@@ -44,6 +44,31 @@ synchronous gRPC or REST calls. Persistent state lives in Postgres with Alembic
 migrations. Object storage holds binary assets. GitOps drives deployments into
 Kubernetes across sandbox, staging, and production environments.
 
+## Technology Choices
+
+### LangGraph for Agentic Feedback Loops
+
+LangGraph has been selected as the framework for implementing agentic feedback
+loops throughout the content generation and audio synthesis workflows. This
+decision enables:
+
+- **State-driven iterative refinement**: Agent graphs maintain state across
+  generation cycles, incorporating QA findings, brand compliance scores, and
+  editorial feedback to progressively improve script quality.
+- **Contextual audio optimisation**: Audio synthesis agents learn from previous
+  renders, adjusting mixing parameters, voice characteristics, and music
+  selection based on content type and producer approvals.
+- **Observable decision pathways**: LangGraph's state graph structure provides
+  clear audit trails showing how content evolved through each iteration and
+  which factors influenced final decisions.
+- **Scalable multi-agent coordination**: Separate agent graphs can handle
+  different aspects (narrative flow, technical audio quality, brand compliance)
+  while sharing state and converging on optimal outcomes.
+
+The framework's integration with existing LLM adapters through LangChain
+provides seamless extensibility while maintaining the hexagonal architecture
+principles through dedicated agent ports.
+
 ## Component Responsibilities
 
 ### Canonical Content Platform
@@ -78,9 +103,13 @@ Kubernetes across sandbox, staging, and production environments.
 
 - Coordinates `LLMPort` adapters with retry discipline, token budgeting, and
   guardrails per template.
+- Employs LangGraph-based agentic feedback loops for iterative script refinement,
+  integrating QA scores, brand guideline adherence, and narrative flow metrics.
 - Produces structured drafts, show notes, chapter markers, and sponsorship copy.
 - Persists generation runs alongside prompts, responses, and cost telemetry.
 - Surfaces retryable failure modes and exposes override hooks for human edits.
+- Maintains agent state graphs tracking revision history, quality improvements,
+  and convergence criteria across generation cycles.
 
 ### Quality Assurance Stack
 
@@ -102,10 +131,16 @@ Kubernetes across sandbox, staging, and production environments.
 
 - Uses `TTSPort` to request narration voiceovers with persona controls and
   resilience to latency, quota, and failure scenarios.
+- Employs LangGraph agents to optimise audio synthesis parameters based on
+  content type, voice characteristics, and quality metrics from previous
+  renders.
 - Constructs timelines combining narration, background music, and sound effect
   stems drawn from managed catalogues.
 - Executes automated mixing: ducking, crossfades, EQ presets, and loudness
   normalisation to -16 LUFS +/- 1 LU.
+- Utilises agentic feedback loops to learn optimal mixing parameters, music
+  bed selection criteria, and timing adjustments from producer approvals
+  and listener analytics.
 - Publishes previews through `PreviewPublisherPort` and delivers masters to CDN
   storage with chapter metadata embedded.
 
@@ -163,10 +198,16 @@ Kubernetes across sandbox, staging, and production environments.
 
 1. Orchestrator loads the latest series profile and episode template to derive
    prompt scaffolds.
-2. `LLMPort` adapters invoke selected models, respecting token budgets and retry
-   policies.
-3. Generated artefacts persist alongside confidence scores and content hashes.
-4. Editors receive drafts in the console or CLI for optional redlines before QA.
+2. LangGraph agents coordinate `LLMPort` adapters, invoking selected models
+   while maintaining state graphs for iterative refinement.
+3. Generated artefacts persist alongside confidence scores and content hashes;
+   agent states track revision history and improvement metrics.
+4. Agents analyse preliminary QA findings to trigger targeted regeneration
+   cycles, focusing on identified weaknesses in narrative flow or brand compliance.
+5. Convergence criteria determine when content meets quality thresholds;
+   divergent cases escalate to human editors with detailed agent decision logs.
+6. Editors receive drafts in the console or CLI for optional redlines before
+   final QA approval.
 
 ### QA, Compliance, and Approvals
 
@@ -182,13 +223,19 @@ Kubernetes across sandbox, staging, and production environments.
 ### Audio Synthesis and Distribution
 
 1. Approved scripts flow into the audio pipeline, which requests narration from
-   the `TTSPort`.
-2. Music supervisor rules choose background beds and stings based on template
-   cues.
-3. Mixer combines narration and stems, runs normalisation, and exports masters
-   plus low-bitrate previews.
-4. Previews publish via signed URLs; masters replicate to CDN and RSS
+   the `TTSPort` under guidance from LangGraph audio optimisation agents.
+2. Agents analyse script content, previous render metrics, and series profile
+   to determine optimal voice parameters, pacing, and emotional tone.
+3. Music supervisor rules, enhanced by agent learning, choose background beds
+   and stings based on template cues plus historical approval data.
+4. Mixer combines narration and stems, applying agent-optimised parameters for
+   ducking curves, crossfade timing, and EQ presets learned from producer feedback.
+5. Mastering agents verify loudness normalisation targets (-16 LUFS +/- 1 LU)
+   and iterate on compression settings when thresholds aren't met.
+6. Previews publish via signed URLs; masters replicate to CDN and RSS
    integrations with metadata for chapters and sponsors.
+7. Distribution agents monitor listener analytics and feed engagement metrics
+   back to optimise future audio synthesis decisions.
 
 ### Change Management and Migrations
 
