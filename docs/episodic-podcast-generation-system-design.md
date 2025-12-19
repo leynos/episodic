@@ -284,6 +284,54 @@ flowchart TD
     G --> J[Publish]
 ```
 
+The following sequence diagram details the interactions between the Audio
+Synthesis StateGraph, external ports, and the audio engineer during
+preview-feedback-regeneration cycles:
+
+```mermaid
+sequenceDiagram
+    actor AudioEngineer
+    participant AudioStateGraph
+    participant TTSPort
+    participant MusicRules
+    participant PreviewPublisherPort
+    participant CDN
+    participant Postgres
+
+    AudioStateGraph->>Postgres: Load approved script and series_profiles
+    AudioStateGraph->>AudioStateGraph: Prepare timeline and voice personas
+
+    loop Initial or regenerated synthesis
+        AudioStateGraph->>TTSPort: Synthesise narration segments
+        TTSPort-->>AudioStateGraph: Segment audio
+
+        AudioStateGraph->>MusicRules: Select music beds and stings
+        MusicRules-->>AudioStateGraph: Music stem selections
+
+        AudioStateGraph->>AudioStateGraph: Mix stems and normalise loudness
+        AudioStateGraph->>AudioStateGraph: Generate low bitrate preview
+
+        AudioStateGraph->>PreviewPublisherPort: Publish preview asset
+        PreviewPublisherPort->>CDN: Upload preview
+        PreviewPublisherPort-->>AudioEngineer: Signed preview URL
+
+        AudioStateGraph->>Postgres: Persist workflow_checkpoints preview checkpoint
+
+        AudioEngineer-->>AudioStateGraph: Provide feedback by segment
+        AudioStateGraph->>Postgres: Store audio_feedback and routing decision
+
+        alt Preview approved
+            AudioStateGraph->>AudioStateGraph: Master final audio and embed metadata
+            AudioStateGraph->>CDN: Publish masters to distribution
+            AudioStateGraph->>Postgres: Mark StateGraph run complete
+        else Segment level issues
+            AudioStateGraph->>AudioStateGraph: Mark segments for partial regeneration
+        else Fundamental issues
+            AudioStateGraph->>AudioStateGraph: Adjust timeline and parameters for full regeneration
+        end
+    end
+```
+
 ### State Persistence and Checkpointing
 
 LangGraph checkpointing integrates with the platform's Postgres storage:
@@ -335,6 +383,79 @@ Agentic workflow behaviour is configurable per series profile:
   synthesis graph checkpoints and driving routing decisions.
 - Alembic migrations version schema changes; migrations run in CI and during
   deployments to guarantee consistency.
+
+The following entity-relationship diagram illustrates the agentic workflow
+tables and their relationships to the core episode model:
+
+```mermaid
+erDiagram
+    SERIES_PROFILES {
+        uuid id
+        text title
+        text tone_attributes
+        text default_voices
+        jsonb agentic_config
+    }
+
+    EPISODES {
+        uuid id
+        uuid series_profile_id
+        text title
+        text status
+        timestamp created_at
+    }
+
+    GENERATION_ITERATIONS {
+        uuid id
+        uuid episode_id
+        uuid run_id
+        int iteration_index
+        jsonb prompts
+        jsonb responses
+        jsonb evaluator_scores
+        jsonb routing_decision
+        timestamp created_at
+    }
+
+    WORKFLOW_CHECKPOINTS {
+        uuid id
+        uuid episode_id
+        text workflow_type
+        uuid run_id
+        timestamp checkpoint_timestamp
+        jsonb state_blob
+        timestamp ttl_expires_at
+    }
+
+    AUDIO_FEEDBACK {
+        uuid id
+        uuid episode_id
+        uuid checkpoint_id
+        text segment_id
+        uuid author_id
+        text feedback_type
+        text comment
+        jsonb routing_hint
+        timestamp created_at
+    }
+
+    APPROVAL_EVENTS {
+        uuid id
+        uuid episode_id
+        uuid actor_id
+        text action
+        jsonb payload
+        timestamp created_at
+    }
+
+    SERIES_PROFILES ||--o{ EPISODES : has
+    EPISODES ||--o{ GENERATION_ITERATIONS : has
+    EPISODES ||--o{ WORKFLOW_CHECKPOINTS : has
+    EPISODES ||--o{ AUDIO_FEEDBACK : has
+    EPISODES ||--o{ APPROVAL_EVENTS : has
+
+    WORKFLOW_CHECKPOINTS ||--o{ AUDIO_FEEDBACK : contextualises
+```
 
 ## Core Workflows
 
