@@ -4,9 +4,9 @@
 
 The episodic podcast generation platform automates the production of scripted,
 branded audio shows. It ingests heterogeneous source documents, synthesises
-canonical TEI content, applies layered quality assurance, and renders broadcast
-quality audio with background music before exposing approvals and delivery
-channels.
+canonical Text Encoding Initiative (TEI) content, applies layered quality
+assurance, and renders broadcast quality audio with background music before
+exposing approvals and delivery channels.
 
 ## Goals
 
@@ -32,8 +32,8 @@ channels.
 - **Compliance reviewers** verify brand and regulatory adherence.
 - **Audio engineers** tune voice configurations, music beds, and stem mixes.
 - **Developers and operators** maintain services, pipelines, and infrastructure.
-- **Integration clients** consume the API, CLI, or web console to orchestrate
-  workflows programmatically.
+- **Integration clients** consume the API, command-line interface (CLI), or web
+  console to orchestrate workflows programmatically.
 
 ## Architectural Summary
 
@@ -65,7 +65,8 @@ enable long-running editorial review periods.
 
 ### Multi-source Ingestion Service
 
-- Accepts RSS feeds, briefs, transcripts, press releases, and research notes.
+- Accepts Really Simple Syndication (RSS) feeds, briefs, transcripts, press
+  releases, and research notes.
 - Applies document classifiers, quality scores, and weighting heuristics to
   establish priority when sources conflict.
 - Normalises inputs into TEI fragments, merging them into canonical episodes
@@ -126,7 +127,8 @@ enable long-running editorial review periods.
 
 ### Editorial Approval Service
 
-- Implements the configurable approval state machine with stage SLAs.
+- Implements the configurable approval state machine with stage service-level
+  agreement (SLA) targets.
 - Logs reviewer decisions, comments, and attachments per transition.
 - Issues notifications via email, Slack, and webhooks to keep stakeholders
   informed.
@@ -342,8 +344,13 @@ LangGraph checkpointing integrates with the platform's Postgres storage:
   human review periods, or failures to continue from the last checkpoint.
 - **Audit integration** links checkpoint events to `approval_events` and
   generation run histories.
-- **TTL policies** expire stale checkpoints after configurable periods to
-  prevent unbounded storage growth.
+- **Time-to-live (TTL) policies** expire stale checkpoints after configurable
+  periods to prevent unbounded storage growth. Workflows in human-review status
+  receive extended TTLs to accommodate multi-day editorial review cycles. If a
+  checkpoint expires before resumption, the episode status transitions to
+  `expired`, operators receive an alert, and stakeholders may restart the
+  workflow from the last persisted artefacts (drafts, audio stems) rather than
+  from scratch.
 
 ### Configuration and Tunables
 
@@ -383,6 +390,17 @@ Agentic workflow behaviour is configurable per series profile:
   synthesis graph checkpoints and driving routing decisions.
 - Alembic migrations version schema changes; migrations run in CI and during
   deployments to guarantee consistency.
+
+The following indexes support performant queries for agentic workflow tables:
+
+- `workflow_checkpoints(episode_id, workflow_type)` enables fast checkpoint
+  retrieval during graph resumption.
+- `generation_iterations(episode_id, run_id)` supports iteration history queries
+  and debugging of refinement cycles.
+- `audio_feedback(checkpoint_id)` accelerates feedback lookup when routing
+  synthesis graph decisions.
+
+These indexes are created in Alembic migrations alongside table definitions.
 
 The following entity-relationship diagram illustrates the agentic workflow
 tables and their relationships to the core episode model:
@@ -506,7 +524,18 @@ erDiagram
 6. Content passing QA transitions into the approval state machine; reviewers
    complete approvals within SLA windows.
 7. Every evaluation, routing decision, and approval emits audit events,
-   providing full traceability of the content journey.
+   providing full traceability of the content journey. Audit events include:
+   - **Node transition events:** Each graph state transition (e.g., Generate →
+     Evaluate, Route → Refine) records node name, timestamp, actor (system or
+     user), and outcome.
+   - **Evaluation payloads:** Bromide accuracy scores, Chiltern narrative
+     ratings, and brand check findings persist as structured JSON alongside the
+     event.
+   - **Routing decision rationale:** The applied decision logic (e.g., "Pass:
+     all evaluators ≥ threshold" or "Fail: Bromide 0.72 < 0.85, iteration 2/3")
+     accompanies each routing event for transparency.
+   Audit events persist to `approval_events` and link to
+   `generation_iterations` for unified query access.
 
 ### Audio Synthesis and Distribution
 
