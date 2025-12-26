@@ -1,173 +1,184 @@
-# Development Roadmap
+# Development roadmap
 
 This roadmap sequences the work to deliver the episodic podcast generation
 platform. Each phase represents a deployable increment with clear exit criteria
-that align with the system design. Dates are placeholders; refine when team
-capacity is known.
+that align with the system design.
 
-## Phase 0 - Platform Foundations
+## 1. Platform foundations
 
-### Phase 0 Objectives
+### 1.1. Objectives
 
-- Provision shared infrastructure required by all later phases.
-- Establish continuous delivery pipelines and baseline observability.
+- [ ] 1.1.1. Provision shared infrastructure required by all later phases.
+- [ ] 1.1.2. Establish continuous delivery pipelines and baseline observability.
 
-### Phase 0 Key Activities
+### 1.2. Key activities
 
-- Bootstrap the Kubernetes control plane, CloudNativePG Postgres cluster,
-  Valkey cache (Redis-compatible), RabbitMQ operator, and object storage
-  buckets for audio assets.
-- Configure secret management (SOPS + age) and environment promotion strategy.
-- Create the GitOps repository, FluxCD sources, and deployment templates for
-  core services.
-- Deploy Traefik ingress and cert-manager with Let's Encrypt issuers.
-- Instrument clusterwide logging, metrics, and tracing with Prometheus, Loki,
-  and Tempo; define alert routing rules.
-- Document access controls, networking policies, and disaster recovery
-  expectations.
-- Publish the infrastructure design document covering DOKS, GitOps, secrets,
-  and observability baselines.
+- [ ] 1.2.1. Bootstrap the Kubernetes control plane, CloudNativePG Postgres
+  cluster, Valkey cache (Redis-compatible), RabbitMQ operator, and object
+  storage buckets for audio assets.
+- [ ] 1.2.2. Configure secret management (SOPS + age) and environment promotion
+  strategy.
+- [ ] 1.2.3. Create the GitOps repository via the bootstrap script, then
+  configure FluxCD sources and deployment templates for core services.
+- [ ] 1.2.4. Deploy Traefik ingress and cert-manager with Let's Encrypt issuers.
+- [ ] 1.2.5. Instrument clusterwide logging, metrics, and tracing with
+  Prometheus, Loki, and Tempo; define alert routing rules.
+- [ ] 1.2.6. Document access controls, networking policies, and disaster
+  recovery expectations.
+- [ ] 1.2.7. Publish the infrastructure design document covering DOKS, GitOps,
+  secrets, and observability baselines. See `docs/infrastructure-design.md`.
 
-### Phase 0 Exit Criteria
+### 1.3. Exit criteria
 
-- Sandbox environment accepts deployments for the `ingestion`, `orchestrator`,
-  and `audio` services via GitOps.
-- Platform runbook published covering provisioning, credentials, and restore
-  procedures.
-- Infrastructure design document approved and referenced by Phase 0 work.
+- [ ] 1.3.1. Sandbox environment accepts deployments for the `ingestion`,
+  `orchestrator`, and `audio` services via GitOps.
+- [ ] 1.3.2. Platform runbook published covering provisioning, credentials, and
+  restore procedures.
+- [ ] 1.3.3. Infrastructure design document approved and referenced by Phase 0
+  work.
 
-## Phase 1 - Canonical Content Foundation
+## 2. Canonical content foundation
 
-### Phase 1 Objectives
+### 2.1. Objectives
 
-- Land the TEI-oriented domain model and ingestion stack.
-- Persist canonical artefacts with auditable provenance.
+- [ ] 2.1.1. Land the TEI-oriented domain model and ingestion stack.
+- [ ] 2.1.2. Persist canonical artefacts with auditable provenance.
 
-### Phase 1 Key Activities
+### 2.2. Key activities
 
-- Design the relational schema covering TEI headers, canonical episodes,
-  ingestion jobs, source documents, series profiles, and approval states.
-- Introduce migration tooling with Alembic, wired into CI to block divergent
-  schemas.
-- Implement the repository and unit-of-work layers over Postgres with
+- [ ] 2.2.1. Design the relational schema covering TEI headers, canonical
+  episodes, ingestion jobs, source documents, series profiles, and approval
+  states.
+- [ ] 2.2.2. Introduce migration tooling with Alembic, wired into CI to block
+  divergent schemas.
+- [ ] 2.2.3. Implement the repository and unit-of-work layers over Postgres with
   integration tests.
-- Build the multi-source ingestion service that normalises inputs, applies
-  source weighting heuristics, and resolves conflicts into canonical TEI.
-- Capture provenance metadata automatically in TEI headers, including source
-  priorities, ingestion timestamps, and reviewer identities.
-- Define series profile and episode template models, REST endpoints, and change
-  history so downstream generators can retrieve structured briefs.
+- [ ] 2.2.4. Build the multi-source ingestion service that normalises inputs,
+  applies source weighting heuristics, and resolves conflicts into canonical
+  TEI.
+- [ ] 2.2.5. Capture provenance metadata automatically in TEI headers,
+  including source priorities, ingestion timestamps, and reviewer identities.
+- [ ] 2.2.6. Define series profile and episode template models, REST endpoints,
+  and change history so downstream generators can retrieve structured briefs.
 
-### Phase 1 Exit Criteria
+### 2.3. Exit criteria
 
-- Canonical TEI documents persist with full provenance after ingesting at least
-  three heterogeneous source types.
-- Series profiles and episode templates retrievable via the public API with
-  optimistic locking and history tracking.
+- [ ] 2.3.1. Canonical TEI documents persist with full provenance after
+  ingesting at least three heterogeneous source types.
+- [ ] 2.3.2. Series profiles and episode templates retrievable via the public
+  API with optimistic locking and history tracking.
 
-## Phase 2 - Intelligent Content Generation and QA
+## 3. Intelligent content generation and QA
 
-### Phase 2 Objectives
+### 3.1. Objectives
 
-- Orchestrate LLM-based draft generation, enrichment, and multi-layer review.
-- Automate compliance checks against brand and regulatory guidance.
+- [ ] 3.1.1. Orchestrate LLM-based draft generation, enrichment, and
+  multi-layer review.
+- [ ] 3.1.2. Automate compliance checks against brand and regulatory guidance.
 
-### Phase 2 Key Activities
+### 3.2. Key activities
 
-- Implement the `LLMPort` adapter with retry, token budgeting, and guardrail
-  prompts aligned to content templates.
-- Extend Bromide and Chiltern services to score factuality, tone, and style,
-  emitting structured findings.
-- Add automated brand-guideline evaluation: lint textual output, validate tone,
-  vocabulary, and forbidden topics, and record pass/fail outcomes.
-- Enrich TEI bodies with show notes, chapter markers, guest bios, and sponsor
-  reads sourced from template expansions.
-- Persist QA artefacts, including review comments, rubric scores, and
-  compliance results, linked to the canonical episode.
-- Expose generation and QA state via the API and CLI, including filtering by
-  brand compliance status.
+- [ ] 3.2.1. Implement the `LLMPort` adapter with retry, token budgeting, and
+  guardrail prompts aligned to content templates.
+- [ ] 3.2.2. Extend Bromide and Chiltern services to score factuality, tone,
+  and style, emitting structured findings.
+- [ ] 3.2.3. Add automated brand-guideline evaluation: lint textual output,
+  validate tone, vocabulary, and forbidden topics, and record pass/fail
+  outcomes.
+- [ ] 3.2.4. Enrich TEI bodies with show notes, chapter markers, guest bios, and
+  sponsor reads sourced from template expansions.
+- [ ] 3.2.5. Persist QA artefacts, including review comments, rubric scores,
+  and compliance results, linked to the canonical episode.
+- [ ] 3.2.6. Expose generation and QA state via the API and CLI, including
+  filtering by brand compliance status.
 
-### Phase 2 Exit Criteria
+### 3.3. Exit criteria
 
-- Generated scripts achieve defined Bromide/Chiltern thresholds and pass brand
-  guideline checks before entering approval.
-- QA dashboards surface per-episode compliance, reviewer comments, and ageing
-  tasks.
+- [ ] 3.3.1. Generated scripts achieve defined Bromide/Chiltern thresholds and
+  pass brand guideline checks before entering approval.
+- [ ] 3.3.2. QA dashboards surface per-episode compliance, reviewer comments,
+  and ageing tasks.
 
-## Phase 3 - Audio Synthesis and Delivery
+## 4. Audio synthesis and delivery
 
-### Phase 3 Objectives
+### 4.1. Objectives
 
-- Produce production-ready audio with narration, music, and compliance-checked
-  levels.
-- Provide reliable preview and delivery workflows.
+- [ ] 4.1.1. Produce production-ready audio with narration, music, and
+  compliance-checked levels.
+- [ ] 4.1.2. Provide reliable preview and delivery workflows.
 
-### Phase 3 Key Activities
+### 4.2. Key activities
 
-- Implement the `TTSPort` adapter with configurable voice personas and retry
-  semantics.
-- Integrate background music and sound effect stems: manage asset catalogues,
-  select beds per template, and schedule mixes relative to script beats.
-- Build the mixing engine to combine narration and stems, applying ducking,
-  fades, and scene transitions.
-- Enforce loudness normalisation to -16 LUFS +/- 1 LU and peak limiting across
-  stereo channels.
-- Generate shareable previews via the `PreviewPublisherPort`, storing artefacts
-  in object storage with signed URLs.
-- Publish final masters to CDN endpoints and optional RSS feeds.
+- [ ] 4.2.1. Implement the `TTSPort` adapter with configurable voice personas
+  and retry semantics.
+- [ ] 4.2.2. Integrate background music and sound effect stems: manage asset
+  catalogues, select beds per template, and schedule mixes relative to script
+  beats.
+- [ ] 4.2.3. Build the mixing engine to combine narration and stems, applying
+  ducking, fades, and scene transitions.
+- [ ] 4.2.4. Enforce loudness normalisation to -16 LUFS +/- 1 LU and peak
+  limiting across stereo channels.
+- [ ] 4.2.5. Generate shareable previews via the `PreviewPublisherPort`,
+  storing artefacts in object storage with signed URLs.
+- [ ] 4.2.6. Publish final masters to CDN endpoints and optional RSS feeds.
 
-### Phase 3 Exit Criteria
+### 4.3. Exit criteria
 
-- End-to-end render produces master files with embedded chapter markers and
-  balanced stems for flagship shows.
-- QA automation rejects mixes that violate loudness or clipping thresholds.
+- [ ] 4.3.1. End-to-end render produces master files with embedded chapter
+  markers and balanced stems for flagship shows.
+- [ ] 4.3.2. QA automation rejects mixes that violate loudness or clipping
+  thresholds.
 
-## Phase 4 - Client and Interface Experience
+## 5. Client and interface experience
 
-### Phase 4 Objectives
+### 5.1. Objectives
 
-- Deliver API-first access backed by approval workflows and client tooling.
-- Enable editorial collaboration and notifications.
+- [ ] 5.1.1. Deliver API-first access backed by approval workflows and client
+  tooling.
+- [ ] 5.1.2. Enable editorial collaboration and notifications.
 
-### Phase 4 Key Activities
+### 5.2. Key activities
 
-- Finalise REST and GraphQL surfaces, including pagination, filtering, and role
-  enforcement for all previous phase artefacts.
-- Implement the editorial approval state machine with configurable stages,
-  SLA timers, and audit logging.
-- Integrate notification channels (email, Slack, webhook) for approvals,
-  rejections, and automated compliance alerts.
-- Extend the CLI client to support approval actions, diff viewing, and audio
-  preview downloads.
-- Ship the initial web console for managing series profiles, templates, and
-  approval queues.
+- [ ] 5.2.1. Finalise REST and GraphQL surfaces, including pagination,
+  filtering, and role enforcement for all previous phase artefacts.
+- [ ] 5.2.2. Implement the editorial approval state machine with configurable
+  stages, SLA timers, and audit logging.
+- [ ] 5.2.3. Integrate notification channels (email, Slack, webhook) for
+  approvals, rejections, and automated compliance alerts.
+- [ ] 5.2.4. Extend the CLI client to support approval actions, diff viewing,
+  and audio preview downloads.
+- [ ] 5.2.5. Ship the initial web console for managing series profiles,
+  templates, and approval queues.
 
-### Phase 4 Exit Criteria
+### 5.3. Exit criteria
 
-- Editorial teams complete end-to-end approvals via API, CLI, and web console.
-- Audit trails capture every approval transition with user identity and
-  timestamp.
+- [ ] 5.3.1. Editorial teams complete end-to-end approvals via API, CLI, and
+  web console.
+- [ ] 5.3.2. Audit trails capture every approval transition with user identity
+  and timestamp.
 
-## Phase 5 - Security, Compliance, and Operations
+## 6. Security, compliance, and operations
 
-### Phase 5 Objectives
+### 6.1. Objectives
 
-- Harden the platform and automate ongoing operations.
+- [ ] 6.1.1. Harden the platform and automate ongoing operations.
 
-### Phase 5 Key Activities
+### 6.2. Key activities
 
-- Implement fine-grained RBAC, tenancy isolation, and secrets rotation across
-  all services.
-- Add runtime security scanning, dependency auditing, and policy-as-code
-  enforcement inside CI/CD.
-- Roll out GitOps-driven disaster recovery drills, backup verification, and
-  incident runbooks.
-- Expand observability with synthetic monitoring and customer-facing SLIs/SLAs.
-- Certify compliance checkpoints (SOC 2 readiness, GDPR DPIA) and integrate
-  automated evidence collection.
+- [ ] 6.2.1. Implement fine-grained RBAC, tenancy isolation, and secrets
+  rotation across all services.
+- [ ] 6.2.2. Add runtime security scanning, dependency auditing, and
+  policy-as-code enforcement inside CI/CD.
+- [ ] 6.2.3. Roll out GitOps-driven disaster recovery drills, backup
+  verification, and incident runbooks.
+- [ ] 6.2.4. Expand observability with synthetic monitoring and
+  customer-facing SLIs/SLAs.
+- [ ] 6.2.5. Certify compliance checkpoints (SOC 2 readiness, GDPR DPIA) and
+  integrate automated evidence collection.
 
-### Phase 5 Exit Criteria
+### 6.3. Exit criteria
 
-- Security posture reviewed quarterly with no critical findings outstanding.
-- Automated operations dashboards report green for deployment, backups, and
-  latency SLOs.
+- [ ] 6.3.1. Security posture reviewed quarterly with no critical findings
+  outstanding.
+- [ ] 6.3.2. Automated operations dashboards report green for deployment,
+  backups, and latency SLOs.
