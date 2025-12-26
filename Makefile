@@ -1,43 +1,83 @@
-.PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie
-
-APP ?= episodic
-CARGO ?= cargo
-BUILD_JOBS ?=
-RUST_FLAGS ?= -D warnings
-CLIPPY_FLAGS ?= --all-targets --all-features -- $(RUST_FLAGS)
-TEST_FLAGS ?= --all-targets --all-features
 MDLINT ?= markdownlint-cli2
 NIXIE ?= nixie
+MDFORMAT_ALL ?= mdformat-all
+TOOLS = $(MDFORMAT_ALL) ruff ty $(MDLINT) $(NIXIE) uv
+VENV_TOOLS = pytest
+UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 
-build: target/debug/$(APP) ## Build debug binary
-release: target/release/$(APP) ## Build release binary
+.PHONY: help all clean build build-release lint fmt check-fmt \
+        markdownlint nixie test typecheck $(TOOLS) $(VENV_TOOLS)
 
-all: release ## Default target builds release binary
+.DEFAULT_GOAL := all
+
+all: build check-fmt test typecheck
+
+.venv: pyproject.toml
+	$(UV_ENV) uv venv --clear
+
+build: uv .venv ## Build virtual-env and install deps
+	$(UV_ENV) uv sync --group dev
+
+build-release: ## Build artefacts (sdist & wheel)
+	python -m build --sdist --wheel
 
 clean: ## Remove build artifacts
-	$(CARGO) clean
+	rm -rf build dist *.egg-info \
+	  .mypy_cache .pytest_cache .coverage coverage.* \
+	  lcov.info htmlcov .venv
+	find . -type d -name '__pycache__' -print0 | xargs -0 -r rm -rf
 
-test: ## Run tests with warnings treated as errors
-	RUSTFLAGS="$(RUST_FLAGS)" $(CARGO) test $(TEST_FLAGS) $(BUILD_JOBS)
+define ensure_tool
+	@command -v $(1) >/dev/null 2>&1 || { \
+	  printf "Error: '%s' is required, but not installed\n" "$(1)" >&2; \
+	  exit 1; \
+	}
+endef
 
-target/%/$(APP): ## Build binary in debug or release mode
-	$(CARGO) build $(BUILD_JOBS) $(if $(findstring release,$(@)),--release) --bin $(APP)
+define ensure_tool_venv
+	@$(UV_ENV) uv run which $(1) >/dev/null 2>&1 || { \
+	  printf "Error: '%s' is required in the virtualenv, but is not installed\n" "$(1)" >&2; \
+	  exit 1; \
+	}
+endef
 
-lint: ## Run Clippy with warnings denied
-	$(CARGO) clippy $(CLIPPY_FLAGS)
+ifneq ($(strip $(TOOLS)),)
+$(TOOLS): ## Verify required CLI tools
+	$(call ensure_tool,$@)
+endif
 
-fmt: ## Format Rust and Markdown sources
-	$(CARGO) fmt --all
-	mdformat-all
 
-check-fmt: ## Verify formatting
-	$(CARGO) fmt --all -- --check
+ifneq ($(strip $(VENV_TOOLS)),)
+.PHONY: $(VENV_TOOLS)
+$(VENV_TOOLS): ## Verify required CLI tools in venv
+	$(call ensure_tool_venv,$@)
+endif
 
-markdownlint: ## Lint Markdown files
+fmt: ruff $(MDFORMAT_ALL) ## Format sources
+	ruff format
+	ruff check --select I --fix
+	$(MDFORMAT_ALL)
+
+check-fmt: ruff ## Verify formatting
+	ruff format --check
+	# mdformat-all doesn't currently do checking
+
+lint: ruff ## Run linters
+	ruff check
+
+typecheck: build ty ## Run typechecking
+	ty --version
+	ty check
+
+markdownlint: $(MDLINT) ## Lint Markdown files
 	$(MDLINT) '**/*.md'
 
 nixie: ## Validate Mermaid diagrams
+	$(call ensure_tool,nixie)
 	$(NIXIE) --no-sandbox
+
+test: build uv $(VENV_TOOLS) ## Run tests
+	$(UV_ENV) uv run pytest -v -n auto
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \

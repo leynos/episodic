@@ -4,34 +4,19 @@
 
 - **Code is for humans.** Write your code with clarity and empathy—assume a
   tired teammate will need to debug it at 3 a.m.
-- **Comment *why*, not *what*.** Explain assumptions, edge cases, trade-offs, or
-  complexity. Don't echo the obvious.
+- **Comment *why*, not *what*.** Explain assumptions, edge cases, trade-offs,
+  or complexity. Don't echo the obvious.
 - **Clarity over cleverness.** Be concise, but favour explicit over terse or
   obscure idioms. Prefer code that's easy to follow.
 - **Use functions and composition.** Avoid repetition by extracting reusable
-  logic. Prefer generators or comprehensions, and declarative code to
-  imperative repetition when readable.
-- **Small, meaningful functions.** Functions must be small, clear in purpose,
-  single responsibility, and obey command/query segregation.
-- **Clear commit messages.** Commit messages should be descriptive, explaining
-  what was changed and why.
-- **Name things precisely.** Use clear, descriptive variable and function names.
-  For booleans, prefer names with `is`, `has`, or `should`.
-- **Structure logically.** Each file should encapsulate a coherent module. Group
-  related code (e.g., models + utilities + fixtures) close together.
+  logic. Prefer generators or comprehensions to imperative repetition when
+  readable.
+- **Name things precisely.** Use clear, descriptive variable and function
+  names. For booleans, prefer names with `is`, `has`, or `should`.
+- **Structure logically.** Each file should encapsulate a coherent module.
+  Group related code (e.g., models + utilities + fixtures) close together.
 - **Group by feature, not layer.** Colocate views, logic, fixtures, and helpers
   related to a domain concept rather than splitting by type.
-- **Use consistent spelling and grammar.** Comments must use en-GB-oxendict
-  ("-ize" / "-yse" / "-our") spelling and grammar, with the exception of
-  references to external APIs.
-- **Illustrate with clear examples.** Function documentation must include clear
-  examples demonstrating the usage and outcome of the function. Test
-  documentation should omit examples where the example serves only to reiterate
-  the test logic.
-- **Keep file size manageable.** No single code file may be longer than 400
-  lines.  Long switch statements or dispatch tables should be broken up by
-  feature and constituents colocated with targets. Large blocks of test data
-  should be moved to external data files.
 
 ## Documentation Maintenance
 
@@ -40,48 +25,90 @@
   choices, and architectural decisions.
 - **Update:** When new decisions are made, requirements change, libraries are
   added/removed, or architectural patterns evolve, **proactively update** the
-  relevant file(s) in the `docs/` directory to reflect the latest state.
-  **Ensure the documentation remains accurate and current.**
-- Documentation must use en-GB-oxendict ("-ize" / "-yse" / "-our") spelling
-  and grammar. (EXCEPTION: the naming of the "LICENSE" file, which is to be
-  left unchanged for community consistency.)
-- A documentation style guide is provided at
-  `docs/documentation-style-guide.md`.
+  relevant file(s) in the `docs/` directory to reflect the latest state. Ensure
+  the documentation remains accurate and current.
+- **Style:** All documentation must adhere to the
+  [documentation style guide](docs/documentation-style-guide.md).
+
+## Guidelines for Code Changes & Testing
+
+When implementing changes, adhere to the following testing procedures:
+
+- **New Functionality:**
+  - Implement unit tests covering all new code units (functions, components,
+    classes). Implement tests **before** implementing the unit.
+  - Implement behavioral tests that verify the end-to-end behavior of the new
+    feature from a user interaction perspective.
+  - Ensure both unit and behavioral tests pass before considering the
+    functionality complete.
+  - Ensure that new functionality is clearly documented in the
+    [users' guide](docs/users-guide.md).
+  - Ensure that any design decisions made are recorded in the relevant design
+    document.
+- **Bug Fixes:**
+  - Before fixing the bug, write a new test (unit or behavioral, whichever is
+    most appropriate) that specifically targets and reproduces the bug. This
+    test should initially fail.
+  - Implement the bug fix.
+  - Verify that the new test now passes, along with all existing tests.
+  - Ensure that any design decisions made are recorded in the relevant design
+    document.
+- **Modifying Existing Functionality:**
+  - Identify the existing behavioral and unit tests relevant to the
+    functionality being changed.
+  - **First, modify the tests** to reflect the new requirements or behavior.
+  - Run the tests; they should now fail.
+  - Implement the code changes to the functionality.
+  - Verify that the modified tests (and all other existing tests) now pass.
+  - Ensure that revised functionality is clearly documented in the
+    [users' guide](docs/users-guide.md).
+  - Ensure that any design decisions made are recorded in the relevant design
+    document.
+- **Refactoring:**
+  - Identify or create a behavioral test that covers the functionality being
+    refactored. Ensure this test passes **before** starting the refactor.
+  - Perform the refactoring (e.g., extracting logic into a new unit).
+  - If new units are created (e.g., a new function or component), add unit
+    tests for these extracted units.
+  - After the refactor, ensure the original behavioral test **still passes**
+    without modification. Also ensure any new unit tests pass.
 
 ## Change Quality & Committing
 
 - **Atomicity:** Aim for small, focused, atomic changes. Each change (and
   subsequent commit) should represent a single logical unit of work.
-- **Quality Gates:** Before considering a change complete or proposing a commit,
-  ensure it meets the following criteria:
-  - New functionality or changes in behaviour are fully validated by relevant
-    unit tests and behavioural tests.
-  - Where a bug is being fixed, a unittest has been provided demonstrating the
-    behaviour being corrected both to validate the fix and to guard against
-    regression.
-  - Passes all relevant unit and behavioural tests according to the guidelines
-    above.
-  - Passes lint checks
-  - Adheres to formatting standards tested using a formatting validator.
+- **Quality Gates:** Before considering a change complete or proposing a
+  commit, ensure it meets the following criteria:
+  - For Python files:
+    - **Testing:** Passes all relevant unit and behavioral tests according to
+      the guidelines above (run `make test` to verify).
+    - **Linting:** Passes lint checks (`make lint`).
+    - **Formatting:** Adheres to formatting standards (run `make check-fmt` to
+      verify, use `make fmt` to apply formatting).
+    - **Typechecking:** Passes type checking (`make typecheck`).
+  - For Markdown files (`.md` only):
+    - **Linting:** Passes lint checks (`make markdownlint`).
+    - **Mermaid diagrams:** Passes validation using nixie (`make nixie`)
 - **Committing:**
   - Only changes that meet all the quality gates above should be committed.
   - Write clear, descriptive commit messages summarizing the change, following
     these formatting guidelines:
     - **Imperative Mood:** Use the imperative mood in the subject line (e.g.,
       "Fix bug", "Add feature" instead of "Fixed bug", "Added feature").
-    - **Subject Line:** The first line should be a concise summary of the change
-      (ideally 50 characters or less).
-    - **Body:** Separate the subject from the body with a blank line. Subsequent
-      lines should explain the *what* and *why* of the change in more detail,
-      including rationale, goals, and scope. Wrap the body at 72 characters.
-    - **Formatting:** Use Markdown for any formatted text (like bullet points or
-      code snippets) within the commit message body.
+    - **Subject Line:** The first line should be a concise summary of the
+      change (ideally 50 characters or less).
+    - **Body:** Separate the subject from the body with a blank line.
+      Subsequent lines should explain the *what* and *why* of the change in
+      more detail, including rationale, goals, and scope. Wrap the body at 72
+      characters.
+    - **Formatting:** Use Markdown for any formatted text (like bullet points
+      or code snippets) within the commit message body.
   - Do not commit changes that fail any of the quality gates.
 
 ## Refactoring Heuristics & Workflow
 
-- **Recognizing Refactoring Needs:** Regularly assess the codebase for potential
-  refactoring opportunities. Consider refactoring when you observe:
+- **Recognizing Refactoring Needs:** Regularly assess the codebase for
+  potential refactoring opportunities. Consider refactoring when you observe:
   - **Long Methods/Functions:** Functions or methods that are excessively long
     or try to do too many things.
   - **Duplicated Code:** Identical or very similar code blocks appearing in
@@ -93,8 +120,8 @@
   - **Primitive Obsession / Data Clumps:** Groups of simple variables (strings,
     numbers, booleans) that are frequently passed around together, often
     indicating a missing class or object structure.
-  - **Excessive Parameters:** Functions or methods requiring a very long list of
-    parameters.
+  - **Excessive Parameters:** Functions or methods requiring a very long list
+    of parameters.
   - **Feature Envy:** Methods that seem more interested in the data of another
     class/object than their own.
   - **Shotgun Surgery:** A single change requiring small modifications in many
@@ -108,135 +135,6 @@
   - Ensure the refactoring adheres to the testing guidelines (behavioral tests
     pass before and after, unit tests added for new units).
   - Ensure the refactoring commit itself passes all quality gates.
-
-## Rust Specific Guidance
-
-This repository is written in Rust and uses Cargo for building and dependency
-management. Contributors should follow these best practices when working on the
-project:
-
-- Run `make check-fmt`, `make lint`, and `make test` before committing. These
-  targets wrap the following commands so contributors understand the exact
-  behaviour and policy enforced:
-  - `make check-fmt` executes:
-
-    ```sh
-    cargo fmt --workspace -- --check
-    ```
-
-    validating formatting across the entire workspace without modifying files.
-  - `make lint` executes:
-
-    ```sh
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
-    ```
-
-    linting every target with all features enabled and denying all Clippy
-    warnings.
-  - `make test` executes:
-
-    ```sh
-    cargo test --workspace
-    ```
-
-    running the full workspace test suite. Use `make fmt`
-    (`cargo fmt --workspace`) to apply formatting fixes reported by the
-    formatter check.
-- Clippy warnings MUST be disallowed.
-- Fix any warnings emitted during tests in the code itself rather than
-  silencing them.
-- Where a function is too long, extract meaningfully named helper functions
-  adhering to separation of concerns and CQRS.
-- Where a function has too many parameters, group related parameters in
-  meaningfully named structs.
-- Where a function is returning a large error consider using `Arc` to reduce the
-  amount of data returned.
-- Write unit and behavioural tests for new functionality. Run both before and
-  after making any change.
-- Every module **must** begin with a module level (`//!`) comment explaining the
-  module's purpose and utility.
-- Document public APIs using Rustdoc comments (`///`) so documentation can be
-  generated with cargo doc.
-- Prefer immutable data and avoid unnecessary `mut` bindings.
-- Handle errors with the `Result` type instead of panicking where feasible.
-- Use explicit version ranges in `Cargo.toml` and keep dependencies up-to-date.
-- Avoid `unsafe` code unless absolutely necessary and document any usage
-  clearly.
-- Place function attributes **after** doc comments.
-- Do not use `return` in single-line functions.
-- Use predicate functions for conditional criteria with more than two branches.
-- Lints must not be silenced except as a **last resort**.
-- Lint rule suppressions must be tightly scoped and include a clear reason.
-- Prefer `expect` over `allow`.
-- Use `rstest` fixtures for shared setup.
-- Replace duplicated tests with `#[rstest(...)]` parameterised cases.
-- Prefer `mockall` for mocks/stubs.
-- Use `concat!()` to combine long string literals rather than escaping newlines
-  with a backslash.
-- Prefer single line versions of functions where appropriate. I.e.,
-
-  ```rust
-  pub fn new(id: u64) -> Self { Self(id) }
-  ```
-
-  Instead of:
-
-  ```rust
-  pub fn new(id: u64) -> Self {
-      Self(id)
-  }
-  ```
-
-- Use NewTypes to model domain values and eliminate "integer soup". Reach for
-  `newt-hype` when introducing many homogeneous wrappers that share behaviour;
-  add small shims such as `From<&str>` and `AsRef<str>` for string-backed
-  wrappers. For path-centric wrappers implement `AsRef<Path>` alongside
-  `into_inner()` and `to_path_buf()`; avoid attempting
-  `impl From<Wrapper> for PathBuf` because of the orphan rule. Prefer explicit
-  tuple structs whenever bespoke validation or tailored trait surfaces are
-  required, customising `Deref`, `AsRef`, and `TryFrom` per type. Use
-  `the-newtype` when defining traits and needing blanket implementations that
-  apply across wrappers satisfying `Newtype + AsRef/AsMut<Inner>`, or when
-  establishing a coherent internal convention that keeps trait forwarding
-  consistent without per-type boilerplate. Combine approaches: lean on
-  `newt-hype` for the common case, tuple structs for outliers, and
-  `the-newtype` to unify behaviour when you own the trait definitions.
-
-### Dependency Management
-
-- **Mandate caret requirements for all dependencies.** All crate versions
-  specified in `Cargo.toml` must use SemVer-compatible caret requirements
-  (e.g., `some-crate = "1.2.3"`). This is Cargo's default and allows for safe,
-  non-breaking updates to minor and patch versions while preventing breaking
-  changes from new major versions. This approach is critical for ensuring build
-  stability and reproducibility.
-- **Prohibit unstable version specifiers.** The use of wildcard (`*`) or
-  open-ended inequality (`>=`) version requirements is strictly forbidden as
-  they introduce unacceptable risk and unpredictability. Tilde requirements
-  (`~`) should only be used where a dependency must be locked to patch-level
-  updates for a specific, documented reason.
-
-### Error Handling
-
-- **Prefer semantic error enums**. Derive `std::error::Error` (via the
-  `thiserror` crate) for any condition the caller might inspect, retry, or map
-  to an HTTP status.
-- **Use an *opaque* error only at the app boundary**. Use `eyre::Report` for
-  human-readable logs; these should not be exposed in public APIs.
-- **Never export the opaque type from a library**. Convert to domain enums at
-  API boundaries, and to `eyre` only in the main `main()` entrypoint or
-  top-level async task.
-- Prefer `.expect()` over `.unwrap()`. `.expect()` is forbidden outside of
-  tests.
-- Make fixtures **fallible**: return `Result` and use `?` to propagate errors.
-- Keep `expect_used` **strict**; do not suppress the lint.
-- Recognise that `allow-expect-in-tests = true` **doesn’t cover** helpers
-  outside `#[cfg(test)]` or `#[test]`; avoid `expect` in such fixtures.
-- Use `anyhow`/`eyre` with `.context(...)` to **preserve backtraces** and
-  provide clear, typed failure paths.
-- Update helpers (e.g., `set_dir`) to **return errors** rather than panicking.
-- Consume fallible fixtures in `rstest` by **making the test return `Result`**
-  and applying `?` to the fixture.
 
 ## Markdown Guidance
 
@@ -288,9 +186,27 @@ The following tooling is available in this environment:
 - `srgn` – [Structural grep](https://github.com/alexpovel/srgn), searches code
   and enables editing by syntax tree patterns.
 - `difft` **(Difftastic)** – Semantic diff tool that compares code structure
-  rather than just text differences.
 
-## Key Takeaway
+## Python Development Guidelines
 
-These practices help maintain a high-quality codebase and facilitate
-collaboration.
+For Python development, refer to the detailed guidelines in the `.rules/`
+directory:
+
+- [Python Code Style Guidelines](.rules/python-00.md) - Core Python 3.13 style
+  conventions
+- [Python Context Managers](.rules/python-context-managers.md) - Best practices
+  for context managers
+- [Python Exceptions and Logging](.rules/python-exception-design-raising-handling-and-logging.md)
+  \- Throwing, catching and logging exceptions.
+- [Python Generators](.rules/python-generators.md) - Generator and iterator
+  patterns
+- [Python Project Configuration](.rules/python-pyproject.md) - pyproject.toml
+  and packaging
+- [Python Return Patterns](.rules/python-return.md) - Function return
+  conventions
+- [Python Typing](.rules/python-typing.md) - Type annotation best practices
+
+Additional docs:
+
+- [Scripting Standards](docs/scripting-standards.md) - Guidance for writing
+  robust scripts

@@ -10,13 +10,12 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Enable version updates for Cargo
-  - package-ecosystem: "cargo"
+  # Enable version updates for Python (pip / requirements*.txt)
+  - package-ecosystem: "pip"
     directory: "/"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "cargo"
+      - "python"
     schedule:
       interval: "daily"
-      
