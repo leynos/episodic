@@ -20,12 +20,18 @@ that align with the system design.
   strategy.
 - [ ] 1.2.3. Create the GitOps repository via the bootstrap script, then
   configure FluxCD sources and deployment templates for core services.
-- [ ] 1.2.4. Deploy Traefik ingress and cert-manager with Let's Encrypt issuers.
-- [ ] 1.2.5. Instrument clusterwide logging, metrics, and tracing with
+- [ ] 1.2.4. Define the hexagonal architecture boundaries and port contracts
+  across services. See `docs/episodic-podcast-generation-system-design.md`.
+- [ ] 1.2.5. Scaffold Falcon 4.2.x HTTP services running on Granian with
+  baseline routing, health checks, and dependency injection hooks.
+- [ ] 1.2.6. Scaffold Celery workers with RabbitMQ queues, exchanges, and
+  routing keys for background tasks.
+- [ ] 1.2.7. Deploy Traefik ingress and cert-manager with Let's Encrypt issuers.
+- [ ] 1.2.8. Instrument clusterwide logging, metrics, and tracing with
   Prometheus, Loki, and Tempo; define alert routing rules.
-- [ ] 1.2.6. Document access controls, networking policies, and disaster
+- [ ] 1.2.9. Document access controls, networking policies, and disaster
   recovery expectations.
-- [ ] 1.2.7. Publish the infrastructure design document covering DOKS, GitOps,
+- [ ] 1.2.10. Publish the infrastructure design document covering DOKS, GitOps,
   secrets, and observability baselines. See `docs/infrastructure-design.md`.
 
 ### 1.3. Exit criteria
