@@ -39,10 +39,12 @@ exposing approvals and delivery channels.
 
 The system follows a hexagonal architecture: domain services expose ports, and
 adapters integrate external capabilities such as LLMs, TTS vendors, and
-storage. Services communicate through asynchronous events (Kafka) and
-synchronous gRPC or REST calls. Persistent state lives in Postgres with Alembic
-migrations. Object storage holds binary assets. GitOps drives deployments into
-Kubernetes across sandbox, staging, and production environments.
+storage. HTTP services are delivered with Falcon 4.2.x running on Granian, and
+background tasks are handled by Celery with RabbitMQ as the broker. Services
+communicate through asynchronous messaging and synchronous HTTP or gRPC calls.
+Persistent state lives in Postgres with Alembic migrations. Object storage
+holds binary assets. GitOps drives deployments into Kubernetes across sandbox,
+staging, and production environments.
 
 The Content Generation Orchestrator and Audio Synthesis Pipeline employ
 LangGraph as the agentic orchestration framework. LangGraph StateGraphs manage
@@ -158,7 +160,8 @@ enable long-running editorial review periods.
 
 ### Client Experience Layer
 
-- REST and GraphQL APIs expose domain resources with RBAC enforcement.
+- REST and GraphQL APIs expose domain resources with RBAC enforcement, served
+  via Falcon 4.2.x on Granian.
 - CLI client provides ergonomics for ingest, generate, QA review, and approval
   commands.
 - Web console surfaces dashboards, approval queues, and configuration editors.
