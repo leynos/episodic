@@ -880,11 +880,12 @@ stateDiagram-v2
 
 ## Operational Considerations
 
-- **Infrastructure:** Kubernetes clusters span sandbox, staging, and production;
-  supporting services include Postgres, Redis, and object storage. Terraform
-  codifies provisioning and aligns with the Phase 0 roadmap milestone.
-- **Deployment:** GitOps (Argo CD) manages environment parity, progressive
-  delivery, and secrets injected via SOPS and age.
+- **Infrastructure:** DigitalOcean Kubernetes Service (DOKS) clusters span
+  sandbox, staging, and production; supporting services include Postgres,
+  Valkey (Redis-compatible), messaging, and object storage. OpenTofu codifies
+  provisioning; see `docs/infrastructure-design.md`.
+- **Deployment:** GitOps (FluxCD) manages environment parity and progressive
+  delivery, with secrets encrypted via SOPS + age and synced from Vault.
 - **Observability:** Metrics power SLO dashboards; tracing correlates ingestion
   to audio rendering; alerting integrates with Slack and PagerDuty.
 - **Resilience:** Services use idempotent operations, retries with backoff, and

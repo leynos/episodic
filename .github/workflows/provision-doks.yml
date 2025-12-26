@@ -1,0 +1,62 @@
+name: provision-doks
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to provision (sandbox, staging, production)"
+        required: true
+        type: string
+      execution_mode:
+        description: "validate skips external calls; apply provisions"
+        required: false
+        default: "validate"
+        type: choice
+        options:
+          - validate
+          - apply
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    env:
+      OUTPUT_DIR: /tmp/doks-provision
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install OpenTofu
+        if: inputs.execution_mode == 'apply'
+        run: |
+          set -euo pipefail
+          tofu_version="1.7.0"
+          arch="amd64"
+          if [[ "$(uname -m)" == "aarch64" ]]; then
+            arch="arm64"
+          fi
+          archive="tofu_${tofu_version}_linux_${arch}.tar.gz"
+          url="https://github.com/opentofu/opentofu/releases/download/v${tofu_version}/${archive}"
+          sums_url="https://github.com/opentofu/opentofu/releases/download/v${tofu_version}/tofu_${tofu_version}_SHA256SUMS"
+          tmpdir=$(mktemp -d)
+          curl -fsSL -o "${tmpdir}/${archive}" "${url}"
+          curl -fsSL -o "${tmpdir}/SHA256SUMS" "${sums_url}"
+          (cd "${tmpdir}" && sha256sum -c SHA256SUMS --ignore-missing)
+          tar -xzf "${tmpdir}/${archive}" -C "${tmpdir}"
+          sudo install -m 0755 "${tmpdir}/tofu" /usr/local/bin/tofu
+          tofu version
+
+      - name: Provision DOKS cluster
+        env:
+          EXECUTION_MODE: ${{ inputs.execution_mode }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: scripts/provision_doks.sh
+
+      - name: Upload provisioning artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: doks-provision-result
+          path: /tmp/doks-provision/provision-result.json

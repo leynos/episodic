@@ -1,0 +1,6 @@
+{
+  "inputs": {
+    "environment": "sandbox",
+    "execution_mode": "validate"
+  }
+}

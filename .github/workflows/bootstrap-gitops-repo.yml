@@ -1,0 +1,78 @@
+name: bootstrap-gitops-repo
+
+on:
+  workflow_dispatch:
+    inputs:
+      gitops_org:
+        description: "GitHub organisation that will own the GitOps repo"
+        required: true
+        type: string
+      gitops_repo:
+        description: "GitOps repository name"
+        required: true
+        type: string
+      gitops_branch:
+        description: "GitOps default branch"
+        required: false
+        default: "main"
+        type: string
+      vault_version:
+        description: "Vault CLI version"
+        required: false
+        default: "1.16.0"
+        type: string
+      execution_mode:
+        description: "validate skips external calls; apply provisions"
+        required: false
+        default: "validate"
+        type: choice
+        options:
+          - validate
+          - apply
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    env:
+      OUTPUT_DIR: /tmp/gitops-bootstrap
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Vault CLI
+        if: inputs.execution_mode == 'apply'
+        run: |
+          set -euo pipefail
+          if command -v vault >/dev/null 2>&1; then
+            vault version
+            exit 0
+          fi
+          version="${{ inputs.vault_version }}"
+          archive="vault_${version}_linux_amd64.zip"
+          url="https://releases.hashicorp.com/vault/${version}/${archive}"
+          curl -fsSL -o "${archive}" "${url}"
+          unzip -q "${archive}" -d /usr/local/bin
+          vault version
+
+      - name: Bootstrap GitOps repository
+        env:
+          EXECUTION_MODE: ${{ inputs.execution_mode }}
+          GITOPS_ORG: ${{ inputs.gitops_org }}
+          GITOPS_REPO: ${{ inputs.gitops_repo }}
+          GITOPS_BRANCH: ${{ inputs.gitops_branch }}
+          GITOPS_TEMPLATE_DIR: infra/gitops-template
+          FLUX_DEPLOY_KEY_TITLE: flux-deploy-key
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          VAULT_KV_PATH: ${{ secrets.VAULT_KV_PATH }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: scripts/bootstrap_gitops_repo.sh
+
+      - name: Upload bootstrap artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitops-bootstrap-result
+          path: /tmp/gitops-bootstrap/bootstrap-result.json

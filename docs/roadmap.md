@@ -14,15 +14,19 @@ capacity is known.
 
 ### Phase 0 Key Activities
 
-- Bootstrap the Kubernetes control plane, Postgres cluster, Redis cache, and
-  object storage buckets for audio assets.
+- Bootstrap the Kubernetes control plane, CloudNativePG Postgres cluster,
+  Valkey cache (Redis-compatible), RabbitMQ operator, and object storage
+  buckets for audio assets.
 - Configure secret management (SOPS + age) and environment promotion strategy.
-- Create the GitOps repository, Argo CD projects, and deployment templates for
+- Create the GitOps repository, FluxCD sources, and deployment templates for
   core services.
-- Instrument clusterwide logging, metrics, and tracing with Grafana, Loki, and
-  Tempo; define alert routing rules.
+- Deploy Traefik ingress and cert-manager with Let's Encrypt issuers.
+- Instrument clusterwide logging, metrics, and tracing with Prometheus,
+  OpenSearch, and OpenTelemetry; define alert routing rules.
 - Document access controls, networking policies, and disaster recovery
   expectations.
+- Publish the infrastructure design document covering DOKS, GitOps, secrets,
+  and observability baselines.
 
 ### Phase 0 Exit Criteria
 
@@ -30,6 +34,7 @@ capacity is known.
   and `audio` services via GitOps.
 - Platform runbook published covering provisioning, credentials, and restore
   procedures.
+- Infrastructure design document approved and referenced by Phase 0 work.
 
 ## Phase 1 - Canonical Content Foundation
 

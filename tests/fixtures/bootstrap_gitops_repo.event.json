@@ -1,0 +1,8 @@
+{
+  "inputs": {
+    "gitops_org": "df12-test",
+    "gitops_repo": "episodic-gitops",
+    "gitops_branch": "main",
+    "execution_mode": "validate"
+  }
+}
