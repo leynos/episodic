@@ -246,6 +246,93 @@ flowchart TD
     I --> K((Human Review))
 ```
 
+#### Content Request Decision Tree
+
+The decision tree below expands the routing logic that determines which
+workflow to invoke, how to handle revisions, and when to require manual review
+before proceeding.
+
+```mermaid
+flowchart TD
+    A["Content Request"]
+    B["Content Type"]
+    C["Full Generation Pipeline"]
+    D["Incremental Update"]
+    E["Bromide Analysis"]
+    F["Source Documents"]
+    G["Priority-Based Processing"]
+    H["Direct Processing"]
+    I["Change Type"]
+    J["Re-analyze Quality"]
+    K["Update Only"]
+    L["Content Generation"]
+    M["Quality Gate"]
+    N["Audio Generation"]
+    O["Revision Required"]
+    P["Revision Type"]
+    Q["LLM Revision"]
+    R["User Intervention"]
+    S["Editorial Review"]
+    T["Complete"]
+    A --> B
+    B -- New Episode --> C
+    B -- Edit Existing --> D
+    B -- Quality Check Only --> E
+    C --> F
+    F -- Multiple Sources --> G
+    F -- Single Source --> H
+    D --> I
+    I -- Content Change --> J
+    I -- Metadata Change --> K
+    G --> L
+    H --> L
+    J --> L
+    L --> M
+    M -- Pass --> N
+    M -- Fail --> O
+    O --> P
+    P -- Automatic --> Q
+    P -- Manual --> R
+    Q --> L
+    R --> S
+    S --> L
+    N --> T
+    K --> T
+    E --> T
+```
+
+#### Content Generation Sequence
+
+The sequence below captures the common interactions between the API surface,
+the generation orchestrator, QA evaluators, and downstream audio synthesis.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API as "API Service"
+    participant Orchestrator as "Content Generation Orchestrator"
+    participant Postgres
+    participant LLMPort
+    participant Bromide
+    participant TTSPort
+    User ->> API : Submit generation request
+    API ->> Postgres : Persist episode and source metadata
+    API ->> Orchestrator : Initialise StateGraph run
+    Orchestrator ->> LLMPort : Generate draft content
+    LLMPort -->> Orchestrator : Draft content
+    Orchestrator ->> Bromide : Evaluate draft quality
+    Bromide -->> Orchestrator : QA report
+    Orchestrator ->> Postgres : Store iteration results
+    Orchestrator -->> API : Ready for approval
+    API -->> User : Request editorial review
+    User ->> API : Approve content
+    API ->> Orchestrator : Trigger audio synthesis
+    Orchestrator ->> TTSPort : Synthesise narration
+    TTSPort -->> Orchestrator : Audio stems
+    Orchestrator ->> Postgres : Persist audio metadata
+    Orchestrator -->> API : Publish-ready notification
+```
+
 ### Audio Synthesis Graph
 
 The audio synthesis workflow follows a similar pattern with preview-driven
@@ -334,6 +421,118 @@ sequenceDiagram
     end
 ```
 
+#### Audio Generation Error Recovery
+
+Audio synthesis requires resilient handling for voice synthesis failures and
+quality regressions. The diagram below maps the primary recovery routes.
+
+```mermaid
+flowchart TD
+    A["Audio Generation Request"]
+    B["Voice Profile Validation"]
+    C["Profile Valid?"]
+    D["Profile Error Response"]
+    E["TTSPort Call"]
+    F["API Response"]
+    G["Audio Quality Analysis"]
+    H["Voice Synthesis Error"]
+    I["API Error Handler"]
+    J["Rate Limit Handler"]
+    K["Catastrophic Failure Detection"]
+    L["Failure Type"]
+    M["Voice Parameter Adjustment"]
+    N["Alternative Voice Selection"]
+    O["Retry with Adjusted Parameters"]
+    P["Voice Substitution"]
+    Q["Substitution Available?"]
+    R["Retry with New Voice"]
+    S["Manual Voice Assignment"]
+    T["User Notification"]
+    U["Voice Selection Interface"]
+    V["Error Classification"]
+    W["Retry Logic"]
+    X["Service Unavailable"]
+    Y["Exponential Backoff"]
+    Z["Retry Attempt"]
+    AA["Alternative Service Check"]
+    BB["Backup Service Available?"]
+    CC["Failover to Backup"]
+    DD["Service Failure Notification"]
+    EE["Backup Service Call"]
+    FF["Rate Limit Queue"]
+    GG["Scheduled Retry"]
+    HH["Quality Check"]
+    II["Post-Processing Pipeline"]
+    JJ["Quality Failure Analysis"]
+    KK["Failure Reason"]
+    LL["Artifact Removal Attempt"]
+    MM["Voice Correction"]
+    NN["Quality Enhancement"]
+    OO["Artifact Removal Success?"]
+    PP["Regeneration Required"]
+    QQ["Voice Profile Correction"]
+    RR["Quality Enhancement Processing"]
+    SS["Enhancement Success?"]
+    TT["Automatic Regeneration"]
+    UU["Success Response"]
+    A --> B
+    B --> C
+    C -- No --> D
+    C -- Yes --> E
+    E --> F
+    F -- Success --> G
+    F -- Voice Failure --> H
+    F -- API Error --> I
+    F -- Rate Limited --> J
+    H --> K
+    K --> L
+    L -- Recoverable --> M
+    L -- Non-Recoverable --> N
+    M --> O
+    O --> E
+    N --> P
+    P --> Q
+    Q -- Yes --> R
+    Q -- No --> S
+    R --> E
+    S --> T
+    T --> U
+    I --> V
+    V -- Temporary --> W
+    V -- Permanent --> X
+    W --> Y
+    Y --> Z
+    Z --> E
+    X --> AA
+    AA --> BB
+    BB -- Yes --> CC
+    BB -- No --> DD
+    CC --> EE
+    EE --> F
+    J --> FF
+    FF --> GG
+    GG --> E
+    G --> HH
+    HH -- Pass --> II
+    HH -- Fail --> JJ
+    JJ --> KK
+    KK -- Audio Artifacts --> LL
+    KK -- Wrong Voice --> MM
+    KK -- Poor Quality --> NN
+    LL --> OO
+    OO -- Yes --> G
+    OO -- No --> PP
+    MM --> QQ
+    QQ --> PP
+    NN --> RR
+    RR --> SS
+    SS -- Yes --> G
+    SS -- No --> PP
+    PP --> TT
+    TT --> E
+    II --> UU
+```
+
 ### State Persistence and Checkpointing
 
 LangGraph checkpointing integrates with the platform's Postgres storage:
@@ -390,6 +589,77 @@ Agentic workflow behaviour is configurable per series profile:
   synthesis graph checkpoints and driving routing decisions.
 - Alembic migrations version schema changes; migrations run in CI and during
   deployments to guarantee consistency.
+
+### Core Entity Model
+
+The core entity model summarises the primary data domains that anchor series,
+episode, and asset management.
+
+```mermaid
+erDiagram
+    USERS {
+        id uuid PK
+        email string
+        username string
+        profile jsonb
+        created_at timestamp
+        updated_at timestamp
+        is_active boolean
+    }
+    SERIES_PROFILES {
+        id uuid PK
+        user_id uuid FK
+        title string
+        configuration jsonb
+        cast_profiles jsonb
+        created_at timestamp
+        updated_at timestamp
+    }
+    EPISODES {
+        id uuid PK
+        series_profile_id uuid FK
+        user_id uuid FK
+        title string
+        content jsonb
+        status string
+        metadata jsonb
+        created_at timestamp
+        updated_at timestamp
+    }
+    EPISODE_VERSIONS {
+        episode_id uuid FK
+        transaction_id integer FK
+        end_transaction_id integer
+        operation_type integer
+        content jsonb
+        created_at timestamp
+    }
+    AUDIO_ASSETS {
+        id uuid PK
+        episode_id uuid FK
+        asset_type string
+        file_path string
+        metadata jsonb
+        created_at timestamp
+    }
+    QUALITY_REPORTS {
+    }
+    CAST_PROFILES {
+    }
+    VOICE_PROFILES {
+    }
+    GENERATION_TASKS {
+    }
+    USERS ||--o{ SERIES_PROFILES : creates
+    USERS ||--o{ EPISODES : owns
+    SERIES_PROFILES ||--o{ EPISODES : contains
+    EPISODES ||--o{ EPISODE_VERSIONS : versioned_by
+    EPISODES ||--o{ AUDIO_ASSETS : generates
+    EPISODES ||--o{ QUALITY_REPORTS : analyzed_by
+    SERIES_PROFILES ||--o{ CAST_PROFILES : defines
+    CAST_PROFILES ||--o{ VOICE_PROFILES : uses
+    EPISODES ||--o{ GENERATION_TASKS : processes
+```
 
 The following indexes support performant queries for agentic workflow tables:
 
@@ -473,6 +743,47 @@ erDiagram
     EPISODES ||--o{ APPROVAL_EVENTS : has
 
     WORKFLOW_CHECKPOINTS ||--o{ AUDIO_FEEDBACK : contextualises
+```
+
+## Episode State Lifecycle
+
+Episodes progress through defined states from draft creation to publication.
+The state diagram below captures the primary transitions used by the approval
+and production workflows.
+
+```mermaid
+stateDiagram-v2
+    Archived --> Archived
+    AudioGeneration --> Failed
+    AudioGeneration --> PostProcessing
+    Draft --> Archived
+    Draft --> InProgress
+    EditorialReview --> AudioGeneration
+    EditorialReview --> OnHold
+    EditorialReview --> QualityReview
+    Failed --> Archived
+    Failed --> Draft
+    InProgress --> Draft
+    InProgress --> Failed
+    InProgress --> QualityReview
+    OnHold --> Archived
+    OnHold --> EditorialReview
+    PostProcessing --> AudioGeneration
+    PostProcessing --> ReadyToPublish
+    Published --> Archived
+    Published --> Updated
+    QualityReview --> EditorialReview
+    QualityReview --> InProgress
+    QualityReview --> Rejected
+    ReadyToPublish --> Draft
+    ReadyToPublish --> Published
+    ReadyToPublish --> Scheduled
+    Rejected --> Archived
+    Rejected --> Draft
+    Scheduled --> Published
+    Scheduled --> ReadyToPublish
+    Updated --> Published
+    [*] --> Draft
 ```
 
 ## Core Workflows
