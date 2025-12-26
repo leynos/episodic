@@ -21,8 +21,8 @@ capacity is known.
 - Create the GitOps repository, FluxCD sources, and deployment templates for
   core services.
 - Deploy Traefik ingress and cert-manager with Let's Encrypt issuers.
-- Instrument clusterwide logging, metrics, and tracing with Prometheus,
-  OpenSearch, and OpenTelemetry; define alert routing rules.
+- Instrument clusterwide logging, metrics, and tracing with Prometheus, Loki,
+  and Tempo; define alert routing rules.
 - Document access controls, networking policies, and disaster recovery
   expectations.
 - Publish the infrastructure design document covering DOKS, GitOps, secrets,

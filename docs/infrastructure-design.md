@@ -43,6 +43,7 @@ without manual intervention.
 - Cache: Valkey operator (Redis-compatible) via
   <https://github.com/hyperspike/valkey-operator>.
 - Messaging: RabbitMQ Kubernetes Operator.
+- Observability: Prometheus, Tempo, and Loki via OpenTelemetry Collector.
 - Secrets: SOPS (Secrets OPerationS) + age for GitOps, plus a shared Vault
   appliance with Wildside.
 
@@ -183,11 +184,11 @@ locally using act and pytest as defined in
 Observability is OpenTelemetry-first with the following defaults:
 
 - **Traces:** OpenTelemetry Collector receives OpenTelemetry Protocol (OTLP)
-  traces and forwards to the configured backend.
+  traces and forwards them to Tempo.
 - **Metrics:** Prometheus is the default in-cluster collector. InfluxDB remains
   an optional long-term metrics store.
-- **Logs:** OpenSearch is the default log store; alternative backends must
-  conform to OpenTelemetry log exports.
+- **Logs:** Loki is the default log store; alternative backends must conform to
+  OpenTelemetry log exports.
 
 Phase 0 must define which backends are enabled per environment and publish
 baseline dashboards and alert routes.
@@ -202,7 +203,6 @@ baseline dashboards and alert routes.
 
 ## Dependencies and open questions
 
-- Select the trace backend that OpenTelemetry Collector exports to.
 - Publish the shared Vault contract (endpoints, CA bundle, auth method).
 - Define the minimum Service Level Objectives (SLOs) and alert routing for the
   observability stack.

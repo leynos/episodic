@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Deploys OpenTelemetry Collector, Prometheus, and OpenSearch.
+Deploys OpenTelemetry Collector, Prometheus, Tempo, and Loki.
 
 ## GitOps render mode
 
