@@ -16,7 +16,7 @@ command interception is intentionally avoided; containers execute in isolation.
 
 ## Prerequisites
 
-- Docker daemon available.
+- Container daemon available (Docker or Podman).
 - `act` installed.
 - Python 3.10+ with `pytest`.
 - Optional but recommended: pin an image to reduce drift:
@@ -24,6 +24,27 @@ command interception is intentionally avoided; containers execute in isolation.
   ```bash
   act pull_request -P ubuntu-latest=catthehacker/ubuntu:act-latest --list
   ```
+
+## Fedora + Podman notes
+
+For Fedora, use the Podman socket and pass it through to `act`:
+
+```bash
+systemctl --user enable --now podman.socket
+export DOCKER_HOST="unix:///run/user/$UID/podman/podman.sock"
+act workflow_dispatch --container-daemon-socket "$DOCKER_HOST" ...
+```
+
+## Artefact handling with act
+
+When `actions/upload-artifact` runs under `act`, the output is a zip file under
+the artefact server path. Expect a path such as:
+
+- `/tmp/act-artifacts/<run-id>/<artifact-name>/<artifact-name>.zip`
+
+Tests should unpack the zip if the raw JSON file is not directly available.
+
+For reference patterns, see `../falcon-correlate/tests/workflows/`.
 
 ## Minimal layout
 
