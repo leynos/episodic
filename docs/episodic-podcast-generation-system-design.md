@@ -55,6 +55,34 @@ support editorial approvals at configurable stages. Persistence and
 checkpointing provide resumable workflows that survive service restarts and
 enable long-running editorial review periods.
 
+### Hexagonal architecture enforcement
+
+Hexagonal architecture is treated as an enforced boundary rather than a
+convention. The system adopts explicit guardrails so that domain logic remains
+framework-agnostic and adapters remain replaceable.
+
+Boundary rules:
+
+- **Domain** modules contain business logic and port contracts, without direct
+  dependencies on transport, storage, or vendor SDKs.
+- **Ports** define typed interfaces and domain error models; adapters implement
+  ports rather than leaking infrastructure concerns into the domain.
+- **Inbound adapters** (Falcon HTTP, CLI, scheduler entrypoints) depend on the
+  domain and ports, but never on outbound adapter implementations.
+- **Outbound adapters** (database, object storage, message broker, LLM/TTS
+  vendors) depend on the domain and ports, but never on inbound adapters.
+- **Cross-adapter imports** are forbidden; interactions happen through ports or
+  well-defined message schemas.
+
+Enforcement mechanisms:
+
+- Lint rules and import conventions flag forbidden dependency direction
+  (e.g. inbound or outbound modules importing each other).
+- Architecture tests validate the allowed dependency graph and port contract
+  adherence as part of `make test`.
+- Contract tests exercise port behaviour against adapter implementations, so
+  adapters are verified without coupling to infrastructure in the domain.
+
 ## Component Responsibilities
 
 ### Canonical Content Platform

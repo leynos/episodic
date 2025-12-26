@@ -33,6 +33,9 @@ that align with the system design.
   recovery expectations.
 - [ ] 1.2.10. Publish the infrastructure design document covering DOKS, GitOps,
   secrets, and observability baselines. See `docs/infrastructure-design.md`.
+- [ ] 1.2.11. Implement architectural enforcement checks for hexagonal
+  boundaries (lint rules and architecture tests). See
+  `docs/episodic-podcast-generation-system-design.md`.
 
 ### 1.3. Exit criteria
 
@@ -42,6 +45,7 @@ that align with the system design.
   restore procedures.
 - [ ] 1.3.3. Infrastructure design document approved and referenced by Phase 0
   work.
+- [ ] 1.3.4. CI gates include enforced hexagonal boundary checks.
 
 ## 2. Canonical content foundation
 
