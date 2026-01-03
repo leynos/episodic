@@ -57,7 +57,7 @@ domain oversight.
 **Celery Task Scope and Domain Boundaries:** Celery is used to run background
 tasks in the Episodic system, which likely includes executing LangGraph
 workflows asynchronously. A potential boundary issue here is the **scope of
-Celery tasks** – if a single Celery task tries to perform an entire multi-step
+Celery tasks** – if a single Celery task tries to perform an entire multistep
 generation workflow end-to-end, it may end up intermixing concerns. For
 example, a monolithic task might call an LLM, evaluate results, update the
 database, and send notifications all in one go, crossing multiple layers.
@@ -123,7 +123,7 @@ the domain service itself automatically triggers a retry, it might entangle
 orchestration concerns. Instead, the agentic system (LangGraph/Celery) should
 catch the failure (perhaps via a Celery retry or a graph loop) and then invoke
 the domain operation again or route to an escalation. Ensuring that failure
-handling, retries, and multi-step sequences are managed by the orchestration
+handling, retries, and multistep sequences are managed by the orchestration
 layer prevents those concerns from leaking into domain code. The **operational
 risk** if this leaks is that it becomes hard to change the workflow because
 domain logic changes become necessary, and tight coupling can emerge where
@@ -249,7 +249,7 @@ a task might directly manipulate persistent state across different domain
 aggregates (updating content and audio records together) which normally would
 be handled in a domain service transaction. At scale, these patterns are
 dangerous: they introduce hidden dependencies between tasks and domain data
-that aren’t obvious. If a Celery task fails halfway through a multi-step
+that aren’t obvious. If a Celery task fails halfway through a multistep
 sequence it was handling on its own, the domain could be left in a
 half-consistent state (since that task might have performed some updates and
 not others). The Episodic design tries to avoid this by using **short,
