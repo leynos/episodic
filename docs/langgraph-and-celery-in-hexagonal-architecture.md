@@ -101,10 +101,8 @@ database state transitions (through ports) so that each task knows what it can
 expect (e.g. a Celery task only proceeds when the domain signals that QA
 results are stored and ready). Hidden coupling can also be addressed by
 **comprehensive tracing and logging**, something the LangGraph framework
-emphasizes so that unseen dependencies can be spotted in how the agent
-executes([1](https://blog.langchain.com/building-langgraph/#:~:text=a%20previous%20step.%20,are%20happy%20with%20the%20outcome)
- )(
-[1](https://blog.langchain.com/building-langgraph/#:~:text=,learn%20how%20users%20use%20it)).
+emphasises so that unseen dependencies can be spotted in how the agent executes
+[LangGraph blog](https://blog.langchain.com/building-langgraph/).
 
 **Orchestration Logic Leaking into Domain Layer:** A subtle risk is
 **orchestration leakage**, where the process control code (which ideally
@@ -139,30 +137,28 @@ hours, especially with human approval in the loop. This introduces challenges
 around reliability and consistency. One major risk is that *long-running tasks
 can fail mid-way*, and if not handled, all progress is lost. The LangGraph
 design explicitly identifies this risk: if an agent fails on minute 9 of a
-10-minute run, restarting from scratch is
-expensive([1](https://blog.langchain.com/building-langgraph/#:~:text=because%2C%20the%20longer%20they%20run%2C,for%20something%20to%20go%20wrong)).
- In a Celery context, workers might crash or tasks might be killed for taking
-too long. To combat this, LangGraph leverages **checkpointing** – saving the
-state of the workflow periodically so it can resume without restarting
-entirely([1](https://blog.langchain.com/building-langgraph/#:~:text=,retry%20when%20it%20does%20fail)
- )(
-[1](https://blog.langchain.com/building-langgraph/#:~:text=,learn%20how%20users%20use%20it)).
- The Episodic system implements this by serializing the StateGraph state to a
-database at key checkpoints. While this addresses reliability, it brings
-operational overhead: the system must ensure that after a crash or a deliberate
-pause (like waiting for human feedback), the resume logic correctly restores
-state and continues via Celery without missteps. If Celery tasks aren’t
-properly encapsulated around these checkpoints, scenarios can arise where a
-task resumes with stale data or double-processing after a retry. There’s also
-the question of **timeouts and resource usage**: Celery tasks have time limits
-(which might be extended for these workflows). A risk is that a single
-LangGraph execution might exhaust worker resources if it isn’t broken into
-smaller tasks. The design’s use of a task queue (Celery/RabbitMQ) is meant to
-decouple the user request from the agent
-execution([1](https://blog.langchain.com/building-langgraph/#:~:text=,the%20computation%20state%20at%20intermediate)),
- but it’s crucial to also break the work into manageable chunks. For example,
-running each major phase (generation, evaluation, refinement) as separate tasks
-or sub-tasks can prevent any one task from running prohibitively long.
+10-minute run, restarting from scratch is expensive
+[LangGraph blog](https://blog.langchain.com/building-langgraph/). In a Celery
+context, workers might crash or tasks might be killed for taking too long. To
+combat this, LangGraph leverages **checkpointing** – saving the state of the
+workflow periodically so it can resume without restarting entirely
+[LangGraph blog](https://blog.langchain.com/building-langgraph/). The Episodic
+system implements this by serializing the StateGraph state to a database at key
+checkpoints. While this addresses reliability, it brings operational overhead:
+the system must ensure that after a crash or a deliberate pause (like waiting
+for human feedback), the resume logic correctly restores state and continues
+via Celery without missteps. If Celery tasks aren’t properly encapsulated
+around these checkpoints, scenarios can arise where a task resumes with stale
+data or double-processing after a retry. There’s also the question of
+**timeouts and resource usage**: Celery tasks have time limits (which might be
+extended for these workflows). A risk is that a single LangGraph execution
+might exhaust worker resources if it isn’t broken into smaller tasks. The
+design’s use of a task queue (Celery/RabbitMQ) is meant to decouple the user
+request from the agent execution
+[LangGraph blog](https://blog.langchain.com/building-langgraph/), but it’s
+crucial to also break the work into manageable chunks. For example, running
+each major phase (generation, evaluation, refinement) as separate tasks or
+sub-tasks can prevent any one task from running prohibitively long.
 **Asynchronous orchestration** also means dealing with eventual consistency: a
 user might query the episode status while tasks are ongoing. The domain model
 accounts for this by tracking a generation run’s status and progress in the
@@ -211,9 +207,9 @@ properly with the orchestrator’s state).
 
 **Complex Graphs Testing Hexagonal Boundaries:** The Episodic system has strict
 architectural enforcement (lint rules and tests for dependency direction).
-However, as LangGraph workflows grow in size and complexity, maintaining those
-enforcement guarantees becomes harder. A large LangGraph StateGraph can involve
-many nodes and transitions – effectively a mini-application within the
+However, as LangGraph workflows grow and increase in complexity, maintaining
+those enforcement guarantees becomes harder. A large LangGraph StateGraph can
+involve many nodes and transitions – effectively a mini-application within the
 application. Ensuring that none of those nodes violates boundaries (e.g.
 calling unauthorized modules) is challenging. Architecture tests typically
 check static module dependencies, but if a LangGraph node dynamically imports

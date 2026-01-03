@@ -12,18 +12,9 @@ from zipfile import ZipFile
 
 import pytest
 
+from tests.utils import podman_socket_path
+
 EVENT = Path("tests/fixtures/provision_doks.event.json")
-
-
-def podman_socket() -> Path:
-    """Return the expected Podman socket path."""
-    socket = Path(f"/run/user/{os.getuid()}/podman/podman.sock")
-    if not socket.exists():
-        pytest.skip(
-            "Podman socket not found. "
-            "Enable it with `systemctl --user enable --now podman.socket`."
-        )
-    return socket
 
 
 def artifact_server_port() -> str:
@@ -38,8 +29,8 @@ def run_act(*, artifact_dir: Path) -> tuple[int, str]:
     if which("act") is None:
         pytest.skip("act is required to run workflow integration tests.")
 
-    socket = podman_socket()
-    socket_uri = f"unix://{socket}"
+    socket_path = podman_socket_path()
+    socket_uri = f"unix://{socket_path}"
     port = artifact_server_port()
     cmd = [
         "act",

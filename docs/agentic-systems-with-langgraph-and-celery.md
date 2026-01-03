@@ -364,7 +364,7 @@ ______________________________________________________________________
 ## 5. The Interface Layer: Model Context Protocol (MCP)
 
 As agentic systems mature, the number of tools they need to access grows
-exponentially. Hardcoding Python functions (`def search_google(query):...`)
+exponentially. Hardcoding Python functions (`def search_google(query):…`)
 creates a maintenance bottleneck and tight coupling between the agent’s code
 and the tool’s implementation. The **Model Context Protocol (MCP)** provides a
 standardized solution to this “Driver Problem”.3
@@ -598,7 +598,7 @@ sensitive patterns (Credit Cards, SSNs) and redact them.
 ```python
 class PIIMiddleware:
     def before_model(self, messages, config):
-        scrubbed =
+        scrubbed = []
         for m in messages:
             # Regex or NLP-based redaction
             clean_text = redact_sensitive_data(m.content)
@@ -791,6 +791,10 @@ ______________________________________________________________________
 
 _Table 1: Architectural component summary._
 
+The table summarises the key components of the Generation 2 agentic
+architecture, their primary technologies, responsibilities, and design patterns
+used in each layer.
+
 | **Component**      | **Technology Choice** | **Primary Responsibility**       | **Key Design Pattern**                    |
 | ------------------ | --------------------- | -------------------------------- | ----------------------------------------- |
 | **Orchestrator**   | LangGraph             | State Management, Decision Logic | Cyclic Graph, Checkpointing               |
@@ -818,14 +822,15 @@ _Table 1: Architectural component summary._
 6. Plan-and-Execute Agents — LangChain Blog,
    <https://blog.langchain.com/planning-agents/>
 7. Parallel Nodes in LangGraph: Managing Concurrent Branches with the Deferred
-   Execution,
+   Execution — Medium,
    <https://medium.com/@gmurro/parallel-nodes-in-langgraph-managing-concurrent-branches-with-the-deferred-execution-d7e94d03ef78>
 8. Part 3 — Scaling AI Chatbot Memory with Redis and LangGraph | by Ratnesh
-   Yadav,
+   Yadav — Medium,
    <https://medium.com/@ratneshyadav_26063/part-3-scaling-ai-chatbot-memory-with-redis-and-langgraph-a1fceaec335b>
-9. LangGraph & Redis: Build smarter AI agents with memory & persistence,
+9. LangGraph & Redis: Build smarter AI agents with memory & persistence —
+   Redis,
    <https://redis.io/blog/langgraph-redis-build-smarter-ai-agents-with-memory-persistence/>
-10. LangGraph Redis Checkpoint 0.1.0,
+10. LangGraph Redis Checkpoint 0.1.0 — Redis,
     <https://redis.io/blog/langgraph-redis-checkpoint-010/>
 11. Need guidance on using LangGraph Checkpointer for persisting chatbot
     sessions — Reddit,
@@ -837,7 +842,7 @@ _Table 1: Architectural component summary._
     LangChain Forum,
     <https://forum.langchain.com/t/generate-subgraph-state-dynamically-in-supervisor-from-user-request/75>
 14. What Actually Happens When LangChain Runs In a Celery Task | by Alexander
-    Wei | Data Science Collective | Dec, 2025 | Medium,
+    Wei | Data Science Collective | Dec, 2025 — Medium,
     <https://medium.com/data-science-collective/what-actually-happens-when-langchain-runs-in-a-celery-task-c55bef4fba14>
 15. Interrupts — Docs by LangChain,
     <https://docs.langchain.com/oss/python/langgraph/interrupts>
@@ -847,7 +852,7 @@ _Table 1: Architectural component summary._
     finishes? — Reddit,
     <https://www.reddit.com/r/LangChain/comments/1nc9y75/how_to_update_a_langgraph_agent_frontend_when_a/>
 18. How to preserve state and resume workflows in langchain with human
-    intervention,
+    intervention — Latenode Community,
     <https://community.latenode.com/t/how-to-preserve-state-and-resume-workflows-in-langchain-with-human-intervention/39108>
 19. LangChain MCP: Integrating LangChain with Model Context Protocol —
     Leanware,
@@ -855,7 +860,7 @@ _Table 1: Architectural component summary._
 20. LangChain MCP Integration: Complete Guide to MCP Adapters — Latenode,
     <https://latenode.com/blog/ai-frameworks-technical-infrastructure/langchain-setup-tools-agents-memory/langchain-mcp-integration-complete-guide-to-mcp-adapters>
 21. Creating Your First MCP Server: A Hello World Guide | by Gianpiero
-    Andrenacci | AI Bistrot | Dec, 2025,
+    Andrenacci | AI Bistrot | Dec, 2025 — Medium,
     <https://medium.com/data-bistrot/creating-your-first-mcp-server-a-hello-world-guide-96ac93db363e>
 22. Skills Turn Reasoning Into Architecture: Rethinking How AI Agents Think —
     Medium,
@@ -865,7 +870,7 @@ _Table 1: Architectural component summary._
 24. Custom middleware — Docs by LangChain,
     <https://docs.langchain.com/oss/python/langchain/middleware/custom>
 25. LangChain Middleware v1-Alpha: A Comprehensive Guide to Agent Control and
-    Customization | Colin McNamara,
+    Customization — Colin McNamara,
     <https://colinmcnamara.com/blog/langchain-middleware-v1-alpha-guide>
 26. Logging — Galileo,
     <https://v2docs.galileo.ai/sdk-api/third-party-integrations/langchain/langchain>
