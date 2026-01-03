@@ -791,7 +791,7 @@ ______________________________________________________________________
 
 _Table 1: Architectural component summary._
 
-The table summarises the key components of the Generation 2 agentic
+The table summarizes the key components of the Generation 2 agentic
 architecture, their primary technologies, responsibilities, and design patterns
 used in each layer.
 
