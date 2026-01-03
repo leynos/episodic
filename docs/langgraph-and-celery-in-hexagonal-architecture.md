@@ -6,7 +6,7 @@
 Hexagonal Architecture, meaning core business logic (the domain) should remain
 independent of frameworks or infrastructure. Introducing LangGraph (an agentic
 workflow engine) and Celery (for async task execution) can threaten this
-separation if not carefully managed. A key friction is ensuring domain
+separation if not carefully managed. A key friction is ensuring the domain’s
 *purity*: domain services and entities should not directly depend on LangGraph
 graphs or Celery mechanics. For example, the design mandates that domain
 modules remain *framework-agnostic*, so if domain logic starts relying on
@@ -262,9 +262,9 @@ domain isolation because each task goes through well-defined ports and commits
 its results before handing off. **Enforcement breaks down if tasks overstep
 their bounds**: for example, if a “monolithic” task is created to speed things
 up, and it bypasses intermediate persistence or port calls, it may work
-initially but will be fragile to failures and hard to test. Therefore, at
-scale, a key discipline is to *modularize the Celery workflow* in tandem with
-the LangGraph structure, so that each node or subgraph corresponds to a
+initially but will be fragile to failures and difficult to verify. Therefore,
+at scale, a key discipline is to *modularize the Celery workflow* in tandem
+with the LangGraph structure, so that each node or subgraph corresponds to a
 cohesive unit of work that can be independently verified to respect hexagonal
 boundaries.
 
@@ -284,23 +284,24 @@ hexagonal design would dictate that **important domain state changes go through
 domain repositories**, not just live in the orchestration layer’s memory. The
 design addresses this by logging QA results and iteration history in dedicated
 tables (e.g. `generation_iterations`, `qa_findings`) alongside the checkpoint
-blob. However, if the graph gets very large, the temptation might be to put
-more into the state blob and less in structured tables (since LangGraph can
-serialize complex objects). This could lead to *boundary blurring*, where some
-business data lives only in a LangGraph snapshot (an adapter-level concern)
-rather than the domain model. Should that snapshot fail to restore or get out
-of sync, the domain might not even be aware of some intermediate decisions.
-Thus, one enforcement challenge is ensuring that **state persistence remains a
-technical convenience and not a source of truth**. Regular audits of what goes
-into the checkpoint state versus what is persisted via ports can catch any
-drift. The design even includes audit links from checkpoints to approval
-events, showing an intent to integrate the two worlds; maintaining that link is
-essential so that every checkpoint corresponds to a known domain event or
-status. In summary, as the workflows become more elaborate, the team must
-**vigilantly enforce the hexagonal boundaries with tooling and reviews**, since
-manual enforcement can falter under complexity. The goal is that even as
-LangGraph and Celery enable rich, asynchronous workflows, the fundamental
-architecture (ports, adapters, and a clean domain core) does not degrade.
+blob. However, if the graph expands beyond a few dozen nodes, the temptation
+might be to put more into the state blob and less in structured tables (since
+LangGraph can serialize complex objects). This could lead to *boundary
+blurring*, where some business data lives only in a LangGraph snapshot (an
+adapter-level concern) rather than the domain model. Should that snapshot fail
+to restore or get out of sync, the domain might not even be aware of some
+intermediate decisions. Thus, one enforcement challenge is ensuring that
+**state persistence remains a technical convenience and not a source of
+truth**. Regular audits of what goes into the checkpoint state versus what is
+persisted via ports can catch any drift. The design even includes audit links
+from checkpoints to approval events, showing an intent to integrate the two
+worlds; maintaining that link is essential so that every checkpoint corresponds
+to a known domain event or status. In summary, as the workflows become more
+elaborate, the team must **vigilantly enforce the hexagonal boundaries with
+tooling and reviews**, since manual enforcement can falter under complexity.
+The goal is that even as LangGraph and Celery enable rich, asynchronous
+workflows, the fundamental architecture (ports, adapters, and a clean domain
+core) does not degrade.
 
 ## Alignment of LangGraph Features with Hexagonal Principles
 
@@ -402,7 +403,7 @@ within a Hexagonal Architecture if used with discipline:
   `workflow_checkpoints` table and tying that to domain entities (episodes and
   approvals). This design means the domain is at least aware that a workflow
   can be paused and resumed (since an Episode can have a “pending approval”
-  status and a linked checkpoint ID perhaps), but the domain doesn’t need to
+  status and a linked checkpoint ID, perhaps), but the domain doesn’t need to
   know *how* the resume works internally. That’s handled by the orchestration
   engine reading from the checkpoint store. This separation keeps the domain
   **pure** in the sense that an `Episode` might have a status “Awaiting

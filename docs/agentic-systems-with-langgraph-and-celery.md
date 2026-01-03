@@ -789,7 +789,7 @@ face of real-world enterprise demands.
 
 ______________________________________________________________________
 
-_Table 1: Architectural component summary._
+**Table 1: Architectural component summary.**
 
 The table summarizes the key components of the Generation 2 agentic
 architecture, their primary technologies, responsibilities, and design patterns
