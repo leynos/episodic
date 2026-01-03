@@ -321,11 +321,11 @@ within a Hexagonal Architecture if used with discipline:
   preserving the port abstraction. The **alignment** here is good: it uses the
   database (an external resource) through well-defined tables and presumably
   via the same ORM/repository patterns as any other data, rather than some
-  ad-hoc file or in-memory store. One caveat is to ensure the serialization
-  format (possibly JSON or pickled Python objects in `state_blob`) doesn’t
-  become a liability – e.g. if it’s pickled Python, that’s not
-  language-agnostic and ties the implementation details into the data store. A
-  better alignment with hexagonal thinking might be to serialize only
+  ad-hoc file or in-memory store. Recommended best practice is to use a
+  language-agnostic serialization format (JSON or Protobuf) so the `state_blob`
+  does not lock persistence to Python. No implementation exists yet, so no
+  migration is required; the expectation is to choose a neutral format from the
+  outset. A better alignment with hexagonal thinking might be to serialize only
   domain-relevant portions in a neutral format (JSON of statuses, etc.), but
   since the checkpoint is largely an internal concern, this is a minor issue.
   Overall, state persistence via LangGraph can coexist with hexagonal
