@@ -40,11 +40,18 @@ exposing approvals and delivery channels.
 The system follows a hexagonal architecture: domain services expose ports, and
 adapters integrate external capabilities such as LLMs, TTS vendors, and
 storage. HTTP services are delivered with Falcon 4.2.x running on Granian, and
-background tasks are handled by Celery with RabbitMQ as the broker. Services
-communicate through asynchronous messaging and synchronous HTTP or gRPC calls.
-Persistent state lives in Postgres with Alembic migrations. Object storage
-holds binary assets. GitOps drives deployments into Kubernetes across sandbox,
-staging, and production environments.
+background tasks are handled by Celery with RabbitMQ as the durable broker and
+Valkey (Redis-compatible) as the result backend. Services communicate through
+asynchronous messaging and synchronous HTTP or gRPC calls. Persistent state
+lives in Postgres with Alembic migrations. Object storage holds binary assets.
+GitOps drives deployments into Kubernetes across sandbox, staging, and
+production environments.
+
+LangGraph provides the control plane for orchestration state, routing
+decisions, and resumable checkpoints, whilst Celery workers form the data plane
+for blocking or compute-heavy execution. Routing keys map I/O-bound tasks to
+high-concurrency pools (gevent or eventlet) and CPU-bound tasks to prefork
+pools, keeping long-running work from blocking orchestration throughput.
 
 The Content Generation Orchestrator and Audio Synthesis Pipeline employ
 LangGraph as the agentic orchestration framework. LangGraph StateGraphs manage
@@ -71,8 +78,12 @@ Boundary rules:
   domain and ports, but never on outbound adapter implementations.
 - **Outbound adapters** (database, object storage, message broker, LLM/TTS
   vendors) depend on the domain and ports, but never on inbound adapters.
+- **Orchestration code** (LangGraph nodes and Celery tasks) depends on domain
+  services and ports only; direct adapter access is forbidden.
 - **Cross-adapter imports** are forbidden; interactions happen through ports or
   well-defined message schemas.
+- **Checkpoint payloads** hold orchestration metadata; canonical domain state
+  is persisted through repositories rather than state blobs.
 
 Enforcement mechanisms:
 
@@ -80,8 +91,12 @@ Enforcement mechanisms:
   (e.g. inbound or outbound modules importing each other).
 - Architecture tests validate the allowed dependency graph and port contract
   adherence as part of `make test`.
+- Architecture tests cover LangGraph node and Celery task imports, enforcing
+  port-only dependencies for orchestration code.
 - Contract tests exercise port behaviour against adapter implementations, so
   adapters are verified without coupling to infrastructure in the domain.
+- Code review checklists enforce idempotency keys, single-responsibility task
+  scope, and checkpoint payload audits for orchestration changes.
 
 ## Component Responsibilities
 
@@ -129,6 +144,8 @@ Enforcement mechanisms:
 - Produces structured drafts, show notes, chapter markers, and sponsorship copy.
 - Persists generation runs alongside prompts, responses, iteration counts, and
   cost telemetry.
+- Records per-task cost entries via `CostLedgerPort` and enforces per-episode
+  budgets through `BudgetPort` before expensive operations.
 - Exposes human-in-the-loop checkpoints where editors can intervene, approve, or
   redirect the generation graph mid-cycle.
 - Provides checkpointing for resumable workflows, enabling long-running
@@ -200,6 +217,7 @@ Enforcement mechanisms:
   OpenTelemetry).
 - Defines SLIs for ingestion latency, generation success, audio throughput, and
   approval turnaround.
+- Tracks LLM token usage, per-task spend, and budget breach events with alerts.
 - Automates rollbacks, blue/green deployments, and incident response runbooks.
 
 ### Security and Compliance Controls
@@ -233,6 +251,54 @@ iterative, feedback-driven processes. Key principles include:
 - **Human-in-the-loop checkpoints pause execution.** Editorial approvals,
   redlines, and audio feedback integrate as interruptible graph nodes with
   persistence.
+
+#### Control and data plane separation
+
+LangGraph StateGraphs operate as the control plane, coordinating state,
+decisions, and checkpoints, whilst Celery workers form the data plane for
+blocking or compute-heavy execution. Graph nodes dispatch tasks to queues with
+routing keys that map I/O-bound work to high-concurrency pools and CPU-bound
+work to prefork pools. This separation keeps long-running work isolated from
+orchestration throughput and allows worker profiles to match workload
+characteristics.
+
+#### Execution patterns for long-running tasks
+
+Long-running operations follow two patterns depending on whether the graph
+requires the result to continue.
+
+- **Fire-and-forget tasks:** Graph nodes enqueue a Celery task for side effects
+  and return immediately, persisting a task identifier for audit but not
+  waiting for the result before routing onward.
+- **Suspend and resume tasks:** Graph nodes enqueue a Celery task, persist an
+  interrupt checkpoint, and pause execution. Workers deliver results through
+  `TaskResumePort`, which resumes the StateGraph with the task output.
+  Idempotency keys are stored alongside the checkpoint so retries do not
+  duplicate side effects. A reconciliation sweep identifies orphaned tasks
+  where dispatch succeeded but the checkpoint write failed, triggering alerts
+  and recovery workflows.
+
+#### Orchestration ports and adapters
+
+Orchestration code relies on ports that keep LangGraph and Celery isolated from
+adapter implementations.
+
+- `BudgetPort` checks and reserves per-user, per-episode, and per-organization
+  budgets before costly steps execute.
+- `CostLedgerPort` persists per-task cost entries and aggregated run totals.
+- `CheckpointPort` saves and restores StateGraph checkpoints.
+- `TaskResumePort` accepts Celery callback payloads and resumes suspended runs.
+- `LLMPort` surfaces token usage metadata for cost accounting callbacks.
+
+#### Inference strategy and tool integration
+
+Planning uses structured output to produce a task plan with explicit
+dependencies, while execution uses tool calling to perform side effects. Model
+tiering assigns higher-capability models to planning and cheaper models to
+execution when budgets are tight. External tools integrate through outbound
+ports, including optional Model Context Protocol (MCP) adapters that expose
+tool catalogs. Skill-based tool loading narrows the available tool set per
+workflow, reducing context size and guiding model choice.
 
 ### Content Generation Graph
 
@@ -570,6 +636,10 @@ LangGraph checkpointing integrates with the platform's Postgres storage:
 
 - **Checkpoint tables** store serialised graph state, keyed by episode ID and
   workflow type.
+- **Valkey checkpointer** provides low-latency state caching when enabled,
+  whilst Postgres remains the system of record for durable checkpoints.
+- **Checkpoint payload boundaries** keep orchestration metadata in state blobs
+  and persist canonical domain artefacts through repositories.
 - **Resume semantics** allow workflows interrupted by service restarts, long
   human review periods, or failures to continue from the last checkpoint.
 - **Audit integration** links checkpoint events to `approval_events` and
@@ -581,6 +651,30 @@ LangGraph checkpointing integrates with the platform's Postgres storage:
   `expired`, operators receive an alert, and stakeholders may restart the
   workflow from the last persisted artefacts (drafts, audio stems) rather than
   from scratch.
+
+### Cost accounting and budget enforcement
+
+Cost accounting treats each LangGraph node and Celery task as a billable unit.
+`LLMPort` callbacks capture prompt and completion token usage, whilst Celery
+tasks record execution time and retry counts. Each task writes a cost entry via
+`CostLedgerPort`, including task identifiers, model metadata, token counts,
+retry totals, and estimated spend. Aggregated totals are stored in StateGraph
+fields such as `total_tokens` and `total_cost_usd`, persisting at checkpoints
+so resumptions retain budget context.
+
+Budget enforcement operates at multiple scopes:
+
+- **Per-user caps:** Daily or monthly limits enforced at request intake.
+- **Per-episode budgets:** Maximum spend per generation run, enforced by the
+  orchestration layer before expensive steps.
+- **Per-organization limits:** Service-wide caps that block further execution
+  once aggregate spend reaches agreed thresholds.
+
+Budget checks run before LLM calls and expensive Celery tasks, routing to a
+budget-exceeded node that records partial results and notifies operators.
+Anomaly controls include iteration caps, `max_concurrency` limits for parallel
+branches, retry budgets for unstable tools, and dead-letter queues for tasks
+halted on budget overruns.
 
 ### Configuration and Tunables
 
@@ -595,6 +689,14 @@ Agentic workflow behaviour is configurable per series profile:
 - **Checkpoint TTL:** Duration before abandoned workflows expire.
 - **Parallel evaluation toggle:** Enable or disable concurrent evaluator
   execution.
+- **Budget caps:** Token or cost limits per user, per episode, and per
+  organization, plus the behaviour when budgets are exceeded.
+- **Model tiering:** Planning and execution model assignments tied to budget
+  and latency targets.
+- **Concurrency limits:** Maximum parallel node execution and task fan-out per
+  graph run.
+- **Task routing profiles:** Queue mappings for I/O-bound versus CPU-bound
+  Celery workloads.
 
 ## Data Model and Storage
 
@@ -613,6 +715,12 @@ Agentic workflow behaviour is configurable per series profile:
 - `generation_iterations` records each generation cycle within a StateGraph run,
   including prompts, responses, evaluator scores, routing decisions, and
   timestamps.
+- `cost_ledger_entries` captures per-task token usage, retry counts, model
+  identifiers, and estimated spend, linked to generation runs.
+- `budget_limits` defines per-user, per-organization, and per-series spend
+  caps, including reset cadence and enforcement policies.
+- `budget_usage` aggregates spend by scope and reporting window to support
+  budget checks and alerting.
 - `workflow_checkpoints` stores serialised LangGraph state for resumable
   workflows, keyed by episode ID, workflow type (generation or synthesis), and
   checkpoint timestamp.
@@ -930,12 +1038,14 @@ stateDiagram-v2
 - Phase 1 implements the canonical content platform, ingestion service, and
   series/template storage defined above.
 - Phase 2 delivers the content generation orchestrator with LangGraph-based
-  agentic workflows, the QA stack as integrated evaluation nodes, and brand
-  compliance automation with feedback-driven refinement loops.
+  agentic workflows, suspend-and-resume execution patterns, hybrid inference,
+  and cost accounting instrumentation alongside integrated QA and brand
+  compliance automation.
 - Phase 3 realises the audio synthesis pipeline with preview-feedback-
   regeneration cycles, including music integration and checkpoint-enabled
   stakeholder review.
 - Phase 4 activates the client experience layer and editorial approval service,
   exposing graph checkpoints through API and console interfaces.
 - Phase 5 rounds out security, compliance, and operational automation in line
-  with the specified controls.
+  with the specified controls, including budget enforcement and cost
+  observability.
