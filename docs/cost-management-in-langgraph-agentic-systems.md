@@ -3,27 +3,30 @@
 As agentic systems scale, tracking and controlling cost (especially LLM token
 usage and compute time) becomes critical for sustainable operation. This
 technical supplement builds on the **LangGraph + Celery** architecture,
-focusing on methods to infer and manage costs across distributed agents. We
-address token usage tracking, per-task cost modeling, anomaly handling, and
-feedback loops for budget enforcement. The strategies below ensure that a
-**Generation 2** agentic system remains not only intelligent and scalable, but
-also **cost-aware** and economically efficient.
+focusing on methods to infer and manage costs across distributed agents. The
+supplement addresses token usage tracking, per-task cost modelling, anomaly
+handling, and feedback loops for budget enforcement. Port definitions for
+`BudgetPort` and `CostLedgerPort` live in
+[Orchestration ports and adapters](episodic-podcast-generation-system-design.md#orchestration-ports-and-adapters).
+ The strategies below ensure that a **Generation 2** agentic system remains not
+only intelligent and scalable, but also **cost-aware** and economically
+efficient.
 
 ## 1. Token Usage and Retry Costs
 
 **Tracking Token Usage per Interaction:** Modern LLM APIs (e.g. OpenAI,
 Anthropic) return token usage statistics with each call. These can be recorded
 to attribute cost to each agent **interaction**. Using LangChain’s callback
-mechanism, we can capture tokens used for prompts and responses in real time.
+mechanism, tokens used for prompts and responses can be captured in real time.
 For example, LangGraph supports the LangChain callback protocol, allowing
 custom handlers to hook into LLM events. A callback’s `on_llm_end` event can
 extract the `token_usage` from the model response and log or emit metrics
-immediately. This lets us track how many tokens were consumed by each node’s
-LLM call and estimate cost based on the provider’s pricing. In practice, one
-can use built-in utilities like `get_openai_callback()` (which wraps an OpenAI
-call to collect token counts and cost) or implement a custom callback that
-pushes token metrics to a monitoring system (e.g. Datadog, Prometheus). The
-code snippet below illustrates a simple callback handler:
+immediately. This allows tracking of how many tokens were consumed by each
+node’s LLM call and estimating cost based on the provider’s pricing. In
+practice, one can use built-in utilities like `get_openai_callback()` (which
+wraps an OpenAI call to collect token counts and cost) or implement a custom
+callback that pushes token metrics to a monitoring system (e.g. Datadog,
+Prometheus). The code snippet below illustrates a simple callback handler:
 
 ```python
 from langchain.callbacks.base import BaseCallbackHandler
@@ -52,7 +55,7 @@ interactions. For instance, enabling `stream_usage=True` on OpenAI chat models
 ensures the usage info is populated in the
 callback([1](https://forum.langchain.com/t/how-to-obtain-token-usage-from-langgraph/1727#:~:text=Thanks%20for%20your%20help%2C%20I,I%20just%20needed%20to%20add)).
  In addition, structured logging can record each call’s token count alongside
-task identifiers, making it easier to analyze cost per user query or per agent
+task identifiers, making it easier to analyse cost per user query or per agent
 run.
 
 **Logging Retry Counts:** Agentic loops and Celery tasks may retry on failures
@@ -62,7 +65,7 @@ a node or tool has been retried. Each cycle of the reasoning loop can increment
 this counter, and the state (persisted via Redis) carries it forward across
 retries. On the Celery side, each task execution has a `request.retries`
 attribute indicating the attempt count. By logging the `retry_count` along with
-token usage, we can measure the cumulative cost of retries. For example, if a
+token usage, the cumulative cost of retries can be measured. For example, if a
 tool call fails and the agent “repeatedly retry[s] a failed tool” in a loop,
 every attempt’s token usage should be added to the total cost. Observability
 middleware can note each retry event (perhaps via Celery task signals or
@@ -109,7 +112,7 @@ cost can then be attached to the task’s result or sent to a central store. For
 example, if a Celery task uses the OpenAI API, the response includes a usage
 breakdown (`"prompt_tokens"`, `"completion_tokens"`); the task can calculate
 cost = tokens * price and log it. Likewise, for tasks performing heavy
-computation on a cloud GPU, you might estimate cost by tracking the task’s
+computation on a cloud GPU, cost can be estimated by tracking the task’s
 execution time and multiplying by an hourly rate for that machine type. These
 **internal hooks** can use Redis or a database to store the intermediate costs.
 A common pattern is to write each task’s cost to a Redis hash or a **sorted
@@ -120,29 +123,29 @@ querying where the budget was spent (e.g. one slow tool consumed 80% of the
 cost).
 
 **Redis-Backed Cost Fields in State:** Because LangGraph treats the agent state
-as the single source of truth (persisted via Redis between steps), we can
-include a **cost field within the state** that accumulates as the agent
-proceeds. For example, the state schema can have `total_tokens_used` and
-`total_cost_usd` fields. After each node execution (each superstep), the node
-updates these fields in the returned state delta. LangGraph’s checkpointing
-will merge these updates into the global state. This means every subsequent
-node is aware of the **cumulative cost so far**. If the agent spawns subgraphs
-or parallel branches, careful handling is needed: each branch might update the
-cost independently, so a **reducer** function should sum the contributions when
-merging states at synchronization points. LangGraph’s reducer concept ensures
-that parallel updates merge deterministically, so token counts are added rather
-than overwritten. Propagating cost in state provides *cross-step visibility*:
-e.g. a planning node could decide not to launch an expensive tool if
-`total_cost_usd` is already near the limit. It also means that if execution is
-suspended and resumed, the cost tally persists – avoiding double-counting if a
-workflow is restarted from a checkpoint.
+as the single source of truth (persisted via Redis between steps), a **cost
+field within the state** can accumulate as the agent proceeds. For example, the
+state schema can have `total_tokens_used` and `total_cost_usd` fields. After
+each node execution (each superstep), the node updates these fields in the
+returned state delta. LangGraph’s checkpointing will merge these updates into
+the global state. This means every subsequent node is aware of the **cumulative
+cost so far**. If the agent spawns subgraphs or parallel branches, careful
+handling is needed: each branch might update the cost independently, so a
+**reducer** function should sum the contributions when merging states at
+synchronization points. LangGraph’s reducer concept ensures that parallel
+updates merge deterministically, so token counts are added rather than
+overwritten. Propagating cost in state provides *cross-step visibility*: e.g. a
+planning node could decide not to launch an expensive tool if `total_cost_usd`
+is already near the limit. It also means that if execution is suspended and
+resumed, the cost tally persists – avoiding double-counting if a workflow is
+restarted from a checkpoint.
 
 **Correlating with External Billing Systems:** Internal tracking should be
 reconciled with external billing to ensure accuracy. Each OpenAI call, for
 instance, generates an entry in OpenAI’s usage logs. By logging the OpenAI
 request IDs or timestamps along with each task, one can later cross-verify
 against the provider’s dashboard or usage API. In practice, LangSmith or custom
-scripts can aggregate your internal usage records and compare them to OpenAI’s
+scripts can aggregate internal usage records and compare them to OpenAI’s
 monthly summary (to catch any discrepancies or missed calls). For GPU or other
 infrastructure costs, integration with cloud billing is useful: e.g. using AWS
 Cost Explorer or GCP Billing export to attribute a dollar cost to the VM hours
@@ -152,8 +155,8 @@ tokens, the task can calculate cost directly from tokens processed. The key is
 to **tie each cost to a task or user**. Storing a `(user_id, task_id, cost)`
 tuple in a database for every significant action creates an audit trail of
 where the budget goes. These records can feed into dashboards or reports (e.g.
-cost per user session, cost per tool type, etc.). This per-task modeling also
-helps identify expensive branches in the agent’s reasoning: you might discover
+cost per user session, cost per tool type, etc.). This per-task modelling also
+helps identify expensive branches in the agent’s reasoning: analysis may reveal
 that a particular tool (like a web scraper or a data analysis sub-agent)
 consistently costs more than others, informing optimization or caching
 decisions.
@@ -167,8 +170,8 @@ aggregate state. Similarly, cost data can be threaded into external UIs or logs
 metadata. Internally, having cost in the state allows nodes to make cost-aware
 decisions (e.g. a node decides to use a cheaper model if the cost so far is
 high). This ties into feedback loops discussed later. In summary, by leveraging
-**Redis-backed state** and **LangChain callbacks**, we achieve fine-grained
-cost modeling: every task and branch is instrumented for cost, and the agent
+**Redis-backed state** and **LangChain callbacks**, this achieves fine-grained
+cost modelling: every task and branch is instrumented for cost, and the agent
 carries an awareness of its spending as it operates.
 
 ## 3. Black Swan Cost Events
@@ -183,19 +186,19 @@ ambiguous goal might cause an agent to loop endlessly, calling the LLM or tools
 repeatedly without making progress. This can **burn through tokens and API
 calls** rapidly. To detect such scenarios, the system should implement **loop
 counters and timers**. For instance, LangGraph’s cyclic graph design allows an
-agent to retry tools or refine queries in loops, but we can set a **max
-iteration limit** (e.g. no more than 5 full cycles for a given task) and track
-the count in state. If `retry_count` or loop count exceeds a threshold, the
-agent can break out and escalate (perhaps returning a partial answer or an
-apologetic response to the user). Similarly, if an agent has consumed an
-unusually high number of tokens in a single conversation (e.g. 5x the normal
-usage for a query), that could indicate a stuck loop – this can trigger an
-alert or automatic halt. Instrumentation wise, logging each loop iteration with
-an ID and monitoring if the same agent run ID appears too many times in
-succession helps flag infinite loops. **Time-based guards** are another safety
-net: using Celery’s task time limits (soft and hard time limits) to kill tasks
-that run too long can stop runaway loops that fail to yield within a reasonable
-time. While timeouts alone don’t track tokens, they prevent a hung process from
+agent to retry tools or refine queries in loops, but a **max iteration limit**
+(e.g. no more than 5 full cycles for a given task) can be set and the count
+tracked in state. If `retry_count` or loop count exceeds a threshold, the agent
+can break out and escalate (perhaps returning a partial answer or an apologetic
+response to the user). Similarly, if an agent has consumed an unusually high
+number of tokens in a single conversation (e.g. 5x the normal usage for a
+query), that could indicate a stuck loop – this can trigger an alert or
+automatic halt. Instrumentation wise, logging each loop iteration with an ID
+and monitoring if the same agent run ID appears too many times in succession
+helps flag infinite loops. **Time-based guards** are another safety net: using
+Celery’s task time limits (soft and hard time limits) to kill tasks that run
+too long can stop runaway loops that fail to yield within a reasonable time.
+While timeouts alone don’t track tokens, they prevent a hung process from
 accumulating unlimited cost.
 
 **Unexpected Parallel Fan-Out:** One advantage of LangGraph is the ability to
@@ -209,28 +212,28 @@ naively launch dozens of search queries or sub-agents at once when a smaller
 number would do. To control this, LangGraph provides a `max_concurrency`
 configuration to cap how many nodes run in
 parallel([3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=,off)).
- By setting reasonable limits (based on API rate limits and budget), we prevent
-an explosion of parallel tasks from *overwhelming quotas*. At the
-infrastructure level, the message broker (RabbitMQ) can also help: tasks can be
-routed into separate queues with limited worker processes for certain expensive
-operations, effectively throttling how many run at once. Monitoring plays a
-role in detecting abnormal fan-out: if the task queue length spikes or if a
-single user triggers an unusually high number of simultaneous tasks, an alert
-should fire. In practice, one can watch RabbitMQ’s queue metrics or use Celery
-events to see how many tasks a single request spawns. Should a *fan-out
-anomaly* be detected (say an agent spawning 100+ tasks where normally 5 is
-expected), the system could dynamically intervene – e.g. temporarily pause new
-task dispatch or push excess tasks to a **dead-letter queue** for later review
-instead of executing immediately.
+ Setting reasonable limits (based on API rate limits and budget) prevents an
+explosion of parallel tasks from *overwhelming quotas*. At the infrastructure
+level, the message broker (RabbitMQ) can also help: tasks can be routed into
+separate queues with limited worker processes for certain expensive operations,
+effectively throttling how many run at once. Monitoring plays a role in
+detecting abnormal fan-out: if the task queue length spikes or if a single user
+triggers an unusually high number of simultaneous tasks, an alert should fire.
+In practice, one can watch RabbitMQ’s queue metrics or use Celery events to see
+how many tasks a single request spawns. Should a *fan-out anomaly* be detected
+(say an agent spawning 100+ tasks where normally 5 is expected), the system
+could dynamically intervene – e.g. temporarily pause new task dispatch or push
+excess tasks to a **dead-letter queue** for later review instead of executing
+immediately.
 
 **Dead Letters and Failure Alerts:** A **Dead Letter Queue (DLQ)** is a proven
-pattern for catching messages (tasks) that cannot be processed normally. In our
-architecture, RabbitMQ is configured with *Dead Letter Exchanges* to capture
-failed or expired tasks. For example, if a Celery task raises a special
+pattern for catching messages (tasks) that cannot be processed normally. In
+this architecture, RabbitMQ is configured with *Dead Letter Exchanges* to
+capture failed or expired tasks. For example, if a Celery task raises a special
 exception (like `Reject` with requeue=False) after exceeding retry attempts,
 RabbitMQ will route this task message to a designated dead-letter queue rather
-than discarding it. We can leverage this for cost anomalies: tasks that hit a
-cost guard (like a BudgetExceeded exception) or that fail due to too many
+than discarding it. This pattern can be leveraged for cost anomalies: tasks
+that hit a cost guard (like a BudgetExceeded exception) or that fail due to too
 retries can be shunted to a DLQ. A background service or admin process can
 consume from the DLQ to inspect what went wrong – often these will be the black
 swan events. By examining dead-lettered tasks, one might find patterns: e.g. a
@@ -362,18 +365,18 @@ scopes:
   with TTL (expiring every 24h) or a more persistent store for monthly totals.
   Every time a task uses tokens, it increments the user’s counter. If a new
   request comes in and the counter is above the limit, the request is refused
-  immediately with a message like “You have reached your usage limit.” This
-  ensures no single user can drive unlimited costs. It also encourages users to
-  prioritize queries (or purchase a higher tier for more usage, if applicable).
+  immediately with a message like “Usage limit reached.” This ensures no single
+  user can drive unlimited costs. It also encourages users to prioritize
+  queries (or purchase a higher tier for more usage, if applicable).
 
-- *Per-agent or per-session budgets:* In some cases, you might allocate a
-  budget for a single session or agent instance. For example, a particular
-  complex job might be allowed to use at most $0.50 of API calls. The agent’s
-  state can carry this budget, and as it works through the job, it deducts
-  cost. Once the budget is nearly exhausted, the agent can decide to wrap up.
-  This is useful for **long-running autonomous agents**: they won’t run forever
-  if they’re not efficient. They either succeed within budget or stop and
-  report back. Technically, this could be enforced by initializing
+- *Per-agent or per-session budgets:* In some cases, a budget can be allocated
+  for a single session or agent instance. For example, a particular complex job
+  might be allowed to use at most $0.50 of API calls. The agent’s state can
+  carry this budget, and as it works through the job, it deducts cost. Once the
+  budget is nearly exhausted, the agent can decide to wrap up. This is useful
+  for **long-running autonomous agents**: they won’t run forever if they’re not
+  efficient. They either succeed within budget or stop and report back.
+  Technically, this could be enforced by initializing
   `state.remaining_budget = X` and decrementing it on each step; if it hits 0,
   a conditional edge directs to a termination sequence.
 
@@ -384,10 +387,10 @@ agent knows it has only 1000 tokens left, it might skip a time-consuming
 brainstorming step and directly provide a concise answer. Implementing this
 requires the agent’s policy (perhaps encoded in the prompt or logic) to be
 aware of a `budget_left` variable. This can be passed via the prompt context
-(e.g. “You have a limited budget remaining, so prioritize essential actions”).
-On the system side, one can inject such hints using LangChain middleware that
-adds a note in the prompt when budget is tight (similar to how dynamic context
-injection can add system instructions).
+(e.g. “Limited budget remaining, prioritize essential actions.”). On the system
+side, one can inject such hints using LangChain middleware that adds a note in
+the prompt when budget is tight (similar to how dynamic context injection can
+add system instructions).
 
 **Enforcement Techniques:** When a budget breach is detected, the system’s
 response should be **immediate and clear**. Common techniques include:
@@ -397,28 +400,27 @@ response should be **immediate and clear**. Common techniques include:
   task didn’t complete). This could be handled in the application layer or by
   the agent itself if it’s capable of outputting such a message.
 
-- **Suspension:** In multi-turn scenarios, one might *suspend* the agent’s
-  session until more budget is allocated. The state (with all progress and
-  context) can be saved, and an external trigger (like admin intervention or
-  next day quota reset) could resume it. LangGraph’s checkpointing and
-  resumability make this feasible – essentially you pause the agent’s loop at a
-  checkpoint when out of funds, and resume later when funds are available. This
-  is analogous to an orchestrator putting a process to sleep until a resource
-  is replenished.
+- **Suspension:** In multi-turn scenarios, the agent’s session can be suspended
+  until more budget is allocated. The state (with all progress and context) can
+  be saved, and an external trigger (like admin intervention or next day quota
+  reset) could resume it. LangGraph’s checkpointing and resumability make this
+  feasible – the agent’s loop pauses at a checkpoint when out of funds, and
+  resumes later when funds are available. This is analogous to an orchestrator
+  putting a process to sleep until a resource is replenished.
 
 - **Differentiated limits:** The system can enforce different budgets for
-  different actions. For example, you might allow cheap tools to continue but
-  block any further LLM calls. The agent could continue in a limited mode if it
+  different actions. For example, cheap tools may be allowed to continue while
+  blocking further LLM calls. The agent could continue in a limited mode if it
   has non-LLM steps that are free. Achieving this could involve tagging nodes
   with expected cost and checking those specifically. For instance, a node that
   uses a GPT-4 call must verify budget, whereas a local database lookup node
   might bypass the check.
 
-**Budget Enforcement Implementation:** On the implementation side, consider
-maintaining a **central budget service** or utility. This could be as simple as
-a function `check_and_update_budget(user, cost)` that atomically checks current
-usage and either permits the new cost (updating the total) or denies it if it
-would exceed the cap. Using Redis INCR with a limit can do this atomically for
+**Budget Enforcement Implementation:** A **central budget service** or utility
+can be maintained. This could be as simple as a function
+`check_and_update_budget(user, cost)` that atomically checks current usage and
+either permits the new cost (updating the total) or denies it if it would
+exceed the cap. Using Redis INCR with a limit can do this atomically for
 distributed workers. For daily budgets, the key can reset daily (with Redis
 EXPIRE). For monthly, a rolling window or a timestamped log might be needed.
 The system should handle concurrency – if multiple tasks end at the same time,
@@ -429,7 +431,7 @@ By incorporating these cost-aware feedback loops, the agent system effectively
 gains a **financial conscience**. It balances its autonomy with an
 understanding of limits, ensuring that it *thinks twice* before every expensive
 operation. This not only prevents surprises on the cloud bill, but it also
-aligns the agent’s behavior with user quotas and organizational cost policies.
+aligns the agent’s behaviour with user quotas and organizational cost policies.
 The result is an agentic platform that is **robust, scalable, and fiscally
 responsible** – it can leverage powerful LLM capabilities while intelligently
 managing and limiting the costs of its computations.

@@ -98,6 +98,19 @@ Enforcement mechanisms:
 - Code review checklists enforce idempotency keys, single-responsibility task
   scope, and checkpoint payload audits for orchestration changes.
 
+#### Orchestration guardrails
+
+The following rules are normative for LangGraph nodes and Celery tasks:
+
+- Orchestration code depends on domain services and ports only; adapters are
+  accessed exclusively through port interfaces.
+- Celery tasks are single-responsibility and idempotent, with idempotency keys
+  persisted per task or workflow step.
+- Checkpoint payloads store orchestration metadata only; canonical domain data
+  is persisted through repositories and tables.
+- Long-running tasks that gate routing use the suspend-and-resume pattern;
+  fire-and-forget tasks are reserved for side effects.
+
 ## Component Responsibilities
 
 ### Canonical Content Platform
@@ -296,9 +309,10 @@ Planning uses structured output to produce a task plan with explicit
 dependencies, while execution uses tool calling to perform side effects. Model
 tiering assigns higher-capability models to planning and cheaper models to
 execution when budgets are tight. External tools integrate through outbound
-ports, including optional Model Context Protocol (MCP) adapters that expose
-tool catalogs. Skill-based tool loading narrows the available tool set per
-workflow, reducing context size and guiding model choice.
+ports, including optional
+[Model Context Protocol (MCP)](agentic-systems-with-langgraph-and-celery.md#5-the-interface-layer-model-context-protocol-mcp)
+ adapters that expose tool catalogues. Skill-based tool loading narrows the
+available tool set per workflow, reducing context size and guiding model choice.
 
 ### Content Generation Graph
 
@@ -360,7 +374,7 @@ flowchart TD
     G["Priority-Based Processing"]
     H["Direct Processing"]
     I["Change Type"]
-    J["Re-analyze Quality"]
+    J["Re-analyse Quality"]
     K["Update Only"]
     L["Content Generation"]
     M["Quality Gate"]
@@ -660,7 +674,8 @@ tasks record execution time and retry counts. Each task writes a cost entry via
 `CostLedgerPort`, including task identifiers, model metadata, token counts,
 retry totals, and estimated spend. Aggregated totals are stored in StateGraph
 fields such as `total_tokens` and `total_cost_usd`, persisting at checkpoints
-so resumptions retain budget context.
+so resumptions retain budget context. Detailed accounting mechanics are
+documented in `docs/cost-management-in-langgraph-agentic-systems.md`.
 
 Budget enforcement operates at multiple scopes:
 
@@ -794,7 +809,7 @@ erDiagram
     SERIES_PROFILES ||--o{ EPISODES : contains
     EPISODES ||--o{ EPISODE_VERSIONS : versioned_by
     EPISODES ||--o{ AUDIO_ASSETS : generates
-    EPISODES ||--o{ QUALITY_REPORTS : analyzed_by
+    EPISODES ||--o{ QUALITY_REPORTS : analysed_by
     SERIES_PROFILES ||--o{ CAST_PROFILES : defines
     CAST_PROFILES ||--o{ VOICE_PROFILES : uses
     EPISODES ||--o{ GENERATION_TASKS : processes

@@ -51,6 +51,16 @@ atomic tasks that deliver those capabilities.
 - Decision: Fix Markdown lint errors in supporting LangGraph and cost
   management documents. Rationale: Quality gates require `make fmt` and
   `make markdownlint` to pass. Date/Author: 2026-01-03, Codex.
+- Decision: Rename the hexagonal architecture guidance file to correct the
+  spelling and update references. Rationale: Avoids broken links and
+  inconsistent naming across documentation. Date/Author: 2026-01-03, Codex.
+- Decision: Centralize orchestration guardrails in the system design and
+  reference them from supporting docs. Rationale: Reduces the risk of
+  divergence across documents. Date/Author: 2026-01-03, Codex.
+- Decision: Align spelling and pronoun usage in supporting docs with the
+  documentation style guide. Rationale: Ensures British English usage and
+  removes first or second person pronouns from Markdown content. Date/Author:
+  2026-01-03, Codex.
 
 ## Outcomes and retrospective
 
@@ -67,7 +77,7 @@ Key references:
   architecture, LangGraph checkpointing, Celery worker segregation, and suspend
   and resume patterns for long-running tasks, plus tool integration ideas such
   as Model Context Protocol (MCP).
-- `docs/langgraph-and-celery-in-hexangonal-architecture.md` enumerates boundary
+- `docs/langgraph-and-celery-in-hexagonal-architecture.md` enumerates boundary
   risks, enforcement strategies, and guidance for keeping orchestration logic
   out of the domain core.
 - `docs/cost-management-in-langgraph-agentic-systems.md` describes task level
@@ -225,3 +235,6 @@ Initial plan created on 2026-01-03 to scope the design and roadmap updates.
 
 Revised on 2026-01-03 to record completion status, validation results, and the
 need for escalated Mermaid diagram rendering.
+
+Revised on 2026-01-03 to capture review-driven updates: corrected filename,
+centralized guardrails, and style guide alignment.

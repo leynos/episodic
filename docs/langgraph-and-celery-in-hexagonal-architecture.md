@@ -10,7 +10,7 @@ separation if not carefully managed. A key friction is ensuring domain
 *purity*: domain services and entities should not directly depend on LangGraph
 graphs or Celery mechanics. For example, the design mandates that domain
 modules remain *framework-agnostic*, so if domain logic starts relying on
-Celery task behaviors or LangGraph-specific classes, that’s a boundary
+Celery task behaviours or LangGraph-specific classes, that’s a boundary
 violation. The LangGraph design intentionally addresses this by treating itself
 as an **internal orchestration mechanism** that does *not replace the hexagonal
 design*. In practice, this means any use of LangGraph must be confined to the
@@ -81,11 +81,11 @@ there’s a risk of *hidden coupling* between components that should remain
 independent. For instance, LangGraph’s StateGraph holds state across iterative
 steps, and Celery tasks might pass around IDs or partial data. If the workflow
 logic assumes certain tasks always run in a set order or that certain state is
-pre-populated in a global context, you get implicit coupling that’s not obvious
-at the port level. One example could be a Celery task that expects a previous
-task to have written a specific database record or file. If that dependency
-isn’t explicit via a domain event or state check, the coupling is hidden and
-can break the moment the execution order changes or tasks get retried.
+pre-populated in a global context, implicit coupling emerges that is not at the
+port level. One example could be a Celery task that expects a previous task to
+have written a specific database record or file. If that dependency isn’t
+explicit via a domain event or state check, the coupling is hidden and can
+break the moment the execution order changes or tasks get retried.
 **Orchestration leakage into the domain** is another form of hidden coupling:
 if domain entities or services begin to incorporate knowledge of the
 orchestrator (e.g. an `Episode` domain object carrying a “current graph node”
@@ -127,8 +127,8 @@ catch the failure (perhaps via a Celery retry or a graph loop) and then invoke
 the domain operation again or route to an escalation. Ensuring that failure
 handling, retries, and multi-step sequences are managed by the orchestration
 layer prevents those concerns from leaking into domain code. The **operational
-risk** if this leaks is that it becomes hard to change the workflow (you’d have
-to modify domain logic) and you might inadvertently create tight coupling where
+risk** if this leaks is that it becomes hard to change the workflow, because
+domain logic changes become necessary, and tight coupling can emerge where
 domain functions assume they’re always called as part of a Celery flow
 (reducing modularity).
 
@@ -152,8 +152,8 @@ database at key checkpoints. While this addresses reliability, it brings
 operational overhead: the system must ensure that after a crash or a deliberate
 pause (like waiting for human feedback), the resume logic correctly restores
 state and continues via Celery without missteps. If Celery tasks aren’t
-properly encapsulated around these checkpoints, you might get scenarios like a
-task resuming with stale data or double-processing after a retry. There’s also
+properly encapsulated around these checkpoints, scenarios can arise where a
+task resumes with stale data or double-processing after a retry. There’s also
 the question of **timeouts and resource usage**: Celery tasks have time limits
 (which might be extended for these workflows). A risk is that a single
 LangGraph execution might exhaust worker resources if it isn’t broken into
@@ -172,7 +172,7 @@ challenge is ensuring that this state is updated *only* at well-defined points
 (to avoid race conditions) – likely right after a checkpoint is saved or a step
 completes. If two parallel Celery tasks try to update the episode status
 concurrently (say one finishing QA evaluation and another finishing audio mix),
-you need careful locking or conflict handling. In short, asynchronous and
+careful locking or conflict handling is needed. In short, asynchronous and
 long-running execution demands robust **synchronization and error-handling
 strategies**: checkpointing, idempotent task design (so retries don’t corrupt
 state), and timeouts on Celery tasks to avoid runaway processes.
@@ -240,8 +240,8 @@ ensure that even as the workflow logic scales out, it remains a first-class
 citizen of the hexagonal architecture rather than a place where rules are
 inadvertently relaxed.
 
-**Celery Task Encapsulation and Domain Isolation:** As the system scales, you
-may have many Celery tasks representing various nodes or sub-processes (content
+**Celery Task Encapsulation and Domain Isolation:** As the system scales, there
+may be many Celery tasks representing various nodes or sub-processes (content
 generation, QA checks, audio synthesis, etc.). If these tasks are not properly
 encapsulated, the risk is that domain logic gets scattered and harder to
 control. *Encapsulation* here means each task should have a single clear
@@ -344,8 +344,8 @@ within a Hexagonal Architecture if used with discipline:
   rendering), each accessed via a port or application service. The Episodic
   system indeed has a *Content Generation Orchestrator* and a separate *Audio
   Synthesis Pipeline*, each employing LangGraph for their domain-specific
-  workflows. In hexagonal terms, you can think of each of these orchestrators
-  as an **application service** coordinating domain operations through ports.
+  workflows. In hexagonal terms, each of these orchestrators can be viewed as
+  an **application service** coordinating domain operations through ports.
   Subgraphs should adhere to the same rule: they shouldn’t directly call each
   other’s internals in uncontrolled ways. Instead, one graph’s output becomes
   input to the next phase via a domain interaction (e.g. once content is
@@ -365,28 +365,28 @@ within a Hexagonal Architecture if used with discipline:
 
 - **Conditional Routing as Business Rules:** The use of conditional edges in
   LangGraph to encode business logic is actually quite aligned with hexagonal
-  principles, as long as we view the entire LangGraph orchestration as part of
-  the **application logic** (the “inside” part of the hexagon that coordinates
-  domain activities). For example, the decision to route a draft back for
-  refinement if QA scores fall below a threshold is a *business rule*. In a
-  traditional hex design, one might implement that in a service class method
-  (if score < X then call refine). LangGraph simply provides a declarative way
-  to represent that rule as a graph transition. The Episodic design embraces
-  this: *threshold checks, retry limits, and escalation policies manifest as
-  edge conditions rather than scattered if-else logic*. This can actually
-  improve domain purity by localizing the workflow logic in one place (the
-  graph definition) instead of potentially duplicating checks across multiple
-  services. However, to remain faithful to hexagonal architecture, those
-  conditions should use **domain data and domain services** to evaluate. That
-  is, the graph might query “is the QA pass threshold met?” which should be
-  answered by data obtained via the domain (e.g. an evaluator service returned
-  a score via a port). As long as that’s the case – and it is, since the
-  evaluators are LangGraph nodes that call QA ports and produce structured
-  results – then the conditional routing is simply orchestrating domain
-  outcomes. It adheres to the *Ports Remain the Integration Boundary* rule by
-  not reaching outside for information; it uses what the domain has provided
-  (scores, counts, flags) to make decisions. The alignment could break if
-  someone coded an edge condition that relies on infrastructure (imagine a
+  principles, as long as the entire LangGraph orchestration is viewed as part
+  of the **application logic** (the “inside” part of the hexagon that
+  coordinates domain activities). For example, the decision to route a draft
+  back for refinement if QA scores fall below a threshold is a *business rule*.
+  In a traditional hex design, one might implement that in a service class
+  method (if score < X then call refine). LangGraph simply provides a
+  declarative way to represent that rule as a graph transition. The Episodic
+  design embraces this: *threshold checks, retry limits, and escalation
+  policies manifest as edge conditions rather than scattered if-else logic*.
+  This can actually improve domain purity by localizing the workflow logic in
+  one place (the graph definition) instead of potentially duplicating checks
+  across multiple services. However, to remain faithful to hexagonal
+  architecture, those conditions should use **domain data and domain services**
+  to evaluate. That is, the graph might query “is the QA pass threshold met?”
+  which should be answered by data obtained via the domain (e.g. an evaluator
+  service returned a score via a port). As long as that’s the case – and it is,
+  since the evaluators are LangGraph nodes that call QA ports and produce
+  structured results – then the conditional routing is simply orchestrating
+  domain outcomes. It adheres to the *Ports Remain the Integration Boundary*
+  rule by not reaching outside for information; it uses what the domain has
+  provided (scores, counts, flags) to make decisions. The alignment could break
+  if someone coded an edge condition that relies on infrastructure (imagine a
   condition that directly checks an external service’s status or a file’s
   existence). But given the design’s emphasis that graphs invoke ports and not
   external APIs directly, this is likely avoided. In summary, conditional logic
@@ -434,131 +434,13 @@ within a Hexagonal Architecture if used with discipline:
 
 ## Strategies to Preserve Architecture Discipline
 
-To successfully integrate LangGraph and Celery into a hexagonal architecture
-without erosion of design principles, the team can employ several strategies:
+Normative orchestration guardrails are defined in
+[Orchestration guardrails](episodic-podcast-generation-system-design.md#orchestration-guardrails)
+ and serve as the source of truth for port-only dependencies, checkpoint
+payload boundaries, and idempotency requirements. This document focuses on
+boundary risks and alignment, while implementation details should defer to the
+system design guardrails.
 
-- **Strict Port-Based Interactions:** *Double down on the ports-and-adapters
-  discipline for every LangGraph node and Celery task.* All external calls (LLM
-  API requests, TTS synthesis, database writes, etc.) should be made through
-  the appropriate port interfaces, never directly to an SDK or model. The
-  design already mandates that LangGraph use ports as its integration boundary.
-  Enforce this with automated linting and code reviews: if a graph node or task
-  function tries to import an outbound adapter or call an external library
-  directly, flag it. By routing all I/O through ports, you maintain domain
-  purity and can swap out implementations or test in isolation. This strategy
-  preserves the **replaceability of adapters** (a core hex goal) – for example,
-  if you change TTS providers, you only update the `TTSPort` adapter, and the
-  LangGraph workflow remains untouched, still calling the port.
-
-- **Encapsulate Orchestration in the Application Layer:** Treat LangGraph and
-  Celery as implementation details of the application (or orchestration) layer,
-  and keep them out of the domain core. Concretely, this means domain services
-  (use-case classes, aggregates, entities) should not reference Celery APIs or
-  LangGraph constructs. Instead, have an *Orchestrator Service* or workflow
-  manager in the application layer that uses LangGraph to coordinate domain
-  operations. The domain can expose methods like `generateDraft`,
-  `evaluateQuality`, `synthesizeAudio` via ports, and the orchestrator (running
-  as a Celery task) calls those in sequence or in parallel using LangGraph’s
-  control flow. This preserves the domain’s framework-agnostic nature – the
-  business logic doesn’t care if Celery or some other scheduler is running the
-  show. A practical tip is to define clear boundaries for what a Celery task
-  does: e.g. one Celery task might be “run content generation workflow for
-  episode X.” Inside that task, you instantiate the LangGraph StateGraph and
-  execute it. The rest of the system only knows that a generation process was
-  started and later that it finished or paused. By not exposing LangGraph’s
-  graph structure outside of the orchestrator context, you prevent any
-  temptation for other parts of the system to couple to it. Celery should be
-  seen as just a means to invoke the orchestrator asynchronously, not as a
-  mechanism to embed business logic on its own. Following this approach, the
-  **domain remains isolated** and the workflow engine plus task queue operate
-  as an adapter/automation around the domain.
-
-- **Minimize Shared State and Use the Database as Source of Truth:** To avoid
-  hidden coupling, make sure that any state needed across steps is persisted in
-  a clear, domain-accessible way (usually in the database via repositories)
-  rather than kept only in-memory or in global variables. LangGraph’s
-  StateGraph will maintain in-memory state during execution, but because tasks
-  can fail or be retried on another worker, rely on the database for anything
-  that must survive a crash or be seen by other processes. The Episodic system
-  does this by storing draft content, QA results, and iteration counts in
-  tables associated with the episode. By doing so, any Celery task that picks
-  up after a checkpoint can load the latest state from these sources (via
-  domain repositories) and there’s no ambiguity. This strategy also means
-  making tasks **idempotent** where possible: if a task is retried, it should
-  either detect that the work was already done (because the state is in DB) or
-  safely redo it without side effects. A practical example is when publishing a
-  preview audio file – the workflow might first check if a preview for this
-  iteration is already in storage (recorded via a DB flag) before generating a
-  new one, to avoid duplicates. In short, treat the persistent state as the
-  king and minimize any ephemeral shared state between Celery tasks. If
-  intermediate data is large (e.g. audio blobs), store them via an object
-  storage adapter and keep references in the domain model rather than passing
-  them in memory between tasks. This approach ensures that **each step is
-  anchored to domain data**, reducing the chance that one part of the workflow
-  secretly depends on something only held in another task’s memory.
-
-- **Implement Clear Checkpoint and Resume Protocols:** Since checkpointing is
-  central to this system, establish a clear protocol for pausing and resuming
-  workflows that keeps domain and orchestration concerns separate. One strategy
-  is to use **domain events** to handle human-in-the-loop pauses. For example,
-  when the LangGraph workflow hits a checkpoint (pause for approval), it should
-  record a checkpoint (via a port call) and perhaps fire a domain event like
-  `EpisodeGenerationPaused(episodeId, checkpointId)`. The domain (or an
-  application service) can listen to this and update the Episode status to
-  “Pending Approval,” but it doesn’t need to know details of the graph.
-  Conversely, when an approval comes back (say via an API call to the system),
-  the domain can validate the approval and then emit an event or call a service
-  to resume the workflow. The orchestrator service picks up that event, loads
-  the saved StateGraph from the checkpoint store, and continues the LangGraph
-  execution. By using events or explicit service calls to bridge the gap, you
-  **prevent the domain from directly waiting on or poking into the
-  orchestrator**, and vice versa. This decoupling also means you can replace
-  Celery/LangGraph with another mechanism in the future by just changing how
-  you handle these events, without altering domain logic. The key strategy is
-  to make the pause/resume cycle a first-class concept: document it and handle
-  it through formal interfaces (like an `ApprovalPort` or event bus) rather
-  than ad-hoc flags. This will guard against orchestration-specific logic
-  creeping into domain services (for example, you avoid something like a domain
-  method that says “if checkpointId is set then do X,” which would be mixing
-  concerns). Instead, the domain simply knows it’s waiting for approval; the
-  orchestrator knows how to resume the graph once approval is given, and
-  communication is through well-defined channels.
-
-- **Continuous Architecture Validation and Refactoring:** As a final strategy,
-  treat the combination of LangGraph and Celery as an evolving part of the
-  architecture that needs regular oversight. This means extending your
-  architecture tests to cover the new patterns. For instance, you might write
-  tests or linters that ensure no Celery task or LangGraph node imports
-  disallowed modules (similar to the existing import rules). You could enforce
-  that certain modules (like those defining graphs) can only depend on domain
-  and ports, not directly on adapters. Additionally, monitor the **size and
-  complexity of graphs**: if a StateGraph becomes too large, consider splitting
-  it into smaller subgraphs or workflows, each corresponding to a clearer
-  domain function. Large, monolithic workflows might indicate that multiple
-  concerns are tangled; by refactoring into smaller graphs (or subgraphs), you
-  can better isolate domain contexts and keep the architecture modular. Also
-  keep an eye on Celery task patterns – if you see tasks growing in scope, it’s
-  a signal to refactor into smaller tasks or introduce new ports to handle
-  parts of what that task is doing. Essentially, don’t set and forget the
-  LangGraph/Celery integration. Treat it with the same care as your codebase’s
-  architecture: schedule design reviews specifically for the orchestration
-  layer, involve both domain experts and infrastructure experts to make sure
-  neither perspective is dominating. By proactively managing this, you can take
-  lessons from LangGraph’s own design (emphasizing durability and
-  control([1](https://blog.langchain.com/building-langgraph/#:~:text=Summary%3A%C2%A0We%20launched%20LangGraph%20as%20a,learned%20about%20building%20reliable%20agents)
-   )(
-  [1](https://blog.langchain.com/building-langgraph/#:~:text=This%20time%20around%2C%20our%20top,for%20scoping%20and%20designing%20LangGraph)))
-   and apply them to your architecture. In practice, that means if something
-  feels “hacky” or a breach of hexagonal style, take the time to address it
-  (for example, by writing a new adapter or splitting responsibilities) before
-  it snowballs. Over time, these habits will preserve the **domain purity and
-  adaptability** of the system, even as the agentic workflows become more
-  sophisticated.
-
-Each of these strategies draws from the LangGraph design philosophy and the
-system’s own guardrails. By keeping the hexagonal tenets in focus – clear
-boundaries, independent domain, and replaceable adapters – while leveraging
-LangGraph and Celery for their strengths (structured orchestration and
-asynchronous execution), the Episodic podcast generation system can enjoy the
-best of both worlds: dynamic, resilient content generation pipelines that still
-uphold the cleanliness and maintainability of a hexagonal architecture.
+Following those guardrails keeps LangGraph and Celery aligned with hexagonal
+architecture by preserving port boundaries, isolating orchestration state from
+domain state, and maintaining replaceable adapters.

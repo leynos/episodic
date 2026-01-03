@@ -24,10 +24,10 @@ holds open database connections, consumes scarce application memory, and
 inevitably triggers gateway timeouts from load balancers or reverse proxies.
 
 The solution lies in a rigorous decoupling of concerns, mirroring the evolution
-of operating systems and distributed computing. We must separate the **Control
-Plane**—responsible for state management, reasoning, and decision
-branching—from the **Data Plane**—responsible for heavy computation, I/O
-operations, and side effects.
+of operating systems and distributed computing. A separation is required
+between the **Control Plane**—responsible for state management, reasoning, and
+decision branching—from the **Data Plane**—responsible for heavy computation,
+I/O operations, and side effects.
 
 This report establishes a comprehensive architectural standard for building
 “Generation 2” agentic systems in Python. It proposes a robust integration of
@@ -36,7 +36,7 @@ Redis or RabbitMQ) as the distributed execution backend.1 Furthermore, it
 addresses the critical challenge of interoperability through the adoption of
 the **Model Context Protocol (MCP)** 3 and the **Agent Skills** paradigm 4,
 ensuring that tool interfaces remain standardized and modular. Finally, it
-analyzes the cognitive architecture of the agents themselves, advocating for a
+analyses the cognitive architecture of the agents themselves, advocating for a
 **Hybrid Inference Strategy** that combines the reliability of **Structured
 Output** for planning with the flexibility of **Tool Calling** for execution.5
 
@@ -51,7 +51,7 @@ ______________________________________________________________________
 
 In the proposed architecture, LangGraph functions as the “Cognitive Kernel” of
 the system. Unlike linear processing chains, which force a predefined sequence
-of steps, LangGraph models agentic behavior as a cyclic graph of nodes
+of steps, LangGraph models agentic behaviour as a cyclic graph of nodes
 (computational units) and edges (control flow transitions).1 This cyclic nature
 is essential for implementing loops—the “reasoning-action-observation”
 cycle—where an agent can repeatedly retry a failed tool, refine a search query,
@@ -132,8 +132,8 @@ multitasking nature of `asyncio` mean that CPU-intensive tasks (like parsing a
 large PDF) or blocking I/O (like downloading a 1GB file) can freeze the entire
 orchestration loop, causing latency spikes for all concurrent users.2
 
-To solve this, we introduce the **Data Plane**, architected around **Celery**—a
-distributed task queue—backed by robust message brokering.
+To solve this, the **Data Plane** is introduced, architected around
+**Celery**—a distributed task queue—backed by robust message brokering.
 
 ### 3.1 The Broker Selection: Redis vs. RabbitMQ
 
@@ -151,12 +151,12 @@ primary task queue in enterprise agent systems.15
   restored. This is critical for agents performing high-value, long-running
   workflows where data loss is unacceptable.
 - **Complex Routing:** RabbitMQ’s “Exchanges” and “Routing Keys” allow for
-  sophisticated worker specialization. We can route “GPU-intensive embedding
-  tasks” to a specific queue served by GPU-enabled nodes, while routing
-  “lightweight API calls” to general-purpose CPU nodes.
+  sophisticated worker specialization. Routing can send “GPU-intensive
+  embedding tasks” to a specific queue served by GPU-enabled nodes, while
+  routing “lightweight API calls” to general-purpose CPU nodes.
 - **Consumer Groups:** It handles competing consumers elegantly, ensuring that
-  if you scale up to 100 workers, tasks are distributed evenly (Round Robin) or
-  based on worker availability (Fair Dispatch).
+  if the deployment scales up to 100 workers, tasks are distributed evenly
+  (Round Robin) or based on worker availability (Fair Dispatch).
 
 #### Redis: The Case for Speed and Simplicity
 
@@ -202,9 +202,9 @@ Designing the Celery worker fleet requires tuning based on the workload type.
   CPU cores to prevent context switching thrashing.
 
 By segregating these workloads into different queues (e.g., `queue='io_tasks'`
-vs `queue='cpu_tasks'`) and assigning specialized workers to consume them, we
-ensure that a massive PDF ingestion job does not block the execution of a
-lightweight web search tool.2
+vs `queue='cpu_tasks'`) and assigning specialized workers to consume them, the
+architecture ensures that a massive PDF ingestion job does not block the
+execution of a lightweight web search tool.2
 
 ______________________________________________________________________
 
@@ -215,7 +215,7 @@ Integrating a stateful, potentially interactive orchestration engine
 synchronization challenge. How does the “Brain” know when the “Body” has
 finished moving?
 
-We identify two primary patterns: **Fire-and-Forget** (for side effects) and
+Two primary patterns are identified: **Fire-and-Forget** (for side effects) and
 **Suspend-and-Resume** (for core reasoning loops). The latter is the critical
 innovation for scalable agents.
 
@@ -264,7 +264,7 @@ def tool_execution_node(state, config):
     thread_id = config["configurable"]["thread_id"]
     
     # 3. Dispatch to Celery
-    # We pass the thread_id to the worker so it knows who to callback.
+    # Pass the thread_id to the worker so the callback can resume the graph.
     task = heavy_rag_task.delay(
         query=tool_call["args"]["query"],
         thread_id=thread_id
@@ -352,6 +352,9 @@ async def resume_workflow(payload: WebhookPayload):
 
 ```
 
+In the Episodic system, the callback is mediated by `TaskResumePort`; see
+[Orchestration ports and adapters](episodic-podcast-generation-system-design.md#orchestration-ports-and-adapters).
+
 This pattern ensures that **zero compute resources** are consumed on the
 orchestration server while the heavy task runs. It allows the system to scale
 to thousands of concurrent long-running agent tasks.17
@@ -387,8 +390,8 @@ acts as the translation layer between MCP’s JSON schema and LangChain’s
 
 #### The MultiServer Client
 
-In a production LangGraph system, we utilize the `MultiServerMCPClient` to
-connect to a diverse constellation of tools.
+In a production LangGraph system, the `MultiServerMCPClient` connects to a
+diverse constellation of tools.
 
 ```python
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -481,13 +484,13 @@ general Python usage, addresses this via **Progressive Disclosure**.4
 
 ### 6.1 The Progressive Disclosure Pattern
 
-Instead of exposing all tools at once, we group them into “Skills” (e.g.,
+Instead of exposing all tools at once, tools are grouped into “Skills” (e.g.,
 “DataAnalysis”, “WebResearch”, “CodeGeneration”). The agent is initially
 presented only with the _descriptions_ of these skills.
 
 1. **Level 1 (Discovery):** The agent sees a list of available skills.
 
-- _Prompt:_ “You have access to the following skills:,.”
+- _Prompt:_ “Available skills: …”
 
 1. **Level 2 (Activation):** The agent decides it needs a specific skill. It
    calls a meta-tool, e.g., `enable_skill("DataAnalysis")`.
@@ -497,7 +500,7 @@ presented only with the _descriptions_ of these skills.
 
 ### 6.2 Designing the Skill Structure
 
-We adopt a standardized directory structure for skills, parsing them at runtime.
+A standardized directory structure for skills is adopted and parsed at runtime.
 
 skills/
 
@@ -521,7 +524,7 @@ phase.
 ```yaml
 ---
 name: data_analysis
-description: Use this skill when the user asks to analyze numerical data, CSV files, or generate plots.
+description: Use this skill when the user asks to analyse numerical data, CSV files, or generate plots.
 ---
 # Instructions
 When using this skill, always verify the data types of the columns before performing aggregation...
@@ -530,8 +533,8 @@ When using this skill, always verify the data types of the columns before perfor
 
 ### 6.3 Implementing the Skill Loader
 
-In Python, we implement a `SkillRegistry` that parses these files and manages
-the dynamic binding.
+A `SkillRegistry` implementation parses these files and manages the dynamic
+binding.
 
 ```python
 import yaml
@@ -577,8 +580,7 @@ This is achieved through **Inference Hooks** and **Middleware**.25
 
 ### 7.1 The Request Lifecycle
 
-We define a middleware pipeline that intercepts the agent’s execution at
-critical points:
+A middleware pipeline intercepts the agent’s execution at critical points:
 
 1. **Pre-Computation (**`before_model`**):** Modifying the prompt before it
    reaches the LLM.
@@ -671,22 +673,21 @@ invoke a **Tool** (Function Call)?
 | **Reliability**  | High for formatting; Medium for reasoning.                                    | High for action selection; Medium for complex parameter generation.                                     |
 
 Research suggests that forcing an agent to exclusively use Tool Calling for
-complex multi-step tasks leads to “looping” behaviors, where the agent tries
+complex multi-step tasks leads to “looping” behaviours, where the agent tries
 one tool, fails, tries another, and loses sight of the overall goal.29
 Conversely, Structured Output is rigid and doesn’t naturally support the
 “acting” part of the agent.
 
 ### 8.2 The Hybrid Approach: Plan-and-Execute
 
-We propose a **Hybrid Architecture** that leverages the strengths of both. This
-is often formalized as the **Plan-and-Execute** pattern.6
+A **Hybrid Architecture** is proposed that leverages the strengths of both.
+This is often formalized as the **Plan-and-Execute** pattern.6
 
 Phase 1: The Planner (Structured Output)
 
 The agent begins by assessing the user’s request and generating a structured
-Plan. This is a cognitive step, not an action step. We use
-with_structured_output to force the model to produce a DAG (Directed Acyclic
-Graph) of tasks.
+Plan. This is a cognitive step, not an action step. with_structured_output is
+used to force the model to produce a DAG (Directed Acyclic Graph) of tasks.
 
 ```python
 from pydantic import BaseModel, Field
@@ -708,7 +709,7 @@ planner_llm = ChatOpenAI(model="o1-preview").with_structured_output(Plan)
 ```
 
 By forcing the model to fill out `reasoning` and `dependencies` _before_
-listing tasks, we induce Chain-of-Thought (CoT) reasoning, significantly
+listing tasks, this induces Chain-of-Thought (CoT) reasoning, significantly
 improving the quality of the plan.
 
 Phase 2: The Executor (Tool Calling)
@@ -762,7 +763,7 @@ Task**.
 
 ### 9.2 Deployment Strategy
 
-For MCP, we recommend a **Sidecar Pattern** in Kubernetes.
+For MCP, a **Sidecar Pattern** in Kubernetes is recommended.
 
 - The Main Container runs the LangGraph API.
 - Sidecar Containers run the MCP Servers (e.g., `filesystem-mcp`,
