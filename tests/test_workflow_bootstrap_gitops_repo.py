@@ -18,10 +18,11 @@ EVENT = Path("tests/fixtures/bootstrap_gitops_repo.event.json")
 def podman_socket() -> Path:
     """Return the expected Podman socket path."""
     socket = Path(f"/run/user/{os.getuid()}/podman/podman.sock")
-    assert socket.exists(), (
-        "Podman socket not found. "
-        "Enable it with `systemctl --user enable --now podman.socket`."
-    )
+    if not socket.exists():
+        pytest.skip(
+            "Podman socket not found. "
+            "Enable it with `systemctl --user enable --now podman.socket`."
+        )
     return socket
 
 

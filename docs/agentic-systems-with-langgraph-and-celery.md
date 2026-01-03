@@ -129,7 +129,7 @@ ______________________________________________________________________
 While LangGraph manages the decision-making process, it is ill-suited for heavy
 lifting. The Python Global Interpreter Lock (GIL) and the cooperative
 multitasking nature of `asyncio` mean that CPU-intensive tasks (like parsing a
-large PDF) or blocking I/O (like downloading a 1GB file) can freeze the entire
+large PDF) or blocking I/O (like downloading a 1 GB file) can freeze the entire
 orchestration loop, causing latency spikes for all concurrent users.2
 
 To solve this, the **Data Plane** is introduced, architected around
@@ -189,7 +189,7 @@ Designing the Celery worker fleet requires tuning based on the workload type.
 - _Configuration:_ Use the `gevent` or `eventlet` execution pools. These allow
   a single CPU core to handle hundreds of concurrent connections, maximizing
   throughput for network-heavy agent tools.
-- _Concurrency:_ High (e.g., 100-500 threads per worker).
+- _Concurrency:_ High (e.g., 100–500 threads per worker).
 
 1. **CPU Bound Queues (The “Compute” Workers):**
 
@@ -225,7 +225,7 @@ In scenarios where the agent needs to perform an action but does not require
 the output to proceed with its reasoning, the Fire-and-Forget pattern is
 appropriate.
 
-- _Examples:_ Sending a slack notification, logging telemetry, updating a
+- _Examples:_ Sending a Slack notification, logging telemetry, updating a
   secondary database index.
 - _Mechanism:_ The LangGraph node calls `task.delay()`. The method returns
   immediately. The node returns a generic message to the state (“Notification
@@ -560,7 +560,7 @@ class SkillRegistry:
         # Logic to update the agent's available tools
         skill = self.skills[skill_name]
         return {
-            "messages":,
+            "messages": agent_state.get("messages", []),
             "active_tools": skill.tools
         }
 
@@ -756,7 +756,7 @@ Task**.
 - _Result:_ The Celery task runs and sends a webhook, but the Orchestrator has
   no record of the graph waiting for it.
 - _Mitigation:_ Implement an **Idempotency Key** mechanism. The Orchestrator
-  should save a “Intent to Dispatch” record in Redis before calling Celery. A
+  should save an “Intent to Dispatch” record in Redis before calling Celery. A
   reconciliation process (“The Sweeper”) runs periodically to check for tasks
   that were dispatched but have no corresponding graph state, initiating a
   rollback or alert.
@@ -803,19 +803,19 @@ _Table 1: Architectural component summary._
 
 ## Works Cited
 
-1. Workflows and agents - Docs by LangChain,
+1. Workflows and agents — Docs by LangChain,
    <https://docs.langchain.com/oss/python/langgraph/workflows-agents>
 2. Integrating Celery + Redis with LangGraph for heavy RAG indexing (chunking,
-   embeddings) — best practices? - LangChain Forum,
+   embeddings) — best practices? — LangChain Forum,
    <https://forum.langchain.com/t/integrating-celery-redis-with-langgraph-for-heavy-rag-indexing-chunking-embeddings-best-practices/2601>
-3. Model Context Protocol (MCP) - Docs by LangChain,
+3. Model Context Protocol (MCP) — Docs by LangChain,
    <https://docs.langchain.com/oss/python/langchain/mcp>
-4. Claude Agent Skills Framework: Build Specialized AI Agents - Digital
+4. Claude Agent Skills Framework: Build Specialized AI Agents — Digital
    Marketing Agency,
    <https://www.digitalapplied.com/blog/claude-agent-skills-framework-guide>
-5. Structured output - Docs by LangChain,
+5. Structured output — Docs by LangChain,
    <https://docs.langchain.com/oss/python/langchain/structured-output>
-6. Plan-and-Execute Agents - LangChain Blog,
+6. Plan-and-Execute Agents — LangChain Blog,
    <https://blog.langchain.com/planning-agents/>
 7. Parallel Nodes in LangGraph: Managing Concurrent Branches with the Deferred
    Execution,
@@ -828,54 +828,54 @@ _Table 1: Architectural component summary._
 10. LangGraph Redis Checkpoint 0.1.0,
     <https://redis.io/blog/langgraph-redis-checkpoint-010/>
 11. Need guidance on using LangGraph Checkpointer for persisting chatbot
-    sessions - Reddit,
+    sessions — Reddit,
     <https://www.reddit.com/r/LangChain/comments/1on4ym0/need_guidance_on_using_langgraph_checkpointer_for/>
 12. How to implement subgraph memory/persistence in LangGraph when parent and
-    subgraph states diverge? - Stack Overflow,
+    subgraph states diverge? — Stack Overflow,
     <https://stackoverflow.com/questions/79607143/how-to-implement-subgraph-memory-persistence-in-langgraph-when-parent-and-subgra>
-13. Generate Subgraph State Dynamically in Supervisor from User Request -
+13. Generate Subgraph State Dynamically in Supervisor from User Request —
     LangChain Forum,
     <https://forum.langchain.com/t/generate-subgraph-state-dynamically-in-supervisor-from-user-request/75>
 14. What Actually Happens When LangChain Runs In a Celery Task | by Alexander
     Wei | Data Science Collective | Dec, 2025 | Medium,
     <https://medium.com/data-science-collective/what-actually-happens-when-langchain-runs-in-a-celery-task-c55bef4fba14>
-15. Interrupts - Docs by LangChain,
+15. Interrupts — Docs by LangChain,
     <https://docs.langchain.com/oss/python/langgraph/interrupts>
-16. The Command Object in Langgraph - Medium,
+16. The Command Object in Langgraph — Medium,
     <https://medium.com/@vivekvjnk/the-command-object-in-langgraph-bc29bf57d18f>
 17. How to update a LangGraph agent + frontend when a long Celery task
-    finishes? - Reddit,
+    finishes? — Reddit,
     <https://www.reddit.com/r/LangChain/comments/1nc9y75/how_to_update_a_langgraph_agent_frontend_when_a/>
 18. How to preserve state and resume workflows in langchain with human
     intervention,
     <https://community.latenode.com/t/how-to-preserve-state-and-resume-workflows-in-langchain-with-human-intervention/39108>
-19. LangChain MCP: Integrating LangChain with Model Context Protocol -
+19. LangChain MCP: Integrating LangChain with Model Context Protocol —
     Leanware,
     <https://www.leanware.co/insights/langchain-mcp-integrating-langchain-with-model-context-protocol>
-20. LangChain MCP Integration: Complete Guide to MCP Adapters - Latenode,
+20. LangChain MCP Integration: Complete Guide to MCP Adapters — Latenode,
     <https://latenode.com/blog/ai-frameworks-technical-infrastructure/langchain-setup-tools-agents-memory/langchain-mcp-integration-complete-guide-to-mcp-adapters>
 21. Creating Your First MCP Server: A Hello World Guide | by Gianpiero
     Andrenacci | AI Bistrot | Dec, 2025,
     <https://medium.com/data-bistrot/creating-your-first-mcp-server-a-hello-world-guide-96ac93db363e>
-22. Skills Turn Reasoning Into Architecture: Rethinking How AI Agents Think -
+22. Skills Turn Reasoning Into Architecture: Rethinking How AI Agents Think —
     Medium,
     <https://medium.com/@nextgendatascientist/skills-turn-reasoning-into-architecture-rethinking-how-ai-agents-think-9b347e681209>
 23. LangGraph Advanced – Dynamically Select Tools in AI Agents for Cleaner and
-    Smarter Workflows - YouTube, <https://www.youtube.com/watch?v=qGaRj3lUfps>
-24. Custom middleware - Docs by LangChain,
+    Smarter Workflows — YouTube, <https://www.youtube.com/watch?v=qGaRj3lUfps>
+24. Custom middleware — Docs by LangChain,
     <https://docs.langchain.com/oss/python/langchain/middleware/custom>
 25. LangChain Middleware v1-Alpha: A Comprehensive Guide to Agent Control and
     Customization | Colin McNamara,
     <https://colinmcnamara.com/blog/langchain-middleware-v1-alpha-guide>
-26. Logging - Galileo,
+26. Logging — Galileo,
     <https://v2docs.galileo.ai/sdk-api/third-party-integrations/langchain/langchain>
-27. Ability to access llm metadata in callback - LangChain Forum,
+27. Ability to access llm metadata in callback — LangChain Forum,
     <https://forum.langchain.com/t/ability-to-access-llm-metadata-in-callback/1236>
 28. How expensive is tool calling compared to using something like
-    llm.with_structured_output() : r/LangChain - Reddit,
+    llm.with_structured_output() : r/LangChain — Reddit,
     <https://www.reddit.com/r/LangChain/comments/1i10bol/how_expensive_is_tool_calling_compared_to_using/>
 29. What's the difference between Tool Calling, Structured Chat, and ReACT
-    Agents? - Reddit,
+    Agents? — Reddit,
     <https://www.reddit.com/r/LangChain/comments/1ffe38x/whats_the_difference_between_tool_calling/>
-30. Plan-and-Execute - GitHub Pages,
+30. Plan-and-Execute — GitHub Pages,
     <https://langchain-ai.github.io/langgraph/tutorials/plan-and-execute/plan-and-execute/>

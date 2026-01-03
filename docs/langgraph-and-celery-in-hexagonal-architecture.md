@@ -265,7 +265,7 @@ those steps can be a separate task or series of tasks. If a task is kept small
 domain isolation because each task goes through well-defined ports and commits
 its results before handing off. **Enforcement breaks down if tasks overstep
 their bounds**: for example, if a “monolithic” task is created to speed things
-up and it bypasses intermediate persistence or port calls, it may work
+up, and it bypasses intermediate persistence or port calls, it may work
 initially but will be fragile to failures and hard to test. Therefore, at
 scale, a key discipline is to *modularize the Celery workflow* in tandem with
 the LangGraph structure, so that each node or subgraph corresponds to a
