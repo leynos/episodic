@@ -101,6 +101,14 @@ that align with the system design.
   and compliance results, linked to the canonical episode.
 - [ ] 3.2.6. Expose generation and QA state via the API and CLI, including
   filtering by brand compliance status.
+- [ ] 3.2.7. Implement structured-output planning and tool-calling execution
+  with model tiering for cost control.
+- [ ] 3.2.8. Add LangGraph suspend-and-resume orchestration, idempotency keys,
+  and Celery queue routing for I/O-bound and CPU-bound workloads.
+- [ ] 3.2.9. Instrument cost accounting with token usage callbacks, per-task
+  ledger entries, and aggregated run totals.
+- [ ] 3.2.10. Extend architecture enforcement to LangGraph nodes and Celery
+  tasks, ensuring port-only dependencies and checkpoint payload boundaries.
 
 ### 3.3. Exit criteria
 
@@ -108,6 +116,10 @@ that align with the system design.
   pass brand guideline checks before entering approval.
 - [ ] 3.3.2. QA dashboards surface per-episode compliance, reviewer comments,
   and ageing tasks.
+- [ ] 3.3.3. LangGraph workflows resume from suspended tasks with idempotency
+  keys and validated queue routing profiles.
+- [ ] 3.3.4. Cost ledger reports per-episode spend and budget breaches using
+  aggregated run totals.
 
 ## 4. Audio synthesis and delivery
 
@@ -185,6 +197,10 @@ that align with the system design.
   customer-facing SLIs/SLAs.
 - [ ] 6.2.5. Certify compliance checkpoints (SOC 2 readiness, GDPR DPIA) and
   integrate automated evidence collection.
+- [ ] 6.2.6. Implement budget enforcement services with per-user and
+  per-organization caps, including alerting on budget overruns.
+- [ ] 6.2.7. Deliver cost dashboards showing token usage, per-task spend, and
+  budget breach trends for operators.
 
 ### 6.3. Exit criteria
 
@@ -192,3 +208,5 @@ that align with the system design.
   outstanding.
 - [ ] 6.3.2. Automated operations dashboards report green for deployment,
   backups, and latency SLOs.
+- [ ] 6.3.3. Cost dashboards report per-organization spend, and budget breach
+  alerts are routed to on-call responders.
