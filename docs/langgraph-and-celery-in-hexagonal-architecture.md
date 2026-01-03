@@ -51,8 +51,8 @@ rather than ad-hoc code. Still, developers must be careful: **domain rules
 encoded in the graph should mirror the domain’s own policies**. Any mismatch
 (say the graph logic diverges from what the domain model allows) would be a
 sign of architectural friction. Essentially, the graph should orchestrate calls
-and decisions *consistent with the domain’s rules*, not invent its own logic
-outside of domain oversight.
+and decisions *consistent with the domain’s rules*, not invent logic outside of
+domain oversight.
 
 **Celery Task Scope and Domain Boundaries:** Celery is used to run background
 tasks in the Episodic system, which likely includes executing LangGraph
@@ -91,17 +91,17 @@ if domain entities or services begin to incorporate knowledge of the
 orchestrator (e.g. an `Episode` domain object carrying a “current graph node”
 state or having to know it’s mid-generation), then the domain is now coupled to
 the workflow process. The Episodic design tries to avoid this by keeping the
-LangGraph state in its own structure (the StateGraph) and using domain
-identifiers (episode ID, run ID) to tie into persistence. However, the
-operational risk remains that future changes – say adding a new subgraph or
-parallel step – might introduce subtle coupling (like two parallel tasks both
-modifying the same piece of domain data). To mitigate this, the team needs to
-make inter-task contracts explicit: use well-defined message schemas or
-database state transitions (through ports) so that each task knows what it can
-expect (e.g. a Celery task only proceeds when the domain signals that QA
-results are stored and ready). Hidden coupling can also be addressed by
-**comprehensive tracing and logging**, something the LangGraph framework
-emphasizes so that unseen dependencies can be spotted in how the agent executes
+LangGraph state within the StateGraph and using domain identifiers (episode ID,
+run ID) to tie into persistence. However, the operational risk remains that
+future changes – say adding a new subgraph or parallel step – might introduce
+subtle coupling (like two parallel tasks both modifying the same piece of
+domain data). To mitigate this, the team needs to make inter-task contracts
+explicit: use well-defined message schemas or database state transitions
+(through ports) so that each task knows what it can expect (e.g. a Celery task
+only proceeds when the domain signals that QA results are stored and ready).
+Hidden coupling can also be addressed by **comprehensive tracing and logging**,
+something the LangGraph framework emphasizes so that unseen dependencies can be
+spotted in how the agent executes
 [LangGraph blog](https://blog.langchain.com/building-langgraph/).
 
 **Orchestration Logic Leaking into Domain Layer:** A subtle risk is
@@ -125,7 +125,7 @@ catch the failure (perhaps via a Celery retry or a graph loop) and then invoke
 the domain operation again or route to an escalation. Ensuring that failure
 handling, retries, and multi-step sequences are managed by the orchestration
 layer prevents those concerns from leaking into domain code. The **operational
-risk** if this leaks is that it becomes hard to change the workflow, because
+risk** if this leaks is that it becomes hard to change the workflow because
 domain logic changes become necessary, and tight coupling can emerge where
 domain functions assume they’re always called as part of a Celery flow
 (reducing modularity).
@@ -183,7 +183,7 @@ orchestrator waits indefinitely). The design includes toggles to enable/disable
 parallel evaluation, indicating awareness that concurrency might be tuned for
 safety. From an architectural view, as long as these parallel tasks operate on
 isolated data (e.g. each evaluator works on a copy of the draft and writes its
-own result via a port), domain purity is okay. But operationally, if they
+result via a port), domain purity is okay. But operationally, if they
 inadvertently share domain state (say two tasks both update the same episode
 record’s QA field), that’s a race condition. The mitigation is to aggregate
 results in a single place (the orchestrator or a dedicated port) rather than
@@ -388,11 +388,10 @@ within a Hexagonal Architecture if used with discipline:
   existence). But given the design’s emphasis that graphs invoke ports and not
   external APIs directly, this is likely avoided. In summary, conditional logic
   in LangGraph aligns with hex architecture **when it’s effectively
-  implementing domain policy**. It should be seen as an extension of the
-  domain’s decision-making, not separate from it. Tests and reviews can ensure
-  that the same business rules are understood at the domain level (perhaps
-  documented in the domain model or configuration) so the graph isn’t a silo of
-  hidden logic.
+  implementing domain policy**. It extends the domain’s decision-making, rather
+  than operating separately from it. Tests and reviews can ensure that the same
+  business rules are understood at the domain level (perhaps documented in the
+  domain model or configuration) so the graph isn’t a silo of hidden logic.
 
 - **Checkpointing and Long-Running Workflow Management:** Checkpointing is a
   feature that doesn’t typically appear in a standard hexagonal architecture,
