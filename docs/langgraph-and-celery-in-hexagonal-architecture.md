@@ -101,7 +101,7 @@ database state transitions (through ports) so that each task knows what it can
 expect (e.g. a Celery task only proceeds when the domain signals that QA
 results are stored and ready). Hidden coupling can also be addressed by
 **comprehensive tracing and logging**, something the LangGraph framework
-emphasises so that unseen dependencies can be spotted in how the agent executes
+emphasizes so that unseen dependencies can be spotted in how the agent executes
 [LangGraph blog](https://blog.langchain.com/building-langgraph/).
 
 **Orchestration Logic Leaking into Domain Layer:** A subtle risk is
