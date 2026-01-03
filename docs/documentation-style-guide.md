@@ -18,8 +18,9 @@ Apply these rules to keep the documentation clear and consistent for developers.
   - maintain the "e" in words such as _likeable_, _liveable_ and _rateable_,
   - suffix -ogue in words such as _analogue_ and _catalogue_,
   - and so forth.
-- The word **"outwith"** is acceptable.
-- Keep United States (US) spelling when used in an API, for example, `color`.
+- The words **"outwith"** and **"caveat"** are acceptable.
+- Keep United States (US) spelling when used in an external API, command, or
+  library, for example, `color`.
 - The project uses the filename `LICENSE` for community consistency.
 
 ## Punctuation and grammar
