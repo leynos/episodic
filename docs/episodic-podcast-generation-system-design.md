@@ -176,7 +176,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   quantitative scores and qualitative suggestions.
 - Brand guideline checks enforce vocabulary, tone, and forbidden topic rules.
 - Evaluator services publish machine-discoverable pricing contracts via OpenAPI
-  `info.x-sla`, pointing to a Service Level Agreements for OpenAPI (SLA4OAI)
+  `info.x-sla`, pointing to an SLA4OAI (Service-Level Agreements for OpenAPI)
   plan document that defines metrics and pricing rules.
 - QA evaluators operate as LangGraph nodes, enabling parallel execution within
   the generation StateGraph.

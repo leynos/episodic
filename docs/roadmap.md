@@ -91,7 +91,7 @@ that align with the system design.
 - [ ] 3.2.1. Implement the `LLMPort` adapter with retry, token budgeting, and
   guardrail prompts aligned to content templates.
 - [ ] 3.2.2. Extend Bromide and Chiltern services to score factuality, tone,
-  and style, exposing OpenAPI + Service Level Agreements for OpenAPI (SLA4OAI)
+  and style, exposing OpenAPI + SLA4OAI (Service-Level Agreements for OpenAPI)
   pricing plans (`info.x-sla`) and returning structured findings plus usage
   metrics per call.
 - [ ] 3.2.3. Add automated brand-guideline evaluation: lint textual output,
