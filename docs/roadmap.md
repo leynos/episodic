@@ -91,8 +91,9 @@ that align with the system design.
 - [ ] 3.2.1. Implement the `LLMPort` adapter with retry, token budgeting, and
   guardrail prompts aligned to content templates.
 - [ ] 3.2.2. Extend Bromide and Chiltern services to score factuality, tone,
-  and style, exposing OpenAPI + SLA4OAI pricing plans (`info.x-sla`) and
-  returning structured findings plus usage metrics per call.
+  and style, exposing OpenAPI + Service Level Agreements for OpenAPI (SLA4OAI)
+  pricing plans (`info.x-sla`) and returning structured findings plus usage
+  metrics per call.
 - [ ] 3.2.3. Add automated brand-guideline evaluation: lint textual output,
   validate tone, vocabulary, and forbidden topics, and record pass/fail
   outcomes.
@@ -118,8 +119,9 @@ that align with the system design.
 - [ ] 3.2.13. Extend `CostLedgerPort` storage to record helper service call line
   items, including operation identifiers, usage metrics, plan IDs, and SLA
   snapshot IDs.
-- [ ] 3.2.14. Extend `BudgetPort` APIs to reserve and settle estimated spend for
-  helper calls (reserve → commit → release) keyed by idempotency key.
+- [ ] 3.2.14. Extend `BudgetPort` APIs to reserve estimated spend for helper
+  calls and then commit/release against actuals (reserve → commit → release)
+  keyed by idempotency key.
 
 ### 3.3. Exit criteria
 

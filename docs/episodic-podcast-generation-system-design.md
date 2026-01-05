@@ -161,7 +161,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   pinning pricing snapshots for helper services and vendors to support
   auditability and dispute resolution.
 - Enforces per-episode budgets through `BudgetPort` using reservation and
-  reconciliation semantics (reserve → spend → settle) around billable calls.
+  reconciliation semantics (reserve → commit → release) around billable calls.
 - Exposes human-in-the-loop checkpoints where editors can intervene, approve, or
   redirect the generation graph mid-cycle.
 - Provides checkpointing for resumable workflows, enabling long-running
@@ -176,8 +176,8 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   quantitative scores and qualitative suggestions.
 - Brand guideline checks enforce vocabulary, tone, and forbidden topic rules.
 - Evaluator services publish machine-discoverable pricing contracts via OpenAPI
-  `info.x-sla`, pointing to a SLA4OAI plan document that defines metrics and
-  pricing rules.
+  `info.x-sla`, pointing to a Service Level Agreements for OpenAPI (SLA4OAI)
+  plan document that defines metrics and pricing rules.
 - QA evaluators operate as LangGraph nodes, enabling parallel execution within
   the generation StateGraph.
 - Evaluation results drive conditional routing: passing scores advance content
@@ -454,7 +454,7 @@ sequenceDiagram
     Orchestrator ->> PricingEngine : Price call (usage, plan, snapshot)
     PricingEngine -->> Orchestrator : Cost breakdown (minor units)
     Orchestrator ->> CostLedger : Write cost line item + task roll-up
-    Orchestrator ->> Budget : Settle reservation (commit + release unused)
+    Orchestrator ->> Budget : Commit actual cost + release unused reservation
     Orchestrator ->> Postgres : Store iteration results
     Orchestrator -->> API : Ready for approval
     API -->> User : Request editorial review
@@ -720,14 +720,14 @@ content hash) from cost ledger entries.
   response envelope.
 - Evaluator/helper ports should mirror `LLMPort` shape by returning usage
   metadata alongside the primary payload (for example,
-  `BromidePort.evaluate(...) -> (result, usage)`).
+  `BromidePort.evaluate(…) -> (result, usage)`).
 
 Header-based usage example:
 
 - `X-SLA4OAI-Usage: {"requests":1,"input_tokens":842,"output_tokens":211}`
 - `X-SLA4OAI-Plan: bromide-payg`
-- `X-SLA4OAI-Snapshot: <hash or version>` (optional; the orchestrator pins its
-  own snapshot regardless)
+- `X-SLA4OAI-Snapshot: <hash or version>` (optional; the orchestrator pins a
+  snapshot regardless)
 
 The domain service responsible for pricing is `PricingEngine`, which computes
 the cost of an individual call deterministically from:
@@ -762,6 +762,8 @@ fields including:
 - `computed_cost_minor` + `currency`
 - `pricing_model`: `payg | quota_overage | subscription_allocated`
 - `idempotency_key` + `retry_attempt`
+- `billing_period_key` (for example, `2026-01`), required for `fixed_allocation`
+  entries and recommended for all external call scopes
 
 Budget enforcement operates at multiple scopes:
 
@@ -771,14 +773,13 @@ Budget enforcement operates at multiple scopes:
 - **Per-organization limits:** Service-wide caps that block further execution
   once aggregate spend reaches agreed thresholds.
 
-For billable helper calls, budget enforcement uses a reserve → spend →
-reconcile flow:
+For billable helper calls, budget enforcement uses a reserve → commit → release
+flow:
 
 - Before calling a helper, compute a conservative estimate (for example, from
   request size), then reserve budget using an idempotency key.
 - After the helper returns, price using actual usage metrics, write the cost
-  ledger entry, and settle the reservation (commit actual spend and release any
-  unused reservation).
+  ledger entry, then commit actual spend and release any unused reservation.
 
 Idempotency keys must cover billing as well as side effects: the same
 `Idempotency-Key` used for outbound helper calls is reused for metering counter
@@ -796,8 +797,14 @@ SLA4OAI supports plan-level pricing with a billing cadence (for example,
 monthly). For per-task recovery, the preferred approach is to model internal
 helpers as pure usage-based services (plan cost = 0) and express all chargeback
 through metric pricing. If subscription costs are unavoidable, the platform
-needs a scheduled settlement job that amortises fixed plan cost across tasks as
-synthetic `scope=fixed_allocation` entries.
+needs a scheduled settlement job that amortizes fixed plan cost across tasks as
+synthetic `scope=fixed_allocation` entries. Each `fixed_allocation` entry is
+linked to:
+
+- `billing_period_key` (so reconciliation is repeatable and queryable)
+- `plan_id` + `sla_snapshot_id` (so allocation is explainable and immutable)
+- A task-level parent (`parent_cost_entry_id`) for per-task chargeback, with
+  idempotency keyed by `(billing_period_key, plan_id, task_id)`
 
 ### Configuration and Tunables
 
