@@ -160,8 +160,8 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
   pinning pricing snapshots for helper services and vendors to support
   auditability and dispute resolution.
-- Enforces per-episode budgets through `BudgetPort` using reservation and
-  reconciliation semantics (reserve → commit → release) around billable calls.
+- Enforces per-episode budgets through `BudgetPort` using reservation semantics
+  (reserve → commit → release) around billable calls.
 - Exposes human-in-the-loop checkpoints where editors can intervene, approve, or
   redirect the generation graph mid-cycle.
 - Provides checkpointing for resumable workflows, enabling long-running
@@ -176,7 +176,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   quantitative scores and qualitative suggestions.
 - Brand guideline checks enforce vocabulary, tone, and forbidden topic rules.
 - Evaluator services publish machine-discoverable pricing contracts via OpenAPI
-  `info.x-sla`, pointing to an SLA4OAI (Service-Level Agreements for OpenAPI)
+  `info.x-sla`, pointing to an SLA4OAI (Service Level Agreements for OpenAPI)
   plan document that defines metrics and pricing rules.
 - QA evaluators operate as LangGraph nodes, enabling parallel execution within
   the generation StateGraph.
@@ -724,10 +724,17 @@ content hash) from cost ledger entries.
 
 Header-based usage example:
 
-- `X-SLA4OAI-Usage: {"requests":1,"input_tokens":842,"output_tokens":211}`
-- `X-SLA4OAI-Plan: bromide-payg`
-- `X-SLA4OAI-Snapshot: <hash or version>` (optional; the orchestrator pins a
-  snapshot regardless)
+Example response headers:
+
+```text
+X-SLA4OAI-Usage: {"requests":1,"input_tokens":842,"output_tokens":211}
+X-SLA4OAI-Plan: bromide-payg
+X-SLA4OAI-Snapshot: <hash or version>
+```
+
+- `X-SLA4OAI-Usage` is a JSON object mapping SLA4OAI metric names to values.
+- `X-SLA4OAI-Plan` is the plan identifier used for pricing.
+- `X-SLA4OAI-Snapshot` is optional; the orchestrator pins a snapshot regardless.
 
 The domain service responsible for pricing is `PricingEngine`, which computes
 the cost of an individual call deterministically from:
