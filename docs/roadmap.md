@@ -91,7 +91,9 @@ that align with the system design.
 - [ ] 3.2.1. Implement the `LLMPort` adapter with retry, token budgeting, and
   guardrail prompts aligned to content templates.
 - [ ] 3.2.2. Extend Bromide and Chiltern services to score factuality, tone,
-  and style, emitting structured findings.
+  and style, exposing OpenAPI + SLA4OAI (Service Level Agreements for OpenAPI)
+  pricing plans (`info.x-sla`) and returning structured findings plus usage
+  metrics per call.
 - [ ] 3.2.3. Add automated brand-guideline evaluation: lint textual output,
   validate tone, vocabulary, and forbidden topics, and record pass/fail
   outcomes.
@@ -105,10 +107,21 @@ that align with the system design.
   with model tiering for cost control.
 - [ ] 3.2.8. Add LangGraph suspend-and-resume orchestration, idempotency keys,
   and Celery queue routing for I/O-bound and CPU-bound workloads.
-- [ ] 3.2.9. Instrument cost accounting with token usage callbacks, per-task
-  ledger entries, and aggregated run totals.
+- [ ] 3.2.9. Instrument cost accounting with per-call usage metering, pinned
+  SLA4OAI pricing snapshots for helper services, hierarchical ledger entries,
+  and aggregated run totals.
 - [ ] 3.2.10. Extend architecture enforcement to LangGraph nodes and Celery
   tasks, ensuring port-only dependencies and checkpoint payload boundaries.
+- [ ] 3.2.11. Add `PricingCataloguePort` adapter with SLA discovery via OpenAPI,
+  schema validation, caching (TTL/ETag), and snapshot persistence.
+- [ ] 3.2.12. Add `PricingEngine` with a concurrency-safe `MeteringPort` to
+  price individual calls deterministically when quotas and overages apply.
+- [ ] 3.2.13. Extend `CostLedgerPort` storage to record helper service call line
+  items, including operation identifiers, usage metrics, plan IDs, and SLA
+  snapshot IDs.
+- [ ] 3.2.14. Extend `BudgetPort` APIs to reserve estimated spend for helper
+  calls and then commit/release against actuals (reserve → commit → release)
+  keyed by idempotency key.
 
 ### 3.3. Exit criteria
 
@@ -119,7 +132,8 @@ that align with the system design.
 - [ ] 3.3.3. LangGraph workflows resume from suspended tasks with idempotency
   keys and validated queue routing profiles.
 - [ ] 3.3.4. Cost ledger reports per-episode spend and budget breaches using
-  aggregated run totals.
+  pinned pricing snapshots and hierarchical line items for LLM, TTS, and helper
+  calls.
 
 ## 4. Audio synthesis and delivery
 

@@ -157,8 +157,11 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Produces structured drafts, show notes, chapter markers, and sponsorship copy.
 - Persists generation runs alongside prompts, responses, iteration counts, and
   cost telemetry.
-- Records per-task cost entries via `CostLedgerPort` and enforces per-episode
-  budgets through `BudgetPort` before expensive operations.
+- Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
+  pinning pricing snapshots for helper services and vendors to support
+  auditability and dispute resolution.
+- Enforces per-episode budgets through `BudgetPort` using reservation semantics
+  (reserve → commit → release) around billable calls.
 - Exposes human-in-the-loop checkpoints where editors can intervene, approve, or
   redirect the generation graph mid-cycle.
 - Provides checkpointing for resumable workflows, enabling long-running
@@ -172,6 +175,9 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Chiltern rates narrative flow, pacing, and call-to-action placement, producing
   quantitative scores and qualitative suggestions.
 - Brand guideline checks enforce vocabulary, tone, and forbidden topic rules.
+- Evaluator services publish machine-discoverable pricing contracts via OpenAPI
+  `info.x-sla`, pointing to an SLA4OAI (Service Level Agreements for OpenAPI)
+  plan document that defines metrics and pricing rules.
 - QA evaluators operate as LangGraph nodes, enabling parallel execution within
   the generation StateGraph.
 - Evaluation results drive conditional routing: passing scores advance content
@@ -298,7 +304,13 @@ adapter implementations.
 
 - `BudgetPort` checks and reserves per-user, per-episode, and per-organization
   budgets before costly steps execute.
-- `CostLedgerPort` persists per-task cost entries and aggregated run totals.
+- `CostLedgerPort` persists hierarchical cost entries (task roll-ups plus
+  call-level line items) and aggregated run totals.
+- `PricingCataloguePort` discovers helper OpenAPI documents, fetches and
+  validates SLA4OAI pricing plans, and returns immutable snapshots plus plan
+  bindings for the calling tenant.
+- `MeteringPort` provides atomic, concurrency-safe metric consumption counters
+  used by pricing logic when quotas and overages apply.
 - `CheckpointPort` saves and restores StateGraph checkpoints.
 - `TaskResumePort` accepts Celery callback payloads and resumes suspended runs.
 - `LLMPort` surfaces token usage metadata for cost accounting callbacks.
@@ -423,16 +435,26 @@ sequenceDiagram
     participant API as "API Service"
     participant Orchestrator as "Content Generation Orchestrator"
     participant Postgres
+    participant PricingCatalogue as "PricingCataloguePort"
+    participant Budget as "BudgetPort"
     participant LLMPort
     participant Bromide
+    participant PricingEngine
+    participant CostLedger as "CostLedgerPort"
     participant TTSPort
     User ->> API : Submit generation request
     API ->> Postgres : Persist episode and source metadata
     API ->> Orchestrator : Initialise StateGraph run
     Orchestrator ->> LLMPort : Generate draft content
     LLMPort -->> Orchestrator : Draft content
-    Orchestrator ->> Bromide : Evaluate draft quality
-    Bromide -->> Orchestrator : QA report
+    Orchestrator ->> PricingCatalogue : Get SLA snapshot + plan binding (Bromide)
+    Orchestrator ->> Budget : Reserve estimated cost (idempotency key)
+    Orchestrator ->> Bromide : Evaluate draft quality (Idempotency-Key)
+    Bromide -->> Orchestrator : QA report + usage metrics
+    Orchestrator ->> PricingEngine : Price call (usage, plan, snapshot)
+    PricingEngine -->> Orchestrator : Cost breakdown (minor units)
+    Orchestrator ->> CostLedger : Write cost line item + task roll-up
+    Orchestrator ->> Budget : Commit actual cost + release unused reservation
     Orchestrator ->> Postgres : Store iteration results
     Orchestrator -->> API : Ready for approval
     API -->> User : Request editorial review
@@ -668,14 +690,81 @@ LangGraph checkpointing integrates with the platform's Postgres storage:
 
 ### Cost accounting and budget enforcement
 
-Cost accounting treats each LangGraph node and Celery task as a billable unit.
-`LLMPort` callbacks capture prompt and completion token usage, whilst Celery
-tasks record execution time and retry counts. Each task writes a cost entry via
-`CostLedgerPort`, including task identifiers, model metadata, token counts,
-retry totals, and estimated spend. Aggregated totals are stored in StateGraph
-fields such as `total_tokens` and `total_cost_usd`, persisting at checkpoints
-so resumptions retain budget context. Detailed accounting mechanics are
-documented in `docs/cost-management-in-langgraph-agentic-systems.md`.
+Cost accounting treats each LangGraph node and Celery task as a billable unit,
+but pricing is computed from per-call usage metrics and pinned pricing
+snapshots. The intent is determinism and auditability: historical bills must
+remain explainable even if helper pricing plans change later.
+
+#### Helper pricing contracts (SLA4OAI)
+
+Each helper service MUST expose:
+
+- `GET /openapi.json` (or `/openapi.yaml`)
+- `info.x-sla: <URI to SLA document>` (relative URIs are permitted)
+- `GET /sla/plans.yaml` (or similar), serving an SLA4OAI plan document
+
+The orchestrator MUST treat helper SLA documents as versioned billing inputs,
+not live truth that can silently rewrite historical cost. When pricing a call,
+the orchestrator persists and references an immutable snapshot (including a
+content hash) from cost ledger entries.
+
+#### Pricing catalogue, usage metering, and deterministic pricing
+
+- A `PricingCataloguePort` adapter discovers `info.x-sla`, fetches the SLA4OAI
+  document, validates it, and persists an immutable snapshot (`snapshot_id` +
+  hash). The adapter may cache by TTL and ETag to reduce traffic, but the
+  orchestrator always prices using a specific snapshot.
+- Helper responses MUST include a usage payload keyed by SLA4OAI metric names,
+  allowing the orchestrator to compute cost without guessing. This can be
+  provided via response headers (for low-friction retrofits) or a structured
+  response envelope.
+- Evaluator/helper ports should mirror `LLMPort` shape by returning usage
+  metadata alongside the primary payload (for example,
+  `BromidePort.evaluate(…) -> (result, usage)`).
+
+Header-based usage example:
+
+| Header               | Example value                                           | Required | Meaning                                                                          |
+| -------------------- | ------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `X-SLA4OAI-Usage`    | `{"requests":1,"input_tokens":842,"output_tokens":211}` | Yes      | JSON mapping SLA4OAI metric names to values.                                     |
+| `X-SLA4OAI-Plan`     | `bromide-payg`                                          | Optional | Plan identifier used for pricing.                                                |
+| `X-SLA4OAI-Snapshot` | `<hash or version>`                                     | Optional | Helper-advertised snapshot/version; the orchestrator pins a snapshot regardless. |
+
+The domain service responsible for pricing is `PricingEngine`, which computes
+the cost of an individual call deterministically from:
+
+- `(service, operation, plan_id, usage_metrics, billing_period, snapshot_id,
+  org_id)`
+
+When quotas and overage pricing apply, `PricingEngine` relies on a
+concurrency-safe `MeteringPort` to atomically consume per-metric usage within
+the relevant billing period. This avoids parallel tasks randomly misattributing
+which calls landed "over quota".
+
+#### Hierarchical cost ledger entries
+
+To support per-task cost recovery end-to-end, cost accounting records two
+levels:
+
+1. Task-level roll-ups.
+2. Call-level line items for each billable external interaction (LLM vendors,
+   TTS vendors, and helper services such as Bromide and Chiltern).
+
+`CostLedgerPort` persists hierarchical entries (or a companion table) with
+fields including:
+
+- `parent_cost_entry_id` (nullable)
+- `scope`: `task | external_call | fixed_allocation`
+- `provider_type`: `llm | tts | helper`
+- `provider_name`
+- `operation`: OpenAPI `operationId` or `(method, path)`
+- `sla_snapshot_id` + `plan_id`
+- `usage`: JSON `{metric_name: value, ...}`
+- `computed_cost_minor` + `currency`
+- `pricing_model`: `payg | quota_overage | subscription_allocated`
+- `idempotency_key` + `retry_attempt`
+- `billing_period_key` (for example, `2026-01`), required for `fixed_allocation`
+  entries and recommended for all external call scopes
 
 Budget enforcement operates at multiple scopes:
 
@@ -685,11 +774,38 @@ Budget enforcement operates at multiple scopes:
 - **Per-organization limits:** Service-wide caps that block further execution
   once aggregate spend reaches agreed thresholds.
 
-Budget checks run before LLM calls and expensive Celery tasks, routing to a
-budget-exceeded node that records partial results and notifies operators.
-Anomaly controls include iteration caps, `max_concurrency` limits for parallel
-branches, retry budgets for unstable tools, and dead-letter queues for tasks
-halted on budget overruns.
+For billable helper calls, budget enforcement uses a reserve → commit → release
+flow:
+
+- Before calling a helper, compute a conservative estimate (for example, from
+  request size), then reserve budget using an idempotency key.
+- After the helper returns, price using actual usage metrics, write the cost
+  ledger entry, then commit actual spend and release any unused reservation.
+
+Idempotency keys must cover billing as well as side effects: the same
+`Idempotency-Key` used for outbound helper calls is reused for metering counter
+consumption and cost ledger insertion, preventing double-charging on retries.
+
+Budget checks run before LLM calls, helper calls, and expensive Celery tasks,
+routing to a budget-exceeded node that records partial results and notifies
+operators. Anomaly controls include iteration caps, `max_concurrency` limits
+for parallel branches, retry budgets for unstable tools, and dead-letter queues
+for tasks halted on budget overruns.
+
+#### Subscription plan pricing
+
+SLA4OAI supports plan-level pricing with a billing cadence (for example,
+monthly). For per-task recovery, the preferred approach is to model internal
+helpers as pure usage-based services (plan cost = 0) and express all chargeback
+through metric pricing. If subscription costs are unavoidable, the platform
+needs a scheduled settlement job that amortizes fixed plan cost across tasks as
+synthetic `scope=fixed_allocation` entries. Each `fixed_allocation` entry is
+linked to:
+
+- `billing_period_key` (so reconciliation is repeatable and queryable)
+- `plan_id` + `sla_snapshot_id` (so allocation is explainable and immutable)
+- A task-level parent (`parent_cost_entry_id`) for per-task chargeback, with
+  idempotency keyed by `(billing_period_key, plan_id, task_id)`
 
 ### Configuration and Tunables
 
@@ -730,8 +846,13 @@ Agentic workflow behaviour is configurable per series profile:
 - `generation_iterations` records each generation cycle within a StateGraph run,
   including prompts, responses, evaluator scores, routing decisions, and
   timestamps.
-- `cost_ledger_entries` captures per-task token usage, retry counts, model
-  identifiers, and estimated spend, linked to generation runs.
+- `cost_ledger_entries` captures per-task roll-ups plus per-call line items for
+  billable external interactions, including pinned pricing snapshot IDs, plan
+  bindings, usage metrics, computed cost in minor units, and idempotency keys.
+- `sla_snapshots` stores immutable SLA4OAI plan documents (snapshot ID, content
+  hash, source URI, retrieval timestamp) used to price helper service calls.
+- `metering_counters` stores per-organization metric consumption keyed by
+  service, billing period, and metric name to support quota and overage pricing.
 - `budget_limits` defines per-user, per-organization, and per-series spend
   caps, including reset cadence and enforcement policies.
 - `budget_usage` aggregates spend by scope and reporting window to support
