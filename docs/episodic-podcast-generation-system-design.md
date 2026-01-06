@@ -701,7 +701,7 @@ Each helper service MUST expose:
 
 - `GET /openapi.json` (or `/openapi.yaml`)
 - `info.x-sla: <URI to SLA document>` (relative URIs are permitted)
-- `GET /sla/plans.yaml` (or similar), serving a SLA4OAI plan document
+- `GET /sla/plans.yaml` (or similar), serving an SLA4OAI plan document
 
 The orchestrator MUST treat helper SLA documents as versioned billing inputs,
 not live truth that can silently rewrite historical cost. When pricing a call,
@@ -724,17 +724,11 @@ content hash) from cost ledger entries.
 
 Header-based usage example:
 
-Example response headers:
-
-```text
-X-SLA4OAI-Usage: {"requests":1,"input_tokens":842,"output_tokens":211}
-X-SLA4OAI-Plan: bromide-payg
-X-SLA4OAI-Snapshot: <hash or version>
-```
-
-- `X-SLA4OAI-Usage` is a JSON object mapping SLA4OAI metric names to values.
-- `X-SLA4OAI-Plan` is the plan identifier used for pricing.
-- `X-SLA4OAI-Snapshot` is optional; the orchestrator pins a snapshot regardless.
+| Header               | Example value                                           | Required | Meaning                                                                          |
+| -------------------- | ------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `X-SLA4OAI-Usage`    | `{"requests":1,"input_tokens":842,"output_tokens":211}` | Yes      | JSON mapping SLA4OAI metric names to values.                                     |
+| `X-SLA4OAI-Plan`     | `bromide-payg`                                          | Optional | Plan identifier used for pricing.                                                |
+| `X-SLA4OAI-Snapshot` | `<hash or version>`                                     | Optional | Helper-advertised snapshot/version; the orchestrator pins a snapshot regardless. |
 
 The domain service responsible for pricing is `PricingEngine`, which computes
 the cost of an individual call deterministically from:
