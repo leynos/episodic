@@ -87,7 +87,7 @@ planned features.
 - **Deployment:** FluxCD GitOps
 - **Testing:** pytest with BDD (pytest-bdd)
 
-### Architecture
+## Architecture
 
 Episodic is built using **hexagonal architecture** (ports and adapters) to
 maintain clean boundaries between domain logic and infrastructure concerns.
