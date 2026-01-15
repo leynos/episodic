@@ -36,7 +36,7 @@ platform foundations (Phase 1 of 6).
 📋 See [`docs/roadmap.md`](docs/roadmap.md) for detailed development status and
 planned features.
 
-## Features
+## Planned Features
 
 ### 🔄 Content Pipeline
 
