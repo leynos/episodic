@@ -74,11 +74,15 @@ planned features.
 ## Technology Stack
 
 - **Language:** Python 3.13+ (with optional Rust extensions)
-- **Web Framework:** Falcon 4.2.x on Granian
+- **Web Framework:** [Falcon](https://falconframework.org/) 4.2.x on
+  [Granian](https://github.com/emmett-framework/granian) (Rust-based ASGI
+  server)
 - **Task Queue:** Celery with RabbitMQ
-- **Orchestration:** LangGraph for agentic workflows
-- **Database:** PostgreSQL (CloudNativePG)
-- **Cache:** Valkey (Redis-compatible)
+- **Orchestration:** [LangGraph](https://langchain-ai.github.io/langgraph/) for
+  agentic workflows
+- **Database:** PostgreSQL ([CloudNativePG](https://cloudnative-pg.io/))
+- **Cache:** [Valkey](https://valkey.io/) (Redis-compatible in-memory data
+  store)
 - **Infrastructure:** Kubernetes (DigitalOcean DOKS), OpenTofu/Terraform
 - **Deployment:** FluxCD GitOps
 - **Testing:** pytest with BDD (pytest-bdd)
@@ -94,7 +98,7 @@ This ensures testability, flexibility, and long-term maintainability.
 ### Prerequisites
 
 - Python 3.13+
-- uv (Python package manager)
+- [uv](https://docs.astral.sh/uv/) (fast Python package and project manager)
 - Make
 - Docker (for local development)
 
@@ -114,7 +118,7 @@ make typecheck
 
 ### Usage
 
-📖 See [`docs/users-guide.md`](docs/users-guide.md) for the nicknacks.
+📖 See [`docs/users-guide.md`](docs/users-guide.md) for the knick-knacks.
 
 > User guide coming soon as features are implemented!
 
