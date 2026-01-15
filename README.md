@@ -124,12 +124,12 @@ make typecheck
 
 ## Documentation
 
-- [**Roadmap**](docs/roadmap.md) - Development phases and current status
-- [**System Design**](docs/episodic-podcast-generation-system-design.md) -
+- [**Roadmap**](docs/roadmap.md) — Development phases and current status
+- [**System Design**](docs/episodic-podcast-generation-system-design.md) —
   Architecture and component overview
-- [**Infrastructure Design**](docs/infrastructure-design.md) - Kubernetes,
+- [**Infrastructure Design**](docs/infrastructure-design.md) — Kubernetes,
   GitOps, and observability
-- [**Users Guide**](docs/users-guide.md) - Usage instructions (coming soon)
+- [**Users Guide**](docs/users-guide.md) — Usage instructions (coming soon)
 
 ## Contributing
 
@@ -144,9 +144,9 @@ This project follows strict code quality standards:
 See [`AGENTS.md`](AGENTS.md) for contributor guidelines and commit gating
 requirements.
 
-## License
+## Licence
 
-Licensed under the [ISC License](LICENSE).
+Licensed under the [ISC Licence](LICENSE).
 
 ## Credits
 
