@@ -6,6 +6,7 @@ These fixtures follow the py-pglite approach documented in
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import os
 import socket
@@ -55,9 +56,23 @@ class _AsyncpgConnection(typ.Protocol):
 
 
 def _should_use_pglite() -> bool:
-    """Return True when tests should attempt py-pglite."""
+    """Return True when tests should attempt py-pglite.
+
+    If a non-SQLite backend is requested but py-pglite is unavailable,
+    fail fast with a clear error instead of silently skipping tests.
+    """
     target = os.getenv("EPISODIC_TEST_DB", "pglite").lower()
-    return target != "sqlite" and _PGLITE_AVAILABLE
+    if target == "sqlite":
+        return False
+    if not _PGLITE_AVAILABLE:
+        msg = (
+            "Database-backed tests requested via EPISODIC_TEST_DB="
+            f"{target!r}, but py-pglite is not installed or unavailable. "
+            "Install py-pglite (see docs/testing-sqlalchemy-with-pytest-and-"
+            "py-pglite.md) or set EPISODIC_TEST_DB=sqlite."
+        )
+        raise RuntimeError(msg)
+    return True
 
 
 def _find_free_port() -> int:
@@ -88,10 +103,26 @@ async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
         from sqlalchemy.ext.asyncio import create_async_engine
 
         dsn = config.get_asyncpg_uri()
+        connect_timeout = 20
+        max_retries = 5
+        retry_delay = 0.5
 
         async def async_creator() -> asyncpg.Connection:
-            connection = await asyncpg.connect(dsn=dsn, ssl=False, timeout=5)
-            return typ.cast("asyncpg.Connection", _AsyncpgProxy(connection))
+            last_error: Exception | None = None
+            for attempt in range(max_retries):
+                try:
+                    connection = await asyncpg.connect(
+                        dsn=dsn,
+                        ssl=False,
+                        timeout=connect_timeout,
+                    )
+                except (OSError, TimeoutError, asyncpg.PostgresError) as exc:
+                    last_error = exc
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                else:
+                    return typ.cast("asyncpg.Connection", _AsyncpgProxy(connection))
+            msg = "Timed out connecting to the py-pglite Postgres instance."
+            raise TimeoutError(msg) from last_error
 
         url = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
         engine = create_async_engine(
@@ -132,10 +163,7 @@ def _run_migrations(connection: Connection, config: Config) -> None:
 async def pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
     """Yield an async engine backed by py-pglite Postgres."""
     if not _should_use_pglite():
-        pytest.skip(
-            "py-pglite unavailable. "
-            "See docs/testing-sqlalchemy-with-pytest-and-py-pglite.md."
-        )
+        pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
 
     engine_cm = _pglite_engine(tmp_path)
     engine = await engine_cm.__aenter__()

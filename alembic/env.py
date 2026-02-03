@@ -7,7 +7,7 @@ import typing as typ
 from logging.config import fileConfig
 
 from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import AsyncConnection, async_engine_from_config
 
 from alembic import context
 from episodic.canonical.storage import Base
@@ -53,7 +53,10 @@ async def run_migrations_online_async() -> None:
     """Run migrations in online mode."""
     connectable = config.attributes.get("connection")
     if connectable is not None:
-        _do_run_migrations(connectable)
+        if isinstance(connectable, AsyncConnection):
+            await connectable.run_sync(_do_run_migrations)
+        else:
+            _do_run_migrations(connectable)
         return
 
     section = config.get_section(config.config_ini_section) or {}
@@ -73,7 +76,10 @@ def run_migrations_online() -> None:
     """Entrypoint for online migrations."""
     connectable = config.attributes.get("connection")
     if connectable is not None:
-        _do_run_migrations(connectable)
+        if isinstance(connectable, AsyncConnection):
+            asyncio.run(connectable.run_sync(_do_run_migrations))
+        else:
+            _do_run_migrations(connectable)
         return
     asyncio.run(run_migrations_online_async())
 

@@ -7,6 +7,7 @@ import typing as typ
 import uuid
 
 import pytest
+import sqlalchemy as sa
 import tei_rapporteur as _tei
 from pytest_bdd import given, scenario, then, when
 
@@ -17,7 +18,7 @@ from episodic.canonical.domain import (
     SourceDocumentInput,
 )
 from episodic.canonical.services import ingest_sources
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 
 TEI: typ.Any = _tei
 
@@ -116,7 +117,17 @@ def ingestion_job_records_sources(
         async with SqlAlchemyUnitOfWork(factory) as uow:
             episode = await ingest_sources(uow, profile, request)
 
+        async with factory() as session:
+            result = await session.execute(
+                sa.select(IngestionJobRecord).where(
+                    IngestionJobRecord.target_episode_id == episode.id
+                )
+            )
+            job_record = result.scalar_one()
+
         context["episode_id"] = episode.id
+        context["ingestion_job_id"] = job_record.id
+        context["source_uris"] = [source.source_uri for source in sources]
 
     _function_scoped_runner.run(_ingest())
 
@@ -159,5 +170,57 @@ def approval_state_is_draft(
 
         assert episode is not None
         assert episode.approval_state is ApprovalState.DRAFT
+
+    _function_scoped_runner.run(_fetch())
+
+
+@then("an approval event is persisted for the ingestion job")
+def approval_event_persisted(
+    _function_scoped_runner: asyncio.Runner,
+    session_factory: object,
+    context: dict[str, typ.Any],
+) -> None:
+    """Verify approval events are stored for the ingestion."""
+
+    async def _fetch() -> None:
+        episode_id = typ.cast("uuid.UUID", context["episode_id"])
+        source_uris = typ.cast("list[str]", context["source_uris"])
+
+        factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+        async with SqlAlchemyUnitOfWork(factory) as uow:
+            events = await uow.approval_events.list_for_episode(episode_id)
+
+        assert events
+        event = events[0]
+        assert event.from_state is None
+        assert event.to_state is ApprovalState.DRAFT
+        assert isinstance(event.payload, dict)
+        assert set(event.payload.get("sources", [])) >= set(source_uris)
+
+    _function_scoped_runner.run(_fetch())
+
+
+@then("source documents are stored and linked to the ingestion job and episode")
+def source_documents_linked(
+    _function_scoped_runner: asyncio.Runner,
+    session_factory: object,
+    context: dict[str, typ.Any],
+) -> None:
+    """Verify source documents are linked to ingestion jobs and episodes."""
+
+    async def _fetch() -> None:
+        job_id = typ.cast("uuid.UUID", context["ingestion_job_id"])
+        episode_id = typ.cast("uuid.UUID", context["episode_id"])
+        source_uris = typ.cast("list[str]", context["source_uris"])
+
+        factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+        async with SqlAlchemyUnitOfWork(factory) as uow:
+            documents = await uow.source_documents.list_for_job(job_id)
+
+        assert len(documents) == len(source_uris)
+        for document in documents:
+            assert document.ingestion_job_id == job_id
+            assert document.canonical_episode_id == episode_id
+            assert document.source_uri in source_uris
 
     _function_scoped_runner.run(_fetch())

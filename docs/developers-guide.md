@@ -32,7 +32,10 @@ Key expectations:
   runtime.
 - Tests run against Postgres semantics, not SQLite.
 - Migrations are applied automatically for each test fixture instance.
-- `EPISODIC_TEST_DB=sqlite` skips py-pglite setup when a fallback is required.
+- `EPISODIC_TEST_DB=sqlite` disables the py-pglite fixtures (tests that depend
+  on them will be skipped).
+- If a non-SQLite backend is requested while py-pglite is unavailable, the
+  fixtures raise a clear error instead of silently skipping tests.
 
 ## Canonical content persistence
 

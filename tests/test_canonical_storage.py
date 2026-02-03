@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import exc as sa_exc
 
 from episodic.canonical.domain import (
+    ApprovalEvent,
     ApprovalState,
     CanonicalEpisode,
     EpisodeStatus,
@@ -143,3 +144,56 @@ async def test_can_persist_episode_with_header(session_factory: object) -> None:
     assert fetched is not None
     assert fetched.series_profile_id == series.id
     assert fetched.tei_header_id == header.id
+
+
+@pytest.mark.asyncio
+async def test_repository_getters_and_lists(session_factory: object) -> None:
+    """Repository getters and list methods return persisted records."""
+    now = dt.datetime.now(dt.UTC)
+    series, header, episode, job, source = _episode_fixture(now)
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.tei_headers.add(header)
+        await uow.commit()
+
+        await uow.episodes.add(episode)
+        await uow.ingestion_jobs.add(job)
+        await uow.source_documents.add(source)
+        await uow.flush()
+        await uow.approval_events.add(
+            ApprovalEvent(
+                id=uuid.uuid4(),
+                episode_id=episode.id,
+                actor="reviewer@example.com",
+                from_state=None,
+                to_state=ApprovalState.DRAFT,
+                note="Initial review.",
+                payload={"sources": [source.source_uri]},
+                created_at=now,
+            )
+        )
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        record = await uow.series_profiles.get_by_slug(series.slug)
+        assert record is not None
+        assert record.id == series.id
+
+        record = await uow.tei_headers.get(header.id)
+        assert record is not None
+        assert record.id == header.id
+
+        record = await uow.ingestion_jobs.get(job.id)
+        assert record is not None
+        assert record.id == job.id
+
+        records = await uow.source_documents.list_for_job(job.id)
+        assert records
+        assert records[0].ingestion_job_id == job.id
+        assert records[0].canonical_episode_id == episode.id
+
+        records = await uow.approval_events.list_for_episode(episode.id)
+        assert records
+        assert records[0].episode_id == episode.id

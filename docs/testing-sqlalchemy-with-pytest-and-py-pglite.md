@@ -44,7 +44,8 @@ SQLAlchemy. The most important are:
 - **`pglite_engine`** – a SQLAlchemy Engine connected to a temporary Postgres
   instance (typically one per test).
 
-- **`pglite_session`** – a SQLAlchemy ORM Session bound to the above engine.
+- **`pglite_session`** – a SQLAlchemy object-relational mapper (ORM) Session
+  bound to the above engine.
 
 These fixtures can be requested in tests. **No database URL or manual server
 startup is required** – simply including the fixture triggers py-pglite to

@@ -20,8 +20,18 @@ class TeiHeaderPayload:
 
 def parse_tei_header(xml: str) -> TeiHeaderPayload:
     """Parse a TEI XML payload and extract the header."""
-    document = TEI.parse_xml(xml)
-    document.validate()
+    try:
+        document = TEI.parse_xml(xml)
+        document.validate()
+    except ValueError as exc:
+        message = str(exc)
+        if "teiHeader" in message or "header" in message:
+            msg = "TEI header missing from parsed payload."
+            raise TypeError(msg) from exc
+        if "title" in message:
+            msg = "TEI header title missing from parsed payload."
+            raise ValueError(msg) from exc
+        raise
     payload = TEI.to_dict(document)
     header = payload.get("teiHeader") or payload.get("header")
     if not isinstance(header, dict):

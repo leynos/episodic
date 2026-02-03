@@ -54,9 +54,10 @@ def _log(
     *args: object,
     exc_info: object | None = None,
 ) -> None:
+    message = template % args if args else template
     logger.log(
         level,
-        template % args,
+        message,
         exc_info=exc_info,
         stack_info=False,
     )

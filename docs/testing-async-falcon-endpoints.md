@@ -3,29 +3,29 @@
 ## **1\. Introduction**
 
 The Falcon framework is recognized for its high-performance capabilities in
-building WSGI and ASGI web APIs and microservices, emphasizing reliability and
-speed. A significant evolution in Falcon is its robust support for asynchronous
-programming through asyncio and the Asynchronous Server Gateway Interface
-(ASGI). This enables the development of highly concurrent applications capable
-of handling numerous I/O-bound operations efficiently. However, the
-introduction of asynchronous patterns brings new complexities to testing.
-Verifying the correctness of asynchronous code requires specialized tools and
-techniques to manage event loops and awaitables. pytest stands out as a widely
-adopted Python testing framework, favored for its simplicity and extensibility.
-For testing asyncio-based applications, the pytest-asyncio plugin is
-indispensable, providing the necessary infrastructure to write and execute
-asynchronous tests seamlessly. This report aims to furnish a comprehensive
-guide on best practices for testing asynchronous Falcon endpoints using pytest,
-covering environment setup, fundamental test structures, advanced control with
-Falcon's testing utilities, asynchronous fixtures, effective mocking
-strategies, and testing crucial components like hooks and middleware. A core
-consideration when working with Falcon's ASGI interface (falcon.asgi.App) is
-the pervasive nature of asynchronicity. It's not merely the endpoint responders
-that become async def; this paradigm extends to hooks, middleware methods, and
-error handlers, all of which must be awaitable coroutine functions.
-Consequently, testing strategies must holistically address this "async
-everything" model to ensure comprehensive validation of the application's
-behavior.
+building Web Server Gateway Interface (WSGI) and Asynchronous Server Gateway
+Interface (ASGI) web APIs and microservices, emphasizing reliability and speed.
+A significant evolution in Falcon is its robust support for asynchronous
+programming through asyncio and ASGI. This enables the development of highly
+concurrent applications capable of handling numerous I/O-bound operations
+efficiently. However, the introduction of asynchronous patterns brings new
+complexities to testing. Verifying the correctness of asynchronous code
+requires specialized tools and techniques to manage event loops and awaitables.
+pytest stands out as a widely adopted Python testing framework, favored for its
+simplicity and extensibility. For testing asyncio-based applications, the
+pytest-asyncio plugin is indispensable, providing the necessary infrastructure
+to write and execute asynchronous tests seamlessly. This report aims to furnish
+a comprehensive guide on best practices for testing asynchronous Falcon
+endpoints using pytest, covering environment setup, fundamental test
+structures, advanced control with Falcon's testing utilities, asynchronous
+fixtures, effective mocking strategies, and testing crucial components like
+hooks and middleware. A core consideration when working with Falcon's ASGI
+interface (falcon.asgi.App) is the pervasive nature of asynchronicity. It's not
+merely the endpoint responders that become async def; this paradigm extends to
+hooks, middleware methods, and error handlers, all of which must be awaitable
+coroutine functions. Consequently, testing strategies must holistically address
+this "async everything" model to ensure comprehensive validation of the
+application's behavior.
 
 ## **2\. Setting Up the Testing Environment**
 
