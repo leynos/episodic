@@ -21,11 +21,21 @@ tests pass, and the roadmap entry for 2.2.1 is marked done.
 - [x] (2026-02-02 00:00Z) Drafted initial ExecPlan for schema design.
 - [x] (2026-02-03 00:00Z) Added py-pglite test scaffolding references and
   linked the new testing guidance.
+- [x] (2026-02-03 00:00Z) Implemented canonical schema models, Alembic
+  migrations, and py-pglite fixtures.
+- [x] (2026-02-03 00:00Z) Added unit and behavioural tests for ingestion
+  workflows and repository constraints.
+- [x] (2026-02-03 00:00Z) Updated system design, users guide, and developer
+  guide documentation for the canonical schema.
+- [x] (2026-02-03 00:00Z) Added unit-of-work flush support to preserve
+  foreign-key ordering during ingestion and validated async py-pglite tests.
 
 ## Surprises and discoveries
 
 - Observation: The async SQLAlchemy and py-pglite testing guides are now
-  available in `docs/` after importing them from the gillie repository.
+  available in `docs/` after importing them from the ghillie repository.
+- Observation: py-pglite requires Node.js 18+ for the embedded Postgres WASM
+  runtime, so tests depend on Node availability.
 
 ## Decision log
 
@@ -41,10 +51,17 @@ tests pass, and the roadmap entry for 2.2.1 is marked done.
   document the scaffolding in `tests/conftest.py` alongside the new guidance
   docs. Rationale: Aligns unit and behavioural tests with the documented
   in-process Postgres strategy. Date/Author: 2026-02-03, Codex.
+- Decision: Introduce `CanonicalUnitOfWork.flush()` to persist dependent
+  records before creating approval events in a single transaction. Rationale:
+  Approval events and episodes share foreign-key constraints without ORM
+  relationships; flushing preserves ordering. Date/Author: 2026-02-03, Codex.
 
 ## Outcomes and retrospective
 
-Pending implementation.
+Canonical content schema models, migrations, and py-pglite-backed tests were
+implemented alongside documentation updates for design decisions and developer
+practice. Validation confirmed formatting, linting, and tests passed with the
+new fixtures after adding unit-of-work flushes for ingestion ordering.
 
 ## Context and orientation
 
@@ -235,3 +252,6 @@ implementation, and validation steps for roadmap item 2.2.1.
 
 Revised on 2026-02-03 to align test scaffolding and validation steps with the
 py-pglite testing guidance.
+
+Revised on 2026-02-03 to capture canonical schema implementation details and
+updated documentation.

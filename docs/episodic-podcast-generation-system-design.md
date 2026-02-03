@@ -833,10 +833,14 @@ Agentic workflow behaviour is configurable per series profile:
 
 - `series_profiles` captures show metadata, tone attributes, default voices, and
   sponsor obligations.
+- `tei_headers` stores parsed TEI header payloads, including provenance and
+  human-readable titles.
 - `episode_templates` stores segment layouts, prompt scaffolds, and music bed
   preferences linked to series profiles.
-- `source_documents` records ingestion jobs, document types, weighting factors,
-  and original files in object storage.
+- `ingestion_jobs` tracks each ingestion run, including status, timestamps, and
+  targeted episodes.
+- `source_documents` records ingestion sources, document types, weighting
+  factors, and original files in object storage.
 - `episodes` holds canonical TEI, generation status, QA verdicts, and approval
   pointers.
 - `qa_findings` and `brand_compliance_results` record scores, rule breaches, and
@@ -864,6 +868,35 @@ Agentic workflow behaviour is configurable per series profile:
   synthesis graph checkpoints and driving routing decisions.
 - Alembic migrations version schema changes; migrations run in CI and during
   deployments to guarantee consistency.
+
+### Canonical content schema decisions
+
+The canonical content schema separates TEI headers from canonical episode
+records so provenance metadata can be parsed once and reused across workflow
+stages. TEI headers are stored as JSONB for structured querying and retain the
+raw XML payload for audit and re-emission. Canonical episodes reference TEI
+headers by identifier, store the canonical TEI XML string, and track both
+workflow status and approval state. Ingestion jobs capture lifecycle status,
+timestamps, and the target episode, while source documents link back to their
+ingestion job and the canonical episode they influence. Approval events record
+state transitions with actor metadata and payloads for auditability. Ingestion
+workflows flush pending inserts before recording dependent rows so foreign-key
+relationships remain valid within a single transaction.
+
+The diagram below summarises the canonical content tables and their
+relationships.
+
+```mermaid
+erDiagram
+    SERIES_PROFILES ||--o{ EPISODES : has
+    SERIES_PROFILES ||--o{ INGESTION_JOBS : runs
+    TEI_HEADERS ||--|| EPISODES : anchors
+    INGESTION_JOBS ||--o{ SOURCE_DOCUMENTS : imports
+    EPISODES ||--o{ SOURCE_DOCUMENTS : influences
+    EPISODES ||--o{ APPROVAL_EVENTS : records
+```
+
+_Figure 7: Canonical content schema relationships._
 
 ### Core Entity Model
 

@@ -10,14 +10,17 @@ import contextlib
 import os
 import socket
 import typing as typ
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from alembic.config import Config
+
+from alembic import command
 
 if typ.TYPE_CHECKING:
-    from pathlib import Path
-
-    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+    from sqlalchemy.engine import Connection
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 try:
     from py_pglite import PGliteConfig, PGliteManager
@@ -25,6 +28,30 @@ try:
     _PGLITE_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     _PGLITE_AVAILABLE = False
+
+
+class _AsyncpgProxy:
+    """Proxy asyncpg connections to enforce close timeouts."""
+
+    def __init__(self, connection: _AsyncpgConnection) -> None:
+        self._connection = connection
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._connection, name)
+
+    async def close(self, *, timeout: float | None = None) -> None:
+        try:
+            await self._connection.close(timeout=timeout or 2)
+        except Exception:  # noqa: BLE001
+            self._connection.terminate()
+
+
+class _AsyncpgConnection(typ.Protocol):
+    """Minimal asyncpg connection surface required for cleanup."""
+
+    async def close(self, *, timeout: float | None = None) -> None: ...
+
+    def terminate(self) -> None: ...
 
 
 def _should_use_pglite() -> bool:
@@ -57,17 +84,48 @@ async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
     )
 
     with PGliteManager(config):
+        import asyncpg
         from sqlalchemy.ext.asyncio import create_async_engine
 
-        url = (
-            f"postgresql+asyncpg://postgres:postgres@{config.tcp_host}:"
-            f"{config.tcp_port}/postgres"
+        dsn = config.get_asyncpg_uri()
+
+        async def async_creator() -> asyncpg.Connection:
+            connection = await asyncpg.connect(dsn=dsn, ssl=False, timeout=5)
+            return typ.cast("asyncpg.Connection", _AsyncpgProxy(connection))
+
+        url = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+        engine = create_async_engine(
+            url,
+            async_creator=async_creator,
+            pool_pre_ping=True,
         )
-        engine = create_async_engine(url)
         try:
             yield engine
         finally:
             await engine.dispose()
+
+
+def _alembic_config(database_url: str) -> Config:
+    """Create an Alembic configuration for test migrations."""
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    config.set_main_option("sqlalchemy.url", database_url)
+    return config
+
+
+async def _apply_migrations(engine: AsyncEngine) -> None:
+    """Apply Alembic migrations against the provided engine."""
+    config = _alembic_config(str(engine.url))
+
+    async with engine.begin() as connection:
+        await connection.run_sync(_run_migrations, config)
+
+
+def _run_migrations(connection: Connection, config: Config) -> None:
+    """Run Alembic migrations in a sync context."""
+    config.attributes["connection"] = connection
+    command.upgrade(config, "head")
 
 
 @pytest_asyncio.fixture
@@ -88,14 +146,37 @@ async def pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
 
 
 @pytest_asyncio.fixture
-async def pglite_session(
+async def migrated_engine(
     pglite_engine: AsyncEngine,
+) -> typ.AsyncIterator[AsyncEngine]:
+    """Yield a py-pglite engine with migrations applied."""
+    await _apply_migrations(pglite_engine)
+    yield pglite_engine
+
+
+@pytest.fixture
+def session_factory(
+    migrated_engine: AsyncEngine,
+) -> async_sessionmaker[AsyncSession]:
+    """Yield an async session factory bound to the migrated engine."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    return async_sessionmaker(
+        migrated_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+
+@pytest_asyncio.fixture
+async def pglite_session(
+    migrated_engine: AsyncEngine,
 ) -> typ.AsyncIterator[AsyncSession]:
     """Yield an async SQLAlchemy session bound to py-pglite."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     session_factory = async_sessionmaker(
-        pglite_engine,
+        migrated_engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )

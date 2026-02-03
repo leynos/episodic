@@ -1,0 +1,145 @@
+"""Unit tests for canonical storage repositories."""
+
+from __future__ import annotations
+
+import datetime as dt
+import typing as typ
+import uuid
+
+import pytest
+from sqlalchemy import exc as sa_exc
+
+from episodic.canonical.domain import (
+    ApprovalState,
+    CanonicalEpisode,
+    EpisodeStatus,
+    IngestionJob,
+    IngestionStatus,
+    SeriesProfile,
+    SourceDocument,
+    TeiHeader,
+)
+from episodic.canonical.storage import SqlAlchemyUnitOfWork
+
+if typ.TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+def _episode_fixture(
+    now: dt.datetime,
+) -> tuple[SeriesProfile, TeiHeader, CanonicalEpisode, IngestionJob, SourceDocument]:
+    series_id = uuid.uuid4()
+    header_id = uuid.uuid4()
+    episode_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+
+    series = SeriesProfile(
+        id=series_id,
+        slug="nightshift",
+        title="Nightshift",
+        description="After-dark science news.",
+        configuration={"tone": "calm"},
+        created_at=now,
+        updated_at=now,
+    )
+    header = TeiHeader(
+        id=header_id,
+        title="Nightshift Episode 1",
+        payload={"file_desc": {"title": "Nightshift Episode 1"}},
+        raw_xml="<TEI/>",
+        created_at=now,
+        updated_at=now,
+    )
+    episode = CanonicalEpisode(
+        id=episode_id,
+        series_profile_id=series_id,
+        tei_header_id=header_id,
+        title="Nightshift Episode 1",
+        tei_xml="<TEI/>",
+        status=EpisodeStatus.DRAFT,
+        approval_state=ApprovalState.DRAFT,
+        created_at=now,
+        updated_at=now,
+    )
+    job = IngestionJob(
+        id=job_id,
+        series_profile_id=series_id,
+        target_episode_id=episode_id,
+        status=IngestionStatus.COMPLETED,
+        requested_at=now,
+        started_at=now,
+        completed_at=now,
+        error_message=None,
+        created_at=now,
+        updated_at=now,
+    )
+    source = SourceDocument(
+        id=uuid.uuid4(),
+        ingestion_job_id=job_id,
+        canonical_episode_id=episode_id,
+        source_type="web",
+        source_uri="https://example.com",
+        weight=0.75,
+        content_hash="hash-1",
+        metadata={"kind": "article"},
+        created_at=now,
+    )
+
+    return (series, header, episode, job, source)
+
+
+@pytest.mark.asyncio
+async def test_series_profile_slug_unique(session_factory: object) -> None:
+    """Series profile slugs are unique."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    profile_a = SeriesProfile(
+        id=uuid.uuid4(),
+        slug="science-hour",
+        title="Science Hour",
+        description=None,
+        configuration={},
+        created_at=dt.datetime.now(dt.UTC),
+        updated_at=dt.datetime.now(dt.UTC),
+    )
+    profile_b = SeriesProfile(
+        id=uuid.uuid4(),
+        slug="science-hour",
+        title="Science Hour Replay",
+        description=None,
+        configuration={},
+        created_at=dt.datetime.now(dt.UTC),
+        updated_at=dt.datetime.now(dt.UTC),
+    )
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(profile_a)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(profile_b)
+        with pytest.raises(sa_exc.IntegrityError):
+            await uow.commit()
+
+
+@pytest.mark.asyncio
+async def test_can_persist_episode_with_header(session_factory: object) -> None:
+    """Episodes persist with linked TEI headers and ingestion metadata."""
+    now = dt.datetime.now(dt.UTC)
+    series, header, episode, job, source = _episode_fixture(now)
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.tei_headers.add(header)
+        await uow.commit()
+        await uow.episodes.add(episode)
+        await uow.ingestion_jobs.add(job)
+        await uow.source_documents.add(source)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        fetched = await uow.episodes.get(episode.id)
+
+    assert fetched is not None
+    assert fetched.series_profile_id == series.id
+    assert fetched.tei_header_id == header.id

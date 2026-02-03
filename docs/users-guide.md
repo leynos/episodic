@@ -26,6 +26,7 @@ This guide will cover:
 
 - Uploading and ingesting source documents
 - Working with TEI (Text Encoding Initiative) canonical content
+- Tracking ingestion jobs, source weighting decisions, and provenance metadata
 - Configuring content weighting and conflict resolution
 - Managing episode metadata and show notes
 
@@ -34,6 +35,7 @@ This guide will cover:
 - Setting up brand guidelines and compliance rules
 - Configuring multi-layer quality assurance checks
 - Using the editorial approval workflow
+- Reviewing approval states and audit history for canonical episodes
 - Reviewing and approving generated content
 
 ### Audio Production
