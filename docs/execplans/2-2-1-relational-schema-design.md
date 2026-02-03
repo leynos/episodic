@@ -19,13 +19,13 @@ tests pass, and the roadmap entry for 2.2.1 is marked done.
 ## Progress
 
 - [x] (2026-02-02 00:00Z) Drafted initial ExecPlan for schema design.
+- [x] (2026-02-03 00:00Z) Added py-pglite test scaffolding references and
+  linked the new testing guidance.
 
 ## Surprises and discoveries
 
-- Observation: `docs/async-sqlalchemy-with-pg-and-falcon.md`,
-  `docs/testing-async-falcon-endpoints.md`, and
-  `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md` are referenced in the
-  request but are not present in `docs/`. Evidence: `rg` returned no matches.
+- Observation: The async SQLAlchemy and py-pglite testing guides are now
+  available in `docs/` after importing them from the gillie repository.
 
 ## Decision log
 
@@ -37,6 +37,10 @@ tests pass, and the roadmap entry for 2.2.1 is marked done.
   `docs/episodic-podcast-generation-system-design.md` alongside the existing
   data model section. Rationale: The system design document is the canonical
   architecture reference. Date/Author: 2026-02-02, Codex.
+- Decision: Adopt the py-pglite testing approach for database-backed tests and
+  document the scaffolding in `tests/conftest.py` alongside the new guidance
+  docs. Rationale: Aligns unit and behavioural tests with the documented
+  in-process Postgres strategy. Date/Author: 2026-02-03, Codex.
 
 ## Outcomes and retrospective
 
@@ -54,6 +58,12 @@ Key references:
   rules for ports and adapters.
 - `docs/agentic-systems-with-langgraph-and-celery.md` provides orchestration
   context for ingestion jobs and background workflows.
+- `docs/async-sqlalchemy-with-pg-and-falcon.md` defines async SQLAlchemy
+  engine, session, and middleware practices for Falcon.
+- `docs/testing-async-falcon-endpoints.md` captures the async Falcon endpoint
+  testing approach.
+- `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md` defines the py-pglite
+  fixtures and migration strategy for Postgres-backed tests.
 - `docs/users-guide.md` requires updates for user-visible behaviours.
 - `docs/developers-guide.md` must be created or updated to document internal
   interfaces and practices.
@@ -79,7 +89,8 @@ for the schema, keeping the adapter layer isolated from domain logic. Wire
 logging via `femtologging` in repository and migration entry points. Add tests
 with `pytest` for model constraints and repository behaviour, plus `pytest-bdd`
 scenarios that exercise ingestion jobs, source document association, canonical
-episode creation, and approval state transitions.
+episode creation, and approval state transitions using the py-pglite fixtures
+from `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`.
 
 Finally, update documentation to reflect user-facing behaviours and developer
 interfaces, and mark the roadmap entry as done once the schema is implemented
@@ -89,18 +100,23 @@ and validated. Run all required quality gates and capture logs under `/tmp`.
 
 1. Locate schema-related guidance in the design document and roadmap.
 
-   rg -n "Data Model and Storage"
-   docs/episodic-podcast-generation-system-design.md rg -n
-   "series_profiles|episodes|source_documents|approval_events"
-   docs/episodic-podcast-generation-system-design.md rg -n "2.2.1"
-   docs/roadmap.md
+   ```plaintext
+   rg -n "Data Model and Storage" docs/episodic-podcast-generation-system-design.md
+   rg -n "series_profiles|episodes|source_documents|approval_events" \
+     docs/episodic-podcast-generation-system-design.md
+   rg -n "2.2.1" docs/roadmap.md
+   ```
 
 2. Locate or create internal documentation targets for developer guidance.
 
+   ```plaintext
    rg -n "developers-guide" docs
+   ```
 
 3. Review external library guides for TEI parsing and logging conventions, and
-   summarise integration points in the design document.
+   summarise integration points in the design document. Review the async
+   SQLAlchemy and py-pglite testing guides, and align the test scaffolding with
+   the documented fixtures.
 
 4. Draft the relational schema design, covering:
    - TEI header storage strategy (raw XML, JSONB, or both) and provenance
@@ -120,6 +136,8 @@ and validated. Run all required quality gates and capture logs under `/tmp`.
    - Unit tests for SQLAlchemy models, constraints, and repository operations.
    - Behavioural tests using `pytest-bdd` that exercise ingestion, canonical
      episode creation, and approval transitions end-to-end.
+   - Use py-pglite fixtures and migration setup as documented in
+     `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`.
 
 7. Update documentation:
    - `docs/episodic-podcast-generation-system-design.md` with schema decisions.
@@ -131,22 +149,32 @@ and validated. Run all required quality gates and capture logs under `/tmp`.
 
 8. Run formatting and validation for documentation changes.
 
-   set -o pipefail timeout 300 make fmt 2>&1 | tee /tmp/make-fmt.log
+   ```plaintext
+   set -o pipefail
+   timeout 300 make fmt 2>&1 | tee /tmp/make-fmt.log
 
-   set -o pipefail timeout 300 make markdownlint 2>&1 | tee
-   /tmp/make-markdownlint.log
+   set -o pipefail
+   timeout 300 make markdownlint 2>&1 | tee /tmp/make-markdownlint.log
 
-   set -o pipefail timeout 300 make nixie 2>&1 | tee /tmp/make-nixie.log
+   set -o pipefail
+   timeout 300 make nixie 2>&1 | tee /tmp/make-nixie.log
+   ```
 
 9. Run code quality gates and tests.
 
-   set -o pipefail timeout 300 make check-fmt 2>&1 | tee /tmp/make-check-fmt.log
+   ```plaintext
+   set -o pipefail
+   timeout 300 make check-fmt 2>&1 | tee /tmp/make-check-fmt.log
 
-   set -o pipefail timeout 300 make typecheck 2>&1 | tee /tmp/make-typecheck.log
+   set -o pipefail
+   timeout 300 make typecheck 2>&1 | tee /tmp/make-typecheck.log
 
-   set -o pipefail timeout 300 make lint 2>&1 | tee /tmp/make-lint.log
+   set -o pipefail
+   timeout 300 make lint 2>&1 | tee /tmp/make-lint.log
 
-   set -o pipefail timeout 300 make test 2>&1 | tee /tmp/make-test.log
+   set -o pipefail
+   timeout 300 make test 2>&1 | tee /tmp/make-test.log
+   ```
 
 ## Validation and acceptance
 
@@ -160,6 +188,8 @@ Acceptance requires all of the following:
 - Unit tests validate model constraints and repository operations.
 - Behavioural tests validate ingestion, canonical episode creation, and
   approval transitions using `pytest-bdd`.
+- Test scaffolding uses the py-pglite fixtures documented in
+  `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`.
 - Documentation updates include schema decisions, user-facing behaviour, and
   developer practices, aligned with the documentation style guide.
 - `docs/roadmap.md` marks 2.2.1 as done after validation.
@@ -194,9 +224,14 @@ Document or introduce the following interfaces and dependencies:
 - `tei-rapporteur` for TEI header parsing and validation.
 - `femtologging` for structured logging in adapters.
 - SQLAlchemy 2.x async engine, Alembic migrations, and Postgres driver.
+- py-pglite (`py-pglite[asyncpg]`) for Postgres-backed tests, plus Node.js
+  18+ for the WASM runtime as documented.
 - `pytest`, `pytest-asyncio`, and `pytest-bdd` for unit and behavioural tests.
 
 ## Revision note
 
 Initial plan created on 2026-02-02 to scope the relational schema design,
 implementation, and validation steps for roadmap item 2.2.1.
+
+Revised on 2026-02-03 to align test scaffolding and validation steps with the
+py-pglite testing guidance.
