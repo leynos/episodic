@@ -44,6 +44,7 @@ class _AsyncpgProxy:
         try:
             await self._connection.close(timeout=timeout or 2)
         except Exception:  # noqa: BLE001
+            # Ensure cleanup even if asyncpg close fails. FIXME: narrow error handling.
             self._connection.terminate()
 
 
@@ -165,12 +166,15 @@ async def pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
     if not _should_use_pglite():
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
 
-    engine_cm = _pglite_engine(tmp_path)
-    engine = await engine_cm.__aenter__()
-    try:
+    async with _pglite_engine(tmp_path) as engine:
         yield engine
-    finally:
-        await engine_cm.__aexit__(None, None, None)
+
+
+@pytest.fixture
+def _function_scoped_runner() -> typ.Iterator[asyncio.Runner]:
+    """Provide a function-scoped asyncio.Runner for sync BDD steps."""
+    with asyncio.Runner() as runner:
+        yield runner
 
 
 @pytest_asyncio.fixture

@@ -7,7 +7,21 @@ import typing as typ
 
 import tei_rapporteur as _tei
 
-TEI: typ.Any = _tei
+TEI = _tei  # pyright: ignore[reportUnknownMemberType]  # TODO(@codex): add type stubs for tei_rapporteur upstream (https://github.com/leynos/tei-rapporteur/issues/new)
+
+
+class TEIDocumentProtocol(typ.Protocol):
+    """Typed TEI document surface needed for validation."""
+
+    def validate(self) -> None: ...
+
+
+class TEIProtocol(typ.Protocol):
+    """Typed surface for tei_rapporteur interactions."""
+
+    def parse_xml(self, xml: str) -> TEIDocumentProtocol: ...
+
+    def to_dict(self, document: TEIDocumentProtocol) -> dict[str, typ.Any]: ...
 
 
 @dc.dataclass(frozen=True)
@@ -20,8 +34,9 @@ class TeiHeaderPayload:
 
 def parse_tei_header(xml: str) -> TeiHeaderPayload:
     """Parse a TEI XML payload and extract the header."""
+    tei = typ.cast("TEIProtocol", TEI)
     try:
-        document = TEI.parse_xml(xml)
+        document = tei.parse_xml(xml)
         document.validate()
     except ValueError as exc:
         message = str(exc)
@@ -32,7 +47,7 @@ def parse_tei_header(xml: str) -> TeiHeaderPayload:
             msg = "TEI header title missing from parsed payload."
             raise ValueError(msg) from exc
         raise
-    payload = TEI.to_dict(document)
+    payload = tei.to_dict(document)
     header = payload.get("teiHeader") or payload.get("header")
     if not isinstance(header, dict):
         msg = "TEI header missing from parsed payload."

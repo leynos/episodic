@@ -10,7 +10,7 @@ dependencies = [
     "alembic>=1.13,<2.0",
     "asyncpg>=0.20.0,<1.0",
     "femtologging @ git+https://github.com/leynos/femtologging@7c139fb7aca18f9277e00b88604b8bf5eb471be0",
-    "sqlalchemy>=2.0.34",
+    "sqlalchemy>=2.0.34,<3.0.0",
     "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@3129188d792585976bff1c12332c9243bca8cac0",
 ]
 

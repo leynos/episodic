@@ -233,7 +233,7 @@ behavior can be adjusted:
 
 Choosing the scope often involves a **trade-off between performance and
 isolation**. When test suites are small or deterministic isolation is
-prioritised, function-scoped (fresh DB each test) is simplest. For large suites
+prioritized, function-scoped (fresh DB each test) is simplest. For large suites
 where DB setup is a bottleneck, consider a session-scoped database with careful
 cleaning. As a rule of thumb: **apply schema migrations once per test session
 and reuse the database for speed, but ensure each test starts from a known
@@ -479,11 +479,11 @@ applications. The result is the **best of both worlds** – quick, ephemeral
 databases as convenient as SQLite, and the full power and accuracy of
 PostgreSQL. This enables thorough tests (unit tests, integration tests, even
 testing API endpoints with the DB in play) with minimal friction. In practice,
-teams find that such a setup **“shaves minutes from every build, and hours from
+teams find that such a setup “shaves minutes from every build, and hours from
 every week” by ensuring every test run starts from a known good state with no
 manual DB management
-overhead([3](https://hoop.dev/blog/the-simplest-way-to-make-postgresql-pytest-work-like-it-should/))
- **. Happy testing!
+overhead([3](https://hoop.dev/blog/the-simplest-way-to-make-postgresql-pytest-work-like-it-should/)).
+ Happy testing!
 
 **Sources:**
 

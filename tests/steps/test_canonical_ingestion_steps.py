@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import typing as typ
 import uuid
@@ -20,12 +21,20 @@ from episodic.canonical.domain import (
 from episodic.canonical.services import ingest_sources
 from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 
-TEI: typ.Any = _tei
+
+class TEIProtocol(typ.Protocol):
+    """Typed surface for tei_rapporteur interactions in tests."""
+
+    Document: cabc.Callable[[str], object]
+    emit_xml: cabc.Callable[[object], str]
+
+
+TEI: TEIProtocol = typ.cast("TEIProtocol", _tei)
 
 if typ.TYPE_CHECKING:
-    import asyncio
+    import collections.abc as cabc
 
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @scenario(
@@ -37,6 +46,13 @@ def test_ingestion_job_records_canonical_content() -> None:
 
 
 @pytest.fixture
+def _function_scoped_runner() -> typ.Iterator[asyncio.Runner]:
+    """Provide an asyncio runner for synchronous BDD steps."""
+    with asyncio.Runner() as runner:
+        yield runner
+
+
+@pytest.fixture
 def context() -> dict[str, typ.Any]:
     """Share state between BDD steps."""
     return {}
@@ -45,7 +61,7 @@ def context() -> dict[str, typ.Any]:
 @given('a series profile "science-hour" exists')
 def series_profile_exists(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: object,
+    session_factory: cabc.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Persist a series profile for ingestion."""
@@ -62,8 +78,7 @@ def series_profile_exists(
             updated_at=now,
         )
 
-        factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-        async with SqlAlchemyUnitOfWork(factory) as uow:
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
             await uow.series_profiles.add(profile)
             await uow.commit()
 
@@ -82,7 +97,7 @@ def tei_document_available(context: dict[str, typ.Any]) -> None:
 @when("an ingestion job records source documents")
 def ingestion_job_records_sources(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: object,
+    session_factory: cabc.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Ingest source documents into a canonical episode."""
@@ -113,11 +128,10 @@ def ingestion_job_records_sources(
             requested_by="producer@example.com",
         )
 
-        factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-        async with SqlAlchemyUnitOfWork(factory) as uow:
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await ingest_sources(uow, profile, request)
 
-        async with factory() as session:
+        async with session_factory() as session:
             result = await session.execute(
                 sa.select(IngestionJobRecord).where(
                     IngestionJobRecord.target_episode_id == episode.id
@@ -135,7 +149,7 @@ def ingestion_job_records_sources(
 @then('the canonical episode is stored for "science-hour"')
 def canonical_episode_stored(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: object,
+    session_factory: cabc.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Verify the canonical episode was persisted."""
@@ -143,8 +157,7 @@ def canonical_episode_stored(
     async def _fetch() -> None:
         episode_id = typ.cast("uuid.UUID", context["episode_id"])
 
-        factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-        async with SqlAlchemyUnitOfWork(factory) as uow:
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await uow.episodes.get(episode_id)
 
         assert episode is not None
@@ -156,7 +169,7 @@ def canonical_episode_stored(
 @then('the approval state is "draft"')
 def approval_state_is_draft(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: object,
+    session_factory: cabc.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Verify the episode approval state is draft."""
@@ -164,8 +177,7 @@ def approval_state_is_draft(
     async def _fetch() -> None:
         episode_id = typ.cast("uuid.UUID", context["episode_id"])
 
-        factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-        async with SqlAlchemyUnitOfWork(factory) as uow:
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await uow.episodes.get(episode_id)
 
         assert episode is not None
@@ -177,7 +189,7 @@ def approval_state_is_draft(
 @then("an approval event is persisted for the ingestion job")
 def approval_event_persisted(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: object,
+    session_factory: cabc.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Verify approval events are stored for the ingestion."""
@@ -186,8 +198,7 @@ def approval_event_persisted(
         episode_id = typ.cast("uuid.UUID", context["episode_id"])
         source_uris = typ.cast("list[str]", context["source_uris"])
 
-        factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-        async with SqlAlchemyUnitOfWork(factory) as uow:
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
             events = await uow.approval_events.list_for_episode(episode_id)
 
         assert events
@@ -203,7 +214,7 @@ def approval_event_persisted(
 @then("source documents are stored and linked to the ingestion job and episode")
 def source_documents_linked(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: object,
+    session_factory: cabc.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Verify source documents are linked to ingestion jobs and episodes."""
@@ -213,8 +224,7 @@ def source_documents_linked(
         episode_id = typ.cast("uuid.UUID", context["episode_id"])
         source_uris = typ.cast("list[str]", context["source_uris"])
 
-        factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-        async with SqlAlchemyUnitOfWork(factory) as uow:
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
             documents = await uow.source_documents.list_for_job(job_id)
 
         assert len(documents) == len(source_uris)

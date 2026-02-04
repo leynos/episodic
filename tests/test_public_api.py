@@ -7,4 +7,6 @@ import episodic
 
 def test_public_api_omits_hello() -> None:
     """Verify the placeholder hello helper is removed from the public API."""
-    assert not hasattr(episodic, "hello")
+    assert not hasattr(episodic, "hello"), (
+        "episodic should not expose 'hello' in its public API."
+    )

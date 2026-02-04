@@ -2,25 +2,26 @@
 
 from __future__ import annotations
 
-import typing as typ
-
 import pytest
 import tei_rapporteur as _tei
 
 from episodic.canonical.tei import parse_tei_header
 
-TEI: typ.Any = _tei
-
 
 def test_parse_tei_header_extracts_title() -> None:
     """Parsed headers surface the document title."""
-    document = TEI.Document("Bridgewater")
-    xml = TEI.emit_xml(document)
+    document = _tei.Document("Bridgewater")  # type: ignore[unresolved-attribute]
+    xml = _tei.emit_xml(document)  # type: ignore[unresolved-attribute]
 
     header = parse_tei_header(xml)
 
-    assert header.title == "Bridgewater"
-    assert header.payload["file_desc"]["title"] == "Bridgewater"
+    assert header.title == "Bridgewater", (
+        f"Expected header.title to be 'Bridgewater', got {header.title!r}."
+    )
+    assert header.payload["file_desc"]["title"] == "Bridgewater", (
+        "Expected header.payload['file_desc']['title'] to be 'Bridgewater', "
+        f"got {header.payload['file_desc']['title']!r}."
+    )
 
 
 def test_parse_tei_header_raises_type_error_when_header_missing() -> None:

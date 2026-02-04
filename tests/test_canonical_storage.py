@@ -133,6 +133,8 @@ async def test_can_persist_episode_with_header(session_factory: object) -> None:
         await uow.series_profiles.add(series)
         await uow.tei_headers.add(header)
         await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
         await uow.episodes.add(episode)
         await uow.ingestion_jobs.add(job)
         await uow.source_documents.add(source)

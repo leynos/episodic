@@ -131,7 +131,7 @@ and validated. Run all required quality gates and capture logs under `/tmp`.
    ```
 
 3. Review external library guides for TEI parsing and logging conventions, and
-   summarise integration points in the design document. Review the async
+   summarize integration points in the design document. Review the async
    SQLAlchemy and py-pglite testing guides, and align the test scaffolding with
    the documented fixtures.
 

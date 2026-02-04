@@ -33,7 +33,35 @@ async def ingest_sources(
     series_profile: SeriesProfile,
     request: IngestionRequest,
 ) -> CanonicalEpisode:
-    """Create canonical records for an ingestion job."""
+    """Create canonical records for an ingestion job.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work boundary providing repository access and transaction scope.
+    series_profile : SeriesProfile
+        Series profile that owns the canonical episode.
+    request : IngestionRequest
+        Ingestion payload containing TEI XML and source metadata.
+
+    Returns
+    -------
+    CanonicalEpisode
+        Persisted canonical episode representing the ingested TEI content.
+
+    Raises
+    ------
+    TypeError
+        If the TEI header is missing from the parsed payload.
+    ValueError
+        If the TEI header title is missing or blank.
+
+    Notes
+    -----
+    This function writes TEI headers, episodes, ingestion jobs, source
+    documents, and approval events via the unit-of-work and commits the
+    transaction.
+    """
     now = dt.datetime.now(dt.UTC)
     header_payload = parse_tei_header(request.tei_xml)
     header_id = uuid.uuid4()

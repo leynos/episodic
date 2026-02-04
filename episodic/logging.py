@@ -9,7 +9,25 @@ from femtologging import basicConfig, get_logger
 
 
 class LogLevel(enum.StrEnum):
-    """Supported log levels for femtologging."""
+    """Supported log levels for femtologging.
+
+    Attributes
+    ----------
+    TRACE : str
+        Verbose trace-level logging.
+    DEBUG : str
+        Debug-level logging.
+    INFO : str
+        Informational logging.
+    WARN : str
+        Warning logging (deprecated alias of WARNING).
+    WARNING : str
+        Warning logging.
+    ERROR : str
+        Error logging.
+    CRITICAL : str
+        Critical error logging.
+    """
 
     TRACE = "TRACE"
     DEBUG = "DEBUG"
@@ -21,7 +39,21 @@ class LogLevel(enum.StrEnum):
 
 
 def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, bool]:
-    """Configure femtologging and return the normalised level."""
+    """Configure femtologging and return the normalised level.
+
+    Parameters
+    ----------
+    level : str | None
+        Requested log level, or None to use the default.
+    force : bool, optional
+        Whether to force reconfiguration of logging handlers.
+
+    Returns
+    -------
+    tuple[str, bool]
+        A tuple of (effective_level, used_default), where used_default is True
+        when the input was missing or invalid.
+    """
     if not level:
         basicConfig(level="INFO", force=force)
         return ("INFO", True)
@@ -69,7 +101,28 @@ def log_info(
     *args: object,
     exc_info: object | None = None,
 ) -> None:
-    """Log an INFO message with percent-style formatting."""
+    """Log an INFO message with percent-style formatting.
+
+    Parameters
+    ----------
+    logger : _SupportsLog
+        Logger instance that supports the femtologging log API.
+    template : str
+        Percent-style format string for the log message.
+    *args : object
+        Arguments interpolated into the template.
+    exc_info : object | None, optional
+        Exception info to attach to the log record.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If the template and arguments do not align for percent formatting.
+    """
     _log(logger, "INFO", template, *args, exc_info=exc_info)
 
 
@@ -79,7 +132,28 @@ def log_warning(
     *args: object,
     exc_info: object | None = None,
 ) -> None:
-    """Log a WARNING message with percent-style formatting."""
+    """Log a WARNING message with percent-style formatting.
+
+    Parameters
+    ----------
+    logger : _SupportsLog
+        Logger instance that supports the femtologging log API.
+    template : str
+        Percent-style format string for the log message.
+    *args : object
+        Arguments interpolated into the template.
+    exc_info : object | None, optional
+        Exception info to attach to the log record.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If the template and arguments do not align for percent formatting.
+    """
     _log(logger, "WARNING", template, *args, exc_info=exc_info)
 
 
@@ -89,7 +163,28 @@ def log_error(
     *args: object,
     exc_info: object | None = None,
 ) -> None:
-    """Log an ERROR message with percent-style formatting."""
+    """Log an ERROR message with percent-style formatting.
+
+    Parameters
+    ----------
+    logger : _SupportsLog
+        Logger instance that supports the femtologging log API.
+    template : str
+        Percent-style format string for the log message.
+    *args : object
+        Arguments interpolated into the template.
+    exc_info : object | None, optional
+        Exception info to attach to the log record.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If the template and arguments do not align for percent formatting.
+    """
     _log(logger, "ERROR", template, *args, exc_info=exc_info)
 
 

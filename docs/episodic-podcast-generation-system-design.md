@@ -883,7 +883,7 @@ state transitions with actor metadata and payloads for auditability. Ingestion
 workflows flush pending inserts before recording dependent rows so foreign-key
 relationships remain valid within a single transaction.
 
-The diagram below summarises the canonical content tables and their
+The diagram below summarizes the canonical content tables and their
 relationships.
 
 ```mermaid
@@ -900,7 +900,7 @@ _Figure 7: Canonical content schema relationships._
 
 ### Core Entity Model
 
-The core entity model summarises the primary data domains that anchor series,
+The core entity model summarizes the primary data domains that anchor series,
 episode, and asset management.
 
 ```mermaid

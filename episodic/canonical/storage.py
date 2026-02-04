@@ -28,7 +28,6 @@ from .ports import (
     CanonicalUnitOfWork,
     EpisodeRepository,
     IngestionJobRepository,
-    SeriesProfileRepository,
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
@@ -36,7 +35,7 @@ from .ports import (
 if typ.TYPE_CHECKING:
     from types import TracebackType
 
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 
@@ -337,7 +336,7 @@ def _approval_event_from_record(record: ApprovalEventRecord) -> ApprovalEvent:
     )
 
 
-class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
+class SqlAlchemySeriesProfileRepository:
     """SQLAlchemy-backed series profile repository."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -544,7 +543,7 @@ class SqlAlchemyApprovalEventRepository(ApprovalEventRepository):
 class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
     """Async unit-of-work backed by SQLAlchemy sessions."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(self, session_factory: typ.Callable[[], AsyncSession]) -> None:
         self._session_factory = session_factory
         self._session: AsyncSession | None = None
 

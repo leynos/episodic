@@ -1,6 +1,6 @@
-# **A Comprehensive Guide to Testing Asynchronous Falcon Endpoints with Pytest**
+# A comprehensive guide to testing asynchronous Falcon endpoints with pytest
 
-## **1\. Introduction**
+## 1. Introduction
 
 The Falcon framework is recognized for its high-performance capabilities in
 building Web Server Gateway Interface (WSGI) and Asynchronous Server Gateway
@@ -11,8 +11,8 @@ concurrent applications capable of handling numerous I/O-bound operations
 efficiently. However, the introduction of asynchronous patterns brings new
 complexities to testing. Verifying the correctness of asynchronous code
 requires specialized tools and techniques to manage event loops and awaitables.
-pytest stands out as a widely adopted Python testing framework, favored for its
-simplicity and extensibility. For testing asyncio-based applications, the
+pytest stands out as a widely adopted Python testing framework, favoured for
+its simplicity and extensibility. For testing asyncio-based applications, the
 pytest-asyncio plugin is indispensable, providing the necessary infrastructure
 to write and execute asynchronous tests seamlessly. This report aims to furnish
 a comprehensive guide on best practices for testing asynchronous Falcon
@@ -25,16 +25,16 @@ merely the endpoint responders that become async def; this paradigm extends to
 hooks, middleware methods, and error handlers, all of which must be awaitable
 coroutine functions. Consequently, testing strategies must holistically address
 this "async everything" model to ensure comprehensive validation of the
-application's behavior.
+application's behaviour.
 
-## **2\. Setting Up the Testing Environment**
+## 2. Setting up the testing environment
 
 A well-configured testing environment is foundational for effective and
 reliable testing of asynchronous Falcon applications. This involves installing
 the necessary libraries, structuring the project logically, and configuring
 pytest to handle asynchronous code.
 
-### **Essential Libraries**
+### Essential libraries
 
 To effectively test asynchronous Falcon endpoints, several key libraries are
 required:
@@ -67,7 +67,7 @@ projects based on earlier Python versions must include asyncmock as a
 dependency. This distinction necessitates careful consideration during
 environment setup and when writing import statements for mocking utilities.
 
-### **Recommended Project Structure**
+### Recommended project structure
 
 A conventional project structure enhances clarity and maintainability. A
 typical layout for a Falcon project with tests might be:
@@ -93,7 +93,7 @@ dependency groups (PEP 735) are declared in ``pyproject.toml`` and installed
 with ``uv sync``. A similar structure is often suggested for web applications,
 promoting modularity.
 
-### **Configuring pytest-asyncio**
+### Configuring pytest-asyncio
 
 The pytest-asyncio plugin can be configured via a pytest.ini or pyproject.toml
 file. A key configuration option is asyncio\_mode, which dictates how
@@ -120,9 +120,9 @@ default, enhances code readability and makes the test's asynchronous execution
 context immediately apparent. This explicitness is generally recommended for
 clarity, particularly in collaborative projects or when onboarding new team
 members. The decision between these modes reflects a balance between
-conciseness and the explicit declaration of asynchronous behavior.
+conciseness and the explicit declaration of asynchronous behaviour.
 
-### **Virtual Environments**
+### Virtual environments
 
 Utilizing virtual environments (e.g., via venv or virtualenv) is a standard
 Python best practice and is strongly recommended. Virtual environments isolate
@@ -130,14 +130,14 @@ project dependencies, preventing conflicts between different projects and
 ensuring a reproducible environment. S2 specifically mentions virtualenv for
 creating these isolated Python environments.
 
-## **3\. Fundamentals of Testing Async Falcon Endpoints**
+## 3. Fundamentals of testing async Falcon endpoints
 
 With the environment set up, the next step is to understand the basic mechanics
 of writing and executing asynchronous tests against Falcon ASGI endpoints. This
 involves using pytest-asyncio decorators and an asynchronous HTTP client like
 HTTPX.
 
-### **Writing Your First Async Test**
+### Writing a first async test
 
 Asynchronous test functions in pytest are defined using async def and must be
 decorated with @pytest.mark.asyncio. This decorator signals to pytest-asyncio
@@ -165,14 +165,14 @@ async def test_my_async_function():
 This structure, demonstrated in various forms, forms the basis for all
 asynchronous tests.
 
-### **Introducing httpx.AsyncClient for ASGI App Testing**
+### Introducing httpx.AsyncClient for ASGI app testing
 
 To interact with a Falcon ASGI application (falcon.asgi.App), an asynchronous
 HTTP client is necessary. HTTPX provides httpx.AsyncClient, which is
-well-suited for this purpose.1 A key feature for testing ASGI applications
+well-suited for this purpose.[^1] A key feature for testing ASGI applications
 directly, without needing to run a separate web server, is httpx.ASGITransport.
-By initializing AsyncClient with ASGITransport(app=your\_falcon\_app), requests
-are routed directly to the application in memory.1 This in-memory testing
+By initializing AsyncClient with ASGITransport(app=the\_falcon\_app), requests
+are routed directly to the application in memory.[^1] This in-memory testing
 approach offers significant advantages. Traditional API testing often involves
 deploying the application to a live server and making network requests. This
 introduces dependencies on the network stack and server process, potentially
@@ -180,17 +180,17 @@ slowing down tests and making them less reliable. ASGITransport circumvents
 these external factors by directly invoking the ASGI application. This results
 in faster test execution, improved reliability by avoiding network-related
 issues, and tests that are closer to unit tests for the web layer while still
-functioning as integration tests for the Falcon application's components.1 This
-method is generally the preferred approach for testing Falcon ASGI endpoints
-unless end-to-end testing with a specific server like Uvicorn is explicitly
-required. The setup for using httpx.AsyncClient with ASGITransport typically
-looks like this:
+functioning as integration tests for the Falcon application's components.[^1]
+This method is generally the preferred approach for testing Falcon ASGI
+endpoints unless end-to-end testing with a specific server like Uvicorn is
+explicitly required. The setup for using httpx.AsyncClient with ASGITransport
+typically looks like this:
 
 ```python
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-# from my_falcon_app import app  # Your Falcon ASGI application instance
+# from my_falcon_app import app  # Falcon ASGI application instance
 
 
 @pytest.mark.asyncio
@@ -204,7 +204,7 @@ async def test_root_endpoint(app):  # Assuming 'app' is provided by a fixture
 
 The base\_url="<http://test>" is a mandatory parameter for HTTPX, serving as a
 placeholder even when ASGITransport is used, as HTTPX uses it for internal
-routing logic.1 It is important to distinguish between Falcon's synchronous
+routing logic.[^1] It is important to distinguish between Falcon's synchronous
 testing client (falcon.testing.TestClient) and httpx.AsyncClient when writing
 async def tests. While falcon.testing.TestClient can simulate requests to ASGI
 applications, its design is primarily synchronous. Using its simulate\_\*
@@ -215,7 +215,7 @@ expected in an already asynchronous test context. For idiomatic pytest-asyncio
 tests, httpx.AsyncClient or Falcon's ASGIConductor (discussed later) are
 generally more appropriate and less prone to subtle asynchronous issues.
 
-### **Basic Request Simulation and Assertions**
+### Basic request simulation and assertions
 
 Once the AsyncClient is set up, various HTTP requests can be simulated. Common
 methods include ac.get(), ac.post(), ac.put(), and ac.delete(). These methods
@@ -229,7 +229,7 @@ object, checking attributes such as:
 
 Examples of such assertions are found in various contexts.
 
-### **Example: A Simple Falcon ASGI App and its Test**
+### Example: a simple Falcon ASGI app and its test
 
 To illustrate these concepts, consider a simple Falcon ASGI application and its
 corresponding tests. **Falcon Application (src/app.py):**
@@ -300,25 +300,25 @@ async def test_post_things(client_app):
 These tests demonstrate how to use httpx.AsyncClient with ASGITransport to send
 GET and POST requests to the Falcon ASGI application and assert the responses.
 This combination of defining asynchronous resources and testing them with an
-asynchronous client forms the core of testing Falcon ASGI applications.1
+asynchronous client forms the core of testing Falcon ASGI applications.[^1]
 
-## **4\. Advanced Test Control with falcon.testing.ASGIConductor**
+## 4. Advanced test control with falcon.testing.ASGIConductor
 
 While httpx.AsyncClient is suitable for many testing scenarios, Falcon provides
 falcon.testing.ASGIConductor for more fine-grained control over the ASGI
-application lifecycle.2 This tool is particularly valuable when testing
+application lifecycle.[^2] This tool is particularly valuable when testing
 streaming protocols like Server-Sent Events (SSE) or WebSockets, and for
-verifying the behavior of ASGI middleware lifespan events (process\_startup and
-process\_shutdown).3 The ASGIConductor uses coroutines for its operations,
-which means it integrates naturally with async def test functions. However,
-this also implies that pytest-asyncio is not merely a convenience but a strict
-prerequisite for using ASGIConductor within a pytest environment. pytest itself
-does not natively execute async def tests or manage the await calls;
-pytest-asyncio provides the event loop and necessary wrappers to enable this
-functionality. Falcon's documentation explicitly directs users to
+verifying the behaviour of ASGI middleware lifespan events (process\_startup
+and process\_shutdown).[^3] The ASGIConductor uses coroutines for its
+operations, which means it integrates naturally with async def test functions.
+However, this also implies that pytest-asyncio is not merely a convenience but
+a strict prerequisite for using ASGIConductor within a pytest environment.
+pytest itself does not natively execute async def tests or manage the await
+calls; pytest-asyncio provides the event loop and necessary wrappers to enable
+this functionality. Falcon's documentation explicitly directs users to
 pytest-asyncio when using ASGIConductor with pytest.
 
-### **Using ASGIConductor as a Context Manager**
+### Using ASGIConductor as a context manager
 
 ASGIConductor is typically employed as an asynchronous context manager. This
 pattern is crucial because it automatically simulates the ASGI lifespan
@@ -331,46 +331,49 @@ protocol:
 - **On exiting the context**, ASGIConductor sends the lifespan.shutdown event,
   triggering shutdown logic or process\_shutdown middleware methods.
 
-This behavior ensures that the entire application lifecycle, including these
+This behaviour ensures that the entire application lifecycle, including these
 critical startup and shutdown phases, is simulated within the test environment,
-mirroring how a real ASGI server would interact with the application.3 This
+mirroring how a real ASGI server would interact with the application.[^3] This
 capability is indispensable for accurately testing components like middleware
 that rely on these lifecycle events. For instance, middleware might establish
 database connections during process\_startup and close them during
-process\_shutdown; ASGIConductor facilitates the verification of such behavior.
-An example of its usage:
+process\_shutdown; ASGIConductor facilitates the verification of such
+behaviour. An example of its usage:
 
 ```python
 import asyncio
 
+import falcon
 import falcon.asgi
+import falcon.testing
 import pytest
-from falcon import testing
 
-# Assume 'my_asgi_app' is a falcon.asgi.App instance provided by a fixture or created directly.
+
+# Assume 'my_asgi_app' is a falcon.asgi.App instance provided by a fixture or
+# created directly.
 class StreamingResource:
     async def on_get_stream(self, req, resp):
         async def stream_data():
             for i in range(3):
                 await asyncio.sleep(0.01)
-                yield f"data: Event {i}
-
-".encode("utf-8")
+                yield f"data: Event {i}\n\n".encode("utf-8")
 
         resp.sse = stream_data()  # Use resp.sse for Server-Sent Events
         resp.content_type = falcon.MEDIA_SSE
 
 
 # Example app setup (could be in a fixture)
-# my_asgi_app = falcon.asgi.App()
-# my_asgi_app.add_route("/events", StreamingResource())
+my_asgi_app = falcon.asgi.App()
+my_asgi_app.add_route("/events", StreamingResource())
 
 
 @pytest.mark.asyncio
-async def test_example_with_conductor(my_asgi_app):  # my_asgi_app fixture
-    async with testing.ASGIConductor(my_asgi_app) as conductor:
+async def test_example_with_conductor():
+    async with falcon.testing.ASGIConductor(my_asgi_app) as conductor:
         # For non-streaming endpoints:
-        response = await conductor.get("/some_other_endpoint")  # Assuming this route exists
+        response = await conductor.get(
+            "/some_other_endpoint"
+        )  # Assuming this route exists
         assert response.status_code == 200
 
         # For streaming endpoints (conceptual, actual iteration depends on endpoint):
@@ -384,9 +387,9 @@ async def test_example_with_conductor(my_asgi_app):  # my_asgi_app fixture
 
 The ASGIConductor ensures that process\_startup methods of any registered
 middleware are called upon entering the async with block, and process\_shutdown
-methods are called upon exit.3
+methods are called upon exit.[^3]
 
-### **Simulating Requests with ASGIConductor**
+### Simulating requests with ASGIConductor
 
 Within the async with block, the conductor object provides simulate\_\* methods
 (e.g., await conductor.simulate\_get('/')) and convenience aliases (e.g., await
@@ -394,7 +397,7 @@ conductor.get('/')). These are coroutines and operate similarly to those on
 falcon.testing.TestClient or httpx.AsyncClient, but within the managed
 lifecycle provided by ASGIConductor.
 
-### **Testing Streaming Responses**
+### Testing streaming responses
 
 ASGIConductor is specifically designed to aid in testing streaming protocols
 like SSE and WebSockets. Methods such as simulate\_get\_stream allow for
@@ -404,7 +407,7 @@ ASGIConductor as the appropriate tool for such scenarios. The result object
 obtained from these streaming simulations often provides an async iterator
 (e.g., result.stream) to consume the streamed data.
 
-### **Relationship with falcon.testing.TestClient**
+### Relationship with falcon.testing.TestClient
 
 An ASGIConductor instance can also be obtained directly from an instance of
 falcon.testing.TestClient by using the TestClient instance as an async context
@@ -421,7 +424,7 @@ This provides flexibility, allowing developers to use the familiar TestClient
 setup and then "upgrade" to ASGIConductor when its advanced lifecycle
 management features are needed.
 
-## **5\. Mastering Asynchronous Fixtures in Pytest**
+## 5. Mastering asynchronous fixtures in pytest
 
 Fixtures are a cornerstone of pytest, providing a mechanism for setting up and
 tearing down resources required by tests. When working with asynchronous
@@ -430,7 +433,7 @@ asynchronous (e.g., establishing an asynchronous database connection or
 initializing an external async service client). pytest-asyncio extends pytest's
 fixture system to support such asynchronous fixtures.
 
-### **Need for Asynchronous Fixtures**
+### Need for asynchronous fixtures
 
 If a fixture needs to perform I/O-bound operations, such as connecting to a
 database or making an HTTP request to an external service, it should be defined
@@ -438,7 +441,7 @@ as an async def function to avoid blocking the event loop. Standard pytest
 fixtures are not designed to handle async def functions correctly; they would
 return the coroutine object itself rather than its awaited result.
 
-### **Creating Async Fixtures with @pytest\_asyncio.fixture**
+### Creating async fixtures with @pytest_asyncio.fixture
 
 To define an asynchronous fixture, the @pytest\_asyncio.fixture decorator must
 be used instead of the standard @pytest.fixture. This special decorator ensures
@@ -446,24 +449,27 @@ that the async def fixture coroutine is properly executed within the
 pytest-asyncio managed event loop, and its awaited result is supplied to the
 test function. Failure to use @pytest\_asyncio.fixture for an async def fixture
 is a common pitfall. If @pytest.fixture is used, the test function will receive
-the raw coroutine object, leading to AttributeError or unexpected behavior when
-the test attempts to use it as the actual fixture value. This distinction is
-critical for the correct functioning of asynchronous tests. An example of a
+the raw coroutine object, leading to AttributeError or unexpected behaviour
+when the test attempts to use it as the actual fixture value. This distinction
+is critical for the correct functioning of asynchronous tests. An example of a
 simple asynchronous fixture:
 
 ```python
 import asyncio
 
-import pytest import pytest_asyncio
+import pytest
+import pytest_asyncio
 
 
-@pytest_asyncio.fixture async def async_data_loader():
+@pytest_asyncio.fixture
+async def async_data_loader():
     # Simulate an asynchronous I/O operation, e.g., fetching data
     await asyncio.sleep(0.01)
     return {"data_key": "async_value"}
 
 
-@pytest.mark.asyncio async def test_using_async_fixture(async_data_loader):
+@pytest.mark.asyncio
+async def test_using_async_fixture(async_data_loader):
     # async_data_loader will be the dictionary {"data_key": "async_value"}
     assert async_data_loader["data_key"] == "async_value"
 ```
@@ -471,7 +477,7 @@ import pytest import pytest_asyncio
 This pattern, where @pytest\_asyncio.fixture is used for async def fixtures, is
 consistently highlighted.
 
-### **Async Fixtures with yield (Async Generators)**
+### Async fixtures with yield (async generators)
 
 For resources that require explicit cleanup after a test (e.g., closing
 database connections, shutting down service clients), asynchronous fixtures can
@@ -481,13 +487,15 @@ teardown phase. An excellent example is creating an httpx.AsyncClient fixture
 that is properly closed after use:
 
 ```python
-import pytest import pytest_asyncio from httpx import ASGITransport, AsyncClient
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 
-# from my_falcon_app import app  # Your Falcon ASGI application instance
+# from my_falcon_app import app  # Falcon ASGI application instance
 
 
-@pytest_asyncio.fixture async def async_test_client(app):  # Assuming 'app' is
-a fixture providing the Falcon app
+@pytest_asyncio.fixture
+async def async_test_client(app):  # Assuming 'app' is a fixture providing the app
     # The httpx.AsyncClient itself is an async context manager.
     # Its __aenter__ and __aexit__ methods handle setup and teardown.
     async with AsyncClient(
@@ -499,7 +507,7 @@ a fixture providing the Falcon app
 
 This pattern is crucial for robust resource management in asynchronous tests.
 
-### **Fixture Scopes with Async Fixtures**
+### Fixture scopes with async fixtures
 
 Pytest fixtures can have different scopes (function, class, module, session) to
 control how often they are set up and torn down. When using asynchronous
@@ -535,38 +543,46 @@ suites that utilize expensive, shared asynchronous resources. Proper event loop
 scope management prevents flaky tests and ensures efficient resource
 utilization.
 
-### **Example: Async Database Connection Fixture (Conceptual)**
+### Example: async database connection fixture (conceptual)
 
 A common use case for async fixtures is managing asynchronous database
 connections.
 
 ```python
 # Conceptual example using a hypothetical asyncpg-like library
-import pytest import pytest_asyncio
-
-# import asyncpg  # Example: pip install asyncpg
+import asyncpg
+import pytest
+import pytest_asyncio
 
 # Assume event_loop fixture is session-scoped if db_pool is session-scoped.
-# @pytest_asyncio.fixture(scope="session")
-# async def db_pool():
-#     # Replace with actual connection details for your async database driver
+@pytest_asyncio.fixture(scope="session")
+async def db_pool():
+    # Replace with actual connection details for the async database driver
+    pool = await asyncpg.create_pool(
+        user="app_user",
+        password="app_password",
+        database="test_db",
+        host="localhost",
+    )
+    yield pool
+    await pool.close()
+
+
+@pytest_asyncio.fixture
+async def db_conn(db_pool):
+    # Depends on the session-scoped pool
+    async with db_pool.acquire() as connection:
+        # Start a transaction that will be rolled back after the test
+        async with connection.transaction():
+            yield connection
+        # Transaction is automatically rolled back here
 ```
-
-pool \= await asyncpg.create\_pool( \#         user='your\_user',
-password='your\_password', \#         database='test\_db', host='localhost'
-\#     ) \#     yield pool \#     await pool.close()
-
-\# @pytest\_asyncio.fixture \# async def db\_conn(db\_pool): \# Depends on the
-session-scoped pool \#     async with db\_pool.acquire() as connection:
-\#         \# Start a transaction that will be rolled back after the test
-\#         async with connection.transaction(): \#             yield connection
-\#         \# Transaction is automatically rolled back here
 
 This illustrates how session-scoped connection pools and function-scoped
 transactional connections can be managed using async fixtures, ensuring test
 isolation and efficient resource use.
 
-## **6\. Effective Mocking of Asynchronous Dependencies**
+## 6. Effective mocking of asynchronous dependencies
 
 Mocking is a vital technique in testing, allowing for the isolation of code
 units by replacing their dependencies with controlled test doubles. This is
@@ -575,7 +591,7 @@ particularly important for avoiding slow and unreliable external interactions
 When testing asynchronous code, the standard mocking tools need to be adapted
 to handle awaitables.
 
-### **Why Mock in Async Tests?**
+### Why mock in async tests?
 
 The reasons for mocking in asynchronous tests mirror those in synchronous
 testing:
@@ -585,11 +601,11 @@ testing:
 - **Speed:** Avoid slow operations like real network requests or database
   access.
 - **Determinism:** Ensure tests produce consistent results by controlling
-  dependency behavior. The primary challenge in async mocking is that
+  dependency behaviour. The primary challenge in async mocking is that
   dependencies are often async def methods, which return coroutines
   (awaitables) rather than direct values.
 
-### **Introducing AsyncMock**
+### Introducing AsyncMock
 
 Standard mock objects from unittest.mock (like Mock or MagicMock) are not
 directly suitable for mocking async def methods. This is because they are
@@ -600,28 +616,28 @@ library provides an equivalent AsyncMock class. An AsyncMock instance, when
 called, returns an awaitable. The return\_value attribute of an AsyncMock
 specifies what this awaitable will resolve to when awaited.
 
-### **Patching Asynchronous Methods and Functions**
+### Patching asynchronous methods and functions
 
 The mocker.patch utility (from pytest-mock) or unittest.mock.patch can be used
 to replace asynchronous functions or methods with an AsyncMock instance. The
 core principle of patching—replacing an object where it is looked up—remains
 the same. The key difference is that the replacement object must be an
-AsyncMock.4 For example, to mock an asynchronous method get\_cat\_fact on a
+AsyncMock.[^4] For example, to mock an asynchronous method get\_cat\_fact on a
 CatFact class:
 
 ```python
 from unittest.mock import AsyncMock  # Or from asyncmock import AsyncMock
 
-# In your test:
+# In the test:
 # mocker.patch.object(CatFact, "get_cat_fact", AsyncMock(return_value=mock_response))
 ```
 
 This replaces the actual get\_cat\_fact method with an AsyncMock that, when
 awaited, will return mock\_response.
 
-### **Configuring AsyncMock Behavior**
+### Configuring AsyncMock behaviour
 
-The behavior of an AsyncMock can be configured primarily through its
+The behaviour of an AsyncMock can be configured primarily through its
 return\_value and side\_effect attributes:
 
 - **return\_value**: This attribute defines the value that the coroutine
@@ -655,7 +671,7 @@ my_mock = AsyncMock(side_effect=ValueError("Async operation failed"))
     mock's return\_value is used.  
 - An **asynchronous function (async def)**: This async function will be
     called and awaited. Its result becomes the resolved value of the mock's
-    awaitable. This is powerful for simulating more complex async behaviors.  
+    awaitable. This is powerful for simulating more complex async behaviours.  
 - Another **AsyncMock instance**: If side\_effect is set to another AsyncMock
     instance, calling the patched function effectively calls this other
     AsyncMock instance. The return\_value should then be configured on this
@@ -663,12 +679,12 @@ my_mock = AsyncMock(side_effect=ValueError("Async operation failed"))
 
 Understanding the interplay between return\_value, side\_effect, and the
 awaitable nature of AsyncMock is crucial. For simple resolved values,
-return\_value is sufficient. For dynamic behavior, exceptions, or invoking
+return\_value is sufficient. For dynamic behaviour, exceptions, or invoking
 other async logic, side\_effect is the appropriate choice. Misconfiguration can
 lead to mocks not behaving as expected, for example, returning a coroutine
 where a resolved value is anticipated by the test logic.
 
-### **Verifying Mock Interactions**
+### Verifying mock interactions
 
 Standard mock assertion methods provided by unittest.mock work seamlessly with
 AsyncMock. These include:
@@ -683,7 +699,7 @@ AsyncMock. These include:
 These assertions are vital for verifying that the code under test interacts
 with its asynchronous dependencies in the expected manner.
 
-### **Example: Mocking an Async Service Call in a Falcon Resource**
+### Example: mocking an async service call in a Falcon resource
 
 Consider a Falcon resource that depends on an external asynchronous service:
 **Service (src/services.py):**
@@ -764,10 +780,12 @@ async def test_get_item_with_mocked_service(client_svc, mocker):
     patched_fetch_method.assert_called_once_with("item_789")
 ```
 
-### **Table: unittest.mock.Mock vs. unittest.mock.AsyncMock**
+### Table: unittest.mock.Mock vs. unittest.mock.AsyncMock
 
 To further clarify the distinction, the following table compares key features
 of Mock and AsyncMock:
+
+Table: Comparison of unittest.mock.Mock and unittest.mock.AsyncMock
 
 | Feature                     | unittest.mock.Mock                                         | unittest.mock.AsyncMock (Python 3.8+ or asyncmock library)    |
 | :-------------------------- | :--------------------------------------------------------- | :------------------------------------------------------------ |
@@ -778,21 +796,21 @@ of Mock and AsyncMock:
 | **Primary Use Case**        | Mocking synchronous dependencies.                          | Mocking asynchronous dependencies.                            |
 
 This table underscores why AsyncMock is essential for correctly simulating the
-behavior of asynchronous dependencies.
+behaviour of asynchronous dependencies.
 
-## **7\. Testing Asynchronous Falcon Hooks (@falcon.before, @falcon.after)**
+## 7. Testing asynchronous Falcon hooks (@falcon.before, @falcon.after)
 
 Falcon's hooks (@falcon.before and @falcon.after) allow for the execution of
 custom logic before or after a resource responder method. When developing
 asynchronous applications with falcon.asgi.App, these hooks must also be
-asynchronous (async def).5 Testing these async hooks involves verifying their
-intended effects on the request/response lifecycle and their interaction with
-other components.
+asynchronous (async def).[^5] Testing these async hooks involves verifying
+their intended effects on the request/response lifecycle and their interaction
+with other components.
 
-### **Defining Asynchronous Hooks**
+### Defining asynchronous hooks
 
 Asynchronous hooks are defined as async def functions and applied using the
-standard @falcon.before() or @falcon.after() decorators.5
+standard @falcon.before() or @falcon.after() decorators.[^5]
 
 - **@falcon.before(async\_hook\_func)**: The async\_hook\_func is executed
   before the responder.
@@ -801,15 +819,15 @@ standard @falcon.before() or @falcon.after() decorators.5
   the responder.
   - Signature: async def hook\_name(req, resp, resource, req\_succeeded) The
     req\_succeeded parameter is a boolean indicating whether the responder and
-    any preceding after hooks completed successfully.5
+    any preceding after hooks completed successfully.[^5]
 
 These hooks, being async def, are integral parts of the asynchronous request
 processing pipeline. They can await other coroutines, modify req.context or
 resp objects, or raise exceptions to alter the control flow. Thus, testing them
-involves not only their isolated logic but also their integrated behavior
+involves not only their isolated logic but also their integrated behaviour
 within Falcon's ASGI request-response cycle.
 
-### **Strategies for Testing Hooks**
+### Strategies for testing hooks
 
 Testing asynchronous hooks generally involves:
 
@@ -828,13 +846,13 @@ Testing asynchronous hooks generally involves:
   dependencies, it's beneficial to mock these internal dependencies to test the
   hook's logic in isolation.
 
-### **Using ASGIConductor or httpx.AsyncClient**
+### Using ASGIConductor or httpx.AsyncClient
 
 Requests to endpoints decorated with asynchronous hooks are simulated using
 httpx.AsyncClient with ASGITransport or falcon.testing.ASGIConductor, similar
 to testing regular asynchronous endpoints.
 
-### **Example: Testing an Asynchronous Authentication before Hook**
+### Example: testing an asynchronous authentication before hook
 
 Consider an asynchronous before hook for authentication: **Async Hook
 (src/hooks.py):**
@@ -924,10 +942,10 @@ async def test_protected_resource_valid_token(hooked_app_client):
 ```
 
 This testing pattern, adapted from synchronous examples and using
-httpx.AsyncClient 1, effectively validates the behavior of the asynchronous
+httpx.AsyncClient[^1], effectively validates the behaviour of the asynchronous
 authentication hook.
 
-### **Mocking Dependencies within Async Hooks**
+### Mocking dependencies within async hooks
 
 If an asynchronous hook itself calls other asynchronous services (e.g., an
 external authentication provider or a database query for permissions), these
@@ -937,7 +955,7 @@ authenticate\_request\_async involved await
 auth\_service.validate\_token(token), that validate\_token method would be
 patched with an AsyncMock.
 
-### **Asserting Hook Execution**
+### Asserting hook execution
 
 In cases where a hook's execution does not produce an immediately obvious side
 effect in the response or req.context (e.g., a logging hook), its execution can
@@ -951,7 +969,7 @@ be verified by:
 These techniques ensure that even hooks with subtle effects can be reliably
 tested.
 
-## **8\. Testing Asynchronous Falcon Middleware**
+## 8. Testing asynchronous Falcon middleware
 
 Falcon middleware provides a mechanism to globally process requests and
 responses. In an ASGI context, middleware components can also participate in
@@ -959,7 +977,7 @@ the application's lifespan events (startup and shutdown). Testing asynchronous
 middleware involves verifying both its per-request logic and its handling of
 these lifecycle events.
 
-### **Understanding Async Middleware in Falcon**
+### Understanding async middleware in Falcon
 
 For falcon.asgi.App, middleware components must implement asynchronous methods:
 
@@ -971,28 +989,28 @@ For falcon.asgi.App, middleware components must implement asynchronous methods:
 
 The per-request methods (process\_request, process\_resource,
 process\_response) are executed in a stacked manner based on the order they are
-provided to the falcon.asgi.App instance.6
+provided to the falcon.asgi.App instance.[^6]
 
-### **Testing process\_request, process\_resource, process\_response**
+### Testing process_request, process_resource, process_response
 
 These methods are tested similarly to asynchronous hooks. Tests involve making
 requests that pass through the middleware and asserting expected outcomes:
 
 - Modifications to req.context, resp.context, headers, or response data.  
-- Short-circuiting behavior (e.g., if resp.complete is set to True in
+- Short-circuiting behaviour (e.g., if resp.complete is set to True in
   process\_request, subsequent middleware and the resource responder should be
   skipped).
 - Interactions with mocked dependencies within the middleware methods, using
   AsyncMock. httpx.AsyncClient or falcon.testing.ASGIConductor can be used for
   these tests.
 
-### **Testing ASGI Lifespan Events (process\_startup, process\_shutdown)**
+### Testing ASGI lifespan events (process_startup, process_shutdown)
 
 Testing process\_startup and process\_shutdown is a critical aspect of
 validating ASGI middleware. These methods handle application-wide setup and
 teardown. falcon.testing.ASGIConductor is the native Falcon tool for this, as
 it simulates the full ASGI lifespan protocol when used as an async context
-manager.3
+manager.[^3]
 
 - Entering async with ASGIConductor(app) as conductor: triggers
   process\_startup methods of all registered middleware.
@@ -1012,7 +1030,7 @@ tests) ensures a shallow copy of this state is available in the scope of
 subsequent request-response calls. Middleware can then transfer relevant items
 from req.scope\['state'\] to req.context for easier access by responders.
 
-### **Example: Testing process\_startup and process\_shutdown with ASGIConductor**
+### Example: testing process_startup and process_shutdown with ASGIConductor
 
 **Middleware with Lifespan Methods (src/middleware.py):**
 
@@ -1044,7 +1062,8 @@ class DatabaseConnectionMiddleware:
         # Simulate closing the database connection pool
         if "state" in scope and "db_pool" in scope["state"]:
             print(
-                f\"Middleware: process_shutdown cleaning up db_pool: {scope['state']['db_pool']}\"
+                f"Middleware: process_shutdown cleaning up db_pool: "
+                f"{scope['state']['db_pool']}"
             )
             del scope["state"]["db_pool"]
         self.db_connection_info = None
@@ -1061,7 +1080,8 @@ class DatabaseConnectionMiddleware:
 
 ```python
 # src/app_with_middleware.py
-import falcon import falcon.asgi
+import falcon
+import falcon.asgi
 
 from .middleware import DatabaseConnectionMiddleware
 
@@ -1089,20 +1109,23 @@ app_mw.add_route("/data", DataResource())
 
 ```python
 # tests/test_middleware.py
-import pytest from falcon import testing
+import falcon
+import falcon.testing
+import pytest
 
-# Import your app and the middleware instance to check its state from the module
+# Import the app and the middleware instance to check its state from the module
 from src.app_with_middleware import app_mw, db_middleware_instance
 
 
-@pytest.mark.asyncio async def test_database_middleware_lifespan(event_loop):
-# event_loop from pytest-asyncio
+@pytest.mark.asyncio
+async def test_database_middleware_lifespan(event_loop):
+    # event_loop from pytest-asyncio
     # Ensure initial state
     assert not db_middleware_instance.startup_complete
     assert not db_middleware_instance.shutdown_complete
     assert db_middleware_instance.db_connection_info is None
 
-    async with testing.ASGIConductor(app_mw) as conductor:
+    async with falcon.testing.ASGIConductor(app_mw) as conductor:
         # After entering context, process_startup should have run
         assert db_middleware_instance.startup_complete
         assert (
@@ -1124,9 +1147,9 @@ from src.app_with_middleware import app_mw, db_middleware_instance
 
 This example demonstrates how ASGIConductor facilitates testing the full
 lifecycle of ASGI middleware, including the propagation of state from
-process\_startup via scope\['state'\].3
+process\_startup via scope\['state'\].[^3]
 
-### **Verifying Middleware Call Order and Short-Circuiting**
+### Verifying middleware call order and short-circuiting
 
 For more complex scenarios:
 
@@ -1139,7 +1162,7 @@ For more complex scenarios:
   mocking methods in the downstream components and asserting they were not
   called.
 
-## **9\. Strategies for Testing Error Handling**
+## 9. Strategies for testing error handling
 
 Robust applications require comprehensive error handling. Testing these error
 paths ensures that the application behaves predictably and provides meaningful
@@ -1147,7 +1170,7 @@ feedback to clients when issues arise. In asynchronous Falcon applications,
 this involves testing Falcon's built-in HTTP error exceptions, custom error
 handlers, and general Python exceptions.
 
-### **Testing Falcon HTTP Errors**
+### Testing Falcon HTTP errors
 
 Falcon provides a suite of HTTP exceptions (e.g., falcon.HTTPBadRequest,
 falcon.HTTPNotFound, falcon.HTTPUnauthorized) that can be raised from
@@ -1174,9 +1197,13 @@ Example: If a resource expects a 'name' field in a POST request:
 #     resp.status = falcon.HTTP_201
 #     resp.media = {"id": "new_id", "name": media['name']}
 
+import falcon
+import pytest
+
 # In the test file:
-@pytest.mark.asyncio async def test_post_item_missing_name(async_test_client):
-# httpx.AsyncClient fixture
+@pytest.mark.asyncio
+async def test_post_item_missing_name(async_test_client):
+    # httpx.AsyncClient fixture
     response = await async_test_client.post(
         "/items", json={"value": 42}
     )  # Missing 'name'
@@ -1186,14 +1213,15 @@ Example: If a resource expects a 'name' field in a POST request:
     assert "The 'name' field is required" in error_payload["description"]
 ```
 
-### **Using pytest.raises with Asynchronous Code**
+### Using pytest.raises with asynchronous code
 
 For testing scenarios where specific Python exceptions (not necessarily
 Falcon's HTTP exceptions) are expected to be raised from asynchronous code,
 pytest.raises is the appropriate tool. It functions as a context manager:
 
 ```python
-import falcon import pytest
+import falcon
+import pytest
 
 # async def some_utility_that_might_fail_async():
 #     raise ValueError("An internal problem occurred")
@@ -1202,16 +1230,16 @@ import falcon import pytest
 #     async def on_get(self, req, resp):
 #         try:
 #             await some_utility_that_might_fail_async()
-    #             resp.media = {"status": "ok"}
-    #         except ValueError as e:
-    #             # Example: Catch specific error, log it, and return a generic server error
-    #             # In a real app, you might have a custom error handler for ValueError
-    #             raise falcon.HTTPInternalServerError(
-    #                 description=f"Internal processing error: {e}",
-    #             )
+#             resp.media = {"status": "ok"}
+#         except ValueError as e:
+#             # Example: Catch specific error, log it, and return a generic server error
+#             # In a real app, a project might have a custom error handler for ValueError
+#             raise falcon.HTTPInternalServerError(
+#                 description=f"Internal processing error: {e}",
+#             )
 
-@pytest.mark.asyncio async def test_operation_raises_specific_exception(mocker,
-async_test_client):
+@pytest.mark.asyncio
+async def test_operation_raises_specific_exception(mocker, async_test_client):
     # Mock the utility to ensure it raises the expected underlying error
     mocker.patch(
         "path.to.some_utility_that_might_fail_async",
@@ -1245,7 +1273,7 @@ internally (perhaps to be caught by a custom error handler or to test a
 non-HTTP part of the system), pytest.raises is used to catch that specific
 exception type directly from the awaited call.
 
-### **Testing Custom Error Handlers**
+### Testing custom error handlers
 
 Falcon allows applications to register custom error handlers for specific
 exception types using app.add\_error\_handler(SomeExceptionType,
@@ -1265,7 +1293,7 @@ Mocking asynchronous dependencies *within the custom error handler itself*
 might also be necessary if the handler performs async operations (e.g., async
 logging).
 
-## **10\. Best Practices and Common Pitfalls**
+## 10. Best practices and common pitfalls
 
 Adhering to best practices and being aware of common pitfalls can significantly
 improve the quality, reliability, and maintainability of asynchronous tests for
@@ -1297,15 +1325,16 @@ Falcon applications.
   single aspect of functionality. Leverage fixtures effectively to reduce
   boilerplate and enhance readability.
 - **Python Version Compatibility:** Be mindful of differences in asyncio
-  behavior across Python versions. Notably, unittest.mock.AsyncMock is standard
-  from Python 3.8 onwards; older versions require the asyncmock library.
+  behaviour across Python versions. Notably, unittest.mock.AsyncMock is
+  standard from Python 3.8 onwards; older versions require the asyncmock
+  library.
 - **Choosing the Right Test Client/Tool:** The selection of a testing utility
   should align with the testing objective:
   - httpx.AsyncClient with ASGITransport: Ideal for most endpoint
-    request-response testing, offering speed and isolation.1  
+    request-response testing, offering speed and isolation.[^1]  
   - falcon.testing.ASGIConductor: Necessary for fine-grained control over the
     ASGI lifecycle, testing streaming protocols, and verifying middleware
-    lifespan events (process\_startup, process\_shutdown).3  
+    lifespan events (process\_startup, process\_shutdown).[^3]  
   - falcon.testing.TestClient: Can target ASGI apps, but for async def tests,
     it's generally preferable to obtain an ASGIConductor from it via its async
     context manager rather than using its synchronous simulate\_\* methods
@@ -1319,7 +1348,7 @@ Falcon applications.
   as \-s (to disable output capture), \-x (to stop on the first failure), and
   \--lf (to run only the last failed tests) are valuable aids during debugging.
 
-## **11\. Conclusion: Building Confidently with Asynchronous Tests**
+## 11. Conclusion: building confidently with asynchronous tests
 
 Testing asynchronous Falcon applications with pytest requires a nuanced
 approach that embraces the asynchronous nature of the framework and its
@@ -1357,24 +1386,19 @@ remain effective and leverage the latest advancements in the field. For further
 information, the official documentation for Falcon (particularly its ASGI and
 testing sections), pytest, pytest-asyncio, and HTTPX are invaluable resources.
 
-### **Works cited**
+### Works cited
 
-1. Async Tests \- FastAPI, accessed on June 1, 2025,
-   [https://fastapi.tiangolo.com/advanced/async-tests/](https://fastapi.tiangolo.com/advanced/async-tests/)
-
-2. Testing Helpers — Falcon 3.1.3 documentation, accessed on June 1, 2025,
-   [https://falcon.readthedocs.io/en/3.1.3/api/testing.html](https://falcon.readthedocs.io/en/3.1.3/api/testing.html)
-
-3. Testing Helpers — Falcon 4.0.2 documentation, accessed on June 1, 2025,
-   [https://falcon.readthedocs.io/en/stable/api/testing.html](https://falcon.readthedocs.io/en/stable/api/testing.html)
-
-4. A Practical Guide To Async Testing With Pytest-Asyncio | Pytest with …,
-   accessed on June 1, 2025,
-   [https://pytest-with-eric.com/pytest-advanced/pytest-asyncio/](https://pytest-with-eric.com/pytest-advanced/pytest-asyncio/)
-
-5. Hooks — Falcon 4.0.2 documentation \- The Falcon Web Framework, accessed on
-   June 1, 2025,
-   [https://falcon.readthedocs.io/en/stable/api/hooks.html](https://falcon.readthedocs.io/en/stable/api/hooks.html)
-
-6. Middleware — Falcon 4.0.2 documentation, accessed on June 1, 2025,
-   [https://falcon.readthedocs.io/en/stable/api/middleware.html](https://falcon.readthedocs.io/en/stable/api/middleware.html)
+[^1]: Async Tests - FastAPI, accessed on June 1, 2025,
+    <https://fastapi.tiangolo.com/advanced/async-tests/>
+[^2]: Testing Helpers — Falcon 3.1.3 documentation, accessed on June 1, 2025,
+    <https://falcon.readthedocs.io/en/3.1.3/api/testing.html>
+[^3]: Testing Helpers — Falcon 4.0.2 documentation, accessed on June 1, 2025,
+    <https://falcon.readthedocs.io/en/stable/api/testing.html>
+[^4]: A Practical Guide To Async Testing With Pytest-Asyncio | Pytest with …,
+    accessed on June 1, 2025,
+    <https://pytest-with-eric.com/pytest-advanced/pytest-asyncio/>
+[^5]: Hooks — Falcon 4.0.2 documentation - The Falcon Web Framework, accessed
+    on June 1, 2025,
+    <https://falcon.readthedocs.io/en/stable/api/hooks.html>
+[^6]: Middleware — Falcon 4.0.2 documentation, accessed on June 1, 2025,
+    <https://falcon.readthedocs.io/en/stable/api/middleware.html>

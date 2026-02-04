@@ -179,6 +179,11 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
+    op.create_index(
+        "ix_ingestion_jobs_series_profile_id",
+        "ingestion_jobs",
+        ["series_profile_id"],
+    )
 
     op.create_table(
         "source_documents",
@@ -251,6 +256,10 @@ def downgrade() -> None:
     op.drop_table("approval_events")
     op.drop_index("ix_source_documents_ingestion_job_id", table_name="source_documents")
     op.drop_table("source_documents")
+    op.drop_index(
+        "ix_ingestion_jobs_series_profile_id",
+        table_name="ingestion_jobs",
+    )
     op.drop_table("ingestion_jobs")
     op.drop_index("ix_episodes_series_profile_id", table_name="episodes")
     op.drop_table("episodes")

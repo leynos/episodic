@@ -23,12 +23,15 @@ class SeriesProfileRepository(typ.Protocol):
 
     async def add(self, profile: SeriesProfile) -> None:
         """Persist a series profile."""
+        ...
 
     async def get(self, profile_id: uuid.UUID) -> SeriesProfile | None:
         """Fetch a series profile by identifier."""
+        ...
 
     async def get_by_slug(self, slug: str) -> SeriesProfile | None:
         """Fetch a series profile by slug."""
+        ...
 
 
 class TeiHeaderRepository(typ.Protocol):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import typing as typ
 from logging.config import fileConfig
 
@@ -23,8 +24,21 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
 
+def _configure_database_url() -> None:
+    """Ensure sqlalchemy.url is set from the environment or existing config."""
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        config.set_main_option("sqlalchemy.url", db_url)
+        return
+    current = config.get_main_option("sqlalchemy.url")
+    if not current:
+        msg = "DATABASE_URL is not set and sqlalchemy.url is empty."
+        raise RuntimeError(msg)
+
+
 def run_migrations_offline() -> None:
     """Run migrations in offline mode."""
+    _configure_database_url()
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -59,6 +73,7 @@ async def run_migrations_online_async() -> None:
             _do_run_migrations(connectable)
         return
 
+    _configure_database_url()
     section = config.get_section(config.config_ini_section) or {}
     connectable = async_engine_from_config(
         section,
