@@ -104,9 +104,11 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         """
         if self._session is None:
             return
-        if exc is not None:
-            await self._session.rollback()
-        await self._session.close()
+        try:
+            if exc is not None:
+                await self._session.rollback()
+        finally:
+            await self._session.close()
 
     async def commit(self) -> None:
         """Commit the current unit-of-work transaction.

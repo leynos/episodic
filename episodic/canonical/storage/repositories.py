@@ -22,6 +22,7 @@ from episodic.canonical.ports import (
     ApprovalEventRepository,
     EpisodeRepository,
     IngestionJobRepository,
+    SeriesProfileRepository,
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
@@ -58,7 +59,7 @@ if typ.TYPE_CHECKING:
     )
 
 
-class SqlAlchemySeriesProfileRepository:
+class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
     """Persist series profiles using SQLAlchemy.
 
     Parameters
@@ -82,7 +83,7 @@ class SqlAlchemySeriesProfileRepository:
         -------
         None
         """
-        self._session.add(
+        return self._session.add(
             SeriesProfileRecord(
                 id=profile.id,
                 slug=profile.slug,

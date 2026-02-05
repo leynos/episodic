@@ -2,6 +2,12 @@
 
 These fixtures follow the py-pglite approach documented in
 `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`.
+
+Examples
+--------
+Run database-backed tests with py-pglite:
+
+>>> EPISODIC_TEST_DB=pglite pytest -k canonical
 """
 
 from __future__ import annotations

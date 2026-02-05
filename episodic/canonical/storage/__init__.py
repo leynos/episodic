@@ -33,7 +33,7 @@ from .repositories import (
 )
 from .uow import SqlAlchemyUnitOfWork
 
-__all__ = [
+__all__ = (
     "ApprovalEventRecord",
     "Base",
     "EpisodeRecord",
@@ -48,4 +48,4 @@ __all__ = [
     "SqlAlchemyTeiHeaderRepository",
     "SqlAlchemyUnitOfWork",
     "TeiHeaderRecord",
-]
+)

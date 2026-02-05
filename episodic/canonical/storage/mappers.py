@@ -1,7 +1,7 @@
 """Record-to-domain mapping helpers for canonical persistence.
 
 This module converts SQLAlchemy ORM records into domain entities. The helpers
-keep mapping logic centralised so repositories can remain focused on data
+keep mapping logic centralized so repositories can remain focused on data
 access.
 
 Examples

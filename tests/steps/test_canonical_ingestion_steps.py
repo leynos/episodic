@@ -1,4 +1,11 @@
-"""Behavioural tests for canonical ingestion workflows."""
+"""Behavioural tests for canonical ingestion workflows.
+
+Examples
+--------
+Run the canonical ingestion BDD scenario:
+
+>>> pytest tests/steps/test_canonical_ingestion_steps.py -k ingestion
+"""
 
 from __future__ import annotations
 
@@ -21,14 +28,25 @@ from episodic.canonical.services import ingest_sources
 from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 
 
-class TEIProtocol(typ.Protocol):
+class TEITestProtocol(typ.Protocol):
     """Typed surface for tei_rapporteur interactions in tests."""
 
     Document: typ.Callable[[str], object]
     emit_xml: typ.Callable[[object], str]
 
 
-TEI: TEIProtocol = typ.cast("TEIProtocol", _tei)
+TEI: TEITestProtocol = typ.cast("TEITestProtocol", _tei)
+
+
+class IngestionContext(typ.TypedDict, total=False):
+    """Shared state for canonical ingestion BDD steps."""
+
+    profile: SeriesProfile
+    tei_xml: str
+    episode_id: uuid.UUID
+    ingestion_job_id: uuid.UUID
+    source_uris: list[str]
+
 
 if typ.TYPE_CHECKING:
     import asyncio
@@ -45,16 +63,16 @@ def test_ingestion_job_records_canonical_content() -> None:
 
 
 @pytest.fixture
-def context() -> dict[str, typ.Any]:
+def context() -> IngestionContext:
     """Share state between BDD steps."""
-    return {}
+    return typ.cast("IngestionContext", {})
 
 
 @given('a series profile "science-hour" exists')
 def series_profile_exists(
     _function_scoped_runner: asyncio.Runner,
     session_factory: typ.Callable[[], AsyncSession],
-    context: dict[str, typ.Any],
+    context: IngestionContext,
 ) -> None:
     """Persist a series profile for ingestion."""
 
@@ -80,7 +98,7 @@ def series_profile_exists(
 
 
 @given('a TEI document titled "Bridgewater" is available')
-def tei_document_available(context: dict[str, typ.Any]) -> None:
+def tei_document_available(context: IngestionContext) -> None:
     """Provide TEI XML for ingestion."""
     document = TEI.Document("Bridgewater")
     context["tei_xml"] = TEI.emit_xml(document)
@@ -90,13 +108,13 @@ def tei_document_available(context: dict[str, typ.Any]) -> None:
 def ingestion_job_records_sources(
     _function_scoped_runner: asyncio.Runner,
     session_factory: typ.Callable[[], AsyncSession],
-    context: dict[str, typ.Any],
+    context: IngestionContext,
 ) -> None:
     """Ingest source documents into a canonical episode."""
 
     async def _ingest() -> None:
-        profile = typ.cast("SeriesProfile", context["profile"])
-        tei_xml = typ.cast("str", context["tei_xml"])
+        profile = context["profile"]
+        tei_xml = context["tei_xml"]
         sources = [
             SourceDocumentInput(
                 source_type="web",
@@ -142,12 +160,12 @@ def ingestion_job_records_sources(
 def canonical_episode_stored(
     _function_scoped_runner: asyncio.Runner,
     session_factory: typ.Callable[[], AsyncSession],
-    context: dict[str, typ.Any],
+    context: IngestionContext,
 ) -> None:
     """Verify the canonical episode was persisted."""
 
     async def _fetch() -> None:
-        episode_id = typ.cast("uuid.UUID", context["episode_id"])
+        episode_id = context["episode_id"]
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await uow.episodes.get(episode_id)
@@ -162,12 +180,12 @@ def canonical_episode_stored(
 def approval_state_is_draft(
     _function_scoped_runner: asyncio.Runner,
     session_factory: typ.Callable[[], AsyncSession],
-    context: dict[str, typ.Any],
+    context: IngestionContext,
 ) -> None:
     """Verify the episode approval state is draft."""
 
     async def _fetch() -> None:
-        episode_id = typ.cast("uuid.UUID", context["episode_id"])
+        episode_id = context["episode_id"]
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await uow.episodes.get(episode_id)
@@ -184,13 +202,13 @@ def approval_state_is_draft(
 def approval_event_persisted(
     _function_scoped_runner: asyncio.Runner,
     session_factory: typ.Callable[[], AsyncSession],
-    context: dict[str, typ.Any],
+    context: IngestionContext,
 ) -> None:
     """Verify approval events are stored for the ingestion."""
 
     async def _fetch() -> None:
-        episode_id = typ.cast("uuid.UUID", context["episode_id"])
-        source_uris = typ.cast("list[str]", context["source_uris"])
+        episode_id = context["episode_id"]
+        source_uris = context["source_uris"]
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             events = await uow.approval_events.list_for_episode(episode_id)
@@ -213,14 +231,14 @@ def approval_event_persisted(
 def source_documents_linked(
     _function_scoped_runner: asyncio.Runner,
     session_factory: typ.Callable[[], AsyncSession],
-    context: dict[str, typ.Any],
+    context: IngestionContext,
 ) -> None:
     """Verify source documents are linked to ingestion jobs and episodes."""
 
     async def _fetch() -> None:
-        job_id = typ.cast("uuid.UUID", context["ingestion_job_id"])
-        episode_id = typ.cast("uuid.UUID", context["episode_id"])
-        source_uris = typ.cast("list[str]", context["source_uris"])
+        job_id = context["ingestion_job_id"]
+        episode_id = context["episode_id"]
+        source_uris = context["source_uris"]
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             documents = await uow.source_documents.list_for_job(job_id)

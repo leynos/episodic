@@ -15,11 +15,8 @@ Use the base metadata to create the canonical tables:
 
 from __future__ import annotations
 
-# TODO(@codex): https://github.com/leynos/episodic/pull/14
-#   SQLAlchemy evaluates annotations at runtime; keep stdlib types imported.
-import datetime as dt  # noqa: TC003
-import typing as typ
-import uuid  # noqa: TC003
+import datetime as dt  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
+import uuid  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
 
 import sqlalchemy as sa
 from sqlalchemy import orm
@@ -68,7 +65,7 @@ class SeriesProfileRecord(Base):
         Display title for the series.
     description : str | None
         Optional description for the series.
-    configuration : dict[str, typing.Any]
+    configuration : dict[str, object]
         Free-form configuration settings associated with the series.
     created_at : datetime.datetime
         Timestamp when the record was created.
@@ -82,19 +79,26 @@ class SeriesProfileRecord(Base):
         postgresql.UUID(as_uuid=True),
         primary_key=True,
     )
-    slug: orm.Mapped[str] = orm.mapped_column(sa.String(160), unique=True)
-    title: orm.Mapped[str] = orm.mapped_column(sa.String(240))
+    slug: orm.Mapped[str] = orm.mapped_column(
+        sa.String(160),
+        nullable=False,
+        unique=True,
+    )
+    title: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)
     description: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
-    configuration: orm.Mapped[dict[str, typ.Any]] = orm.mapped_column(
+    configuration: orm.Mapped[dict[str, object]] = orm.mapped_column(
         postgresql.JSONB,
         default=dict,
+        nullable=False,
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
     )
     updated_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
     )
@@ -109,7 +113,7 @@ class TeiHeaderRecord(Base):
         Primary key for the TEI header.
     title : str
         Derived title from the TEI header.
-    payload : dict[str, typing.Any]
+    payload : dict[str, object]
         Parsed TEI header payload stored as JSONB.
     raw_xml : str
         Raw TEI XML payload for auditing or reprocessing.
@@ -125,17 +129,20 @@ class TeiHeaderRecord(Base):
         postgresql.UUID(as_uuid=True),
         primary_key=True,
     )
-    title: orm.Mapped[str] = orm.mapped_column(sa.String(240))
-    payload: orm.Mapped[dict[str, typ.Any]] = orm.mapped_column(
+    title: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)
+    payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
         postgresql.JSONB,
+        nullable=False,
     )
-    raw_xml: orm.Mapped[str] = orm.mapped_column(sa.Text)
+    raw_xml: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
     )
     updated_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
     )
@@ -175,21 +182,31 @@ class EpisodeRecord(Base):
     series_profile_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("series_profiles.id"),
+        nullable=False,
     )
     tei_header_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("tei_headers.id"),
+        nullable=False,
     )
-    title: orm.Mapped[str] = orm.mapped_column(sa.String(240))
-    tei_xml: orm.Mapped[str] = orm.mapped_column(sa.Text)
-    status: orm.Mapped[EpisodeStatus] = orm.mapped_column(EPISODE_STATUS)
-    approval_state: orm.Mapped[ApprovalState] = orm.mapped_column(APPROVAL_STATE)
+    title: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)
+    tei_xml: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
+    status: orm.Mapped[EpisodeStatus] = orm.mapped_column(
+        EPISODE_STATUS,
+        nullable=False,
+    )
+    approval_state: orm.Mapped[ApprovalState] = orm.mapped_column(
+        APPROVAL_STATE,
+        nullable=False,
+    )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
     )
     updated_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
     )
@@ -231,15 +248,20 @@ class IngestionJobRecord(Base):
     series_profile_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("series_profiles.id"),
+        nullable=False,
     )
     target_episode_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("episodes.id"),
         nullable=True,
     )
-    status: orm.Mapped[IngestionStatus] = orm.mapped_column(INGESTION_STATUS)
+    status: orm.Mapped[IngestionStatus] = orm.mapped_column(
+        INGESTION_STATUS,
+        nullable=False,
+    )
     requested_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
     )
     started_at: orm.Mapped[dt.datetime | None] = orm.mapped_column(
         sa.DateTime(timezone=True),
@@ -252,10 +274,12 @@ class IngestionJobRecord(Base):
     error_message: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
     )
     updated_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
     )
@@ -280,7 +304,7 @@ class SourceDocumentRecord(Base):
         Normalised weight assigned to the source.
     content_hash : str
         Hash of the source content for deduplication.
-    metadata_payload : dict[str, typing.Any]
+    metadata_payload : dict[str, object]
         JSON metadata payload stored under the ``metadata`` column.
     created_at : datetime.datetime
         Timestamp when the record was created.
@@ -295,23 +319,26 @@ class SourceDocumentRecord(Base):
     ingestion_job_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("ingestion_jobs.id"),
+        nullable=False,
     )
     canonical_episode_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("episodes.id"),
         nullable=True,
     )
-    source_type: orm.Mapped[str] = orm.mapped_column(sa.String(120))
-    source_uri: orm.Mapped[str] = orm.mapped_column(sa.Text)
-    weight: orm.Mapped[float] = orm.mapped_column(sa.Float)
-    content_hash: orm.Mapped[str] = orm.mapped_column(sa.String(128))
-    metadata_payload: orm.Mapped[dict[str, typ.Any]] = orm.mapped_column(
+    source_type: orm.Mapped[str] = orm.mapped_column(sa.String(120), nullable=False)
+    source_uri: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
+    weight: orm.Mapped[float] = orm.mapped_column(sa.Float, nullable=False)
+    content_hash: orm.Mapped[str] = orm.mapped_column(sa.String(128), nullable=False)
+    metadata_payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
         "metadata",
         postgresql.JSONB,
         default=dict,
+        nullable=False,
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
     )
 
@@ -340,7 +367,7 @@ class ApprovalEventRecord(Base):
         New approval state after the transition.
     note : str | None
         Optional free-form note.
-    payload : dict[str, typing.Any]
+    payload : dict[str, object]
         Supplemental metadata for the approval event.
     created_at : datetime.datetime
         Timestamp when the record was created.
@@ -355,19 +382,25 @@ class ApprovalEventRecord(Base):
     episode_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("episodes.id"),
+        nullable=False,
     )
     actor: orm.Mapped[str | None] = orm.mapped_column(sa.String(200), nullable=True)
     from_state: orm.Mapped[ApprovalState | None] = orm.mapped_column(
         APPROVAL_STATE,
         nullable=True,
     )
-    to_state: orm.Mapped[ApprovalState] = orm.mapped_column(APPROVAL_STATE)
+    to_state: orm.Mapped[ApprovalState] = orm.mapped_column(
+        APPROVAL_STATE,
+        nullable=False,
+    )
     note: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
-    payload: orm.Mapped[dict[str, typ.Any]] = orm.mapped_column(
+    payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
         postgresql.JSONB,
         default=dict,
+        nullable=False,
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
+        nullable=False,
         server_default=sa.func.now(),
     )

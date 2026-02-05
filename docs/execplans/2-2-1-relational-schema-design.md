@@ -25,7 +25,7 @@ tests pass, and the roadmap entry for 2.2.1 is marked done.
   migrations, and py-pglite fixtures.
 - [x] (2026-02-03 00:00Z) Added unit and behavioural tests for ingestion
   workflows and repository constraints.
-- [x] (2026-02-03 00:00Z) Updated system design, users guide, and developer
+- [x] (2026-02-03 00:00Z) Updated system design, users' guide, and developer
   guide documentation for the canonical schema.
 - [x] (2026-02-03 00:00Z) Added unit-of-work flush support to preserve
   foreign-key ordering during ingestion and validated async py-pglite tests.

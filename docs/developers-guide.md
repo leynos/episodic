@@ -42,7 +42,7 @@ Key expectations:
 Canonical content persistence follows the hexagonal architecture guidance:
 
 - `episodic/canonical/ports.py` defines repository and unit-of-work interfaces.
-- `episodic/canonical/storage.py` implements SQLAlchemy adapters and keeps
+- `episodic/canonical/storage/` implements SQLAlchemy adapters and keeps
   persistence concerns out of the domain layer.
 - `episodic/canonical/services.py` orchestrates ingestion workflows using the
   ports.

@@ -1,4 +1,11 @@
-"""Unit tests for canonical storage repositories."""
+"""Unit tests for canonical storage repositories.
+
+Examples
+--------
+Run the repository test suite:
+
+>>> pytest tests/test_canonical_storage.py
+"""
 
 from __future__ import annotations
 
@@ -29,6 +36,7 @@ if typ.TYPE_CHECKING:
 def _episode_fixture(
     now: dt.datetime,
 ) -> tuple[SeriesProfile, TeiHeader, CanonicalEpisode, IngestionJob, SourceDocument]:
+    """Return a set of related canonical entities."""
     series_id = uuid.uuid4()
     header_id = uuid.uuid4()
     episode_id = uuid.uuid4()
@@ -118,7 +126,10 @@ async def test_series_profile_slug_unique(session_factory: object) -> None:
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         await uow.series_profiles.add(profile_b)
-        with pytest.raises(sa_exc.IntegrityError):
+        with pytest.raises(
+            sa_exc.IntegrityError,
+            match=r"unique|UNIQUE|duplicate",
+        ):
             await uow.commit()
 
 
