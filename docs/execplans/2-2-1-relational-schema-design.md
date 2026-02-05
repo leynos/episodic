@@ -34,8 +34,8 @@ tests pass, and the roadmap entry for 2.2.1 is marked done.
 
 - Observation: The async SQLAlchemy and py-pglite testing guides are now
   available in `docs/` after importing them from the ghillie repository.
-- Observation: py-pglite requires Node.js 18+ for the embedded Postgres WASM
-  runtime, so tests depend on Node availability.
+- Observation: py-pglite requires Node.js 18+ for the embedded Postgres
+  WebAssembly (WASM) runtime, so tests depend on Node availability.
 
 ## Decision log
 

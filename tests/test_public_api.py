@@ -1,4 +1,13 @@
-"""Tests for the episodic public API surface."""
+"""Tests for the episodic public API surface.
+
+These tests verify the symbols exposed at the package boundary.
+
+Examples
+--------
+Import the package to inspect its public surface:
+
+>>> import episodic
+"""
 
 from __future__ import annotations
 

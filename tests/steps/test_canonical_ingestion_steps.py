@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import typing as typ
 import uuid
@@ -25,14 +24,14 @@ from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 class TEIProtocol(typ.Protocol):
     """Typed surface for tei_rapporteur interactions in tests."""
 
-    Document: cabc.Callable[[str], object]
-    emit_xml: cabc.Callable[[object], str]
+    Document: typ.Callable[[str], object]
+    emit_xml: typ.Callable[[object], str]
 
 
 TEI: TEIProtocol = typ.cast("TEIProtocol", _tei)
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+    import asyncio
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,13 +45,6 @@ def test_ingestion_job_records_canonical_content() -> None:
 
 
 @pytest.fixture
-def _function_scoped_runner() -> typ.Iterator[asyncio.Runner]:
-    """Provide an asyncio runner for synchronous BDD steps."""
-    with asyncio.Runner() as runner:
-        yield runner
-
-
-@pytest.fixture
 def context() -> dict[str, typ.Any]:
     """Share state between BDD steps."""
     return {}
@@ -61,7 +53,7 @@ def context() -> dict[str, typ.Any]:
 @given('a series profile "science-hour" exists')
 def series_profile_exists(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: cabc.Callable[[], AsyncSession],
+    session_factory: typ.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Persist a series profile for ingestion."""
@@ -97,7 +89,7 @@ def tei_document_available(context: dict[str, typ.Any]) -> None:
 @when("an ingestion job records source documents")
 def ingestion_job_records_sources(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: cabc.Callable[[], AsyncSession],
+    session_factory: typ.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Ingest source documents into a canonical episode."""
@@ -149,7 +141,7 @@ def ingestion_job_records_sources(
 @then('the canonical episode is stored for "science-hour"')
 def canonical_episode_stored(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: cabc.Callable[[], AsyncSession],
+    session_factory: typ.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Verify the canonical episode was persisted."""
@@ -160,8 +152,8 @@ def canonical_episode_stored(
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await uow.episodes.get(episode_id)
 
-        assert episode is not None
-        assert episode.title == "Bridgewater"
+        assert episode is not None, "Expected a persisted canonical episode."
+        assert episode.title == "Bridgewater", "Expected the episode title."
 
     _function_scoped_runner.run(_fetch())
 
@@ -169,7 +161,7 @@ def canonical_episode_stored(
 @then('the approval state is "draft"')
 def approval_state_is_draft(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: cabc.Callable[[], AsyncSession],
+    session_factory: typ.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Verify the episode approval state is draft."""
@@ -180,8 +172,10 @@ def approval_state_is_draft(
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await uow.episodes.get(episode_id)
 
-        assert episode is not None
-        assert episode.approval_state is ApprovalState.DRAFT
+        assert episode is not None, "Expected a persisted canonical episode."
+        assert episode.approval_state is ApprovalState.DRAFT, (
+            "Expected the episode approval state to be draft."
+        )
 
     _function_scoped_runner.run(_fetch())
 
@@ -189,7 +183,7 @@ def approval_state_is_draft(
 @then("an approval event is persisted for the ingestion job")
 def approval_event_persisted(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: cabc.Callable[[], AsyncSession],
+    session_factory: typ.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Verify approval events are stored for the ingestion."""
@@ -201,12 +195,16 @@ def approval_event_persisted(
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             events = await uow.approval_events.list_for_episode(episode_id)
 
-        assert events
+        assert events, "Expected approval events for the episode."
         event = events[0]
-        assert event.from_state is None
-        assert event.to_state is ApprovalState.DRAFT
-        assert isinstance(event.payload, dict)
-        assert set(event.payload.get("sources", [])) >= set(source_uris)
+        assert event.from_state is None, "Expected the initial approval event."
+        assert event.to_state is ApprovalState.DRAFT, (
+            "Expected the approval event to transition to draft."
+        )
+        assert isinstance(event.payload, dict), "Expected a payload dictionary."
+        assert set(event.payload.get("sources", [])) >= set(source_uris), (
+            "Expected the approval payload to include the ingested sources."
+        )
 
     _function_scoped_runner.run(_fetch())
 
@@ -214,7 +212,7 @@ def approval_event_persisted(
 @then("source documents are stored and linked to the ingestion job and episode")
 def source_documents_linked(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: cabc.Callable[[], AsyncSession],
+    session_factory: typ.Callable[[], AsyncSession],
     context: dict[str, typ.Any],
 ) -> None:
     """Verify source documents are linked to ingestion jobs and episodes."""
@@ -227,10 +225,18 @@ def source_documents_linked(
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             documents = await uow.source_documents.list_for_job(job_id)
 
-        assert len(documents) == len(source_uris)
+        assert len(documents) == len(source_uris), (
+            "Expected one persisted document per ingested source."
+        )
         for document in documents:
-            assert document.ingestion_job_id == job_id
-            assert document.canonical_episode_id == episode_id
-            assert document.source_uri in source_uris
+            assert document.ingestion_job_id == job_id, (
+                "Expected document to reference the ingestion job."
+            )
+            assert document.canonical_episode_id == episode_id, (
+                "Expected document to link to the canonical episode."
+            )
+            assert document.source_uri in source_uris, (
+                "Expected document source URI to match an ingested source."
+            )
 
     _function_scoped_runner.run(_fetch())

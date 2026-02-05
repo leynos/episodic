@@ -1,44 +1,38 @@
-# Testing SQLAlchemy 2.x with Postgres: PyTest and **py-pglite** Guide
+# Testing SQLAlchemy 2.x with Postgres: pytest and py-pglite guide
 
-## Why Use **py-pglite** for SQLAlchemy Tests
+## Why use py-pglite for SQLAlchemy tests
 
 Testing a PostgreSQL-backed application can be slow or complex when real
 databases or containers must be started. **py-pglite** offers an embeddable
-Postgres for Python tests – essentially a **real PostgreSQL database running
-in-memory** – with **zero config**. Tests can run **just like using SQLite**
+Postgres for Python tests, essentially a **real PostgreSQL database running
+in-memory**, with **zero config**. Tests can run **just like using SQLite**
 while still exercising Postgres features (JSONB, array types, extensions, etc.)
-in tests([1](https://github.com/wey-gu/py-pglite)). With **py-pglite**, each
-test can have a **fresh, isolated database** that is created and destroyed
-automatically, ensuring no state leaks between
-tests([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)). In
-short, it provides:
+in tests[^1]. With **py-pglite**, each test can have a **fresh, isolated
+database** that is created and destroyed automatically, ensuring no state leaks
+between tests[^2]. In short, it provides:
 
 - **Real Postgres in tests:** Tests run against a true Postgres engine (not an
   SQLite or mock), so Postgres-specific features are available and issues are
-  early([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)).
+  early[^2].
 
 - **Ephemeral & isolated:** By default, each test gets its own clean database,
-  preventing flaky runs caused by leftover
-  data([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)).
+  preventing flaky runs caused by leftover data[^2].
 
 - **Fast startup:** No Docker or external service needed – py-pglite
-  initializes in a couple of seconds vs. tens of seconds for a
-  container([1](https://github.com/wey-gu/py-pglite)).
+  initializes in a couple of seconds vs. tens of seconds for a container[^1].
 
-- **Minimal boilerplate:** PyTest fixtures are provided to set up and tear down
-  the DB automatically, removing manual setup/cleanup
-  scripts([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)).
+- **Minimal boilerplate:** pytest fixtures are provided to set up and tear down
+  the DB automatically, removing manual setup/cleanup scripts[^2].
 
-**py-pglite** achieves this by running a WebAssembly-based Postgres engine
-under the hood (PGlite) inside a Node.js
-runtime([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)).
-(You’ll need Node.js 18+ installed, as the first run will fetch the PGlite WASM
-package.) Once installed with `pip install py-pglite[sqlalchemy]`, it
-integrates with PyTest to make database testing almost seamless.
+**py-pglite** achieves this by running a WebAssembly (WASM)-based Postgres
+engine under the hood (PGlite) inside a Node.js runtime[^2]. Node.js 18+ is
+required because the first run fetches the PGlite WASM package. Once installed
+with `pip install py-pglite[sqlalchemy]`, it integrates with pytest to make
+database testing almost seamless.
 
-## Setting Up **py-pglite** Fixtures in PyTest
+## Setting up py-pglite fixtures in pytest
 
-After installing, **py-pglite** provides out-of-the-box PyTest fixtures for
+After installing, **py-pglite** provides out-of-the-box pytest fixtures for
 SQLAlchemy. The most important are:
 
 - **`pglite_engine`** – a SQLAlchemy Engine connected to a temporary Postgres
@@ -48,9 +42,9 @@ SQLAlchemy. The most important are:
   bound to the above engine.
 
 These fixtures can be requested in tests. **No database URL or manual server
-startup is required** – simply including the fixture triggers py-pglite to
-launch an in-memory Postgres and yield a connection. For example, a basic test
-might look like:
+startup is required**; including the fixture triggers py-pglite to launch an
+in-memory Postgres and yield a connection. For example, a basic test might look
+like:
 
 ```python
 # models.py – define an example model
@@ -93,18 +87,17 @@ def test_user_creation(pglite_session):
 When this test runs, `pglite_session` provides a **fully configured Session**
 connected to a temporary Postgres. **The database instance is started just for
 this test and torn down after**, so the next test starts with a clean
-slate([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)).
-`pglite_session` can be used exactly like a normal SQLAlchemy session to
-add/query objects. In this example, `Base.metadata.create_all(...)` creates the
-tables for the model in the ephemeral database. In a real project, Alembic
-migrations would typically set up the schema (more on this below), but using
-`create_all` is fine for simple cases.
+slate[^2]. `pglite_session` can be used exactly like a normal SQLAlchemy
+session to add/query objects. In this example, `Base.metadata.create_all(...)`
+creates the tables for the model in the ephemeral database. In a real project,
+Alembic migrations would typically set up the schema (more on this below), but
+using `create_all` is fine for simple cases.
 
 **Note:** The first py-pglite test may take a moment to download the WASM
 Postgres bundle via Node.js. Once installed, database startup is very fast (a
 couple of seconds or less) for each test.
 
-## Writing Asynchronous Tests with SQLAlchemy 2.x and **pytest-asyncio**
+## Writing asynchronous tests with SQLAlchemy 2.x and pytest-asyncio
 
 SQLAlchemy 2.x supports an async ORM API, and async database logic can be
 tested with py-pglite as well. Py-pglite does not yet provide a ready-made
@@ -124,8 +117,7 @@ The key steps are:
 - **Create an AsyncEngine:** Build a SQLAlchemy AsyncEngine using
   `create_async_engine()` with the `asyncpg` driver pointing to the PGlite
   host/port. For example:
-  `create_async_engine(f"postgresql+asyncpg://{host}:{port}/{database}")`
-  ([1](https://github.com/wey-gu/py-pglite)).
+  `create_async_engine(f"postgresql+asyncpg://{host}:{port}/{database}")` [^1].
 
 - **Use `pytest-asyncio`** to write async test functions that await database
   operations.
@@ -175,24 +167,22 @@ then performs async session operations (`await session.commit()`,
 - Ensure the **driver and connection string** are correct. The DSN must use
   `postgresql+asyncpg://` (or an async psycopg DSN if using psycopg3’s async
   support). Py-pglite’s built-in connection string is hard-coded for
-  psycopg+Unix socket by
-  default([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)), so
-  switching to TCP as shown above is the easiest path for async.
+  psycopg+Unix socket by default[^2], so switching to TCP as shown above is the
+  easiest path for async.
 
 - **Use `pytest.mark.asyncio`** (from `pytest-asyncio`) on async test functions
-  so PyTest handles the event loop.
+  so pytest handles the event loop.
 
 - The rest of the async test workflow naturally allows mixing `asyncio` awaits
   with database calls as shown.
 
-## Resetting the Database Between Tests (Function vs. Session Scope)
+## Resetting the database between tests (function vs. session scope)
 
 One of the advantages of py-pglite is test **isolation** – each test starts
 with a blank database. By default, the provided `pglite_session` fixture has
 **function scope**, meaning **each test function gets its own fresh
-database**([1](https://github.com/wey-gu/py-pglite)). This is the safest
-approach to avoid cross-test interference. However, database scope and reset
-behavior can be adjusted:
+database**[^1]. This is the safest approach to avoid cross-test interference.
+However, database scope and reset behaviour can be adjusted:
 
 - **Per test (function-scope)** – **Default**. Every test uses a new ephemeral
   Postgres instance. Migrations or table creation can run at the start of each
@@ -203,17 +193,15 @@ behavior can be adjusted:
 - **Per test module or session (module/session-scope)** – A single database
   instance is shared by multiple tests, typically created at the beginning of
   the test run. Migrations typically run **once per session** (not for each
-  test) for
-  speed([3](https://hoop.dev/blog/the-simplest-way-to-make-postgresql-pytest-work-like-it-should/)).
-   This can significantly speed up a large test suite by avoiding redundant DB
-  initialization. **However**, isolation *within* that shared database still
-  needs to be enforced. Common strategies include:
+  test) for speed[^3]. This can significantly speed up a large test suite by
+  avoiding redundant DB initialization. **However**, isolation *within* that
+  shared database still needs to be enforced. Common strategies include:
 
 - **Truncate or clean tables between tests:** After each test, delete the data
   that was added. Py-pglite provides a utility
   `utils.clean_database_data(engine)` to wipe all tables (with an option to
-  exclude certain tables).[^py-pglite-guide] Call this in a function-scoped
-  fixture that runs after each test when using a shared engine. Likewise,
+  exclude certain tables).[^4] Call this in a function-scoped fixture that runs
+  after each test when using a shared engine. Likewise,
   `utils.reset_sequences(engine)` will reset serial primary key counters so IDs
   start from 1 again – useful for consistency in tests. These utilities help
   keep a session-scoped database *logically* fresh between tests.
@@ -226,10 +214,10 @@ behavior can be adjusted:
   expiring the session after rollback prevents stale state.)
 
 - **Use separate schemas per test:** Py-pglite’s utilities can create/drop
-  schemas when isolating data by schema.[^py-pglite-guide] For instance, each
-  test could operate in a schema named after the test function, and the schema
-  is dropped afterwards. This avoids altering the entire DB and is useful in
-  multi-tenant style testing.
+  schemas when isolating data by schema.[^4] For instance, each test could
+  operate in a schema named after the test function, and the schema is dropped
+  afterwards. This avoids altering the entire DB and is useful in multi-tenant
+  style testing.
 
 Choosing the scope often involves a **trade-off between performance and
 isolation**. When test suites are small or deterministic isolation is
@@ -237,10 +225,9 @@ prioritized, function-scoped (fresh DB each test) is simplest. For large suites
 where DB setup is a bottleneck, consider a session-scoped database with careful
 cleaning. As a rule of thumb: **apply schema migrations once per test session
 and reuse the database for speed, but ensure each test starts from a known
-empty
-state**([3](https://hoop.dev/blog/the-simplest-way-to-make-postgresql-pytest-work-like-it-should/)).
+empty state**[^3].
 
-## Applying Alembic Migrations in Tests
+## Applying Alembic migrations in tests
 
 When using SQLAlchemy with Alembic for migrations, apply those migrations to
 the test database so that the test schema matches the production schema.
@@ -248,7 +235,7 @@ the test database so that the test schema matches the production schema.
 may include critical DDL like constraints or indexes. Integrate Alembic into
 the test setup as follows:
 
-- **Run migrations at setup:** Use a PyTest fixture (often session-scoped) to
+- **Run migrations at setup:** Use a pytest fixture (often session-scoped) to
   run `alembic upgrade head` against the test database. For example, load the
   Alembic `Config` and call `alembic.command.upgrade(config, "head")` once the
   py-pglite engine is up. If the `pglite_engine` fixture is available, create
@@ -272,8 +259,7 @@ def migrated_engine(pglite_engine):
 Then use `migrated_engine` in tests instead of `pglite_engine` to ensure schema
 is ready. This runs migrations once for the session. For strict per-test
 isolation, migrations could run in a function fixture, but that approach is
-slower and usually unnecessary once the schema is in
-place([3](https://hoop.dev/blog/the-simplest-way-to-make-postgresql-pytest-work-like-it-should/)).)
+slower and usually unnecessary once the schema is in place[^3].)
 
 - **Use `pytest-alembic` (optional):** The community has a plugin
   **pytest-alembic** that can automate applying migrations in tests and even
@@ -295,7 +281,7 @@ migrations or mismatches between models and DB (a common source of bugs) early
 in development. Migrations that add seed data or required setup then benefit
 the tests automatically.
 
-## Injecting Test Database into Your Application (Dependency Injection)
+## Injecting the test database into the application (dependency injection)
 
 In many applications, especially web frameworks like **FastAPI** or **Flask**,
 database access is provided via some form of *dependency injection* or global
@@ -330,13 +316,13 @@ def test_create_user_api(pglite_engine):
 ```
 
 In this snippet, a new Session bound to the `pglite_engine` is injected for
-each request.[^py-pglite-guide] The test client calls the override, using the
-in-memory Postgres. The API is therefore exercised against the ephemeral DB and
-**no data goes to the real database**. After the test, remove the override if
-needed (FastAPI’s `TestClient` typically resets overrides when disposed).
+each request.[^4] The test client calls the override, using the in-memory
+Postgres. The API is therefore exercised against the ephemeral DB and **no data
+goes to the real database**. After the test, remove the override if needed
+(FastAPI’s `TestClient` typically resets overrides when disposed).
 
 - **Flask or others:** If an application uses a global SQLAlchemy `db` object
-  or sessionmaker, configure it for tests. For instance, create a PyTest
+  or sessionmaker, configure it for tests. For instance, create a pytest
   fixture that **re-binds the session/engine** to the pglite engine. In
   Flask-SQLAlchemy, configure
   `app.config["SQLALCHEMY_DATABASE_URI"] = pglite_engine.url` before
@@ -355,7 +341,7 @@ uses the same test database**. In both direct function calls and endpoint
 invocations, everything operates on the py-pglite Postgres. The result is
 end-to-end tests that are isolated yet use realistic database interactions.
 
-## Generating Test Data with Factory Boy and Faker
+## Generating test data with Factory Boy and Faker
 
 Manually crafting test data can be tedious and can lead to repetitive tests.
 **Factory Boy** is a popular library that helps create ORM model instances with
@@ -392,12 +378,10 @@ injected at test time.
 
 - **Use a fixture to attach the session:** In tests,
   `UserFactory.create()` should automatically add the user to the
-  `pglite_session`. Assign the PyTest session to the factory before using it.
+  `pglite_session`. Assign the pytest session to the factory before using it.
   One approach is an autouse fixture that runs for each test and sets
   `UserFactory._meta.sqlalchemy_session = pglite_session`. Factory Boy’s docs
-  suggest this
-  approach([5](https://medium.com/@aasispaudelthp2/factoryboy-tutorial-with-sqlalchemy-and-pytest-1cda908d783a)).
-   For example:
+  suggest this approach[^5]. For example:
 
 ```python
 @pytest.fixture(autouse=True)
@@ -413,12 +397,11 @@ Factory Boy commit automatically after creation).
 
 - **Quick data generation:** Factories can generate multiple records in one go.
   For example, Factory Boy allows creating batches:
-  `UserFactory.create_batch(5)` will make five User records at
-  once([5](https://medium.com/@aasispaudelthp2/factoryboy-tutorial-with-sqlalchemy-and-pytest-1cda908d783a)).
-   Each will have unique fake data for the fields. This is extremely handy for
+  `UserFactory.create_batch(5)` will make five User records at once[^5]. Each
+  will have unique fake data for the fields. This is extremely handy for
   populating a test database with sample data. Override specific fields per
   call (e.g., `UserFactory(name="Specific Name")`) to test particular
-  scenarios([5](https://medium.com/@aasispaudelthp2/factoryboy-tutorial-with-sqlalchemy-and-pytest-1cda908d783a)).
+  scenarios[^5].
 
 - **Faker for direct use:** Even outside of Factory Boy, **Faker** can generate
   data for ad hoc inserts or assertions. For example, `fake.email()` returns a
@@ -431,14 +414,12 @@ is declared without manual value selection. This can uncover edge cases (e.g.
 names with non-ASCII characters, very long text, etc. from Faker) and keeps
 tests maintainable. It is especially powerful in integration with py-pglite: it
 is possible to **create a complex object graph with one factory call** (thanks
-to Factory Boy’s support for SubFactory
-relations([5](https://medium.com/@aasispaudelthp2/factoryboy-tutorial-with-sqlalchemy-and-pytest-1cda908d783a))),
- and have that data immediately persisted to the in-memory Postgres for the
-test to use.
+to Factory Boy’s support for SubFactory relations[^5]), and have that data
+immediately persisted to the in-memory Postgres for the test to use.
 
-## Final Tips and Best Practices
+## Final tips and best practices
 
-Combining **SQLAlchemy**, **PyTest**, and **py-pglite** gives a potent testing
+Combining **SQLAlchemy**, **pytest**, and **py-pglite** gives a potent testing
 setup that is fast, isolated, and faithful to the production environment. Here
 are some parting best-practice tips for this setup:
 
@@ -446,12 +427,12 @@ are some parting best-practice tips for this setup:
   database (or resets it), tests are less likely to flicker due to state
   bleed-over. When a shared DB is used for speed, be rigorous in cleaning up
   data between tests. Tools like `verify_database_empty(engine)` from py-pglite
-  can assert that no data remains.[^py-pglite-guide]
+  can assert that no data remains.[^4]
 
 - **Always commit or flush when needed:** SQLAlchemy’s Session will not persist
   changes to the database until a commit (or autoflush) occurs. Tests often
   fail when a query returns no data because a commit was forgotten. Commit in
-  tests or use `session.flush()` before selecting, to be safe.[^py-pglite-guide]
+  tests or use `session.flush()` before selecting, to be safe.[^4]
 
 - **Parallel testing:** When running tests in parallel (e.g., with
   `pytest-xdist`), ensure each process has an isolated database. Py-pglite’s
@@ -460,18 +441,15 @@ are some parting best-practice tips for this setup:
   each worker or simply stick to function-scoped isolation for parallel runs.
 
 - **Node.js dependency:** As noted, py-pglite currently relies on Node to run
-  the WASM
-  Postgres([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)). In
-  a CI environment, make sure Node is installed. Once set up, the tests behave
-  the same locally and in CI. The maintainers are exploring more direct WASM
-  integration to drop the Node requirement in the
-  future([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)).
+  the WASM Postgres[^2]. In a CI environment, ensure Node is installed. Once
+  set up, the tests behave the same locally and in CI. The maintainers are
+  exploring more direct WASM integration to drop the Node requirement in the
+  future[^2].
 
 - **Use real Postgres features confidently:** Since py-pglite *is* Postgres,
   JSON fields, text search, `pg_trgm`, or other extensions belong in both the
   application and the tests. Extensions like `pgvector` can be enabled in
-  py-pglite for testing advanced
-  features([1](https://github.com/wey-gu/py-pglite)). Tests can then validate
+  py-pglite for testing advanced features[^1]. Tests can then validate
   functionality that would be impossible to cover with SQLite or mocks.
 
 Following this guide sets up a robust testing environment for SQLAlchemy 2.x
@@ -481,30 +459,28 @@ PostgreSQL. This enables thorough tests (unit tests, integration tests, even
 testing API endpoints with the DB in play) with minimal friction. In practice,
 teams find that such a setup “shaves minutes from every build, and hours from
 every week” by ensuring every test run starts from a known good state with no
-manual DB management
-overhead([3](https://hoop.dev/blog/the-simplest-way-to-make-postgresql-pytest-work-like-it-should/)).
- Happy testing!
+manual DB management overhead[^3]. This concludes the guide.
 
 **Sources:**
 
 - Arun Babu Neelicattu, *"Python, PostgreSQL and Wasm walk into a pytest bar"*
-  – Overview of py-pglite for in-process Postgres
-  testing([2](https://void.abn.is/a-python-project-postgresql-and-wasm/)).
+  – Overview of py-pglite for in-process Postgres testing[^2].
 
 - wey-gu (GitHub) – **py-pglite** README and examples (SQLAlchemy usage, async
-  tips, extension support)([1](https://github.com/wey-gu/py-pglite)).
+  tips, extension support)[^1].
 
 - High Efficiency Coder Blog –
   *"秒建PostgreSQL内存数据库：Python测试效率翻倍秘籍"* (Chinese) – In-depth
-  guide on py-pglite usage and utilities.[^py-pglite-guide]
+  guide on py-pglite usage and utilities.[^4]
 
-- hoop.dev blog – *"PostgreSQL PyTest work like it should"* – Best practices
-  for database test isolation and
-  performance([3](https://hoop.dev/blog/the-simplest-way-to-make-postgresql-pytest-work-like-it-should/)).
+- hoop.dev blog – *"PostgreSQL pytest work like it should"* – Best practices
+  for database test isolation and performance[^3].
 
 - Aashish Paudel, *Factory Boy tutorial with SQLAlchemy and Pytest* – Usage of
-  Factory Boy with SQLAlchemy (session fixture, `SQLAlchemyModelFactory`)
-  ([5](https://medium.com/@aasispaudelthp2/factoryboy-tutorial-with-sqlalchemy-and-pytest-1cda908d783a)).
+  Factory Boy with SQLAlchemy (session fixture, `SQLAlchemyModelFactory`) [^5].
 
-[^py-pglite-guide]:
-  <https://www.xugj520.cn/archives/py-pglite-postgresql-testing-guide.html>
+[^1]: <https://github.com/wey-gu/py-pglite>
+[^2]: <https://void.abn.is/a-python-project-postgresql-and-wasm/>
+[^3]: <https://hoop.dev/blog/the-simplest-way-to-make-postgresql-pytest-work-like-it-should/>
+[^4]: <https://www.xugj520.cn/archives/py-pglite-postgresql-testing-guide.html>
+[^5]: <https://medium.com/@aasispaudelthp2/factoryboy-tutorial-with-sqlalchemy-and-pytest-1cda908d783a>

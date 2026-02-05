@@ -1,4 +1,14 @@
-"""Alembic environment for async SQLAlchemy migrations."""
+"""Alembic environment for async SQLAlchemy migrations.
+
+This module configures Alembic for async SQLAlchemy engines and supports both
+offline and online migration execution.
+
+Examples
+--------
+Run migrations with Alembic:
+
+>>> alembic upgrade head
+"""
 
 from __future__ import annotations
 
@@ -37,7 +47,17 @@ def _configure_database_url() -> None:
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in offline mode."""
+    """Run migrations in offline mode.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    RuntimeError
+        If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
+    """
     _configure_database_url()
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -64,14 +84,27 @@ def _do_run_migrations(connection: Connection) -> None:
 
 
 async def run_migrations_online_async() -> None:
-    """Run migrations in online mode."""
+    """Run migrations in online mode.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    RuntimeError
+        If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
+    """
     connectable = config.attributes.get("connection")
-    if connectable is not None:
-        if isinstance(connectable, AsyncConnection):
+    match connectable:
+        case AsyncConnection():
             await connectable.run_sync(_do_run_migrations)
-        else:
+            return
+        case None:
+            pass
+        case _:
             _do_run_migrations(connectable)
-        return
+            return
 
     _configure_database_url()
     section = config.get_section(config.config_ini_section) or {}
@@ -88,14 +121,27 @@ async def run_migrations_online_async() -> None:
 
 
 def run_migrations_online() -> None:
-    """Entrypoint for online migrations."""
+    """Entrypoint for online migrations.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    RuntimeError
+        If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
+    """
     connectable = config.attributes.get("connection")
-    if connectable is not None:
-        if isinstance(connectable, AsyncConnection):
+    match connectable:
+        case AsyncConnection():
             asyncio.run(connectable.run_sync(_do_run_migrations))
-        else:
+            return
+        case None:
+            pass
+        case _:
             _do_run_migrations(connectable)
-        return
+            return
     asyncio.run(run_migrations_online_async())
 
 

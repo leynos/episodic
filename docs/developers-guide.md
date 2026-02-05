@@ -1,4 +1,4 @@
-# Episodic Developers' guide
+# Episodic developers' guide
 
 This guide documents internal development practices for Episodic. Follow the
 documentation style guide in `docs/documentation-style-guide.md` when updating

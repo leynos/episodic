@@ -13,15 +13,53 @@ TEI = _tei  # pyright: ignore[reportUnknownMemberType]  # TODO(@codex): add type
 class TEIDocumentProtocol(typ.Protocol):
     """Typed TEI document surface needed for validation."""
 
-    def validate(self) -> None: ...
+    def validate(self) -> None:
+        """Validate the parsed TEI document.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If the TEI document is invalid.
+        """
+        ...
 
 
 class TEIProtocol(typ.Protocol):
     """Typed surface for tei_rapporteur interactions."""
 
-    def parse_xml(self, xml: str) -> TEIDocumentProtocol: ...
+    def parse_xml(self, xml: str) -> TEIDocumentProtocol:
+        """Parse TEI XML into a TEI document.
 
-    def to_dict(self, document: TEIDocumentProtocol) -> dict[str, typ.Any]: ...
+        Parameters
+        ----------
+        xml : str
+            TEI XML payload to parse.
+
+        Returns
+        -------
+        TEIDocumentProtocol
+            Parsed TEI document handle.
+        """
+        ...
+
+    def to_dict(self, document: TEIDocumentProtocol) -> dict[str, typ.Any]:
+        """Convert a TEI document into a dictionary payload.
+
+        Parameters
+        ----------
+        document : TEIDocumentProtocol
+            Parsed TEI document to serialise.
+
+        Returns
+        -------
+        dict[str, typ.Any]
+            Serialised TEI document dictionary.
+        """
+        ...
 
 
 @dc.dataclass(frozen=True)
@@ -33,7 +71,25 @@ class TeiHeaderPayload:
 
 
 def parse_tei_header(xml: str) -> TeiHeaderPayload:
-    """Parse a TEI XML payload and extract the header."""
+    """Parse a TEI XML payload and extract the header.
+
+    Parameters
+    ----------
+    xml : str
+        TEI XML payload to parse.
+
+    Returns
+    -------
+    TeiHeaderPayload
+        Parsed TEI header payload and derived metadata.
+
+    Raises
+    ------
+    TypeError
+        If the TEI header is missing from the parsed payload.
+    ValueError
+        If the TEI header title is missing or empty.
+    """
     tei = typ.cast("TEIProtocol", TEI)
     try:
         document = tei.parse_xml(xml)

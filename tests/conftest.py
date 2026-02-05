@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-import socket
 import typing as typ
 from pathlib import Path
 
@@ -29,31 +28,6 @@ try:
     _PGLITE_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     _PGLITE_AVAILABLE = False
-
-
-class _AsyncpgProxy:
-    """Proxy asyncpg connections to enforce close timeouts."""
-
-    def __init__(self, connection: _AsyncpgConnection) -> None:
-        self._connection = connection
-
-    def __getattr__(self, name: str) -> object:
-        return getattr(self._connection, name)
-
-    async def close(self, *, timeout: float | None = None) -> None:
-        try:
-            await self._connection.close(timeout=timeout or 2)
-        except Exception:  # noqa: BLE001
-            # Ensure cleanup even if asyncpg close fails. FIXME: narrow error handling.
-            self._connection.terminate()
-
-
-class _AsyncpgConnection(typ.Protocol):
-    """Minimal asyncpg connection surface required for cleanup."""
-
-    async def close(self, *, timeout: float | None = None) -> None: ...
-
-    def terminate(self) -> None: ...
 
 
 def _should_use_pglite() -> bool:
@@ -76,13 +50,6 @@ def _should_use_pglite() -> bool:
     return True
 
 
-def _find_free_port() -> int:
-    """Find an available TCP port for a temporary Postgres instance."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
 @contextlib.asynccontextmanager
 async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
     """Start a py-pglite Postgres and yield an async engine bound to it."""
@@ -90,47 +57,14 @@ async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
         msg = "py-pglite is not available for test fixtures."
         raise RuntimeError(msg)
 
-    port = _find_free_port()
     work_dir = tmp_path / "pglite"
-    config = PGliteConfig(
-        use_tcp=True,
-        tcp_host="127.0.0.1",
-        tcp_port=port,
-        work_dir=work_dir,
-    )
+    config = PGliteConfig(work_dir=work_dir)
 
     with PGliteManager(config):
-        import asyncpg
         from sqlalchemy.ext.asyncio import create_async_engine
 
-        dsn = config.get_asyncpg_uri()
-        connect_timeout = 20
-        max_retries = 5
-        retry_delay = 0.5
-
-        async def async_creator() -> asyncpg.Connection:
-            last_error: Exception | None = None
-            for attempt in range(max_retries):
-                try:
-                    connection = await asyncpg.connect(
-                        dsn=dsn,
-                        ssl=False,
-                        timeout=connect_timeout,
-                    )
-                except (OSError, TimeoutError, asyncpg.PostgresError) as exc:
-                    last_error = exc
-                    await asyncio.sleep(retry_delay * (attempt + 1))
-                else:
-                    return typ.cast("asyncpg.Connection", _AsyncpgProxy(connection))
-            msg = "Timed out connecting to the py-pglite Postgres instance."
-            raise TimeoutError(msg) from last_error
-
-        url = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(
-            url,
-            async_creator=async_creator,
-            pool_pre_ping=True,
-        )
+        dsn = config.get_connection_string()
+        engine = create_async_engine(dsn, pool_pre_ping=True)
         try:
             yield engine
         finally:
@@ -142,7 +76,9 @@ def _alembic_config(database_url: str) -> Config:
     root = Path(__file__).resolve().parents[1]
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
-    config.set_main_option("sqlalchemy.url", database_url)
+    # ConfigParser interpolates percent signs, so escape them in URLs.
+    safe_url = database_url.replace("%", "%%")
+    config.set_main_option("sqlalchemy.url", safe_url)
     return config
 
 

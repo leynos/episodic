@@ -1,4 +1,15 @@
-"""Logging helpers for femtologging integration."""
+"""Logging helpers for femtologging integration.
+
+This module wraps femtologging with convenience helpers that keep logging
+configuration and structured formatting consistent across the codebase.
+
+Examples
+--------
+Configure logging and emit a message:
+
+>>> level, used_default = configure_logging("INFO")
+>>> log_info(get_logger(__name__), "Started %s", "ingestion")
+"""
 
 from __future__ import annotations
 
@@ -68,6 +79,8 @@ def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, b
 
 
 class _SupportsLog(typ.Protocol):
+    """Protocol for loggers supporting the femtologging API."""
+
     def log(
         self,
         level: str,
@@ -86,6 +99,7 @@ def _log(
     *args: object,
     exc_info: object | None = None,
 ) -> None:
+    """Format and emit a log message with the given level."""
     message = template % args if args else template
     logger.log(
         level,

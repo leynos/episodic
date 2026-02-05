@@ -143,9 +143,13 @@ async def test_can_persist_episode_with_header(session_factory: object) -> None:
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.episodes.get(episode.id)
 
-    assert fetched is not None
-    assert fetched.series_profile_id == series.id
-    assert fetched.tei_header_id == header.id
+    assert fetched is not None, "Expected the episode to be persisted."
+    assert fetched.series_profile_id == series.id, (
+        "Expected the episode to reference the series profile."
+    )
+    assert fetched.tei_header_id == header.id, (
+        "Expected the episode to reference the TEI header."
+    )
 
 
 @pytest.mark.asyncio
@@ -180,22 +184,28 @@ async def test_repository_getters_and_lists(session_factory: object) -> None:
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         record = await uow.series_profiles.get_by_slug(series.slug)
-        assert record is not None
-        assert record.id == series.id
+        assert record is not None, "Expected to fetch the series profile."
+        assert record.id == series.id, "Expected the series profile id to match."
 
         record = await uow.tei_headers.get(header.id)
-        assert record is not None
-        assert record.id == header.id
+        assert record is not None, "Expected to fetch the TEI header."
+        assert record.id == header.id, "Expected the TEI header id to match."
 
         record = await uow.ingestion_jobs.get(job.id)
-        assert record is not None
-        assert record.id == job.id
+        assert record is not None, "Expected to fetch the ingestion job."
+        assert record.id == job.id, "Expected the ingestion job id to match."
 
         records = await uow.source_documents.list_for_job(job.id)
-        assert records
-        assert records[0].ingestion_job_id == job.id
-        assert records[0].canonical_episode_id == episode.id
+        assert records, "Expected source documents for the ingestion job."
+        assert records[0].ingestion_job_id == job.id, (
+            "Expected the document to reference the ingestion job."
+        )
+        assert records[0].canonical_episode_id == episode.id, (
+            "Expected the document to reference the canonical episode."
+        )
 
         records = await uow.approval_events.list_for_episode(episode.id)
-        assert records
-        assert records[0].episode_id == episode.id
+        assert records, "Expected approval events for the episode."
+        assert records[0].episode_id == episode.id, (
+            "Expected the approval event to reference the episode."
+        )
