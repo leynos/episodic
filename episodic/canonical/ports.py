@@ -3,6 +3,12 @@
 This module defines protocol interfaces for canonical persistence boundaries so
 adapters can be swapped without impacting the domain layer.
 
+Note: Repository protocols intentionally follow a consistent structure (add, get,
+list methods) across different domain entities. This structural similarity is
+deliberate and provides type safety, clarity, and adherence to the Interface
+Segregation Principle. Each Protocol defines a complete, independent contract
+for its domain entity.
+
 Examples
 --------
 Implement a repository that satisfies the protocol:

@@ -3,13 +3,6 @@
 This module implements repository adapters that translate domain entities to
 SQLAlchemy ORM records. Repositories operate within a supplied async session
 and are intended to be composed through the canonical unit-of-work.
-
-Examples
---------
-Create and use a repository inside an async session:
-
->>> repo = SqlAlchemyEpisodeRepository(session)
->>> await repo.get(episode_id)
 """
 
 from __future__ import annotations
@@ -45,6 +38,7 @@ from .models import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,15 +52,24 @@ if typ.TYPE_CHECKING:
         TeiHeader,
     )
 
+_Record = typ.TypeVar("_Record")
+_Entity = typ.TypeVar("_Entity")
+
+
+async def _get_one_or_none(
+    session: AsyncSession,
+    statement: sa.Select[tuple[_Record]],
+    mapper: cabc.Callable[[_Record], _Entity],
+) -> _Entity | None:
+    result = await session.execute(statement)
+    record = result.scalar_one_or_none()
+    if record is None:
+        return None
+    return mapper(record)
+
 
 class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
-    """Persist series profiles using SQLAlchemy.
-
-    Parameters
-    ----------
-    session : AsyncSession
-        Active async session bound to the persistence engine.
-    """
+    """Persist series profiles using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -79,9 +82,6 @@ class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
         profile : SeriesProfile
             Series profile domain entity to persist.
 
-        Returns
-        -------
-        None
         """
         self._session.add(
             SeriesProfileRecord(
@@ -108,13 +108,11 @@ class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
         SeriesProfile | None
             The matched series profile, or ``None`` if no match exists.
         """
-        result = await self._session.execute(
-            sa.select(SeriesProfileRecord).where(SeriesProfileRecord.id == profile_id)
+        return await _get_one_or_none(
+            self._session,
+            sa.select(SeriesProfileRecord).where(SeriesProfileRecord.id == profile_id),
+            _series_profile_from_record,
         )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return _series_profile_from_record(record)
 
     async def get_by_slug(self, slug: str) -> SeriesProfile | None:
         """Fetch a series profile by slug.
@@ -129,23 +127,15 @@ class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
         SeriesProfile | None
             The matched series profile, or ``None`` if no match exists.
         """
-        result = await self._session.execute(
-            sa.select(SeriesProfileRecord).where(SeriesProfileRecord.slug == slug)
+        return await _get_one_or_none(
+            self._session,
+            sa.select(SeriesProfileRecord).where(SeriesProfileRecord.slug == slug),
+            _series_profile_from_record,
         )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return _series_profile_from_record(record)
 
 
 class SqlAlchemyTeiHeaderRepository(TeiHeaderRepository):
-    """Persist TEI headers using SQLAlchemy.
-
-    Parameters
-    ----------
-    session : AsyncSession
-        Active async session bound to the persistence engine.
-    """
+    """Persist TEI headers using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -158,9 +148,6 @@ class SqlAlchemyTeiHeaderRepository(TeiHeaderRepository):
         header : TeiHeader
             Parsed TEI header to persist.
 
-        Returns
-        -------
-        None
         """
         self._session.add(
             TeiHeaderRecord(
@@ -186,23 +173,15 @@ class SqlAlchemyTeiHeaderRepository(TeiHeaderRepository):
         TeiHeader | None
             The matched TEI header, or ``None`` if no match exists.
         """
-        result = await self._session.execute(
-            sa.select(TeiHeaderRecord).where(TeiHeaderRecord.id == header_id)
+        return await _get_one_or_none(
+            self._session,
+            sa.select(TeiHeaderRecord).where(TeiHeaderRecord.id == header_id),
+            _tei_header_from_record,
         )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return _tei_header_from_record(record)
 
 
 class SqlAlchemyEpisodeRepository(EpisodeRepository):
-    """Persist canonical episodes using SQLAlchemy.
-
-    Parameters
-    ----------
-    session : AsyncSession
-        Active async session bound to the persistence engine.
-    """
+    """Persist canonical episodes using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -215,9 +194,6 @@ class SqlAlchemyEpisodeRepository(EpisodeRepository):
         episode : CanonicalEpisode
             Canonical episode domain entity to persist.
 
-        Returns
-        -------
-        None
         """
         self._session.add(
             EpisodeRecord(
@@ -246,23 +222,15 @@ class SqlAlchemyEpisodeRepository(EpisodeRepository):
         CanonicalEpisode | None
             The matched canonical episode, or ``None`` if no match exists.
         """
-        result = await self._session.execute(
-            sa.select(EpisodeRecord).where(EpisodeRecord.id == episode_id)
+        return await _get_one_or_none(
+            self._session,
+            sa.select(EpisodeRecord).where(EpisodeRecord.id == episode_id),
+            _episode_from_record,
         )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return _episode_from_record(record)
 
 
 class SqlAlchemyIngestionJobRepository(IngestionJobRepository):
-    """Persist ingestion jobs using SQLAlchemy.
-
-    Parameters
-    ----------
-    session : AsyncSession
-        Active async session bound to the persistence engine.
-    """
+    """Persist ingestion jobs using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -275,9 +243,6 @@ class SqlAlchemyIngestionJobRepository(IngestionJobRepository):
         job : IngestionJob
             Ingestion job domain entity to persist.
 
-        Returns
-        -------
-        None
         """
         self._session.add(
             IngestionJobRecord(
@@ -307,23 +272,15 @@ class SqlAlchemyIngestionJobRepository(IngestionJobRepository):
         IngestionJob | None
             The matched ingestion job, or ``None`` if no match exists.
         """
-        result = await self._session.execute(
-            sa.select(IngestionJobRecord).where(IngestionJobRecord.id == job_id)
+        return await _get_one_or_none(
+            self._session,
+            sa.select(IngestionJobRecord).where(IngestionJobRecord.id == job_id),
+            _ingestion_job_from_record,
         )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return _ingestion_job_from_record(record)
 
 
 class SqlAlchemySourceDocumentRepository(SourceDocumentRepository):
-    """Persist source documents using SQLAlchemy.
-
-    Parameters
-    ----------
-    session : AsyncSession
-        Active async session bound to the persistence engine.
-    """
+    """Persist source documents using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -336,9 +293,6 @@ class SqlAlchemySourceDocumentRepository(SourceDocumentRepository):
         document : SourceDocument
             Source document domain entity to persist.
 
-        Returns
-        -------
-        None
         """
         self._session.add(
             SourceDocumentRecord(
@@ -376,13 +330,7 @@ class SqlAlchemySourceDocumentRepository(SourceDocumentRepository):
 
 
 class SqlAlchemyApprovalEventRepository(ApprovalEventRepository):
-    """Persist approval events using SQLAlchemy.
-
-    Parameters
-    ----------
-    session : AsyncSession
-        Active async session bound to the persistence engine.
-    """
+    """Persist approval events using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -395,9 +343,6 @@ class SqlAlchemyApprovalEventRepository(ApprovalEventRepository):
         event : ApprovalEvent
             Approval event domain entity to persist.
 
-        Returns
-        -------
-        None
         """
         self._session.add(
             ApprovalEventRecord(

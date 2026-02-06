@@ -70,6 +70,96 @@ class TeiHeaderPayload:
     payload: dict[str, typ.Any]
 
 
+def _parse_and_validate_tei(tei: TEIProtocol, xml: str) -> TEIDocumentProtocol:
+    """Parse TEI XML and validate the document.
+
+    Parameters
+    ----------
+    tei : TEIProtocol
+        TEI parsing module interface.
+    xml : str
+        TEI XML payload to parse.
+
+    Returns
+    -------
+    TEIDocumentProtocol
+        Parsed and validated TEI document.
+
+    Raises
+    ------
+    TypeError
+        If the TEI header is missing from the parsed payload.
+    ValueError
+        If the TEI header title is missing from the parsed payload.
+    ValueError
+        If the TEI document is invalid and does not map to a known header issue.
+    """
+    try:
+        document = tei.parse_xml(xml)
+        document.validate()
+    except ValueError as exc:
+        message = str(exc)
+        if "teiHeader" in message or "header" in message:
+            msg = "TEI header missing from parsed payload."
+            raise TypeError(msg) from exc
+        if "title" in message:
+            msg = "TEI header title missing from parsed payload."
+            raise ValueError(msg) from exc
+        raise
+    return document
+
+
+def _extract_header(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
+    """Extract the TEI header from a parsed payload.
+
+    Parameters
+    ----------
+    payload : dict[str, typ.Any]
+        Parsed TEI document payload.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        Extracted TEI header payload.
+
+    Raises
+    ------
+    TypeError
+        If the TEI header is missing from the parsed payload.
+    """
+    header = payload.get("teiHeader") or payload.get("header")
+    if not isinstance(header, dict):
+        msg = "TEI header missing from parsed payload."
+        raise TypeError(msg)
+    return header
+
+
+def _extract_title(header: dict[str, typ.Any]) -> str:
+    """Extract the TEI header title.
+
+    Parameters
+    ----------
+    header : dict[str, typ.Any]
+        TEI header payload.
+
+    Returns
+    -------
+    str
+        Extracted TEI header title.
+
+    Raises
+    ------
+    ValueError
+        If the TEI header title is missing from the parsed payload.
+    """
+    file_desc = header.get("fileDesc") or header.get("file_desc") or {}
+    title = file_desc.get("title")
+    if not isinstance(title, str) or not title.strip():
+        msg = "TEI header title missing from parsed payload."
+        raise ValueError(msg)
+    return title
+
+
 def parse_tei_header(xml: str) -> TeiHeaderPayload:
     """Parse a TEI XML payload and extract the header.
 
@@ -91,27 +181,8 @@ def parse_tei_header(xml: str) -> TeiHeaderPayload:
         If the TEI header title is missing or empty.
     """
     tei = typ.cast("TEIProtocol", TEI)
-    try:
-        document = tei.parse_xml(xml)
-        document.validate()
-    except ValueError as exc:
-        message = str(exc)
-        if "teiHeader" in message or "header" in message:
-            msg = "TEI header missing from parsed payload."
-            raise TypeError(msg) from exc
-        if "title" in message:
-            msg = "TEI header title missing from parsed payload."
-            raise ValueError(msg) from exc
-        raise
+    document = _parse_and_validate_tei(tei, xml)
     payload = tei.to_dict(document)
-    header = payload.get("teiHeader") or payload.get("header")
-    if not isinstance(header, dict):
-        msg = "TEI header missing from parsed payload."
-        raise TypeError(msg)
-    file_desc = header.get("fileDesc") or header.get("file_desc") or {}
-    title = file_desc.get("title")
-    if not isinstance(title, str) or not title.strip():
-        msg = "TEI header title missing from parsed payload."
-        raise ValueError(msg)
-
+    header = _extract_header(payload)
+    title = _extract_title(header)
     return TeiHeaderPayload(title=title, payload=header)

@@ -92,30 +92,13 @@ class _SupportsLog(typ.Protocol):
     ) -> str | None: ...
 
 
-def _log(
-    logger: _SupportsLog,
-    level: str,
-    template: str,
-    *args: object,
-    exc_info: object | None = None,
-) -> None:
-    """Format and emit a log message with the given level."""
-    message = template % args if args else template
-    logger.log(
-        level,
-        message,
-        exc_info=exc_info,
-        stack_info=False,
-    )
-
-
 def log_info(
     logger: _SupportsLog,
     template: str,
     *args: object,
     exc_info: object | None = None,
 ) -> None:
-    """Log an INFO message with percent-style formatting.
+    """Format and emit an INFO log message.
 
     Parameters
     ----------
@@ -137,7 +120,13 @@ def log_info(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _log(logger, "INFO", template, *args, exc_info=exc_info)
+    message = template % args if args else template
+    logger.log(
+        LogLevel.INFO,
+        message,
+        exc_info=exc_info,
+        stack_info=False,
+    )
 
 
 def log_warning(
@@ -146,7 +135,7 @@ def log_warning(
     *args: object,
     exc_info: object | None = None,
 ) -> None:
-    """Log a WARNING message with percent-style formatting.
+    """Format and emit a WARNING log message.
 
     Parameters
     ----------
@@ -168,7 +157,13 @@ def log_warning(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _log(logger, "WARNING", template, *args, exc_info=exc_info)
+    message = template % args if args else template
+    logger.log(
+        LogLevel.WARNING,
+        message,
+        exc_info=exc_info,
+        stack_info=False,
+    )
 
 
 def log_error(
@@ -177,7 +172,7 @@ def log_error(
     *args: object,
     exc_info: object | None = None,
 ) -> None:
-    """Log an ERROR message with percent-style formatting.
+    """Format and emit an ERROR log message.
 
     Parameters
     ----------
@@ -199,7 +194,13 @@ def log_error(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _log(logger, "ERROR", template, *args, exc_info=exc_info)
+    message = template % args if args else template
+    logger.log(
+        LogLevel.ERROR,
+        message,
+        exc_info=exc_info,
+        stack_info=False,
+    )
 
 
 __all__ = [

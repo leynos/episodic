@@ -56,17 +56,8 @@ def _ingestion_status_enum() -> postgresql.ENUM:
     )
 
 
-def upgrade() -> None:
-    """Apply schema changes."""
-    episode_status = _episode_status_enum()
-    approval_state = _approval_state_enum()
-    ingestion_status = _ingestion_status_enum()
-
-    bind = op.get_bind()
-    episode_status.create(bind, checkfirst=True)
-    approval_state.create(bind, checkfirst=True)
-    ingestion_status.create(bind, checkfirst=True)
-
+def _create_series_profiles_table() -> None:
+    """Create the series_profiles table."""
     op.create_table(
         "series_profiles",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -88,6 +79,9 @@ def upgrade() -> None:
         ),
     )
 
+
+def _create_tei_headers_table() -> None:
+    """Create the tei_headers table."""
     op.create_table(
         "tei_headers",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -108,6 +102,12 @@ def upgrade() -> None:
         ),
     )
 
+
+def _create_episodes_table(
+    episode_status: postgresql.ENUM,
+    approval_state: postgresql.ENUM,
+) -> None:
+    """Create the episodes table."""
     op.create_table(
         "episodes",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -146,6 +146,9 @@ def upgrade() -> None:
         ["series_profile_id"],
     )
 
+
+def _create_ingestion_jobs_table(ingestion_status: postgresql.ENUM) -> None:
+    """Create the ingestion_jobs table."""
     op.create_table(
         "ingestion_jobs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -185,6 +188,9 @@ def upgrade() -> None:
         ["series_profile_id"],
     )
 
+
+def _create_source_documents_table() -> None:
+    """Create the source_documents table."""
     op.create_table(
         "source_documents",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -222,6 +228,9 @@ def upgrade() -> None:
         ["ingestion_job_id"],
     )
 
+
+def _create_approval_events_table(approval_state: postgresql.ENUM) -> None:
+    """Create the approval_events table."""
     op.create_table(
         "approval_events",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -248,6 +257,25 @@ def upgrade() -> None:
         "approval_events",
         ["episode_id"],
     )
+
+
+def upgrade() -> None:
+    """Apply schema changes."""
+    episode_status = _episode_status_enum()
+    approval_state = _approval_state_enum()
+    ingestion_status = _ingestion_status_enum()
+
+    bind = op.get_bind()
+    episode_status.create(bind, checkfirst=True)
+    approval_state.create(bind, checkfirst=True)
+    ingestion_status.create(bind, checkfirst=True)
+
+    _create_series_profiles_table()
+    _create_tei_headers_table()
+    _create_episodes_table(episode_status, approval_state)
+    _create_ingestion_jobs_table(ingestion_status)
+    _create_source_documents_table()
+    _create_approval_events_table(approval_state)
 
 
 def downgrade() -> None:

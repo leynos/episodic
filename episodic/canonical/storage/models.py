@@ -3,14 +3,6 @@
 This module defines the SQLAlchemy ORM models and enumerations backing the
 canonical content schema. The models are used by repositories and Alembic
 migrations to describe the database structure.
-
-Examples
---------
-Use the base metadata to create the canonical tables:
-
->>> from sqlalchemy import create_engine
->>> engine = create_engine("postgresql://example")
->>> Base.metadata.create_all(engine)
 """
 
 from __future__ import annotations

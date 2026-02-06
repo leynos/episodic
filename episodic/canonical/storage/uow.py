@@ -29,6 +29,7 @@ from .repositories import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     from types import TracebackType
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +61,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for approval event persistence.
     """
 
-    def __init__(self, session_factory: typ.Callable[[], AsyncSession]) -> None:
+    def __init__(self, session_factory: cabc.Callable[[], AsyncSession]) -> None:
         self._session_factory = session_factory
         self._session: AsyncSession | None = None
 
