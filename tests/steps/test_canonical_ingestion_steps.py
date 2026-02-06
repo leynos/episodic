@@ -38,6 +38,23 @@ class TEITestProtocol(typ.Protocol):
 TEI: TEITestProtocol = typ.cast("TEITestProtocol", _tei)
 
 
+def _run_async_step(
+    runner: asyncio.Runner,
+    step_fn: typ.Callable[[], typ.Awaitable[None]],
+) -> None:
+    """Execute an async BDD step function via the provided runner.
+
+    Parameters
+    ----------
+    runner : asyncio.Runner
+        The function-scoped runner for executing async code in sync steps.
+    step_fn : Callable[[], Awaitable[None]]
+        The async function to execute.
+    """
+    coro = typ.cast("typ.Coroutine[typ.Any, typ.Any, None]", step_fn())
+    runner.run(coro)
+
+
 class IngestionContext(typ.TypedDict, total=False):
     """Shared state for canonical ingestion BDD steps."""
 
@@ -94,7 +111,7 @@ def series_profile_exists(
 
         context["profile"] = profile
 
-    _function_scoped_runner.run(_store_profile())
+    _run_async_step(_function_scoped_runner, _store_profile)
 
 
 @given('a TEI document titled "Bridgewater" is available')
@@ -153,7 +170,7 @@ def ingestion_job_records_sources(
         context["ingestion_job_id"] = job_record.id
         context["source_uris"] = [source.source_uri for source in sources]
 
-    _function_scoped_runner.run(_ingest())
+    _run_async_step(_function_scoped_runner, _ingest)
 
 
 @then('the canonical episode is stored for "science-hour"')
@@ -173,7 +190,7 @@ def canonical_episode_stored(
         assert episode is not None, "Expected a persisted canonical episode."
         assert episode.title == "Bridgewater", "Expected the episode title."
 
-    _function_scoped_runner.run(_fetch())
+    _run_async_step(_function_scoped_runner, _fetch)
 
 
 @then('the approval state is "draft"')
@@ -195,7 +212,7 @@ def approval_state_is_draft(
             "Expected the episode approval state to be draft."
         )
 
-    _function_scoped_runner.run(_fetch())
+    _run_async_step(_function_scoped_runner, _fetch)
 
 
 @then("an approval event is persisted for the ingestion job")
@@ -224,7 +241,7 @@ def approval_event_persisted(
             "Expected the approval payload to include the ingested sources."
         )
 
-    _function_scoped_runner.run(_fetch())
+    _run_async_step(_function_scoped_runner, _fetch)
 
 
 @then("source documents are stored and linked to the ingestion job and episode")
@@ -257,4 +274,4 @@ def source_documents_linked(
                 "Expected document source URI to match an ingested source."
             )
 
-    _function_scoped_runner.run(_fetch())
+    _run_async_step(_function_scoped_runner, _fetch)

@@ -1,4 +1,18 @@
-"""TEI parsing helpers built on tei-rapporteur."""
+"""TEI parsing helpers built on tei-rapporteur.
+
+This module wraps tei-rapporteur to validate TEI payloads and extract the
+canonical header metadata used in ingestion services. It provides a consistent
+typed surface around the parser and standardized error messages for missing
+header data.
+
+Examples
+--------
+Parse a TEI header payload from XML:
+
+>>> payload = parse_tei_header("<TEI>...</TEI>")
+>>> payload.title
+'Example'
+"""
 
 from __future__ import annotations
 
@@ -128,10 +142,12 @@ def _extract_header(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
         If the TEI header is missing from the parsed payload.
     """
     header = payload.get("teiHeader") or payload.get("header")
-    if not isinstance(header, dict):
-        msg = "TEI header missing from parsed payload."
-        raise TypeError(msg)
-    return header
+    match header:
+        case dict() as header_dict:
+            return header_dict
+        case _:
+            msg = "TEI header missing from parsed payload."
+            raise TypeError(msg)
 
 
 def _extract_title(header: dict[str, typ.Any]) -> str:
@@ -154,10 +170,12 @@ def _extract_title(header: dict[str, typ.Any]) -> str:
     """
     file_desc = header.get("fileDesc") or header.get("file_desc") or {}
     title = file_desc.get("title")
-    if not isinstance(title, str) or not title.strip():
-        msg = "TEI header title missing from parsed payload."
-        raise ValueError(msg)
-    return title
+    match title:
+        case str() as title_value if title_value.strip():
+            return title_value
+        case _:
+            msg = "TEI header title missing from parsed payload."
+            raise ValueError(msg)
 
 
 def parse_tei_header(xml: str) -> TeiHeaderPayload:

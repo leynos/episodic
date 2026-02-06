@@ -111,6 +111,13 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         finally:
             await self._session.close()
 
+    def _require_session(self) -> AsyncSession:
+        """Return the active session or raise when missing."""
+        if self._session is None:
+            msg = "Session not initialized for unit of work."
+            raise RuntimeError(msg)
+        return self._session
+
     async def commit(self) -> None:
         """Commit the current unit-of-work transaction.
 
@@ -123,10 +130,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         RuntimeError
             If no session has been initialized for the unit of work.
         """
-        if self._session is None:
-            msg = "Session not initialized for unit of work."
-            raise RuntimeError(msg)
-        await self._session.commit()
+        await self._require_session().commit()
         log_info(logger, "Committed canonical unit of work.")
 
     async def flush(self) -> None:
@@ -141,10 +145,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         RuntimeError
             If no session has been initialized for the unit of work.
         """
-        if self._session is None:
-            msg = "Session not initialized for unit of work."
-            raise RuntimeError(msg)
-        await self._session.flush()
+        await self._require_session().flush()
 
     async def rollback(self) -> None:
         """Roll back the current unit-of-work session.
@@ -158,7 +159,4 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         RuntimeError
             If no session has been initialized for the unit of work.
         """
-        if self._session is None:
-            msg = "Session not initialized for unit of work."
-            raise RuntimeError(msg)
-        await self._session.rollback()
+        await self._require_session().rollback()

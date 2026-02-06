@@ -1,4 +1,16 @@
-"""Create canonical content schema."""
+"""Create the canonical content schema for ingestion and approval workflows.
+
+This migration defines the canonical tables, enums, and indexes used to store
+series profiles, TEI headers, episodes, ingestion jobs, source documents, and
+approval events. It is the foundational schema for canonical ingestion and
+approval auditing.
+
+Examples
+--------
+Apply the migration with Alembic:
+
+>>> alembic upgrade head
+"""
 
 from __future__ import annotations
 
@@ -56,15 +68,9 @@ def _ingestion_status_enum() -> postgresql.ENUM:
     )
 
 
-def _create_series_profiles_table() -> None:
-    """Create the series_profiles table."""
-    op.create_table(
-        "series_profiles",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("slug", sa.String(160), nullable=False, unique=True),
-        sa.Column("title", sa.String(240), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("configuration", postgresql.JSONB(), nullable=False),
+def _timestamp_columns() -> list[sa.Column]:
+    """Create shared created_at and updated_at columns."""
+    return [
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -77,6 +83,19 @@ def _create_series_profiles_table() -> None:
             nullable=False,
             server_default=sa.func.now(),
         ),
+    ]
+
+
+def _create_series_profiles_table() -> None:
+    """Create the series_profiles table."""
+    op.create_table(
+        "series_profiles",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column("slug", sa.String(160), nullable=False, unique=True),
+        sa.Column("title", sa.String(240), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("configuration", postgresql.JSONB(), nullable=False),
+        *_timestamp_columns(),
     )
 
 
@@ -88,18 +107,7 @@ def _create_tei_headers_table() -> None:
         sa.Column("title", sa.String(240), nullable=False),
         sa.Column("payload", postgresql.JSONB(), nullable=False),
         sa.Column("raw_xml", sa.Text(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
+        *_timestamp_columns(),
     )
 
 
@@ -127,18 +135,7 @@ def _create_episodes_table(
         sa.Column("tei_xml", sa.Text(), nullable=False),
         sa.Column("status", episode_status, nullable=False),
         sa.Column("approval_state", approval_state, nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
+        *_timestamp_columns(),
     )
     op.create_index(
         "ix_episodes_series_profile_id",
@@ -169,18 +166,7 @@ def _create_ingestion_jobs_table(ingestion_status: postgresql.ENUM) -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
+        *_timestamp_columns(),
     )
     op.create_index(
         "ix_ingestion_jobs_series_profile_id",

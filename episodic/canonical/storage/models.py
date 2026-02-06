@@ -287,7 +287,7 @@ class SourceDocumentRecord(Base):
     ingestion_job_id : uuid.UUID
         Foreign key to the ingestion job.
     canonical_episode_id : uuid.UUID | None
-        Foreign key to the canonical episode, when available.
+        Foreign key to the canonical episode, set on creation for immutable records.
     source_type : str
         Source type label (for example, transcript or web).
     source_uri : str

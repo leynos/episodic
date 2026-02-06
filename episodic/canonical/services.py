@@ -20,7 +20,7 @@ from .domain import (
     SourceDocument,
     TeiHeader,
 )
-from .tei import parse_tei_header
+from .tei import TeiHeaderPayload, parse_tei_header
 
 logger = get_logger(__name__)
 
@@ -30,7 +30,7 @@ if typ.TYPE_CHECKING:
 
 def _create_tei_header(
     header_id: uuid.UUID,
-    header_payload: typ.Any,  # noqa: ANN401
+    header_payload: TeiHeaderPayload,
     tei_xml: str,
     now: dt.datetime,
 ) -> TeiHeader:
@@ -45,7 +45,7 @@ def _create_tei_header(
     )
 
 
-def _create_canonical_episode(  # noqa: PLR0913, PLR0917
+def _create_canonical_episode(  # noqa: PLR0913, PLR0917  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - required entity fields.
     episode_id: uuid.UUID,
     series_profile_id: uuid.UUID,
     header_id: uuid.UUID,

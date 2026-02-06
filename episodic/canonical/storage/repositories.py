@@ -8,6 +8,11 @@ and are intended to be composed through the canonical unit-of-work.
 from __future__ import annotations
 
 import typing as typ
+from typing import (  # noqa: ICN003, UP035  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - review requirement.
+    Any,
+    Callable,
+    TypeVar,
+)
 
 import sqlalchemy as sa
 
@@ -38,7 +43,6 @@ from .models import (
 )
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,23 +56,29 @@ if typ.TYPE_CHECKING:
         TeiHeader,
     )
 
-_Record = typ.TypeVar("_Record")
-_Entity = typ.TypeVar("_Entity")
+RecordT = TypeVar("RecordT")
+DomainT = TypeVar("DomainT")
 
 
-async def _get_one_or_none(
-    session: AsyncSession,
-    statement: sa.Select[tuple[_Record]],
-    mapper: cabc.Callable[[_Record], _Entity],
-) -> _Entity | None:
-    result = await session.execute(statement)
-    record = result.scalar_one_or_none()
-    if record is None:
-        return None
-    return mapper(record)
+class _RepositoryBase:
+    """Shared helpers for SQLAlchemy repositories."""
+
+    _session: AsyncSession
+
+    async def _get_one_or_none(
+        self,
+        record_type: type[RecordT],
+        where_clause: Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        mapper: Callable[[RecordT], DomainT],
+    ) -> DomainT | None:
+        result = await self._session.execute(sa.select(record_type).where(where_clause))
+        record = result.scalar_one_or_none()
+        if record is None:
+            return None
+        return mapper(record)
 
 
-class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
+class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository):
     """Persist series profiles using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -108,9 +118,9 @@ class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
         SeriesProfile | None
             The matched series profile, or ``None`` if no match exists.
         """
-        return await _get_one_or_none(
-            self._session,
-            sa.select(SeriesProfileRecord).where(SeriesProfileRecord.id == profile_id),
+        return await self._get_one_or_none(
+            SeriesProfileRecord,
+            SeriesProfileRecord.id == profile_id,
             _series_profile_from_record,
         )
 
@@ -127,14 +137,14 @@ class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
         SeriesProfile | None
             The matched series profile, or ``None`` if no match exists.
         """
-        return await _get_one_or_none(
-            self._session,
-            sa.select(SeriesProfileRecord).where(SeriesProfileRecord.slug == slug),
+        return await self._get_one_or_none(
+            SeriesProfileRecord,
+            SeriesProfileRecord.slug == slug,
             _series_profile_from_record,
         )
 
 
-class SqlAlchemyTeiHeaderRepository(TeiHeaderRepository):
+class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
     """Persist TEI headers using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -173,14 +183,14 @@ class SqlAlchemyTeiHeaderRepository(TeiHeaderRepository):
         TeiHeader | None
             The matched TEI header, or ``None`` if no match exists.
         """
-        return await _get_one_or_none(
-            self._session,
-            sa.select(TeiHeaderRecord).where(TeiHeaderRecord.id == header_id),
+        return await self._get_one_or_none(
+            TeiHeaderRecord,
+            TeiHeaderRecord.id == header_id,
             _tei_header_from_record,
         )
 
 
-class SqlAlchemyEpisodeRepository(EpisodeRepository):
+class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
     """Persist canonical episodes using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -222,14 +232,14 @@ class SqlAlchemyEpisodeRepository(EpisodeRepository):
         CanonicalEpisode | None
             The matched canonical episode, or ``None`` if no match exists.
         """
-        return await _get_one_or_none(
-            self._session,
-            sa.select(EpisodeRecord).where(EpisodeRecord.id == episode_id),
+        return await self._get_one_or_none(
+            EpisodeRecord,
+            EpisodeRecord.id == episode_id,
             _episode_from_record,
         )
 
 
-class SqlAlchemyIngestionJobRepository(IngestionJobRepository):
+class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
     """Persist ingestion jobs using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -272,14 +282,14 @@ class SqlAlchemyIngestionJobRepository(IngestionJobRepository):
         IngestionJob | None
             The matched ingestion job, or ``None`` if no match exists.
         """
-        return await _get_one_or_none(
-            self._session,
-            sa.select(IngestionJobRecord).where(IngestionJobRecord.id == job_id),
+        return await self._get_one_or_none(
+            IngestionJobRecord,
+            IngestionJobRecord.id == job_id,
             _ingestion_job_from_record,
         )
 
 
-class SqlAlchemySourceDocumentRepository(SourceDocumentRepository):
+class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentRepository):
     """Persist source documents using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -329,7 +339,7 @@ class SqlAlchemySourceDocumentRepository(SourceDocumentRepository):
         return [_source_document_from_record(row) for row in result.scalars()]
 
 
-class SqlAlchemyApprovalEventRepository(ApprovalEventRepository):
+class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository):
     """Persist approval events using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:

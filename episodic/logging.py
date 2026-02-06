@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import enum
 import typing as typ
+import warnings
 
 from femtologging import basicConfig, get_logger
 
@@ -65,19 +66,25 @@ def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, b
         A tuple of (effective_level, used_default), where used_default is True
         when the input was missing or invalid.
     """
-    if not level:
-        basicConfig(level="INFO", force=force)
-        return ("INFO", True)
-
-    normalised = level.strip().upper()
-    if normalised not in LogLevel.__members__:
-        basicConfig(level="INFO", force=force)
-        return ("INFO", True)
+    requested = level.strip().upper() if level else None
+    if not requested or requested not in LogLevel.__members__:
+        used_default = True
+        normalised = LogLevel.INFO
+    else:
+        used_default = False
+        normalised = LogLevel(requested)
+        if normalised is LogLevel.WARN:
+            warnings.warn(
+                "LogLevel.WARN is deprecated; use LogLevel.WARNING instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
     basicConfig(level=normalised, force=force)
-    return (normalised, False)
+    return (normalised, used_default)
 
 
+# _SupportsLog is private because callers can rely on structural typing instead.
 class _SupportsLog(typ.Protocol):
     """Protocol for loggers supporting the femtologging API."""
 
