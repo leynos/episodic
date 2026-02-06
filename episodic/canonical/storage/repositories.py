@@ -83,7 +83,7 @@ class SqlAlchemySeriesProfileRepository(SeriesProfileRepository):
         -------
         None
         """
-        return self._session.add(
+        self._session.add(
             SeriesProfileRecord(
                 id=profile.id,
                 slug=profile.slug,

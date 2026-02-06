@@ -301,7 +301,7 @@ class SourceDocumentRecord(Base):
     source_uri : str
         URI pointing to the source content.
     weight : float
-        Normalised weight assigned to the source.
+        Normalized weight assigned to the source.
     content_hash : str
         Hash of the source content for deduplication.
     metadata_payload : dict[str, object]

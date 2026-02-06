@@ -120,10 +120,10 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Raises
         ------
         RuntimeError
-            If no session has been initialised for the unit of work.
+            If no session has been initialized for the unit of work.
         """
         if self._session is None:
-            msg = "Session not initialised for unit of work."
+            msg = "Session not initialized for unit of work."
             raise RuntimeError(msg)
         await self._session.commit()
         log_info(logger, "Committed canonical unit of work.")
@@ -138,10 +138,10 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Raises
         ------
         RuntimeError
-            If no session has been initialised for the unit of work.
+            If no session has been initialized for the unit of work.
         """
         if self._session is None:
-            msg = "Session not initialised for unit of work."
+            msg = "Session not initialized for unit of work."
             raise RuntimeError(msg)
         await self._session.flush()
 
@@ -155,9 +155,9 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Raises
         ------
         RuntimeError
-            If no session has been initialised for the unit of work.
+            If no session has been initialized for the unit of work.
         """
         if self._session is None:
-            msg = "Session not initialised for unit of work."
+            msg = "Session not initialized for unit of work."
             raise RuntimeError(msg)
         await self._session.rollback()
