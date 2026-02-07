@@ -24,6 +24,10 @@ import tei_rapporteur as _tei
 TEI = _tei  # pyright: ignore[reportUnknownMemberType]  # TODO(@codex): add type stubs for tei_rapporteur upstream (https://github.com/leynos/tei-rapporteur/issues/new)
 
 
+_MISSING_HEADER_MESSAGE = "XML processing error: missing field `teiHeader`"
+_MISSING_TITLE_MESSAGE = "XML processing error: missing field `title`"
+
+
 class TEIDocumentProtocol(typ.Protocol):
     """Typed TEI document surface needed for validation."""
 
@@ -85,62 +89,26 @@ class TeiHeaderPayload:
 
 
 def _parse_and_validate_tei(tei: TEIProtocol, xml: str) -> TEIDocumentProtocol:
-    """Parse TEI XML and validate the document.
-
-    Parameters
-    ----------
-    tei : TEIProtocol
-        TEI parsing module interface.
-    xml : str
-        TEI XML payload to parse.
-
-    Returns
-    -------
-    TEIDocumentProtocol
-        Parsed and validated TEI document.
-
-    Raises
-    ------
-    TypeError
-        If the TEI header is missing from the parsed payload.
-    ValueError
-        If the TEI header title is missing from the parsed payload.
-    ValueError
-        If the TEI document is invalid and does not map to a known header issue.
-    """
+    """Parse TEI XML and validate the document."""
     try:
         document = tei.parse_xml(xml)
         document.validate()
     except ValueError as exc:
         message = str(exc)
-        if "teiHeader" in message or "header" in message:
-            msg = "TEI header missing from parsed payload."
-            raise TypeError(msg) from exc
-        if "title" in message:
-            msg = "TEI header title missing from parsed payload."
-            raise ValueError(msg) from exc
-        raise
+        match message:
+            case _ if message == _MISSING_HEADER_MESSAGE:
+                msg = "TEI header missing from parsed payload."
+                raise TypeError(msg) from exc
+            case _ if message == _MISSING_TITLE_MESSAGE:
+                msg = "TEI header title missing from parsed payload."
+                raise ValueError(msg) from exc
+            case _:
+                raise
     return document
 
 
 def _extract_header(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
-    """Extract the TEI header from a parsed payload.
-
-    Parameters
-    ----------
-    payload : dict[str, typ.Any]
-        Parsed TEI document payload.
-
-    Returns
-    -------
-    dict[str, typ.Any]
-        Extracted TEI header payload.
-
-    Raises
-    ------
-    TypeError
-        If the TEI header is missing from the parsed payload.
-    """
+    """Extract the TEI header from a parsed payload."""
     header = payload.get("teiHeader") or payload.get("header")
     match header:
         case dict() as header_dict:
@@ -151,23 +119,7 @@ def _extract_header(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
 
 
 def _extract_title(header: dict[str, typ.Any]) -> str:
-    """Extract the TEI header title.
-
-    Parameters
-    ----------
-    header : dict[str, typ.Any]
-        TEI header payload.
-
-    Returns
-    -------
-    str
-        Extracted TEI header title.
-
-    Raises
-    ------
-    ValueError
-        If the TEI header title is missing from the parsed payload.
-    """
+    """Extract the TEI header title."""
     file_desc = header.get("fileDesc") or header.get("file_desc") or {}
     title = file_desc.get("title")
     match title:
@@ -197,6 +149,9 @@ def parse_tei_header(xml: str) -> TeiHeaderPayload:
         If the TEI header is missing from the parsed payload.
     ValueError
         If the TEI header title is missing or empty.
+    ValueError
+        If the TEI parser raises a validation error that does not map to a
+        missing header or title.
     """
     tei = typ.cast("TEIProtocol", TEI)
     document = _parse_and_validate_tei(tei, xml)

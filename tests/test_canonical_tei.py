@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 import tei_rapporteur as _tei
 
+from episodic.canonical import tei as tei_module
 from episodic.canonical.tei import parse_tei_header
 
 
@@ -61,3 +62,38 @@ def test_parse_tei_header_raises_value_error_when_title_missing_or_blank() -> No
 
     with pytest.raises(ValueError, match="TEI header title missing"):
         parse_tei_header(xml_with_header_without_title)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "XML processing error: header invalid",
+        "XML processing error: title malformed",
+    ],
+)
+def test_parse_tei_header_preserves_unmapped_validation_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    message: str,
+) -> None:
+    """Unmapped validation errors should surface unchanged."""
+
+    class _DummyDocument:
+        def __init__(self, exc: Exception) -> None:
+            self._exc = exc
+
+        def validate(self) -> None:
+            raise self._exc
+
+    class _DummyTei:
+        def __init__(self, exc: Exception) -> None:
+            self._exc = exc
+
+        def parse_xml(self, xml: str) -> _DummyDocument:
+            return _DummyDocument(self._exc)
+
+        def to_dict(self, document: _DummyDocument) -> dict[str, object]:
+            return {}
+
+    monkeypatch.setattr(tei_module, "TEI", _DummyTei(ValueError(message)))
+    with pytest.raises(ValueError, match=message):
+        parse_tei_header("<TEI></TEI>")

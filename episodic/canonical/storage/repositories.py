@@ -8,11 +8,6 @@ and are intended to be composed through the canonical unit-of-work.
 from __future__ import annotations
 
 import typing as typ
-from typing import (  # noqa: ICN003, UP035  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - review requirement.
-    Any,
-    Callable,
-    TypeVar,
-)
 
 import sqlalchemy as sa
 
@@ -43,6 +38,7 @@ from .models import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,20 +52,17 @@ if typ.TYPE_CHECKING:
         TeiHeader,
     )
 
-RecordT = TypeVar("RecordT")
-DomainT = TypeVar("DomainT")
-
 
 class _RepositoryBase:
     """Shared helpers for SQLAlchemy repositories."""
 
     _session: AsyncSession
 
-    async def _get_one_or_none(
+    async def _get_one_or_none[RecordT, DomainT](
         self,
         record_type: type[RecordT],
-        where_clause: Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        mapper: Callable[[RecordT], DomainT],
+        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        mapper: cabc.Callable[[RecordT], DomainT],
     ) -> DomainT | None:
         result = await self._session.execute(sa.select(record_type).where(where_clause))
         record = result.scalar_one_or_none()
