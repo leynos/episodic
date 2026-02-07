@@ -122,6 +122,10 @@ make typecheck
 
 > User guide coming soon as features are implemented!
 
+Note: The Python package does not expose a stable public API yet. The
+placeholder `hello` helper has been removed, so treat the module surface as
+internal until a supported API is documented.
+
 ## Documentation
 
 - [**Roadmap**](docs/roadmap.md) — Development phases and current status

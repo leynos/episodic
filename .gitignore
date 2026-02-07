@@ -3,5 +3,9 @@ out/
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
+.uv-cache/
+.venv/
+.bin/
 **/*.rs.bk
 *.swp

@@ -3,7 +3,7 @@ NIXIE ?= nixie
 MDFORMAT_ALL ?= mdformat-all
 TOOLS = $(MDFORMAT_ALL) ruff ty $(MDLINT) uv
 VENV_TOOLS = pytest
-UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
+UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie test typecheck $(TOOLS) $(VENV_TOOLS)
