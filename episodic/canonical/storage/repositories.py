@@ -3,6 +3,16 @@
 This module implements repository adapters that translate domain entities to
 SQLAlchemy ORM records. Repositories operate within a supplied async session
 and are intended to be composed through the canonical unit-of-work.
+
+Examples
+--------
+Create a repository with an async session:
+
+>>> async with SqlAlchemyUnitOfWork(session_factory) as uow:
+...     session = uow._require_session()
+...     repo = SqlAlchemySeriesProfileRepository(session)
+...     await repo.add(profile)
+...     await uow.commit()
 """
 
 from __future__ import annotations

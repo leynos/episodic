@@ -212,11 +212,11 @@ def log_error(
     _emit(logger, LogLevel.ERROR, _format_message(template, args), exc_info=exc_info)
 
 
-__all__ = [
+__all__ = (
     "LogLevel",
     "configure_logging",
     "get_logger",
     "log_error",
     "log_info",
     "log_warning",
-]
+)

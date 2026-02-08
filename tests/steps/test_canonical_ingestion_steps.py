@@ -52,7 +52,7 @@ def _run_async_step(
     step_fn : Callable[[], Awaitable[None]]
         The async function to execute.
     """
-    coro = typ.cast("typ.Coroutine[typ.Any, typ.Any, None]", step_fn())
+    coro = typ.cast("typ.Coroutine[object, object, None]", step_fn())
     runner.run(coro)
 
 

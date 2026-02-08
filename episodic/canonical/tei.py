@@ -24,12 +24,20 @@ import tei_rapporteur as _tei
 TEI = _tei  # pyright: ignore[reportUnknownMemberType]  # TODO(@codex): add type stubs for tei_rapporteur upstream (https://github.com/leynos/tei-rapporteur/issues/new)
 
 
+type TEIPayload = dict[str, typ.Any]
+
 _MISSING_HEADER_MESSAGE = "XML processing error: missing field `teiHeader`"
 _MISSING_TITLE_MESSAGE = "XML processing error: missing field `title`"
 
 
 class TEIDocumentProtocol(typ.Protocol):
-    """Typed TEI document surface needed for validation."""
+    """Protocol for TEI document validation.
+
+    Methods
+    -------
+    validate()
+        Validate the parsed TEI document.
+    """
 
     def validate(self) -> None:
         """Validate the parsed TEI document.
@@ -47,7 +55,15 @@ class TEIDocumentProtocol(typ.Protocol):
 
 
 class TEIProtocol(typ.Protocol):
-    """Typed surface for tei_rapporteur interactions."""
+    """Protocol for tei-rapporteur parser interactions.
+
+    Methods
+    -------
+    parse_xml(xml)
+        Parse a TEI XML payload into a document handle.
+    to_dict(document)
+        Serialize a TEI document into a dictionary payload.
+    """
 
     def parse_xml(self, xml: str) -> TEIDocumentProtocol:
         """Parse TEI XML into a TEI document.
@@ -64,28 +80,36 @@ class TEIProtocol(typ.Protocol):
         """
         ...
 
-    def to_dict(self, document: TEIDocumentProtocol) -> dict[str, typ.Any]:
+    def to_dict(self, document: TEIDocumentProtocol) -> TEIPayload:
         """Convert a TEI document into a dictionary payload.
 
         Parameters
         ----------
         document : TEIDocumentProtocol
-            Parsed TEI document to serialise.
+            Parsed TEI document to serialize.
 
         Returns
         -------
-        dict[str, typ.Any]
-            Serialised TEI document dictionary.
+        TEIPayload
+            Serialized TEI document dictionary.
         """
         ...
 
 
 @dc.dataclass(frozen=True, slots=True)
 class TeiHeaderPayload:
-    """Parsed TEI header payload and derived metadata."""
+    """Parsed TEI header payload and derived metadata.
+
+    Attributes
+    ----------
+    title : str
+        Parsed title extracted from the TEI header.
+    payload : TEIPayload
+        Header dictionary extracted from the parsed TEI document.
+    """
 
     title: str
-    payload: dict[str, typ.Any]
+    payload: TEIPayload
 
 
 def _parse_and_validate_tei(tei: TEIProtocol, xml: str) -> TEIDocumentProtocol:
@@ -105,20 +129,23 @@ def _parse_and_validate_tei(tei: TEIProtocol, xml: str) -> TEIDocumentProtocol:
     return document
 
 
-def _extract_header(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
+def _extract_header(payload: TEIPayload) -> TEIPayload:
     """Extract the TEI header from a parsed payload."""
     header = payload.get("teiHeader") or payload.get("header")
     match header:
         case dict() as header_dict:
-            return header_dict
+            return typ.cast("TEIPayload", header_dict)
         case _:
             msg = "TEI header missing from parsed payload."
             raise TypeError(msg)
 
 
-def _extract_title(header: dict[str, typ.Any]) -> str:
+def _extract_title(header: TEIPayload) -> str:
     """Extract the TEI header title."""
-    file_desc = header.get("fileDesc") or header.get("file_desc") or {}
+    file_desc = typ.cast(
+        "TEIPayload",
+        header.get("fileDesc") or header.get("file_desc") or {},
+    )
     title = file_desc.get("title")
     match title:
         case str() as title_value if title_value.strip():
