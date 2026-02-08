@@ -108,18 +108,7 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
         )
 
     async def get(self, profile_id: uuid.UUID) -> SeriesProfile | None:
-        """Fetch a series profile by identifier.
-
-        Parameters
-        ----------
-        profile_id : uuid.UUID
-            Identifier of the series profile to fetch.
-
-        Returns
-        -------
-        SeriesProfile | None
-            The matched series profile, or ``None`` if no match exists.
-        """
+        """Fetch a series profile by identifier."""
         return await self._get_one_or_none(
             SeriesProfileRecord,
             SeriesProfileRecord.id == profile_id,
@@ -171,18 +160,7 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
         )
 
     async def get(self, header_id: uuid.UUID) -> TeiHeader | None:
-        """Fetch a TEI header by identifier.
-
-        Parameters
-        ----------
-        header_id : uuid.UUID
-            Identifier of the TEI header to fetch.
-
-        Returns
-        -------
-        TeiHeader | None
-            The matched TEI header, or ``None`` if no match exists.
-        """
+        """Fetch a TEI header by identifier."""
         return await self._get_one_or_none(
             TeiHeaderRecord,
             TeiHeaderRecord.id == header_id,
@@ -217,18 +195,7 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
         )
 
     async def get(self, episode_id: uuid.UUID) -> CanonicalEpisode | None:
-        """Fetch a canonical episode by identifier.
-
-        Parameters
-        ----------
-        episode_id : uuid.UUID
-            Identifier of the episode to fetch.
-
-        Returns
-        -------
-        CanonicalEpisode | None
-            The matched canonical episode, or ``None`` if no match exists.
-        """
+        """Fetch a canonical episode by identifier."""
         return await self._get_one_or_none(
             EpisodeRecord,
             EpisodeRecord.id == episode_id,
@@ -264,18 +231,7 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
         )
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
-        """Fetch an ingestion job by identifier.
-
-        Parameters
-        ----------
-        job_id : uuid.UUID
-            Identifier of the ingestion job to fetch.
-
-        Returns
-        -------
-        IngestionJob | None
-            The matched ingestion job, or ``None`` if no match exists.
-        """
+        """Fetch an ingestion job by identifier."""
         return await self._get_one_or_none(
             IngestionJobRecord,
             IngestionJobRecord.id == job_id,
