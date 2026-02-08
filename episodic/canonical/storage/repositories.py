@@ -6,11 +6,10 @@ and are intended to be composed through the canonical unit-of-work.
 
 Examples
 --------
-Create a repository with an async session:
+Create a repository with the unit-of-work session:
 
 >>> async with SqlAlchemyUnitOfWork(session_factory) as uow:
-...     session = uow._require_session()
-...     repo = SqlAlchemySeriesProfileRepository(session)
+...     repo = uow.series_profiles
 ...     await repo.add(profile)
 ...     await uow.commit()
 """
@@ -184,13 +183,9 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
         TeiHeader | None
             The matched TEI header, or ``None`` if no match exists.
         """
-
-        def _match_header_id() -> sa.ColumnElement[bool]:
-            return TeiHeaderRecord.id == header_id
-
         return await self._get_one_or_none(
             TeiHeaderRecord,
-            _match_header_id(),
+            TeiHeaderRecord.id == header_id,
             _tei_header_from_record,
         )
 
@@ -234,11 +229,10 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
         CanonicalEpisode | None
             The matched canonical episode, or ``None`` if no match exists.
         """
-        mapper = _episode_from_record
         return await self._get_one_or_none(
             EpisodeRecord,
             EpisodeRecord.id == episode_id,
-            mapper,
+            _episode_from_record,
         )
 
 
@@ -282,11 +276,10 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
         IngestionJob | None
             The matched ingestion job, or ``None`` if no match exists.
         """
-        record_type = IngestionJobRecord
         return await self._get_one_or_none(
-            record_type=record_type,
-            where_clause=record_type.id == job_id,
-            mapper=_ingestion_job_from_record,
+            IngestionJobRecord,
+            IngestionJobRecord.id == job_id,
+            _ingestion_job_from_record,
         )
 
 

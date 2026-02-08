@@ -3,6 +3,12 @@
 This module wraps femtologging with convenience helpers that keep logging
 configuration and structured formatting consistent across the codebase.
 
+Note: The log_info, log_warning, and log_error functions intentionally follow a
+consistent structure to provide a discoverable, ergonomic public API. Shared
+formatting and emission logic is factored into private helpers (_format_message,
+_emit). This design mirrors Python's standard logging module and prioritizes
+usability over eliminating structural similarity.
+
 Examples
 --------
 Configure logging and emit a message:

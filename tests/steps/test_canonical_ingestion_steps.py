@@ -237,12 +237,11 @@ def approval_state_is_draft(
     context: IngestionContext,
 ) -> None:
     """Verify the episode approval state is draft."""
-    assertion = _assert_episode_is_draft
     _run_episode_assertion(
         _function_scoped_runner,
         session_factory,
         context,
-        assertion,
+        _assert_episode_is_draft,
     )
 
 
