@@ -24,7 +24,7 @@ import tei_rapporteur as _tei
 TEI = _tei  # pyright: ignore[reportUnknownMemberType]  # TODO(@codex): add type stubs for tei_rapporteur upstream (https://github.com/leynos/tei-rapporteur/issues/new)
 
 
-type TEIPayload = dict[str, typ.Any]
+type TEIPayload = dict[str, object]
 
 _MISSING_HEADER_MESSAGE = "XML processing error: missing field `teiHeader`"
 _MISSING_TITLE_MESSAGE = "XML processing error: missing field `title`"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import typing as typ
+
 import pytest
 import tei_rapporteur as _tei
 
@@ -19,9 +21,10 @@ def test_parse_tei_header_extracts_title() -> None:
     assert header.title == "Bridgewater", (
         f"Expected header.title to be 'Bridgewater', got {header.title!r}."
     )
-    assert header.payload["file_desc"]["title"] == "Bridgewater", (
+    file_desc = typ.cast("tei_module.TEIPayload", header.payload["file_desc"])
+    assert file_desc["title"] == "Bridgewater", (
         "Expected header.payload['file_desc']['title'] to be 'Bridgewater', "
-        f"got {header.payload['file_desc']['title']!r}."
+        f"got {file_desc['title']!r}."
     )
 
 

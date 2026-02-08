@@ -79,6 +79,7 @@ def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, b
                 DeprecationWarning,
                 stacklevel=2,
             )
+            normalised = LogLevel.WARNING
 
     basicConfig(level=normalised, force=force)
     return (normalised, used_default)

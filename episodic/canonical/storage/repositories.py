@@ -76,6 +76,7 @@ class _RepositoryBase:
         where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
         mapper: cabc.Callable[[RecordT], DomainT],
     ) -> DomainT | None:
+        """Return a mapped record for the query or None."""
         result = await self._session.execute(sa.select(record_type).where(where_clause))
         record = result.scalar_one_or_none()
         if record is None:
