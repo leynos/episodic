@@ -80,7 +80,7 @@ class TEIProtocol(typ.Protocol):
         ...
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class TeiHeaderPayload:
     """Parsed TEI header payload and derived metadata."""
 
@@ -95,15 +95,13 @@ def _parse_and_validate_tei(tei: TEIProtocol, xml: str) -> TEIDocumentProtocol:
         document.validate()
     except ValueError as exc:
         message = str(exc)
-        match message:
-            case _ if message == _MISSING_HEADER_MESSAGE:
-                msg = "TEI header missing from parsed payload."
-                raise TypeError(msg) from exc
-            case _ if message == _MISSING_TITLE_MESSAGE:
-                msg = "TEI header title missing from parsed payload."
-                raise ValueError(msg) from exc
-            case _:
-                raise
+        if message == _MISSING_HEADER_MESSAGE:
+            msg = "TEI header missing from parsed payload."
+            raise TypeError(msg) from exc
+        if message == _MISSING_TITLE_MESSAGE:
+            msg = "TEI header title missing from parsed payload."
+            raise ValueError(msg) from exc
+        raise
     return document
 
 

@@ -7,6 +7,7 @@ and are intended to be composed through the canonical unit-of-work.
 
 from __future__ import annotations
 
+import dataclasses as dc
 import typing as typ
 
 import sqlalchemy as sa
@@ -53,6 +54,7 @@ if typ.TYPE_CHECKING:
     )
 
 
+@dc.dataclass(slots=True)
 class _RepositoryBase:
     """Shared helpers for SQLAlchemy repositories."""
 
@@ -73,9 +75,6 @@ class _RepositoryBase:
 
 class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository):
     """Persist series profiles using SQLAlchemy."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
     async def add(self, profile: SeriesProfile) -> None:
         """Add a series profile record.
@@ -130,18 +129,16 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
         SeriesProfile | None
             The matched series profile, or ``None`` if no match exists.
         """
+        slug_clause = SeriesProfileRecord.slug == slug
         return await self._get_one_or_none(
             SeriesProfileRecord,
-            SeriesProfileRecord.slug == slug,
+            slug_clause,
             _series_profile_from_record,
         )
 
 
 class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
     """Persist TEI headers using SQLAlchemy."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
     async def add(self, header: TeiHeader) -> None:
         """Add a TEI header record.
@@ -176,18 +173,19 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
         TeiHeader | None
             The matched TEI header, or ``None`` if no match exists.
         """
+
+        def _match_header_id() -> sa.ColumnElement[bool]:
+            return TeiHeaderRecord.id == header_id
+
         return await self._get_one_or_none(
             TeiHeaderRecord,
-            TeiHeaderRecord.id == header_id,
+            _match_header_id(),
             _tei_header_from_record,
         )
 
 
 class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
     """Persist canonical episodes using SQLAlchemy."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
     async def add(self, episode: CanonicalEpisode) -> None:
         """Add a canonical episode record.
@@ -225,18 +223,16 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
         CanonicalEpisode | None
             The matched canonical episode, or ``None`` if no match exists.
         """
+        mapper = _episode_from_record
         return await self._get_one_or_none(
             EpisodeRecord,
             EpisodeRecord.id == episode_id,
-            _episode_from_record,
+            mapper,
         )
 
 
 class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
     """Persist ingestion jobs using SQLAlchemy."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
     async def add(self, job: IngestionJob) -> None:
         """Add an ingestion job record.
@@ -275,18 +271,16 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
         IngestionJob | None
             The matched ingestion job, or ``None`` if no match exists.
         """
+        record_type = IngestionJobRecord
         return await self._get_one_or_none(
-            IngestionJobRecord,
-            IngestionJobRecord.id == job_id,
-            _ingestion_job_from_record,
+            record_type=record_type,
+            where_clause=record_type.id == job_id,
+            mapper=_ingestion_job_from_record,
         )
 
 
 class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentRepository):
     """Persist source documents using SQLAlchemy."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
     async def add(self, document: SourceDocument) -> None:
         """Add a source document record.
@@ -325,18 +319,16 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
             Source documents associated with the ingestion job.
         """
         result = await self._session.execute(
-            sa.select(SourceDocumentRecord).where(
-                SourceDocumentRecord.ingestion_job_id == job_id
-            )
+            sa
+            .select(SourceDocumentRecord)
+            .where(SourceDocumentRecord.ingestion_job_id == job_id)
+            .order_by(SourceDocumentRecord.created_at)
         )
         return [_source_document_from_record(row) for row in result.scalars()]
 
 
 class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository):
     """Persist approval events using SQLAlchemy."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
 
     async def add(self, event: ApprovalEvent) -> None:
         """Add an approval event record.
@@ -377,8 +369,9 @@ class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository
             Approval events associated with the episode.
         """
         result = await self._session.execute(
-            sa.select(ApprovalEventRecord).where(
-                ApprovalEventRecord.episode_id == episode_id
-            )
+            sa
+            .select(ApprovalEventRecord)
+            .where(ApprovalEventRecord.episode_id == episode_id)
+            .order_by(ApprovalEventRecord.created_at)
         )
         return [_approval_event_from_record(row) for row in result.scalars()]

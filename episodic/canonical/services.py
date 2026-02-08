@@ -1,4 +1,15 @@
-"""Domain services for canonical content ingestion."""
+"""Domain services for canonical content ingestion.
+
+This module provides orchestration helpers for ingesting TEI content into the
+canonical persistence layer using unit-of-work boundaries.
+
+Examples
+--------
+Ingest sources within a unit-of-work session:
+
+>>> async with SqlAlchemyUnitOfWork(session_factory) as uow:
+...     episode = await ingest_sources(uow, profile, request)
+"""
 
 from __future__ import annotations
 
@@ -45,21 +56,19 @@ def _create_tei_header(
     )
 
 
-def _create_canonical_episode(  # noqa: PLR0913, PLR0917  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - required entity fields.
+def _create_canonical_episode(
     episode_id: uuid.UUID,
-    series_profile_id: uuid.UUID,
-    header_id: uuid.UUID,
-    title: str,
-    tei_xml: str,
+    series_profile: SeriesProfile,
+    header: TeiHeader,
     now: dt.datetime,
 ) -> CanonicalEpisode:
     """Create a canonical episode entity."""
     return CanonicalEpisode(
         id=episode_id,
-        series_profile_id=series_profile_id,
-        tei_header_id=header_id,
-        title=title,
-        tei_xml=tei_xml,
+        series_profile_id=series_profile.id,
+        tei_header_id=header.id,
+        title=header.title,
+        tei_xml=header.raw_xml,
         status=EpisodeStatus.DRAFT,
         approval_state=ApprovalState.DRAFT,
         created_at=now,
@@ -170,14 +179,7 @@ async def ingest_sources(
     job_id = uuid.uuid4()
 
     header = _create_tei_header(header_id, header_payload, request.tei_xml, now)
-    episode = _create_canonical_episode(
-        episode_id,
-        series_profile.id,
-        header_id,
-        header_payload.title,
-        request.tei_xml,
-        now,
-    )
+    episode = _create_canonical_episode(episode_id, series_profile, header, now)
     job = _create_ingestion_job(job_id, series_profile.id, episode_id, now)
 
     await uow.tei_headers.add(header)

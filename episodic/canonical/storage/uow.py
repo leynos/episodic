@@ -118,6 +118,11 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             raise RuntimeError(msg)
         return self._session
 
+    async def _apply_session_action(self, action: str) -> None:
+        """Apply a named action on the active session."""
+        session = self._require_session()
+        await getattr(session, action)()
+
     async def commit(self) -> None:
         """Commit the current unit-of-work transaction.
 
@@ -130,7 +135,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         RuntimeError
             If no session has been initialized for the unit of work.
         """
-        await self._require_session().commit()
+        await self._apply_session_action("commit")
         log_info(logger, "Committed canonical unit of work.")
 
     async def flush(self) -> None:
@@ -159,4 +164,5 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         RuntimeError
             If no session has been initialized for the unit of work.
         """
-        await self._require_session().rollback()
+        session = self._require_session()
+        await session.rollback()

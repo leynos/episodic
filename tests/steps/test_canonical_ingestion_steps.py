@@ -20,6 +20,7 @@ from pytest_bdd import given, scenario, then, when
 
 from episodic.canonical.domain import (
     ApprovalState,
+    CanonicalEpisode,
     IngestionRequest,
     SeriesProfile,
     SourceDocumentInput,
@@ -31,8 +32,8 @@ from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 class TEITestProtocol(typ.Protocol):
     """Typed surface for tei_rapporteur interactions in tests."""
 
-    Document: typ.Callable[[str], object]
-    emit_xml: typ.Callable[[object], str]
+    Document: cabc.Callable[[str], object]
+    emit_xml: cabc.Callable[[object], str]
 
 
 TEI: TEITestProtocol = typ.cast("TEITestProtocol", _tei)
@@ -40,7 +41,7 @@ TEI: TEITestProtocol = typ.cast("TEITestProtocol", _tei)
 
 def _run_async_step(
     runner: asyncio.Runner,
-    step_fn: typ.Callable[[], typ.Awaitable[None]],
+    step_fn: cabc.Callable[[], typ.Awaitable[None]],
 ) -> None:
     """Execute an async BDD step function via the provided runner.
 
@@ -55,6 +56,17 @@ def _run_async_step(
     runner.run(coro)
 
 
+async def _require_episode(
+    session_factory: cabc.Callable[[], AsyncSession],
+    episode_id: uuid.UUID,
+) -> CanonicalEpisode:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        episode = await uow.episodes.get(episode_id)
+
+    assert episode is not None, "Expected a persisted canonical episode."
+    return episode
+
+
 class IngestionContext(typ.TypedDict, total=False):
     """Shared state for canonical ingestion BDD steps."""
 
@@ -65,8 +77,38 @@ class IngestionContext(typ.TypedDict, total=False):
     source_uris: list[str]
 
 
+def _run_episode_assertion(
+    runner: asyncio.Runner,
+    session_factory: cabc.Callable[[], AsyncSession],
+    context: IngestionContext,
+    assertion: cabc.Callable[[CanonicalEpisode], None],
+) -> None:
+    """Execute a canonical episode assertion for a BDD step."""
+
+    async def _fetch() -> None:
+        episode_id = context["episode_id"]
+
+        episode = await _require_episode(session_factory, episode_id)
+        assertion(episode)
+
+    _run_async_step(runner, _fetch)
+
+
+def _assert_episode_title(episode: CanonicalEpisode) -> None:
+    """Assert the canonical episode title matches expectations."""
+    assert episode.title == "Bridgewater", "Expected the episode title."
+
+
+def _assert_episode_is_draft(episode: CanonicalEpisode) -> None:
+    """Assert the canonical episode approval state is draft."""
+    assert episode.approval_state is ApprovalState.DRAFT, (
+        "Expected the episode approval state to be draft."
+    )
+
+
 if typ.TYPE_CHECKING:
     import asyncio
+    import collections.abc as cabc
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -88,7 +130,7 @@ def context() -> IngestionContext:
 @given('a series profile "science-hour" exists')
 def series_profile_exists(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     context: IngestionContext,
 ) -> None:
     """Persist a series profile for ingestion."""
@@ -124,7 +166,7 @@ def tei_document_available(context: IngestionContext) -> None:
 @when("an ingestion job records source documents")
 def ingestion_job_records_sources(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     context: IngestionContext,
 ) -> None:
     """Ingest source documents into a canonical episode."""
@@ -176,49 +218,38 @@ def ingestion_job_records_sources(
 @then('the canonical episode is stored for "science-hour"')
 def canonical_episode_stored(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     context: IngestionContext,
 ) -> None:
     """Verify the canonical episode was persisted."""
-
-    async def _fetch() -> None:
-        episode_id = context["episode_id"]
-
-        async with SqlAlchemyUnitOfWork(session_factory) as uow:
-            episode = await uow.episodes.get(episode_id)
-
-        assert episode is not None, "Expected a persisted canonical episode."
-        assert episode.title == "Bridgewater", "Expected the episode title."
-
-    _run_async_step(_function_scoped_runner, _fetch)
+    _run_episode_assertion(
+        _function_scoped_runner,
+        session_factory,
+        context,
+        _assert_episode_title,
+    )
 
 
 @then('the approval state is "draft"')
 def approval_state_is_draft(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     context: IngestionContext,
 ) -> None:
     """Verify the episode approval state is draft."""
-
-    async def _fetch() -> None:
-        episode_id = context["episode_id"]
-
-        async with SqlAlchemyUnitOfWork(session_factory) as uow:
-            episode = await uow.episodes.get(episode_id)
-
-        assert episode is not None, "Expected a persisted canonical episode."
-        assert episode.approval_state is ApprovalState.DRAFT, (
-            "Expected the episode approval state to be draft."
-        )
-
-    _run_async_step(_function_scoped_runner, _fetch)
+    assertion = _assert_episode_is_draft
+    _run_episode_assertion(
+        _function_scoped_runner,
+        session_factory,
+        context,
+        assertion,
+    )
 
 
 @then("an approval event is persisted for the ingestion job")
 def approval_event_persisted(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     context: IngestionContext,
 ) -> None:
     """Verify approval events are stored for the ingestion."""
@@ -237,7 +268,7 @@ def approval_event_persisted(
             "Expected the approval event to transition to draft."
         )
         assert isinstance(event.payload, dict), "Expected a payload dictionary."
-        assert set(event.payload.get("sources", [])) >= set(source_uris), (
+        assert set(event.payload.get("sources", [])) == set(source_uris), (
             "Expected the approval payload to include the ingested sources."
         )
 
@@ -247,7 +278,7 @@ def approval_event_persisted(
 @then("source documents are stored and linked to the ingestion job and episode")
 def source_documents_linked(
     _function_scoped_runner: asyncio.Runner,
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     context: IngestionContext,
 ) -> None:
     """Verify source documents are linked to ingestion jobs and episodes."""
