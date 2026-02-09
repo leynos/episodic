@@ -16,15 +16,31 @@ Parse a TEI header payload from XML:
 
 from __future__ import annotations
 
+import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
 import tei_rapporteur as _tei
 
 type TEIPayload = dict[str, object]
+type ParseXmlFn = cabc.Callable[[str], object]
+type ToDictFn = cabc.Callable[[object], object]
 
 _MISSING_HEADER_MESSAGE = "XML processing error: missing field `teiHeader`"
 _MISSING_TITLE_MESSAGE = "XML processing error: missing field `title`"
+
+
+def _default_parse_xml(xml: str) -> object:
+    """Parse XML using the default tei_rapporteur binding."""
+    return _tei.parse_xml(xml)
+
+
+def _default_to_dict(document: object) -> object:
+    """Serialize a parsed TEI document using the default binding."""
+    if not isinstance(document, _tei.Document):
+        msg = "TEI parser returned unexpected document type."
+        raise TypeError(msg)
+    return _tei.to_dict(document)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -43,11 +59,18 @@ class TeiHeaderPayload:
     payload: TEIPayload
 
 
-def _parse_and_validate_tei(xml: str) -> _tei.Document:
+def _parse_and_validate_tei(
+    xml: str,
+    parse_xml: ParseXmlFn = _default_parse_xml,
+) -> object:
     """Parse TEI XML and validate the document."""
     try:
-        document = _tei.parse_xml(xml)
-        document.validate()
+        document = parse_xml(xml)
+        validate = getattr(document, "validate", None)
+        if not callable(validate):
+            msg = "TEI parser returned document without callable validate()."
+            raise TypeError(msg)
+        validate()
     except ValueError as exc:
         message = str(exc)
         if message == _MISSING_HEADER_MESSAGE:
@@ -58,6 +81,25 @@ def _parse_and_validate_tei(xml: str) -> _tei.Document:
             raise ValueError(msg) from exc
         raise
     return document
+
+
+def _to_payload(
+    document: object,
+    to_dict: ToDictFn = _default_to_dict,
+) -> TEIPayload:
+    """Convert a parsed TEI document into a string-keyed payload."""
+    payload = to_dict(document)
+    if not isinstance(payload, dict):
+        msg = "TEI parser produced non-mapping payload."
+        raise TypeError(msg)
+
+    typed_payload: TEIPayload = {}
+    for key, value in payload.items():
+        if not isinstance(key, str):
+            msg = "TEI parser produced non-string payload keys."
+            raise TypeError(msg)
+        typed_payload[key] = value
+    return typed_payload
 
 
 def _extract_header(payload: TEIPayload) -> TEIPayload:
@@ -110,7 +152,7 @@ def parse_tei_header(xml: str) -> TeiHeaderPayload:
         missing header or title.
     """
     document = _parse_and_validate_tei(xml)
-    payload = typ.cast("TEIPayload", _tei.to_dict(document))
+    payload = _to_payload(document)
     header = _extract_header(payload)
     title = _extract_title(header)
     return TeiHeaderPayload(title=title, payload=header)

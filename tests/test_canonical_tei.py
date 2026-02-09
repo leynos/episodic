@@ -80,22 +80,16 @@ def test_parse_tei_header_preserves_unmapped_validation_errors(
 ) -> None:
     """Unmapped validation errors should surface unchanged."""
 
-    class _DummyDocument:
-        def __init__(self, exc: Exception) -> None:
-            self._exc = exc
+    def _raise_unmapped_validation_error(
+        _xml: str,
+        parse_xml: tei_module.ParseXmlFn = _tei.parse_xml,
+    ) -> object:
+        raise ValueError(message)
 
-        def validate(self) -> None:
-            raise self._exc
-
-    dummy_document = _DummyDocument(ValueError(message))
-
-    def _parse_xml(_xml: str) -> _DummyDocument:
-        return dummy_document
-
-    def _to_dict(_document: _DummyDocument) -> dict[str, object]:
-        return {}
-
-    monkeypatch.setattr(tei_module._tei, "parse_xml", _parse_xml)
-    monkeypatch.setattr(tei_module._tei, "to_dict", _to_dict)
+    monkeypatch.setattr(
+        tei_module,
+        "_parse_and_validate_tei",
+        _raise_unmapped_validation_error,
+    )
     with pytest.raises(ValueError, match=message):
         parse_tei_header("<TEI></TEI>")
