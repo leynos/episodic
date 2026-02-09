@@ -139,10 +139,30 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         log_info(logger, "Committed canonical unit of work.")
 
     async def flush(self) -> None:
-        """Flush pending unit-of-work changes."""
+        """Flush pending unit-of-work changes.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RuntimeError
+            If no session has been initialized for the unit of work.
+        """
         await self._require_session().flush()
 
     async def rollback(self) -> None:
-        """Roll back the current unit-of-work session."""
+        """Roll back the current unit-of-work session.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RuntimeError
+            If no session has been initialized for the unit of work.
+        """
         session = self._require_session()
         await session.rollback()

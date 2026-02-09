@@ -43,15 +43,7 @@ def _run_async_step(
     runner: asyncio.Runner,
     step_fn: cabc.Callable[[], typ.Awaitable[None]],
 ) -> None:
-    """Execute an async BDD step function via the provided runner.
-
-    Parameters
-    ----------
-    runner : asyncio.Runner
-        The function-scoped runner for executing async code in sync steps.
-    step_fn : Callable[[], Awaitable[None]]
-        The async function to execute.
-    """
+    """Execute an async BDD step via the provided runner."""
     coro = typ.cast("typ.Coroutine[object, object, None]", step_fn())
     runner.run(coro)
 
@@ -60,6 +52,7 @@ async def _require_episode(
     session_factory: cabc.Callable[[], AsyncSession],
     episode_id: uuid.UUID,
 ) -> CanonicalEpisode:
+    """Fetch the persisted canonical episode."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         episode = await uow.episodes.get(episode_id)
 
