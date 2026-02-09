@@ -1,8 +1,9 @@
-# Update tei-rapporteur pin and remove local TEI typing shims
+# Update tei-rapporteur pin and remove local Text Encoding Initiative (TEI) typing shims
 
-This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
-`Risks`, `Progress`, `Surprises and discoveries`, `Decision log`, and
-`Outcomes and retrospective` must be kept up to date as work proceeds.
+This execution plan (ExecPlan) is a living document. The sections
+`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises and discoveries`,
+`Decision log`, and `Outcomes and retrospective` must be kept up to date as
+work proceeds.
 
 Status: COMPLETE
 
@@ -24,7 +25,7 @@ pass.
   `episodic/canonical/tei.py`.
 - Do not add new dependencies.
 - Keep dependency source as the existing git dependency in
-  `pyproject.toml`; only update the commit SHA.
+  `pyproject.toml`; only update the commit secure hash algorithm (SHA).
 - Remove local TEI typing shims instead of replacing them with new local
   protocol wrappers.
 - Preserve repository quality gates: formatting, linting, type-checking, and
@@ -80,10 +81,10 @@ pass.
 
 ## Surprises and discoveries
 
-- Observation: No MCP resources are exposed in this session, so the
-  qdrant-backed notes retrieval protocol could not be executed. Evidence:
-  `list_mcp_resources` returned an empty resource list. Impact: Planning
-  proceeded using repository files only.
+- Observation: No Model Context Protocol (MCP) resources are exposed in this
+  session, so the qdrant-backed notes retrieval protocol could not be executed.
+  Evidence: `list_mcp_resources` returned an empty resource list. Impact:
+  Planning proceeded using repository files only.
 - Observation: TEI typing shims exist in both production and test code.
   Evidence: `episodic/canonical/tei.py` defines `TEIDocumentProtocol` and
   `TEIProtocol`; `tests/steps/test_canonical_ingestion_steps.py` defines
@@ -91,13 +92,14 @@ pass.
   `type: ignore[unresolved-attribute]`. Impact: Plan must remove shim patterns
   consistently across these files.
 - Observation: Baseline type-check fails under the old TEI pin when ignore
-  comments are removed. Evidence: `make typecheck` produced ty diagnostics
+  comments are removed. Evidence: `make typecheck` produced type diagnostics
   `Module tei_rapporteur has no member Document` and
   `Module tei_rapporteur has no member emit_xml`. Impact: This confirms the
   dependency update is necessary before full shim removal.
 - Observation: Direct `uv run` commands can fail to build `tei-rapporteur` on
-  Python 3.14 without the ABI forward-compatibility environment variable.
-  Evidence: a direct `uv run python` invocation failed with
+  Python 3.14 without the application binary interface (ABI)
+  forward-compatibility environment variable. Evidence: a direct
+  `uv run python` invocation failed with
   `PyO3's maximum supported version (3.13)` until using Makefile-wrapped
   commands that set `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`. Impact: validation
   and module interaction commands should use Makefile targets (or equivalent
