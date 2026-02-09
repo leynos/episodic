@@ -21,79 +21,10 @@ import typing as typ
 
 import tei_rapporteur as _tei
 
-TEI = _tei  # pyright: ignore[reportUnknownMemberType]  # TODO(@codex): add type stubs for tei_rapporteur upstream (https://github.com/leynos/tei-rapporteur/issues/new)
-
-
 type TEIPayload = dict[str, object]
 
 _MISSING_HEADER_MESSAGE = "XML processing error: missing field `teiHeader`"
 _MISSING_TITLE_MESSAGE = "XML processing error: missing field `title`"
-
-
-class TEIDocumentProtocol(typ.Protocol):
-    """Protocol for TEI document validation.
-
-    Methods
-    -------
-    validate()
-        Validate the parsed TEI document.
-    """
-
-    def validate(self) -> None:
-        """Validate the parsed TEI document.
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        ValueError
-            If the TEI document is invalid.
-        """
-        ...
-
-
-class TEIProtocol(typ.Protocol):
-    """Protocol for tei-rapporteur parser interactions.
-
-    Methods
-    -------
-    parse_xml(xml)
-        Parse a TEI XML payload into a document handle.
-    to_dict(document)
-        Serialize a TEI document into a dictionary payload.
-    """
-
-    def parse_xml(self, xml: str) -> TEIDocumentProtocol:
-        """Parse TEI XML into a TEI document.
-
-        Parameters
-        ----------
-        xml : str
-            TEI XML payload to parse.
-
-        Returns
-        -------
-        TEIDocumentProtocol
-            Parsed TEI document handle.
-        """
-        ...
-
-    def to_dict(self, document: TEIDocumentProtocol) -> TEIPayload:
-        """Convert a TEI document into a dictionary payload.
-
-        Parameters
-        ----------
-        document : TEIDocumentProtocol
-            Parsed TEI document to serialize.
-
-        Returns
-        -------
-        TEIPayload
-            Serialized TEI document dictionary.
-        """
-        ...
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -112,10 +43,10 @@ class TeiHeaderPayload:
     payload: TEIPayload
 
 
-def _parse_and_validate_tei(tei: TEIProtocol, xml: str) -> TEIDocumentProtocol:
+def _parse_and_validate_tei(xml: str) -> _tei.Document:
     """Parse TEI XML and validate the document."""
     try:
-        document = tei.parse_xml(xml)
+        document = _tei.parse_xml(xml)
         document.validate()
     except ValueError as exc:
         message = str(exc)
@@ -178,9 +109,8 @@ def parse_tei_header(xml: str) -> TeiHeaderPayload:
         If the TEI parser raises a validation error that does not map to a
         missing header or title.
     """
-    tei = typ.cast("TEIProtocol", TEI)
-    document = _parse_and_validate_tei(tei, xml)
-    payload = tei.to_dict(document)
+    document = _parse_and_validate_tei(xml)
+    payload = typ.cast("TEIPayload", _tei.to_dict(document))
     header = _extract_header(payload)
     title = _extract_title(header)
     return TeiHeaderPayload(title=title, payload=header)

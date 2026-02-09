@@ -4,7 +4,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises and discoveries`, `Decision log`, and
 `Outcomes and retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 No `PLANS.md` file is present in the repository root.
 
@@ -66,11 +66,17 @@ pass.
 - [x] (2026-02-09 12:28Z) Gathered repository context, identified tei-rapporteur
   pin locations, and identified local TEI typing shim locations.
 - [x] (2026-02-09 12:28Z) Drafted this ExecPlan for review.
-- [ ] Update dependency pin and lockfile to
-  `c587b1814a6234e6c55b709ff9e943bef2d83610`.
-- [ ] Remove TEI local protocol/type-ignore shim code and switch to direct
-  upstream typing.
-- [ ] Run all Python quality gates and confirm no behavioural regression.
+- [x] (2026-02-09 12:45Z) Completed Stage A baseline proof by removing TEI
+  unresolved-attribute ignores in `tests/test_canonical_tei.py` and running
+  `make typecheck`; old pin failed on missing `tei_rapporteur.Document` and
+  `tei_rapporteur.emit_xml`.
+- [x] (2026-02-09 12:46Z) Completed Stage B by updating `pyproject.toml` and
+  `uv.lock` to `c587b1814a6234e6c55b709ff9e943bef2d83610`.
+- [x] (2026-02-09 12:47Z) Completed Stage C by removing TEI local protocol and
+  cast shims in production and test code while preserving TEI parsing behaviour.
+- [x] (2026-02-09 12:48Z) Completed Stage D validation: `make fmt`,
+  `make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, and `make nixie` all passed.
 
 ## Surprises and discoveries
 
@@ -84,6 +90,18 @@ pass.
   `TEITestProtocol`; `tests/test_canonical_tei.py` uses
   `type: ignore[unresolved-attribute]`. Impact: Plan must remove shim patterns
   consistently across these files.
+- Observation: Baseline type-check fails under the old TEI pin when ignore
+  comments are removed. Evidence: `make typecheck` produced ty diagnostics
+  `Module tei_rapporteur has no member Document` and
+  `Module tei_rapporteur has no member emit_xml`. Impact: This confirms the
+  dependency update is necessary before full shim removal.
+- Observation: Direct `uv run` commands can fail to build `tei-rapporteur` on
+  Python 3.14 without the ABI forward-compatibility environment variable.
+  Evidence: a direct `uv run python` invocation failed with
+  `PyO3's maximum supported version (3.13)` until using Makefile-wrapped
+  commands that set `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`. Impact: validation
+  and module interaction commands should use Makefile targets (or equivalent
+  `UV_ENV` settings) in this repository.
 
 ## Decision log
 
@@ -94,25 +112,44 @@ pass.
 - Decision: Keep runtime behaviour validation in scope with targeted TEI tests
   plus full `make test`. Rationale: Dependency upgrades can alter parsing
   behaviour even when the intent is typing-only. Date/Author: 2026-02-09, Codex.
+- Decision: Proceed to Stage B dependency update immediately after baseline
+  failure proof. Rationale: The failing diagnostics align exactly with the
+  expected missing upstream typing surface under the old SHA. Date/Author:
+  2026-02-09, Codex.
+- Decision: Keep validation and Python execution on Makefile targets (or
+  explicit `UV_ENV` settings) during this change. Rationale: this avoids Python
+  3.14/PyO3 compatibility build failures when Rust-backed dependencies are
+  rebuilt. Date/Author: 2026-02-09, Codex.
 
 ## Outcomes and retrospective
 
-This plan is in DRAFT status. Implementation outcomes and lessons learned will
-be recorded here after execution.
+The implementation updated `tei-rapporteur` to
+`c587b1814a6234e6c55b709ff9e943bef2d83610`, removed local TEI protocol and cast
+shims, and now uses upstream type hints directly in production and tests. The
+proof sequence completed as intended: before-state type-check failed under the
+old SHA once ignores were removed, and final type-check passed under the new
+SHA with no TEI-specific ignore comments or protocol wrappers.
+
+Runtime TEI behaviour remained stable, validated by the existing TEI unit tests
+and canonical ingestion behavioural test. A key execution lesson is to preserve
+`PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` for local commands that may rebuild
+Rust-backed dependencies on Python 3.14.
 
 ## Context and orientation
 
 The dependency pin and likely change surface are:
 
-- `pyproject.toml` currently pins `tei-rapporteur` to
-  `3129188d792585976bff1c12332c9243bca8cac0`.
-- `uv.lock` contains the corresponding git source and revision entries.
-- `episodic/canonical/tei.py` wraps `tei_rapporteur` behind local protocol
-  types and a `pyright` member-type ignore.
-- `tests/steps/test_canonical_ingestion_steps.py` defines a local
-  `TEITestProtocol` shim and casts `tei_rapporteur`.
-- `tests/test_canonical_tei.py` uses unresolved-attribute ignore comments on
-  `tei_rapporteur` members.
+- At plan start, `pyproject.toml` pinned `tei-rapporteur` to
+  `3129188d792585976bff1c12332c9243bca8cac0`; after implementation it pins
+  `c587b1814a6234e6c55b709ff9e943bef2d83610`.
+- `uv.lock` now contains the corresponding new git source and revision entries.
+- At plan start, `episodic/canonical/tei.py` wrapped `tei_rapporteur` behind
+  local protocol types and a member-type ignore; those wrappers have been
+  removed.
+- At plan start, `tests/steps/test_canonical_ingestion_steps.py` defined a
+  `TEITestProtocol` shim and cast `tei_rapporteur`; this shim has been removed.
+- At plan start, `tests/test_canonical_tei.py` used TEI unresolved-attribute
+  ignore comments; those ignore comments have been removed.
 
 Terms used in this plan:
 
@@ -265,3 +302,9 @@ No new adapter layer should be introduced unless a tolerance threshold is hit.
 
 Initial draft created on 2026-02-09 to plan the `tei-rapporteur` SHA update and
 removal of local TEI typing shims in favour of upstream type hints.
+
+Revised on 2026-02-09 to mark implementation as in progress and capture Stage A
+baseline evidence from `make typecheck`.
+
+Revised on 2026-02-09 to record completed implementation, validation outcomes,
+and the Python 3.14/PyO3 environment constraint discovered during execution.
