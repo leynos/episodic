@@ -56,7 +56,7 @@ that align with the system design.
 
 ### 2.2. Key activities
 
-- [ ] 2.2.1. Design the relational schema covering TEI headers, canonical
+- [x] 2.2.1. Design the relational schema covering TEI headers, canonical
   episodes, ingestion jobs, source documents, series profiles, and approval
   states.
 - [ ] 2.2.2. Introduce migration tooling with Alembic, wired into CI to block
