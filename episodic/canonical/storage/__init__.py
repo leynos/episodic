@@ -14,6 +14,7 @@ Use the unit-of-work to fetch a canonical episode:
 
 from __future__ import annotations
 
+from .migration_check import detect_schema_drift
 from .models import (
     ApprovalEventRecord,
     Base,
@@ -48,4 +49,5 @@ __all__ = (
     "SqlAlchemyTeiHeaderRepository",
     "SqlAlchemyUnitOfWork",
     "TeiHeaderRecord",
+    "detect_schema_drift",
 )

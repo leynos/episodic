@@ -175,6 +175,7 @@ class EpisodeRecord(Base):
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("series_profiles.id"),
         nullable=False,
+        index=True,
     )
     tei_header_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -241,6 +242,7 @@ class IngestionJobRecord(Base):
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("series_profiles.id"),
         nullable=False,
+        index=True,
     )
     target_episode_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -312,6 +314,7 @@ class SourceDocumentRecord(Base):
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("ingestion_jobs.id"),
         nullable=False,
+        index=True,
     )
     canonical_episode_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -375,6 +378,7 @@ class ApprovalEventRecord(Base):
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("episodes.id"),
         nullable=False,
+        index=True,
     )
     actor: orm.Mapped[str | None] = orm.mapped_column(sa.String(200), nullable=True)
     from_state: orm.Mapped[ApprovalState | None] = orm.mapped_column(

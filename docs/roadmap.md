@@ -59,7 +59,7 @@ that align with the system design.
 - [x] 2.2.1. Design the relational schema covering TEI headers, canonical
   episodes, ingestion jobs, source documents, series profiles, and approval
   states.
-- [ ] 2.2.2. Introduce migration tooling with Alembic, wired into CI to block
+- [x] 2.2.2. Introduce migration tooling with Alembic, wired into CI to block
   divergent schemas.
 - [ ] 2.2.3. Implement the repository and unit-of-work layers over Postgres with
   integration tests.
