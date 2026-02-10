@@ -125,7 +125,15 @@ def _extract_header(payload: TEIPayload) -> TEIPayload:
     header = payload.get("teiHeader") or payload.get("header")
     match header:
         case dict() as header_dict:
-            return typ.cast("TEIPayload", header_dict)
+            typed_header: TEIPayload = {}
+            for key, value in header_dict.items():
+                match key:
+                    case str() as key_str:
+                        typed_header[key_str] = value
+                    case _:
+                        msg = "TEI header payload contains non-string keys."
+                        raise TypeError(msg)
+            return typed_header
         case _:
             msg = "TEI header missing from parsed payload."
             raise TypeError(msg)
