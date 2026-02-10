@@ -22,8 +22,9 @@ before executing database-backed scenarios.
 
 ### Creating a new migration
 
-After modifying ORM models in `episodic/canonical/storage/models.py`, generate
-a migration with Alembic's autogenerate feature:
+After modifying Object-Relational Mapping (ORM) models in
+`episodic/canonical/storage/models.py`, generate a migration with Alembic's
+autogenerate feature:
 
     DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
 

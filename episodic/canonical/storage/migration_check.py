@@ -15,6 +15,7 @@ Run the drift check from the command line:
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import sys
 import typing as typ
 
@@ -72,48 +73,57 @@ async def check_migrations_cli() -> int:
         Exit code: 0 when models and migrations match, 1 when drift is
         detected, 2 on infrastructure errors.
     """
-    try:
-        from py_pglite import PGliteConfig, PGliteManager
-    except ModuleNotFoundError:
+    if importlib.util.find_spec("py_pglite") is None:
         log_error(
             _logger,
             "py-pglite is not installed; cannot run migration drift check.",
         )
         return 2
 
-    import tempfile
-    from pathlib import Path
+    from py_pglite import PGliteConfig, PGliteManager
 
-    from sqlalchemy.ext.asyncio import create_async_engine
+    try:
+        import tempfile
+        from pathlib import Path
 
-    with tempfile.TemporaryDirectory(prefix="episodic-migration-check-") as tmp:
-        work_dir = Path(tmp)
-        config = PGliteConfig(work_dir=work_dir)
+        from sqlalchemy.ext.asyncio import create_async_engine
 
-        with PGliteManager(config):
-            dsn = config.get_connection_string()
-            engine = create_async_engine(dsn, pool_pre_ping=True)
-            try:
-                log_info(_logger, "Applying migrations to ephemeral database.")
-                await apply_migrations(engine)
+        with tempfile.TemporaryDirectory(
+            prefix="episodic-migration-check-",
+        ) as tmp:
+            work_dir = Path(tmp)
+            config = PGliteConfig(work_dir=work_dir)
 
-                log_info(_logger, "Checking for schema drift.")
-                diffs = await detect_schema_drift(engine)
-            finally:
-                await engine.dispose()
+            with PGliteManager(config):
+                dsn = config.get_connection_string()
+                engine = create_async_engine(dsn, pool_pre_ping=True)
+                try:
+                    log_info(
+                        _logger,
+                        "Applying migrations to ephemeral database.",
+                    )
+                    await apply_migrations(engine)
 
-    if diffs:
-        log_error(
-            _logger,
-            "Schema drift detected (%s difference(s)):",
-            len(diffs),
-        )
-        for diff in diffs:
-            log_error(_logger, "  %s", diff)
-        return 1
+                    log_info(_logger, "Checking for schema drift.")
+                    diffs = await detect_schema_drift(engine)
+                finally:
+                    await engine.dispose()
 
-    log_info(_logger, "No schema drift detected.")
-    return 0
+        if diffs:
+            log_error(
+                _logger,
+                "Schema drift detected (%s difference(s)):",
+                len(diffs),
+            )
+            for diff in diffs:
+                log_error(_logger, "  %s", diff)
+            return 1
+    except Exception:  # noqa: BLE001
+        log_error(_logger, "Infrastructure error.", exc_info=True)
+        return 2
+    else:
+        log_info(_logger, "No schema drift detected.")
+        return 0
 
 
 if __name__ == "__main__":

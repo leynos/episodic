@@ -1,4 +1,4 @@
-# Introduce migration tooling with Alembic, wired into CI to block divergent schemas
+# Introduce migration tooling with Alembic, wired into continuous integration (CI) to block divergent schemas
 
 This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
