@@ -87,8 +87,8 @@ def test_parse_tei_header_preserves_unmapped_validation_errors(
         raise ValueError(message)
 
     monkeypatch.setattr(
-        tei_module,
-        "_parse_and_validate_tei",
+        tei_module._tei,
+        "parse_xml",
         _raise_unmapped_validation_error,
     )
     with pytest.raises(ValueError, match=message):
