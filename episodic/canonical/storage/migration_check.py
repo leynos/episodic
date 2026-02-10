@@ -21,6 +21,7 @@ import typing as typ
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from alembic.util import CommandError
 
 from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
@@ -80,14 +81,14 @@ async def check_migrations_cli() -> int:
         )
         return 2
 
+    import tempfile
+    from pathlib import Path
+
     from py_pglite import PGliteConfig, PGliteManager
+    from sqlalchemy.exc import SQLAlchemyError
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     try:
-        import tempfile
-        from pathlib import Path
-
-        from sqlalchemy.ext.asyncio import create_async_engine
-
         with tempfile.TemporaryDirectory(
             prefix="episodic-migration-check-",
         ) as tmp:
@@ -108,22 +109,22 @@ async def check_migrations_cli() -> int:
                     diffs = await detect_schema_drift(engine)
                 finally:
                     await engine.dispose()
-
-        if diffs:
-            log_error(
-                _logger,
-                "Schema drift detected (%s difference(s)):",
-                len(diffs),
-            )
-            for diff in diffs:
-                log_error(_logger, "  %s", diff)
-            return 1
-    except Exception:  # noqa: BLE001
-        log_error(_logger, "Infrastructure error.", exc_info=True)
+    except (OSError, RuntimeError, SQLAlchemyError, CommandError) as exc:
+        log_error(_logger, "Infrastructure error: %s", exc, exc_info=True)
         return 2
-    else:
-        log_info(_logger, "No schema drift detected.")
-        return 0
+
+    if diffs:
+        log_error(
+            _logger,
+            "Schema drift detected (%s difference(s)):",
+            len(diffs),
+        )
+        for diff in diffs:
+            log_error(_logger, "  %s", diff)
+        return 1
+
+    log_info(_logger, "No schema drift detected.")
+    return 0
 
 
 if __name__ == "__main__":

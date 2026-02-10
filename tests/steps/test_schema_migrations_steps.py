@@ -9,7 +9,6 @@ Run the schema migration BDD scenarios:
 
 from __future__ import annotations
 
-import contextlib
 import typing as typ
 
 import pytest
@@ -65,9 +64,8 @@ def drift_context() -> typ.Iterator[DriftContext]:
     ctx: DriftContext = typ.cast("DriftContext", {})
     yield ctx
     temp_table = ctx.get("temp_table")
-    if temp_table is not None:
-        with contextlib.suppress(Exception):
-            Base.metadata.remove(temp_table)
+    if temp_table is not None and temp_table.key in Base.metadata.tables:
+        Base.metadata.remove(temp_table)
 
 
 @given("all Alembic migrations have been applied")

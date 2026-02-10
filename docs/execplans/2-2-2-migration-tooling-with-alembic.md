@@ -488,11 +488,8 @@ If tests fail, fix the issue and rerun the relevant `make` target. Log files in
 
 ## Interfaces and dependencies
 
-New module `episodic/canonical/storage/migration_check.py` exports:
-
-    async def detect_schema_drift(
-        engine: AsyncEngine,
-    ) -> list[tuple[Any, …]]
+New module `episodic/canonical/storage/migration_check.py` exports
+`detect_schema_drift(engine: AsyncEngine) -> list[tuple[Any, ...]]`.
 
 This function accepts an async SQLAlchemy engine where Alembic migrations have
 already been applied. It returns a list of differences between the migrated
