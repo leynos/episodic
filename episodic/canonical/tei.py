@@ -93,7 +93,8 @@ def _parse_and_validate_tei(
         if mapped_exc is not exc:
             raise mapped_exc from exc
         raise
-    return document
+    else:
+        return document
 
 
 def _to_payload(
