@@ -25,7 +25,7 @@ before executing database-backed scenarios.
 After modifying ORM models in `episodic/canonical/storage/models.py`, generate
 a migration with Alembic's autogenerate feature:
 
-    DATABASE_URL=<your-db-url> alembic revision --autogenerate -m "description"
+    DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
 
 Migration files follow the naming convention
 `YYYYMMDD_NNNNNN_short_description.py` (for example
@@ -37,18 +37,19 @@ The `make check-migrations` target detects drift between the ORM models and the
 applied migration history. It starts an ephemeral Postgres via py-pglite,
 applies all Alembic migrations, and uses
 `alembic.autogenerate.compare_metadata()` to compare the migrated schema
-against `Base.metadata`. If they differ the check exits non-zero and reports
+against `Base.metadata`. If they differ, the check exits non-zero and reports
 the discrepancies.
 
 Run it locally before committing model changes:
 
     make check-migrations
 
-### CI enforcement
+### Continuous integration enforcement
 
-The CI pipeline (`.github/workflows/ci.yml`) runs `make check-migrations` on
-every push to `main` and on every pull request. A PR that modifies ORM models
-without an accompanying Alembic migration will be blocked.
+The Continuous Integration (CI) pipeline (`.github/workflows/ci.yml`) runs
+`make check-migrations` on every push to `main` and on every pull request. A
+pull request that modifies Object-Relational Mapping (ORM) models without an
+accompanying Alembic migration will be blocked.
 
 ### Developer workflow
 

@@ -12,9 +12,9 @@ from __future__ import annotations
 import typing as typ
 
 import pytest
-import sqlalchemy as sa
 
-from episodic.canonical.storage import Base, detect_schema_drift
+from episodic.canonical.storage import detect_schema_drift
+from tests.conftest import temporary_drift_table
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine
@@ -34,13 +34,6 @@ async def test_drift_detected_for_unmigrated_table(
     migrated_engine: AsyncEngine,
 ) -> None:
     """Schema drift check detects a table present in metadata but not in migrations."""
-    table = sa.Table(
-        "_test_drift_table",
-        Base.metadata,
-        sa.Column("id", sa.Integer, primary_key=True),
-    )
-    try:
+    with temporary_drift_table():
         diffs = await detect_schema_drift(migrated_engine)
         assert len(diffs) > 0, "Expected schema drift to be detected."
-    finally:
-        Base.metadata.remove(table)

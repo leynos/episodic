@@ -15,8 +15,8 @@ import pytest
 import sqlalchemy as sa
 from pytest_bdd import given, scenario, then, when
 
-from episodic.canonical.storage import Base
 from episodic.canonical.storage.migration_check import detect_schema_drift
+from episodic.canonical.storage.models import Base
 
 if typ.TYPE_CHECKING:
     import asyncio

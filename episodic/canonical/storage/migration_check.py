@@ -15,15 +15,13 @@ Run the drift check from the command line:
 from __future__ import annotations
 
 import asyncio
-import pathlib
 import sys
 import typing as typ
 
 from alembic.autogenerate import compare_metadata
-from alembic.config import Config
 from alembic.migration import MigrationContext
 
-from alembic import command
+from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
 from episodic.logging import get_logger, log_error, log_info
 
@@ -40,7 +38,7 @@ def _compare_schema(
     metadata: sa.MetaData,
 ) -> list[tuple[object, ...]]:
     """Compare a migrated database against ORM model metadata."""
-    ctx = MigrationContext.configure(connection)
+    ctx = MigrationContext.configure(connection, opts={"compare_type": True})
     return typ.cast("list[tuple[object, ...]]", compare_metadata(ctx, metadata))
 
 
@@ -65,29 +63,6 @@ async def detect_schema_drift(
         return await connection.run_sync(_compare_schema, Base.metadata)
 
 
-def _alembic_config(database_url: str) -> Config:
-    """Create an Alembic configuration pointing at the project root."""
-    root = pathlib.Path(__file__).resolve().parents[3]
-    cfg = Config(str(root / "alembic.ini"))
-    cfg.set_main_option("script_location", str(root / "alembic"))
-    safe_url = database_url.replace("%", "%%")
-    cfg.set_main_option("sqlalchemy.url", safe_url)
-    return cfg
-
-
-def _run_migrations(connection: Connection, cfg: Config) -> None:
-    """Apply all Alembic migrations inside a sync context."""
-    cfg.attributes["connection"] = connection
-    command.upgrade(cfg, "head")
-
-
-async def _apply_migrations(engine: AsyncEngine) -> None:
-    """Apply all Alembic migrations against *engine*."""
-    cfg = _alembic_config(str(engine.url))
-    async with engine.begin() as connection:
-        await connection.run_sync(_run_migrations, cfg)
-
-
 async def check_migrations_cli() -> int:
     """Run the schema drift check as a CLI entrypoint.
 
@@ -107,24 +82,25 @@ async def check_migrations_cli() -> int:
         return 2
 
     import tempfile
+    from pathlib import Path
 
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    work_dir = pathlib.Path(tempfile.mkdtemp(prefix="episodic-migration-check-"))
+    with tempfile.TemporaryDirectory(prefix="episodic-migration-check-") as tmp:
+        work_dir = Path(tmp)
+        config = PGliteConfig(work_dir=work_dir)
 
-    config = PGliteConfig(work_dir=work_dir)
+        with PGliteManager(config):
+            dsn = config.get_connection_string()
+            engine = create_async_engine(dsn, pool_pre_ping=True)
+            try:
+                log_info(_logger, "Applying migrations to ephemeral database.")
+                await apply_migrations(engine)
 
-    with PGliteManager(config):
-        dsn = config.get_connection_string()
-        engine = create_async_engine(dsn, pool_pre_ping=True)
-        try:
-            log_info(_logger, "Applying migrations to ephemeral database.")
-            await _apply_migrations(engine)
-
-            log_info(_logger, "Checking for schema drift.")
-            diffs = await detect_schema_drift(engine)
-        finally:
-            await engine.dispose()
+                log_info(_logger, "Checking for schema drift.")
+                diffs = await detect_schema_drift(engine)
+            finally:
+                await engine.dispose()
 
     if diffs:
         log_error(

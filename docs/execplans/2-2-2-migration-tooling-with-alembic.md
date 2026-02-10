@@ -10,13 +10,14 @@ Status: COMPLETE
 
 ## Purpose and big picture
 
-After this change, the CI pipeline will automatically detect and block any pull
-request where ORM model changes are not accompanied by corresponding Alembic
-migrations. Developers will have a local `make check-migrations` target that
-compares the current SQLAlchemy model metadata against the state produced by
-applying all Alembic migrations, reporting any differences (schema drift). This
-prevents schema divergence between code and database, catching errors before
-they reach staging or production.
+After this change, the Continuous Integration (CI) pipeline will automatically
+detect and block any pull request where Object-Relational Mapping (ORM) model
+changes are not accompanied by corresponding Alembic migrations. Developers
+will have a local `make check-migrations` target that compares the current
+SQLAlchemy model metadata against the state produced by applying all Alembic
+migrations, reporting any differences (schema drift). This prevents schema
+divergence between code and database, catching errors before they reach staging
+or production.
 
 Success is observable when:
 
@@ -89,7 +90,8 @@ Success is observable when:
 
 ## Progress
 
-- [x] (2026-02-09 00:00Z) Stage A: Write BDD feature file and step stubs.
+- [x] (2026-02-09 00:00Z) Stage A: Write Behaviour-Driven Development (BDD)
+  feature file and step stubs.
 - [x] (2026-02-09 00:00Z) Stage B: Write unit tests for schema drift
   detection.
 - [x] (2026-02-09 00:00Z) Stage C: Implement the `migration_check` module.
@@ -113,14 +115,14 @@ Success is observable when:
 ## Decision Log
 
 - Decision: Use `alembic.autogenerate.compare_metadata()` programmatically
-  rather than the `alembic check` CLI command. Rationale: The `alembic check`
-  CLI invokes the full Alembic environment (`env.py`), which is configured for
-  async SQLAlchemy and requires `DATABASE_URL` to be set. A programmatic
-  approach reuses the existing py-pglite engine and `_apply_migrations`
-  patterns from `tests/conftest.py`, is fully testable, and gives control over
-  output format and false-positive filtering. The `compare_metadata` function
-  is the same API that `alembic check` uses internally. Date/Author:
-  2026-02-09, plan phase.
+  rather than the `alembic check` Command-Line Interface (CLI) command.
+  Rationale: The `alembic check` CLI invokes the full Alembic environment
+  (`env.py`), which is configured for async SQLAlchemy and requires
+  `DATABASE_URL` to be set. A programmatic approach reuses the existing
+  py-pglite engine and `_apply_migrations` patterns from `tests/conftest.py`,
+  is fully testable, and gives control over output format and false-positive
+  filtering. The `compare_metadata` function is the same API that
+  `alembic check` uses internally. Date/Author: 2026-02-09, plan phase.
 
 - Decision: Place the `migration_check` module at
   `episodic/canonical/storage/migration_check.py` rather than in a separate
@@ -203,7 +205,7 @@ architecture. The codebase lives at `/home/user/project/`. Key locations:
 
 The term "schema drift" means a difference between what the ORM models declare
 (via `Base.metadata`) and what the database would look like after applying all
-Alembic migrations. Detecting drift tells us whether a developer has changed
+Alembic migrations. Detecting drift indicates whether a developer has changed
 models without creating a corresponding migration (or vice versa).
 
 The function `alembic.autogenerate.compare_metadata(context, metadata)` accepts
