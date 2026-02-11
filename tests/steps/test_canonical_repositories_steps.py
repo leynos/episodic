@@ -39,6 +39,33 @@ def _run_async_step(
     runner.run(coro)
 
 
+async def _persist_series_profile(
+    session_factory: cabc.Callable[[], AsyncSession],
+    *,
+    slug: str,
+    title: str,
+    configuration: dict[str, object],
+    action: cabc.Callable[[SqlAlchemyUnitOfWork], typ.Awaitable[None]],
+) -> SeriesProfile:
+    """Create a series profile, add it via the UoW, and run *action*."""
+    now = dt.datetime.now(dt.UTC)
+    profile = SeriesProfile(
+        id=uuid.uuid4(),
+        slug=slug,
+        title=title,
+        description=None,
+        configuration=configuration,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.series_profiles.add(profile)
+        await action(uow)
+
+    return profile
+
+
 class RepositoryContext(typ.TypedDict, total=False):
     """Shared state for canonical repository BDD steps."""
 
@@ -106,21 +133,13 @@ def add_series_profile(
     """Persist a series profile through the repository."""
 
     async def _store() -> None:
-        now = dt.datetime.now(dt.UTC)
-        profile = SeriesProfile(
-            id=uuid.uuid4(),
+        profile = await _persist_series_profile(
+            session_factory,
             slug="bdd-round-trip",
             title="BDD Round Trip",
-            description=None,
             configuration={"tone": "neutral"},
-            created_at=now,
-            updated_at=now,
+            action=lambda uow: uow.commit(),
         )
-
-        async with SqlAlchemyUnitOfWork(session_factory) as uow:
-            await uow.series_profiles.add(profile)
-            await uow.commit()
-
         context["profile"] = profile
         context["profile_id"] = profile.id
 
@@ -136,21 +155,13 @@ def add_and_rollback(
     """Add a series profile and roll back without committing."""
 
     async def _store_and_rollback() -> None:
-        now = dt.datetime.now(dt.UTC)
-        profile = SeriesProfile(
-            id=uuid.uuid4(),
+        profile = await _persist_series_profile(
+            session_factory,
             slug="bdd-rollback",
             title="BDD Rollback",
-            description=None,
             configuration={},
-            created_at=now,
-            updated_at=now,
+            action=lambda uow: uow.rollback(),
         )
-
-        async with SqlAlchemyUnitOfWork(session_factory) as uow:
-            await uow.series_profiles.add(profile)
-            await uow.rollback()
-
         context["profile"] = profile
         context["profile_id"] = profile.id
 
