@@ -16,16 +16,17 @@ import asyncio
 import contextlib
 import os
 import typing as typ
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from alembic.config import Config
+import sqlalchemy as sa
 
-from alembic import command
+from episodic.canonical.storage.alembic_helpers import apply_migrations
+from episodic.canonical.storage.models import Base
 
 if typ.TYPE_CHECKING:
-    from sqlalchemy.engine import Connection
+    from pathlib import Path
+
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 try:
@@ -77,29 +78,22 @@ async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
             await engine.dispose()
 
 
-def _alembic_config(database_url: str) -> Config:
-    """Create an Alembic configuration for test migrations."""
-    root = Path(__file__).resolve().parents[1]
-    config = Config(str(root / "alembic.ini"))
-    config.set_main_option("script_location", str(root / "alembic"))
-    # ConfigParser interpolates percent signs, so escape them in URLs.
-    safe_url = database_url.replace("%", "%%")
-    config.set_main_option("sqlalchemy.url", safe_url)
-    return config
+@contextlib.contextmanager
+def temporary_drift_table() -> typ.Iterator[sa.Table]:
+    """Add a temporary table to Base.metadata and remove it on exit.
 
-
-async def _apply_migrations(engine: AsyncEngine) -> None:
-    """Apply Alembic migrations against the provided engine."""
-    config = _alembic_config(str(engine.url))
-
-    async with engine.begin() as connection:
-        await connection.run_sync(_run_migrations, config)
-
-
-def _run_migrations(connection: Connection, config: Config) -> None:
-    """Run Alembic migrations in a sync context."""
-    config.attributes["connection"] = connection
-    command.upgrade(config, "head")
+    This helper is shared between the unit tests and BDD steps that
+    verify schema drift detection against an unmigrated table.
+    """
+    table = sa.Table(
+        "_test_drift_table",
+        Base.metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+    )
+    try:
+        yield table
+    finally:
+        Base.metadata.remove(table)
 
 
 @pytest_asyncio.fixture
@@ -124,7 +118,7 @@ async def migrated_engine(
     pglite_engine: AsyncEngine,
 ) -> typ.AsyncIterator[AsyncEngine]:
     """Yield a py-pglite engine with migrations applied."""
-    await _apply_migrations(pglite_engine)
+    await apply_migrations(pglite_engine)
     yield pglite_engine
 
 

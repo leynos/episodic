@@ -29,6 +29,8 @@ This guide will cover:
 - Tracking ingestion jobs, source weighting decisions, and provenance metadata
 - Configuring content weighting and conflict resolution
 - Managing episode metadata and show notes
+- Database schema integrity is validated automatically in CI so that canonical
+  content storage remains consistent across releases
 
 ### Quality & Compliance
 

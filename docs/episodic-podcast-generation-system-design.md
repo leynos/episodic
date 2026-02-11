@@ -1186,6 +1186,17 @@ stateDiagram-v2
 3. Deployments apply migrations through GitOps jobs with automated rollback if
    checks fail.
 
+Schema drift detection runs in Continuous Integration (CI) via
+`make check-migrations`. The check starts an ephemeral PostgreSQL instance
+using py-pglite, applies all Alembic migrations to it, and then calls
+`alembic.autogenerate.compare_metadata()` to compare the migrated database
+state against the current Object-Relational Mapping (ORM) model metadata
+(`Base.metadata`). If the comparison finds differences, the check exits
+non-zero and the pull request is blocked. This approach was chosen over the
+`alembic check` Command-Line Interface (CLI) because it reuses the existing
+py-pglite test infrastructure, is fully testable in isolation, and gives
+explicit control over false-positive filtering.
+
 ## Operational Considerations
 
 - **Infrastructure:** DigitalOcean Kubernetes Service (DOKS) clusters span

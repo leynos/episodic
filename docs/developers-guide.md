@@ -20,6 +20,46 @@ under `alembic/`, and migration scripts are stored in `alembic/versions/`.
 Schema changes must be expressed as migrations, and tests apply migrations
 before executing database-backed scenarios.
 
+### Creating a new migration
+
+After modifying Object-Relational Mapping (ORM) models in
+`episodic/canonical/storage/models.py`, generate a migration with Alembic's
+autogenerate feature:
+
+    DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
+
+Migration files follow the naming convention
+`YYYYMMDD_NNNNNN_short_description.py` (for example
+`20260203_000001_create_canonical_schema.py`).
+
+### Schema drift detection
+
+The `make check-migrations` target detects drift between the ORM models and the
+applied migration history. It starts an ephemeral Postgres via py-pglite,
+applies all Alembic migrations, and uses
+`alembic.autogenerate.compare_metadata()` to compare the migrated schema
+against `Base.metadata`. If they differ, the check exits non-zero and reports
+the discrepancies.
+
+Run it locally before committing model changes:
+
+    make check-migrations
+
+### Continuous integration enforcement
+
+The Continuous Integration (CI) pipeline (`.github/workflows/ci.yml`) runs
+`make check-migrations` on every push to `main` and on every pull request. A
+pull request that modifies Object-Relational Mapping (ORM) models without an
+accompanying Alembic migration will be blocked.
+
+### Developer workflow
+
+1. Modify ORM models in `episodic/canonical/storage/models.py`.
+2. Generate a migration: `alembic revision --autogenerate -m "description"`.
+3. Run `make check-migrations` to verify the models and migrations are in sync.
+4. Run `make test` to confirm existing tests still pass.
+5. Commit both the model changes and the new migration together.
+
 ## Database testing with py-pglite
 
 Tests that touch the database use py-pglite to run an in-process PostgreSQL

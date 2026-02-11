@@ -6,7 +6,7 @@ VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie test typecheck $(TOOLS) $(VENV_TOOLS)
+        markdownlint nixie test typecheck check-migrations $(TOOLS) $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
 
@@ -78,6 +78,9 @@ nixie: ## Validate Mermaid diagrams
 
 test: build uv $(VENV_TOOLS) ## Run tests
 	$(UV_ENV) uv run pytest -v -n auto
+
+check-migrations: build uv $(VENV_TOOLS) ## Check for schema drift between models and migrations
+	$(UV_ENV) uv run python -m episodic.canonical.storage.migration_check
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
