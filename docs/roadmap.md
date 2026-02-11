@@ -61,7 +61,7 @@ that align with the system design.
   states.
 - [x] 2.2.2. Introduce migration tooling with Alembic, wired into Continuous
   Integration (CI) to block divergent schemas.
-- [ ] 2.2.3. Implement the repository and unit-of-work layers over Postgres with
+- [x] 2.2.3. Implement the repository and unit-of-work layers over Postgres with
   integration tests.
 - [ ] 2.2.4. Build the multi-source ingestion service that normalises inputs,
   applies source weighting heuristics, and resolves conflicts into canonical

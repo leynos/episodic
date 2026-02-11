@@ -90,6 +90,37 @@ Canonical content persistence follows the hexagonal architecture guidance:
   persisted before creating related rows (for example, approval events that
   reference newly created episodes).
 
+### Repository usage
+
+Each repository provides `add()` to persist a domain entity and `get()` (or
+`get_by_slug()`, `list_for_job()`, `list_for_episode()`) to retrieve persisted
+entities. Repositories translate between frozen domain dataclasses and
+SQLAlchemy ORM records via mapper functions in
+`episodic/canonical/storage/mappers.py`. Access repositories through the
+unit-of-work rather than constructing them directly:
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.series_profiles.add(profile)
+        await uow.commit()
+
+        fetched = await uow.series_profiles.get(profile.id)
+
+### Unit-of-work transaction semantics
+
+The `SqlAlchemyUnitOfWork` manages transaction boundaries:
+
+- `commit()` persists all pending changes to the database.
+- `rollback()` discards all uncommitted changes within the current session.
+- `flush()` writes pending changes to the database without committing, useful
+  when dependent records require foreign-key references to exist within the
+  same transaction.
+- When the context manager exits with an unhandled exception, the unit of work
+  rolls back automatically.
+
+Database-level constraints (unique slugs, foreign keys, and CHECK constraints
+such as the weight bound on source documents) are enforced by Postgres and
+raise `sqlalchemy.exc.IntegrityError` on violation.
+
 ## Logging
 
 Structured logging uses femtologging. Import `get_logger` from
