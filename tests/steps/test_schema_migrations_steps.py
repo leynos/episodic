@@ -35,10 +35,10 @@ class DriftContext(typ.TypedDict, total=False):
 
 def _run_async_step(
     runner: asyncio.Runner,
-    step_fn: cabc.Callable[[], typ.Awaitable[None]],
+    step_fn: cabc.Callable[[], cabc.Awaitable[None]],
 ) -> None:
     """Execute an async BDD step via the provided runner."""
-    coro = typ.cast("typ.Coroutine[object, object, None]", step_fn())
+    coro = typ.cast("cabc.Coroutine[object, object, None]", step_fn())
     runner.run(coro)
 
 
@@ -59,7 +59,7 @@ def test_drift_detected_when_models_diverge() -> None:
 
 
 @pytest.fixture
-def drift_context() -> typ.Iterator[DriftContext]:
+def drift_context() -> cabc.Iterator[DriftContext]:
     """Share state between BDD steps and clean up temp tables."""
     ctx: DriftContext = typ.cast("DriftContext", {})
     yield ctx

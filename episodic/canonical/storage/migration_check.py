@@ -109,8 +109,8 @@ async def check_migrations_cli() -> int:
                     diffs = await detect_schema_drift(engine)
                 finally:
                     await engine.dispose()
-    except (OSError, RuntimeError, SQLAlchemyError, CommandError) as exc:
-        log_error(_logger, "Infrastructure error: %s", exc, exc_info=True)
+    except (OSError, RuntimeError, SQLAlchemyError, CommandError):
+        log_error(_logger, "Infrastructure error.", exc_info=True)
         return 2
 
     if diffs:
