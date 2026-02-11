@@ -25,6 +25,7 @@ import tei_rapporteur as _tei
 type TEIPayload = dict[str, object]
 type ParseXmlFn = cabc.Callable[[str], object]
 type ToDictFn = cabc.Callable[[object], object]
+type PayloadInput = cabc.Mapping[object, object] | cabc.Iterable[tuple[object, object]]
 
 _MISSING_HEADER_MESSAGE = "XML processing error: missing field `teiHeader`"
 _MISSING_TITLE_MESSAGE = "XML processing error: missing field `title`"
@@ -97,6 +98,41 @@ def _parse_and_validate_tei(
         return document
 
 
+def _ensure_string_keyed_payload(
+    payload: PayloadInput,
+    *,
+    non_string_keys_message: str,
+) -> TEIPayload:
+    """Normalize mapping or item-pairs into a TEIPayload with string keys."""
+    match payload:
+        case cabc.Mapping() as payload_mapping:
+            return _ensure_string_keyed_items(
+                payload_mapping.items(),
+                non_string_keys_message=non_string_keys_message,
+            )
+        case _:
+            return _ensure_string_keyed_items(
+                payload,
+                non_string_keys_message=non_string_keys_message,
+            )
+
+
+def _ensure_string_keyed_items(
+    items: cabc.Iterable[tuple[object, object]],
+    *,
+    non_string_keys_message: str,
+) -> TEIPayload:
+    """Normalize key-value items into a TEIPayload with string keys."""
+    typed_payload: TEIPayload = {}
+    for key, value in items:
+        match key:
+            case str() as key_str:
+                typed_payload[key_str] = value
+            case _:
+                raise TypeError(non_string_keys_message)
+    return typed_payload
+
+
 def _to_payload(
     document: object,
     to_dict: ToDictFn = _default_to_dict,
@@ -109,16 +145,10 @@ def _to_payload(
         case _:
             msg = "TEI parser produced non-mapping payload."
             raise TypeError(msg)
-
-    typed_payload: TEIPayload = {}
-    for key, value in items:
-        match key:
-            case str() as key_str:
-                typed_payload[key_str] = value
-            case _:
-                msg = "TEI parser produced non-string payload keys."
-                raise TypeError(msg)
-    return typed_payload
+    return _ensure_string_keyed_payload(
+        items,
+        non_string_keys_message="TEI parser produced non-string payload keys.",
+    )
 
 
 def _extract_header(payload: TEIPayload) -> TEIPayload:
@@ -126,15 +156,10 @@ def _extract_header(payload: TEIPayload) -> TEIPayload:
     header = payload.get("teiHeader") or payload.get("header")
     match header:
         case dict() as header_dict:
-            typed_header: TEIPayload = {}
-            for key, value in header_dict.items():
-                match key:
-                    case str() as key_str:
-                        typed_header[key_str] = value
-                    case _:
-                        msg = "TEI header payload contains non-string keys."
-                        raise TypeError(msg)
-            return typed_header
+            return _ensure_string_keyed_payload(
+                header_dict,
+                non_string_keys_message="TEI header payload contains non-string keys.",
+            )
         case _:
             msg = "TEI header missing from parsed payload."
             raise TypeError(msg)
