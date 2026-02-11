@@ -29,16 +29,6 @@ from episodic.canonical.services import ingest_sources
 from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 
 
-class TEITestProtocol(typ.Protocol):
-    """Typed surface for tei_rapporteur interactions in tests."""
-
-    Document: cabc.Callable[[str], object]
-    emit_xml: cabc.Callable[[object], str]
-
-
-TEI: TEITestProtocol = typ.cast("TEITestProtocol", _tei)
-
-
 def _run_async_step(
     runner: asyncio.Runner,
     step_fn: cabc.Callable[[], typ.Awaitable[None]],
@@ -152,8 +142,8 @@ def series_profile_exists(
 @given('a TEI document titled "Bridgewater" is available')
 def tei_document_available(context: IngestionContext) -> None:
     """Provide TEI XML for ingestion."""
-    document = TEI.Document("Bridgewater")
-    context["tei_xml"] = TEI.emit_xml(document)
+    document = _tei.Document("Bridgewater")
+    context["tei_xml"] = _tei.emit_xml(document)
 
 
 @when("an ingestion job records source documents")

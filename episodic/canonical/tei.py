@@ -16,84 +16,34 @@ Parse a TEI header payload from XML:
 
 from __future__ import annotations
 
+import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
 import tei_rapporteur as _tei
 
-TEI = _tei  # pyright: ignore[reportUnknownMemberType]  # TODO(@codex): add type stubs for tei_rapporteur upstream (https://github.com/leynos/tei-rapporteur/issues/new)
-
-
 type TEIPayload = dict[str, object]
+type ParseXmlFn = cabc.Callable[[str], object]
+type ToDictFn = cabc.Callable[[object], object]
+type PayloadInput = cabc.Mapping[object, object] | cabc.Iterable[tuple[object, object]]
 
 _MISSING_HEADER_MESSAGE = "XML processing error: missing field `teiHeader`"
 _MISSING_TITLE_MESSAGE = "XML processing error: missing field `title`"
 
 
-class TEIDocumentProtocol(typ.Protocol):
-    """Protocol for TEI document validation.
-
-    Methods
-    -------
-    validate()
-        Validate the parsed TEI document.
-    """
-
-    def validate(self) -> None:
-        """Validate the parsed TEI document.
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        ValueError
-            If the TEI document is invalid.
-        """
-        ...
+def _default_parse_xml(xml: str) -> object:
+    """Parse XML using the default tei_rapporteur binding."""
+    return _tei.parse_xml(xml)
 
 
-class TEIProtocol(typ.Protocol):
-    """Protocol for tei-rapporteur parser interactions.
-
-    Methods
-    -------
-    parse_xml(xml)
-        Parse a TEI XML payload into a document handle.
-    to_dict(document)
-        Serialize a TEI document into a dictionary payload.
-    """
-
-    def parse_xml(self, xml: str) -> TEIDocumentProtocol:
-        """Parse TEI XML into a TEI document.
-
-        Parameters
-        ----------
-        xml : str
-            TEI XML payload to parse.
-
-        Returns
-        -------
-        TEIDocumentProtocol
-            Parsed TEI document handle.
-        """
-        ...
-
-    def to_dict(self, document: TEIDocumentProtocol) -> TEIPayload:
-        """Convert a TEI document into a dictionary payload.
-
-        Parameters
-        ----------
-        document : TEIDocumentProtocol
-            Parsed TEI document to serialize.
-
-        Returns
-        -------
-        TEIPayload
-            Serialized TEI document dictionary.
-        """
-        ...
+def _default_to_dict(document: object) -> object:
+    """Serialize a parsed TEI document using the default binding."""
+    match document:
+        case _tei.Document():
+            return _tei.to_dict(document)
+        case _:
+            msg = "TEI parser returned unexpected document type."
+            raise TypeError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -112,21 +62,93 @@ class TeiHeaderPayload:
     payload: TEIPayload
 
 
-def _parse_and_validate_tei(tei: TEIProtocol, xml: str) -> TEIDocumentProtocol:
+def _validate_document(document: object) -> None:
+    """Validate a parsed document via its validate callable."""
+    validate = getattr(document, "validate", None)
+    if not callable(validate):
+        msg = "TEI parser returned document without callable validate()."
+        raise TypeError(msg)
+    validate()
+
+
+def _map_validation_error(exc: ValueError) -> Exception:
+    """Map parser validation errors to domain-specific exceptions."""
+    message = str(exc)
+    if message == _MISSING_HEADER_MESSAGE:
+        return TypeError("TEI header missing from parsed payload.")
+    if message == _MISSING_TITLE_MESSAGE:
+        return ValueError("TEI header title missing from parsed payload.")
+    return exc
+
+
+def _parse_and_validate_tei(
+    xml: str,
+    parse_xml: ParseXmlFn = _default_parse_xml,
+) -> object:
     """Parse TEI XML and validate the document."""
     try:
-        document = tei.parse_xml(xml)
-        document.validate()
+        document = parse_xml(xml)
+        _validate_document(document)
     except ValueError as exc:
-        message = str(exc)
-        if message == _MISSING_HEADER_MESSAGE:
-            msg = "TEI header missing from parsed payload."
-            raise TypeError(msg) from exc
-        if message == _MISSING_TITLE_MESSAGE:
-            msg = "TEI header title missing from parsed payload."
-            raise ValueError(msg) from exc
+        mapped_exc = _map_validation_error(exc)
+        if mapped_exc is not exc:
+            raise mapped_exc from exc
         raise
-    return document
+    else:
+        return document
+
+
+def _ensure_string_keyed_payload(
+    payload: PayloadInput,
+    *,
+    non_string_keys_message: str,
+) -> TEIPayload:
+    """Normalize mapping or item-pairs into a TEIPayload with string keys."""
+    match payload:
+        case cabc.Mapping() as payload_mapping:
+            return _ensure_string_keyed_items(
+                payload_mapping.items(),
+                non_string_keys_message=non_string_keys_message,
+            )
+        case _:
+            return _ensure_string_keyed_items(
+                payload,
+                non_string_keys_message=non_string_keys_message,
+            )
+
+
+def _ensure_string_keyed_items(
+    items: cabc.Iterable[tuple[object, object]],
+    *,
+    non_string_keys_message: str,
+) -> TEIPayload:
+    """Normalize key-value items into a TEIPayload with string keys."""
+    typed_payload: TEIPayload = {}
+    for key, value in items:
+        match key:
+            case str() as key_str:
+                typed_payload[key_str] = value
+            case _:
+                raise TypeError(non_string_keys_message)
+    return typed_payload
+
+
+def _to_payload(
+    document: object,
+    to_dict: ToDictFn = _default_to_dict,
+) -> TEIPayload:
+    """Convert a parsed TEI document into a string-keyed payload."""
+    payload = to_dict(document)
+    match payload:
+        case dict() as payload_dict:
+            items = payload_dict.items()
+        case _:
+            msg = "TEI parser produced non-mapping payload."
+            raise TypeError(msg)
+    return _ensure_string_keyed_payload(
+        items,
+        non_string_keys_message="TEI parser produced non-string payload keys.",
+    )
 
 
 def _extract_header(payload: TEIPayload) -> TEIPayload:
@@ -134,7 +156,10 @@ def _extract_header(payload: TEIPayload) -> TEIPayload:
     header = payload.get("teiHeader") or payload.get("header")
     match header:
         case dict() as header_dict:
-            return typ.cast("TEIPayload", header_dict)
+            return _ensure_string_keyed_payload(
+                header_dict,
+                non_string_keys_message="TEI header payload contains non-string keys.",
+            )
         case _:
             msg = "TEI header missing from parsed payload."
             raise TypeError(msg)
@@ -178,9 +203,8 @@ def parse_tei_header(xml: str) -> TeiHeaderPayload:
         If the TEI parser raises a validation error that does not map to a
         missing header or title.
     """
-    tei = typ.cast("TEIProtocol", TEI)
-    document = _parse_and_validate_tei(tei, xml)
-    payload = tei.to_dict(document)
+    document = _parse_and_validate_tei(xml)
+    payload = _to_payload(document)
     header = _extract_header(payload)
     title = _extract_title(header)
     return TeiHeaderPayload(title=title, payload=header)

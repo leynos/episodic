@@ -13,8 +13,8 @@ from episodic.canonical.tei import parse_tei_header
 
 def test_parse_tei_header_extracts_title() -> None:
     """Parsed headers surface the document title."""
-    document = _tei.Document("Bridgewater")  # type: ignore[unresolved-attribute]
-    xml = _tei.emit_xml(document)  # type: ignore[unresolved-attribute]
+    document = _tei.Document("Bridgewater")
+    xml = _tei.emit_xml(document)
 
     header = parse_tei_header(xml)
 
@@ -80,23 +80,16 @@ def test_parse_tei_header_preserves_unmapped_validation_errors(
 ) -> None:
     """Unmapped validation errors should surface unchanged."""
 
-    class _DummyDocument:
-        def __init__(self, exc: Exception) -> None:
-            self._exc = exc
+    def _raise_unmapped_validation_error(
+        _xml: str,
+        parse_xml: tei_module.ParseXmlFn = _tei.parse_xml,
+    ) -> object:
+        raise ValueError(message)
 
-        def validate(self) -> None:
-            raise self._exc
-
-    class _DummyTei:
-        def __init__(self, exc: Exception) -> None:
-            self._exc = exc
-
-        def parse_xml(self, xml: str) -> _DummyDocument:
-            return _DummyDocument(self._exc)
-
-        def to_dict(self, document: _DummyDocument) -> dict[str, object]:
-            return {}
-
-    monkeypatch.setattr(tei_module, "TEI", _DummyTei(ValueError(message)))
+    monkeypatch.setattr(
+        tei_module._tei,
+        "parse_xml",
+        _raise_unmapped_validation_error,
+    )
     with pytest.raises(ValueError, match=message):
         parse_tei_header("<TEI></TEI>")
