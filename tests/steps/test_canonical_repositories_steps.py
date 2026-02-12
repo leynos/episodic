@@ -41,20 +41,21 @@ def _run_async_step(
 
 async def _persist_series_profile(
     session_factory: cabc.Callable[[], AsyncSession],
-    *,
-    slug: str,
-    title: str,
-    configuration: dict[str, object],
+    profile_data: dict[str, typ.Any],
     action: cabc.Callable[[SqlAlchemyUnitOfWork], typ.Awaitable[None]],
 ) -> SeriesProfile:
-    """Create a series profile, add it via the UoW, and run *action*."""
+    """Create a series profile, add it via the UoW, and run *action*.
+
+    *profile_data* must contain ``"slug"`` and ``"title"`` keys.
+    ``"configuration"`` defaults to ``{}`` when absent.
+    """
     now = dt.datetime.now(dt.UTC)
     profile = SeriesProfile(
         id=uuid.uuid4(),
-        slug=slug,
-        title=title,
+        slug=profile_data["slug"],
+        title=profile_data["title"],
         description=None,
-        configuration=configuration,
+        configuration=profile_data.get("configuration", {}),
         created_at=now,
         updated_at=now,
     )
@@ -135,9 +136,11 @@ def add_series_profile(
     async def _store() -> None:
         profile = await _persist_series_profile(
             session_factory,
-            slug="bdd-round-trip",
-            title="BDD Round Trip",
-            configuration={"tone": "neutral"},
+            {
+                "slug": "bdd-round-trip",
+                "title": "BDD Round Trip",
+                "configuration": {"tone": "neutral"},
+            },
             action=lambda uow: uow.commit(),
         )
         context["profile"] = profile
@@ -157,9 +160,7 @@ def add_and_rollback(
     async def _store_and_rollback() -> None:
         profile = await _persist_series_profile(
             session_factory,
-            slug="bdd-rollback",
-            title="BDD Rollback",
-            configuration={},
+            {"slug": "bdd-rollback", "title": "BDD Rollback", "configuration": {}},
             action=lambda uow: uow.rollback(),
         )
         context["profile"] = profile
