@@ -74,6 +74,8 @@ class RepositoryContext(typ.TypedDict, total=False):
     profile_id: uuid.UUID
     fetched_profile: SeriesProfile | None
     integrity_error_raised: bool
+    _job_id: uuid.UUID
+    _episode_id: uuid.UUID
 
 
 if typ.TYPE_CHECKING:
@@ -237,8 +239,8 @@ def episode_with_dependencies(
 
         # Store IDs for the weight constraint step.
         context["profile_id"] = episode_id  # reuse field for step linking
-        context["_job_id"] = job_id  # type: ignore[typeddict-unknown-key]
-        context["_episode_id"] = episode_id  # type: ignore[typeddict-unknown-key]
+        context["_job_id"] = job_id
+        context["_episode_id"] = episode_id
 
     _run_async_step(_function_scoped_runner, _setup)
 
@@ -275,8 +277,8 @@ def add_bad_weight_source(
 
     async def _add() -> None:
         now = dt.datetime.now(dt.UTC)
-        job_id: uuid.UUID = context["_job_id"]  # type: ignore[typeddict-item]
-        episode_id: uuid.UUID = context["_episode_id"]  # type: ignore[typeddict-item]
+        job_id: uuid.UUID = context["_job_id"]
+        episode_id: uuid.UUID = context["_episode_id"]
 
         bad_source = SourceDocument(
             id=uuid.uuid4(),
@@ -290,13 +292,14 @@ def add_bad_weight_source(
             created_at=now,
         )
 
-        try:
-            async with SqlAlchemyUnitOfWork(session_factory) as uow:
-                await uow.source_documents.add(bad_source)
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            await uow.source_documents.add(bad_source)
+            with pytest.raises(
+                sa_exc.IntegrityError,
+                match=r"ck_source_documents_weight|check|CHECK",
+            ):
                 await uow.commit()
-            context["integrity_error_raised"] = False
-        except sa_exc.IntegrityError:
-            context["integrity_error_raised"] = True
+        context["integrity_error_raised"] = True
 
     _run_async_step(_function_scoped_runner, _add)
 

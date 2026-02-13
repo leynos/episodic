@@ -135,11 +135,11 @@ Success is observable when:
   rather than modifying production code. Rationale: The repository and
   unit-of-work implementation was delivered as part of roadmap items 2.2.1 and
   2.2.2. All six repository classes, the `SqlAlchemyUnitOfWork`, port
-  protocols, domain entities, ORM models, mappers, and the `ingest_sources`
-  domain service are fully implemented and functional. Three unit tests and one
-  BDD scenario already exist. What remained was comprehensive integration tests
-  and documentation to satisfy the "with integration tests" requirement of
-  2.2.3. Date/Author: 2026-02-11, plan phase.
+  protocols, domain entities, object-relational mapper (ORM) models, mappers,
+  and the `ingest_sources` domain service are fully implemented and functional.
+  Three unit tests and one BDD scenario already exist. What remained was
+  comprehensive integration tests and documentation to satisfy the "with
+  integration tests" requirement of 2.2.3. Date/Author: 2026-02-11, plan phase.
 
 - Decision: Add eight targeted unit tests rather than restructuring existing
   tests. Rationale: The existing three tests cover persistence with header
@@ -240,7 +240,7 @@ their roles are:
   orchestrates creating TEI headers, episodes, ingestion jobs, source
   documents, and approval events within a UoW transaction.
 - `tests/test_canonical_storage.py` -- Existing unit tests: slug uniqueness,
-  episode persistence with header linkage, getter and list round-trips.
+  episode persistence with header linkage, getter, and list round-trips.
 - `tests/features/canonical_ingestion.feature` -- Existing BDD scenario
   exercising the full ingestion workflow.
 - `tests/steps/test_canonical_ingestion_steps.py` -- Step definitions for the
