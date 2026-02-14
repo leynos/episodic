@@ -220,3 +220,193 @@ async def test_repository_getters_and_lists(session_factory: object) -> None:
         assert records[0].episode_id == episode.id, (
             "Expected the approval event to reference the episode."
         )
+
+
+@pytest.mark.asyncio
+async def test_get_returns_none_for_missing_entity(session_factory: object) -> None:
+    """Repository get() returns None for a non-existent identifier."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        result = await uow.series_profiles.get(uuid.uuid4())
+
+    assert result is None, "Expected None when the entity does not exist."
+
+
+@pytest.mark.asyncio
+async def test_uow_rollback_discards_uncommitted_changes(
+    session_factory: object,
+) -> None:
+    """Rollback discards uncommitted changes."""
+    now = dt.datetime.now(dt.UTC)
+    profile = SeriesProfile(
+        id=uuid.uuid4(),
+        slug="rollback-test",
+        title="Rollback Test",
+        description=None,
+        configuration={},
+        created_at=now,
+        updated_at=now,
+    )
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(profile)
+        await uow.rollback()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        result = await uow.series_profiles.get(profile.id)
+
+    assert result is None, "Expected rollback to discard the uncommitted profile."
+
+
+@pytest.mark.asyncio
+async def test_uow_rolls_back_on_exception(session_factory: object) -> None:
+    """UoW context manager rolls back on unhandled exception."""
+    now = dt.datetime.now(dt.UTC)
+    profile = SeriesProfile(
+        id=uuid.uuid4(),
+        slug="exception-test",
+        title="Exception Test",
+        description=None,
+        configuration={},
+        created_at=now,
+        updated_at=now,
+    )
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async def _add_and_raise() -> None:
+        async with SqlAlchemyUnitOfWork(factory) as uow:
+            await uow.series_profiles.add(profile)
+            msg = "Simulated failure."
+            raise RuntimeError(msg)
+
+    with pytest.raises(RuntimeError):
+        await _add_and_raise()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        result = await uow.series_profiles.get(profile.id)
+
+    assert result is None, "Expected exception to trigger rollback."
+
+
+@pytest.mark.asyncio
+async def test_source_document_weight_check_constraint(session_factory: object) -> None:
+    """Weight check constraint rejects values outside [0, 1]."""
+    now = dt.datetime.now(dt.UTC)
+    series, header, episode, job, _ = _episode_fixture(now)
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.tei_headers.add(header)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.episodes.add(episode)
+        await uow.ingestion_jobs.add(job)
+        bad_source = SourceDocument(
+            id=uuid.uuid4(),
+            ingestion_job_id=job.id,
+            canonical_episode_id=episode.id,
+            source_type="web",
+            source_uri="https://example.com/invalid",
+            weight=1.5,
+            content_hash="hash-bad",
+            metadata={},
+            created_at=now,
+        )
+        await uow.source_documents.add(bad_source)
+        with pytest.raises(
+            sa_exc.IntegrityError,
+            match=r"ck_source_documents_weight|check|CHECK",
+        ):
+            await uow.commit()
+
+
+@pytest.mark.asyncio
+async def test_approval_event_fk_constraint(session_factory: object) -> None:
+    """Approval event foreign key rejects non-existent episode."""
+    now = dt.datetime.now(dt.UTC)
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        event = ApprovalEvent(
+            id=uuid.uuid4(),
+            episode_id=uuid.uuid4(),
+            actor="test@example.com",
+            from_state=None,
+            to_state=ApprovalState.DRAFT,
+            note="Orphan event.",
+            payload={},
+            created_at=now,
+        )
+        await uow.approval_events.add(event)
+        with pytest.raises(
+            sa_exc.IntegrityError,
+            match=r"foreign key|FOREIGN KEY|fk|violates",
+        ):
+            await uow.commit()
+
+
+@pytest.mark.asyncio
+async def test_tei_header_round_trip(session_factory: object) -> None:
+    """TEI header round-trips through add and get."""
+    now = dt.datetime.now(dt.UTC)
+    header = TeiHeader(
+        id=uuid.uuid4(),
+        title="Round Trip Header",
+        payload={"file_desc": {"title": "Round Trip"}},
+        raw_xml="<TEI>round trip</TEI>",
+        created_at=now,
+        updated_at=now,
+    )
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.tei_headers.add(header)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        fetched = await uow.tei_headers.get(header.id)
+
+    assert fetched is not None, "Expected the TEI header to persist."
+    assert fetched.title == header.title, "Expected the title to round-trip."
+    assert fetched.payload == header.payload, "Expected the payload to round-trip."
+    assert fetched.raw_xml == header.raw_xml, "Expected the raw XML to round-trip."
+
+
+@pytest.mark.asyncio
+async def test_ingestion_job_round_trip(session_factory: object) -> None:
+    """Ingestion job round-trips through add and get."""
+    now = dt.datetime.now(dt.UTC)
+    series, header, episode, job, _ = _episode_fixture(now)
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.tei_headers.add(header)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.episodes.add(episode)
+        await uow.ingestion_jobs.add(job)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        fetched = await uow.ingestion_jobs.get(job.id)
+
+    assert fetched is not None, "Expected the ingestion job to persist."
+    assert fetched.id == job.id, "Expected the job id to match."
+    assert fetched.status == job.status, "Expected the job status to match."
+
+
+@pytest.mark.asyncio
+async def test_list_for_episode_returns_empty_for_unknown(
+    session_factory: object,
+) -> None:
+    """Listing approval events for a non-existent episode returns empty."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        events = await uow.approval_events.list_for_episode(uuid.uuid4())
+
+    assert events == [], "Expected an empty list for a missing episode."

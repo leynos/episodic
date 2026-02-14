@@ -31,6 +31,9 @@ This guide will cover:
 - Managing episode metadata and show notes
 - Database schema integrity is validated automatically in CI so that canonical
   content storage remains consistent across releases
+- Repository and transactional integrity are validated by integration tests
+  running against a real PostgreSQL engine, covering persistence round-trips,
+  rollback behaviour, and constraint enforcement
 
 ### Quality & Compliance
 

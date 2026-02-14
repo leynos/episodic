@@ -898,6 +898,34 @@ erDiagram
 
 _Figure 7: Canonical content schema relationships._
 
+### Repository and unit-of-work implementation
+
+The canonical persistence layer follows the hexagonal architecture by defining
+Protocol-based port interfaces in `episodic/canonical/ports.py` and
+implementing them as async SQLAlchemy adapters in
+`episodic/canonical/storage/`. Six repository protocols
+(`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
+`IngestionJobRepository`, `SourceDocumentRepository`,
+`ApprovalEventRepository`) define the persistence contract, and
+`CanonicalUnitOfWork` aggregates them behind a transactional boundary with
+`commit()`, `flush()`, and `rollback()` methods.
+
+The `SqlAlchemyUnitOfWork` adapter creates a fresh `AsyncSession` on entry,
+instantiates all six repositories bound to that session, and rolls back
+automatically when the context manager exits with an unhandled exception.
+Repositories translate between frozen domain dataclasses and SQLAlchemy ORM
+records via dedicated mapper functions in
+`episodic/canonical/storage/mappers.py`, keeping the domain layer free of
+persistence imports.
+
+Integration tests run against an in-process PostgreSQL instance provided by
+py-pglite, with Alembic migrations applied before each test function. The test
+suite validates round-trip persistence for every repository, unit-of-work
+rollback semantics (both explicit and exception-triggered), database-level
+constraint enforcement (unique slugs, foreign-key integrity, weight CHECK
+constraints), and empty-result paths. Behavioural tests written with pytest-bdd
+exercise the same semantics from a scenario-driven perspective.
+
 ### Core Entity Model
 
 The core entity model summarizes the primary data domains that anchor series,
