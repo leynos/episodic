@@ -303,7 +303,7 @@ def add_bad_weight_source(
             await uow.source_documents.add(bad_source)
             with pytest.raises(
                 sa_exc.IntegrityError,
-                match=r"ck_source_documents_weight|check|CHECK",
+                match=r"(?i)ck_source_documents_weight|check",
             ):
                 await uow.commit()
         context["integrity_error_raised"] = True
