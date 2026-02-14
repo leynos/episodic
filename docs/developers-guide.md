@@ -26,7 +26,9 @@ After modifying Object-Relational Mapping (ORM) models in
 `episodic/canonical/storage/models.py`, generate a migration with Alembic's
 autogenerate feature:
 
-    DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
+```shell
+DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
+```
 
 Migration files follow the naming convention
 `YYYYMMDD_NNNNNN_short_description.py` (for example
@@ -43,7 +45,9 @@ the discrepancies.
 
 Run it locally before committing model changes:
 
-    make check-migrations
+```shell
+make check-migrations
+```
 
 ### Continuous integration enforcement
 
@@ -99,11 +103,13 @@ SQLAlchemy ORM records via mapper functions in
 `episodic/canonical/storage/mappers.py`. Access repositories through the
 unit-of-work rather than constructing them directly:
 
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await uow.series_profiles.add(profile)
-        await uow.commit()
+```python
+async with SqlAlchemyUnitOfWork(session_factory) as uow:
+    await uow.series_profiles.add(profile)
+    await uow.commit()
 
-        fetched = await uow.series_profiles.get(profile.id)
+    fetched = await uow.series_profiles.get(profile.id)
+```
 
 ### Unit-of-work transaction semantics
 

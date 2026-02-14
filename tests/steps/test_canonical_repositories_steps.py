@@ -246,7 +246,6 @@ def episode_with_dependencies(
             await uow.commit()
 
         # Store IDs for the weight constraint step.
-        context["profile_id"] = episode_id  # reuse field for step linking
         context["_job_id"] = job_id
         context["_episode_id"] = episode_id
 
