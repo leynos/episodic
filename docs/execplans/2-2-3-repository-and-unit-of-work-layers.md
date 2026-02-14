@@ -38,14 +38,15 @@ Success is observable when:
 
 ## Constraints
 
-- No changes to existing production code. The repository, UoW, domain, model,
-  mapper, and service modules (`episodic/canonical/ports.py`,
+- No changes to existing production code. The repository, unit-of-work,
+  domain, model, mapper, and service modules were already implemented in
+  roadmap items 2.2.1 and 2.2.2. These modules (`episodic/canonical/ports.py`,
   `episodic/canonical/storage/repositories.py`,
   `episodic/canonical/storage/uow.py`, `episodic/canonical/domain.py`,
   `episodic/canonical/storage/models.py`,
   `episodic/canonical/storage/mappers.py`, `episodic/canonical/services.py`)
-  must not be modified. The implementation is complete; this plan adds tests
-  and documentation only.
+  must not be modified. This plan closes the remaining test-coverage and
+  documentation gaps for that existing implementation.
 - All existing tests must continue to pass. No regressions in `make test`,
   `make lint`, `make check-fmt`, or `make typecheck`.
 - No new external dependencies may be added.

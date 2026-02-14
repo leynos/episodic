@@ -39,16 +39,24 @@ def _run_async_step(
     runner.run(coro)
 
 
+class SeriesProfilePayload(typ.TypedDict, total=False):
+    """Data required to create a series profile in tests.
+
+    ``slug`` and ``title`` are required.  ``configuration`` defaults
+    to ``{}`` when absent.
+    """
+
+    slug: typ.Required[str]
+    title: typ.Required[str]
+    configuration: dict[str, object]
+
+
 async def _persist_series_profile(
     session_factory: cabc.Callable[[], AsyncSession],
-    profile_data: dict[str, typ.Any],
+    profile_data: SeriesProfilePayload,
     action: cabc.Callable[[SqlAlchemyUnitOfWork], typ.Awaitable[None]],
 ) -> SeriesProfile:
-    """Create a series profile, add it via the UoW, and run *action*.
-
-    *profile_data* must contain ``"slug"`` and ``"title"`` keys.
-    ``"configuration"`` defaults to ``{}`` when absent.
-    """
+    """Create a series profile, add it via the UoW, and run *action*."""
     now = dt.datetime.now(dt.UTC)
     profile = SeriesProfile(
         id=uuid.uuid4(),
