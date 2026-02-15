@@ -18,6 +18,7 @@ import pytest_asyncio
 from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
 from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
 from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
+from episodic.canonical.domain import SeriesProfile
 from episodic.canonical.ingestion import (
     MultiSourceRequest,
     NormalisedSource,
@@ -32,26 +33,20 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.tei import parse_tei_header
 
 if typ.TYPE_CHECKING:
-    import datetime as dt
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def _make_raw_source(
-    source_type: str = "transcript",
-    source_uri: str = "s3://bucket/transcript.txt",
-    content: str = "Episode transcript content",
-    content_hash: str = "hash-abc",
-    metadata: dict[str, object] | None = None,
-) -> RawSourceInput:
-    """Build a raw source input for testing."""
-    return RawSourceInput(
-        source_type=source_type,
-        source_uri=source_uri,
-        content=content,
-        content_hash=content_hash,
-        metadata=metadata or {},
-    )
+def _make_raw_source(**kwargs: object) -> RawSourceInput:
+    """Build a raw source input for testing with sensible defaults."""
+    defaults: dict[str, object] = {
+        "source_type": "transcript",
+        "source_uri": "s3://bucket/transcript.txt",
+        "content": "Episode transcript content",
+        "content_hash": "hash-abc",
+        "metadata": {},
+    }
+    merged = defaults | kwargs
+    return RawSourceInput(**merged)  # type: ignore[arg-type]
 
 
 def _make_normalised_source(
@@ -85,11 +80,17 @@ def _make_normalised_source(
 def _make_weighting_result(
     title: str = "Test Title",
     weight: float = 0.8,
-    quality: float = 0.8,
-    freshness: float = 0.7,
-    reliability: float = 0.6,
+    scores: dict[str, float] | None = None,
 ) -> WeightingResult:
     """Build a weighting result for testing."""
+    resolved = scores or {
+        "quality": 0.8,
+        "freshness": 0.7,
+        "reliability": 0.6,
+    }
+    quality = resolved["quality"]
+    freshness = resolved["freshness"]
+    reliability = resolved["reliability"]
     source = _make_normalised_source(title, quality, freshness, reliability)
     return WeightingResult(
         source=source,
@@ -103,13 +104,11 @@ def _make_weighting_result(
 
 
 @pytest_asyncio.fixture
-async def _series_profile(
+async def series_profile_for_ingestion(
     session_factory: typ.Callable[[], AsyncSession],
-) -> typ.Any:
+) -> SeriesProfile:
     """Create and persist a series profile for integration tests."""
     import datetime as dt
-
-    from episodic.canonical.domain import SeriesProfile
 
     now = dt.datetime.now(dt.UTC)
     profile = SeriesProfile(
@@ -284,10 +283,10 @@ async def test_conflict_resolver_records_resolution_notes() -> None:
 @pytest.mark.asyncio
 async def test_ingest_multi_source_end_to_end(
     session_factory: typ.Callable[[], AsyncSession],
-    _series_profile: typ.Any,
+    series_profile_for_ingestion: SeriesProfile,
 ) -> None:
     """End-to-end integration test for multi-source ingestion."""
-    profile = _series_profile
+    profile = series_profile_for_ingestion
     pipeline = IngestionPipeline(
         normaliser=InMemorySourceNormaliser(),
         weighting=DefaultWeightingStrategy(),
@@ -358,10 +357,10 @@ async def test_ingest_multi_source_end_to_end(
 @pytest.mark.asyncio
 async def test_ingest_multi_source_preserves_all_sources(
     session_factory: typ.Callable[[], AsyncSession],
-    _series_profile: typ.Any,
+    series_profile_for_ingestion: SeriesProfile,
 ) -> None:
     """All sources are persisted, even those rejected in conflict resolution."""
-    profile = _series_profile
+    profile = series_profile_for_ingestion
     pipeline = IngestionPipeline(
         normaliser=InMemorySourceNormaliser(),
         weighting=DefaultWeightingStrategy(),
@@ -434,10 +433,10 @@ async def test_ingest_multi_source_preserves_all_sources(
 @pytest.mark.asyncio
 async def test_ingest_multi_source_empty_sources_raises(
     session_factory: typ.Callable[[], AsyncSession],
-    _series_profile: typ.Any,
+    series_profile_for_ingestion: SeriesProfile,
 ) -> None:
     """Submitting zero raw sources raises ValueError."""
-    profile = _series_profile
+    profile = series_profile_for_ingestion
     pipeline = IngestionPipeline(
         normaliser=InMemorySourceNormaliser(),
         weighting=DefaultWeightingStrategy(),

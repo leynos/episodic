@@ -116,6 +116,47 @@ async def _resolve_conflicts(
     return await resolver.resolve(weighted)
 
 
+async def _persist_and_log(
+    outcome: ConflictOutcome,
+    ingestion_request: IngestionRequest,
+    *,
+    uow: CanonicalUnitOfWork,
+    series_profile: SeriesProfile,
+) -> CanonicalEpisode:
+    """Persist a resolved ingestion request and log the outcome.
+
+    Parameters
+    ----------
+    outcome : ConflictOutcome
+        Resolved conflict outcome used for logging source counts.
+    ingestion_request : IngestionRequest
+        Fully-assembled ingestion payload ready for persistence.
+    uow : CanonicalUnitOfWork
+        Unit-of-work boundary providing repository access and transaction
+        scope.
+    series_profile : SeriesProfile
+        Series profile that owns the canonical episode.
+
+    Returns
+    -------
+    CanonicalEpisode
+        Persisted canonical episode representing the merged content.
+    """
+    episode = await ingest_sources(uow, series_profile, ingestion_request)
+
+    log_info(
+        logger,
+        "Multi-source ingestion complete: %s sources, "
+        "%s preferred, %s rejected. Episode %s.",
+        len(ingestion_request.sources),
+        len(outcome.preferred_sources),
+        len(outcome.rejected_sources),
+        episode.id,
+    )
+
+    return episode
+
+
 async def ingest_multi_source(
     uow: CanonicalUnitOfWork,
     series_profile: SeriesProfile,
@@ -179,27 +220,15 @@ async def ingest_multi_source(
         request.raw_sources,
         weighted,
     )
-
     ingestion_request = IngestionRequest(
         tei_xml=outcome.merged_tei_xml,
         sources=source_inputs,
         requested_by=request.requested_by,
     )
 
-    episode = await ingest_sources(
-        uow,
-        series_profile,
+    return await _persist_and_log(
+        outcome,
         ingestion_request,
+        uow=uow,
+        series_profile=series_profile,
     )
-
-    log_info(
-        logger,
-        "Multi-source ingestion complete: %s sources, "
-        "%s preferred, %s rejected. Episode %s.",
-        len(request.raw_sources),
-        len(outcome.preferred_sources),
-        len(outcome.rejected_sources),
-        episode.id,
-    )
-
-    return episode
