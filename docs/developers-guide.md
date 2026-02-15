@@ -26,7 +26,9 @@ After modifying Object-Relational Mapping (ORM) models in
 `episodic/canonical/storage/models.py`, generate a migration with Alembic's
 autogenerate feature:
 
-    DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
+```shell
+DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
+```
 
 Migration files follow the naming convention
 `YYYYMMDD_NNNNNN_short_description.py` (for example
@@ -43,7 +45,9 @@ the discrepancies.
 
 Run it locally before committing model changes:
 
-    make check-migrations
+```shell
+make check-migrations
+```
 
 ### Continuous integration enforcement
 
@@ -89,6 +93,39 @@ Canonical content persistence follows the hexagonal architecture guidance:
 - `CanonicalUnitOfWork.flush()` is available when dependent records must be
   persisted before creating related rows (for example, approval events that
   reference newly created episodes).
+
+### Repository usage
+
+Each repository provides `add()` to persist a domain entity and `get()` (or
+`get_by_slug()`, `list_for_job()`, `list_for_episode()`) to retrieve persisted
+entities. Repositories translate between frozen domain dataclasses and
+SQLAlchemy ORM records via mapper functions in
+`episodic/canonical/storage/mappers.py`. Access repositories through the
+unit-of-work rather than constructing them directly:
+
+```python
+async with SqlAlchemyUnitOfWork(session_factory) as uow:
+    await uow.series_profiles.add(profile)
+    await uow.commit()
+
+    fetched = await uow.series_profiles.get(profile.id)
+```
+
+### Unit-of-work transaction semantics
+
+The `SqlAlchemyUnitOfWork` manages transaction boundaries:
+
+- `commit()` persists all pending changes to the database.
+- `rollback()` discards all uncommitted changes within the current session.
+- `flush()` writes pending changes to the database without committing, useful
+  when dependent records require foreign-key references to exist within the
+  same transaction.
+- When the context manager exits with an unhandled exception, the unit of work
+  rolls back automatically.
+
+Database-level constraints (unique slugs, foreign keys, and CHECK constraints
+such as the weight bound on source documents) are enforced by Postgres and
+raise `sqlalchemy.exc.IntegrityError` on violation.
 
 ## Logging
 
