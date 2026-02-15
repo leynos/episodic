@@ -127,6 +127,90 @@ Database-level constraints (unique slugs, foreign keys, and CHECK constraints
 such as the weight bound on source documents) are enforced by Postgres and
 raise `sqlalchemy.exc.IntegrityError` on violation.
 
+## Multi-source ingestion
+
+The multi-source ingestion service normalises heterogeneous source documents,
+applies source weighting heuristics, resolves conflicts, and merges the result
+into a canonical TEI episode. The service is implemented as an orchestrator
+(`ingest_multi_source`) that composes around the existing low-level
+`ingest_sources` persistence function.
+
+### Port protocols
+
+Three Protocol-based interfaces in `episodic/canonical/ingestion_ports.py`
+define the pipeline extension points:
+
+- `SourceNormaliser` — converts a `RawSourceInput` into a `NormalisedSource`
+  containing a TEI XML fragment and quality, freshness, and reliability scores.
+- `WeightingStrategy` — computes a `WeightingResult` for each normalised
+  source using series-level configuration coefficients.
+- `ConflictResolver` — produces a `ConflictOutcome` that selects preferred
+  sources, rejects lower-weighted alternatives, and merges the canonical TEI.
+
+### Reference adapters
+
+Reference implementations in `episodic/canonical/adapters/` are suitable for
+testing and initial deployments:
+
+- `InMemorySourceNormaliser` — assigns quality, freshness, and reliability
+  scores based on source type defaults. Known types and their defaults:
+  - `transcript`: quality=0.9, freshness=0.8, reliability=0.9
+  - `brief`: quality=0.8, freshness=0.7, reliability=0.8
+  - `rss`: quality=0.6, freshness=1.0, reliability=0.5
+  - `press_release`: quality=0.7, freshness=0.6, reliability=0.7
+  - `research_notes`: quality=0.5, freshness=0.5, reliability=0.6
+  - Unknown types receive mid-range fallback scores (0.5 each).
+- `DefaultWeightingStrategy` — computes a weighted average using
+  coefficients from the series configuration or defaults. The configuration
+  dictionary may contain a `"weighting"` key with `"quality_coefficient"`
+  (default 0.5), `"freshness_coefficient"` (default 0.3), and
+  `"reliability_coefficient"` (default 0.2).
+- `HighestWeightConflictResolver` — selects the highest-weighted source as
+  canonical; all others are rejected with provenance preserved.
+
+### Orchestration flow
+
+```python
+from episodic.canonical.adapters import (
+    DefaultWeightingStrategy,
+    HighestWeightConflictResolver,
+    InMemorySourceNormaliser,
+)
+from episodic.canonical.ingestion import MultiSourceRequest, RawSourceInput
+from episodic.canonical.ingestion_service import (
+    IngestionPipeline,
+    ingest_multi_source,
+)
+
+pipeline = IngestionPipeline(
+    normaliser=InMemorySourceNormaliser(),
+    weighting=DefaultWeightingStrategy(),
+    resolver=HighestWeightConflictResolver(),
+)
+request = MultiSourceRequest(
+    raw_sources=[...],
+    series_slug="my-series",
+    requested_by="user@example.com",
+)
+async with SqlAlchemyUnitOfWork(session_factory) as uow:
+    episode = await ingest_multi_source(uow, profile, request, pipeline)
+```
+
+### Implementing custom adapters
+
+To implement a custom adapter, create a class that satisfies the corresponding
+protocol. For example, a custom normaliser for RSS feeds:
+
+```python
+class RssNormaliser:
+    async def normalise(self, raw_source: RawSourceInput) -> NormalisedSource:
+        # Parse RSS XML, extract title and content, build TEI fragment.
+        ...
+```
+
+The adapter can then be passed to `IngestionPipeline` in place of the reference
+normaliser.
+
 ## Logging
 
 Structured logging uses femtologging. Import `get_logger` from

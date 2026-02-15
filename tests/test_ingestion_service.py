@@ -1,0 +1,460 @@
+"""Unit tests for the multi-source ingestion service.
+
+Examples
+--------
+Run the multi-source ingestion tests:
+
+>>> pytest tests/test_ingestion_service.py -v
+"""
+
+from __future__ import annotations
+
+import typing as typ
+import uuid
+
+import pytest
+import pytest_asyncio
+
+from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
+from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
+from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
+from episodic.canonical.ingestion import (
+    MultiSourceRequest,
+    NormalisedSource,
+    RawSourceInput,
+    WeightingResult,
+)
+from episodic.canonical.ingestion_service import (
+    IngestionPipeline,
+    ingest_multi_source,
+)
+from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.tei import parse_tei_header
+
+if typ.TYPE_CHECKING:
+    import datetime as dt
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _make_raw_source(
+    source_type: str = "transcript",
+    source_uri: str = "s3://bucket/transcript.txt",
+    content: str = "Episode transcript content",
+    content_hash: str = "hash-abc",
+    metadata: dict[str, object] | None = None,
+) -> RawSourceInput:
+    """Build a raw source input for testing."""
+    return RawSourceInput(
+        source_type=source_type,
+        source_uri=source_uri,
+        content=content,
+        content_hash=content_hash,
+        metadata=metadata or {},
+    )
+
+
+def _make_normalised_source(
+    title: str = "Test Title",
+    quality: float = 0.8,
+    freshness: float = 0.7,
+    reliability: float = 0.6,
+) -> NormalisedSource:
+    """Build a normalised source for testing."""
+    import tei_rapporteur as _tei
+
+    from episodic.canonical.domain import SourceDocumentInput
+
+    tei_fragment = _tei.emit_xml(_tei.Document(title))
+    return NormalisedSource(
+        source_input=SourceDocumentInput(
+            source_type="transcript",
+            source_uri="s3://bucket/test.txt",
+            weight=0.0,
+            content_hash="hash-test",
+            metadata={},
+        ),
+        title=title,
+        tei_fragment=tei_fragment,
+        quality_score=quality,
+        freshness_score=freshness,
+        reliability_score=reliability,
+    )
+
+
+def _make_weighting_result(
+    title: str = "Test Title",
+    weight: float = 0.8,
+    quality: float = 0.8,
+    freshness: float = 0.7,
+    reliability: float = 0.6,
+) -> WeightingResult:
+    """Build a weighting result for testing."""
+    source = _make_normalised_source(title, quality, freshness, reliability)
+    return WeightingResult(
+        source=source,
+        computed_weight=weight,
+        factors={
+            "quality_score": quality,
+            "freshness_score": freshness,
+            "reliability_score": reliability,
+        },
+    )
+
+
+@pytest_asyncio.fixture
+async def _series_profile(
+    session_factory: typ.Callable[[], AsyncSession],
+) -> typ.Any:
+    """Create and persist a series profile for integration tests."""
+    import datetime as dt
+
+    from episodic.canonical.domain import SeriesProfile
+
+    now = dt.datetime.now(dt.UTC)
+    profile = SeriesProfile(
+        id=uuid.uuid4(),
+        slug=f"test-series-{uuid.uuid4().hex[:8]}",
+        title="Test Series",
+        description=None,
+        configuration={"tone": "neutral"},
+        created_at=now,
+        updated_at=now,
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.series_profiles.add(profile)
+        await uow.commit()
+    return profile
+
+
+# -- Normaliser tests --
+
+
+@pytest.mark.asyncio
+async def test_normaliser_produces_valid_tei_fragment() -> None:
+    """The normaliser produces a NormalisedSource with parseable TEI XML."""
+    normaliser = InMemorySourceNormaliser()
+    raw = _make_raw_source(
+        source_type="transcript",
+        content="Transcript content here",
+        metadata={"title": "My Transcript"},
+    )
+
+    result = await normaliser.normalise(raw)
+
+    # TEI fragment should be parseable.
+    parsed = parse_tei_header(result.tei_fragment)
+    assert parsed.title == "My Transcript"
+
+    # Scores should match transcript defaults.
+    assert result.quality_score == pytest.approx(0.9)
+    assert result.freshness_score == pytest.approx(0.8)
+    assert result.reliability_score == pytest.approx(0.9)
+
+    # Source input should carry through metadata.
+    assert result.source_input.source_type == "transcript"
+    assert result.source_input.source_uri == raw.source_uri
+
+
+@pytest.mark.asyncio
+async def test_normaliser_unknown_source_type_uses_defaults() -> None:
+    """An unknown source type gets mid-range fallback scores."""
+    normaliser = InMemorySourceNormaliser()
+    raw = _make_raw_source(source_type="unknown_format")
+
+    result = await normaliser.normalise(raw)
+
+    assert result.quality_score == pytest.approx(0.5)
+    assert result.freshness_score == pytest.approx(0.5)
+    assert result.reliability_score == pytest.approx(0.5)
+
+
+# -- Weighting strategy tests --
+
+
+@pytest.mark.asyncio
+async def test_weighting_strategy_computes_weighted_average() -> None:
+    """The strategy computes weights as a weighted average with defaults."""
+    strategy = DefaultWeightingStrategy()
+    source = _make_normalised_source(
+        quality=0.9,
+        freshness=0.8,
+        reliability=0.9,
+    )
+
+    results = await strategy.compute_weights([source], {})
+
+    assert len(results) == 1
+    # Default: 0.9*0.5 + 0.8*0.3 + 0.9*0.2 = 0.45 + 0.24 + 0.18 = 0.87
+    assert results[0].computed_weight == pytest.approx(0.87)
+    assert "quality_coefficient" in results[0].factors
+    assert results[0].factors["quality_coefficient"] == pytest.approx(0.5)
+
+
+@pytest.mark.asyncio
+async def test_weighting_strategy_respects_series_configuration() -> None:
+    """Custom coefficients from series configuration are used."""
+    strategy = DefaultWeightingStrategy()
+    source = _make_normalised_source(
+        quality=1.0,
+        freshness=0.0,
+        reliability=0.0,
+    )
+    config = {
+        "weighting": {
+            "quality_coefficient": 1.0,
+            "freshness_coefficient": 0.0,
+            "reliability_coefficient": 0.0,
+        },
+    }
+
+    results = await strategy.compute_weights([source], config)
+
+    # 1.0*1.0 + 0.0*0.0 + 0.0*0.0 = 1.0
+    assert results[0].computed_weight == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_weighting_strategy_clamps_to_unit_interval() -> None:
+    """Weights are clamped to [0, 1] even with extreme scores."""
+    strategy = DefaultWeightingStrategy()
+    # Scores above 1.0 should be clamped.
+    source = _make_normalised_source(
+        quality=2.0,
+        freshness=2.0,
+        reliability=2.0,
+    )
+
+    results = await strategy.compute_weights([source], {})
+
+    assert results[0].computed_weight <= 1.0
+    assert results[0].computed_weight >= 0.0
+
+
+# -- Conflict resolver tests --
+
+
+@pytest.mark.asyncio
+async def test_conflict_resolver_selects_highest_weight() -> None:
+    """The resolver selects the highest-weighted source as preferred."""
+    resolver = HighestWeightConflictResolver()
+    high = _make_weighting_result(title="High Priority", weight=0.9)
+    low = _make_weighting_result(title="Low Priority", weight=0.3)
+
+    outcome = await resolver.resolve([low, high])
+
+    assert len(outcome.preferred_sources) == 1
+    assert outcome.preferred_sources[0].source.title == "High Priority"
+    assert len(outcome.rejected_sources) == 1
+    assert outcome.rejected_sources[0].source.title == "Low Priority"
+    assert outcome.merged_title == "High Priority"
+
+
+@pytest.mark.asyncio
+async def test_conflict_resolver_single_source_no_conflict() -> None:
+    """A single source is selected with no rejections."""
+    resolver = HighestWeightConflictResolver()
+    single = _make_weighting_result(title="Only Source", weight=0.8)
+
+    outcome = await resolver.resolve([single])
+
+    assert len(outcome.preferred_sources) == 1
+    assert outcome.preferred_sources[0].source.title == "Only Source"
+    assert len(outcome.rejected_sources) == 0
+
+
+@pytest.mark.asyncio
+async def test_conflict_resolver_records_resolution_notes() -> None:
+    """The resolver produces human-readable resolution notes."""
+    resolver = HighestWeightConflictResolver()
+    high = _make_weighting_result(title="Winner", weight=0.9)
+    low = _make_weighting_result(title="Loser", weight=0.3)
+
+    outcome = await resolver.resolve([high, low])
+
+    assert "Winner" in outcome.resolution_notes
+    assert "selected as canonical" in outcome.resolution_notes
+    assert "Loser" in outcome.resolution_notes
+    assert "rejected" in outcome.resolution_notes
+
+
+# -- Integration tests --
+
+
+@pytest.mark.asyncio
+async def test_ingest_multi_source_end_to_end(
+    session_factory: typ.Callable[[], AsyncSession],
+    _series_profile: typ.Any,
+) -> None:
+    """End-to-end integration test for multi-source ingestion."""
+    profile = _series_profile
+    pipeline = IngestionPipeline(
+        normaliser=InMemorySourceNormaliser(),
+        weighting=DefaultWeightingStrategy(),
+        resolver=HighestWeightConflictResolver(),
+    )
+
+    request = MultiSourceRequest(
+        raw_sources=[
+            _make_raw_source(
+                source_type="transcript",
+                source_uri="s3://bucket/transcript.txt",
+                content="Primary transcript",
+                content_hash="hash-primary",
+                metadata={"title": "Primary Episode"},
+            ),
+            _make_raw_source(
+                source_type="brief",
+                source_uri="s3://bucket/brief.txt",
+                content="Background brief",
+                content_hash="hash-brief",
+                metadata={"title": "Brief Notes"},
+            ),
+        ],
+        series_slug=profile.slug,
+        requested_by="producer@example.com",
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        episode = await ingest_multi_source(
+            uow,
+            profile,
+            request,
+            pipeline,
+        )
+
+    # Episode should be persisted.
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        persisted = await uow.episodes.get(episode.id)
+
+    assert persisted is not None
+    assert persisted.title == "Primary Episode"
+
+    # Source documents should be persisted with computed weights.
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        # Fetch the ingestion job to find source documents.
+        jobs_session = session_factory()
+        async with jobs_session:
+            import sqlalchemy as sa
+
+            from episodic.canonical.storage import IngestionJobRecord
+
+            result = await jobs_session.execute(
+                sa.select(IngestionJobRecord).where(
+                    IngestionJobRecord.target_episode_id == episode.id,
+                ),
+            )
+            job_record = result.scalar_one()
+
+        documents = await uow.source_documents.list_for_job(job_record.id)
+
+    assert len(documents) == 2
+    # Weights should be computed, not zero placeholders.
+    for doc in documents:
+        assert doc.weight > 0.0
+        assert doc.weight <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_ingest_multi_source_preserves_all_sources(
+    session_factory: typ.Callable[[], AsyncSession],
+    _series_profile: typ.Any,
+) -> None:
+    """All sources are persisted, even those rejected in conflict resolution."""
+    profile = _series_profile
+    pipeline = IngestionPipeline(
+        normaliser=InMemorySourceNormaliser(),
+        weighting=DefaultWeightingStrategy(),
+        resolver=HighestWeightConflictResolver(),
+    )
+
+    source_uris = [
+        "s3://bucket/source-1.txt",
+        "s3://bucket/source-2.txt",
+        "s3://bucket/source-3.txt",
+    ]
+    request = MultiSourceRequest(
+        raw_sources=[
+            _make_raw_source(
+                source_type="transcript",
+                source_uri=source_uris[0],
+                content="Source one",
+                content_hash="hash-1",
+                metadata={"title": "Source One"},
+            ),
+            _make_raw_source(
+                source_type="brief",
+                source_uri=source_uris[1],
+                content="Source two",
+                content_hash="hash-2",
+                metadata={"title": "Source Two"},
+            ),
+            _make_raw_source(
+                source_type="rss",
+                source_uri=source_uris[2],
+                content="Source three",
+                content_hash="hash-3",
+                metadata={"title": "Source Three"},
+            ),
+        ],
+        series_slug=profile.slug,
+        requested_by="test@example.com",
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        episode = await ingest_multi_source(
+            uow,
+            profile,
+            request,
+            pipeline,
+        )
+
+    # All three sources should be persisted, not just the winner.
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        jobs_session = session_factory()
+        async with jobs_session:
+            import sqlalchemy as sa
+
+            from episodic.canonical.storage import IngestionJobRecord
+
+            result = await jobs_session.execute(
+                sa.select(IngestionJobRecord).where(
+                    IngestionJobRecord.target_episode_id == episode.id,
+                ),
+            )
+            job_record = result.scalar_one()
+
+        documents = await uow.source_documents.list_for_job(job_record.id)
+
+    assert len(documents) == 3
+    persisted_uris = {doc.source_uri for doc in documents}
+    assert persisted_uris == set(source_uris)
+
+
+@pytest.mark.asyncio
+async def test_ingest_multi_source_empty_sources_raises(
+    session_factory: typ.Callable[[], AsyncSession],
+    _series_profile: typ.Any,
+) -> None:
+    """Submitting zero raw sources raises ValueError."""
+    profile = _series_profile
+    pipeline = IngestionPipeline(
+        normaliser=InMemorySourceNormaliser(),
+        weighting=DefaultWeightingStrategy(),
+        resolver=HighestWeightConflictResolver(),
+    )
+
+    request = MultiSourceRequest(
+        raw_sources=[],
+        series_slug=profile.slug,
+        requested_by="test@example.com",
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(ValueError, match="At least one raw source"):
+            await ingest_multi_source(
+                uow,
+                profile,
+                request,
+                pipeline,
+            )

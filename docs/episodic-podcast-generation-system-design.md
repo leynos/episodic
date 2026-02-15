@@ -926,6 +926,38 @@ constraint enforcement (unique slugs, foreign-key integrity, weight CHECK
 constraints), and empty-result paths. Behavioural tests written with pytest-bdd
 exercise the same semantics from a scenario-driven perspective.
 
+### Multi-source ingestion service implementation
+
+The multi-source ingestion service composes a higher-level orchestrator
+(`ingest_multi_source`) around the existing `ingest_sources` persistence
+function. Three Protocol-based port interfaces define the pipeline extension
+points:
+
+- `SourceNormaliser` converts heterogeneous raw sources (transcripts, briefs,
+  Really Simple Syndication (RSS) feeds, press releases, and research notes)
+  into normalised TEI fragments with quality, freshness, and reliability scores.
+- `WeightingStrategy` computes a final weight for each normalised source using
+  a weighted average of the three scores, with coefficients configurable per
+  series via the `SeriesProfile.configuration` dictionary. Default coefficients
+  are quality=0.5, freshness=0.3, reliability=0.2. Results are clamped to [0,
+  1].
+- `ConflictResolver` resolves conflicts between weighted sources. The
+  reference implementation selects the highest-weighted source as the canonical
+  content; all other sources are recorded as rejected with weights preserved
+  for audit.
+
+The orchestrator runs the pipeline in sequence: normalise, weight, resolve,
+then delegates persistence to `ingest_sources`. All submitted sources are
+persisted as `SourceDocument` entities regardless of whether they were
+preferred or rejected during conflict resolution. This ensures rejected content
+is retained for audit as specified in the system design.
+
+Reference adapters in `episodic/canonical/adapters/` implement the three ports
+with sensible defaults, suitable for testing and initial deployments.
+Production adapters for specific source formats (RSS parsing, document
+extraction) can replace the reference adapters without modifying the
+orchestrator.
+
 ### Core Entity Model
 
 The core entity model summarizes the primary data domains that anchor series,
