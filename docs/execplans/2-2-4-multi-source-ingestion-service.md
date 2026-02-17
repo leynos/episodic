@@ -477,7 +477,7 @@ Create **`tests/features/multi_source_ingestion.feature`**:
 
     Feature: Multi-source ingestion
 
-      Scenario: Ingestion normalises and merges multiple sources
+      Scenario: Ingestion normalizes and merges multiple sources
         Given a series profile "tech-weekly" exists for multi-source ingestion
         And a transcript source is available
         And a brief source is available

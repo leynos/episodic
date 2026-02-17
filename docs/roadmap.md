@@ -63,7 +63,7 @@ that align with the system design.
   Integration (CI) to block divergent schemas.
 - [x] 2.2.3. Implement the repository and unit-of-work layers over Postgres with
   integration tests.
-- [x] 2.2.4. Build the multi-source ingestion service that normalises inputs,
+- [x] 2.2.4. Build the multi-source ingestion service that normalizes inputs,
   applies source weighting heuristics, and resolves conflicts into canonical
   TEI.
 - [ ] 2.2.5. Capture provenance metadata automatically in TEI headers,

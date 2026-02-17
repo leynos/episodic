@@ -89,7 +89,7 @@ def _add_raw_source(
 
 @scenario(
     "../features/multi_source_ingestion.feature",
-    "Ingestion normalises and merges multiple sources",
+    "Ingestion normalizes and merges multiple sources",
 )
 def test_multi_source_ingestion() -> None:
     """Run the multi-source ingestion scenario."""
