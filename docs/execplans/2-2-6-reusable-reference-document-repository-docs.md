@@ -6,7 +6,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -65,12 +65,14 @@ sequences this new capability.
 
 - [x] (2026-02-17 16:00Z) Draft ExecPlan created with repository sketch and
   documentation update plan.
-- [ ] Stage A: Confirm exact design document sections to revise and final
-  terminology.
-- [ ] Stage B: Update `docs/episodic-podcast-generation-system-design.md`.
-- [ ] Stage C: Update `docs/roadmap.md` with explicit reusable-reference work
-  items and revised exit criteria.
-- [ ] Stage D: Run formatting and Markdown validation gates; capture outputs.
+- [x] (2026-02-17 16:09Z) Stage A: Confirmed design-document insertion points
+  and terminology boundaries (`SourceDocument` vs `ReferenceDocument`).
+- [x] (2026-02-17 16:10Z) Stage B: Updated
+  `docs/episodic-podcast-generation-system-design.md`.
+- [x] (2026-02-17 16:11Z) Stage C: Updated `docs/roadmap.md` with explicit
+  reusable-reference work items and revised exit criteria.
+- [x] (2026-02-17 16:13Z) Stage D: Ran formatting and Markdown validation
+  gates with captured logs.
 
 ## Surprises & discoveries
 
@@ -104,10 +106,32 @@ sequences this new capability.
 
 ## Outcomes & retrospective
 
-This section will be completed after the documentation edits and validation
-gates run. Target outcome: design and roadmap documents provide an unambiguous
-path from ingestion-only source storage to reusable reference-document
-management.
+The documentation-only implementation completed successfully.
+
+Changes delivered:
+
+- Updated `docs/episodic-podcast-generation-system-design.md` to:
+  - distinguish current ingestion-bound `SourceDocumentRepository` behaviour
+    from planned reusable reference-document capabilities,
+  - add reusable reference data-model entities
+    (`reference_documents`, `reference_document_revisions`,
+    `reference_document_bindings`),
+  - introduce a dedicated planned-model Mermaid diagram, and
+  - align component and roadmap-alignment narrative with reusable reference
+    storage.
+- Updated `docs/roadmap.md` to:
+  - split reusable reference-document work into explicit Phase 2 activities
+    (2.2.6 through 2.2.8), and
+  - expand Phase 2 exit criteria to require API retrieval of reusable
+    references and ingestion snapshot behaviour.
+
+Validation evidence:
+
+- `make fmt` passed (`/tmp/execplan-refdocs-final-make-fmt.log`).
+- `make markdownlint` passed
+  (`/tmp/execplan-refdocs-final-markdownlint.log`).
+- `make nixie` passed (`/tmp/execplan-refdocs-final-nixie.log`), with Mermaid
+  diagrams validated.
 
 ## Context and orientation
 
@@ -229,7 +253,10 @@ Acceptance is documentation behaviour, not runtime behaviour.
 During implementation, capture concise evidence here:
 
 - `git diff -- docs/episodic-podcast-generation-system-design.md docs/roadmap.md`
-- Exit summaries from `/tmp/execplan-refdocs-*.log`.
+- Exit summaries from:
+  - `/tmp/execplan-refdocs-final-make-fmt.log`
+  - `/tmp/execplan-refdocs-final-markdownlint.log`
+  - `/tmp/execplan-refdocs-final-nixie.log`
 
 ## Interfaces and dependencies
 
@@ -246,5 +273,6 @@ No new dependencies are required.
 
 ## Revision note
 
-Initial draft created to scope a documentation-only update for reusable
-reference-document repository planning across design and roadmap documents.
+Updated status from `DRAFT` to `COMPLETE` after implementing the planned
+documentation updates in the design document and roadmap, and after passing all
+Markdown quality gates.

@@ -138,6 +138,9 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   sponsor requirements.
 - Manages episode templates describing segment ordering, timing, and audio bed
   preferences.
+- Maintains reusable reference materials (for example, style guides, character
+  profiles, and research briefs) as versioned documents that can be bound to
+  series and templates.
 - Provides change history and optimistic locking so editorial teams can iterate
   safely.
 - Supplies templated prompts and metadata to generation and audio pipelines.
@@ -837,9 +840,15 @@ Agentic workflow behaviour is configurable per series profile:
   human-readable titles.
 - `episode_templates` stores segment layouts, prompt scaffolds, and music bed
   preferences linked to series profiles.
+- `reference_documents` stores reusable source materials independently of
+  ingestion jobs, including document kind and ownership scope.
+- `reference_document_revisions` stores immutable content versions for each
+  reusable reference document, including hashes and author metadata.
+- `reference_document_bindings` links pinned reference revisions to a target
+  context (series profile, episode template, or ingestion run).
 - `ingestion_jobs` tracks each ingestion run, including status, timestamps, and
   targeted episodes.
-- `source_documents` records ingestion sources, document types, weighting
+- `source_documents` records ingestion-run inputs, document types, weighting
   factors, and original files in object storage.
 - `episodes` holds canonical TEI, generation status, QA verdicts, and approval
   pointers.
@@ -877,11 +886,20 @@ stages. TEI headers are stored as JSONB for structured querying and retain the
 raw XML payload for audit and re-emission. Canonical episodes reference TEI
 headers by identifier, store the canonical TEI XML string, and track both
 workflow status and approval state. Ingestion jobs capture lifecycle status,
-timestamps, and the target episode, while source documents link back to their
+timestamps, and the target episode. In current implementation,
+`source_documents` are ingestion-bound records that link back to a specific
 ingestion job and the canonical episode they influence. Approval events record
 state transitions with actor metadata and payloads for auditability. Ingestion
 workflows flush pending inserts before recording dependent rows so foreign-key
 relationships remain valid within a single transaction.
+
+Reusable references are modelled separately from ingestion inputs. A
+`reference_document` captures stable identity and scope, each
+`reference_document_revision` stores immutable content with version metadata,
+and `reference_document_binding` pins a chosen revision to a consuming context.
+Ingestion workflows resolve these bindings and snapshot selected revisions into
+ingestion-bound `source_documents`, preserving reproducible TEI provenance
+while allowing independent document reuse across jobs.
 
 TEI header payloads include an `episodic_provenance` extension with
 `source_priorities`, `ingestion_timestamp`, `reviewer_identities`, and a
@@ -904,6 +922,25 @@ erDiagram
 
 _Figure 7: Canonical content schema relationships._
 
+### Planned reusable reference-document model
+
+The diagram below extends the canonical schema with reusable reference-document
+tables. These tables are planned and not yet implemented in
+`episodic/canonical/ports.py` or `episodic/canonical/storage/repositories.py`.
+
+```mermaid
+erDiagram
+    SERIES_PROFILES ||--o{ EPISODE_TEMPLATES : defines
+    SERIES_PROFILES ||--o{ REFERENCE_DOCUMENTS : owns
+    REFERENCE_DOCUMENTS ||--o{ REFERENCE_DOCUMENT_REVISIONS : versions
+    REFERENCE_DOCUMENT_REVISIONS ||--o{ REFERENCE_DOCUMENT_BINDINGS : pins
+    EPISODE_TEMPLATES ||--o{ REFERENCE_DOCUMENT_BINDINGS : consumes
+    INGESTION_JOBS ||--o{ REFERENCE_DOCUMENT_BINDINGS : snapshots
+    INGESTION_JOBS ||--o{ SOURCE_DOCUMENTS : records
+```
+
+_Figure 8: Planned reusable reference-document relationships._
+
 ### Repository and unit-of-work implementation
 
 The canonical persistence layer follows the hexagonal architecture by defining
@@ -923,6 +960,17 @@ Repositories translate between frozen domain dataclasses and SQLAlchemy ORM
 records via dedicated mapper functions in
 `episodic/canonical/storage/mappers.py`, keeping the domain layer free of
 persistence imports.
+
+`SourceDocumentRepository` in current code is intentionally ingestion-scoped.
+Its contract exposes `add(document)` and `list_for_job(job_id)`, and
+`SourceDocument` entities include `ingestion_job_id`. This supports one-shot
+ingestion provenance, but not a standalone reusable reference library.
+
+`EpisodeTemplateRepository` and reusable reference repositories are planned
+additions. The planned design introduces at least one repository for
+`ReferenceDocument` persistence and additional repository responsibilities for
+revision history and binding resolution across series, templates, and ingestion
+contexts.
 
 Integration tests run against an in-process PostgreSQL instance provided by
 py-pglite, with Alembic migrations applied before each test function. The test
@@ -1288,7 +1336,8 @@ explicit control over false-positive filtering.
 - Phase 0 establishes the infrastructure blueprint described in Operational
   Considerations.
 - Phase 1 implements the canonical content platform, ingestion service, and
-  series/template storage defined above.
+  series/template storage plus reusable reference-document storage defined
+  above.
 - Phase 2 delivers the content generation orchestrator with LangGraph-based
   agentic workflows, suspend-and-resume execution patterns, hybrid inference,
   and cost accounting instrumentation alongside integrated QA and brand

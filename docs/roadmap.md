@@ -70,15 +70,24 @@ that align with the system design.
   including source priorities, ingestion timestamps, and reviewer identities;
   validated by integration and BDD tests that assert persisted TEI header
   provenance fields and ordering.
-- [ ] 2.2.6. Define series profile and episode template models, REST endpoints,
+- [ ] 2.2.6. Define the reusable reference-document model (`ReferenceDocument`,
+  `ReferenceDocumentRevision`, and `ReferenceBinding`) and repository contracts
+  independent of ingestion-job scope.
+- [ ] 2.2.7. Define series profile and episode template models, REST endpoints,
   and change history so downstream generators can retrieve structured briefs.
+- [ ] 2.2.8. Implement reference-binding resolution so ingestion runs, series
+  profiles, and episode templates can reuse pinned document revisions while
+  preserving provenance snapshots in ingestion records.
 
 ### 2.3. Exit criteria
 
 - [ ] 2.3.1. Canonical TEI documents persist with full provenance after
   ingesting at least three heterogeneous source types.
-- [ ] 2.3.2. Series profiles and episode templates retrievable via the public
-  API with optimistic locking and history tracking.
+- [ ] 2.3.2. Series profiles, episode templates, and reusable reference
+  documents are retrievable via the public API with optimistic locking and
+  change history.
+- [ ] 2.3.3. Ingestion workflows can resolve reusable reference bindings and
+  snapshot pinned revisions into per-job provenance records.
 
 ## 3. Intelligent content generation and QA
 
