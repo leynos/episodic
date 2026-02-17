@@ -63,22 +63,22 @@ class MultiSourceContext(typ.TypedDict, total=False):
 
 def _add_raw_source(
     multi_source_context: MultiSourceContext,
-    source_type: str,
-    source_uri: str,
-    content: str,
-    content_hash: str,
-    metadata: dict[str, object],
+    source: RawSourceInput,
     *,
     replace: bool = False,
 ) -> None:
-    """Append (or replace) a raw source in the shared context."""
-    source = RawSourceInput(
-        source_type=source_type,
-        source_uri=source_uri,
-        content=content,
-        content_hash=content_hash,
-        metadata=metadata,
-    )
+    """Append (or replace) a raw source in the shared context.
+
+    Parameters
+    ----------
+    multi_source_context : MultiSourceContext
+        Shared BDD step state dictionary.
+    source : RawSourceInput
+        Pre-constructed raw source to register.
+    replace : bool
+        When ``True``, discard any previously registered sources and
+        start a fresh list containing only *source*.
+    """
     if replace:
         multi_source_context["raw_sources"] = [source]
     else:
@@ -150,14 +150,14 @@ def transcript_source_available(
     multi_source_context: MultiSourceContext,
 ) -> None:
     """Provide a transcript raw source."""
-    _add_raw_source(
-        multi_source_context,
+    source = RawSourceInput(
         source_type="transcript",
         source_uri="s3://bucket/transcript.txt",
         content="Full episode transcript content",
         content_hash="hash-transcript",
         metadata={"title": "Episode Transcript"},
     )
+    _add_raw_source(multi_source_context, source)
 
 
 @given("a brief source is available for multi-source ingestion")
@@ -165,14 +165,14 @@ def brief_source_available(
     multi_source_context: MultiSourceContext,
 ) -> None:
     """Provide a brief raw source."""
-    _add_raw_source(
-        multi_source_context,
+    source = RawSourceInput(
         source_type="brief",
         source_uri="s3://bucket/brief.txt",
         content="Background briefing material",
         content_hash="hash-brief",
         metadata={"title": "Episode Brief"},
     )
+    _add_raw_source(multi_source_context, source)
 
 
 @given(
@@ -182,15 +182,14 @@ def single_transcript_source_available(
     multi_source_context: MultiSourceContext,
 ) -> None:
     """Provide a single transcript raw source."""
-    _add_raw_source(
-        multi_source_context,
+    source = RawSourceInput(
         source_type="transcript",
         source_uri="s3://bucket/solo-transcript.txt",
         content="Solo episode transcript",
         content_hash="hash-solo",
         metadata={"title": "Solo Transcript"},
-        replace=True,
     )
+    _add_raw_source(multi_source_context, source, replace=True)
 
 
 @when("multi-source ingestion processes the sources")
