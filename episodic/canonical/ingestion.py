@@ -26,7 +26,7 @@ if typ.TYPE_CHECKING:
     from .domain import JsonMapping, SourceDocumentInput
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class RawSourceInput:
     """A single raw source before normalisation.
 
@@ -52,7 +52,7 @@ class RawSourceInput:
     metadata: JsonMapping
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class NormalisedSource:
     """A source document after normalisation into a TEI-compatible fragment.
 
@@ -80,7 +80,7 @@ class NormalisedSource:
     reliability_score: float
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class WeightingResult:
     """Computed weight for a single normalised source.
 
@@ -99,7 +99,7 @@ class WeightingResult:
     factors: JsonMapping
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class ConflictOutcome:
     """Result of conflict resolution across all weighted sources.
 
@@ -125,7 +125,7 @@ class ConflictOutcome:
     resolution_notes: str
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class MultiSourceRequest:
     """Input payload for multi-source ingestion.
 

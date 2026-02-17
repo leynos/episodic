@@ -18,23 +18,22 @@ Ingest multiple sources within a unit-of-work session:
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses as dc
 import typing as typ
 
 from episodic.logging import get_logger, log_info
 
-from .domain import IngestionRequest, SourceDocumentInput
+from .domain import IngestionRequest
 from .services import ingest_sources
 
 logger = get_logger(__name__)
 
 if typ.TYPE_CHECKING:
-    from .domain import CanonicalEpisode, SeriesProfile
+    from .domain import CanonicalEpisode, SeriesProfile, SourceDocumentInput
     from .ingestion import (
         ConflictOutcome,
         MultiSourceRequest,
-        NormalisedSource,
-        RawSourceInput,
         WeightingResult,
     )
     from .ingestion_ports import (
@@ -64,97 +63,42 @@ class IngestionPipeline:
     resolver: ConflictResolver
 
 
-def _build_source_document_inputs(
-    raw_sources: list[RawSourceInput],
-    weighted_sources: list[WeightingResult],
-) -> list[SourceDocumentInput]:
-    """Build persistence-ready source inputs from weighted results.
-
-    Each raw source is matched to its weighted result so the computed
-    weight replaces the placeholder weight assigned during normalisation.
-    """
-    weight_by_uri: dict[str, float] = {
-        wr.source.source_input.source_uri: wr.computed_weight for wr in weighted_sources
-    }
-    return [
-        SourceDocumentInput(
-            source_type=raw.source_type,
-            source_uri=raw.source_uri,
-            weight=weight_by_uri.get(raw.source_uri, 0.0),
-            content_hash=raw.content_hash,
-            metadata=raw.metadata,
-        )
-        for raw in raw_sources
-    ]
-
-
-async def _normalise_sources(
-    raw_sources: list[RawSourceInput],
-    normaliser: SourceNormaliser,
-) -> list[NormalisedSource]:
-    """Normalise all raw sources into TEI fragments."""
-    return [await normaliser.normalise(raw) for raw in raw_sources]
-
-
-async def _compute_weights(
-    normalised: list[NormalisedSource],
-    series_configuration: dict[str, object],
-    weighting: WeightingStrategy,
-) -> list[WeightingResult]:
-    """Compute weights for all normalised sources."""
-    return await weighting.compute_weights(
-        normalised,
-        series_configuration,
-    )
-
-
-async def _resolve_conflicts(
-    weighted: list[WeightingResult],
-    resolver: ConflictResolver,
-) -> ConflictOutcome:
-    """Resolve conflicts between weighted sources."""
-    return await resolver.resolve(weighted)
-
-
-async def _persist_and_log(
+def _build_conflict_metadata(
     outcome: ConflictOutcome,
-    ingestion_request: IngestionRequest,
-    *,
-    uow: CanonicalUnitOfWork,
-    series_profile: SeriesProfile,
-) -> CanonicalEpisode:
-    """Persist a resolved ingestion request and log the outcome.
+) -> dict[str, object]:
+    """Build a serialisable conflict-resolution audit summary."""
+    return {
+        "preferred_sources": [
+            wr.source.source_input.source_uri for wr in outcome.preferred_sources
+        ],
+        "rejected_sources": [
+            wr.source.source_input.source_uri for wr in outcome.rejected_sources
+        ],
+        "resolution_notes": outcome.resolution_notes,
+    }
 
-    Parameters
-    ----------
-    outcome : ConflictOutcome
-        Resolved conflict outcome used for logging source counts.
-    ingestion_request : IngestionRequest
-        Fully-assembled ingestion payload ready for persistence.
-    uow : CanonicalUnitOfWork
-        Unit-of-work boundary providing repository access and transaction
-        scope.
-    series_profile : SeriesProfile
-        Series profile that owns the canonical episode.
 
-    Returns
-    -------
-    CanonicalEpisode
-        Persisted canonical episode representing the merged content.
+def _enrich_source_metadata(
+    weighted_sources: list[WeightingResult],
+    conflict_metadata: dict[str, object],
+) -> list[SourceDocumentInput]:
+    """Replace placeholder weights and inject conflict-resolution metadata.
+
+    Each source's ``metadata`` dictionary is augmented with a
+    ``"conflict_resolution"`` key containing the audit summary produced
+    by the conflict resolver.
     """
-    episode = await ingest_sources(uow, series_profile, ingestion_request)
-
-    log_info(
-        logger,
-        "Multi-source ingestion complete: %s sources, "
-        "%s preferred, %s rejected. Episode %s.",
-        len(ingestion_request.sources),
-        len(outcome.preferred_sources),
-        len(outcome.rejected_sources),
-        episode.id,
-    )
-
-    return episode
+    return [
+        dc.replace(
+            wr.source.source_input,
+            weight=wr.computed_weight,
+            metadata={
+                **wr.source.source_input.metadata,
+                "conflict_resolution": conflict_metadata,
+            },
+        )
+        for wr in weighted_sources
+    ]
 
 
 async def ingest_multi_source(
@@ -167,12 +111,13 @@ async def ingest_multi_source(
 
     This orchestrator runs the full ingestion pipeline:
 
-    1. Normalise each raw source into a TEI fragment via the normaliser.
+    1. Normalise each raw source into a TEI fragment via the normaliser
+       (concurrently using ``asyncio.gather``).
     2. Compute weights using the weighting strategy and series
        configuration.
     3. Resolve conflicts between sources via the conflict resolver.
-    4. Build an ``IngestionRequest`` with the merged TEI and computed
-       weights.
+    4. Build an ``IngestionRequest`` with the merged TEI, computed
+       weights, and conflict-resolution metadata.
     5. Delegate persistence to ``ingest_sources``.
 
     Parameters
@@ -195,40 +140,51 @@ async def ingest_multi_source(
     Raises
     ------
     ValueError
-        If ``request.raw_sources`` is empty.
-    TypeError
-        If the merged TEI header is missing from the parsed payload.
-    ValueError
-        If the merged TEI header title is missing or blank.
+        If ``request.raw_sources`` is empty or if
+        ``request.series_slug`` does not match
+        ``series_profile.slug``.
     """
     if not request.raw_sources:
         msg = "At least one raw source is required for multi-source ingestion."
         raise ValueError(msg)
 
-    normalised = await _normalise_sources(
-        request.raw_sources,
-        pipeline.normaliser,
+    if request.series_slug != series_profile.slug:
+        msg = (
+            f"Series slug mismatch: request has {request.series_slug!r} "
+            f"but profile has {series_profile.slug!r}."
+        )
+        raise ValueError(msg)
+
+    normalised = list(
+        await asyncio.gather(
+            *(pipeline.normaliser.normalise(raw) for raw in request.raw_sources),
+        ),
     )
-    weighted = await _compute_weights(
+
+    weighted = await pipeline.weighting.compute_weights(
         normalised,
         series_profile.configuration,
-        pipeline.weighting,
     )
-    outcome = await _resolve_conflicts(weighted, pipeline.resolver)
+    outcome = await pipeline.resolver.resolve(weighted)
 
-    source_inputs = _build_source_document_inputs(
-        request.raw_sources,
-        weighted,
-    )
+    conflict_metadata = _build_conflict_metadata(outcome)
+    source_inputs = _enrich_source_metadata(weighted, conflict_metadata)
     ingestion_request = IngestionRequest(
         tei_xml=outcome.merged_tei_xml,
         sources=source_inputs,
         requested_by=request.requested_by,
     )
 
-    return await _persist_and_log(
-        outcome,
-        ingestion_request,
-        uow=uow,
-        series_profile=series_profile,
+    episode = await ingest_sources(uow, series_profile, ingestion_request)
+
+    log_info(
+        logger,
+        "Multi-source ingestion complete: %s sources, "
+        "%s preferred, %s rejected. Episode %s.",
+        len(source_inputs),
+        len(outcome.preferred_sources),
+        len(outcome.rejected_sources),
+        episode.id,
     )
+
+    return episode

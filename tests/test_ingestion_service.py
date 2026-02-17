@@ -168,6 +168,35 @@ async def test_normaliser_unknown_source_type_uses_defaults() -> None:
     assert result.reliability_score == pytest.approx(0.5)
 
 
+@pytest.mark.asyncio
+async def test_normaliser_infers_title_from_content() -> None:
+    """Without a metadata title, the first content line is used."""
+    normaliser = InMemorySourceNormaliser()
+    raw = _make_raw_source(
+        content="First line of content\nSecond line",
+        metadata={},
+    )
+
+    result = await normaliser.normalise(raw)
+
+    assert result.title == "First line of content"
+
+
+@pytest.mark.asyncio
+async def test_normaliser_infers_title_from_source_type() -> None:
+    """With no metadata title and empty content, source_type is used."""
+    normaliser = InMemorySourceNormaliser()
+    raw = _make_raw_source(
+        source_type="press_release",
+        content="",
+        metadata={},
+    )
+
+    result = await normaliser.normalise(raw)
+
+    assert result.title == "Press Release"
+
+
 # -- Weighting strategy tests --
 
 
@@ -329,22 +358,21 @@ async def test_ingest_multi_source_end_to_end(
     assert persisted is not None
     assert persisted.title == "Primary Episode"
 
+    # Find the ingestion job via a plain session query.
+    import sqlalchemy as sa
+
+    from episodic.canonical.storage import IngestionJobRecord
+
+    async with session_factory() as session:
+        result = await session.execute(
+            sa.select(IngestionJobRecord).where(
+                IngestionJobRecord.target_episode_id == episode.id,
+            ),
+        )
+        job_record = result.scalar_one()
+
     # Source documents should be persisted with computed weights.
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        # Fetch the ingestion job to find source documents.
-        jobs_session = session_factory()
-        async with jobs_session:
-            import sqlalchemy as sa
-
-            from episodic.canonical.storage import IngestionJobRecord
-
-            result = await jobs_session.execute(
-                sa.select(IngestionJobRecord).where(
-                    IngestionJobRecord.target_episode_id == episode.id,
-                ),
-            )
-            job_record = result.scalar_one()
-
         documents = await uow.source_documents.list_for_job(job_record.id)
 
     assert len(documents) == 2
@@ -408,21 +436,21 @@ async def test_ingest_multi_source_preserves_all_sources(
             pipeline,
         )
 
+    # Find the ingestion job via a plain session query.
+    import sqlalchemy as sa
+
+    from episodic.canonical.storage import IngestionJobRecord
+
+    async with session_factory() as session:
+        result = await session.execute(
+            sa.select(IngestionJobRecord).where(
+                IngestionJobRecord.target_episode_id == episode.id,
+            ),
+        )
+        job_record = result.scalar_one()
+
     # All three sources should be persisted, not just the winner.
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        jobs_session = session_factory()
-        async with jobs_session:
-            import sqlalchemy as sa
-
-            from episodic.canonical.storage import IngestionJobRecord
-
-            result = await jobs_session.execute(
-                sa.select(IngestionJobRecord).where(
-                    IngestionJobRecord.target_episode_id == episode.id,
-                ),
-            )
-            job_record = result.scalar_one()
-
         documents = await uow.source_documents.list_for_job(job_record.id)
 
     assert len(documents) == 3
@@ -457,3 +485,97 @@ async def test_ingest_multi_source_empty_sources_raises(
                 request,
                 pipeline,
             )
+
+
+@pytest.mark.asyncio
+async def test_ingest_multi_source_slug_mismatch_raises(
+    session_factory: typ.Callable[[], AsyncSession],
+    series_profile_for_ingestion: SeriesProfile,
+) -> None:
+    """Mismatched series slug raises ValueError."""
+    profile = series_profile_for_ingestion
+    pipeline = IngestionPipeline(
+        normaliser=InMemorySourceNormaliser(),
+        weighting=DefaultWeightingStrategy(),
+        resolver=HighestWeightConflictResolver(),
+    )
+
+    request = MultiSourceRequest(
+        raw_sources=[_make_raw_source()],
+        series_slug="wrong-slug",
+        requested_by="test@example.com",
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(ValueError, match="Series slug mismatch"):
+            await ingest_multi_source(
+                uow,
+                profile,
+                request,
+                pipeline,
+            )
+
+
+@pytest.mark.asyncio
+async def test_ingest_multi_source_records_conflict_metadata(
+    session_factory: typ.Callable[[], AsyncSession],
+    series_profile_for_ingestion: SeriesProfile,
+) -> None:
+    """Conflict-resolution metadata is recorded in source document metadata."""
+    profile = series_profile_for_ingestion
+    pipeline = IngestionPipeline(
+        normaliser=InMemorySourceNormaliser(),
+        weighting=DefaultWeightingStrategy(),
+        resolver=HighestWeightConflictResolver(),
+    )
+
+    request = MultiSourceRequest(
+        raw_sources=[
+            _make_raw_source(
+                source_type="transcript",
+                source_uri="s3://bucket/winner.txt",
+                content="Winner content",
+                content_hash="hash-winner",
+                metadata={"title": "Winner"},
+            ),
+            _make_raw_source(
+                source_type="rss",
+                source_uri="s3://bucket/loser.txt",
+                content="Loser content",
+                content_hash="hash-loser",
+                metadata={"title": "Loser"},
+            ),
+        ],
+        series_slug=profile.slug,
+        requested_by="test@example.com",
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        episode = await ingest_multi_source(
+            uow,
+            profile,
+            request,
+            pipeline,
+        )
+
+    import sqlalchemy as sa
+
+    from episodic.canonical.storage import IngestionJobRecord
+
+    async with session_factory() as session:
+        result = await session.execute(
+            sa.select(IngestionJobRecord).where(
+                IngestionJobRecord.target_episode_id == episode.id,
+            ),
+        )
+        job_record = result.scalar_one()
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        documents = await uow.source_documents.list_for_job(job_record.id)
+
+    for doc in documents:
+        assert "conflict_resolution" in doc.metadata
+        cr = doc.metadata["conflict_resolution"]
+        assert "preferred_sources" in cr
+        assert "rejected_sources" in cr
+        assert "resolution_notes" in cr

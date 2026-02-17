@@ -12,24 +12,25 @@ Status: COMPLETE
 
 After this change, the Episodic platform can ingest heterogeneous source
 documents (transcripts, briefs, press releases, Really Simple Syndication (RSS)
-feeds, and research notes), normalise them into TEI fragments, compute source
-weights using configurable heuristics, resolve conflicts between competing
-sources, and merge the result into a single canonical TEI episode with full
-provenance. The existing low-level `ingest_sources()` persistence function is
-preserved unchanged; a new higher-level orchestrator composes around it.
+feeds, and research notes), normalize them into Text Encoding Initiative (TEI)
+fragments, compute source weights using configurable heuristics, resolve
+conflicts between competing sources, and merge the result into a single
+canonical TEI episode with full provenance. The existing low-level
+`ingest_sources()` persistence function is preserved unchanged; a new
+higher-level orchestrator composes around it.
 
 Success is observable when:
 
 1. Running `make test` passes all existing tests plus new unit tests and
-   Behaviour-Driven Development (BDD) scenarios covering normalisation,
+   Behaviour-Driven Development (BDD) scenarios covering normalization,
    weighting, conflict resolution, and end-to-end multi-source ingestion.
 2. Three new port protocols (`SourceNormaliser`, `WeightingStrategy`,
-   `ConflictResolver`) define the extension points for normalisation,
+   `ConflictResolver`) define the extension points for normalization,
    weighting, and conflict resolution.
 3. Reference in-memory adapters implement all three ports, sufficient for
    unit and behavioural testing without external dependencies.
 4. The `ingest_multi_source()` orchestrator accepts a
-   `MultiSourceRequest`, runs the pipeline (normalise → weight → resolve →
+   `MultiSourceRequest`, runs the pipeline (normalize → weight → resolve →
    merge), delegates persistence to `ingest_sources()`, and returns the
    persisted `CanonicalEpisode`.
 5. Conflict resolution audit data (which sources were preferred, which were
@@ -135,21 +136,21 @@ Success is observable when:
 - Decision: Compose a new `ingest_multi_source()` orchestrator around the
   existing `ingest_sources()` rather than modifying it in place. Rationale:
   `ingest_sources()` is already tested, stable, and serves as the persistence
-  boundary. The new orchestrator handles normalisation, weighting, and conflict
+  boundary. The new orchestrator handles normalization, weighting, and conflict
   resolution as pure domain logic, then delegates persistence. This follows the
-  open/closed principle and minimises blast radius. Date/Author: 2026-02-15,
+  open/closed principle and minimizes blast radius. Date/Author: 2026-02-15,
   plan phase.
 
 - Decision: Define three separate port protocols (`SourceNormaliser`,
   `WeightingStrategy`, `ConflictResolver`) rather than a single monolithic
-  ingestion port. Rationale: Each concern (normalisation, weighting, conflict
+  ingestion port. Rationale: Each concern (normalization, weighting, conflict
   resolution) is independently swappable and testable. This follows the
   Interface Segregation Principle and mirrors the hexagonal architecture
   pattern established in the codebase. Date/Author: 2026-02-15, plan phase.
 
 - Decision: Provide reference in-memory adapters rather than concrete
   production adapters for all five source types. Rationale: The roadmap item
-  focuses on the service layer (normalisation pipeline, weighting heuristics,
+  focuses on the service layer (normalization pipeline, weighting heuristics,
   conflict resolution). Concrete adapters for RSS parsing, PDF extraction, and
   similar concerns are infrastructure details that belong in later tasks or
   dedicated adapter packages. The reference adapters are sufficient for testing
@@ -160,7 +161,7 @@ Success is observable when:
   `episodic/canonical/ingestion_ports.py` rather than extending the existing
   `domain.py` and `ports.py`. Rationale: The existing files are focused on the
   persistence-layer domain and ports. The new ingestion pipeline introduces
-  distinct concerns (normalisation, weighting, conflict resolution) that
+  distinct concerns (normalization, weighting, conflict resolution) that
   warrant separate modules. This follows the "group by feature" guidance in
   `AGENTS.md`. Date/Author: 2026-02-15, plan phase.
 
@@ -258,7 +259,7 @@ lines 1127–1135. Key requirements:
 
 - Accepts RSS feeds, briefs, transcripts, press releases, and research notes.
 - Applies document classifiers, quality scores, and weighting heuristics.
-- Normalises inputs into TEI fragments and merges into canonical episodes.
+- Normalizes inputs into TEI fragments and merges into canonical episodes.
 - Conflicts resolve using the weighting matrix; rejected content retained for
   audit.
 - Records provenance and retains source attachments.
@@ -278,17 +279,17 @@ Create two new modules in `episodic/canonical/`:
 **`episodic/canonical/ingestion.py`** — Domain value objects:
 
 - `NormalisedSource` (frozen dataclass): Represents a single source document
-  after normalisation into a TEI-compatible fragment.
+  after normalization into a TEI-compatible fragment.
   - `source_input: SourceDocumentInput` — the original source metadata.
   - `title: str` — extracted or inferred title from the source.
-  - `tei_fragment: str` — normalised TEI XML fragment for this source.
+  - `tei_fragment: str` — normalized TEI XML fragment for this source.
   - `quality_score: float` — classifier-assigned quality score (0–1).
   - `freshness_score: float` — temporal freshness score (0–1).
   - `reliability_score: float` — source reliability score (0–1).
 
 - `WeightingResult` (frozen dataclass): The computed weight for a single
-  normalised source, along with the reasoning.
-  - `source: NormalisedSource` — the normalised source.
+  normalized source, along with the reasoning.
+  - `source: NormalisedSource` — the normalized source.
   - `computed_weight: float` — final weight (0–1) after heuristic application.
   - `factors: JsonMapping` — breakdown of weighting factors for audit.
 
@@ -309,7 +310,7 @@ Create two new modules in `episodic/canonical/`:
   - `requested_by: str | None` — actor requesting ingestion.
 
 - `RawSourceInput` (frozen dataclass): A single raw source before
-  normalisation.
+  normalization.
   - `source_type: str` — type classifier (e.g. "transcript", "brief", "rss",
     "press_release", "research_notes").
   - `source_uri: str` — URI or path to the source.
@@ -319,7 +320,7 @@ Create two new modules in `episodic/canonical/`:
 
 **`episodic/canonical/ingestion_ports.py`** — Port protocols:
 
-- `SourceNormaliser` (Protocol): Normalises a raw source into a TEI fragment
+- `SourceNormaliser` (Protocol): Normalizes a raw source into a TEI fragment
   with quality, freshness, and reliability scores.
 
       class SourceNormaliser(typ.Protocol):
@@ -328,7 +329,7 @@ Create two new modules in `episodic/canonical/`:
               raw_source: RawSourceInput,
           ) -> NormalisedSource: …
 
-- `WeightingStrategy` (Protocol): Computes weights for normalised sources
+- `WeightingStrategy` (Protocol): Computes weights for normalized sources
   using series-level configuration.
 
       class WeightingStrategy(typ.Protocol):
@@ -400,7 +401,7 @@ Create **`episodic/canonical/ingestion_service.py`**:
     - `resolver: ConflictResolver`
   - Returns: `CanonicalEpisode`
   - Orchestration:
-    1. Normalise each raw source via `normaliser.normalise()`.
+    1. Normalize each raw source via `normaliser.normalise()`.
     2. Compute weights via `weighting.compute_weights()`.
     3. Resolve conflicts via `resolver.resolve()`.
     4. Build an `IngestionRequest` from the resolved output:
@@ -503,7 +504,7 @@ Validation: `make test` passes all BDD scenarios.
 1. **`docs/episodic-podcast-generation-system-design.md`** — Add a subsection
    "Multi-source ingestion service implementation" after the "Repository and
    unit-of-work implementation" section. Document the three-port architecture
-   (normalisation, weighting, conflict resolution), the composition pattern
+   (normalization, weighting, conflict resolution), the composition pattern
    around `ingest_sources()`, the weighting heuristic defaults, and the
    conflict resolution strategy.
 
@@ -515,7 +516,7 @@ Validation: `make test` passes all BDD scenarios.
    - Series configuration keys for weighting coefficients.
 
 3. **`docs/users-guide.md`** — Update the "Content Creation" section to note
-   that multi-source ingestion normalises heterogeneous sources, applies
+   that multi-source ingestion normalizes heterogeneous sources, applies
    configurable weighting heuristics, and resolves conflicts automatically
    while retaining all source material for audit.
 
@@ -621,7 +622,7 @@ Acceptance requires all of the following:
 - Three new port protocols (`SourceNormaliser`, `WeightingStrategy`,
   `ConflictResolver`) are defined with full docstrings and type annotations.
 - Reference adapters implement all three ports with configurable defaults.
-- The `ingest_multi_source()` orchestrator composes normalisation → weighting
+- The `ingest_multi_source()` orchestrator composes normalization → weighting
   → conflict resolution → persistence via `ingest_sources()`.
 - All submitted sources are persisted (including rejected ones) for audit.
 - Conflict resolution metadata is recorded in the approval event payload.

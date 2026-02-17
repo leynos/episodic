@@ -129,7 +129,7 @@ raise `sqlalchemy.exc.IntegrityError` on violation.
 
 ## Multi-source ingestion
 
-The multi-source ingestion service normalises heterogeneous source documents,
+The multi-source ingestion service normalizes heterogeneous source documents,
 applies source weighting heuristics, resolves conflicts, and merges the result
 into a canonical TEI episode. The service is implemented as an orchestrator
 (`ingest_multi_source`) that composes around the existing low-level
@@ -142,7 +142,7 @@ define the pipeline extension points:
 
 - `SourceNormaliser` — converts a `RawSourceInput` into a `NormalisedSource`
   containing a TEI XML fragment and quality, freshness, and reliability scores.
-- `WeightingStrategy` — computes a `WeightingResult` for each normalised
+- `WeightingStrategy` — computes a `WeightingResult` for each normalized
   source using series-level configuration coefficients.
 - `ConflictResolver` — produces a `ConflictOutcome` that selects preferred
   sources, rejects lower-weighted alternatives, and merges the canonical TEI.

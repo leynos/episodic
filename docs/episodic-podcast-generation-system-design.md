@@ -935,8 +935,8 @@ points:
 
 - `SourceNormaliser` converts heterogeneous raw sources (transcripts, briefs,
   Really Simple Syndication (RSS) feeds, press releases, and research notes)
-  into normalised TEI fragments with quality, freshness, and reliability scores.
-- `WeightingStrategy` computes a final weight for each normalised source using
+  into normalized TEI fragments with quality, freshness, and reliability scores.
+- `WeightingStrategy` computes a final weight for each normalized source using
   a weighted average of the three scores, with coefficients configurable per
   series via the `SeriesProfile.configuration` dictionary. Default coefficients
   are quality=0.5, freshness=0.3, reliability=0.2. Results are clamped to [0,
@@ -946,7 +946,7 @@ points:
   content; all other sources are recorded as rejected with weights preserved
   for audit.
 
-The orchestrator runs the pipeline in sequence: normalise, weight, resolve,
+The orchestrator runs the pipeline in sequence: normalize, weight, resolve,
 then delegates persistence to `ingest_sources`. All submitted sources are
 persisted as `SourceDocument` entities regardless of whether they were
 preferred or rejected during conflict resolution. This ensures rejected content

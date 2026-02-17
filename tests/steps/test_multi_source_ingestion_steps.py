@@ -293,6 +293,7 @@ def conflict_resolution_metadata_recorded(
 
     async def _verify() -> None:
         episode_id = multi_source_context["episode_id"]
+        job_id = multi_source_context["ingestion_job_id"]
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             events = await uow.approval_events.list_for_episode(
                 episode_id,
@@ -307,6 +308,20 @@ def conflict_resolution_metadata_recorded(
         assert "sources" in event.payload, (
             "Expected source URIs in the approval payload."
         )
+
+        # Conflict-resolution metadata should be embedded in each
+        # source document's metadata.
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            documents = await uow.source_documents.list_for_job(job_id)
+
+        for doc in documents:
+            assert "conflict_resolution" in doc.metadata, (
+                "Expected conflict_resolution in source document metadata."
+            )
+            cr = doc.metadata["conflict_resolution"]
+            assert "preferred_sources" in cr
+            assert "rejected_sources" in cr
+            assert "resolution_notes" in cr
 
     _run_async_step(_function_scoped_runner, _verify)
 
