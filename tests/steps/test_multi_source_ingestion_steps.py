@@ -314,14 +314,24 @@ def conflict_resolution_metadata_recorded(
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             documents = await uow.source_documents.list_for_job(job_id)
 
-        for doc in documents:
+        for idx, doc in enumerate(documents):
             assert "conflict_resolution" in doc.metadata, (
-                "Expected conflict_resolution in source document metadata."
+                f"Expected conflict_resolution in source document "
+                f"metadata for doc index={idx} id={doc.id}."
             )
             cr = doc.metadata["conflict_resolution"]
-            assert "preferred_sources" in cr
-            assert "rejected_sources" in cr
-            assert "resolution_notes" in cr
+            assert "preferred_sources" in cr, (
+                f"Expected preferred_sources in conflict_resolution "
+                f"metadata for doc index={idx} id={doc.id}."
+            )
+            assert "rejected_sources" in cr, (
+                f"Expected rejected_sources in conflict_resolution "
+                f"metadata for doc index={idx} id={doc.id}."
+            )
+            assert "resolution_notes" in cr, (
+                f"Expected resolution_notes in conflict_resolution "
+                f"metadata for doc index={idx} id={doc.id}."
+            )
 
     _run_async_step(_function_scoped_runner, _verify)
 

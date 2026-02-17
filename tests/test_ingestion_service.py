@@ -33,7 +33,11 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.tei import parse_tei_header
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from episodic.canonical.storage import IngestionJobRecord
 
 
 def _make_raw_source(**kwargs: object) -> RawSourceInput:
@@ -46,6 +50,9 @@ def _make_raw_source(**kwargs: object) -> RawSourceInput:
         "metadata": {},
     }
     merged = defaults | kwargs
+    # merged is dict[str, object]; RawSourceInput expects explicit keyword
+    # types.  The values are correct at runtime — the dict just has a wider
+    # value type than the constructor signature declares.
     return RawSourceInput(**merged)  # type: ignore[arg-type]
 
 
@@ -83,14 +90,10 @@ def _make_weighting_result(
     scores: dict[str, float] | None = None,
 ) -> WeightingResult:
     """Build a weighting result for testing."""
-    resolved = scores or {
-        "quality": 0.8,
-        "freshness": 0.7,
-        "reliability": 0.6,
-    }
-    quality = resolved["quality"]
-    freshness = resolved["freshness"]
-    reliability = resolved["reliability"]
+    resolved = scores or {}
+    quality = resolved.get("quality", 0.8)
+    freshness = resolved.get("freshness", 0.7)
+    reliability = resolved.get("reliability", 0.6)
     source = _make_normalised_source(title, quality, freshness, reliability)
     return WeightingResult(
         source=source,
@@ -101,6 +104,24 @@ def _make_weighting_result(
             "reliability_score": reliability,
         },
     )
+
+
+async def _get_job_record_for_episode(
+    session_factory: cabc.Callable[[], AsyncSession],
+    episode_id: uuid.UUID,
+) -> IngestionJobRecord:
+    """Look up the ingestion job record targeting *episode_id*."""
+    import sqlalchemy as sa
+
+    from episodic.canonical.storage import IngestionJobRecord
+
+    async with session_factory() as session:
+        result = await session.execute(
+            sa.select(IngestionJobRecord).where(
+                IngestionJobRecord.target_episode_id == episode_id,
+            ),
+        )
+        return result.scalar_one()
 
 
 @pytest_asyncio.fixture
@@ -359,17 +380,10 @@ async def test_ingest_multi_source_end_to_end(
     assert persisted.title == "Primary Episode"
 
     # Find the ingestion job via a plain session query.
-    import sqlalchemy as sa
-
-    from episodic.canonical.storage import IngestionJobRecord
-
-    async with session_factory() as session:
-        result = await session.execute(
-            sa.select(IngestionJobRecord).where(
-                IngestionJobRecord.target_episode_id == episode.id,
-            ),
-        )
-        job_record = result.scalar_one()
+    job_record = await _get_job_record_for_episode(
+        session_factory,
+        episode.id,
+    )
 
     # Source documents should be persisted with computed weights.
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -437,17 +451,10 @@ async def test_ingest_multi_source_preserves_all_sources(
         )
 
     # Find the ingestion job via a plain session query.
-    import sqlalchemy as sa
-
-    from episodic.canonical.storage import IngestionJobRecord
-
-    async with session_factory() as session:
-        result = await session.execute(
-            sa.select(IngestionJobRecord).where(
-                IngestionJobRecord.target_episode_id == episode.id,
-            ),
-        )
-        job_record = result.scalar_one()
+    job_record = await _get_job_record_for_episode(
+        session_factory,
+        episode.id,
+    )
 
     # All three sources should be persisted, not just the winner.
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -558,17 +565,10 @@ async def test_ingest_multi_source_records_conflict_metadata(
             pipeline,
         )
 
-    import sqlalchemy as sa
-
-    from episodic.canonical.storage import IngestionJobRecord
-
-    async with session_factory() as session:
-        result = await session.execute(
-            sa.select(IngestionJobRecord).where(
-                IngestionJobRecord.target_episode_id == episode.id,
-            ),
-        )
-        job_record = result.scalar_one()
+    job_record = await _get_job_record_for_episode(
+        session_factory,
+        episode.id,
+    )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)
