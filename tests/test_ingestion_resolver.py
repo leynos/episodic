@@ -8,10 +8,17 @@ from _ingestion_service_helpers import _make_weighting_result
 from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
 
 
+@pytest.fixture
+def resolver() -> HighestWeightConflictResolver:
+    """Provide a conflict resolver instance for adapter tests."""
+    return HighestWeightConflictResolver()
+
+
 @pytest.mark.asyncio
-async def test_conflict_resolver_selects_highest_weight() -> None:
+async def test_conflict_resolver_selects_highest_weight(
+    resolver: HighestWeightConflictResolver,
+) -> None:
     """The resolver selects the highest-weighted source as preferred."""
-    resolver = HighestWeightConflictResolver()
     high = _make_weighting_result(title="High Priority", weight=0.9)
     low = _make_weighting_result(title="Low Priority", weight=0.3)
 
@@ -33,9 +40,10 @@ async def test_conflict_resolver_selects_highest_weight() -> None:
 
 
 @pytest.mark.asyncio
-async def test_conflict_resolver_single_source_no_conflict() -> None:
+async def test_conflict_resolver_single_source_no_conflict(
+    resolver: HighestWeightConflictResolver,
+) -> None:
     """A single source is selected with no rejections."""
-    resolver = HighestWeightConflictResolver()
     single = _make_weighting_result(title="Only Source", weight=0.8)
 
     outcome = await resolver.resolve([single])
@@ -52,9 +60,10 @@ async def test_conflict_resolver_single_source_no_conflict() -> None:
 
 
 @pytest.mark.asyncio
-async def test_conflict_resolver_records_resolution_notes() -> None:
+async def test_conflict_resolver_records_resolution_notes(
+    resolver: HighestWeightConflictResolver,
+) -> None:
     """The resolver produces human-readable resolution notes."""
-    resolver = HighestWeightConflictResolver()
     high = _make_weighting_result(title="Winner", weight=0.9)
     low = _make_weighting_result(title="Loser", weight=0.3)
 

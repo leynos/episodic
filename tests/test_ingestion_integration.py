@@ -10,31 +10,25 @@ from _ingestion_service_helpers import (
     _make_raw_source,
 )
 
-from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
-from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
-from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
 from episodic.canonical.ingestion import MultiSourceRequest
-from episodic.canonical.ingestion_service import IngestionPipeline, ingest_multi_source
+from episodic.canonical.ingestion_service import ingest_multi_source
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import SeriesProfile
+    from episodic.canonical.ingestion_service import IngestionPipeline
 
 
 @pytest.mark.asyncio
 async def test_ingest_multi_source_end_to_end(
     session_factory: typ.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
+    ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """End-to-end integration test for multi-source ingestion."""
     profile = series_profile_for_ingestion
-    pipeline = IngestionPipeline(
-        normaliser=InMemorySourceNormaliser(),
-        weighting=DefaultWeightingStrategy(),
-        resolver=HighestWeightConflictResolver(),
-    )
 
     request = MultiSourceRequest(
         raw_sources=[
@@ -62,7 +56,7 @@ async def test_ingest_multi_source_end_to_end(
             uow,
             profile,
             request,
-            pipeline,
+            ingestion_pipeline,
         )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -99,14 +93,10 @@ async def test_ingest_multi_source_end_to_end(
 async def test_ingest_multi_source_preserves_all_sources(
     session_factory: typ.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
+    ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """All sources are persisted, even those rejected in conflict resolution."""
     profile = series_profile_for_ingestion
-    pipeline = IngestionPipeline(
-        normaliser=InMemorySourceNormaliser(),
-        weighting=DefaultWeightingStrategy(),
-        resolver=HighestWeightConflictResolver(),
-    )
 
     source_uris = [
         "s3://bucket/source-1.txt",
@@ -146,7 +136,7 @@ async def test_ingest_multi_source_preserves_all_sources(
             uow,
             profile,
             request,
-            pipeline,
+            ingestion_pipeline,
         )
 
     job_record = await _get_job_record_for_episode(
@@ -168,14 +158,10 @@ async def test_ingest_multi_source_preserves_all_sources(
 async def test_ingest_multi_source_empty_sources_raises(
     session_factory: typ.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
+    ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Submitting zero raw sources raises ValueError."""
     profile = series_profile_for_ingestion
-    pipeline = IngestionPipeline(
-        normaliser=InMemorySourceNormaliser(),
-        weighting=DefaultWeightingStrategy(),
-        resolver=HighestWeightConflictResolver(),
-    )
 
     request = MultiSourceRequest(
         raw_sources=[],
@@ -189,7 +175,7 @@ async def test_ingest_multi_source_empty_sources_raises(
                 uow,
                 profile,
                 request,
-                pipeline,
+                ingestion_pipeline,
             )
 
 
@@ -197,14 +183,10 @@ async def test_ingest_multi_source_empty_sources_raises(
 async def test_ingest_multi_source_slug_mismatch_raises(
     session_factory: typ.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
+    ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Mismatched series slug raises ValueError."""
     profile = series_profile_for_ingestion
-    pipeline = IngestionPipeline(
-        normaliser=InMemorySourceNormaliser(),
-        weighting=DefaultWeightingStrategy(),
-        resolver=HighestWeightConflictResolver(),
-    )
 
     request = MultiSourceRequest(
         raw_sources=[_make_raw_source()],
@@ -218,7 +200,7 @@ async def test_ingest_multi_source_slug_mismatch_raises(
                 uow,
                 profile,
                 request,
-                pipeline,
+                ingestion_pipeline,
             )
 
 
@@ -226,14 +208,10 @@ async def test_ingest_multi_source_slug_mismatch_raises(
 async def test_ingest_multi_source_records_conflict_metadata(
     session_factory: typ.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
+    ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Conflict-resolution metadata is recorded in source document metadata."""
     profile = series_profile_for_ingestion
-    pipeline = IngestionPipeline(
-        normaliser=InMemorySourceNormaliser(),
-        weighting=DefaultWeightingStrategy(),
-        resolver=HighestWeightConflictResolver(),
-    )
 
     request = MultiSourceRequest(
         raw_sources=[
@@ -261,7 +239,7 @@ async def test_ingest_multi_source_records_conflict_metadata(
             uow,
             profile,
             request,
-            pipeline,
+            ingestion_pipeline,
         )
 
     job_record = await _get_job_record_for_episode(

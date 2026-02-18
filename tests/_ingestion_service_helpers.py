@@ -19,19 +19,37 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.storage import IngestionJobRecord
 
 
-def _make_raw_source(**kwargs: object) -> RawSourceInput:
+class RawSourceInputOverrides(typ.TypedDict, total=False):
+    """Optional overrides accepted by `_make_raw_source`."""
+
+    source_type: str
+    source_uri: str
+    content: str
+    content_hash: str
+    metadata: dict[str, object]
+
+
+class RawSourceInputDict(typ.TypedDict):
+    """Fully-resolved dictionary shape for `RawSourceInput` construction."""
+
+    source_type: str
+    source_uri: str
+    content: str
+    content_hash: str
+    metadata: dict[str, object]
+
+
+def _make_raw_source(**kwargs: typ.Unpack[RawSourceInputOverrides]) -> RawSourceInput:
     """Build a raw source input for testing with sensible defaults."""
-    defaults: dict[str, object] = {
+    defaults: RawSourceInputDict = {
         "source_type": "transcript",
         "source_uri": "s3://bucket/transcript.txt",
         "content": "Episode transcript content",
         "content_hash": "hash-abc",
         "metadata": {},
     }
-    merged = defaults | kwargs
-    # merged is dict[str, object]; RawSourceInput expects explicit keyword
-    # types. The values are correct at runtime; the dict is simply wider.
-    return RawSourceInput(**merged)  # type: ignore[arg-type]
+    merged = typ.cast("RawSourceInputDict", defaults | kwargs)
+    return RawSourceInput(**merged)
 
 
 def _make_normalised_source(

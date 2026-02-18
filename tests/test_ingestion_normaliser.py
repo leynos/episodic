@@ -9,10 +9,17 @@ from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
 from episodic.canonical.tei import parse_tei_header
 
 
+@pytest.fixture
+def normaliser() -> InMemorySourceNormaliser:
+    """Provide a normaliser instance for adapter tests."""
+    return InMemorySourceNormaliser()
+
+
 @pytest.mark.asyncio
-async def test_normaliser_produces_valid_tei_fragment() -> None:
+async def test_normaliser_produces_valid_tei_fragment(
+    normaliser: InMemorySourceNormaliser,
+) -> None:
     """The normaliser produces a NormalisedSource with parseable TEI XML."""
-    normaliser = InMemorySourceNormaliser()
     raw = _make_raw_source(
         source_type="transcript",
         content="Transcript content here",
@@ -43,9 +50,10 @@ async def test_normaliser_produces_valid_tei_fragment() -> None:
 
 
 @pytest.mark.asyncio
-async def test_normaliser_unknown_source_type_uses_defaults() -> None:
+async def test_normaliser_unknown_source_type_uses_defaults(
+    normaliser: InMemorySourceNormaliser,
+) -> None:
     """An unknown source type gets mid-range fallback scores."""
-    normaliser = InMemorySourceNormaliser()
     raw = _make_raw_source(source_type="unknown_format")
 
     result = await normaliser.normalise(raw)
@@ -62,9 +70,10 @@ async def test_normaliser_unknown_source_type_uses_defaults() -> None:
 
 
 @pytest.mark.asyncio
-async def test_normaliser_infers_title_from_content() -> None:
+async def test_normaliser_infers_title_from_content(
+    normaliser: InMemorySourceNormaliser,
+) -> None:
     """Without a metadata title, the first content line is used."""
-    normaliser = InMemorySourceNormaliser()
     raw = _make_raw_source(
         content="First line of content\nSecond line",
         metadata={},
@@ -78,9 +87,10 @@ async def test_normaliser_infers_title_from_content() -> None:
 
 
 @pytest.mark.asyncio
-async def test_normaliser_infers_title_from_source_type() -> None:
+async def test_normaliser_infers_title_from_source_type(
+    normaliser: InMemorySourceNormaliser,
+) -> None:
     """With no metadata title and empty content, source_type is used."""
-    normaliser = InMemorySourceNormaliser()
     raw = _make_raw_source(
         source_type="press_release",
         content="",

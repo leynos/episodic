@@ -31,6 +31,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
     from episodic.canonical.domain import SeriesProfile
+    from episodic.canonical.ingestion_service import IngestionPipeline
 
 try:
     from py_pglite import PGliteConfig, PGliteManager
@@ -143,7 +144,20 @@ def session_factory(
 async def series_profile_for_ingestion(
     session_factory: typ.Callable[[], AsyncSession],
 ) -> SeriesProfile:
-    """Create and persist a series profile for ingestion integration tests."""
+    """Create and persist a series profile for ingestion integration tests.
+
+    Parameters
+    ----------
+    session_factory : Callable[[], AsyncSession]
+        Factory that returns an async SQLAlchemy session bound to the
+        migrated test database.
+
+    Returns
+    -------
+    SeriesProfile
+        Persisted series profile instance used by ingestion integration
+        tests.
+    """
     import datetime as dt
 
     from episodic.canonical.domain import SeriesProfile
@@ -163,6 +177,23 @@ async def series_profile_for_ingestion(
         await uow.series_profiles.add(profile)
         await uow.commit()
     return profile
+
+
+@pytest_asyncio.fixture
+async def ingestion_pipeline() -> IngestionPipeline:
+    """Build the standard multi-source ingestion pipeline for tests."""
+    await asyncio.sleep(0)
+
+    from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
+    from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
+    from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
+    from episodic.canonical.ingestion_service import IngestionPipeline
+
+    return IngestionPipeline(
+        normaliser=InMemorySourceNormaliser(),
+        weighting=DefaultWeightingStrategy(),
+        resolver=HighestWeightConflictResolver(),
+    )
 
 
 @pytest_asyncio.fixture
