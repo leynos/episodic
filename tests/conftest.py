@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import os
 import typing as typ
+import uuid
 
 import pytest
 import pytest_asyncio
@@ -28,6 +29,8 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+
+    from episodic.canonical.domain import SeriesProfile
 
 try:
     from py_pglite import PGliteConfig, PGliteManager
@@ -134,6 +137,32 @@ def session_factory(
         class_=AsyncSession,
         expire_on_commit=False,
     )
+
+
+@pytest_asyncio.fixture
+async def series_profile_for_ingestion(
+    session_factory: typ.Callable[[], AsyncSession],
+) -> SeriesProfile:
+    """Create and persist a series profile for ingestion integration tests."""
+    import datetime as dt
+
+    from episodic.canonical.domain import SeriesProfile
+    from episodic.canonical.storage import SqlAlchemyUnitOfWork
+
+    now = dt.datetime.now(dt.UTC)
+    profile = SeriesProfile(
+        id=uuid.uuid4(),
+        slug=f"test-series-{uuid.uuid4().hex[:8]}",
+        title="Test Series",
+        description=None,
+        configuration={"tone": "neutral"},
+        created_at=now,
+        updated_at=now,
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.series_profiles.add(profile)
+        await uow.commit()
+    return profile
 
 
 @pytest_asyncio.fixture
