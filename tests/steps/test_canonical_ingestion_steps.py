@@ -288,3 +288,48 @@ def source_documents_linked(
             )
 
     _run_async_step(_function_scoped_runner, _fetch)
+
+
+@then("TEI header provenance metadata is captured for the ingestion")
+def tei_header_provenance_captured(
+    _function_scoped_runner: asyncio.Runner,
+    session_factory: cabc.Callable[[], AsyncSession],
+    context: IngestionContext,
+) -> None:
+    """Verify TEI header provenance metadata is persisted."""
+
+    async def _fetch() -> None:
+        episode_id = context["episode_id"]
+        source_uris = context["source_uris"]
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            episode = await uow.episodes.get(episode_id)
+            assert episode is not None, "Expected a persisted canonical episode."
+            header = await uow.tei_headers.get(episode.tei_header_id)
+
+        assert header is not None, "Expected the TEI header to be persisted."
+        provenance = header.payload.get("episodic_provenance")
+        assert isinstance(provenance, dict), (
+            "Expected TEI header provenance dictionary."
+        )
+        assert provenance.get("capture_context") == "source_ingestion", (
+            "Expected ingestion provenance context."
+        )
+        assert provenance.get("reviewer_identities") == ["producer@example.com"], (
+            "Expected reviewer identity from ingestion request."
+        )
+        assert isinstance(provenance.get("ingestion_timestamp"), str), (
+            "Expected ingestion timestamp string in provenance."
+        )
+        priorities = provenance.get("source_priorities")
+        assert isinstance(priorities, list), (
+            "Expected source priorities list in provenance."
+        )
+        assert len(priorities) == len(source_uris), (
+            "Expected one source-priority record per source URI."
+        )
+        assert priorities[0]["source_uri"] == "https://example.com/report", (
+            "Expected highest-weight source URI to be first."
+        )
+
+    _run_async_step(_function_scoped_runner, _fetch)

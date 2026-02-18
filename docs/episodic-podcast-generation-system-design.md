@@ -883,6 +883,12 @@ state transitions with actor metadata and payloads for auditability. Ingestion
 workflows flush pending inserts before recording dependent rows so foreign-key
 relationships remain valid within a single transaction.
 
+TEI header payloads include an `episodic_provenance` extension with
+`source_priorities`, `ingestion_timestamp`, `reviewer_identities`, and a
+`capture_context`. This metadata is generated in the domain layer and then
+persisted through repository adapters, so script-generation workflows can reuse
+the same provenance contract when implemented.
+
 The diagram below summarizes the canonical content tables and their
 relationships.
 
@@ -951,6 +957,12 @@ then delegates persistence to `ingest_sources`. All submitted sources are
 persisted as `SourceDocument` entities regardless of whether they were
 preferred or rejected during conflict resolution. This ensures rejected content
 is retained for audit as specified in the system design.
+
+During persistence, `ingest_sources` enriches the TEI header payload with
+provenance automatically. Source priorities are derived from final source
+weights (descending with deterministic tie-breaks), ingestion timestamps are
+stored as UTC ISO-8601 strings, and reviewer identities are taken from the
+request actor metadata.
 
 Reference adapters in `episodic/canonical/adapters/` implement the three ports
 with sensible defaults, suitable for testing and initial deployments.

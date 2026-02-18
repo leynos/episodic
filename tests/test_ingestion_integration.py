@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import typing as typ
 
 import pytest
@@ -19,6 +20,36 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import SeriesProfile
     from episodic.canonical.ingestion_service import IngestionPipeline
+
+
+class SourcePriorityRecord(typ.TypedDict):
+    """Serialized source-priority record in TEI provenance metadata."""
+
+    priority: int
+    source_uri: str
+    source_type: str
+    weight: float
+    content_hash: str
+
+
+class TeiHeaderProvenanceRecord(typ.TypedDict):
+    """Serialized TEI header provenance metadata payload."""
+
+    capture_context: str
+    ingestion_timestamp: str
+    source_priorities: list[SourcePriorityRecord]
+    reviewer_identities: list[str]
+
+
+def _require_provenance_payload(
+    payload: dict[str, object],
+) -> TeiHeaderProvenanceRecord:
+    """Return the TEI header provenance payload with runtime checks."""
+    provenance = payload.get("episodic_provenance")
+    assert isinstance(provenance, dict), (
+        "Expected TEI header payload to include dict provenance metadata."
+    )
+    return typ.cast("TeiHeaderProvenanceRecord", provenance)
 
 
 @pytest.mark.asyncio
@@ -61,12 +92,32 @@ async def test_ingest_multi_source_end_to_end(
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         persisted = await uow.episodes.get(episode.id)
+        assert persisted is not None, (
+            "Expected persisted episode to be retrievable after ingestion."
+        )
+        header = await uow.tei_headers.get(persisted.tei_header_id)
 
-    assert persisted is not None, (
-        "Expected persisted episode to be retrievable after ingestion."
-    )
     assert persisted.title == "Primary Episode", (
         "Expected winning source title to persist as canonical episode title."
+    )
+    assert header is not None, "Expected a persisted TEI header."
+
+    provenance = _require_provenance_payload(header.payload)
+    timestamp = provenance.get("ingestion_timestamp")
+    assert isinstance(timestamp, str), "Expected ingestion timestamp as string."
+    assert dt.datetime.fromisoformat(timestamp).tzinfo is not None, (
+        "Expected timezone-aware ingestion timestamp."
+    )
+    assert provenance.get("reviewer_identities") == ["producer@example.com"], (
+        "Expected reviewer identity to be captured from request actor."
+    )
+    priorities = provenance["source_priorities"]
+    assert len(priorities) == 2, "Expected one priority entry per source."
+    assert priorities[0]["source_uri"] == "s3://bucket/transcript.txt", (
+        "Expected highest-priority source to be first in provenance."
+    )
+    assert priorities[1]["source_uri"] == "s3://bucket/brief.txt", (
+        "Expected lower-priority source to be second in provenance."
     )
 
     job_record = await _get_job_record_for_episode(
@@ -241,6 +292,10 @@ async def test_ingest_multi_source_records_conflict_metadata(
             request,
             ingestion_pipeline,
         )
+        persisted = await uow.episodes.get(episode.id)
+        assert persisted is not None, "Expected persisted canonical episode."
+        header = await uow.tei_headers.get(persisted.tei_header_id)
+        assert header is not None, "Expected persisted TEI header."
 
     job_record = await _get_job_record_for_episode(
         session_factory,
@@ -264,3 +319,12 @@ async def test_ingest_multi_source_records_conflict_metadata(
         assert "resolution_notes" in cr, (
             "Expected conflict metadata to include resolver notes."
         )
+
+    provenance = _require_provenance_payload(header.payload)
+    priorities = provenance["source_priorities"]
+    assert priorities[0]["source_uri"] == "s3://bucket/winner.txt", (
+        "Expected winner source to lead priority ordering."
+    )
+    assert priorities[1]["source_uri"] == "s3://bucket/loser.txt", (
+        "Expected loser source to follow in priority ordering."
+    )

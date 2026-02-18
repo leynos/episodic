@@ -196,6 +196,21 @@ async with SqlAlchemyUnitOfWork(session_factory) as uow:
     episode = await ingest_multi_source(uow, profile, request, pipeline)
 ```
 
+### TEI header provenance metadata
+
+TEI header provenance is built in `episodic/canonical/provenance.py` and
+applied by `ingest_sources` in `episodic/canonical/services.py`.
+
+- `build_tei_header_provenance()` generates a stable provenance payload with
+  capture context, source priorities, ingestion timestamp, and reviewer
+  identities.
+- `merge_tei_header_provenance()` attaches that payload under the
+  `episodic_provenance` key in the parsed TEI header dictionary.
+- Source priorities are sorted by descending weight with deterministic
+  tie-breaks by source URI and source type.
+- `capture_context` currently uses `source_ingestion`; `script_generation` is
+  reserved for future generation workflows and must reuse the same builder.
+
 ### Implementing custom adapters
 
 To implement a custom adapter, create a class that satisfies the corresponding

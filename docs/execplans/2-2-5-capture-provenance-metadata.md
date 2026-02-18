@@ -6,7 +6,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -77,81 +77,88 @@ Success is observable when:
 ## Risks
 
 - Risk: TEI header payload key naming may conflict with future TEI parser
-  expectations.
-  Severity: medium
-  Likelihood: low
-  Mitigation: use a dedicated extension key (for example
-  `episodic_provenance`) and keep TEI structural keys untouched.
+  expectations. Severity: medium Likelihood: low Mitigation: use a dedicated
+  extension key (for example `episodic_provenance`) and keep TEI structural
+  keys untouched.
 
 - Risk: Source priority ordering could become nondeterministic on equal weights.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: define deterministic tie-break rules (source URI ascending after
-  weight descending), and test for determinism.
+  Severity: medium Likelihood: medium Mitigation: define deterministic
+  tie-break rules (source URI ascending after weight descending), and test for
+  determinism.
 
 - Risk: Reviewer identities for ingestion are currently a single actor
-  (`requested_by`), while the requirement is plural.
-  Severity: low
-  Likelihood: high
-  Mitigation: store as a list now, with zero-or-one entries during ingestion,
-  and document that script generation will populate multi-reviewer sets.
+  (`requested_by`), while the requirement is plural. Severity: low Likelihood:
+  high Mitigation: store as a list now, with zero-or-one entries during
+  ingestion, and document that script generation will populate multi-reviewer
+  sets.
 
 - Risk: Behavioural tests may only verify approval payload today, not TEI
-  header payload.
-  Severity: low
-  Likelihood: medium
-  Mitigation: add explicit BDD steps that query persisted TEI headers and
-  assert provenance fields.
+  header payload. Severity: low Likelihood: medium Mitigation: add explicit BDD
+  steps that query persisted TEI headers and assert provenance fields.
 
 ## Progress
 
 - [x] (2026-02-18 20:40Z) Drafted this ExecPlan.
-- [ ] Stage A: Baseline and test-first setup completed.
-- [ ] Stage B: Unit tests added/updated and confirmed failing pre-change.
-- [ ] Stage C: Behavioural tests added/updated and confirmed failing pre-change.
-- [ ] Stage D: Provenance domain logic and ingestion wiring implemented.
-- [ ] Stage E: Documentation updates completed.
-- [ ] Stage F: Quality gates executed and passing.
-- [ ] Stage G: Roadmap item `2.2.5` marked done.
+- [x] (2026-02-18 21:15Z) Stage A: Baseline and test-first setup completed.
+- [x] (2026-02-18 21:18Z) Stage B: Unit tests added and confirmed failing
+  pre-change (`ModuleNotFoundError` for provenance module).
+- [x] (2026-02-18 21:20Z) Stage C: Behavioural provenance assertions added and
+  validated in targeted scenario runs.
+- [x] (2026-02-18 21:23Z) Stage D: Shared provenance module implemented and
+  ingestion TEI header enrichment wired in `ingest_sources`.
+- [x] (2026-02-18 21:28Z) Stage E: Documentation updates completed across
+  system design, users' guide, developers' guide, and roadmap.
+- [x] (2026-02-18 21:38Z) Stage F: Quality gates executed and passing.
+- [x] (2026-02-18 21:28Z) Stage G: Roadmap item `2.2.5` marked done.
 
 ## Surprises & discoveries
 
 - Observation: No Qdrant project-memory MCP endpoints are available in this
   environment, so repository and docs inspection are the only context source.
-  Evidence: MCP resource and template listings returned empty results.
-  Impact: No long-term memory recall/write can be performed for this session.
+  Evidence: MCP resource and template listings returned empty results. Impact:
+  No long-term memory recall/write can be performed for this session.
 
 - Observation: Existing ingestion already captures conflict metadata under
   source-document metadata and source URIs in approval-event payload, but TEI
-  header provenance is not yet explicitly captured.
-  Evidence: `episodic/canonical/ingestion_service.py` enriches source metadata;
+  header provenance is not yet explicitly captured. Evidence:
+  `episodic/canonical/ingestion_service.py` enriches source metadata;
   `episodic/canonical/services.py` initial approval payload contains only
-  source URIs.
-  Impact: provenance must be added at TEI-header creation time in
+  source URIs. Impact: provenance must be added at TEI-header creation time in
   `ingest_sources`.
 
 ## Decision log
 
 - Decision: Keep provenance within `TeiHeader.payload` (JSONB) rather than
-  adding new relational columns in this item.
-  Rationale: requirement targets TEI headers and existing schema already stores
-  parsed header payload for query and reuse; this keeps migration risk low.
-  Date/Author: 2026-02-18 / Codex
+  adding new relational columns in this item. Rationale: requirement targets
+  TEI headers and existing schema already stores parsed header payload for
+  query and reuse; this keeps migration risk low. Date/Author: 2026-02-18 /
+  Codex
 
 - Decision: Introduce a shared provenance builder in canonical domain/service
   code now, with context support for `ingestion` and `script_generation`.
   Rationale: satisfies current ingestion work and enforces reuse when script
-  generation is implemented.
-  Date/Author: 2026-02-18 / Codex
+  generation is implemented. Date/Author: 2026-02-18 / Codex
 
 - Decision: Treat reviewer identities as a list even when a single actor is
-  present.
-  Rationale: aligns with roadmap wording and avoids future schema drift.
-  Date/Author: 2026-02-18 / Codex
+  present. Rationale: aligns with roadmap wording and avoids future schema
+  drift. Date/Author: 2026-02-18 / Codex
 
 ## Outcomes & retrospective
 
-Pending implementation.
+Implementation completed on 2026-02-18.
+
+Key outcomes:
+
+- TEI header payloads now include `episodic_provenance` with
+  `source_priorities`, `ingestion_timestamp`, `reviewer_identities`, and
+  `capture_context`.
+- Provenance generation is centralized in
+  `episodic/canonical/provenance.py` and explicitly supports both
+  `source_ingestion` and `script_generation` contexts.
+- Ingestion now applies provenance automatically via
+  `episodic/canonical/services.py`.
+- Unit and behavioural provenance tests were added and pass.
+- `docs/roadmap.md` item `2.2.5` is marked done.
 
 At completion, this section must report:
 

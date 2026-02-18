@@ -31,12 +31,35 @@ from .domain import (
     SourceDocument,
     TeiHeader,
 )
+from .provenance import build_tei_header_provenance, merge_tei_header_provenance
 from .tei import TeiHeaderPayload, parse_tei_header
 
 logger = get_logger(__name__)
 
 if typ.TYPE_CHECKING:
     from .ports import CanonicalUnitOfWork
+
+
+def _with_ingestion_provenance(
+    header_payload: TeiHeaderPayload,
+    request: IngestionRequest,
+    captured_at: dt.datetime,
+) -> TeiHeaderPayload:
+    """Return a TEI header payload enriched with ingestion provenance."""
+    reviewer_identities = [request.requested_by] if request.requested_by else []
+    provenance = build_tei_header_provenance(
+        sources=request.sources,
+        captured_at=captured_at,
+        reviewer_identities=reviewer_identities,
+        capture_context="source_ingestion",
+    )
+    return TeiHeaderPayload(
+        title=header_payload.title,
+        payload=merge_tei_header_provenance(
+            payload=header_payload.payload,
+            provenance=provenance,
+        ),
+    )
 
 
 def _create_tei_header(
@@ -174,6 +197,11 @@ async def ingest_sources(
     """
     now = dt.datetime.now(dt.UTC)
     header_payload = parse_tei_header(request.tei_xml)
+    header_payload = _with_ingestion_provenance(
+        header_payload=header_payload,
+        request=request,
+        captured_at=now,
+    )
     header_id = uuid.uuid4()
     episode_id = uuid.uuid4()
     job_id = uuid.uuid4()
