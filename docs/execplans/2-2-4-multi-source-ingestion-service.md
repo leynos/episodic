@@ -383,7 +383,7 @@ re-exports.
 - Selects the highest-weighted source's TEI fragment as the canonical content.
 - All other sources are recorded as rejected with their weights and factors
   preserved.
-- Generates a `resolution_notes` string summarising the decision.
+- Generates a `resolution_notes` string summarizing the decision.
 
 Validation: `make typecheck` and `make lint` pass.
 
@@ -451,7 +451,7 @@ Create **`tests/test_ingestion_service.py`** with the following tests:
    source, it is selected as preferred with no rejections.
 
 8. `test_conflict_resolver_records_resolution_notes` — The resolver produces
-   a human-readable `resolution_notes` string summarising the decision.
+   a human-readable `resolution_notes` string summarizing the decision.
 
 9. `test_ingest_multi_source_end_to_end` — Integration test using
    `SqlAlchemyUnitOfWork` and reference adapters. Submits two raw sources,

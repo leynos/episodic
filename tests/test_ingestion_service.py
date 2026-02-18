@@ -164,16 +164,28 @@ async def test_normaliser_produces_valid_tei_fragment() -> None:
 
     # TEI fragment should be parseable.
     parsed = parse_tei_header(result.tei_fragment)
-    assert parsed.title == "My Transcript"
+    assert parsed.title == "My Transcript", (
+        "Expected parsed TEI title to match metadata title."
+    )
 
     # Scores should match transcript defaults.
-    assert result.quality_score == pytest.approx(0.9)
-    assert result.freshness_score == pytest.approx(0.8)
-    assert result.reliability_score == pytest.approx(0.9)
+    assert result.quality_score == pytest.approx(0.9), (
+        "Expected transcript quality score to use transcript defaults."
+    )
+    assert result.freshness_score == pytest.approx(0.8), (
+        "Expected transcript freshness score to use transcript defaults."
+    )
+    assert result.reliability_score == pytest.approx(0.9), (
+        "Expected transcript reliability score to use transcript defaults."
+    )
 
     # Source input should carry through metadata.
-    assert result.source_input.source_type == "transcript"
-    assert result.source_input.source_uri == raw.source_uri
+    assert result.source_input.source_type == "transcript", (
+        "Expected source type to be preserved from raw input."
+    )
+    assert result.source_input.source_uri == raw.source_uri, (
+        "Expected source URI to be preserved from raw input."
+    )
 
 
 @pytest.mark.asyncio
@@ -184,9 +196,15 @@ async def test_normaliser_unknown_source_type_uses_defaults() -> None:
 
     result = await normaliser.normalise(raw)
 
-    assert result.quality_score == pytest.approx(0.5)
-    assert result.freshness_score == pytest.approx(0.5)
-    assert result.reliability_score == pytest.approx(0.5)
+    assert result.quality_score == pytest.approx(0.5), (
+        "Expected unknown source types to fall back to default quality."
+    )
+    assert result.freshness_score == pytest.approx(0.5), (
+        "Expected unknown source types to fall back to default freshness."
+    )
+    assert result.reliability_score == pytest.approx(0.5), (
+        "Expected unknown source types to fall back to default reliability."
+    )
 
 
 @pytest.mark.asyncio
@@ -200,7 +218,9 @@ async def test_normaliser_infers_title_from_content() -> None:
 
     result = await normaliser.normalise(raw)
 
-    assert result.title == "First line of content"
+    assert result.title == "First line of content", (
+        "Expected title to be inferred from the first content line."
+    )
 
 
 @pytest.mark.asyncio
@@ -215,7 +235,9 @@ async def test_normaliser_infers_title_from_source_type() -> None:
 
     result = await normaliser.normalise(raw)
 
-    assert result.title == "Press Release"
+    assert result.title == "Press Release", (
+        "Expected title fallback to convert source type into title case."
+    )
 
 
 # -- Weighting strategy tests --
@@ -233,11 +255,17 @@ async def test_weighting_strategy_computes_weighted_average() -> None:
 
     results = await strategy.compute_weights([source], {})
 
-    assert len(results) == 1
+    assert len(results) == 1, "Expected one weighting result for one input source."
     # Default: 0.9*0.5 + 0.8*0.3 + 0.9*0.2 = 0.45 + 0.24 + 0.18 = 0.87
-    assert results[0].computed_weight == pytest.approx(0.87)
-    assert "quality_coefficient" in results[0].factors
-    assert results[0].factors["quality_coefficient"] == pytest.approx(0.5)
+    assert results[0].computed_weight == pytest.approx(0.87), (
+        "Expected weighted average to use default coefficients."
+    )
+    assert "quality_coefficient" in results[0].factors, (
+        "Expected factor breakdown to include quality coefficient."
+    )
+    assert results[0].factors["quality_coefficient"] == pytest.approx(0.5), (
+        "Expected default quality coefficient to be recorded."
+    )
 
 
 @pytest.mark.asyncio
@@ -260,7 +288,9 @@ async def test_weighting_strategy_respects_series_configuration() -> None:
     results = await strategy.compute_weights([source], config)
 
     # 1.0*1.0 + 0.0*0.0 + 0.0*0.0 = 1.0
-    assert results[0].computed_weight == pytest.approx(1.0)
+    assert results[0].computed_weight == pytest.approx(1.0), (
+        "Expected custom coefficients in configuration to drive weighting."
+    )
 
 
 @pytest.mark.asyncio
@@ -276,8 +306,12 @@ async def test_weighting_strategy_clamps_to_unit_interval() -> None:
 
     results = await strategy.compute_weights([source], {})
 
-    assert results[0].computed_weight <= 1.0
-    assert results[0].computed_weight >= 0.0
+    assert results[0].computed_weight <= 1.0, (
+        "Expected computed weights to be clamped to the upper bound."
+    )
+    assert results[0].computed_weight >= 0.0, (
+        "Expected computed weights to be clamped to the lower bound."
+    )
 
 
 # -- Conflict resolver tests --
@@ -292,11 +326,19 @@ async def test_conflict_resolver_selects_highest_weight() -> None:
 
     outcome = await resolver.resolve([low, high])
 
-    assert len(outcome.preferred_sources) == 1
-    assert outcome.preferred_sources[0].source.title == "High Priority"
-    assert len(outcome.rejected_sources) == 1
-    assert outcome.rejected_sources[0].source.title == "Low Priority"
-    assert outcome.merged_title == "High Priority"
+    assert len(outcome.preferred_sources) == 1, "Expected exactly one preferred source."
+    assert outcome.preferred_sources[0].source.title == "High Priority", (
+        "Expected highest-weight source to be preferred."
+    )
+    assert len(outcome.rejected_sources) == 1, (
+        "Expected non-winning source to be rejected."
+    )
+    assert outcome.rejected_sources[0].source.title == "Low Priority", (
+        "Expected lower-weight source to be rejected."
+    )
+    assert outcome.merged_title == "High Priority", (
+        "Expected merged title to come from the preferred source."
+    )
 
 
 @pytest.mark.asyncio
@@ -307,9 +349,15 @@ async def test_conflict_resolver_single_source_no_conflict() -> None:
 
     outcome = await resolver.resolve([single])
 
-    assert len(outcome.preferred_sources) == 1
-    assert outcome.preferred_sources[0].source.title == "Only Source"
-    assert len(outcome.rejected_sources) == 0
+    assert len(outcome.preferred_sources) == 1, (
+        "Expected single-source input to yield one preferred source."
+    )
+    assert outcome.preferred_sources[0].source.title == "Only Source", (
+        "Expected only source to be selected as preferred."
+    )
+    assert len(outcome.rejected_sources) == 0, (
+        "Expected no rejected sources for single-source input."
+    )
 
 
 @pytest.mark.asyncio
@@ -321,10 +369,18 @@ async def test_conflict_resolver_records_resolution_notes() -> None:
 
     outcome = await resolver.resolve([high, low])
 
-    assert "Winner" in outcome.resolution_notes
-    assert "selected as canonical" in outcome.resolution_notes
-    assert "Loser" in outcome.resolution_notes
-    assert "rejected" in outcome.resolution_notes
+    assert "Winner" in outcome.resolution_notes, (
+        "Expected resolution notes to mention the winning source."
+    )
+    assert "selected as canonical" in outcome.resolution_notes, (
+        "Expected resolution notes to include canonical-selection language."
+    )
+    assert "Loser" in outcome.resolution_notes, (
+        "Expected resolution notes to mention the rejected source."
+    )
+    assert "rejected" in outcome.resolution_notes, (
+        "Expected resolution notes to describe rejection."
+    )
 
 
 # -- Integration tests --
@@ -376,8 +432,12 @@ async def test_ingest_multi_source_end_to_end(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         persisted = await uow.episodes.get(episode.id)
 
-    assert persisted is not None
-    assert persisted.title == "Primary Episode"
+    assert persisted is not None, (
+        "Expected persisted episode to be retrievable after ingestion."
+    )
+    assert persisted.title == "Primary Episode", (
+        "Expected winning source title to persist as canonical episode title."
+    )
 
     # Find the ingestion job via a plain session query.
     job_record = await _get_job_record_for_episode(
@@ -389,11 +449,17 @@ async def test_ingest_multi_source_end_to_end(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)
 
-    assert len(documents) == 2
+    assert len(documents) == 2, (
+        "Expected all input sources to be persisted as source documents."
+    )
     # Weights should be computed, not zero placeholders.
     for doc in documents:
-        assert doc.weight > 0.0
-        assert doc.weight <= 1.0
+        assert doc.weight > 0.0, (
+            "Expected persisted source weight to be greater than zero."
+        )
+        assert doc.weight <= 1.0, (
+            "Expected persisted source weight to be capped at one."
+        )
 
 
 @pytest.mark.asyncio
@@ -460,9 +526,11 @@ async def test_ingest_multi_source_preserves_all_sources(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)
 
-    assert len(documents) == 3
+    assert len(documents) == 3, "Expected all three sources to be persisted."
     persisted_uris = {doc.source_uri for doc in documents}
-    assert persisted_uris == set(source_uris)
+    assert persisted_uris == set(source_uris), (
+        "Expected persisted source URIs to match all input URIs."
+    )
 
 
 @pytest.mark.asyncio
@@ -574,8 +642,16 @@ async def test_ingest_multi_source_records_conflict_metadata(
         documents = await uow.source_documents.list_for_job(job_record.id)
 
     for doc in documents:
-        assert "conflict_resolution" in doc.metadata
+        assert "conflict_resolution" in doc.metadata, (
+            "Expected conflict-resolution metadata to be attached to each source."
+        )
         cr = doc.metadata["conflict_resolution"]
-        assert "preferred_sources" in cr
-        assert "rejected_sources" in cr
-        assert "resolution_notes" in cr
+        assert "preferred_sources" in cr, (
+            "Expected conflict metadata to include preferred sources."
+        )
+        assert "rejected_sources" in cr, (
+            "Expected conflict metadata to include rejected sources."
+        )
+        assert "resolution_notes" in cr, (
+            "Expected conflict metadata to include resolver notes."
+        )

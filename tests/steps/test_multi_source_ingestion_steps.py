@@ -221,9 +221,11 @@ def multi_source_ingestion_processes(
                 request,
                 pipeline,
             )
-
-        # Find the ingestion job.
-        async with session_factory() as session:
+            # Query job while UoW is still open.
+            session = uow._session
+            assert session is not None, (
+                "Expected an active session while unit of work is open."
+            )
             result = await session.execute(
                 sa.select(IngestionJobRecord).where(
                     IngestionJobRecord.target_episode_id == episode.id,
