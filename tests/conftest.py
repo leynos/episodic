@@ -181,7 +181,20 @@ async def series_profile_for_ingestion(
 
 @pytest_asyncio.fixture
 async def ingestion_pipeline() -> IngestionPipeline:
-    """Build the standard multi-source ingestion pipeline for tests."""
+    """Build the standard multi-source ingestion pipeline for tests.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    IngestionPipeline
+        The ``ingestion_pipeline`` fixture instance configured with
+        ``InMemorySourceNormaliser``, ``DefaultWeightingStrategy``, and
+        ``HighestWeightConflictResolver``.
+    """
+    # Yield control once so async fixture setup is consistently scheduled.
     await asyncio.sleep(0)
 
     from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
