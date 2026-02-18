@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import os
 import typing as typ
+import uuid
 
 import pytest
 import pytest_asyncio
@@ -28,6 +29,9 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+
+    from episodic.canonical.domain import SeriesProfile
+    from episodic.canonical.ingestion_service import IngestionPipeline
 
 try:
     from py_pglite import PGliteConfig, PGliteManager
@@ -133,6 +137,75 @@ def session_factory(
         migrated_engine,
         class_=AsyncSession,
         expire_on_commit=False,
+    )
+
+
+@pytest_asyncio.fixture
+async def series_profile_for_ingestion(
+    session_factory: typ.Callable[[], AsyncSession],
+) -> SeriesProfile:
+    """Create and persist a series profile for ingestion integration tests.
+
+    Parameters
+    ----------
+    session_factory : Callable[[], AsyncSession]
+        Factory that returns an async SQLAlchemy session bound to the
+        migrated test database.
+
+    Returns
+    -------
+    SeriesProfile
+        Persisted series profile instance used by ingestion integration
+        tests.
+    """
+    import datetime as dt
+
+    from episodic.canonical.domain import SeriesProfile
+    from episodic.canonical.storage import SqlAlchemyUnitOfWork
+
+    now = dt.datetime.now(dt.UTC)
+    profile = SeriesProfile(
+        id=uuid.uuid4(),
+        slug=f"test-series-{uuid.uuid4().hex[:8]}",
+        title="Test Series",
+        description=None,
+        configuration={"tone": "neutral"},
+        created_at=now,
+        updated_at=now,
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.series_profiles.add(profile)
+        await uow.commit()
+    return profile
+
+
+@pytest_asyncio.fixture
+async def ingestion_pipeline() -> IngestionPipeline:
+    """Build the standard multi-source ingestion pipeline for tests.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    IngestionPipeline
+        The ``ingestion_pipeline`` fixture instance configured with
+        ``InMemorySourceNormaliser``, ``DefaultWeightingStrategy``, and
+        ``HighestWeightConflictResolver``.
+    """
+    # Yield control once so async fixture setup is consistently scheduled.
+    await asyncio.sleep(0)
+
+    from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
+    from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
+    from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
+    from episodic.canonical.ingestion_service import IngestionPipeline
+
+    return IngestionPipeline(
+        normaliser=InMemorySourceNormaliser(),
+        weighting=DefaultWeightingStrategy(),
+        resolver=HighestWeightConflictResolver(),
     )
 
 

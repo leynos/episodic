@@ -34,6 +34,14 @@ This guide will cover:
 - Repository and transactional integrity are validated by integration tests
   running against a real PostgreSQL engine, covering persistence round-trips,
   rollback behaviour, and constraint enforcement
+- Multi-source ingestion normalizes heterogeneous sources (transcripts,
+  briefs, Really Simple Syndication (RSS) feeds, press releases, and research
+  notes) into canonical TEI episodes. Source weighting heuristics automatically
+  compute priority scores based on quality, freshness, and reliability.
+  Conflicts between competing sources are resolved using a weighting matrix,
+  with all source material retained for audit regardless of whether it was
+  preferred or rejected. Weighting coefficients are configurable per series
+  profile.
 
 ### Quality & Compliance
 

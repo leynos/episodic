@@ -3,7 +3,7 @@
 ## Overview
 
 The episodic podcast generation platform automates the production of scripted,
-branded audio shows. It ingests heterogeneous source documents, synthesises
+branded audio shows. It ingests heterogeneous source documents, synthesizes
 canonical Text Encoding Initiative (TEI) content, applies layered quality
 assurance, and renders broadcast quality audio with background music before
 exposing approvals and delivery channels.
@@ -127,7 +127,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   releases, and research notes.
 - Applies document classifiers, quality scores, and weighting heuristics to
   establish priority when sources conflict.
-- Normalises inputs into TEI fragments, merging them into canonical episodes
+- Normalizes inputs into TEI fragments, merging them into canonical episodes
   while recording provenance and retaining source attachments.
 - Exposes ingestion job status via API endpoints and emits events for downstream
   processing.
@@ -331,7 +331,7 @@ available tool set per workflow, reducing context size and guiding model choice.
 The content generation workflow operates as a cyclic StateGraph with the
 following node structure:
 
-1. **Initialise:** Load series profile, episode template, and canonical TEI
+1. **Initialize:** Load series profile, episode template, and canonical TEI
    sources; construct the initial prompt scaffold.
 2. **Generate:** Invoke `LLMPort` to produce draft content, show notes, and
    enrichments.
@@ -352,7 +352,7 @@ The following diagram illustrates the content generation graph:
 
 ```mermaid
 flowchart TD
-    A[Initialise] --> B[Generate]
+    A[Initialize] --> B[Generate]
     B --> C{Evaluate}
     C -->|Parallel| D1[Bromide]
     C -->|Parallel| D2[Chiltern]
@@ -444,7 +444,7 @@ sequenceDiagram
     participant TTSPort
     User ->> API : Submit generation request
     API ->> Postgres : Persist episode and source metadata
-    API ->> Orchestrator : Initialise StateGraph run
+    API ->> Orchestrator : Initialize StateGraph run
     Orchestrator ->> LLMPort : Generate draft content
     LLMPort -->> Orchestrator : Draft content
     Orchestrator ->> PricingCatalogue : Get SLA snapshot + plan binding (Bromide)
@@ -460,7 +460,7 @@ sequenceDiagram
     API -->> User : Request editorial review
     User ->> API : Approve content
     API ->> Orchestrator : Trigger audio synthesis
-    Orchestrator ->> TTSPort : Synthesise narration
+    Orchestrator ->> TTSPort : Synthesize narration
     TTSPort -->> Orchestrator : Audio stems
     Orchestrator ->> Postgres : Persist audio metadata
     Orchestrator -->> API : Publish-ready notification
@@ -473,7 +473,7 @@ feedback loops:
 
 1. **Prepare Timeline:** Retrieve approved script, select voice personas, and
    schedule music beds.
-2. **Synthesise Narration:** Invoke `TTSPort` for each segment; handle retries
+2. **Synthesize Narration:** Invoke `TTSPort` for each segment; handle retries
    and fallback voices.
 3. **Mix Stems:** Combine narration, music, and effects; apply ducking and
    normalisation.
@@ -483,7 +483,7 @@ feedback loops:
    - If approved, proceed to **Master**.
    - If segment-level issues, proceed to **Partial Regeneration**.
    - If fundamental issues, proceed to **Full Regeneration**.
-7. **Partial Regeneration:** Re-synthesise specific segments; return to **Mix
+7. **Partial Regeneration:** Re-synthesize specific segments; return to **Mix
    Stems**.
 8. **Full Regeneration:** Return to **Prepare Timeline** with updated
    parameters.
@@ -493,7 +493,7 @@ The following diagram illustrates the audio synthesis graph:
 
 ```mermaid
 flowchart TD
-    A[Prepare Timeline] --> B[Synthesise Narration]
+    A[Prepare Timeline] --> B[Synthesize Narration]
     B --> C[Mix Stems]
     C --> D[Generate Preview]
     D --> E((Await Feedback))
@@ -524,13 +524,13 @@ sequenceDiagram
     AudioStateGraph->>AudioStateGraph: Prepare timeline and voice personas
 
     loop Initial or regenerated synthesis
-        AudioStateGraph->>TTSPort: Synthesise narration segments
+        AudioStateGraph->>TTSPort: Synthesize narration segments
         TTSPort-->>AudioStateGraph: Segment audio
 
         AudioStateGraph->>MusicRules: Select music beds and stings
         MusicRules-->>AudioStateGraph: Music stem selections
 
-        AudioStateGraph->>AudioStateGraph: Mix stems and normalise loudness
+        AudioStateGraph->>AudioStateGraph: Mix stems and normalize loudness
         AudioStateGraph->>AudioStateGraph: Generate low bitrate preview
 
         AudioStateGraph->>PreviewPublisherPort: Publish preview asset
@@ -926,6 +926,38 @@ constraint enforcement (unique slugs, foreign-key integrity, weight CHECK
 constraints), and empty-result paths. Behavioural tests written with pytest-bdd
 exercise the same semantics from a scenario-driven perspective.
 
+### Multi-source ingestion service implementation
+
+The multi-source ingestion service composes a higher-level orchestrator
+(`ingest_multi_source`) around the existing `ingest_sources` persistence
+function. Three Protocol-based port interfaces define the pipeline extension
+points:
+
+- `SourceNormaliser` converts heterogeneous raw sources (transcripts, briefs,
+  Really Simple Syndication (RSS) feeds, press releases, and research notes)
+  into normalized TEI fragments with quality, freshness, and reliability scores.
+- `WeightingStrategy` computes a final weight for each normalized source using
+  a weighted average of the three scores, with coefficients configurable per
+  series via the `SeriesProfile.configuration` dictionary. Default coefficients
+  are quality=0.5, freshness=0.3, reliability=0.2. Results are clamped to [0,
+  1].
+- `ConflictResolver` resolves conflicts between weighted sources. The
+  reference implementation selects the highest-weighted source as the canonical
+  content; all other sources are recorded as rejected with weights preserved
+  for audit.
+
+The orchestrator runs the pipeline in sequence: normalize, weight, resolve,
+then delegates persistence to `ingest_sources`. All submitted sources are
+persisted as `SourceDocument` entities regardless of whether they were
+preferred or rejected during conflict resolution. This ensures rejected content
+is retained for audit as specified in the system design.
+
+Reference adapters in `episodic/canonical/adapters/` implement the three ports
+with sensible defaults, suitable for testing and initial deployments.
+Production adapters for specific source formats (RSS parsing, document
+extraction) can replace the reference adapters without modifying the
+orchestrator.
+
 ### Core Entity Model
 
 The core entity model summarizes the primary data domains that anchor series,
@@ -1131,12 +1163,12 @@ stateDiagram-v2
    scores, and applies weighting heuristics defined per series.
 3. Conflicts resolve using the weighting matrix; rejected content is retained
    for audit.
-4. Normalised TEI fragments merge into the canonical episode; provenance is
+4. Normalized TEI fragments merge into the canonical episode; provenance is
    logged and downstream events trigger generation.
 
 ### Episode Generation and Enrichment
 
-1. Orchestrator initialises a LangGraph StateGraph, loading the latest series
+1. Orchestrator initializes a LangGraph StateGraph, loading the latest series
    profile and episode template to derive prompt scaffolds.
 2. `LLMPort` adapters invoke selected models, respecting token budgets and retry
    policies; the graph captures generated content in state.
@@ -1186,9 +1218,9 @@ stateDiagram-v2
 
 ### Audio Synthesis and Distribution
 
-1. Approved scripts initialise an Audio Synthesis StateGraph, which prepares
+1. Approved scripts initialize an Audio Synthesis StateGraph, which prepares
    timelines and selects voice personas from series profile configuration.
-2. `TTSPort` synthesises narration segments with configured resilience policies;
+2. `TTSPort` synthesizes narration segments with configured resilience policies;
    the graph tracks segment completion in state.
 3. Music supervisor rules choose background beds and stings based on template
    cues; stems assemble into the mixing timeline.
