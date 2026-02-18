@@ -935,25 +935,94 @@ _Figure 7: Canonical content schema relationships._
 
 ### Planned reusable reference-document model
 
-The diagram below extends the canonical schema with reusable reference-document
-tables. These tables are planned and not yet implemented in
+The detailed diagram below extends the canonical schema with reusable
+reference-document tables. These tables are planned and not yet implemented in
 `episodic/canonical/ports.py` or `episodic/canonical/storage/repositories.py`.
-Host and guest profiles are expressed as `REFERENCE_DOCUMENTS` kinds scoped to
-`SERIES_PROFILES`, with optional episode anchors for revision applicability.
+Host and guest profiles are represented as series-aligned `REFERENCE_DOCUMENTS`
+kinds, while `effective_from_episode_id` supports revision applicability from a
+specific episode onwards.
 
 ```mermaid
 erDiagram
+    SERIES_PROFILES {
+        uuid id
+        string title
+        string ownership_scope
+    }
+
+    EPISODES {
+        uuid id
+        uuid series_profile_id
+        string title
+    }
+
+    EPISODE_TEMPLATES {
+        uuid id
+        uuid series_profile_id
+        string name
+    }
+
+    REFERENCE_DOCUMENTS {
+        uuid id
+        uuid owner_series_profile_id
+        string kind
+        string lifecycle_state
+        jsonb metadata
+    }
+
+    REFERENCE_DOCUMENT_REVISIONS {
+        uuid id
+        uuid reference_document_id
+        string content_hash
+        string author
+        string change_note
+        timestamptz created_at
+    }
+
+    REFERENCE_DOCUMENT_BINDINGS {
+        uuid id
+        uuid reference_document_revision_id
+        uuid series_profile_id
+        uuid episode_template_id
+        uuid ingestion_job_id
+        uuid effective_from_episode_id
+        string target_kind
+    }
+
+    INGESTION_JOBS {
+        uuid id
+        uuid target_episode_id
+        timestamptz started_at
+        timestamptz completed_at
+        string status
+    }
+
+    SOURCE_DOCUMENTS {
+        uuid id
+        uuid ingestion_job_id
+        uuid reference_document_revision_id
+        string document_type
+        float weighting_factor
+        string object_storage_key
+    }
+
+    SERIES_PROFILES ||--o{ EPISODES : has
     SERIES_PROFILES ||--o{ EPISODE_TEMPLATES : defines
     SERIES_PROFILES ||--o{ REFERENCE_DOCUMENTS : owns
+
     REFERENCE_DOCUMENTS ||--o{ REFERENCE_DOCUMENT_REVISIONS : versions
     REFERENCE_DOCUMENT_REVISIONS ||--o{ REFERENCE_DOCUMENT_BINDINGS : pins
-    EPISODE_TEMPLATES ||--o{ REFERENCE_DOCUMENT_BINDINGS : consumes
+
+    SERIES_PROFILES ||--o{ REFERENCE_DOCUMENT_BINDINGS : context
+    EPISODE_TEMPLATES ||--o{ REFERENCE_DOCUMENT_BINDINGS : context
+    INGESTION_JOBS ||--o{ REFERENCE_DOCUMENT_BINDINGS : context
     EPISODES ||--o{ REFERENCE_DOCUMENT_BINDINGS : effective_from
-    INGESTION_JOBS ||--o{ REFERENCE_DOCUMENT_BINDINGS : snapshots
+
     INGESTION_JOBS ||--o{ SOURCE_DOCUMENTS : records
+    REFERENCE_DOCUMENT_REVISIONS ||--o{ SOURCE_DOCUMENTS : snapshot
 ```
 
-_Figure 8: Planned reusable reference-document relationships._
+_Figure 8: Planned reusable reference material and profile schema._
 
 ### Repository and unit-of-work implementation
 

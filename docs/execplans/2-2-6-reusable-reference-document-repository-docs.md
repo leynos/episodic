@@ -76,6 +76,9 @@ sequences this new capability.
 - [x] (2026-02-18 11:21Z) Stage E: Extended the model and roadmap for
   series-aligned host and guest profiles, including `effective_from_episode_id`
   revision semantics.
+- [x] (2026-02-18 11:22Z) Stage F: Replaced the reusable-reference ER diagram
+  with a detailed field-level model covering host/guest profiles and revision
+  applicability anchors.
 
 ## Surprises & discoveries
 
@@ -115,6 +118,12 @@ sequences this new capability.
   behaviour without breaking series-level reuse. Date/Author: 2026-02-18 /
   Codex.
 
+- Decision: document the reusable-reference schema using a full field-level ER
+  diagram instead of relationship-only edges. Rationale: the requested update
+  requires explicit columns (including `effective_from_episode_id` and snapshot
+  linkage fields) so implementers can interpret binding and provenance
+  semantics unambiguously. Date/Author: 2026-02-18 / Codex.
+
 ## Outcomes & retrospective
 
 The documentation-only implementation completed successfully.
@@ -140,14 +149,19 @@ Changes delivered:
   - define `effective_from_episode_id` binding semantics for revisions that
     apply from a given episode onwards, and
   - align roadmap activities and exit criteria with those semantics.
+- Added a detailed reusable-reference ER diagram in
+  `docs/episodic-podcast-generation-system-design.md` with explicit entities,
+  fields, and relationships for:
+  - series, episodes, templates, and ingestion jobs,
+  - host/guest profile representation as `REFERENCE_DOCUMENTS.kind`, and
+  - revision snapshot flow into ingestion-bound `SOURCE_DOCUMENTS`.
 
 Validation evidence:
 
-- `make fmt` passed (`/tmp/execplan-refdocs-hostguest-make-fmt.log`).
+- `make fmt` passed (`/tmp/execplan-refdocs-diagram-make-fmt.log`).
 - `make markdownlint` passed
-  (`/tmp/execplan-refdocs-hostguest-markdownlint.log`).
-- `make nixie` passed (`/tmp/execplan-refdocs-hostguest-nixie.log`), with
-  Mermaid
+  (`/tmp/execplan-refdocs-diagram-markdownlint.log`).
+- `make nixie` passed (`/tmp/execplan-refdocs-diagram-nixie.log`), with Mermaid
   diagrams validated.
 
 ## Context and orientation
@@ -271,9 +285,9 @@ During implementation, capture concise evidence here:
 
 - `git diff -- docs/episodic-podcast-generation-system-design.md docs/roadmap.md`
 - Exit summaries from:
-  - `/tmp/execplan-refdocs-hostguest-make-fmt.log`
-  - `/tmp/execplan-refdocs-hostguest-markdownlint.log`
-  - `/tmp/execplan-refdocs-hostguest-nixie.log`
+  - `/tmp/execplan-refdocs-diagram-make-fmt.log`
+  - `/tmp/execplan-refdocs-diagram-markdownlint.log`
+  - `/tmp/execplan-refdocs-diagram-nixie.log`
 
 ## Interfaces and dependencies
 
@@ -292,4 +306,4 @@ No new dependencies are required.
 
 Extended the completed plan with series-aligned host/guest profile semantics
 and `effective_from_episode_id` applicability rules, then updated the design
-document and roadmap accordingly.
+document, roadmap, and reusable-reference ER diagram accordingly.
