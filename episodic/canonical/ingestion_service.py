@@ -101,6 +101,37 @@ def _enrich_source_metadata(
     ]
 
 
+def _validate_ingestion_request(
+    request: MultiSourceRequest,
+    series_profile: SeriesProfile,
+) -> None:
+    """Validate a multi-source ingestion request against series context.
+
+    Parameters
+    ----------
+    request : MultiSourceRequest
+        Multi-source ingestion payload to validate.
+    series_profile : SeriesProfile
+        Series profile expected to match the request's series slug.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``request.raw_sources`` is empty or when
+        ``request.series_slug`` does not match ``series_profile.slug``.
+    """
+    if not request.raw_sources:
+        msg = "At least one raw source is required for multi-source ingestion."
+        raise ValueError(msg)
+
+    if request.series_slug != series_profile.slug:
+        msg = (
+            f"Series slug mismatch: request has {request.series_slug!r} "
+            f"but profile has {series_profile.slug!r}."
+        )
+        raise ValueError(msg)
+
+
 async def ingest_multi_source(
     uow: CanonicalUnitOfWork,
     series_profile: SeriesProfile,
@@ -144,16 +175,7 @@ async def ingest_multi_source(
         ``request.series_slug`` does not match
         ``series_profile.slug``.
     """
-    if not request.raw_sources:
-        msg = "At least one raw source is required for multi-source ingestion."
-        raise ValueError(msg)
-
-    if request.series_slug != series_profile.slug:
-        msg = (
-            f"Series slug mismatch: request has {request.series_slug!r} "
-            f"but profile has {series_profile.slug!r}."
-        )
-        raise ValueError(msg)
+    _validate_ingestion_request(request, series_profile)
 
     normalised = list(
         await asyncio.gather(
