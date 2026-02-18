@@ -73,6 +73,9 @@ sequences this new capability.
   reusable-reference work items and revised exit criteria.
 - [x] (2026-02-17 16:13Z) Stage D: Ran formatting and Markdown validation
   gates with captured logs.
+- [x] (2026-02-18 11:21Z) Stage E: Extended the model and roadmap for
+  series-aligned host and guest profiles, including `effective_from_episode_id`
+  revision semantics.
 
 ## Surprises & discoveries
 
@@ -104,6 +107,14 @@ sequences this new capability.
   content and template/profile workflows already scoped to Phase 2.
   Date/Author: 2026-02-17 / Codex.
 
+- Decision: model host and guest profiles as series-aligned reference
+  documents, with optional episode-anchored revision applicability. Rationale:
+  hosts may not appear in every episode and guests may recur across multiple
+  episodes, so episode ownership is the wrong primary scope. A binding-level
+  `effective_from_episode_id` allows deterministic "from this episode onward"
+  behaviour without breaking series-level reuse. Date/Author: 2026-02-18 /
+  Codex.
+
 ## Outcomes & retrospective
 
 The documentation-only implementation completed successfully.
@@ -124,13 +135,19 @@ Changes delivered:
     (2.2.6 through 2.2.8), and
   - expand Phase 2 exit criteria to require API retrieval of reusable
     references and ingestion snapshot behaviour.
+- Applied a follow-up documentation revision to:
+  - classify host and guest profiles as series-aligned reference documents,
+  - define `effective_from_episode_id` binding semantics for revisions that
+    apply from a given episode onwards, and
+  - align roadmap activities and exit criteria with those semantics.
 
 Validation evidence:
 
-- `make fmt` passed (`/tmp/execplan-refdocs-final-make-fmt.log`).
+- `make fmt` passed (`/tmp/execplan-refdocs-hostguest-make-fmt.log`).
 - `make markdownlint` passed
-  (`/tmp/execplan-refdocs-final-markdownlint.log`).
-- `make nixie` passed (`/tmp/execplan-refdocs-final-nixie.log`), with Mermaid
+  (`/tmp/execplan-refdocs-hostguest-markdownlint.log`).
+- `make nixie` passed (`/tmp/execplan-refdocs-hostguest-nixie.log`), with
+  Mermaid
   diagrams validated.
 
 ## Context and orientation
@@ -151,7 +168,7 @@ episode-template repository contract.
 Current roadmap text in `docs/roadmap.md` includes:
 
 - 2.2.4 ingestion normalisation and conflict resolution, and
-- 2.2.6 series profile and episode template models and APIs.
+- 2.2.6 reusable reference-document models and repository contracts.
 
 It does not explicitly include a reusable reference-document repository layer
 or reuse workflows across ingestion jobs.
@@ -254,9 +271,9 @@ During implementation, capture concise evidence here:
 
 - `git diff -- docs/episodic-podcast-generation-system-design.md docs/roadmap.md`
 - Exit summaries from:
-  - `/tmp/execplan-refdocs-final-make-fmt.log`
-  - `/tmp/execplan-refdocs-final-markdownlint.log`
-  - `/tmp/execplan-refdocs-final-nixie.log`
+  - `/tmp/execplan-refdocs-hostguest-make-fmt.log`
+  - `/tmp/execplan-refdocs-hostguest-markdownlint.log`
+  - `/tmp/execplan-refdocs-hostguest-nixie.log`
 
 ## Interfaces and dependencies
 
@@ -273,6 +290,6 @@ No new dependencies are required.
 
 ## Revision note
 
-Updated status from `DRAFT` to `COMPLETE` after implementing the planned
-documentation updates in the design document and roadmap, and after passing all
-Markdown quality gates.
+Extended the completed plan with series-aligned host/guest profile semantics
+and `effective_from_episode_id` applicability rules, then updated the design
+document and roadmap accordingly.

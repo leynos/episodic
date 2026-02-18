@@ -141,6 +141,9 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Maintains reusable reference materials (for example, style guides, character
   profiles, and research briefs) as versioned documents that can be bound to
   series and templates.
+- Treats host and guest profiles as series-aligned reference documents: hosts
+  can be absent from specific episodes, guests can recur across episodes, and
+  applicability is controlled by binding rules instead of episode ownership.
 - Provides change history and optimistic locking so editorial teams can iterate
   safely.
 - Supplies templated prompts and metadata to generation and audio pipelines.
@@ -841,11 +844,13 @@ Agentic workflow behaviour is configurable per series profile:
 - `episode_templates` stores segment layouts, prompt scaffolds, and music bed
   preferences linked to series profiles.
 - `reference_documents` stores reusable source materials independently of
-  ingestion jobs, including document kind and ownership scope.
+  ingestion jobs, including document kind (for example, style guide,
+  host_profile, and guest_profile) and ownership scope.
 - `reference_document_revisions` stores immutable content versions for each
   reusable reference document, including hashes and author metadata.
 - `reference_document_bindings` links pinned reference revisions to a target
-  context (series profile, episode template, or ingestion run).
+  context (series profile, episode template, or ingestion run), with an
+  optional `effective_from_episode_id` anchor for forward-only applicability.
 - `ingestion_jobs` tracks each ingestion run, including status, timestamps, and
   targeted episodes.
 - `source_documents` records ingestion-run inputs, document types, weighting
@@ -897,9 +902,15 @@ Reusable references are modelled separately from ingestion inputs. A
 `reference_document` captures stable identity and scope, each
 `reference_document_revision` stores immutable content with version metadata,
 and `reference_document_binding` pins a chosen revision to a consuming context.
-Ingestion workflows resolve these bindings and snapshot selected revisions into
-ingestion-bound `source_documents`, preserving reproducible TEI provenance
-while allowing independent document reuse across jobs.
+Host and guest profiles are represented as series-aligned reference documents
+rather than episode-bound records, because hosts may skip episodes and guests
+may appear across multiple episodes. When profile guidance changes mid-series,
+editors add a new revision and create a binding with
+`effective_from_episode_id`; that revision applies from the anchor episode
+onwards until superseded. Ingestion workflows resolve these bindings and
+snapshot selected revisions into ingestion-bound `source_documents`, preserving
+reproducible TEI provenance while allowing independent document reuse across
+jobs.
 
 TEI header payloads include an `episodic_provenance` extension with
 `source_priorities`, `ingestion_timestamp`, `reviewer_identities`, and a
@@ -927,6 +938,8 @@ _Figure 7: Canonical content schema relationships._
 The diagram below extends the canonical schema with reusable reference-document
 tables. These tables are planned and not yet implemented in
 `episodic/canonical/ports.py` or `episodic/canonical/storage/repositories.py`.
+Host and guest profiles are expressed as `REFERENCE_DOCUMENTS` kinds scoped to
+`SERIES_PROFILES`, with optional episode anchors for revision applicability.
 
 ```mermaid
 erDiagram
@@ -935,6 +948,7 @@ erDiagram
     REFERENCE_DOCUMENTS ||--o{ REFERENCE_DOCUMENT_REVISIONS : versions
     REFERENCE_DOCUMENT_REVISIONS ||--o{ REFERENCE_DOCUMENT_BINDINGS : pins
     EPISODE_TEMPLATES ||--o{ REFERENCE_DOCUMENT_BINDINGS : consumes
+    EPISODES ||--o{ REFERENCE_DOCUMENT_BINDINGS : effective_from
     INGESTION_JOBS ||--o{ REFERENCE_DOCUMENT_BINDINGS : snapshots
     INGESTION_JOBS ||--o{ SOURCE_DOCUMENTS : records
 ```
@@ -970,7 +984,8 @@ ingestion provenance, but not a standalone reusable reference library.
 additions. The planned design introduces at least one repository for
 `ReferenceDocument` persistence and additional repository responsibilities for
 revision history and binding resolution across series, templates, and ingestion
-contexts.
+contexts, including `effective_from_episode_id` resolution when selecting
+host/guest profile revisions for a specific episode.
 
 Integration tests run against an in-process PostgreSQL instance provided by
 py-pglite, with Alembic migrations applied before each test function. The test

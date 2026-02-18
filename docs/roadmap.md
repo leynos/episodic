@@ -72,12 +72,15 @@ that align with the system design.
   provenance fields and ordering.
 - [ ] 2.2.6. Define the reusable reference-document model (`ReferenceDocument`,
   `ReferenceDocumentRevision`, and `ReferenceBinding`) and repository contracts
-  independent of ingestion-job scope.
+  independent of ingestion-job scope, including series-aligned host and guest
+  profile documents.
 - [ ] 2.2.7. Define series profile and episode template models, REST endpoints,
   and change history so downstream generators can retrieve structured briefs.
 - [ ] 2.2.8. Implement reference-binding resolution so ingestion runs, series
   profiles, and episode templates can reuse pinned document revisions while
-  preserving provenance snapshots in ingestion records.
+  preserving provenance snapshots in ingestion records, with
+  `effective_from_episode_id` support for revisions that apply from a specific
+  episode onwards.
 
 ### 2.3. Exit criteria
 
@@ -85,9 +88,10 @@ that align with the system design.
   ingesting at least three heterogeneous source types.
 - [ ] 2.3.2. Series profiles, episode templates, and reusable reference
   documents are retrievable via the public API with optimistic locking and
-  change history.
+  change history, including series-aligned host and guest profiles.
 - [ ] 2.3.3. Ingestion workflows can resolve reusable reference bindings and
-  snapshot pinned revisions into per-job provenance records.
+  snapshot pinned revisions into per-job provenance records, honouring
+  `effective_from_episode_id` semantics.
 
 ## 3. Intelligent content generation and QA
 
