@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import typing as typ
 
@@ -39,6 +40,15 @@ class TeiHeaderProvenanceRecord(typ.TypedDict):
     ingestion_timestamp: str
     source_priorities: list[SourcePriorityRecord]
     reviewer_identities: list[str]
+
+
+@dataclasses.dataclass(frozen=True)
+class IngestionTestContext:
+    """Test fixtures for multi-source ingestion error tests."""
+
+    session_factory: typ.Callable[[], AsyncSession]
+    profile: SeriesProfile
+    ingestion_pipeline: IngestionPipeline
 
 
 def _require_provenance_payload(
@@ -94,20 +104,18 @@ def _verify_source_documents(
 
 
 async def _assert_ingestion_raises(
-    session_factory: typ.Callable[[], AsyncSession],
-    profile: SeriesProfile,
+    context: IngestionTestContext,
     request: MultiSourceRequest,
-    ingestion_pipeline: IngestionPipeline,
     expected_error_pattern: str,
 ) -> None:
     """Assert that multi-source ingestion raises a matching ValueError."""
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+    async with SqlAlchemyUnitOfWork(context.session_factory) as uow:
         with pytest.raises(ValueError, match=expected_error_pattern):
             await ingest_multi_source(
                 uow,
-                profile,
+                context.profile,
                 request,
-                ingestion_pipeline,
+                context.ingestion_pipeline,
             )
 
 
@@ -251,16 +259,19 @@ async def test_ingest_multi_source_empty_sources_raises(
     ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Submitting zero raw sources raises ValueError."""
+    context = IngestionTestContext(
+        session_factory=session_factory,
+        profile=series_profile_for_ingestion,
+        ingestion_pipeline=ingestion_pipeline,
+    )
     request = MultiSourceRequest(
         raw_sources=[],
         series_slug=series_profile_for_ingestion.slug,
         requested_by="test@example.com",
     )
     await _assert_ingestion_raises(
-        session_factory,
-        series_profile_for_ingestion,
+        context,
         request,
-        ingestion_pipeline,
         "At least one raw source",
     )
 
@@ -272,16 +283,19 @@ async def test_ingest_multi_source_slug_mismatch_raises(
     ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Mismatched series slug raises ValueError."""
+    context = IngestionTestContext(
+        session_factory=session_factory,
+        profile=series_profile_for_ingestion,
+        ingestion_pipeline=ingestion_pipeline,
+    )
     request = MultiSourceRequest(
         raw_sources=[_make_raw_source()],
         series_slug="wrong-slug",
         requested_by="test@example.com",
     )
     await _assert_ingestion_raises(
-        session_factory,
-        series_profile_for_ingestion,
+        context,
         request,
-        ingestion_pipeline,
         "Series slug mismatch",
     )
 
