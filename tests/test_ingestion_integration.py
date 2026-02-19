@@ -93,6 +93,24 @@ def _verify_source_documents(
         )
 
 
+async def _assert_ingestion_raises(
+    session_factory: typ.Callable[[], AsyncSession],
+    profile: SeriesProfile,
+    request: MultiSourceRequest,
+    ingestion_pipeline: IngestionPipeline,
+    expected_error_pattern: str,
+) -> None:
+    """Assert that multi-source ingestion raises a matching ValueError."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(ValueError, match=expected_error_pattern):
+            await ingest_multi_source(
+                uow,
+                profile,
+                request,
+                ingestion_pipeline,
+            )
+
+
 @pytest.mark.asyncio
 async def test_ingest_multi_source_end_to_end(
     session_factory: typ.Callable[[], AsyncSession],
@@ -145,9 +163,9 @@ async def test_ingest_multi_source_end_to_end(
 
     provenance = _require_provenance_payload(header.payload)
     _verify_provenance_metadata(
-        provenance=provenance,
-        expected_reviewer="producer@example.com",
-        expected_source_uris=[
+        provenance,
+        "producer@example.com",
+        [
             "s3://bucket/transcript.txt",
             "s3://bucket/brief.txt",
         ],
@@ -158,7 +176,7 @@ async def test_ingest_multi_source_end_to_end(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)
 
-    _verify_source_documents(documents=documents, expected_count=2)
+    _verify_source_documents(documents, expected_count=2)
 
 
 @pytest.mark.asyncio
@@ -233,22 +251,18 @@ async def test_ingest_multi_source_empty_sources_raises(
     ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Submitting zero raw sources raises ValueError."""
-    profile = series_profile_for_ingestion
-
     request = MultiSourceRequest(
         raw_sources=[],
-        series_slug=profile.slug,
+        series_slug=series_profile_for_ingestion.slug,
         requested_by="test@example.com",
     )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ValueError, match="At least one raw source"):
-            await ingest_multi_source(
-                uow,
-                profile,
-                request,
-                ingestion_pipeline,
-            )
+    await _assert_ingestion_raises(
+        session_factory,
+        series_profile_for_ingestion,
+        request,
+        ingestion_pipeline,
+        "At least one raw source",
+    )
 
 
 @pytest.mark.asyncio
@@ -258,22 +272,18 @@ async def test_ingest_multi_source_slug_mismatch_raises(
     ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Mismatched series slug raises ValueError."""
-    profile = series_profile_for_ingestion
-
     request = MultiSourceRequest(
         raw_sources=[_make_raw_source()],
         series_slug="wrong-slug",
         requested_by="test@example.com",
     )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ValueError, match="Series slug mismatch"):
-            await ingest_multi_source(
-                uow,
-                profile,
-                request,
-                ingestion_pipeline,
-            )
+    await _assert_ingestion_raises(
+        session_factory,
+        series_profile_for_ingestion,
+        request,
+        ingestion_pipeline,
+        "Series slug mismatch",
+    )
 
 
 @pytest.mark.asyncio
