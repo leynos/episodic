@@ -52,6 +52,47 @@ def _require_provenance_payload(
     return typ.cast("TeiHeaderProvenanceRecord", provenance)
 
 
+def _verify_provenance_metadata(
+    provenance: TeiHeaderProvenanceRecord,
+    expected_reviewer: str,
+    expected_source_uris: list[str],
+) -> None:
+    """Verify provenance metadata values for an ingested TEI header."""
+    timestamp = provenance.get("ingestion_timestamp")
+    assert isinstance(timestamp, str), "Expected ingestion timestamp as string."
+    assert dt.datetime.fromisoformat(timestamp).tzinfo is not None, (
+        "Expected timezone-aware ingestion timestamp."
+    )
+    assert provenance.get("reviewer_identities") == [expected_reviewer], (
+        "Expected reviewer identity to be captured from request actor."
+    )
+    priorities = provenance["source_priorities"]
+    assert len(priorities) == len(expected_source_uris), (
+        "Expected one priority entry per source."
+    )
+    actual_source_uris = [priority["source_uri"] for priority in priorities]
+    assert actual_source_uris == expected_source_uris, (
+        "Expected source priorities to match source URI order."
+    )
+
+
+def _verify_source_documents(
+    documents: list[typ.Any],
+    expected_count: int,
+) -> None:
+    """Verify persisted source document count and weight bounds."""
+    assert len(documents) == expected_count, (
+        "Expected all input sources to be persisted as source documents."
+    )
+    for document in documents:
+        assert document.weight > 0.0, (
+            "Expected persisted source weight to be greater than zero."
+        )
+        assert document.weight <= 1.0, (
+            "Expected persisted source weight to be capped at one."
+        )
+
+
 @pytest.mark.asyncio
 async def test_ingest_multi_source_end_to_end(
     session_factory: typ.Callable[[], AsyncSession],
@@ -103,41 +144,21 @@ async def test_ingest_multi_source_end_to_end(
     assert header is not None, "Expected a persisted TEI header."
 
     provenance = _require_provenance_payload(header.payload)
-    timestamp = provenance.get("ingestion_timestamp")
-    assert isinstance(timestamp, str), "Expected ingestion timestamp as string."
-    assert dt.datetime.fromisoformat(timestamp).tzinfo is not None, (
-        "Expected timezone-aware ingestion timestamp."
-    )
-    assert provenance.get("reviewer_identities") == ["producer@example.com"], (
-        "Expected reviewer identity to be captured from request actor."
-    )
-    priorities = provenance["source_priorities"]
-    assert len(priorities) == 2, "Expected one priority entry per source."
-    assert priorities[0]["source_uri"] == "s3://bucket/transcript.txt", (
-        "Expected highest-priority source to be first in provenance."
-    )
-    assert priorities[1]["source_uri"] == "s3://bucket/brief.txt", (
-        "Expected lower-priority source to be second in provenance."
+    _verify_provenance_metadata(
+        provenance=provenance,
+        expected_reviewer="producer@example.com",
+        expected_source_uris=[
+            "s3://bucket/transcript.txt",
+            "s3://bucket/brief.txt",
+        ],
     )
 
-    job_record = await _get_job_record_for_episode(
-        session_factory,
-        episode.id,
-    )
+    job_record = await _get_job_record_for_episode(session_factory, episode.id)
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)
 
-    assert len(documents) == 2, (
-        "Expected all input sources to be persisted as source documents."
-    )
-    for doc in documents:
-        assert doc.weight > 0.0, (
-            "Expected persisted source weight to be greater than zero."
-        )
-        assert doc.weight <= 1.0, (
-            "Expected persisted source weight to be capped at one."
-        )
+    _verify_source_documents(documents=documents, expected_count=2)
 
 
 @pytest.mark.asyncio
