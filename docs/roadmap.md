@@ -73,14 +73,20 @@ that align with the system design.
 - [ ] 2.2.6. Define the reusable reference-document model (`ReferenceDocument`,
   `ReferenceDocumentRevision`, and `ReferenceBinding`) and repository contracts
   independent of ingestion-job scope, including series-aligned host and guest
-  profile documents.
+  profile documents. Finish line: approved ER diagram, glossary entries for all
+  three entities, and documented repository plus API contract acceptance
+  criteria.
 - [ ] 2.2.7. Define series profile and episode template models, REST endpoints,
-  and change history so downstream generators can retrieve structured briefs.
+  and change history, so downstream generators can retrieve structured briefs.
+  Acceptance criteria: documented models, published REST API specification, and
+  versioned change-history format. Dependencies: 2.2.6 approved model
+  definitions; downstream input for 2.2.8 binding resolution.
 - [ ] 2.2.8. Implement reference-binding resolution so ingestion runs, series
   profiles, and episode templates can reuse pinned document revisions while
   preserving provenance snapshots in ingestion records, with
   `effective_from_episode_id` support for revisions that apply from a specific
-  episode onwards.
+  episode onwards. Prerequisite: 2.2.6 model definitions approved. Scope:
+  repository and API behaviour only.
 
 ### 2.3. Exit criteria
 

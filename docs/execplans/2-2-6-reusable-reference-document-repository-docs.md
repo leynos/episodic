@@ -130,7 +130,8 @@ The documentation-only implementation completed successfully.
 
 Changes delivered:
 
-- Updated `docs/episodic-podcast-generation-system-design.md` to:
+- Updated `docs/episodic-podcast-generation-system-design.md` to do the
+  following:
   - distinguish current ingestion-bound `SourceDocumentRepository` behaviour
     from planned reusable reference-document capabilities,
   - add reusable reference data-model entities
@@ -139,7 +140,7 @@ Changes delivered:
   - introduce a dedicated planned-model Mermaid diagram, and
   - align component and roadmap-alignment narrative with reusable reference
     storage.
-- Updated `docs/roadmap.md` to:
+- Updated `docs/roadmap.md` to do the following:
   - split reusable reference-document work into explicit Phase 2 activities
     (2.2.6 through 2.2.8), and
   - expand Phase 2 exit criteria to require API retrieval of reusable
@@ -235,10 +236,12 @@ review diffs for clarity and consistency with design intent.
 
 Run from repository root:
 
-    git status --short
-    rg -n "SourceDocumentRepository|source_documents|episode_templates|2\\.2\\.6|2\\.3\\.2" \
-      docs/episodic-podcast-generation-system-design.md \
-      docs/roadmap.md
+```shell
+git status --short
+rg -n "SourceDocumentRepository|source_documents|episode_templates|2\\.2\\.6|2\\.3\\.2" \
+  docs/episodic-podcast-generation-system-design.md \
+  docs/roadmap.md
+```
 
 Edit files:
 
@@ -247,9 +250,11 @@ Edit files:
 
 Run validation with captured logs:
 
-    set -o pipefail; make fmt 2>&1 | tee /tmp/execplan-refdocs-make-fmt.log
-    set -o pipefail; make markdownlint 2>&1 | tee /tmp/execplan-refdocs-markdownlint.log
-    set -o pipefail; make nixie 2>&1 | tee /tmp/execplan-refdocs-make-nixie.log
+```shell
+set -o pipefail; make fmt 2>&1 | tee /tmp/execplan-refdocs-make-fmt.log
+set -o pipefail; make markdownlint 2>&1 | tee /tmp/execplan-refdocs-markdownlint.log
+set -o pipefail; make nixie 2>&1 | tee /tmp/execplan-refdocs-make-nixie.log
+```
 
 Expected success indicators:
 

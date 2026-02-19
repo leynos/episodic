@@ -891,7 +891,7 @@ stages. TEI headers are stored as JSONB for structured querying and retain the
 raw XML payload for audit and re-emission. Canonical episodes reference TEI
 headers by identifier, store the canonical TEI XML string, and track both
 workflow status and approval state. Ingestion jobs capture lifecycle status,
-timestamps, and the target episode. In current implementation,
+timestamps, and the target episode. In the current implementation,
 `source_documents` are ingestion-bound records that link back to a specific
 ingestion job and the canonical episode they influence. Approval events record
 state transitions with actor metadata and payloads for auditability. Ingestion
