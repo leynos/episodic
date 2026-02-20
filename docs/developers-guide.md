@@ -206,8 +206,8 @@ applied by `ingest_sources` in `episodic/canonical/services.py`.
   identities.
 - `merge_tei_header_provenance()` attaches that payload under the
   `episodic_provenance` key in the parsed TEI header dictionary.
-- Source priorities are sorted by descending weight with deterministic
-  tie-breaks by source URI and source type.
+- Source priorities are sorted by descending weight, preserving source input
+  order for ties.
 - `capture_context` currently uses `source_ingestion`; `script_generation` is
   reserved for future generation workflows and must reuse the same builder.
 

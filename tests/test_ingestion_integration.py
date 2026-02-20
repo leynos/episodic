@@ -269,12 +269,11 @@ async def test_ingest_multi_source_preserves_all_sources(
 @pytest.mark.asyncio
 async def test_ingest_multi_source_empty_sources_raises(
     ingestion_test_context: IngestionTestContext,
-    series_profile_for_ingestion: SeriesProfile,
 ) -> None:
     """Submitting zero raw sources raises ValueError."""
     request = MultiSourceRequest(
         raw_sources=[],
-        series_slug=series_profile_for_ingestion.slug,
+        series_slug=ingestion_test_context.profile.slug,
         requested_by="test@example.com",
     )
     await _assert_ingestion_raises(

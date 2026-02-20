@@ -960,9 +960,9 @@ is retained for audit as specified in the system design.
 
 During persistence, `ingest_sources` enriches the TEI header payload with
 provenance automatically. Source priorities are derived from final source
-weights (descending with deterministic tie-breaks), ingestion timestamps are
-stored as UTC ISO-8601 strings, and reviewer identities are taken from the
-request actor metadata.
+weights (descending, preserving source input order on equal weights), ingestion
+timestamps are stored as UTC ISO-8601 strings, and reviewer identities are
+taken from the request actor metadata.
 
 Reference adapters in `episodic/canonical/adapters/` implement the three ports
 with sensible defaults, suitable for testing and initial deployments.

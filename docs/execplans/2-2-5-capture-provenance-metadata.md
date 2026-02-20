@@ -1,8 +1,9 @@
-# Capture provenance metadata in TEI headers for ingestion and future script generation
+# Capture provenance metadata in Text Encoding Initiative (TEI) headers for ingestion and future script generation
 
-This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
-`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
-`Outcomes & Retrospective` must be kept up to date as work proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections
+`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
+`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
+proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
@@ -28,8 +29,9 @@ Success is observable when:
    computed weights.
 3. Unit tests (pytest) fail before implementation and pass after implementation
    for provenance capture and ordering.
-4. Behavioural tests (pytest-bdd) fail before implementation and pass after
-   implementation for user-observable provenance behaviour.
+4. Behavior-driven development (BDD) tests (`pytest-bdd`) fail before
+   implementation and pass after implementation for user-observable provenance
+   behavior.
 5. Documentation is updated in:
    - `docs/episodic-podcast-generation-system-design.md`
    - `docs/users-guide.md`
@@ -45,11 +47,12 @@ Success is observable when:
   - Domain layer owns provenance schema and merge logic.
   - Storage adapters persist domain outputs but do not invent provenance.
   - No adapter-to-adapter calls.
-- Keep existing ingestion behaviour unchanged except for adding provenance
+- Keep existing ingestion behavior unchanged except for adding provenance
   metadata.
 - Do not add external dependencies.
-- Keep provenance payload serialisable to JSONB and backward-compatible with
-  existing `tei_headers.payload` records that lack provenance.
+- Keep provenance payload serializable to PostgreSQL JSONB (JSONB) and
+  backward-compatible with existing `tei_headers.payload` records that lack
+  provenance.
 - Represent ingestion timestamps in UTC with explicit timezone data.
 - Script generation is not implemented in this roadmap item; however, the
   provenance API introduced now must be reusable by script generation later.
@@ -81,10 +84,10 @@ Success is observable when:
   extension key (for example `episodic_provenance`) and keep TEI structural
   keys untouched.
 
-- Risk: Source priority ordering could become nondeterministic on equal weights.
-  Severity: medium Likelihood: medium Mitigation: define deterministic
-  tie-break rules (source URI ascending after weight descending), and test for
-  determinism.
+- Risk: Source priority ordering could become inconsistent with canonical
+  winner selection on equal weights. Severity: medium Likelihood: medium
+  Mitigation: preserve source input order for equal-weight ties to match
+  conflict-resolution behavior, and test for determinism.
 
 - Risk: Reviewer identities for ingestion are currently a single actor
   (`requested_by`), while the requirement is plural. Severity: low Likelihood:
@@ -92,17 +95,17 @@ Success is observable when:
   ingestion, and document that script generation will populate multi-reviewer
   sets.
 
-- Risk: Behavioural tests may only verify approval payload today, not TEI
-  header payload. Severity: low Likelihood: medium Mitigation: add explicit BDD
-  steps that query persisted TEI headers and assert provenance fields.
+- Risk: Behavioral tests may only verify approval payload today, not TEI
+  header payload. Severity: low Likelihood: medium Mitigation: add explicit
+  BDD steps that query persisted TEI headers and assert provenance fields.
 
 ## Progress
 
-- [x] (2026-02-18 20:40Z) Drafted this ExecPlan.
+- [x] (2026-02-18 20:40Z) Drafted this Execution Plan (ExecPlan).
 - [x] (2026-02-18 21:15Z) Stage A: Baseline and test-first setup completed.
 - [x] (2026-02-18 21:18Z) Stage B: Unit tests added and confirmed failing
   pre-change (`ModuleNotFoundError` for provenance module).
-- [x] (2026-02-18 21:20Z) Stage C: Behavioural provenance assertions added and
+- [x] (2026-02-18 21:20Z) Stage C: Behavioral provenance assertions added and
   validated in targeted scenario runs.
 - [x] (2026-02-18 21:23Z) Stage D: Shared provenance module implemented and
   ingestion TEI header enrichment wired in `ingest_sources`.
@@ -113,7 +116,8 @@ Success is observable when:
 
 ## Surprises & discoveries
 
-- Observation: No Qdrant project-memory MCP endpoints are available in this
+- Observation: No Qdrant project-memory Model Context Protocol (MCP) endpoints
+  are available in this
   environment, so repository and docs inspection are the only context source.
   Evidence: MCP resource and template listings returned empty results. Impact:
   No long-term memory recall/write can be performed for this session.
@@ -132,16 +136,16 @@ Success is observable when:
   adding new relational columns in this item. Rationale: requirement targets
   TEI headers and existing schema already stores parsed header payload for
   query and reuse; this keeps migration risk low. Date/Author: 2026-02-18 /
-  Codex
+  Codex.
 
 - Decision: Introduce a shared provenance builder in canonical domain/service
   code now, with context support for `ingestion` and `script_generation`.
   Rationale: satisfies current ingestion work and enforces reuse when script
-  generation is implemented. Date/Author: 2026-02-18 / Codex
+  generation is implemented. Date/Author: 2026-02-18 / Codex.
 
 - Decision: Treat reviewer identities as a list even when a single actor is
   present. Rationale: aligns with roadmap wording and avoids future schema
-  drift. Date/Author: 2026-02-18 / Codex
+  drift. Date/Author: 2026-02-18 / Codex.
 
 ## Outcomes & retrospective
 
@@ -157,12 +161,12 @@ Key outcomes:
   `source_ingestion` and `script_generation` contexts.
 - Ingestion now applies provenance automatically via
   `episodic/canonical/services.py`.
-- Unit and behavioural provenance tests were added and pass.
+- Unit and behavioral provenance tests were added and pass.
 - `docs/roadmap.md` item `2.2.5` is marked done.
 
 At completion, this section must report:
 
-- Delivered behaviour against Purpose criteria.
+- Delivered behavior against Purpose criteria.
 - Deviations from planned scope.
 - Any tolerance breaches and escalation outcomes.
 - Lessons for script-generation provenance reuse.
@@ -185,10 +189,10 @@ Relevant current implementation and documents:
   - Covers end-to-end multi-source ingestion persistence.
 - `tests/steps/test_canonical_ingestion_steps.py` and
   `tests/features/canonical_ingestion.feature`
-  - Current BDD ingestion behaviour.
+  - Current BDD ingestion behavior.
 - `tests/steps/test_multi_source_ingestion_steps.py` and
   `tests/features/multi_source_ingestion.feature`
-  - Current BDD multi-source behaviour.
+  - Current BDD multi-source behavior.
 - `docs/roadmap.md`
   - Item `2.2.5` is currently unchecked.
 - `docs/episodic-podcast-generation-system-design.md`
@@ -230,11 +234,11 @@ Add and update pytest unit tests before implementation.
 
 Run targeted tests and confirm expected failures before implementation.
 
-Go/no-go: proceed only after failures demonstrate missing behaviour.
+Go/no-go: proceed only after failures demonstrate missing behavior.
 
-### Stage C: behavioural tests first
+### Stage C: behavioral tests first
 
-Update pytest-bdd coverage to express user-visible provenance behaviour.
+Update pytest-bdd coverage to express user-visible provenance behavior.
 
 - Extend `tests/features/canonical_ingestion.feature` with provenance
   expectations.
@@ -260,20 +264,20 @@ Implement minimal production changes to satisfy failing tests.
 - Ensure source priorities are computed from `request.sources` weights with
   deterministic rank assignment.
 - Populate reviewer identities from `request.requested_by` as a list.
-- Keep `raw_xml` behaviour unchanged unless tests require explicit provenance
+- Keep `raw_xml` behavior unchanged unless tests require explicit provenance
   emission in XML.
 
 Go/no-go: proceed to docs only when all new tests pass.
 
 ### Stage E: documentation updates
 
-Update required docs after behaviour is implemented.
+Update required docs after behavior is implemented.
 
 - `docs/episodic-podcast-generation-system-design.md`
   - Record provenance contract and reusable builder approach.
   - Clarify script-generation integration expectation.
 - `docs/users-guide.md`
-  - Add user-facing behaviour for automatic TEI provenance fields.
+  - Add user-facing behavior for automatic TEI provenance fields.
 - `docs/developers-guide.md`
   - Document internal provenance interface and extension rules.
   - State that script-generation flows must call the shared builder.
@@ -365,7 +369,7 @@ Acceptance criteria:
 - A shared provenance builder supports both `ingestion` and
   `script_generation` contexts (script generation use is documented for future
   implementation).
-- Unit tests and behavioural tests for provenance pass.
+- Unit tests and behavioral tests for provenance pass.
 - `make check-fmt`, `make typecheck`, `make lint`, and `make test` pass.
 - Documentation updates are present in system design, users' guide, and
   developers' guide.
@@ -383,7 +387,7 @@ Acceptance criteria:
 
 ## Artifacts and notes
 
-Expected log artefacts:
+Expected log artifacts:
 
 - `/tmp/2-2-5-target-unit-before.log`
 - `/tmp/2-2-5-target-bdd-before.log`
@@ -405,14 +409,14 @@ Planned interfaces:
   - timestamp,
   - source descriptors with weights,
   - reviewer identity list,
-  and returns JSON-serialisable provenance payload.
+  and returns JSON-serializable provenance payload.
 - `ingest_sources()` integration point in `episodic/canonical/services.py`.
 
 Dependencies already present and reused:
 
 - Python 3.13 standard library (`datetime`, dataclasses, typing).
 - SQLAlchemy async stack and Postgres JSONB persistence.
-- pytest and pytest-bdd for unit and behavioural tests.
+- pytest and pytest-bdd for unit and behavioral tests.
 - Existing Makefile quality gates.
 
 No new dependencies are expected.

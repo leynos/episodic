@@ -67,7 +67,9 @@ that align with the system design.
   applies source weighting heuristics, and resolves conflicts into canonical
   TEI.
 - [x] 2.2.5. Capture provenance metadata automatically in TEI headers,
-  including source priorities, ingestion timestamps, and reviewer identities.
+  including source priorities, ingestion timestamps, and reviewer identities;
+  validated by integration and BDD tests that assert persisted TEI header
+  provenance fields and ordering.
 - [ ] 2.2.6. Define series profile and episode template models, REST endpoints,
   and change history so downstream generators can retrieve structured briefs.
 

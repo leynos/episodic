@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pytest
+
 from episodic.canonical.domain import SourceDocumentInput
 from episodic.canonical.provenance import (
     build_tei_header_provenance,
@@ -46,10 +48,16 @@ def test_build_tei_header_provenance_orders_sources_by_priority() -> None:
     assert priorities[1]["source_uri"] == "https://example.com/second", (
         "Expected lower-weighted source to be second."
     )
+    assert priorities[0]["priority"] == 1, (
+        "Expected highest-weighted source to have priority rank one."
+    )
+    assert priorities[1]["priority"] == 2, (
+        "Expected lower-weighted source to have priority rank two."
+    )
 
 
 def test_build_tei_header_provenance_is_deterministic_for_ties() -> None:
-    """Tie weights are ordered deterministically by source URI."""
+    """Tie weights preserve source input order for deterministic ranking."""
     provenance = build_tei_header_provenance(
         sources=[
             _source("https://example.com/zeta", weight=0.7),
@@ -62,11 +70,58 @@ def test_build_tei_header_provenance_is_deterministic_for_ties() -> None:
 
     priorities = provenance["source_priorities"]
     assert isinstance(priorities, list), "Expected source priorities as a list."
-    assert priorities[0]["source_uri"] == "https://example.com/alpha", (
-        "Expected lexical URI tie-break ordering."
+    assert priorities[0]["source_uri"] == "https://example.com/zeta", (
+        "Expected equal weights to preserve request ordering."
     )
-    assert priorities[1]["source_uri"] == "https://example.com/zeta", (
-        "Expected lexical URI tie-break ordering."
+    assert priorities[1]["source_uri"] == "https://example.com/alpha", (
+        "Expected equal weights to preserve request ordering."
+    )
+
+
+def test_build_tei_header_provenance_rejects_naive_timestamp() -> None:
+    """Naive capture timestamps are rejected."""
+    with pytest.raises(ValueError, match=r"captured_at must be timezone-aware\."):
+        build_tei_header_provenance(
+            sources=[_source("https://example.com/source", weight=0.5)],
+            captured_at=dt.datetime(2026, 2, 18, 12, 0, tzinfo=dt.UTC).replace(
+                tzinfo=None,
+            ),
+            reviewer_identities=["reviewer@example.com"],
+            capture_context="source_ingestion",
+        )
+
+
+def test_build_tei_header_provenance_normalises_reviewer_identities() -> None:
+    """Reviewer identities are stripped, deduplicated, and blank-filtered."""
+    provenance = build_tei_header_provenance(
+        sources=[_source("https://example.com/source", weight=0.5)],
+        captured_at=dt.datetime(2026, 2, 18, 12, 0, tzinfo=dt.UTC),
+        reviewer_identities=[
+            "  alice@example.com  ",
+            "",
+            "alice@example.com",
+            "bob@example.com",
+        ],
+        capture_context="source_ingestion",
+    )
+
+    assert provenance["reviewer_identities"] == [
+        "alice@example.com",
+        "bob@example.com",
+    ], "Expected normalized reviewer identities in first-seen order."
+
+
+def test_build_tei_header_provenance_with_empty_sources() -> None:
+    """Empty source lists produce empty source-priority records."""
+    provenance = build_tei_header_provenance(
+        sources=[],
+        captured_at=dt.datetime(2026, 2, 18, 12, 0, tzinfo=dt.UTC),
+        reviewer_identities=["reviewer@example.com"],
+        capture_context="source_ingestion",
+    )
+
+    assert provenance["source_priorities"] == [], (
+        "Expected empty priorities when no sources are provided."
     )
 
 
@@ -90,12 +145,12 @@ def test_build_tei_header_provenance_supports_script_generation_context() -> Non
 def test_merge_tei_header_provenance_adds_payload_without_mutating_input() -> None:
     """Merging provenance returns a new payload with extension metadata."""
     payload = {"fileDesc": {"title": "Bridgewater"}}
-    provenance = {
-        "capture_context": "source_ingestion",
-        "source_priorities": [],
-        "ingestion_timestamp": "2026-02-18T12:00:00+00:00",
-        "reviewer_identities": [],
-    }
+    provenance = build_tei_header_provenance(
+        sources=[],
+        captured_at=dt.datetime(2026, 2, 18, 12, 0, tzinfo=dt.UTC),
+        reviewer_identities=[],
+        capture_context="source_ingestion",
+    )
 
     merged = merge_tei_header_provenance(payload, provenance)
 
@@ -104,4 +159,28 @@ def test_merge_tei_header_provenance_adds_payload_without_mutating_input() -> No
     )
     assert "episodic_provenance" not in payload, (
         "Expected merge to avoid mutating the original payload."
+    )
+
+
+def test_merge_tei_header_provenance_preserves_unrelated_existing_keys() -> None:
+    """Merging provenance preserves unknown keys from existing payload metadata."""
+    payload = {
+        "fileDesc": {"title": "Bridgewater"},
+        "episodic_provenance": {"legacy_key": "legacy-value"},
+    }
+    provenance = build_tei_header_provenance(
+        sources=[_source("https://example.com/source", weight=1.0)],
+        captured_at=dt.datetime(2026, 2, 18, 12, 0, tzinfo=dt.UTC),
+        reviewer_identities=["reviewer@example.com"],
+        capture_context="source_ingestion",
+    )
+
+    merged = merge_tei_header_provenance(payload, provenance)
+
+    merged_provenance = merged["episodic_provenance"]
+    assert isinstance(merged_provenance, dict), (
+        "Expected merged provenance payload to remain a mapping."
+    )
+    assert merged_provenance["legacy_key"] == "legacy-value", (
+        "Expected merge to preserve unknown existing provenance keys."
     )

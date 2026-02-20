@@ -13,6 +13,7 @@ Ingest sources within a unit-of-work session:
 
 from __future__ import annotations
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -53,8 +54,8 @@ def _with_ingestion_provenance(
         reviewer_identities=reviewer_identities,
         capture_context="source_ingestion",
     )
-    return TeiHeaderPayload(
-        title=header_payload.title,
+    return dc.replace(
+        header_payload,
         payload=merge_tei_header_provenance(
             payload=header_payload.payload,
             provenance=provenance,
