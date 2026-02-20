@@ -8,3 +8,4 @@ Feature: Canonical ingestion
     And the approval state is "draft"
     And an approval event is persisted for the ingestion job
     And source documents are stored and linked to the ingestion job and episode
+    And TEI header provenance metadata is captured for the ingestion

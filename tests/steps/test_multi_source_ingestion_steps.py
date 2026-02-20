@@ -357,3 +357,44 @@ def single_source_marked_as_preferred(
         )
 
     _run_async_step(_function_scoped_runner, _verify)
+
+
+@then("TEI header provenance captures source priorities")
+def tei_header_provenance_captures_priorities(
+    _function_scoped_runner: asyncio.Runner,
+    session_factory: cabc.Callable[[], AsyncSession],
+    multi_source_context: MultiSourceContext,
+) -> None:
+    """Verify TEI header provenance captures source-priority ordering."""
+
+    async def _verify() -> None:
+        episode_id = multi_source_context["episode_id"]
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            episode = await uow.episodes.get(episode_id)
+            assert episode is not None, "Expected a persisted canonical episode."
+            header = await uow.tei_headers.get(episode.tei_header_id)
+
+        assert header is not None, "Expected TEI header for canonical episode."
+        provenance = header.payload.get("episodic_provenance")
+        assert isinstance(provenance, dict), (
+            "Expected TEI header to include provenance metadata."
+        )
+        assert provenance.get("capture_context") == "source_ingestion", (
+            "Expected ingestion capture context in TEI provenance."
+        )
+        assert provenance.get("reviewer_identities") == ["bdd-test@example.com"], (
+            "Expected ingestion actor identity in provenance metadata."
+        )
+        priorities = provenance.get("source_priorities")
+        assert isinstance(priorities, list), (
+            "Expected list of source priorities in TEI provenance."
+        )
+        assert priorities, "Expected at least one source priority entry."
+
+        if len(priorities) > 1:
+            assert priorities[0]["source_uri"] == "s3://bucket/transcript.txt", (
+                "Expected transcript source to rank highest in default weighting."
+            )
+
+    _run_async_step(_function_scoped_runner, _verify)

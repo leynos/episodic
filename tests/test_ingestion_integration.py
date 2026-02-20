@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+import datetime as dt
 import typing as typ
 
 import pytest
@@ -19,6 +21,116 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import SeriesProfile
     from episodic.canonical.ingestion_service import IngestionPipeline
+
+
+class SourcePriorityRecord(typ.TypedDict):
+    """Serialized source-priority record in TEI provenance metadata."""
+
+    priority: int
+    source_uri: str
+    source_type: str
+    weight: float
+    content_hash: str
+
+
+class TeiHeaderProvenanceRecord(typ.TypedDict):
+    """Serialized TEI header provenance metadata payload."""
+
+    capture_context: str
+    ingestion_timestamp: str
+    source_priorities: list[SourcePriorityRecord]
+    reviewer_identities: list[str]
+
+
+@dataclasses.dataclass(frozen=True)
+class IngestionTestContext:
+    """Test fixtures for multi-source ingestion error tests."""
+
+    session_factory: typ.Callable[[], AsyncSession]
+    profile: SeriesProfile
+    ingestion_pipeline: IngestionPipeline
+
+
+def _require_provenance_payload(
+    payload: dict[str, object],
+) -> TeiHeaderProvenanceRecord:
+    """Return the TEI header provenance payload with runtime checks."""
+    provenance = payload.get("episodic_provenance")
+    assert isinstance(provenance, dict), (
+        "Expected TEI header payload to include dict provenance metadata."
+    )
+    return typ.cast("TeiHeaderProvenanceRecord", provenance)
+
+
+def _verify_provenance_metadata(
+    provenance: TeiHeaderProvenanceRecord,
+    expected_reviewer: str,
+    expected_source_uris: list[str],
+) -> None:
+    """Verify provenance metadata values for an ingested TEI header."""
+    timestamp = provenance.get("ingestion_timestamp")
+    assert isinstance(timestamp, str), "Expected ingestion timestamp as string."
+    assert dt.datetime.fromisoformat(timestamp).tzinfo is not None, (
+        "Expected timezone-aware ingestion timestamp."
+    )
+    assert provenance.get("reviewer_identities") == [expected_reviewer], (
+        "Expected reviewer identity to be captured from request actor."
+    )
+    priorities = provenance["source_priorities"]
+    assert len(priorities) == len(expected_source_uris), (
+        "Expected one priority entry per source."
+    )
+    actual_source_uris = [priority["source_uri"] for priority in priorities]
+    assert actual_source_uris == expected_source_uris, (
+        "Expected source priorities to match source URI order."
+    )
+
+
+def _verify_source_documents(
+    documents: list[typ.Any],
+    expected_count: int,
+) -> None:
+    """Verify persisted source document count and weight bounds."""
+    assert len(documents) == expected_count, (
+        "Expected all input sources to be persisted as source documents."
+    )
+    for document in documents:
+        assert document.weight > 0.0, (
+            "Expected persisted source weight to be greater than zero."
+        )
+        assert document.weight <= 1.0, (
+            "Expected persisted source weight to be capped at one."
+        )
+
+
+async def _assert_ingestion_raises(
+    context: IngestionTestContext,
+    request: MultiSourceRequest,
+    expected_error_pattern: str,
+) -> None:
+    """Assert that multi-source ingestion raises a matching ValueError."""
+    async with SqlAlchemyUnitOfWork(context.session_factory) as uow:
+        with pytest.raises(ValueError, match=expected_error_pattern):
+            await ingest_multi_source(
+                uow,
+                context.profile,
+                request,
+                context.ingestion_pipeline,
+            )
+
+
+@pytest.fixture
+def ingestion_test_context(
+    session_factory: typ.Callable[[], AsyncSession],
+    series_profile_for_ingestion: SeriesProfile,
+    ingestion_pipeline: IngestionPipeline,
+) -> IngestionTestContext:
+    """Compose ingestion test fixtures into a context object."""
+    return IngestionTestContext(
+        session_factory=session_factory,
+        profile=series_profile_for_ingestion,
+        ingestion_pipeline=ingestion_pipeline,
+    )
 
 
 @pytest.mark.asyncio
@@ -61,32 +173,32 @@ async def test_ingest_multi_source_end_to_end(
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         persisted = await uow.episodes.get(episode.id)
+        assert persisted is not None, (
+            "Expected persisted episode to be retrievable after ingestion."
+        )
+        header = await uow.tei_headers.get(persisted.tei_header_id)
 
-    assert persisted is not None, (
-        "Expected persisted episode to be retrievable after ingestion."
-    )
     assert persisted.title == "Primary Episode", (
         "Expected winning source title to persist as canonical episode title."
     )
+    assert header is not None, "Expected a persisted TEI header."
 
-    job_record = await _get_job_record_for_episode(
-        session_factory,
-        episode.id,
+    provenance = _require_provenance_payload(header.payload)
+    _verify_provenance_metadata(
+        provenance,
+        "producer@example.com",
+        [
+            "s3://bucket/transcript.txt",
+            "s3://bucket/brief.txt",
+        ],
     )
+
+    job_record = await _get_job_record_for_episode(session_factory, episode.id)
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)
 
-    assert len(documents) == 2, (
-        "Expected all input sources to be persisted as source documents."
-    )
-    for doc in documents:
-        assert doc.weight > 0.0, (
-            "Expected persisted source weight to be greater than zero."
-        )
-        assert doc.weight <= 1.0, (
-            "Expected persisted source weight to be capped at one."
-        )
+    _verify_source_documents(documents, expected_count=2)
 
 
 @pytest.mark.asyncio
@@ -155,53 +267,46 @@ async def test_ingest_multi_source_preserves_all_sources(
 
 
 @pytest.mark.asyncio
-async def test_ingest_multi_source_empty_sources_raises(
-    session_factory: typ.Callable[[], AsyncSession],
-    series_profile_for_ingestion: SeriesProfile,
-    ingestion_pipeline: IngestionPipeline,
+@pytest.mark.parametrize(
+    ("raw_sources", "series_slug", "expected_error_pattern"),
+    [
+        (
+            [],
+            None,
+            "At least one raw source",
+        ),
+        (
+            [_make_raw_source()],
+            "wrong-slug",
+            "Series slug mismatch",
+        ),
+    ],
+    ids=["empty_sources", "slug_mismatch"],
+)
+async def test_ingest_multi_source_validation_errors(
+    ingestion_test_context: IngestionTestContext,
+    raw_sources: list,
+    series_slug: str | None,
+    expected_error_pattern: str,
 ) -> None:
-    """Submitting zero raw sources raises ValueError."""
-    profile = series_profile_for_ingestion
+    """Multi-source ingestion validates input and raises ValueError.
 
+    Invalid requests raise validation errors.
+    """
     request = MultiSourceRequest(
-        raw_sources=[],
-        series_slug=profile.slug,
+        raw_sources=raw_sources,
+        series_slug=(
+            series_slug
+            if series_slug is not None
+            else ingestion_test_context.profile.slug
+        ),
         requested_by="test@example.com",
     )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ValueError, match="At least one raw source"):
-            await ingest_multi_source(
-                uow,
-                profile,
-                request,
-                ingestion_pipeline,
-            )
-
-
-@pytest.mark.asyncio
-async def test_ingest_multi_source_slug_mismatch_raises(
-    session_factory: typ.Callable[[], AsyncSession],
-    series_profile_for_ingestion: SeriesProfile,
-    ingestion_pipeline: IngestionPipeline,
-) -> None:
-    """Mismatched series slug raises ValueError."""
-    profile = series_profile_for_ingestion
-
-    request = MultiSourceRequest(
-        raw_sources=[_make_raw_source()],
-        series_slug="wrong-slug",
-        requested_by="test@example.com",
+    await _assert_ingestion_raises(
+        ingestion_test_context,
+        request,
+        expected_error_pattern,
     )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ValueError, match="Series slug mismatch"):
-            await ingest_multi_source(
-                uow,
-                profile,
-                request,
-                ingestion_pipeline,
-            )
 
 
 @pytest.mark.asyncio
@@ -241,6 +346,10 @@ async def test_ingest_multi_source_records_conflict_metadata(
             request,
             ingestion_pipeline,
         )
+        persisted = await uow.episodes.get(episode.id)
+        assert persisted is not None, "Expected persisted canonical episode."
+        header = await uow.tei_headers.get(persisted.tei_header_id)
+        assert header is not None, "Expected persisted TEI header."
 
     job_record = await _get_job_record_for_episode(
         session_factory,
@@ -264,3 +373,12 @@ async def test_ingest_multi_source_records_conflict_metadata(
         assert "resolution_notes" in cr, (
             "Expected conflict metadata to include resolver notes."
         )
+
+    provenance = _require_provenance_payload(header.payload)
+    priorities = provenance["source_priorities"]
+    assert priorities[0]["source_uri"] == "s3://bucket/winner.txt", (
+        "Expected winner source to lead priority ordering."
+    )
+    assert priorities[1]["source_uri"] == "s3://bucket/loser.txt", (
+        "Expected loser source to follow in priority ordering."
+    )

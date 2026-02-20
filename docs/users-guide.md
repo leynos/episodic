@@ -41,7 +41,8 @@ This guide will cover:
   Conflicts between competing sources are resolved using a weighting matrix,
   with all source material retained for audit regardless of whether it was
   preferred or rejected. Weighting coefficients are configurable per series
-  profile.
+  profile. TEI headers automatically capture provenance metadata including
+  source priorities, ingestion timestamps, and reviewer identities.
 
 ### Quality & Compliance
 

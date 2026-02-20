@@ -66,8 +66,10 @@ that align with the system design.
 - [x] 2.2.4. Build the multi-source ingestion service that normalizes inputs,
   applies source weighting heuristics, and resolves conflicts into canonical
   TEI.
-- [ ] 2.2.5. Capture provenance metadata automatically in TEI headers,
-  including source priorities, ingestion timestamps, and reviewer identities.
+- [x] 2.2.5. Capture provenance metadata automatically in TEI headers,
+  including source priorities, ingestion timestamps, and reviewer identities;
+  validated by integration and BDD tests that assert persisted TEI header
+  provenance fields and ordering.
 - [ ] 2.2.6. Define series profile and episode template models, REST endpoints,
   and change history so downstream generators can retrieve structured briefs.
 
