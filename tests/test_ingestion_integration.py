@@ -268,16 +268,14 @@ async def test_ingest_multi_source_preserves_all_sources(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("test_id", "raw_sources", "series_slug", "expected_error_pattern"),
+    ("raw_sources", "series_slug", "expected_error_pattern"),
     [
         (
-            "empty_sources",
             [],
             None,
             "At least one raw source",
         ),
         (
-            "slug_mismatch",
             [_make_raw_source()],
             "wrong-slug",
             "Series slug mismatch",
@@ -287,7 +285,6 @@ async def test_ingest_multi_source_preserves_all_sources(
 )
 async def test_ingest_multi_source_validation_errors(
     ingestion_test_context: IngestionTestContext,
-    test_id: str,
     raw_sources: list,
     series_slug: str | None,
     expected_error_pattern: str,
@@ -296,7 +293,6 @@ async def test_ingest_multi_source_validation_errors(
 
     Invalid requests raise validation errors.
     """
-    _ = test_id
     request = MultiSourceRequest(
         raw_sources=raw_sources,
         series_slug=(
