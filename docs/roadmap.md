@@ -70,15 +70,49 @@ that align with the system design.
   including source priorities, ingestion timestamps, and reviewer identities;
   validated by integration and BDD tests that assert persisted TEI header
   provenance fields and ordering.
-- [ ] 2.2.6. Define series profile and episode template models, REST endpoints,
-  and change history so downstream generators can retrieve structured briefs.
+- [ ] 2.2.6. Define the reusable reference-document model (`ReferenceDocument`,
+  `ReferenceDocumentRevision`, and `ReferenceBinding`) and repository contracts
+  independent of ingestion-job scope, including series-aligned host and guest
+  profile documents. Finish line: approved ER diagram, glossary entries for all
+  three entities, and documented repository plus API contract acceptance
+  criteria.
+- [ ] 2.2.7. Define REST endpoints for reusable reference documents
+  (`ReferenceDocument`, `ReferenceDocumentRevision`, and `ReferenceBinding`)
+  with optimistic locking, change history retrieval, and series-aligned host
+  and guest profile access. Acceptance criteria: published API specification;
+  implemented endpoints for create/get/list/update plus revision-binding
+  workflows; optimistic-locking behaviour validated; change-history retrieval
+  tests passing; and host/guest profile access tests passing for series-aligned
+  documents. Dependencies: 2.2.6 approved model definitions, authn/authz
+  policies, database schema and migrations, migration plan for existing
+  reusable documents, and client SDK contract updates. Sequencing: database
+  schema and migrations -> optimistic-locking semantics -> endpoint
+  implementation -> change-history retrieval -> host/guest profile access
+  paths. Scope: API and repository behaviour only for supported fields and
+  operations, paginated response sizes as defined in the API spec, and no
+  production SLA tuning in this phase.
+- [ ] 2.2.8. Define series profile and episode template models, REST endpoints,
+  and change history, so downstream generators can retrieve structured briefs.
+  Acceptance criteria: documented models, published REST API specification, and
+  versioned change-history format. Dependencies: 2.2.6 approved model
+  definitions; downstream input for 2.2.9 binding resolution.
+- [ ] 2.2.9. Implement reference-binding resolution so ingestion runs, series
+  profiles, and episode templates can reuse pinned document revisions while
+  preserving provenance snapshots in ingestion records, with
+  `effective_from_episode_id` support for revisions that apply from a specific
+  episode onwards. Prerequisite: 2.2.6 model definitions approved. Scope:
+  repository and API behaviour only.
 
 ### 2.3. Exit criteria
 
 - [ ] 2.3.1. Canonical TEI documents persist with full provenance after
   ingesting at least three heterogeneous source types.
-- [ ] 2.3.2. Series profiles and episode templates retrievable via the public
-  API with optimistic locking and history tracking.
+- [ ] 2.3.2. Series profiles, episode templates, and reusable reference
+  documents are retrievable via the public API with optimistic locking and
+  change history, including series-aligned host and guest profiles.
+- [ ] 2.3.3. Ingestion workflows can resolve reusable reference bindings and
+  snapshot pinned revisions into per-job provenance records, honouring
+  `effective_from_episode_id` semantics.
 
 ## 3. Intelligent content generation and QA
 

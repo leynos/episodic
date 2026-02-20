@@ -138,6 +138,12 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   sponsor requirements.
 - Manages episode templates describing segment ordering, timing, and audio bed
   preferences.
+- Maintains reusable reference materials (for example, style guides, character
+  profiles, and research briefs) as versioned documents that can be bound to
+  series and templates.
+- Treats host and guest profiles as series-aligned reference documents: hosts
+  can be absent from specific episodes, guests can recur across episodes, and
+  applicability is controlled by binding rules instead of episode ownership.
 - Provides change history and optimistic locking so editorial teams can iterate
   safely.
 - Supplies templated prompts and metadata to generation and audio pipelines.
@@ -837,9 +843,17 @@ Agentic workflow behaviour is configurable per series profile:
   human-readable titles.
 - `episode_templates` stores segment layouts, prompt scaffolds, and music bed
   preferences linked to series profiles.
+- `reference_documents` stores reusable source materials independently of
+  ingestion jobs, including document kind (for example, style guide,
+  host_profile, and guest_profile) and ownership scope.
+- `reference_document_revisions` stores immutable content versions for each
+  reusable reference document, including hashes and author metadata.
+- `reference_document_bindings` links pinned reference revisions to a target
+  context (series profile, episode template, or ingestion run), with an
+  optional `effective_from_episode_id` anchor for forward-only applicability.
 - `ingestion_jobs` tracks each ingestion run, including status, timestamps, and
   targeted episodes.
-- `source_documents` records ingestion sources, document types, weighting
+- `source_documents` records ingestion-run inputs, document types, weighting
   factors, and original files in object storage.
 - `episodes` holds canonical TEI, generation status, QA verdicts, and approval
   pointers.
@@ -877,11 +891,26 @@ stages. TEI headers are stored as JSONB for structured querying and retain the
 raw XML payload for audit and re-emission. Canonical episodes reference TEI
 headers by identifier, store the canonical TEI XML string, and track both
 workflow status and approval state. Ingestion jobs capture lifecycle status,
-timestamps, and the target episode, while source documents link back to their
+timestamps, and the target episode. In the current implementation,
+`source_documents` are ingestion-bound records that link back to a specific
 ingestion job and the canonical episode they influence. Approval events record
 state transitions with actor metadata and payloads for auditability. Ingestion
 workflows flush pending inserts before recording dependent rows so foreign-key
 relationships remain valid within a single transaction.
+
+Reusable references will be modelled separately from ingestion inputs. A
+`reference_document` will capture stable identity and scope, each
+`reference_document_revision` will store immutable content with version
+metadata, and `reference_document_binding` will pin a chosen revision to a
+consuming context. Host and guest profiles will be represented as
+series-aligned reference documents rather than episode-bound records because
+hosts may skip episodes and guests may appear across multiple episodes. When
+profile guidance changes mid-series, editors will add a new revision and will
+create a binding with `effective_from_episode_id`; that revision will apply
+from the anchor episode onwards until superseded. Ingestion workflows will
+resolve these bindings and will snapshot selected revisions into
+ingestion-bound `source_documents`, preserving reproducible TEI provenance
+while allowing independent document reuse across jobs.
 
 TEI header payloads include an `episodic_provenance` extension with
 `source_priorities`, `ingestion_timestamp`, `reviewer_identities`, and a
@@ -904,6 +933,97 @@ erDiagram
 
 _Figure 7: Canonical content schema relationships._
 
+### Planned reusable reference-document model
+
+The detailed diagram below extends the canonical schema with reusable
+reference-document tables. These tables are planned and not yet implemented in
+the canonical ports and storage repositories. Host and guest profiles are
+represented as series-aligned `REFERENCE_DOCUMENTS` kinds, while
+`effective_from_episode_id` supports revision applicability from a specific
+episode onwards.
+
+```mermaid
+erDiagram
+    SERIES_PROFILES {
+        uuid id
+        string title
+        string ownership_scope
+    }
+
+    EPISODES {
+        uuid id
+        uuid series_profile_id
+        string title
+    }
+
+    EPISODE_TEMPLATES {
+        uuid id
+        uuid series_profile_id
+        string name
+    }
+
+    REFERENCE_DOCUMENTS {
+        uuid id
+        uuid owner_series_profile_id
+        string kind
+        string lifecycle_state
+        jsonb metadata
+    }
+
+    REFERENCE_DOCUMENT_REVISIONS {
+        uuid id
+        uuid reference_document_id
+        string content_hash
+        string author
+        string change_note
+        timestamptz created_at
+    }
+
+    REFERENCE_DOCUMENT_BINDINGS {
+        uuid id
+        uuid reference_document_revision_id
+        uuid series_profile_id
+        uuid episode_template_id
+        uuid ingestion_job_id
+        uuid effective_from_episode_id
+        string target_kind
+    }
+
+    INGESTION_JOBS {
+        uuid id
+        uuid target_episode_id
+        timestamptz started_at
+        timestamptz completed_at
+        string status
+    }
+
+    SOURCE_DOCUMENTS {
+        uuid id
+        uuid ingestion_job_id
+        uuid reference_document_revision_id
+        string document_type
+        float weighting_factor
+        string object_storage_key
+    }
+
+    SERIES_PROFILES ||--o{ EPISODES : has
+    SERIES_PROFILES ||--o{ EPISODE_TEMPLATES : defines
+    SERIES_PROFILES ||--o{ REFERENCE_DOCUMENTS : owns
+
+    REFERENCE_DOCUMENTS ||--o{ REFERENCE_DOCUMENT_REVISIONS : versions
+    REFERENCE_DOCUMENT_REVISIONS ||--o{ REFERENCE_DOCUMENT_BINDINGS : pins
+
+    SERIES_PROFILES ||--o{ REFERENCE_DOCUMENT_BINDINGS : context
+    EPISODE_TEMPLATES ||--o{ REFERENCE_DOCUMENT_BINDINGS : context
+    INGESTION_JOBS ||--o{ REFERENCE_DOCUMENT_BINDINGS : context
+    EPISODES ||--o{ REFERENCE_DOCUMENT_BINDINGS : effective_from
+
+    INGESTION_JOBS ||--o{ SOURCE_DOCUMENTS : records
+    REFERENCE_DOCUMENT_REVISIONS ||--o{ SOURCE_DOCUMENTS : snapshot
+```
+
+_Figure 8: Planned reusable reference material and profile schema._
+
 ### Repository and unit-of-work implementation
 
 The canonical persistence layer follows the hexagonal architecture by defining
@@ -923,6 +1043,18 @@ Repositories translate between frozen domain dataclasses and SQLAlchemy ORM
 records via dedicated mapper functions in
 `episodic/canonical/storage/mappers.py`, keeping the domain layer free of
 persistence imports.
+
+`SourceDocumentRepository` in current code is intentionally ingestion-scoped.
+Its contract exposes `add(document)` and `list_for_job(job_id)`, and
+`SourceDocument` entities include `ingestion_job_id`. This supports one-shot
+ingestion provenance, but not a standalone reusable reference library.
+
+`EpisodeTemplateRepository` and reusable reference repositories are planned
+additions. The planned design introduces at least one repository for
+`ReferenceDocument` persistence and additional repository responsibilities for
+revision history and binding resolution across series, templates, and ingestion
+contexts, including `effective_from_episode_id` resolution when selecting
+host/guest profile revisions for a specific episode.
 
 Integration tests run against an in-process PostgreSQL instance provided by
 py-pglite, with Alembic migrations applied before each test function. The test
@@ -1288,7 +1420,8 @@ explicit control over false-positive filtering.
 - Phase 0 establishes the infrastructure blueprint described in Operational
   Considerations.
 - Phase 1 implements the canonical content platform, ingestion service, and
-  series/template storage defined above.
+  series/template storage plus reusable reference-document storage defined
+  above.
 - Phase 2 delivers the content generation orchestrator with LangGraph-based
   agentic workflows, suspend-and-resume execution patterns, hybrid inference,
   and cost accounting instrumentation alongside integrated QA and brand
