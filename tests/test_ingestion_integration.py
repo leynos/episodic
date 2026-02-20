@@ -119,6 +119,20 @@ async def _assert_ingestion_raises(
             )
 
 
+@pytest.fixture
+def ingestion_test_context(
+    session_factory: typ.Callable[[], AsyncSession],
+    series_profile_for_ingestion: SeriesProfile,
+    ingestion_pipeline: IngestionPipeline,
+) -> IngestionTestContext:
+    """Compose ingestion test fixtures into a context object."""
+    return IngestionTestContext(
+        session_factory=session_factory,
+        profile=series_profile_for_ingestion,
+        ingestion_pipeline=ingestion_pipeline,
+    )
+
+
 @pytest.mark.asyncio
 async def test_ingest_multi_source_end_to_end(
     session_factory: typ.Callable[[], AsyncSession],
@@ -254,23 +268,17 @@ async def test_ingest_multi_source_preserves_all_sources(
 
 @pytest.mark.asyncio
 async def test_ingest_multi_source_empty_sources_raises(
-    session_factory: typ.Callable[[], AsyncSession],
+    ingestion_test_context: IngestionTestContext,
     series_profile_for_ingestion: SeriesProfile,
-    ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Submitting zero raw sources raises ValueError."""
-    context = IngestionTestContext(
-        session_factory=session_factory,
-        profile=series_profile_for_ingestion,
-        ingestion_pipeline=ingestion_pipeline,
-    )
     request = MultiSourceRequest(
         raw_sources=[],
         series_slug=series_profile_for_ingestion.slug,
         requested_by="test@example.com",
     )
     await _assert_ingestion_raises(
-        context,
+        ingestion_test_context,
         request,
         "At least one raw source",
     )
@@ -278,23 +286,16 @@ async def test_ingest_multi_source_empty_sources_raises(
 
 @pytest.mark.asyncio
 async def test_ingest_multi_source_slug_mismatch_raises(
-    session_factory: typ.Callable[[], AsyncSession],
-    series_profile_for_ingestion: SeriesProfile,
-    ingestion_pipeline: IngestionPipeline,
+    ingestion_test_context: IngestionTestContext,
 ) -> None:
     """Mismatched series slug raises ValueError."""
-    context = IngestionTestContext(
-        session_factory=session_factory,
-        profile=series_profile_for_ingestion,
-        ingestion_pipeline=ingestion_pipeline,
-    )
     request = MultiSourceRequest(
         raw_sources=[_make_raw_source()],
         series_slug="wrong-slug",
         requested_by="test@example.com",
     )
     await _assert_ingestion_raises(
-        context,
+        ingestion_test_context,
         request,
         "Series slug mismatch",
     )
