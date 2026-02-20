@@ -267,36 +267,49 @@ async def test_ingest_multi_source_preserves_all_sources(
 
 
 @pytest.mark.asyncio
-async def test_ingest_multi_source_empty_sources_raises(
+@pytest.mark.parametrize(
+    ("test_id", "raw_sources", "series_slug", "expected_error_pattern"),
+    [
+        (
+            "empty_sources",
+            [],
+            None,
+            "At least one raw source",
+        ),
+        (
+            "slug_mismatch",
+            [_make_raw_source()],
+            "wrong-slug",
+            "Series slug mismatch",
+        ),
+    ],
+    ids=["empty_sources", "slug_mismatch"],
+)
+async def test_ingest_multi_source_validation_errors(
     ingestion_test_context: IngestionTestContext,
+    test_id: str,
+    raw_sources: list,
+    series_slug: str | None,
+    expected_error_pattern: str,
 ) -> None:
-    """Submitting zero raw sources raises ValueError."""
+    """Multi-source ingestion validates input and raises ValueError.
+
+    Invalid requests raise validation errors.
+    """
+    _ = test_id
     request = MultiSourceRequest(
-        raw_sources=[],
-        series_slug=ingestion_test_context.profile.slug,
+        raw_sources=raw_sources,
+        series_slug=(
+            series_slug
+            if series_slug is not None
+            else ingestion_test_context.profile.slug
+        ),
         requested_by="test@example.com",
     )
     await _assert_ingestion_raises(
         ingestion_test_context,
         request,
-        "At least one raw source",
-    )
-
-
-@pytest.mark.asyncio
-async def test_ingest_multi_source_slug_mismatch_raises(
-    ingestion_test_context: IngestionTestContext,
-) -> None:
-    """Mismatched series slug raises ValueError."""
-    request = MultiSourceRequest(
-        raw_sources=[_make_raw_source()],
-        series_slug="wrong-slug",
-        requested_by="test@example.com",
-    )
-    await _assert_ingestion_raises(
-        ingestion_test_context,
-        request,
-        "Series slug mismatch",
+        expected_error_pattern,
     )
 
 
