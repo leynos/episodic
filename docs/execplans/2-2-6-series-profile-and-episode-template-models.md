@@ -7,7 +7,7 @@ proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -75,84 +75,103 @@ Success is observable when:
 ## Risks
 
 - Risk: roadmap numbering mismatch could cause completion updates to touch the
-  wrong checklist item.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: reference the exact checklist text when marking done.
+  wrong checklist item. Severity: medium. Likelihood: medium. Mitigation:
+  reference the exact checklist text when marking done.
 
 - Risk: Falcon endpoint scaffolding is not yet present in code, increasing
-  initial implementation surface.
-  Severity: high.
-  Likelihood: high.
-  Mitigation: stage endpoint scaffolding behind focused failing tests and keep
-  wiring minimal.
+  initial implementation surface. Severity: high. Likelihood: high. Mitigation:
+  stage endpoint scaffolding behind focused failing tests and keep wiring
+  minimal.
 
 - Risk: optimistic locking semantics may diverge between storage and API.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: define one version token contract (for example `version` or
-  `etag`) in domain/service first, then assert it in unit, integration, and
-  BDD tests.
+  Severity: high. Likelihood: medium. Mitigation: define one version token
+  contract (for example `version` or `etag`) in domain/service first, then
+  assert it in unit, integration, and BDD tests.
 
 - Risk: dependency on reusable reference-document work may be incomplete at
-  implementation time.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep series profile and template histories self-contained, with
-  explicit extension points for reference bindings.
+  implementation time. Severity: medium. Likelihood: medium. Mitigation: keep
+  series profile and template histories self-contained, with explicit extension
+  points for reference bindings.
 
 ## Progress
 
 - [x] (2026-02-20 20:04Z) Drafted ExecPlan with file-level implementation and
   validation strategy.
-- [ ] Stage A: lock model and API contracts with failing tests.
-- [ ] Stage B: add persistence models, migrations, repositories, and unit of
-  work wiring.
-- [ ] Stage C: add application services for profile/template change history and
-  structured-brief retrieval.
-- [ ] Stage D: add Falcon REST endpoints and behavioural tests.
-- [ ] Stage E: update design, user, developer docs, and mark roadmap entry done.
-- [ ] Stage F: run full quality gates and capture evidence logs.
+- [x] (2026-02-20 22:19Z) Stage A completed: added failing unit/API/BDD tests.
+- [x] (2026-02-20 22:25Z) Stage B completed: added persistence models,
+  repositories, unit-of-work wiring, and Alembic migration.
+- [x] (2026-02-20 22:27Z) Stage C completed: added profile/template domain
+  services with revision-based optimistic locking and structured briefs.
+- [x] (2026-02-20 22:28Z) Stage D completed: added Falcon REST adapters and
+  API test fixtures.
+- [x] (2026-02-20 22:30Z) Stage E completed: updated design, user, developer,
+  and roadmap docs.
+- [x] (2026-02-20 23:34Z) Stage F completed: all required quality gates passed
+  with evidence logs in `/tmp/impl-2-2-8-make-*-final.log`.
 
 ## Surprises & discoveries
 
 - Observation: no MCP resources or templates are available in this environment,
   so project-memory retrieval via `qdrant-find` is unavailable in-session.
   Evidence: `list_mcp_resources` and `list_mcp_resource_templates` both
-  returned empty lists.
-  Impact: this plan is based on repository state and checked-in documentation.
+  returned empty lists. Impact: this plan is based on repository state and
+  checked-in documentation.
 
 - Observation: as of 2026-02-20, `docs/roadmap.md` tracks this capability under
   item `2.2.8`, while this ExecPlan filename was requested as `2-2-6`.
-  Evidence: `docs/roadmap.md` section `2.2 Key activities`.
-  Impact: implementation must mark the matching text entry done rather than
-  relying only on numeric labels.
+  Evidence: `docs/roadmap.md` section `2.2 Key activities`. Impact:
+  implementation must mark the matching text entry done rather than relying
+  only on numeric labels.
+
+- Observation: creating history entries in the same transaction as new profile
+  and template rows requires explicit `flush()` before history insertion in
+  this schema. Evidence: foreign-key violations from `series_profile_history`
+  and `episode_template_history` inserts before parent row flush. Impact:
+  service flow now persists parent row, flushes, then writes history.
 
 ## Decision log
 
 - Decision: keep this ExecPlan aligned to the requested filename
   `docs/execplans/2-2-6-series-profile-and-episode-template-models.md` while
-  grounding completion against the current roadmap text.
-  Rationale: preserves requested artifact naming without risking checklist drift.
-  Date/Author: 2026-02-20 / Codex.
+  grounding completion against the current roadmap text. Rationale: preserves
+  requested artifact naming without risking checklist drift. Date/Author:
+  2026-02-20 / Codex.
 
 - Decision: treat REST endpoints as inbound adapters over domain services, not
-  as direct SQLAlchemy handlers.
-  Rationale: preserves hexagonal boundaries and keeps endpoint tests focused on
-  API contract and orchestration.
+  as direct SQLAlchemy handlers. Rationale: preserves hexagonal boundaries and
+  keeps endpoint tests focused on API contract and orchestration. Date/Author:
+  2026-02-20 / Codex.
+
+- Decision: set `make test` to default `PYTEST_XDIST_WORKERS=1` so py-pglite
+  backed tests run deterministically under xdist without cross-worker process
+  termination. Rationale: py-pglite startup kills existing managed processes,
+  which can terminate sibling workers and produce non-deterministic failures.
   Date/Author: 2026-02-20 / Codex.
 
 ## Outcomes & retrospective
 
-At completion, record:
+Delivered outcomes:
 
-- Implemented model, repository, and endpoint behaviour versus purpose criteria.
-- Any deviations from scope and why they were necessary.
-- Gate results (`check-fmt`, `typecheck`, `lint`, `test`) and notable runtime
-  evidence.
-- Documentation and roadmap completion updates.
-- Follow-on work needed for reference-binding resolution (`roadmap` item 2.2.9
-  text).
+- Implemented `EpisodeTemplate`, `SeriesProfileHistoryEntry`, and
+  `EpisodeTemplateHistoryEntry` domain models.
+- Added repository ports and SQLAlchemy adapters for templates and immutable
+  change-history tables.
+- Added migration
+  `alembic/versions/20260220_000002_add_profile_template_history_schema.py`.
+- Added profile/template services with revision-based optimistic locking and
+  structured-brief assembly.
+- Added Falcon ASGI endpoints in `episodic/api/app.py` for create/get/list/
+  update/history and brief retrieval.
+- Added unit tests, endpoint integration tests, and pytest-bdd behavioural
+  tests for the new API surface.
+- Updated
+  `docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`,
+  `docs/developers-guide.md`, and marked roadmap entry `2.2.8` done.
+
+Residual work:
+
+- Reference-binding resolution and reusable reference-document integration
+  remains in roadmap item `2.2.9`.
 
 ## Context and orientation
 
@@ -388,3 +407,5 @@ domain-first layering is required):
 ## Revision note
 
 - 2026-02-20: Initial draft created for requested implementation planning scope.
+- 2026-02-20: Updated to reflect implementation progress, discovered FK-flush
+  ordering requirement, and completion status.

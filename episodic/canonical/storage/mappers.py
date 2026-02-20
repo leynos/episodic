@@ -18,8 +18,11 @@ import typing as typ
 from episodic.canonical.domain import (
     ApprovalEvent,
     CanonicalEpisode,
+    EpisodeTemplate,
+    EpisodeTemplateHistoryEntry,
     IngestionJob,
     SeriesProfile,
+    SeriesProfileHistoryEntry,
     SourceDocument,
     TeiHeader,
 )
@@ -28,7 +31,10 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.storage.models import (
         ApprovalEventRecord,
         EpisodeRecord,
+        EpisodeTemplateHistoryRecord,
+        EpisodeTemplateRecord,
         IngestionJobRecord,
+        SeriesProfileHistoryRecord,
         SeriesProfileRecord,
         SourceDocumentRecord,
         TeiHeaderRecord,
@@ -118,5 +124,49 @@ def _approval_event_from_record(record: ApprovalEventRecord) -> ApprovalEvent:
         to_state=record.to_state,
         note=record.note,
         payload=record.payload,
+        created_at=record.created_at,
+    )
+
+
+def _episode_template_from_record(record: EpisodeTemplateRecord) -> EpisodeTemplate:
+    """Map an episode template record to a domain entity."""
+    return EpisodeTemplate(
+        id=record.id,
+        series_profile_id=record.series_profile_id,
+        slug=record.slug,
+        title=record.title,
+        description=record.description,
+        structure=record.structure,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _series_profile_history_from_record(
+    record: SeriesProfileHistoryRecord,
+) -> SeriesProfileHistoryEntry:
+    """Map a series profile history record to a domain entity."""
+    return SeriesProfileHistoryEntry(
+        id=record.id,
+        series_profile_id=record.series_profile_id,
+        revision=record.revision,
+        actor=record.actor,
+        note=record.note,
+        snapshot=record.snapshot,
+        created_at=record.created_at,
+    )
+
+
+def _episode_template_history_from_record(
+    record: EpisodeTemplateHistoryRecord,
+) -> EpisodeTemplateHistoryEntry:
+    """Map an episode template history record to a domain entity."""
+    return EpisodeTemplateHistoryEntry(
+        id=record.id,
+        episode_template_id=record.episode_template_id,
+        revision=record.revision,
+        actor=record.actor,
+        note=record.note,
+        snapshot=record.snapshot,
         created_at=record.created_at,
     )

@@ -24,7 +24,10 @@ import sqlalchemy as sa
 from episodic.canonical.ports import (
     ApprovalEventRepository,
     EpisodeRepository,
+    EpisodeTemplateHistoryRepository,
+    EpisodeTemplateRepository,
     IngestionJobRepository,
+    SeriesProfileHistoryRepository,
     SeriesProfileRepository,
     SourceDocumentRepository,
     TeiHeaderRepository,
@@ -33,15 +36,21 @@ from episodic.canonical.ports import (
 from .mappers import (
     _approval_event_from_record,
     _episode_from_record,
+    _episode_template_from_record,
+    _episode_template_history_from_record,
     _ingestion_job_from_record,
     _series_profile_from_record,
+    _series_profile_history_from_record,
     _source_document_from_record,
     _tei_header_from_record,
 )
 from .models import (
     ApprovalEventRecord,
     EpisodeRecord,
+    EpisodeTemplateHistoryRecord,
+    EpisodeTemplateRecord,
     IngestionJobRecord,
+    SeriesProfileHistoryRecord,
     SeriesProfileRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
@@ -56,8 +65,11 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         ApprovalEvent,
         CanonicalEpisode,
+        EpisodeTemplate,
+        EpisodeTemplateHistoryEntry,
         IngestionJob,
         SeriesProfile,
+        SeriesProfileHistoryEntry,
         SourceDocument,
         TeiHeader,
     )
@@ -122,6 +134,28 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
             SeriesProfileRecord,
             SeriesProfileRecord.slug == slug,
             _series_profile_from_record,
+        )
+
+    async def list(self) -> typ.Sequence[SeriesProfile]:
+        """List all series profiles."""
+        result = await self._session.execute(
+            sa.select(SeriesProfileRecord).order_by(SeriesProfileRecord.created_at)
+        )
+        return [_series_profile_from_record(row) for row in result.scalars()]
+
+    async def update(self, profile: SeriesProfile) -> None:
+        """Persist changes to an existing series profile."""
+        await self._session.execute(
+            sa
+            .update(SeriesProfileRecord)
+            .where(SeriesProfileRecord.id == profile.id)
+            .values(
+                slug=profile.slug,
+                title=profile.title,
+                description=profile.description,
+                configuration=profile.configuration,
+                updated_at=profile.updated_at,
+            )
         )
 
 
@@ -329,3 +363,180 @@ class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository
             .order_by(ApprovalEventRecord.created_at)
         )
         return [_approval_event_from_record(row) for row in result.scalars()]
+
+
+class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateRepository):
+    """Persist episode templates using SQLAlchemy."""
+
+    async def add(self, template: EpisodeTemplate) -> None:
+        """Add an episode template record."""
+        self._session.add(
+            EpisodeTemplateRecord(
+                id=template.id,
+                series_profile_id=template.series_profile_id,
+                slug=template.slug,
+                title=template.title,
+                description=template.description,
+                structure=template.structure,
+                created_at=template.created_at,
+                updated_at=template.updated_at,
+            )
+        )
+        return  # noqa: PLR1711
+
+    async def get(self, template_id: uuid.UUID) -> EpisodeTemplate | None:
+        """Fetch an episode template by identifier."""
+        return await self._get_one_or_none(
+            EpisodeTemplateRecord,
+            EpisodeTemplateRecord.id == template_id,
+            _episode_template_from_record,
+        )
+
+    async def list(
+        self,
+        series_profile_id: uuid.UUID | None,
+    ) -> typ.Sequence[EpisodeTemplate]:
+        """List episode templates, optionally by series profile."""
+        query = sa.select(EpisodeTemplateRecord)
+        if series_profile_id is not None:
+            query = query.where(
+                EpisodeTemplateRecord.series_profile_id == series_profile_id
+            )
+        result = await self._session.execute(
+            query.order_by(EpisodeTemplateRecord.created_at)
+        )
+        return [_episode_template_from_record(row) for row in result.scalars()]
+
+    async def get_by_slug(
+        self,
+        series_profile_id: uuid.UUID,
+        slug: str,
+    ) -> EpisodeTemplate | None:
+        """Fetch an episode template by series profile and slug."""
+        return await self._get_one_or_none(
+            EpisodeTemplateRecord,
+            sa.and_(
+                EpisodeTemplateRecord.series_profile_id == series_profile_id,
+                EpisodeTemplateRecord.slug == slug,
+            ),
+            _episode_template_from_record,
+        )
+
+    async def update(self, template: EpisodeTemplate) -> None:
+        """Persist changes to an existing episode template."""
+        await self._session.execute(
+            sa
+            .update(EpisodeTemplateRecord)
+            .where(EpisodeTemplateRecord.id == template.id)
+            .values(
+                slug=template.slug,
+                title=template.title,
+                description=template.description,
+                structure=template.structure,
+                updated_at=template.updated_at,
+            )
+        )
+
+
+class SqlAlchemySeriesProfileHistoryRepository(
+    _RepositoryBase,
+    SeriesProfileHistoryRepository,
+):
+    """Persist series profile history entries using SQLAlchemy."""
+
+    async def add(self, entry: SeriesProfileHistoryEntry) -> None:
+        """Add a profile history entry."""
+        self._session.add(
+            SeriesProfileHistoryRecord(
+                id=entry.id,
+                series_profile_id=entry.series_profile_id,
+                revision=entry.revision,
+                actor=entry.actor,
+                note=entry.note,
+                snapshot=entry.snapshot,
+                created_at=entry.created_at,
+            )
+        )
+        return  # noqa: PLR1711
+
+    async def list_for_profile(
+        self,
+        profile_id: uuid.UUID,
+    ) -> list[SeriesProfileHistoryEntry]:
+        """List history entries for a series profile."""
+        result = await self._session.execute(
+            sa
+            .select(SeriesProfileHistoryRecord)
+            .where(SeriesProfileHistoryRecord.series_profile_id == profile_id)
+            .order_by(SeriesProfileHistoryRecord.revision)
+        )
+        return [_series_profile_history_from_record(row) for row in result.scalars()]
+
+    async def get_latest_for_profile(
+        self,
+        profile_id: uuid.UUID,
+    ) -> SeriesProfileHistoryEntry | None:
+        """Fetch the latest history entry for a series profile."""
+        result = await self._session.execute(
+            sa
+            .select(SeriesProfileHistoryRecord)
+            .where(SeriesProfileHistoryRecord.series_profile_id == profile_id)
+            .order_by(SeriesProfileHistoryRecord.revision.desc())
+            .limit(1)
+        )
+        record = result.scalar_one_or_none()
+        if record is None:
+            return None
+        return _series_profile_history_from_record(record)
+
+
+class SqlAlchemyEpisodeTemplateHistoryRepository(
+    _RepositoryBase,
+    EpisodeTemplateHistoryRepository,
+):
+    """Persist episode template history entries using SQLAlchemy."""
+
+    async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:
+        """Add a template history entry."""
+        self._session.add(
+            EpisodeTemplateHistoryRecord(
+                id=entry.id,
+                episode_template_id=entry.episode_template_id,
+                revision=entry.revision,
+                actor=entry.actor,
+                note=entry.note,
+                snapshot=entry.snapshot,
+                created_at=entry.created_at,
+            )
+        )
+        return  # noqa: PLR1711
+
+    async def list_for_template(
+        self,
+        template_id: uuid.UUID,
+    ) -> list[EpisodeTemplateHistoryEntry]:
+        """List history entries for an episode template."""
+        result = await self._session.execute(
+            sa
+            .select(EpisodeTemplateHistoryRecord)
+            .where(EpisodeTemplateHistoryRecord.episode_template_id == template_id)
+            .order_by(EpisodeTemplateHistoryRecord.revision)
+        )
+        return [_episode_template_history_from_record(row) for row in result.scalars()]
+
+    async def get_latest_for_template(
+        self,
+        template_id: uuid.UUID,
+    ) -> EpisodeTemplateHistoryEntry | None:
+        """Fetch the latest history entry for an episode template."""
+        result = await self._session.execute(
+            sa
+            .select(EpisodeTemplateHistoryRecord)
+            .where(EpisodeTemplateHistoryRecord.episode_template_id == template_id)
+            .order_by(EpisodeTemplateHistoryRecord.revision.desc())
+            .limit(1)
+        )
+        record = result.scalar_one_or_none()
+        if record is None:
+            return None
+        return _episode_template_history_from_record(record)
