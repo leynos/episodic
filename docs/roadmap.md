@@ -79,7 +79,18 @@ that align with the system design.
 - [ ] 2.2.7. Define REST endpoints for reusable reference documents
   (`ReferenceDocument`, `ReferenceDocumentRevision`, and `ReferenceBinding`)
   with optimistic locking, change history retrieval, and series-aligned host
-  and guest profile access.
+  and guest profile access. Acceptance criteria: published API specification;
+  implemented endpoints for create/get/list/update plus revision-binding
+  workflows; optimistic-locking behaviour validated; change-history retrieval
+  tests passing; and host/guest profile access tests passing for series-aligned
+  documents. Dependencies: 2.2.6 approved model definitions, authn/authz
+  policies, database schema and migrations, migration plan for existing
+  reusable documents, and client SDK contract updates. Sequencing: database
+  schema and migrations -> optimistic-locking semantics -> endpoint
+  implementation -> change-history retrieval -> host/guest profile access
+  paths. Scope: API and repository behaviour only for supported fields and
+  operations, paginated response sizes as defined in the API spec, and no
+  production SLA tuning in this phase.
 - [ ] 2.2.8. Define series profile and episode template models, REST endpoints,
   and change history, so downstream generators can retrieve structured briefs.
   Acceptance criteria: documented models, published REST API specification, and
