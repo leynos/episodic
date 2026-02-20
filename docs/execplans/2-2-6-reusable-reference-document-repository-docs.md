@@ -26,7 +26,7 @@ sequences this new capability.
 - This plan covers documentation only. No Python source files, migrations, or
   runtime behaviour may be changed.
 - The design document must describe current behaviour accurately and label the
-  reusable repository as planned capability, not implemented capability.
+  reusable repository as a planned capability, not an implemented capability.
 - The roadmap must preserve phase structure and numbering conventions while
   adding measurable tasks.
 - Documentation must follow `docs/documentation-style-guide.md`, including
@@ -47,10 +47,10 @@ sequences this new capability.
 
 ## Risks
 
-- Risk: readers may confuse ingestion source records with reusable references if
-  both are described as "source documents". Severity: high. Likelihood: medium.
-  Mitigation: add explicit terminology boundaries and a short comparison in the
-  design document.
+- Risk: readers may confuse ingestion source records with reusable references
+  if both are described as "source documents". Severity: high. Likelihood:
+  medium. Mitigation: add explicit terminology boundaries and a short
+  comparison in the design document.
 
 - Risk: roadmap granularity may remain too vague for execution.
   Severity: medium. Likelihood: medium. Mitigation: define roadmap tasks with
@@ -142,7 +142,7 @@ Changes delivered:
     storage.
 - Updated `docs/roadmap.md` to do the following:
   - split reusable reference-document work into explicit Phase 2 activities
-    (2.2.6 through 2.2.8), and
+    (2.2.6 through 2.2.9), and
   - expand Phase 2 exit criteria to require API retrieval of reusable
     references and ingestion snapshot behaviour.
 - Applied a follow-up documentation revision to:
@@ -151,11 +151,10 @@ Changes delivered:
     apply from a given episode onwards, and
   - align roadmap activities and exit criteria with those semantics.
 - Added a detailed reusable-reference ER diagram in
-  `docs/episodic-podcast-generation-system-design.md` with explicit entities,
-  fields, and relationships for:
-  - series, episodes, templates, and ingestion jobs,
-  - host/guest profile representation as `REFERENCE_DOCUMENTS.kind`, and
-  - revision snapshot flow into ingestion-bound `SOURCE_DOCUMENTS`.
+  `docs/episodic-podcast-generation-system-design.md` with explicit entities
+  and relationships: series, episodes, templates, and ingestion jobs;
+  host/guest profile representation as `REFERENCE_DOCUMENTS.kind`; and revision
+  snapshot flow into ingestion-bound `SOURCE_DOCUMENTS`.
 
 Validation evidence:
 
@@ -193,9 +192,9 @@ or reuse workflows across ingestion jobs.
 The design update should sketch a standalone reference library with three
 concepts:
 
-- `ReferenceDocument`: stable identity, owning scope (global or series-level),
-  document kind (style guide, character profile, research brief, and similar),
-  lifecycle state, and metadata.
+- `ReferenceDocument`: stable identity and owning scope
+  (global or series-level). It includes document kind (style guide, character
+  profile, research brief, and similar), lifecycle state, and metadata.
 - `ReferenceDocumentRevision`: immutable versioned content for each document,
   including content hash, author, change note, and created timestamp.
 - `ReferenceBinding`: explicit linkage that applies one or more document
@@ -203,8 +202,9 @@ concepts:
   seed set), preserving reproducibility.
 
 This sketch keeps ingestion provenance intact: ingestion jobs may snapshot the
-selected reference revisions into `source_documents` for TEI provenance, while
-the reusable library remains managed independently.
+selected reference revisions into `source_documents` for Text Encoding
+Initiative (TEI) provenance, while the reusable library remains managed
+independently.
 
 ## Plan of work
 

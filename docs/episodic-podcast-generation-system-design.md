@@ -898,19 +898,19 @@ state transitions with actor metadata and payloads for auditability. Ingestion
 workflows flush pending inserts before recording dependent rows so foreign-key
 relationships remain valid within a single transaction.
 
-Reusable references are modelled separately from ingestion inputs. A
-`reference_document` captures stable identity and scope, each
-`reference_document_revision` stores immutable content with version metadata,
-and `reference_document_binding` pins a chosen revision to a consuming context.
-Host and guest profiles are represented as series-aligned reference documents
-rather than episode-bound records, because hosts may skip episodes and guests
-may appear across multiple episodes. When profile guidance changes mid-series,
-editors add a new revision and create a binding with
-`effective_from_episode_id`; that revision applies from the anchor episode
-onwards until superseded. Ingestion workflows resolve these bindings and
-snapshot selected revisions into ingestion-bound `source_documents`, preserving
-reproducible TEI provenance while allowing independent document reuse across
-jobs.
+Reusable references will be modelled separately from ingestion inputs. A
+`reference_document` will capture stable identity and scope, each
+`reference_document_revision` will store immutable content with version
+metadata, and `reference_document_binding` will pin a chosen revision to a
+consuming context. Host and guest profiles will be represented as
+series-aligned reference documents rather than episode-bound records because
+hosts may skip episodes and guests may appear across multiple episodes. When
+profile guidance changes mid-series, editors will add a new revision and will
+create a binding with `effective_from_episode_id`; that revision will apply
+from the anchor episode onwards until superseded. Ingestion workflows will
+resolve these bindings and will snapshot selected revisions into
+ingestion-bound `source_documents`, preserving reproducible TEI provenance
+while allowing independent document reuse across jobs.
 
 TEI header payloads include an `episodic_provenance` extension with
 `source_priorities`, `ingestion_timestamp`, `reviewer_identities`, and a
@@ -937,10 +937,10 @@ _Figure 7: Canonical content schema relationships._
 
 The detailed diagram below extends the canonical schema with reusable
 reference-document tables. These tables are planned and not yet implemented in
-`episodic/canonical/ports.py` or `episodic/canonical/storage/repositories.py`.
-Host and guest profiles are represented as series-aligned `REFERENCE_DOCUMENTS`
-kinds, while `effective_from_episode_id` supports revision applicability from a
-specific episode onwards.
+the canonical ports and storage repositories. Host and guest profiles are
+represented as series-aligned `REFERENCE_DOCUMENTS` kinds, while
+`effective_from_episode_id` supports revision applicability from a specific
+episode onwards.
 
 ```mermaid
 erDiagram

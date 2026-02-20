@@ -76,12 +76,16 @@ that align with the system design.
   profile documents. Finish line: approved ER diagram, glossary entries for all
   three entities, and documented repository plus API contract acceptance
   criteria.
-- [ ] 2.2.7. Define series profile and episode template models, REST endpoints,
+- [ ] 2.2.7. Define REST endpoints for reusable reference documents
+  (`ReferenceDocument`, `ReferenceDocumentRevision`, and `ReferenceBinding`)
+  with optimistic locking, change history retrieval, and series-aligned host
+  and guest profile access.
+- [ ] 2.2.8. Define series profile and episode template models, REST endpoints,
   and change history, so downstream generators can retrieve structured briefs.
   Acceptance criteria: documented models, published REST API specification, and
   versioned change-history format. Dependencies: 2.2.6 approved model
-  definitions; downstream input for 2.2.8 binding resolution.
-- [ ] 2.2.8. Implement reference-binding resolution so ingestion runs, series
+  definitions; downstream input for 2.2.9 binding resolution.
+- [ ] 2.2.9. Implement reference-binding resolution so ingestion runs, series
   profiles, and episode templates can reuse pinned document revisions while
   preserving provenance snapshots in ingestion records, with
   `effective_from_episode_id` support for revisions that apply from a specific
