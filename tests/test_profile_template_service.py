@@ -7,7 +7,11 @@ import typing as typ
 import pytest
 
 from episodic.canonical.profile_templates import (
+    AuditMetadata,
+    EpisodeTemplateData,
     RevisionConflictError,
+    SeriesProfileCreateData,
+    SeriesProfileData,
     build_series_brief,
     create_episode_template,
     create_series_profile,
@@ -29,12 +33,16 @@ async def test_create_series_profile_creates_initial_history(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         profile, revision = await create_series_profile(
             uow,
-            slug="service-profile",
-            title="Service Profile",
-            description="Initial profile",
-            configuration={"tone": "neutral"},
-            actor="author@example.com",
-            note="Initial version",
+            data=SeriesProfileCreateData(
+                slug="service-profile",
+                title="Service Profile",
+                description="Initial profile",
+                configuration={"tone": "neutral"},
+            ),
+            audit=AuditMetadata(
+                actor="author@example.com",
+                note="Initial version",
+            ),
         )
 
     assert revision == 1, "Expected initial revision to be 1."
@@ -55,12 +63,16 @@ async def test_update_series_profile_rejects_revision_conflicts(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         profile, _ = await create_series_profile(
             uow,
-            slug="profile-conflict",
-            title="Profile Conflict",
-            description="Initial profile",
-            configuration={"tone": "neutral"},
-            actor="author@example.com",
-            note="Initial version",
+            data=SeriesProfileCreateData(
+                slug="profile-conflict",
+                title="Profile Conflict",
+                description="Initial profile",
+                configuration={"tone": "neutral"},
+            ),
+            audit=AuditMetadata(
+                actor="author@example.com",
+                note="Initial version",
+            ),
         )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -69,11 +81,15 @@ async def test_update_series_profile_rejects_revision_conflicts(
                 uow,
                 profile_id=profile.id,
                 expected_revision=5,
-                title="Profile Conflict Updated",
-                description="Changed profile",
-                configuration={"tone": "assertive"},
-                actor="editor@example.com",
-                note="Conflict attempt",
+                data=SeriesProfileData(
+                    title="Profile Conflict Updated",
+                    description="Changed profile",
+                    configuration={"tone": "assertive"},
+                ),
+                audit=AuditMetadata(
+                    actor="editor@example.com",
+                    note="Conflict attempt",
+                ),
             )
 
 
@@ -85,22 +101,28 @@ async def test_create_episode_template_creates_history_and_brief(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         profile, _ = await create_series_profile(
             uow,
-            slug="brief-profile",
-            title="Brief Profile",
-            description="Profile for brief retrieval",
-            configuration={"tone": "calm"},
-            actor="author@example.com",
-            note="Initial profile",
+            data=SeriesProfileCreateData(
+                slug="brief-profile",
+                title="Brief Profile",
+                description="Profile for brief retrieval",
+                configuration={"tone": "calm"},
+            ),
+            audit=AuditMetadata(
+                actor="author@example.com",
+                note="Initial profile",
+            ),
         )
         template, template_revision = await create_episode_template(
             uow,
             series_profile_id=profile.id,
-            slug="weekly-template",
-            title="Weekly Template",
-            description="Template for weekly episodes",
-            structure={"segments": ["intro", "news", "outro"]},
-            actor="editor@example.com",
-            note="Initial template",
+            data=EpisodeTemplateData(
+                slug="weekly-template",
+                title="Weekly Template",
+                description="Template for weekly episodes",
+                structure={"segments": ["intro", "news", "outro"]},
+                actor="editor@example.com",
+                note="Initial template",
+            ),
         )
 
     assert template_revision == 1, "Expected initial template revision to be 1."

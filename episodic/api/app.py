@@ -10,8 +10,13 @@ import falcon
 from falcon import asgi
 
 from episodic.canonical.profile_templates import (
+    AuditMetadata,
     EntityNotFoundError,
+    EpisodeTemplateData,
+    EpisodeTemplateUpdateFields,
     RevisionConflictError,
+    SeriesProfileCreateData,
+    SeriesProfileData,
     build_series_brief,
     create_episode_template,
     create_series_profile,
@@ -56,6 +61,38 @@ def _require_payload_dict(payload: typ.Any) -> dict[str, typ.Any]:  # noqa: ANN4
     return payload
 
 
+def _build_profile_update_kwargs(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
+    """Build update service kwargs for profile updates."""
+    return {
+        "expected_revision": payload["expected_revision"],
+        "data": SeriesProfileData(
+            title=typ.cast("str", payload["title"]),
+            description=typ.cast("str | None", payload.get("description")),
+            configuration=typ.cast("dict[str, typ.Any]", payload["configuration"]),
+        ),
+        "audit": AuditMetadata(
+            actor=typ.cast("str | None", payload.get("actor")),
+            note=typ.cast("str | None", payload.get("note")),
+        ),
+    }
+
+
+def _build_template_update_kwargs(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
+    """Build update service kwargs for template updates."""
+    return {
+        "expected_revision": payload["expected_revision"],
+        "fields": EpisodeTemplateUpdateFields(
+            title=typ.cast("str", payload["title"]),
+            description=typ.cast("str | None", payload.get("description")),
+            structure=typ.cast("dict[str, typ.Any]", payload["structure"]),
+        ),
+        "audit": AuditMetadata(
+            actor=typ.cast("str | None", payload.get("actor")),
+            note=typ.cast("str | None", payload.get("note")),
+        ),
+    }
+
+
 async def _handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917
     uow_factory: UowFactory,
     entity_id: str,
@@ -96,6 +133,7 @@ async def _handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917
     id_field_name: str,
     payload: dict[str, typ.Any],
     required_fields: tuple[str, ...],
+    kwargs_builder: cabc.Callable[[dict[str, typ.Any]], dict[str, typ.Any]],
     service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
     serializer_fn: cabc.Callable[[EntityT, int], dict[str, typ.Any]],
 ) -> tuple[dict[str, typ.Any], str]:
@@ -106,11 +144,8 @@ async def _handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917
             msg = f"Missing required field: {field_name}"
             raise falcon.HTTPBadRequest(description=msg)
 
-    update_kwargs = {field_name: payload[field_name] for field_name in required_fields}
+    update_kwargs = kwargs_builder(payload)
     update_kwargs["expected_revision"] = int(update_kwargs["expected_revision"])
-    update_kwargs["description"] = payload.get("description")
-    update_kwargs["actor"] = payload.get("actor")
-    update_kwargs["note"] = payload.get("note")
 
     try:
         async with uow_factory() as uow:
@@ -220,12 +255,13 @@ class SeriesProfilesResource:
         async with self._uow_factory() as uow:
             profile, revision = await create_series_profile(
                 uow,
-                slug=slug,
-                title=title,
-                description=description,
-                configuration=configuration,
-                actor=actor,
-                note=note,
+                data=SeriesProfileCreateData(
+                    slug=slug,
+                    title=title,
+                    description=description,
+                    configuration=configuration,
+                ),
+                audit=AuditMetadata(actor=actor, note=note),
             )
 
         resp.media = _serialize_series_profile(profile, revision)
@@ -268,6 +304,7 @@ class SeriesProfileResource:
             id_field_name="profile_id",
             payload=payload,
             required_fields=("expected_revision", "title", "configuration"),
+            kwargs_builder=_build_profile_update_kwargs,
             service_fn=update_series_profile,
             serializer_fn=_serialize_series_profile,
         )
@@ -385,12 +422,14 @@ class EpisodeTemplatesResource:
                 template, revision = await create_episode_template(
                     uow,
                     series_profile_id=series_profile_id,
-                    slug=slug,
-                    title=title,
-                    description=description,
-                    structure=structure,
-                    actor=actor,
-                    note=note,
+                    data=EpisodeTemplateData(
+                        slug=slug,
+                        title=title,
+                        description=description,
+                        structure=structure,
+                        actor=actor,
+                        note=note,
+                    ),
                 )
         except EntityNotFoundError as exc:
             raise falcon.HTTPNotFound(description=str(exc)) from exc
@@ -435,6 +474,7 @@ class EpisodeTemplateResource:
             id_field_name="template_id",
             payload=payload,
             required_fields=("expected_revision", "title", "structure"),
+            kwargs_builder=_build_template_update_kwargs,
             service_fn=update_episode_template,
             serializer_fn=_serialize_episode_template,
         )

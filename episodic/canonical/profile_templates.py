@@ -21,6 +21,56 @@ if typ.TYPE_CHECKING:
 type JsonMapping = dict[str, typ.Any]
 
 
+@dc.dataclass(frozen=True, slots=True)
+class AuditMetadata:
+    """Audit metadata for versioned operations."""
+
+    actor: str | None
+    note: str | None
+
+
+@dc.dataclass(frozen=True, slots=True)
+class SeriesProfileData:
+    """Entity data for series profile operations."""
+
+    title: str
+    description: str | None
+    configuration: JsonMapping
+
+
+@dc.dataclass(frozen=True, slots=True)
+class SeriesProfileCreateData(SeriesProfileData):
+    """Entity data for creating a series profile."""
+
+    slug: str
+
+
+@dc.dataclass(frozen=True, slots=True)
+class SeriesProfileUpdateFields(SeriesProfileData):
+    """Entity data for updating a series profile."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class EpisodeTemplateUpdateFields:
+    """Entity data for updating an episode template."""
+
+    title: str
+    description: str | None
+    structure: JsonMapping
+
+
+@dc.dataclass(frozen=True, slots=True)
+class EpisodeTemplateData:
+    """Data for creating or updating an episode template."""
+
+    slug: str
+    title: str
+    description: str | None
+    structure: JsonMapping
+    actor: str | None
+    note: str | None
+
+
 class EntityNotFoundError(LookupError):
     """Raised when an expected profile or template does not exist."""
 
@@ -107,24 +157,20 @@ def _template_snapshot(template: EpisodeTemplate) -> JsonMapping:
     }
 
 
-async def create_series_profile(  # noqa: PLR0913
+async def create_series_profile(
     uow: CanonicalUnitOfWork,
     *,
-    slug: str,
-    title: str,
-    description: str | None,
-    configuration: JsonMapping,
-    actor: str | None,
-    note: str | None,
+    data: SeriesProfileCreateData,
+    audit: AuditMetadata,
 ) -> tuple[SeriesProfile, int]:
     """Create a series profile and initial history entry."""
     now = dt.datetime.now(dt.UTC)
     profile = SeriesProfile(
         id=uuid.uuid4(),
-        slug=slug,
-        title=title,
-        description=description,
-        configuration=configuration,
+        slug=data.slug,
+        title=data.title,
+        description=data.description,
+        configuration=data.configuration,
         created_at=now,
         updated_at=now,
     )
@@ -132,8 +178,8 @@ async def create_series_profile(  # noqa: PLR0913
         id=uuid.uuid4(),
         series_profile_id=profile.id,
         revision=1,
-        actor=actor,
-        note=note,
+        actor=audit.actor,
+        note=audit.note,
         snapshot=_profile_snapshot(profile),
         created_at=now,
     )
@@ -181,11 +227,8 @@ async def update_series_profile(  # noqa: PLR0913
     *,
     profile_id: uuid.UUID,
     expected_revision: int,
-    title: str,
-    description: str | None,
-    configuration: JsonMapping,
-    actor: str | None,
-    note: str | None,
+    data: SeriesProfileData,
+    audit: AuditMetadata,
 ) -> tuple[SeriesProfile, int]:
     """Update a series profile with optimistic-lock revision checks."""
     profile = await uow.series_profiles.get(profile_id)
@@ -205,9 +248,9 @@ async def update_series_profile(  # noqa: PLR0913
     now = dt.datetime.now(dt.UTC)
     updated_profile = dc.replace(
         profile,
-        title=title,
-        description=description,
-        configuration=configuration,
+        title=data.title,
+        description=data.description,
+        configuration=data.configuration,
         updated_at=now,
     )
     next_revision = latest_revision + 1
@@ -215,8 +258,8 @@ async def update_series_profile(  # noqa: PLR0913
         id=uuid.uuid4(),
         series_profile_id=updated_profile.id,
         revision=next_revision,
-        actor=actor,
-        note=note,
+        actor=audit.actor,
+        note=audit.note,
         snapshot=_profile_snapshot(updated_profile),
         created_at=now,
     )
@@ -235,16 +278,11 @@ async def list_series_profile_history(
     return await uow.series_profile_history.list_for_profile(profile_id)
 
 
-async def create_episode_template(  # noqa: PLR0913
+async def create_episode_template(
     uow: CanonicalUnitOfWork,
     *,
     series_profile_id: uuid.UUID,
-    slug: str,
-    title: str,
-    description: str | None,
-    structure: JsonMapping,
-    actor: str | None,
-    note: str | None,
+    data: EpisodeTemplateData,
 ) -> tuple[EpisodeTemplate, int]:
     """Create an episode template and initial history entry."""
     profile = await uow.series_profiles.get(series_profile_id)
@@ -256,10 +294,10 @@ async def create_episode_template(  # noqa: PLR0913
     template = EpisodeTemplate(
         id=uuid.uuid4(),
         series_profile_id=series_profile_id,
-        slug=slug,
-        title=title,
-        description=description,
-        structure=structure,
+        slug=data.slug,
+        title=data.title,
+        description=data.description,
+        structure=data.structure,
         created_at=now,
         updated_at=now,
     )
@@ -267,8 +305,8 @@ async def create_episode_template(  # noqa: PLR0913
         id=uuid.uuid4(),
         episode_template_id=template.id,
         revision=1,
-        actor=actor,
-        note=note,
+        actor=data.actor,
+        note=data.note,
         snapshot=_template_snapshot(template),
         created_at=now,
     )
@@ -318,11 +356,8 @@ async def update_episode_template(  # noqa: PLR0913
     *,
     template_id: uuid.UUID,
     expected_revision: int,
-    title: str,
-    description: str | None,
-    structure: JsonMapping,
-    actor: str | None,
-    note: str | None,
+    fields: EpisodeTemplateUpdateFields,
+    audit: AuditMetadata,
 ) -> tuple[EpisodeTemplate, int]:
     """Update an episode template with optimistic-lock revision checks."""
     template = await uow.episode_templates.get(template_id)
@@ -342,9 +377,9 @@ async def update_episode_template(  # noqa: PLR0913
     now = dt.datetime.now(dt.UTC)
     updated_template = dc.replace(
         template,
-        title=title,
-        description=description,
-        structure=structure,
+        title=fields.title,
+        description=fields.description,
+        structure=fields.structure,
         updated_at=now,
     )
     next_revision = latest_revision + 1
@@ -352,8 +387,8 @@ async def update_episode_template(  # noqa: PLR0913
         id=uuid.uuid4(),
         episode_template_id=updated_template.id,
         revision=next_revision,
-        actor=actor,
-        note=note,
+        actor=audit.actor,
+        note=audit.note,
         snapshot=_template_snapshot(updated_template),
         created_at=now,
     )
