@@ -91,7 +91,7 @@ that align with the system design.
   paths. Scope: API and repository behaviour only for supported fields and
   operations, paginated response sizes as defined in the API spec, and no
   production SLA tuning in this phase.
-- [ ] 2.2.8. Define series profile and episode template models, REST endpoints,
+- [x] 2.2.8. Define series profile and episode template models, REST endpoints,
   and change history, so downstream generators can retrieve structured briefs.
   Acceptance criteria: documented models, published REST API specification, and
   versioned change-history format. Dependencies: 2.2.6 approved model

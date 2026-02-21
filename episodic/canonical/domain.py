@@ -153,3 +153,43 @@ class IngestionRequest:
     tei_xml: str
     sources: list[SourceDocumentInput]
     requested_by: str | None
+
+
+@dc.dataclass(frozen=True)
+class EpisodeTemplate:
+    """Episode template metadata for structured brief generation."""
+
+    id: uuid.UUID
+    series_profile_id: uuid.UUID
+    slug: str
+    title: str
+    description: str | None
+    structure: JsonMapping
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+@dc.dataclass(frozen=True)
+class SeriesProfileHistoryEntry:
+    """Immutable change-history entry for a series profile."""
+
+    id: uuid.UUID
+    series_profile_id: uuid.UUID
+    revision: int
+    actor: str | None
+    note: str | None
+    snapshot: JsonMapping
+    created_at: dt.datetime
+
+
+@dc.dataclass(frozen=True)
+class EpisodeTemplateHistoryEntry:
+    """Immutable change-history entry for an episode template."""
+
+    id: uuid.UUID
+    episode_template_id: uuid.UUID
+    revision: int
+    actor: str | None
+    note: str | None
+    snapshot: JsonMapping
+    created_at: dt.datetime

@@ -76,6 +76,9 @@ Key expectations:
   runtime.
 - Tests run against Postgres semantics, not SQLite.
 - Migrations are applied automatically for each test fixture instance.
+- `make test` uses `PYTEST_XDIST_WORKERS=1` by default to avoid py-pglite
+  cross-worker process termination. Override with
+  `PYTEST_XDIST_WORKERS=<n> make test` when debugging worker-count behaviour.
 - `EPISODIC_TEST_DB=sqlite` disables the py-pglite fixtures (tests that depend
   on them will be skipped).
 - If a non-SQLite backend is requested while py-pglite is unavailable, the
@@ -126,6 +129,43 @@ The `SqlAlchemyUnitOfWork` manages transaction boundaries:
 Database-level constraints (unique slugs, foreign keys, and CHECK constraints
 such as the weight bound on source documents) are enforced by Postgres and
 raise `sqlalchemy.exc.IntegrityError` on violation.
+
+## Series profile and episode template APIs
+
+Series profile and episode template workflows are implemented as a driving
+adapter (`episodic/api/app.py`) over domain services in
+`episodic/canonical/profile_templates.py`.
+
+### Endpoints
+
+- `POST /series-profiles`
+- `GET /series-profiles`
+- `GET /series-profiles/{profile_id}`
+- `PATCH /series-profiles/{profile_id}`
+- `GET /series-profiles/{profile_id}/history`
+- `GET /series-profiles/{profile_id}/brief`
+- `POST /episode-templates`
+- `GET /episode-templates`
+- `GET /episode-templates/{template_id}`
+- `PATCH /episode-templates/{template_id}`
+- `GET /episode-templates/{template_id}/history`
+
+### Optimistic locking and history
+
+- Updates require `expected_revision`.
+- If `expected_revision` does not match the latest persisted revision, the API
+  returns `409 Conflict`.
+- History is append-only and immutable:
+  - `series_profile_history` stores profile snapshots per revision.
+  - `episode_template_history` stores template snapshots per revision.
+
+### Structured brief payloads
+
+`GET /series-profiles/{profile_id}/brief` returns a stable payload containing:
+
+- `series_profile`: profile metadata, configuration, and current revision.
+- `episode_templates`: one template when `template_id` is provided, or all
+  templates for the series profile when omitted.
 
 ## Multi-source ingestion
 

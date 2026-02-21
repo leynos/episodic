@@ -29,8 +29,11 @@ if typ.TYPE_CHECKING:
     from .domain import (
         ApprovalEvent,
         CanonicalEpisode,
+        EpisodeTemplate,
+        EpisodeTemplateHistoryEntry,
         IngestionJob,
         SeriesProfile,
+        SeriesProfileHistoryEntry,
         SourceDocument,
         TeiHeader,
     )
@@ -47,6 +50,10 @@ class SeriesProfileRepository(typ.Protocol):
         Fetch a series profile by identifier.
     get_by_slug(slug)
         Fetch a series profile by slug.
+    list()
+        List all series profiles.
+    update(profile)
+        Persist changes to an existing series profile.
     """
 
     async def add(self, profile: SeriesProfile) -> None:
@@ -90,6 +97,26 @@ class SeriesProfileRepository(typ.Protocol):
         -------
         SeriesProfile | None
             The matching series profile, or ``None`` if no match exists.
+        """
+        ...
+
+    async def list(self) -> typ.Sequence[SeriesProfile]:
+        """List all series profiles.
+
+        Returns
+        -------
+        list[SeriesProfile]
+            Series profiles ordered by ``created_at``.
+        """
+        ...
+
+    async def update(self, profile: SeriesProfile) -> None:
+        """Persist changes to an existing series profile.
+
+        Parameters
+        ----------
+        profile : SeriesProfile
+            Updated series profile entity.
         """
         ...
 
@@ -302,6 +329,81 @@ class ApprovalEventRepository(typ.Protocol):
         ...
 
 
+class EpisodeTemplateRepository(typ.Protocol):
+    """Persistence interface for episode templates."""
+
+    async def add(self, template: EpisodeTemplate) -> None:
+        """Persist an episode template."""
+        ...
+
+    async def get(self, template_id: uuid.UUID) -> EpisodeTemplate | None:
+        """Fetch an episode template by identifier."""
+        ...
+
+    async def list(
+        self,
+        series_profile_id: uuid.UUID | None,
+    ) -> typ.Sequence[EpisodeTemplate]:
+        """List episode templates, optionally filtered by series profile."""
+        ...
+
+    async def get_by_slug(
+        self,
+        series_profile_id: uuid.UUID,
+        slug: str,
+    ) -> EpisodeTemplate | None:
+        """Fetch an episode template by series profile and slug."""
+        ...
+
+    async def update(self, template: EpisodeTemplate) -> None:
+        """Persist changes to an existing episode template."""
+        ...
+
+
+class SeriesProfileHistoryRepository(typ.Protocol):
+    """Persistence interface for series profile history entries."""
+
+    async def add(self, entry: SeriesProfileHistoryEntry) -> None:
+        """Persist a profile history entry."""
+        ...
+
+    async def list_for_profile(
+        self,
+        profile_id: uuid.UUID,
+    ) -> list[SeriesProfileHistoryEntry]:
+        """List history entries for a series profile."""
+        ...
+
+    async def get_latest_for_profile(
+        self,
+        profile_id: uuid.UUID,
+    ) -> SeriesProfileHistoryEntry | None:
+        """Fetch the most recent history entry for a series profile."""
+        ...
+
+
+class EpisodeTemplateHistoryRepository(typ.Protocol):
+    """Persistence interface for episode template history entries."""
+
+    async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:
+        """Persist an episode template history entry."""
+        ...
+
+    async def list_for_template(
+        self,
+        template_id: uuid.UUID,
+    ) -> list[EpisodeTemplateHistoryEntry]:
+        """List history entries for an episode template."""
+        ...
+
+    async def get_latest_for_template(
+        self,
+        template_id: uuid.UUID,
+    ) -> EpisodeTemplateHistoryEntry | None:
+        """Fetch the most recent history entry for an episode template."""
+        ...
+
+
 class CanonicalUnitOfWork(typ.Protocol):
     """Unit-of-work boundary for canonical persistence.
 
@@ -319,6 +421,12 @@ class CanonicalUnitOfWork(typ.Protocol):
         Repository for source document persistence.
     approval_events : ApprovalEventRepository
         Repository for approval event persistence.
+    episode_templates : EpisodeTemplateRepository
+        Repository for episode template persistence.
+    series_profile_history : SeriesProfileHistoryRepository
+        Repository for series profile change history.
+    episode_template_history : EpisodeTemplateHistoryRepository
+        Repository for episode template change history.
     """
 
     series_profiles: SeriesProfileRepository
@@ -327,6 +435,9 @@ class CanonicalUnitOfWork(typ.Protocol):
     ingestion_jobs: IngestionJobRepository
     source_documents: SourceDocumentRepository
     approval_events: ApprovalEventRepository
+    episode_templates: EpisodeTemplateRepository
+    series_profile_history: SeriesProfileHistoryRepository
+    episode_template_history: EpisodeTemplateHistoryRepository
 
     async def __aenter__(self) -> CanonicalUnitOfWork:
         """Enter the unit-of-work context.

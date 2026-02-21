@@ -21,6 +21,7 @@ import uuid
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
+import sqlalchemy.exc as sa_exc
 
 from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
@@ -28,6 +29,7 @@ from episodic.canonical.storage.models import Base
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
+    from falcon import testing
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
     from episodic.canonical.domain import SeriesProfile
@@ -77,9 +79,30 @@ async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
         dsn = config.get_connection_string()
         engine = create_async_engine(dsn, pool_pre_ping=True)
         try:
+            await _wait_for_engine_ready(engine)
             yield engine
         finally:
             await engine.dispose()
+
+
+async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
+    """Wait for py-pglite to accept SQLAlchemy connections.
+
+    Under xdist parallel workers, py-pglite can report startup before the
+    socket is ready for the first connection. This retry keeps tests stable.
+    """
+    max_attempts = 30
+    delay_seconds = 0.1
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.connect() as connection:
+                await connection.execute(sa.text("SELECT 1"))
+        except sa_exc.OperationalError:
+            if attempt == max_attempts:
+                raise
+            await asyncio.sleep(delay_seconds)
+        else:
+            return
 
 
 @contextlib.contextmanager
@@ -223,3 +246,17 @@ async def pglite_session(
     )
     async with session_factory() as session:
         yield session
+
+
+@pytest.fixture
+def canonical_api_client(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> testing.TestClient:
+    """Build a Falcon test client for profile/template REST endpoints."""
+    from falcon import testing
+
+    from episodic.api import create_app
+    from episodic.canonical.storage import SqlAlchemyUnitOfWork
+
+    app = create_app(lambda: SqlAlchemyUnitOfWork(session_factory))
+    return testing.TestClient(app)

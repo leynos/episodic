@@ -18,8 +18,11 @@ import typing as typ
 from episodic.canonical.domain import (
     ApprovalEvent,
     CanonicalEpisode,
+    EpisodeTemplate,
+    EpisodeTemplateHistoryEntry,
     IngestionJob,
     SeriesProfile,
+    SeriesProfileHistoryEntry,
     SourceDocument,
     TeiHeader,
 )
@@ -28,10 +31,35 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.storage.models import (
         ApprovalEventRecord,
         EpisodeRecord,
+        EpisodeTemplateHistoryRecord,
+        EpisodeTemplateRecord,
         IngestionJobRecord,
+        SeriesProfileHistoryRecord,
         SeriesProfileRecord,
         SourceDocumentRecord,
         TeiHeaderRecord,
+    )
+
+
+def _history_entry_from_record(
+    record: SeriesProfileHistoryRecord | EpisodeTemplateHistoryRecord,
+    entity_class: (type[SeriesProfileHistoryEntry] | type[EpisodeTemplateHistoryEntry]),
+    parent_id_field: str,
+) -> SeriesProfileHistoryEntry | EpisodeTemplateHistoryEntry:
+    """Map a history record to a history entry entity."""
+    parent_id = getattr(record, parent_id_field)
+    constructor = typ.cast(
+        "typ.Callable[..., SeriesProfileHistoryEntry | EpisodeTemplateHistoryEntry]",
+        entity_class,
+    )
+    return constructor(
+        id=record.id,
+        revision=record.revision,
+        actor=record.actor,
+        note=record.note,
+        snapshot=record.snapshot,
+        created_at=record.created_at,
+        **{parent_id_field: parent_id},
     )
 
 
@@ -119,4 +147,46 @@ def _approval_event_from_record(record: ApprovalEventRecord) -> ApprovalEvent:
         note=record.note,
         payload=record.payload,
         created_at=record.created_at,
+    )
+
+
+def _episode_template_from_record(record: EpisodeTemplateRecord) -> EpisodeTemplate:
+    """Map an episode template record to a domain entity."""
+    return EpisodeTemplate(
+        id=record.id,
+        series_profile_id=record.series_profile_id,
+        slug=record.slug,
+        title=record.title,
+        description=record.description,
+        structure=record.structure,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _series_profile_history_from_record(
+    record: SeriesProfileHistoryRecord,
+) -> SeriesProfileHistoryEntry:
+    """Map a series profile history record to a domain entity."""
+    return typ.cast(
+        "SeriesProfileHistoryEntry",
+        _history_entry_from_record(
+            record=record,
+            entity_class=SeriesProfileHistoryEntry,
+            parent_id_field="series_profile_id",
+        ),
+    )
+
+
+def _episode_template_history_from_record(
+    record: EpisodeTemplateHistoryRecord,
+) -> EpisodeTemplateHistoryEntry:
+    """Map an episode template history record to a domain entity."""
+    return typ.cast(
+        "EpisodeTemplateHistoryEntry",
+        _history_entry_from_record(
+            record=record,
+            entity_class=EpisodeTemplateHistoryEntry,
+            parent_id_field="episode_template_id",
+        ),
     )

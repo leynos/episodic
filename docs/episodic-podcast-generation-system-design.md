@@ -1029,15 +1029,17 @@ _Figure 8: Planned reusable reference material and profile schema._
 The canonical persistence layer follows the hexagonal architecture by defining
 Protocol-based port interfaces in `episodic/canonical/ports.py` and
 implementing them as async SQLAlchemy adapters in
-`episodic/canonical/storage/`. Six repository protocols
+`episodic/canonical/storage/`. Nine repository protocols
 (`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
 `IngestionJobRepository`, `SourceDocumentRepository`,
-`ApprovalEventRepository`) define the persistence contract, and
-`CanonicalUnitOfWork` aggregates them behind a transactional boundary with
-`commit()`, `flush()`, and `rollback()` methods.
+`ApprovalEventRepository`, `EpisodeTemplateRepository`,
+`SeriesProfileHistoryRepository`, and `EpisodeTemplateHistoryRepository`)
+define the persistence contract, and `CanonicalUnitOfWork` aggregates them
+behind a transactional boundary with `commit()`, `flush()`, and `rollback()`
+methods.
 
 The `SqlAlchemyUnitOfWork` adapter creates a fresh `AsyncSession` on entry,
-instantiates all six repositories bound to that session, and rolls back
+instantiates all repositories bound to that session, and rolls back
 automatically when the context manager exits with an unhandled exception.
 Repositories translate between frozen domain dataclasses and SQLAlchemy ORM
 records via dedicated mapper functions in
@@ -1049,12 +1051,37 @@ Its contract exposes `add(document)` and `list_for_job(job_id)`, and
 `SourceDocument` entities include `ingestion_job_id`. This supports one-shot
 ingestion provenance, but not a standalone reusable reference library.
 
-`EpisodeTemplateRepository` and reusable reference repositories are planned
-additions. The planned design introduces at least one repository for
-`ReferenceDocument` persistence and additional repository responsibilities for
-revision history and binding resolution across series, templates, and ingestion
-contexts, including `effective_from_episode_id` resolution when selecting
-host/guest profile revisions for a specific episode.
+`EpisodeTemplateRepository` is now implemented with immutable
+`episode_template_history` revisions for auditability and optimistic locking.
+Reusable reference repositories remain planned additions. The planned design
+introduces at least one repository for `ReferenceDocument` persistence and
+additional repository responsibilities for revision history and binding
+resolution across series, templates, and ingestion contexts, including
+`effective_from_episode_id` resolution when selecting host/guest profile
+revisions for a specific episode.
+
+### Profile/template REST API specification
+
+The profile/template API is exposed through Falcon ASGI adapters in
+`episodic/api/app.py`.
+
+- `POST /series-profiles` creates a profile and revision `1`.
+- `GET /series-profiles` lists profiles with current revision values.
+- `GET /series-profiles/{profile_id}` returns one profile plus revision.
+- `PATCH /series-profiles/{profile_id}` updates profile data; requires
+  `expected_revision` and returns `409 Conflict` on mismatch.
+- `GET /series-profiles/{profile_id}/history` returns append-only revision
+  history (`revision`, `actor`, `note`, `snapshot`, `created_at`).
+- `GET /series-profiles/{profile_id}/brief` returns a structured brief with the
+  selected series profile and associated episode template payload(s).
+- `POST /episode-templates` creates a template and revision `1`.
+- `GET /episode-templates` lists templates, optionally filtered by
+  `series_profile_id`.
+- `GET /episode-templates/{template_id}` returns one template plus revision.
+- `PATCH /episode-templates/{template_id}` updates template data; requires
+  `expected_revision` and returns `409 Conflict` on mismatch.
+- `GET /episode-templates/{template_id}/history` returns append-only revision
+  history (`revision`, `actor`, `note`, `snapshot`, `created_at`).
 
 Integration tests run against an in-process PostgreSQL instance provided by
 py-pglite, with Alembic migrations applied before each test function. The test
