@@ -114,42 +114,28 @@ def _build_template_update_kwargs(payload: dict[str, typ.Any]) -> dict[str, typ.
     return _build_update_kwargs(payload, "fields", _build_template_fields)
 
 
-def _build_profile_update_request(
-    profile_id: uuid.UUID,
-    update_kwargs: dict[str, typ.Any],
-) -> UpdateSeriesProfileRequest:
-    """Build an update request object for series profiles."""
-    return UpdateSeriesProfileRequest(
-        profile_id=profile_id,
-        expected_revision=typ.cast("int", update_kwargs["expected_revision"]),
-        data=typ.cast("SeriesProfileData", update_kwargs["data"]),
-        audit=typ.cast("AuditMetadata", update_kwargs["audit"]),
-    )
-
-
-def _build_template_update_request(
-    template_id: uuid.UUID,
-    update_kwargs: dict[str, typ.Any],
-) -> UpdateEpisodeTemplateRequest:
-    """Build an update request object for episode templates."""
-    return UpdateEpisodeTemplateRequest(
-        template_id=template_id,
-        expected_revision=typ.cast("int", update_kwargs["expected_revision"]),
-        fields=typ.cast("EpisodeTemplateUpdateFields", update_kwargs["fields"]),
-        audit=typ.cast("AuditMetadata", update_kwargs["audit"]),
-    )
-
-
 def _build_update_request(
     entity_id: uuid.UUID,
     id_field_name: str,
     update_kwargs: dict[str, typ.Any],
 ) -> UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest:
     """Build the correct update request object for an entity type."""
+    expected_revision = typ.cast("int", update_kwargs["expected_revision"])
+    audit = typ.cast("AuditMetadata", update_kwargs["audit"])
     if id_field_name == "profile_id":
-        return _build_profile_update_request(entity_id, update_kwargs)
+        return UpdateSeriesProfileRequest(
+            profile_id=entity_id,
+            expected_revision=expected_revision,
+            data=typ.cast("SeriesProfileData", update_kwargs["data"]),
+            audit=audit,
+        )
     if id_field_name == "template_id":
-        return _build_template_update_request(entity_id, update_kwargs)
+        return UpdateEpisodeTemplateRequest(
+            template_id=entity_id,
+            expected_revision=expected_revision,
+            fields=typ.cast("EpisodeTemplateUpdateFields", update_kwargs["fields"]),
+            audit=audit,
+        )
     msg = f"Unsupported update entity identifier: {id_field_name}"
     raise RuntimeError(msg)
 

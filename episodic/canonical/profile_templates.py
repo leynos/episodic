@@ -105,6 +105,26 @@ class _RevisionedEntry(typ.Protocol):
     revision: int
 
 
+class _VersionedEntity(typ.Protocol):
+    """Protocol for versioned entities with stable identifiers."""
+
+    id: uuid.UUID
+
+
+class _EntityRepository[EntityT: _VersionedEntity](typ.Protocol):
+    """Protocol for repositories that update versioned entities."""
+
+    async def get(self, entity_id: uuid.UUID, /) -> EntityT | None: ...
+
+    async def update(self, entity: EntityT, /) -> None: ...
+
+
+class _HistoryRepository[HistoryT](typ.Protocol):
+    """Protocol for repositories that persist history entries."""
+
+    async def add(self, entry: HistoryT, /) -> None: ...
+
+
 async def _get_latest_revision[HistoryEntryT: _RevisionedEntry](
     fetch_latest: typ.Callable[
         [uuid.UUID],
@@ -144,6 +164,52 @@ def _build_snapshot_base(
         "created_at": created_at.isoformat(),
         "updated_at": updated_at.isoformat(),
     }
+
+
+async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913
+    uow: CanonicalUnitOfWork,
+    *,
+    entity_id: uuid.UUID,
+    expected_revision: int,
+    entity_label: str,
+    entity_repo: _EntityRepository[EntityT],
+    history_repo: _HistoryRepository[HistoryT],
+    fetch_latest: typ.Callable[[uuid.UUID], typ.Awaitable[_RevisionedEntry | None]],
+    history_entry_class: type[HistoryT],
+    entity_id_field: str,
+    update_fields: typ.Callable[[EntityT, dt.datetime], EntityT],
+    create_snapshot: typ.Callable[[EntityT], JsonMapping],
+    audit: AuditMetadata,
+) -> tuple[EntityT, int]:
+    """Update a versioned entity using optimistic locking."""
+    entity = await entity_repo.get(entity_id)
+    if entity is None:
+        msg = f"{entity_label} {entity_id} not found."
+        raise EntityNotFoundError(msg)
+
+    latest_revision = await _get_latest_revision(fetch_latest, entity_id)
+    _check_revision_conflict(
+        expected_revision=expected_revision,
+        latest_revision=latest_revision,
+        entity_label=entity_label,
+    )
+
+    now = dt.datetime.now(dt.UTC)
+    updated_entity = update_fields(entity, now)
+    next_revision = latest_revision + 1
+    history_entry = history_entry_class(
+        id=uuid.uuid4(),
+        revision=next_revision,
+        actor=audit.actor,
+        note=audit.note,
+        snapshot=create_snapshot(updated_entity),
+        created_at=now,
+        **{entity_id_field: updated_entity.id},
+    )
+    await entity_repo.update(updated_entity)
+    await history_repo.add(history_entry)
+    await uow.commit()
+    return updated_entity, next_revision
 
 
 def _profile_snapshot(profile: SeriesProfile) -> JsonMapping:
@@ -248,42 +314,26 @@ async def update_series_profile(
     request: UpdateSeriesProfileRequest,
 ) -> tuple[SeriesProfile, int]:
     """Update a series profile with optimistic-lock revision checks."""
-    profile = await uow.series_profiles.get(request.profile_id)
-    if profile is None:
-        msg = f"Series profile {request.profile_id} not found."
-        raise EntityNotFoundError(msg)
-    latest_revision = await _get_latest_revision(
-        uow.series_profile_history.get_latest_for_profile,
-        request.profile_id,
-    )
-    _check_revision_conflict(
+    return await _update_versioned_entity(
+        uow,
+        entity_id=request.profile_id,
         expected_revision=request.expected_revision,
-        latest_revision=latest_revision,
         entity_label="Series profile",
+        entity_repo=uow.series_profiles,
+        history_repo=uow.series_profile_history,
+        fetch_latest=uow.series_profile_history.get_latest_for_profile,
+        history_entry_class=SeriesProfileHistoryEntry,
+        entity_id_field="series_profile_id",
+        update_fields=lambda entity, now: dc.replace(
+            entity,
+            title=request.data.title,
+            description=request.data.description,
+            configuration=request.data.configuration,
+            updated_at=now,
+        ),
+        create_snapshot=_profile_snapshot,
+        audit=request.audit,
     )
-
-    now = dt.datetime.now(dt.UTC)
-    updated_profile = dc.replace(
-        profile,
-        title=request.data.title,
-        description=request.data.description,
-        configuration=request.data.configuration,
-        updated_at=now,
-    )
-    next_revision = latest_revision + 1
-    history_entry = SeriesProfileHistoryEntry(
-        id=uuid.uuid4(),
-        series_profile_id=updated_profile.id,
-        revision=next_revision,
-        actor=request.audit.actor,
-        note=request.audit.note,
-        snapshot=_profile_snapshot(updated_profile),
-        created_at=now,
-    )
-    await uow.series_profiles.update(updated_profile)
-    await uow.series_profile_history.add(history_entry)
-    await uow.commit()
-    return updated_profile, next_revision
 
 
 async def list_series_profile_history(
@@ -374,42 +424,26 @@ async def update_episode_template(
     request: UpdateEpisodeTemplateRequest,
 ) -> tuple[EpisodeTemplate, int]:
     """Update an episode template with optimistic-lock revision checks."""
-    template = await uow.episode_templates.get(request.template_id)
-    if template is None:
-        msg = f"Episode template {request.template_id} not found."
-        raise EntityNotFoundError(msg)
-    latest_revision = await _get_latest_revision(
-        uow.episode_template_history.get_latest_for_template,
-        request.template_id,
-    )
-    _check_revision_conflict(
+    return await _update_versioned_entity(
+        uow,
+        entity_id=request.template_id,
         expected_revision=request.expected_revision,
-        latest_revision=latest_revision,
         entity_label="Episode template",
+        entity_repo=uow.episode_templates,
+        history_repo=uow.episode_template_history,
+        fetch_latest=uow.episode_template_history.get_latest_for_template,
+        history_entry_class=EpisodeTemplateHistoryEntry,
+        entity_id_field="episode_template_id",
+        update_fields=lambda entity, now: dc.replace(
+            entity,
+            title=request.fields.title,
+            description=request.fields.description,
+            structure=request.fields.structure,
+            updated_at=now,
+        ),
+        create_snapshot=_template_snapshot,
+        audit=request.audit,
     )
-
-    now = dt.datetime.now(dt.UTC)
-    updated_template = dc.replace(
-        template,
-        title=request.fields.title,
-        description=request.fields.description,
-        structure=request.fields.structure,
-        updated_at=now,
-    )
-    next_revision = latest_revision + 1
-    history_entry = EpisodeTemplateHistoryEntry(
-        id=uuid.uuid4(),
-        episode_template_id=updated_template.id,
-        revision=next_revision,
-        actor=request.audit.actor,
-        note=request.audit.note,
-        snapshot=_template_snapshot(updated_template),
-        created_at=now,
-    )
-    await uow.episode_templates.update(updated_template)
-    await uow.episode_template_history.add(history_entry)
-    await uow.commit()
-    return updated_template, next_revision
 
 
 async def list_episode_template_history(
