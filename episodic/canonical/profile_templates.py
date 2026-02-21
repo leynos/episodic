@@ -71,6 +71,26 @@ class EpisodeTemplateData:
     note: str | None
 
 
+@dc.dataclass(frozen=True, slots=True)
+class UpdateSeriesProfileRequest:
+    """Request to update a series profile with optimistic locking."""
+
+    profile_id: uuid.UUID
+    expected_revision: int
+    data: SeriesProfileData
+    audit: AuditMetadata
+
+
+@dc.dataclass(frozen=True, slots=True)
+class UpdateEpisodeTemplateRequest:
+    """Request to update an episode template with optimistic locking."""
+
+    template_id: uuid.UUID
+    expected_revision: int
+    fields: EpisodeTemplateUpdateFields
+    audit: AuditMetadata
+
+
 class EntityNotFoundError(LookupError):
     """Raised when an expected profile or template does not exist."""
 
@@ -222,25 +242,22 @@ async def list_series_profiles(
     return items
 
 
-async def update_series_profile(  # noqa: PLR0913
+async def update_series_profile(
     uow: CanonicalUnitOfWork,
     *,
-    profile_id: uuid.UUID,
-    expected_revision: int,
-    data: SeriesProfileData,
-    audit: AuditMetadata,
+    request: UpdateSeriesProfileRequest,
 ) -> tuple[SeriesProfile, int]:
     """Update a series profile with optimistic-lock revision checks."""
-    profile = await uow.series_profiles.get(profile_id)
+    profile = await uow.series_profiles.get(request.profile_id)
     if profile is None:
-        msg = f"Series profile {profile_id} not found."
+        msg = f"Series profile {request.profile_id} not found."
         raise EntityNotFoundError(msg)
     latest_revision = await _get_latest_revision(
         uow.series_profile_history.get_latest_for_profile,
-        profile_id,
+        request.profile_id,
     )
     _check_revision_conflict(
-        expected_revision=expected_revision,
+        expected_revision=request.expected_revision,
         latest_revision=latest_revision,
         entity_label="Series profile",
     )
@@ -248,9 +265,9 @@ async def update_series_profile(  # noqa: PLR0913
     now = dt.datetime.now(dt.UTC)
     updated_profile = dc.replace(
         profile,
-        title=data.title,
-        description=data.description,
-        configuration=data.configuration,
+        title=request.data.title,
+        description=request.data.description,
+        configuration=request.data.configuration,
         updated_at=now,
     )
     next_revision = latest_revision + 1
@@ -258,8 +275,8 @@ async def update_series_profile(  # noqa: PLR0913
         id=uuid.uuid4(),
         series_profile_id=updated_profile.id,
         revision=next_revision,
-        actor=audit.actor,
-        note=audit.note,
+        actor=request.audit.actor,
+        note=request.audit.note,
         snapshot=_profile_snapshot(updated_profile),
         created_at=now,
     )
@@ -351,25 +368,22 @@ async def list_episode_templates(
     return items
 
 
-async def update_episode_template(  # noqa: PLR0913
+async def update_episode_template(
     uow: CanonicalUnitOfWork,
     *,
-    template_id: uuid.UUID,
-    expected_revision: int,
-    fields: EpisodeTemplateUpdateFields,
-    audit: AuditMetadata,
+    request: UpdateEpisodeTemplateRequest,
 ) -> tuple[EpisodeTemplate, int]:
     """Update an episode template with optimistic-lock revision checks."""
-    template = await uow.episode_templates.get(template_id)
+    template = await uow.episode_templates.get(request.template_id)
     if template is None:
-        msg = f"Episode template {template_id} not found."
+        msg = f"Episode template {request.template_id} not found."
         raise EntityNotFoundError(msg)
     latest_revision = await _get_latest_revision(
         uow.episode_template_history.get_latest_for_template,
-        template_id,
+        request.template_id,
     )
     _check_revision_conflict(
-        expected_revision=expected_revision,
+        expected_revision=request.expected_revision,
         latest_revision=latest_revision,
         entity_label="Episode template",
     )
@@ -377,9 +391,9 @@ async def update_episode_template(  # noqa: PLR0913
     now = dt.datetime.now(dt.UTC)
     updated_template = dc.replace(
         template,
-        title=fields.title,
-        description=fields.description,
-        structure=fields.structure,
+        title=request.fields.title,
+        description=request.fields.description,
+        structure=request.fields.structure,
         updated_at=now,
     )
     next_revision = latest_revision + 1
@@ -387,8 +401,8 @@ async def update_episode_template(  # noqa: PLR0913
         id=uuid.uuid4(),
         episode_template_id=updated_template.id,
         revision=next_revision,
-        actor=audit.actor,
-        note=audit.note,
+        actor=request.audit.actor,
+        note=request.audit.note,
         snapshot=_template_snapshot(updated_template),
         created_at=now,
     )

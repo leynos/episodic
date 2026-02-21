@@ -17,6 +17,8 @@ from episodic.canonical.profile_templates import (
     RevisionConflictError,
     SeriesProfileCreateData,
     SeriesProfileData,
+    UpdateEpisodeTemplateRequest,
+    UpdateSeriesProfileRequest,
     build_series_brief,
     create_episode_template,
     create_series_profile,
@@ -61,35 +63,105 @@ def _require_payload_dict(payload: typ.Any) -> dict[str, typ.Any]:  # noqa: ANN4
     return payload
 
 
+def _build_audit_metadata(payload: dict[str, typ.Any]) -> AuditMetadata:
+    """Extract audit metadata from request payload."""
+    return AuditMetadata(
+        actor=typ.cast("str | None", payload.get("actor")),
+        note=typ.cast("str | None", payload.get("note")),
+    )
+
+
+def _build_update_kwargs[DataT](
+    payload: dict[str, typ.Any],
+    data_key: str,
+    data_builder: cabc.Callable[[dict[str, typ.Any]], DataT],
+) -> dict[str, typ.Any]:
+    """Build generic update service kwargs with optimistic locking."""
+    return {
+        "expected_revision": int(payload["expected_revision"]),
+        data_key: data_builder(payload),
+        "audit": _build_audit_metadata(payload),
+    }
+
+
+def _build_profile_data(payload: dict[str, typ.Any]) -> SeriesProfileData:
+    """Build SeriesProfileData from payload."""
+    return SeriesProfileData(
+        title=typ.cast("str", payload["title"]),
+        description=typ.cast("str | None", payload.get("description")),
+        configuration=typ.cast("dict[str, typ.Any]", payload["configuration"]),
+    )
+
+
+def _build_template_fields(
+    payload: dict[str, typ.Any],
+) -> EpisodeTemplateUpdateFields:
+    """Build EpisodeTemplateUpdateFields from payload."""
+    return EpisodeTemplateUpdateFields(
+        title=typ.cast("str", payload["title"]),
+        description=typ.cast("str | None", payload.get("description")),
+        structure=typ.cast("dict[str, typ.Any]", payload["structure"]),
+    )
+
+
 def _build_profile_update_kwargs(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
     """Build update service kwargs for profile updates."""
-    return {
-        "expected_revision": payload["expected_revision"],
-        "data": SeriesProfileData(
-            title=typ.cast("str", payload["title"]),
-            description=typ.cast("str | None", payload.get("description")),
-            configuration=typ.cast("dict[str, typ.Any]", payload["configuration"]),
-        ),
-        "audit": AuditMetadata(
-            actor=typ.cast("str | None", payload.get("actor")),
-            note=typ.cast("str | None", payload.get("note")),
-        ),
-    }
+    return _build_update_kwargs(payload, "data", _build_profile_data)
 
 
 def _build_template_update_kwargs(payload: dict[str, typ.Any]) -> dict[str, typ.Any]:
     """Build update service kwargs for template updates."""
+    return _build_update_kwargs(payload, "fields", _build_template_fields)
+
+
+def _build_profile_update_request(
+    profile_id: uuid.UUID,
+    update_kwargs: dict[str, typ.Any],
+) -> UpdateSeriesProfileRequest:
+    """Build an update request object for series profiles."""
+    return UpdateSeriesProfileRequest(
+        profile_id=profile_id,
+        expected_revision=typ.cast("int", update_kwargs["expected_revision"]),
+        data=typ.cast("SeriesProfileData", update_kwargs["data"]),
+        audit=typ.cast("AuditMetadata", update_kwargs["audit"]),
+    )
+
+
+def _build_template_update_request(
+    template_id: uuid.UUID,
+    update_kwargs: dict[str, typ.Any],
+) -> UpdateEpisodeTemplateRequest:
+    """Build an update request object for episode templates."""
+    return UpdateEpisodeTemplateRequest(
+        template_id=template_id,
+        expected_revision=typ.cast("int", update_kwargs["expected_revision"]),
+        fields=typ.cast("EpisodeTemplateUpdateFields", update_kwargs["fields"]),
+        audit=typ.cast("AuditMetadata", update_kwargs["audit"]),
+    )
+
+
+def _build_update_request(
+    entity_id: uuid.UUID,
+    id_field_name: str,
+    update_kwargs: dict[str, typ.Any],
+) -> UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest:
+    """Build the correct update request object for an entity type."""
+    if id_field_name == "profile_id":
+        return _build_profile_update_request(entity_id, update_kwargs)
+    if id_field_name == "template_id":
+        return _build_template_update_request(entity_id, update_kwargs)
+    msg = f"Unsupported update entity identifier: {id_field_name}"
+    raise RuntimeError(msg)
+
+
+def _build_update_service_kwargs(
+    entity_id: uuid.UUID,
+    id_field_name: str,
+    update_kwargs: dict[str, typ.Any],
+) -> dict[str, typ.Any]:
+    """Build kwargs for update service invocation."""
     return {
-        "expected_revision": payload["expected_revision"],
-        "fields": EpisodeTemplateUpdateFields(
-            title=typ.cast("str", payload["title"]),
-            description=typ.cast("str | None", payload.get("description")),
-            structure=typ.cast("dict[str, typ.Any]", payload["structure"]),
-        ),
-        "audit": AuditMetadata(
-            actor=typ.cast("str | None", payload.get("actor")),
-            note=typ.cast("str | None", payload.get("note")),
-        ),
+        "request": _build_update_request(entity_id, id_field_name, update_kwargs),
     }
 
 
@@ -144,15 +216,16 @@ async def _handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917
             msg = f"Missing required field: {field_name}"
             raise falcon.HTTPBadRequest(description=msg)
 
-    update_kwargs = kwargs_builder(payload)
-    update_kwargs["expected_revision"] = int(update_kwargs["expected_revision"])
+    update_payload_kwargs = kwargs_builder(payload)
+    update_kwargs = _build_update_service_kwargs(
+        parsed_entity_id,
+        id_field_name,
+        update_payload_kwargs,
+    )
 
     try:
         async with uow_factory() as uow:
-            entity, revision = await service_fn(
-                uow,
-                **{id_field_name: parsed_entity_id, **update_kwargs},
-            )
+            entity, revision = await service_fn(uow, **update_kwargs)
     except EntityNotFoundError as exc:
         raise falcon.HTTPNotFound(description=str(exc)) from exc
     except RevisionConflictError as exc:

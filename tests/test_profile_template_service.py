@@ -12,6 +12,7 @@ from episodic.canonical.profile_templates import (
     RevisionConflictError,
     SeriesProfileCreateData,
     SeriesProfileData,
+    UpdateSeriesProfileRequest,
     build_series_brief,
     create_episode_template,
     create_series_profile,
@@ -79,16 +80,18 @@ async def test_update_series_profile_rejects_revision_conflicts(
         with pytest.raises(RevisionConflictError):
             await update_series_profile(
                 uow,
-                profile_id=profile.id,
-                expected_revision=5,
-                data=SeriesProfileData(
-                    title="Profile Conflict Updated",
-                    description="Changed profile",
-                    configuration={"tone": "assertive"},
-                ),
-                audit=AuditMetadata(
-                    actor="editor@example.com",
-                    note="Conflict attempt",
+                request=UpdateSeriesProfileRequest(
+                    profile_id=profile.id,
+                    expected_revision=5,
+                    data=SeriesProfileData(
+                        title="Profile Conflict Updated",
+                        description="Changed profile",
+                        configuration={"tone": "assertive"},
+                    ),
+                    audit=AuditMetadata(
+                        actor="editor@example.com",
+                        note="Conflict attempt",
+                    ),
                 ),
             )
 
