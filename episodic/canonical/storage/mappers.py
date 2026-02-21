@@ -41,6 +41,28 @@ if typ.TYPE_CHECKING:
     )
 
 
+def _history_entry_from_record(
+    record: SeriesProfileHistoryRecord | EpisodeTemplateHistoryRecord,
+    entity_class: (type[SeriesProfileHistoryEntry] | type[EpisodeTemplateHistoryEntry]),
+    parent_id_field: str,
+) -> SeriesProfileHistoryEntry | EpisodeTemplateHistoryEntry:
+    """Map a history record to a history entry entity."""
+    parent_id = getattr(record, parent_id_field)
+    constructor = typ.cast(
+        "typ.Callable[..., SeriesProfileHistoryEntry | EpisodeTemplateHistoryEntry]",
+        entity_class,
+    )
+    return constructor(
+        id=record.id,
+        revision=record.revision,
+        actor=record.actor,
+        note=record.note,
+        snapshot=record.snapshot,
+        created_at=record.created_at,
+        **{parent_id_field: parent_id},
+    )
+
+
 def _series_profile_from_record(record: SeriesProfileRecord) -> SeriesProfile:
     """Map a series profile record to a domain entity."""
     return SeriesProfile(
@@ -146,14 +168,13 @@ def _series_profile_history_from_record(
     record: SeriesProfileHistoryRecord,
 ) -> SeriesProfileHistoryEntry:
     """Map a series profile history record to a domain entity."""
-    return SeriesProfileHistoryEntry(
-        id=record.id,
-        series_profile_id=record.series_profile_id,
-        revision=record.revision,
-        actor=record.actor,
-        note=record.note,
-        snapshot=record.snapshot,
-        created_at=record.created_at,
+    return typ.cast(
+        "SeriesProfileHistoryEntry",
+        _history_entry_from_record(
+            record=record,
+            entity_class=SeriesProfileHistoryEntry,
+            parent_id_field="series_profile_id",
+        ),
     )
 
 
@@ -161,12 +182,11 @@ def _episode_template_history_from_record(
     record: EpisodeTemplateHistoryRecord,
 ) -> EpisodeTemplateHistoryEntry:
     """Map an episode template history record to a domain entity."""
-    return EpisodeTemplateHistoryEntry(
-        id=record.id,
-        episode_template_id=record.episode_template_id,
-        revision=record.revision,
-        actor=record.actor,
-        note=record.note,
-        snapshot=record.snapshot,
-        created_at=record.created_at,
+    return typ.cast(
+        "EpisodeTemplateHistoryEntry",
+        _history_entry_from_record(
+            record=record,
+            entity_class=EpisodeTemplateHistoryEntry,
+            parent_id_field="episode_template_id",
+        ),
     )

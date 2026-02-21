@@ -8,11 +8,9 @@ if typ.TYPE_CHECKING:
     from falcon import testing
 
 
-def test_profile_and_template_api_round_trip(
-    canonical_api_client: testing.TestClient,
-) -> None:
-    """Create, update, and retrieve profile/template resources."""
-    create_profile_response = canonical_api_client.simulate_post(
+def _create_profile(client: testing.TestClient) -> tuple[str, dict[str, typ.Any]]:
+    """Create a series profile and return its identifier and payload."""
+    create_profile_response = client.simulate_post(
         "/series-profiles",
         json={
             "slug": "api-profile",
@@ -29,8 +27,15 @@ def test_profile_and_template_api_round_trip(
     profile_payload = create_profile_response.json
     profile_id = profile_payload["id"]
     assert profile_payload["revision"] == 1, "Expected revision 1 on create."
+    return profile_id, profile_payload
 
-    create_template_response = canonical_api_client.simulate_post(
+
+def _create_template(
+    client: testing.TestClient,
+    profile_id: str,
+) -> tuple[str, dict[str, typ.Any]]:
+    """Create an episode template and return its identifier and payload."""
+    create_template_response = client.simulate_post(
         "/episode-templates",
         json={
             "series_profile_id": profile_id,
@@ -48,8 +53,12 @@ def test_profile_and_template_api_round_trip(
     template_payload = create_template_response.json
     template_id = template_payload["id"]
     assert template_payload["revision"] == 1, "Expected template revision 1."
+    return template_id, template_payload
 
-    update_profile_response = canonical_api_client.simulate_patch(
+
+def _update_profile(client: testing.TestClient, profile_id: str) -> None:
+    """Update a profile and verify revision increment."""
+    update_profile_response = client.simulate_patch(
         f"/series-profiles/{profile_id}",
         json={
             "expected_revision": 1,
@@ -67,7 +76,13 @@ def test_profile_and_template_api_round_trip(
         "Expected revision to increment on update."
     )
 
-    stale_update_response = canonical_api_client.simulate_patch(
+
+def _verify_stale_update_rejected(
+    client: testing.TestClient,
+    profile_id: str,
+) -> None:
+    """Verify stale profile updates are rejected by optimistic locking."""
+    stale_update_response = client.simulate_patch(
         f"/series-profiles/{profile_id}",
         json={
             "expected_revision": 1,
@@ -82,9 +97,10 @@ def test_profile_and_template_api_round_trip(
         "Expected stale update to return 409."
     )
 
-    history_response = canonical_api_client.simulate_get(
-        f"/series-profiles/{profile_id}/history"
-    )
+
+def _verify_profile_history(client: testing.TestClient, profile_id: str) -> None:
+    """Verify profile history includes both create and update revisions."""
+    history_response = client.simulate_get(f"/series-profiles/{profile_id}/history")
     assert history_response.status_code == 200, (
         "Expected profile history endpoint to return 200."
     )
@@ -92,7 +108,14 @@ def test_profile_and_template_api_round_trip(
         "Expected two profile history revisions."
     )
 
-    brief_response = canonical_api_client.simulate_get(
+
+def _verify_structured_brief(
+    client: testing.TestClient,
+    profile_id: str,
+    template_id: str,
+) -> None:
+    """Verify structured brief returns the expected profile and template."""
+    brief_response = client.simulate_get(
         f"/series-profiles/{profile_id}/brief",
         params={"template_id": template_id},
     )
@@ -105,3 +128,15 @@ def test_profile_and_template_api_round_trip(
     assert brief_response.json["episode_templates"][0]["id"] == template_id, (
         "Expected structured brief to include template."
     )
+
+
+def test_profile_and_template_api_round_trip(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Create, update, and retrieve profile/template resources."""
+    profile_id, _ = _create_profile(canonical_api_client)
+    template_id, _ = _create_template(canonical_api_client, profile_id)
+    _update_profile(canonical_api_client, profile_id)
+    _verify_stale_update_rejected(canonical_api_client, profile_id)
+    _verify_profile_history(canonical_api_client, profile_id)
+    _verify_structured_brief(canonical_api_client, profile_id, template_id)

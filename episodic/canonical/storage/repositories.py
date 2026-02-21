@@ -94,6 +94,54 @@ class _RepositoryBase:
             return None
         return mapper(record)
 
+    async def _add_record[RecordT](self, record: RecordT) -> None:
+        """Add a record to the current SQLAlchemy session."""
+        self._session.add(record)
+
+    async def _list_where[RecordT, DomainT](
+        self,
+        record_type: type[RecordT],
+        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        order_by_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        mapper: cabc.Callable[[RecordT], DomainT],
+    ) -> list[DomainT]:
+        """List mapped records matching a filter and ordering."""
+        result = await self._session.execute(
+            sa.select(record_type).where(where_clause).order_by(order_by_clause)
+        )
+        return [mapper(row) for row in result.scalars()]
+
+    async def _get_latest_where[RecordT, DomainT](
+        self,
+        record_type: type[RecordT],
+        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        order_by_desc_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        mapper: cabc.Callable[[RecordT], DomainT],
+    ) -> DomainT | None:
+        """Return the latest mapped record matching a filter."""
+        result = await self._session.execute(
+            sa
+            .select(record_type)
+            .where(where_clause)
+            .order_by(order_by_desc_clause)
+            .limit(1)
+        )
+        record = result.scalar_one_or_none()
+        if record is None:
+            return None
+        return mapper(record)
+
+    async def _update_where(
+        self,
+        record_type: type[object],
+        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        values: dict[str, typ.Any],
+    ) -> None:
+        """Execute an update statement for matching records."""
+        await self._session.execute(
+            sa.update(record_type).where(where_clause).values(**values)
+        )
+
 
 class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository):
     """Persist series profiles using SQLAlchemy."""
@@ -107,7 +155,7 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
             Series profile domain entity to persist.
 
         """
-        self._session.add(
+        await self._add_record(
             SeriesProfileRecord(
                 id=profile.id,
                 slug=profile.slug,
@@ -118,7 +166,6 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
                 updated_at=profile.updated_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def get(self, profile_id: uuid.UUID) -> SeriesProfile | None:
         """Fetch a series profile by identifier."""
@@ -138,24 +185,25 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
 
     async def list(self) -> typ.Sequence[SeriesProfile]:
         """List all series profiles."""
-        result = await self._session.execute(
-            sa.select(SeriesProfileRecord).order_by(SeriesProfileRecord.created_at)
+        return await self._list_where(
+            SeriesProfileRecord,
+            sa.true(),
+            SeriesProfileRecord.created_at,
+            _series_profile_from_record,
         )
-        return [_series_profile_from_record(row) for row in result.scalars()]
 
     async def update(self, profile: SeriesProfile) -> None:
         """Persist changes to an existing series profile."""
-        await self._session.execute(
-            sa
-            .update(SeriesProfileRecord)
-            .where(SeriesProfileRecord.id == profile.id)
-            .values(
-                slug=profile.slug,
-                title=profile.title,
-                description=profile.description,
-                configuration=profile.configuration,
-                updated_at=profile.updated_at,
-            )
+        await self._update_where(
+            SeriesProfileRecord,
+            SeriesProfileRecord.id == profile.id,
+            {
+                "slug": profile.slug,
+                "title": profile.title,
+                "description": profile.description,
+                "configuration": profile.configuration,
+                "updated_at": profile.updated_at,
+            },
         )
 
 
@@ -171,7 +219,7 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
             Parsed TEI header to persist.
 
         """
-        self._session.add(
+        await self._add_record(
             TeiHeaderRecord(
                 id=header.id,
                 title=header.title,
@@ -181,7 +229,6 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
                 updated_at=header.updated_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def get(self, header_id: uuid.UUID) -> TeiHeader | None:
         """Fetch a TEI header by identifier."""
@@ -204,7 +251,7 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
             Canonical episode domain entity to persist.
 
         """
-        self._session.add(
+        await self._add_record(
             EpisodeRecord(
                 id=episode.id,
                 series_profile_id=episode.series_profile_id,
@@ -217,7 +264,6 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
                 updated_at=episode.updated_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def get(self, episode_id: uuid.UUID) -> CanonicalEpisode | None:
         """Fetch a canonical episode by identifier."""
@@ -240,7 +286,7 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
             Ingestion job domain entity to persist.
 
         """
-        self._session.add(
+        await self._add_record(
             IngestionJobRecord(
                 id=job.id,
                 series_profile_id=job.series_profile_id,
@@ -254,7 +300,6 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
                 updated_at=job.updated_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
         """Fetch an ingestion job by identifier."""
@@ -277,7 +322,7 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
             Source document domain entity to persist.
 
         """
-        self._session.add(
+        await self._add_record(
             SourceDocumentRecord(
                 id=document.id,
                 ingestion_job_id=document.ingestion_job_id,
@@ -290,7 +335,6 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
                 created_at=document.created_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:
         """List source documents for an ingestion job.
@@ -305,13 +349,12 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
         list[SourceDocument]
             Source documents associated with the ingestion job.
         """
-        result = await self._session.execute(
-            sa
-            .select(SourceDocumentRecord)
-            .where(SourceDocumentRecord.ingestion_job_id == job_id)
-            .order_by(SourceDocumentRecord.created_at)
+        return await self._list_where(
+            SourceDocumentRecord,
+            SourceDocumentRecord.ingestion_job_id == job_id,
+            SourceDocumentRecord.created_at,
+            _source_document_from_record,
         )
-        return [_source_document_from_record(row) for row in result.scalars()]
 
 
 class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository):
@@ -326,7 +369,7 @@ class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository
             Approval event domain entity to persist.
 
         """
-        self._session.add(
+        await self._add_record(
             ApprovalEventRecord(
                 id=event.id,
                 episode_id=event.episode_id,
@@ -338,7 +381,6 @@ class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository
                 created_at=event.created_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def list_for_episode(
         self,
@@ -356,13 +398,12 @@ class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository
         list[ApprovalEvent]
             Approval events associated with the episode.
         """
-        result = await self._session.execute(
-            sa
-            .select(ApprovalEventRecord)
-            .where(ApprovalEventRecord.episode_id == episode_id)
-            .order_by(ApprovalEventRecord.created_at)
+        return await self._list_where(
+            ApprovalEventRecord,
+            ApprovalEventRecord.episode_id == episode_id,
+            ApprovalEventRecord.created_at,
+            _approval_event_from_record,
         )
-        return [_approval_event_from_record(row) for row in result.scalars()]
 
 
 class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateRepository):
@@ -370,7 +411,7 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
 
     async def add(self, template: EpisodeTemplate) -> None:
         """Add an episode template record."""
-        self._session.add(
+        await self._add_record(
             EpisodeTemplateRecord(
                 id=template.id,
                 series_profile_id=template.series_profile_id,
@@ -382,7 +423,6 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
                 updated_at=template.updated_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def get(self, template_id: uuid.UUID) -> EpisodeTemplate | None:
         """Fetch an episode template by identifier."""
@@ -397,15 +437,15 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
         series_profile_id: uuid.UUID | None,
     ) -> typ.Sequence[EpisodeTemplate]:
         """List episode templates, optionally by series profile."""
-        query = sa.select(EpisodeTemplateRecord)
+        where_clause: typ.Any = sa.true()
         if series_profile_id is not None:
-            query = query.where(
-                EpisodeTemplateRecord.series_profile_id == series_profile_id
-            )
-        result = await self._session.execute(
-            query.order_by(EpisodeTemplateRecord.created_at)
+            where_clause = EpisodeTemplateRecord.series_profile_id == series_profile_id
+        return await self._list_where(
+            EpisodeTemplateRecord,
+            where_clause,
+            EpisodeTemplateRecord.created_at,
+            _episode_template_from_record,
         )
-        return [_episode_template_from_record(row) for row in result.scalars()]
 
     async def get_by_slug(
         self,
@@ -424,17 +464,16 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
 
     async def update(self, template: EpisodeTemplate) -> None:
         """Persist changes to an existing episode template."""
-        await self._session.execute(
-            sa
-            .update(EpisodeTemplateRecord)
-            .where(EpisodeTemplateRecord.id == template.id)
-            .values(
-                slug=template.slug,
-                title=template.title,
-                description=template.description,
-                structure=template.structure,
-                updated_at=template.updated_at,
-            )
+        await self._update_where(
+            EpisodeTemplateRecord,
+            EpisodeTemplateRecord.id == template.id,
+            {
+                "slug": template.slug,
+                "title": template.title,
+                "description": template.description,
+                "structure": template.structure,
+                "updated_at": template.updated_at,
+            },
         )
 
 
@@ -446,7 +485,7 @@ class SqlAlchemySeriesProfileHistoryRepository(
 
     async def add(self, entry: SeriesProfileHistoryEntry) -> None:
         """Add a profile history entry."""
-        self._session.add(
+        await self._add_record(
             SeriesProfileHistoryRecord(
                 id=entry.id,
                 series_profile_id=entry.series_profile_id,
@@ -457,37 +496,30 @@ class SqlAlchemySeriesProfileHistoryRepository(
                 created_at=entry.created_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def list_for_profile(
         self,
         profile_id: uuid.UUID,
     ) -> list[SeriesProfileHistoryEntry]:
         """List history entries for a series profile."""
-        result = await self._session.execute(
-            sa
-            .select(SeriesProfileHistoryRecord)
-            .where(SeriesProfileHistoryRecord.series_profile_id == profile_id)
-            .order_by(SeriesProfileHistoryRecord.revision)
+        return await self._list_where(
+            SeriesProfileHistoryRecord,
+            SeriesProfileHistoryRecord.series_profile_id == profile_id,
+            SeriesProfileHistoryRecord.revision,
+            _series_profile_history_from_record,
         )
-        return [_series_profile_history_from_record(row) for row in result.scalars()]
 
     async def get_latest_for_profile(
         self,
         profile_id: uuid.UUID,
     ) -> SeriesProfileHistoryEntry | None:
         """Fetch the latest history entry for a series profile."""
-        result = await self._session.execute(
-            sa
-            .select(SeriesProfileHistoryRecord)
-            .where(SeriesProfileHistoryRecord.series_profile_id == profile_id)
-            .order_by(SeriesProfileHistoryRecord.revision.desc())
-            .limit(1)
+        return await self._get_latest_where(
+            SeriesProfileHistoryRecord,
+            SeriesProfileHistoryRecord.series_profile_id == profile_id,
+            SeriesProfileHistoryRecord.revision.desc(),
+            _series_profile_history_from_record,
         )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return _series_profile_history_from_record(record)
 
 
 class SqlAlchemyEpisodeTemplateHistoryRepository(
@@ -498,7 +530,7 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
 
     async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:
         """Add a template history entry."""
-        self._session.add(
+        await self._add_record(
             EpisodeTemplateHistoryRecord(
                 id=entry.id,
                 episode_template_id=entry.episode_template_id,
@@ -509,34 +541,27 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
                 created_at=entry.created_at,
             )
         )
-        return  # noqa: PLR1711
 
     async def list_for_template(
         self,
         template_id: uuid.UUID,
     ) -> list[EpisodeTemplateHistoryEntry]:
         """List history entries for an episode template."""
-        result = await self._session.execute(
-            sa
-            .select(EpisodeTemplateHistoryRecord)
-            .where(EpisodeTemplateHistoryRecord.episode_template_id == template_id)
-            .order_by(EpisodeTemplateHistoryRecord.revision)
+        return await self._list_where(
+            EpisodeTemplateHistoryRecord,
+            EpisodeTemplateHistoryRecord.episode_template_id == template_id,
+            EpisodeTemplateHistoryRecord.revision,
+            _episode_template_history_from_record,
         )
-        return [_episode_template_history_from_record(row) for row in result.scalars()]
 
     async def get_latest_for_template(
         self,
         template_id: uuid.UUID,
     ) -> EpisodeTemplateHistoryEntry | None:
         """Fetch the latest history entry for an episode template."""
-        result = await self._session.execute(
-            sa
-            .select(EpisodeTemplateHistoryRecord)
-            .where(EpisodeTemplateHistoryRecord.episode_template_id == template_id)
-            .order_by(EpisodeTemplateHistoryRecord.revision.desc())
-            .limit(1)
+        return await self._get_latest_where(
+            EpisodeTemplateHistoryRecord,
+            EpisodeTemplateHistoryRecord.episode_template_id == template_id,
+            EpisodeTemplateHistoryRecord.revision.desc(),
+            _episode_template_history_from_record,
         )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return _episode_template_history_from_record(record)

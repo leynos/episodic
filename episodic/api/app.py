@@ -56,6 +56,75 @@ def _require_payload_dict(payload: typ.Any) -> dict[str, typ.Any]:  # noqa: ANN4
     return payload
 
 
+async def _handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917
+    uow_factory: UowFactory,
+    entity_id: str,
+    id_field_name: str,
+    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
+    serializer_fn: cabc.Callable[[EntityT, int], dict[str, typ.Any]],
+) -> tuple[dict[str, typ.Any], str]:
+    """Handle common fetch-by-id endpoint behaviour."""
+    parsed_entity_id = _parse_uuid(entity_id, id_field_name)
+    try:
+        async with uow_factory() as uow:
+            entity, revision = await service_fn(
+                uow,
+                **{id_field_name: parsed_entity_id},
+            )
+    except EntityNotFoundError as exc:
+        raise falcon.HTTPNotFound(description=str(exc)) from exc
+    return serializer_fn(entity, revision), falcon.HTTP_200
+
+
+async def _handle_get_history[EntityT](  # noqa: PLR0913, PLR0917
+    uow_factory: UowFactory,
+    entity_id: str,
+    id_field_name: str,
+    service_fn: cabc.Callable[..., cabc.Awaitable[list[EntityT]]],
+    serializer_fn: cabc.Callable[[EntityT], dict[str, typ.Any]],
+) -> tuple[dict[str, typ.Any], str]:
+    """Handle common history-list endpoint behaviour."""
+    parsed_entity_id = _parse_uuid(entity_id, id_field_name)
+    async with uow_factory() as uow:
+        items = await service_fn(uow, **{id_field_name: parsed_entity_id})
+    return {"items": [serializer_fn(item) for item in items]}, falcon.HTTP_200
+
+
+async def _handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917
+    uow_factory: UowFactory,
+    entity_id: str,
+    id_field_name: str,
+    payload: dict[str, typ.Any],
+    required_fields: tuple[str, ...],
+    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
+    serializer_fn: cabc.Callable[[EntityT, int], dict[str, typ.Any]],
+) -> tuple[dict[str, typ.Any], str]:
+    """Handle common optimistic-lock update endpoint behaviour."""
+    parsed_entity_id = _parse_uuid(entity_id, id_field_name)
+    for field_name in required_fields:
+        if field_name not in payload:
+            msg = f"Missing required field: {field_name}"
+            raise falcon.HTTPBadRequest(description=msg)
+
+    update_kwargs = {field_name: payload[field_name] for field_name in required_fields}
+    update_kwargs["expected_revision"] = int(update_kwargs["expected_revision"])
+    update_kwargs["description"] = payload.get("description")
+    update_kwargs["actor"] = payload.get("actor")
+    update_kwargs["note"] = payload.get("note")
+
+    try:
+        async with uow_factory() as uow:
+            entity, revision = await service_fn(
+                uow,
+                **{id_field_name: parsed_entity_id, **update_kwargs},
+            )
+    except EntityNotFoundError as exc:
+        raise falcon.HTTPNotFound(description=str(exc)) from exc
+    except RevisionConflictError as exc:
+        raise falcon.HTTPConflict(description=str(exc)) from exc
+    return serializer_fn(entity, revision), falcon.HTTP_200
+
+
 def _serialize_series_profile(
     profile: SeriesProfile, revision: int
 ) -> dict[str, typ.Any]:
@@ -176,58 +245,32 @@ class SeriesProfileResource:
         profile_id: str,
     ) -> None:
         """Fetch a series profile."""
-        parsed_profile_id = _parse_uuid(profile_id, "profile_id")
-        try:
-            async with self._uow_factory() as uow:
-                profile, revision = await get_series_profile(
-                    uow,
-                    profile_id=parsed_profile_id,
-                )
-        except EntityNotFoundError as exc:
-            raise falcon.HTTPNotFound(description=str(exc)) from exc
+        del req
+        resp.media, resp.status = await _handle_get_entity(
+            uow_factory=self._uow_factory,
+            entity_id=profile_id,
+            id_field_name="profile_id",
+            service_fn=get_series_profile,
+            serializer_fn=_serialize_series_profile,
+        )
 
-        resp.media = _serialize_series_profile(profile, revision)
-        resp.status = falcon.HTTP_200
-
-    async def on_patch(  # noqa: PLR0914
+    async def on_patch(
         self,
         req: falcon.Request,
         resp: falcon.Response,
         profile_id: str,
     ) -> None:
         """Update a series profile using optimistic locking."""
-        parsed_profile_id = _parse_uuid(profile_id, "profile_id")
         payload = _require_payload_dict(await req.get_media())
-        try:
-            expected_revision = int(payload["expected_revision"])
-            title = typ.cast("str", payload["title"])
-            description = typ.cast("str | None", payload.get("description"))
-            configuration = typ.cast("dict[str, typ.Any]", payload["configuration"])
-            actor = typ.cast("str | None", payload.get("actor"))
-            note = typ.cast("str | None", payload.get("note"))
-        except KeyError as exc:
-            msg = f"Missing required field: {exc.args[0]}"
-            raise falcon.HTTPBadRequest(description=msg) from exc
-
-        try:
-            async with self._uow_factory() as uow:
-                profile, revision = await update_series_profile(
-                    uow,
-                    profile_id=parsed_profile_id,
-                    expected_revision=expected_revision,
-                    title=title,
-                    description=description,
-                    configuration=configuration,
-                    actor=actor,
-                    note=note,
-                )
-        except EntityNotFoundError as exc:
-            raise falcon.HTTPNotFound(description=str(exc)) from exc
-        except RevisionConflictError as exc:
-            raise falcon.HTTPConflict(description=str(exc)) from exc
-
-        resp.media = _serialize_series_profile(profile, revision)
-        resp.status = falcon.HTTP_200
+        resp.media, resp.status = await _handle_update_entity(
+            uow_factory=self._uow_factory,
+            entity_id=profile_id,
+            id_field_name="profile_id",
+            payload=payload,
+            required_fields=("expected_revision", "title", "configuration"),
+            service_fn=update_series_profile,
+            serializer_fn=_serialize_series_profile,
+        )
 
 
 class SeriesProfileHistoryResource:
@@ -243,14 +286,14 @@ class SeriesProfileHistoryResource:
         profile_id: str,
     ) -> None:
         """List series profile history entries."""
-        parsed_profile_id = _parse_uuid(profile_id, "profile_id")
-        async with self._uow_factory() as uow:
-            items = await list_series_profile_history(uow, profile_id=parsed_profile_id)
-
-        resp.media = {
-            "items": [_serialize_series_profile_history_entry(item) for item in items]
-        }
-        resp.status = falcon.HTTP_200
+        del req
+        resp.media, resp.status = await _handle_get_history(
+            uow_factory=self._uow_factory,
+            entity_id=profile_id,
+            id_field_name="profile_id",
+            service_fn=list_series_profile_history,
+            serializer_fn=_serialize_series_profile_history_entry,
+        )
 
 
 class SeriesProfileBriefResource:
@@ -369,58 +412,32 @@ class EpisodeTemplateResource:
         template_id: str,
     ) -> None:
         """Fetch an episode template."""
-        parsed_template_id = _parse_uuid(template_id, "template_id")
-        try:
-            async with self._uow_factory() as uow:
-                template, revision = await get_episode_template(
-                    uow,
-                    template_id=parsed_template_id,
-                )
-        except EntityNotFoundError as exc:
-            raise falcon.HTTPNotFound(description=str(exc)) from exc
+        del req
+        resp.media, resp.status = await _handle_get_entity(
+            uow_factory=self._uow_factory,
+            entity_id=template_id,
+            id_field_name="template_id",
+            service_fn=get_episode_template,
+            serializer_fn=_serialize_episode_template,
+        )
 
-        resp.media = _serialize_episode_template(template, revision)
-        resp.status = falcon.HTTP_200
-
-    async def on_patch(  # noqa: PLR0914
+    async def on_patch(
         self,
         req: falcon.Request,
         resp: falcon.Response,
         template_id: str,
     ) -> None:
         """Update an episode template using optimistic locking."""
-        parsed_template_id = _parse_uuid(template_id, "template_id")
         payload = _require_payload_dict(await req.get_media())
-        try:
-            expected_revision = int(payload["expected_revision"])
-            title = typ.cast("str", payload["title"])
-            description = typ.cast("str | None", payload.get("description"))
-            structure = typ.cast("dict[str, typ.Any]", payload["structure"])
-            actor = typ.cast("str | None", payload.get("actor"))
-            note = typ.cast("str | None", payload.get("note"))
-        except KeyError as exc:
-            msg = f"Missing required field: {exc.args[0]}"
-            raise falcon.HTTPBadRequest(description=msg) from exc
-
-        try:
-            async with self._uow_factory() as uow:
-                template, revision = await update_episode_template(
-                    uow,
-                    template_id=parsed_template_id,
-                    expected_revision=expected_revision,
-                    title=title,
-                    description=description,
-                    structure=structure,
-                    actor=actor,
-                    note=note,
-                )
-        except EntityNotFoundError as exc:
-            raise falcon.HTTPNotFound(description=str(exc)) from exc
-        except RevisionConflictError as exc:
-            raise falcon.HTTPConflict(description=str(exc)) from exc
-
-        resp.media = _serialize_episode_template(template, revision)
-        resp.status = falcon.HTTP_200
+        resp.media, resp.status = await _handle_update_entity(
+            uow_factory=self._uow_factory,
+            entity_id=template_id,
+            id_field_name="template_id",
+            payload=payload,
+            required_fields=("expected_revision", "title", "structure"),
+            service_fn=update_episode_template,
+            serializer_fn=_serialize_episode_template,
+        )
 
 
 class EpisodeTemplateHistoryResource:
@@ -436,17 +453,14 @@ class EpisodeTemplateHistoryResource:
         template_id: str,
     ) -> None:
         """List episode template history entries."""
-        parsed_template_id = _parse_uuid(template_id, "template_id")
-        async with self._uow_factory() as uow:
-            items = await list_episode_template_history(
-                uow,
-                template_id=parsed_template_id,
-            )
-
-        resp.media = {
-            "items": [_serialize_episode_template_history_entry(item) for item in items]
-        }
-        resp.status = falcon.HTTP_200
+        del req
+        resp.media, resp.status = await _handle_get_history(
+            uow_factory=self._uow_factory,
+            entity_id=template_id,
+            id_field_name="template_id",
+            service_fn=list_episode_template_history,
+            serializer_fn=_serialize_episode_template_history_entry,
+        )
 
 
 def create_app(uow_factory: UowFactory) -> asgi.App:

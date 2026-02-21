@@ -21,6 +21,31 @@ class ProfileTemplateApiContext(typ.TypedDict, total=False):
     brief_template_id: str
 
 
+def _make_request_and_assert_status(
+    client: testing.TestClient,
+    method: str,
+    path: str,
+    expected_status: int,
+    *,
+    json: dict[str, typ.Any] | None = None,
+    params: dict[str, typ.Any] | None = None,
+) -> dict[str, typ.Any]:
+    """Send a request, assert status, and return the JSON payload."""
+    method_upper = method.upper()
+    if method_upper == "POST":
+        response = client.simulate_post(path, json=json, params=params)
+    elif method_upper == "PATCH":
+        response = client.simulate_patch(path, json=json, params=params)
+    elif method_upper == "GET":
+        response = client.simulate_get(path, params=params)
+    else:
+        msg = f"Unsupported HTTP method: {method}"
+        raise ValueError(msg)
+
+    assert response.status_code == expected_status
+    return typ.cast("dict[str, typ.Any]", response.json)
+
+
 @scenario(
     "../features/profile_template_api.feature",
     "Editorial team manages profile and template revisions",
@@ -48,8 +73,11 @@ def create_profile(
     context: ProfileTemplateApiContext,
 ) -> None:
     """Create a profile through the API."""
-    response = canonical_api_client.simulate_post(
+    payload = _make_request_and_assert_status(
+        canonical_api_client,
+        "POST",
         "/series-profiles",
+        201,
         json={
             "slug": "bdd-profile",
             "title": "BDD Profile",
@@ -59,8 +87,7 @@ def create_profile(
             "note": "Initial profile",
         },
     )
-    assert response.status_code == 201, "Expected profile creation to return 201."
-    context["profile_id"] = response.json["id"]
+    context["profile_id"] = typ.cast("str", payload["id"])
 
 
 @when("an episode template is created for that profile")
@@ -69,8 +96,11 @@ def create_template(
     context: ProfileTemplateApiContext,
 ) -> None:
     """Create a template through the API."""
-    response = canonical_api_client.simulate_post(
+    payload = _make_request_and_assert_status(
+        canonical_api_client,
+        "POST",
         "/episode-templates",
+        201,
         json={
             "series_profile_id": context["profile_id"],
             "slug": "bdd-template",
@@ -81,8 +111,7 @@ def create_template(
             "note": "Initial template",
         },
     )
-    assert response.status_code == 201, "Expected template creation to return 201."
-    context["template_id"] = response.json["id"]
+    context["template_id"] = typ.cast("str", payload["id"])
 
 
 @when("the series profile is updated with optimistic locking")
@@ -91,8 +120,11 @@ def update_profile(
     context: ProfileTemplateApiContext,
 ) -> None:
     """Update profile using expected revision."""
-    response = canonical_api_client.simulate_patch(
+    payload = _make_request_and_assert_status(
+        canonical_api_client,
+        "PATCH",
         f"/series-profiles/{context['profile_id']}",
+        200,
         json={
             "expected_revision": 1,
             "title": "BDD Profile Updated",
@@ -102,8 +134,7 @@ def update_profile(
             "note": "Update profile",
         },
     )
-    assert response.status_code == 200, "Expected profile update to return 200."
-    assert response.json["revision"] == 2, "Expected revision increment."
+    assert payload["revision"] == 2, "Expected revision increment."
 
 
 @then("the series profile history contains two revisions")
@@ -112,13 +143,13 @@ def assert_history(
     context: ProfileTemplateApiContext,
 ) -> None:
     """Assert profile history revision count."""
-    response = canonical_api_client.simulate_get(
-        f"/series-profiles/{context['profile_id']}/history"
+    payload = _make_request_and_assert_status(
+        canonical_api_client,
+        "GET",
+        f"/series-profiles/{context['profile_id']}/history",
+        200,
     )
-    assert response.status_code == 200, (
-        "Expected profile history response to return 200."
-    )
-    context["history_count"] = len(response.json["items"])
+    context["history_count"] = len(typ.cast("list[object]", payload["items"]))
     assert context["history_count"] == 2, "Expected exactly two revisions."
 
 
@@ -128,16 +159,19 @@ def assert_brief(
     context: ProfileTemplateApiContext,
 ) -> None:
     """Assert structured brief retrieval."""
-    response = canonical_api_client.simulate_get(
+    payload = _make_request_and_assert_status(
+        canonical_api_client,
+        "GET",
         f"/series-profiles/{context['profile_id']}/brief",
+        200,
         params={"template_id": context["template_id"]},
     )
-    assert response.status_code == 200, (
-        "Expected structured brief response to return 200."
+    series_profile = typ.cast("dict[str, typ.Any]", payload["series_profile"])
+    episode_templates = typ.cast(
+        "list[dict[str, typ.Any]]", payload["episode_templates"]
     )
-    payload = response.json
-    context["brief_profile_id"] = payload["series_profile"]["id"]
-    context["brief_template_id"] = payload["episode_templates"][0]["id"]
+    context["brief_profile_id"] = typ.cast("str", series_profile["id"])
+    context["brief_template_id"] = typ.cast("str", episode_templates[0]["id"])
     assert context["brief_profile_id"] == context["profile_id"], (
         "Expected brief to include selected profile."
     )

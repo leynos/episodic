@@ -29,30 +29,81 @@ class RevisionConflictError(ValueError):
     """Raised when optimistic-lock revision preconditions are not met."""
 
 
+class _RevisionedEntry(typ.Protocol):
+    """Protocol for history entries that expose a revision."""
+
+    revision: int
+
+
+async def _get_latest_revision[HistoryEntryT: _RevisionedEntry](
+    fetch_latest: typ.Callable[
+        [uuid.UUID],
+        typ.Awaitable[HistoryEntryT | None],
+    ],
+    entity_id: uuid.UUID,
+) -> int:
+    """Return the latest persisted revision for an entity."""
+    latest = await fetch_latest(entity_id)
+    return 0 if latest is None else latest.revision
+
+
+def _check_revision_conflict(
+    *,
+    expected_revision: int,
+    latest_revision: int,
+    entity_label: str,
+) -> None:
+    """Raise when optimistic-lock revisions do not match."""
+    if expected_revision != latest_revision:
+        msg = (
+            f"{entity_label} revision conflict: expected "
+            f"{expected_revision}, found {latest_revision}."
+        )
+        raise RevisionConflictError(msg)
+
+
+def _build_snapshot_base(
+    *,
+    entity_id: uuid.UUID,
+    created_at: dt.datetime,
+    updated_at: dt.datetime,
+) -> JsonMapping:
+    """Build shared snapshot fields."""
+    return {
+        "id": str(entity_id),
+        "created_at": created_at.isoformat(),
+        "updated_at": updated_at.isoformat(),
+    }
+
+
 def _profile_snapshot(profile: SeriesProfile) -> JsonMapping:
     """Return a stable JSON snapshot for profile history."""
     return {
-        "id": str(profile.id),
+        **_build_snapshot_base(
+            entity_id=profile.id,
+            created_at=profile.created_at,
+            updated_at=profile.updated_at,
+        ),
         "slug": profile.slug,
         "title": profile.title,
         "description": profile.description,
         "configuration": profile.configuration,
-        "created_at": profile.created_at.isoformat(),
-        "updated_at": profile.updated_at.isoformat(),
     }
 
 
 def _template_snapshot(template: EpisodeTemplate) -> JsonMapping:
     """Return a stable JSON snapshot for template history."""
     return {
-        "id": str(template.id),
+        **_build_snapshot_base(
+            entity_id=template.id,
+            created_at=template.created_at,
+            updated_at=template.updated_at,
+        ),
         "series_profile_id": str(template.series_profile_id),
         "slug": template.slug,
         "title": template.title,
         "description": template.description,
         "structure": template.structure,
-        "created_at": template.created_at.isoformat(),
-        "updated_at": template.updated_at.isoformat(),
     }
 
 
@@ -103,8 +154,10 @@ async def get_series_profile(
     if profile is None:
         msg = f"Series profile {profile_id} not found."
         raise EntityNotFoundError(msg)
-    latest = await uow.series_profile_history.get_latest_for_profile(profile_id)
-    revision = 0 if latest is None else latest.revision
+    revision = await _get_latest_revision(
+        uow.series_profile_history.get_latest_for_profile,
+        profile_id,
+    )
     return profile, revision
 
 
@@ -115,8 +168,10 @@ async def list_series_profiles(
     profiles = await uow.series_profiles.list()
     items: list[tuple[SeriesProfile, int]] = []
     for profile in profiles:
-        latest = await uow.series_profile_history.get_latest_for_profile(profile.id)
-        revision = 0 if latest is None else latest.revision
+        revision = await _get_latest_revision(
+            uow.series_profile_history.get_latest_for_profile,
+            profile.id,
+        )
         items.append((profile, revision))
     return items
 
@@ -137,14 +192,15 @@ async def update_series_profile(  # noqa: PLR0913
     if profile is None:
         msg = f"Series profile {profile_id} not found."
         raise EntityNotFoundError(msg)
-    latest = await uow.series_profile_history.get_latest_for_profile(profile_id)
-    latest_revision = 0 if latest is None else latest.revision
-    if expected_revision != latest_revision:
-        msg = (
-            "Series profile revision conflict: expected "
-            f"{expected_revision}, found {latest_revision}."
-        )
-        raise RevisionConflictError(msg)
+    latest_revision = await _get_latest_revision(
+        uow.series_profile_history.get_latest_for_profile,
+        profile_id,
+    )
+    _check_revision_conflict(
+        expected_revision=expected_revision,
+        latest_revision=latest_revision,
+        entity_label="Series profile",
+    )
 
     now = dt.datetime.now(dt.UTC)
     updated_profile = dc.replace(
@@ -233,8 +289,10 @@ async def get_episode_template(
     if template is None:
         msg = f"Episode template {template_id} not found."
         raise EntityNotFoundError(msg)
-    latest = await uow.episode_template_history.get_latest_for_template(template_id)
-    revision = 0 if latest is None else latest.revision
+    revision = await _get_latest_revision(
+        uow.episode_template_history.get_latest_for_template,
+        template_id,
+    )
     return template, revision
 
 
@@ -247,8 +305,10 @@ async def list_episode_templates(
     templates = await uow.episode_templates.list(series_profile_id)
     items: list[tuple[EpisodeTemplate, int]] = []
     for template in templates:
-        latest = await uow.episode_template_history.get_latest_for_template(template.id)
-        revision = 0 if latest is None else latest.revision
+        revision = await _get_latest_revision(
+            uow.episode_template_history.get_latest_for_template,
+            template.id,
+        )
         items.append((template, revision))
     return items
 
@@ -269,14 +329,15 @@ async def update_episode_template(  # noqa: PLR0913
     if template is None:
         msg = f"Episode template {template_id} not found."
         raise EntityNotFoundError(msg)
-    latest = await uow.episode_template_history.get_latest_for_template(template_id)
-    latest_revision = 0 if latest is None else latest.revision
-    if expected_revision != latest_revision:
-        msg = (
-            "Episode template revision conflict: expected "
-            f"{expected_revision}, found {latest_revision}."
-        )
-        raise RevisionConflictError(msg)
+    latest_revision = await _get_latest_revision(
+        uow.episode_template_history.get_latest_for_template,
+        template_id,
+    )
+    _check_revision_conflict(
+        expected_revision=expected_revision,
+        latest_revision=latest_revision,
+        entity_label="Episode template",
+    )
 
     now = dt.datetime.now(dt.UTC)
     updated_template = dc.replace(
