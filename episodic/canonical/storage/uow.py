@@ -91,10 +91,10 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         self.approval_events = SqlAlchemyApprovalEventRepository(self._session)
         self.episode_templates = SqlAlchemyEpisodeTemplateRepository(self._session)
         self.series_profile_history = SqlAlchemySeriesProfileHistoryRepository(
-            self._session
+            session=self._session
         )
         self.episode_template_history = SqlAlchemyEpisodeTemplateHistoryRepository(
-            self._session
+            session=self._session
         )
         return self
 

@@ -18,9 +18,14 @@ from __future__ import annotations
 
 import dataclasses as dc
 import typing as typ
+from typing import Generic, TypeVar  # noqa: ICN003
 
 import sqlalchemy as sa
 
+from episodic.canonical.domain import (
+    EpisodeTemplateHistoryEntry,
+    SeriesProfileHistoryEntry,
+)
 from episodic.canonical.ports import (
     ApprovalEventRepository,
     EpisodeRepository,
@@ -66,13 +71,14 @@ if typ.TYPE_CHECKING:
         ApprovalEvent,
         CanonicalEpisode,
         EpisodeTemplate,
-        EpisodeTemplateHistoryEntry,
         IngestionJob,
         SeriesProfile,
-        SeriesProfileHistoryEntry,
         SourceDocument,
         TeiHeader,
     )
+
+HistoryEntryT = TypeVar("HistoryEntryT")
+HistoryRecordT = TypeVar("HistoryRecordT")
 
 
 @dc.dataclass(slots=True)
@@ -140,6 +146,58 @@ class _RepositoryBase:
         """Execute an update statement for matching records."""
         await self._session.execute(
             sa.update(record_type).where(where_clause).values(**values)
+        )
+
+
+class _HistoryRepositoryBase(
+    _RepositoryBase,
+    Generic[HistoryEntryT, HistoryRecordT],  # noqa: UP046
+):
+    """Shared implementation for history repositories."""
+
+    def __init__(  # noqa: PLR0913, PLR0917
+        self,
+        session: AsyncSession,
+        record_type: type[HistoryRecordT],
+        parent_id_field: str,
+        mapper: typ.Callable[[HistoryRecordT], HistoryEntryT],
+        record_builder: typ.Callable[[HistoryEntryT], HistoryRecordT],
+    ) -> None:
+        super().__init__(session)
+        self._record_type = record_type
+        self._parent_id_field = parent_id_field
+        self._mapper = mapper
+        self._record_builder = record_builder
+
+    async def _add_history_entry(self, entry: HistoryEntryT) -> None:
+        """Persist a history entry record."""
+        await self._add_record(self._record_builder(entry))
+
+    async def _list_for_parent(self, parent_id: uuid.UUID) -> list[HistoryEntryT]:
+        """List history entries for a parent entity."""
+        parent_field = getattr(self._record_type, self._parent_id_field)
+        order_by_field = "revision"
+        revision_field = getattr(self._record_type, order_by_field)
+        return await self._list_where(
+            self._record_type,
+            parent_field == parent_id,
+            revision_field,
+            self._mapper,
+        )
+
+    async def _get_latest_for_parent(
+        self,
+        parent_id: uuid.UUID,
+    ) -> HistoryEntryT | None:
+        """Fetch the latest history entry for a parent entity."""
+        parent_field = getattr(self._record_type, self._parent_id_field)
+        order_by_field = "revision"
+        revision_field = getattr(self._record_type, order_by_field)
+        return await self._get_latest_where(
+            self._record_type,
+            parent_field == parent_id,
+            revision_field.desc(),
+            self._mapper,
         )
 
 
@@ -478,15 +536,18 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
 
 
 class SqlAlchemySeriesProfileHistoryRepository(
-    _RepositoryBase,
+    _HistoryRepositoryBase[SeriesProfileHistoryEntry, SeriesProfileHistoryRecord],
     SeriesProfileHistoryRepository,
 ):
     """Persist series profile history entries using SQLAlchemy."""
 
-    async def add(self, entry: SeriesProfileHistoryEntry) -> None:
-        """Add a profile history entry."""
-        await self._add_record(
-            SeriesProfileHistoryRecord(
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(
+            session=session,
+            record_type=SeriesProfileHistoryRecord,
+            parent_id_field="series_profile_id",
+            mapper=_series_profile_history_from_record,
+            record_builder=lambda entry: SeriesProfileHistoryRecord(
                 id=entry.id,
                 series_profile_id=entry.series_profile_id,
                 revision=entry.revision,
@@ -494,44 +555,44 @@ class SqlAlchemySeriesProfileHistoryRepository(
                 note=entry.note,
                 snapshot=entry.snapshot,
                 created_at=entry.created_at,
-            )
+            ),
         )
+
+    async def add(self, entry: SeriesProfileHistoryEntry) -> None:
+        """Add a profile history entry."""
+        await self._add_history_entry(entry)
 
     async def list_for_profile(
         self,
         profile_id: uuid.UUID,
     ) -> list[SeriesProfileHistoryEntry]:
         """List history entries for a series profile."""
-        return await self._list_where(
-            SeriesProfileHistoryRecord,
-            SeriesProfileHistoryRecord.series_profile_id == profile_id,
-            SeriesProfileHistoryRecord.revision,
-            _series_profile_history_from_record,
-        )
+        return await self._list_for_parent(profile_id)
 
     async def get_latest_for_profile(
         self,
         profile_id: uuid.UUID,
     ) -> SeriesProfileHistoryEntry | None:
         """Fetch the latest history entry for a series profile."""
-        return await self._get_latest_where(
-            SeriesProfileHistoryRecord,
-            SeriesProfileHistoryRecord.series_profile_id == profile_id,
-            SeriesProfileHistoryRecord.revision.desc(),
-            _series_profile_history_from_record,
-        )
+        return await self._get_latest_for_parent(profile_id)
 
 
 class SqlAlchemyEpisodeTemplateHistoryRepository(
-    _RepositoryBase,
+    _HistoryRepositoryBase[
+        EpisodeTemplateHistoryEntry,
+        EpisodeTemplateHistoryRecord,
+    ],
     EpisodeTemplateHistoryRepository,
 ):
     """Persist episode template history entries using SQLAlchemy."""
 
-    async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:
-        """Add a template history entry."""
-        await self._add_record(
-            EpisodeTemplateHistoryRecord(
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(
+            session=session,
+            record_type=EpisodeTemplateHistoryRecord,
+            parent_id_field="episode_template_id",
+            mapper=_episode_template_history_from_record,
+            record_builder=lambda entry: EpisodeTemplateHistoryRecord(
                 id=entry.id,
                 episode_template_id=entry.episode_template_id,
                 revision=entry.revision,
@@ -539,29 +600,23 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
                 note=entry.note,
                 snapshot=entry.snapshot,
                 created_at=entry.created_at,
-            )
+            ),
         )
+
+    async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:
+        """Add a template history entry."""
+        await self._add_history_entry(entry)
 
     async def list_for_template(
         self,
         template_id: uuid.UUID,
     ) -> list[EpisodeTemplateHistoryEntry]:
         """List history entries for an episode template."""
-        return await self._list_where(
-            EpisodeTemplateHistoryRecord,
-            EpisodeTemplateHistoryRecord.episode_template_id == template_id,
-            EpisodeTemplateHistoryRecord.revision,
-            _episode_template_history_from_record,
-        )
+        return await self._list_for_parent(template_id)
 
     async def get_latest_for_template(
         self,
         template_id: uuid.UUID,
     ) -> EpisodeTemplateHistoryEntry | None:
         """Fetch the latest history entry for an episode template."""
-        return await self._get_latest_where(
-            EpisodeTemplateHistoryRecord,
-            EpisodeTemplateHistoryRecord.episode_template_id == template_id,
-            EpisodeTemplateHistoryRecord.revision.desc(),
-            _episode_template_history_from_record,
-        )
+        return await self._get_latest_for_parent(template_id)

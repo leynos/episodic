@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import typing as typ
 
 import pytest
@@ -21,29 +22,75 @@ class ProfileTemplateApiContext(typ.TypedDict, total=False):
     brief_template_id: str
 
 
+@dc.dataclass(frozen=True, slots=True)
+class HttpRequest:
+    """HTTP request specification for testing."""
+
+    method: str
+    path: str
+    json: dict[str, typ.Any] | None = None
+    params: dict[str, typ.Any] | None = None
+
+
 def _make_request_and_assert_status(
     client: testing.TestClient,
-    method: str,
-    path: str,
+    request: HttpRequest,
     expected_status: int,
-    *,
-    json: dict[str, typ.Any] | None = None,
-    params: dict[str, typ.Any] | None = None,
 ) -> dict[str, typ.Any]:
     """Send a request, assert status, and return the JSON payload."""
-    method_upper = method.upper()
+    method_upper = request.method.upper()
     if method_upper == "POST":
-        response = client.simulate_post(path, json=json, params=params)
+        response = client.simulate_post(
+            request.path,
+            json=request.json,
+            params=request.params,
+        )
     elif method_upper == "PATCH":
-        response = client.simulate_patch(path, json=json, params=params)
+        response = client.simulate_patch(
+            request.path,
+            json=request.json,
+            params=request.params,
+        )
     elif method_upper == "GET":
-        response = client.simulate_get(path, params=params)
+        response = client.simulate_get(request.path, params=request.params)
     else:
-        msg = f"Unsupported HTTP method: {method}"
+        msg = f"Unsupported HTTP method: {request.method}"
         raise ValueError(msg)
 
     assert response.status_code == expected_status
     return typ.cast("dict[str, typ.Any]", response.json)
+
+
+def _create_entity_and_store_id(
+    client: testing.TestClient,
+    path: str,
+    payload: dict[str, typ.Any],
+    context: ProfileTemplateApiContext,
+    context_key: str,
+) -> None:
+    """Create an entity via POST and store its ID in context."""
+    response_payload = _make_request_and_assert_status(
+        client,
+        HttpRequest(method="POST", path=path, json=payload),
+        201,
+    )
+    mutable_context = typ.cast("dict[str, typ.Any]", context)
+    mutable_context[context_key] = typ.cast("str", response_payload["id"])
+
+
+def _update_entity_and_assert_revision(
+    client: testing.TestClient,
+    path: str,
+    payload: dict[str, typ.Any],
+    expected_revision: int,
+) -> None:
+    """Update an entity via PATCH and assert the resulting revision."""
+    response_payload = _make_request_and_assert_status(
+        client,
+        HttpRequest(method="PATCH", path=path, json=payload),
+        200,
+    )
+    assert response_payload["revision"] == expected_revision
 
 
 @scenario(
@@ -73,12 +120,10 @@ def create_profile(
     context: ProfileTemplateApiContext,
 ) -> None:
     """Create a profile through the API."""
-    payload = _make_request_and_assert_status(
+    _create_entity_and_store_id(
         canonical_api_client,
-        "POST",
         "/series-profiles",
-        201,
-        json={
+        {
             "slug": "bdd-profile",
             "title": "BDD Profile",
             "description": "BDD profile",
@@ -86,8 +131,9 @@ def create_profile(
             "actor": "bdd@example.com",
             "note": "Initial profile",
         },
+        context,
+        "profile_id",
     )
-    context["profile_id"] = typ.cast("str", payload["id"])
 
 
 @when("an episode template is created for that profile")
@@ -96,12 +142,10 @@ def create_template(
     context: ProfileTemplateApiContext,
 ) -> None:
     """Create a template through the API."""
-    payload = _make_request_and_assert_status(
+    _create_entity_and_store_id(
         canonical_api_client,
-        "POST",
         "/episode-templates",
-        201,
-        json={
+        {
             "series_profile_id": context["profile_id"],
             "slug": "bdd-template",
             "title": "BDD Template",
@@ -110,8 +154,9 @@ def create_template(
             "actor": "bdd@example.com",
             "note": "Initial template",
         },
+        context,
+        "template_id",
     )
-    context["template_id"] = typ.cast("str", payload["id"])
 
 
 @when("the series profile is updated with optimistic locking")
@@ -120,12 +165,10 @@ def update_profile(
     context: ProfileTemplateApiContext,
 ) -> None:
     """Update profile using expected revision."""
-    payload = _make_request_and_assert_status(
+    _update_entity_and_assert_revision(
         canonical_api_client,
-        "PATCH",
         f"/series-profiles/{context['profile_id']}",
-        200,
-        json={
+        {
             "expected_revision": 1,
             "title": "BDD Profile Updated",
             "description": "Updated BDD profile",
@@ -133,8 +176,8 @@ def update_profile(
             "actor": "bdd-editor@example.com",
             "note": "Update profile",
         },
+        2,
     )
-    assert payload["revision"] == 2, "Expected revision increment."
 
 
 @then("the series profile history contains two revisions")
@@ -145,8 +188,10 @@ def assert_history(
     """Assert profile history revision count."""
     payload = _make_request_and_assert_status(
         canonical_api_client,
-        "GET",
-        f"/series-profiles/{context['profile_id']}/history",
+        HttpRequest(
+            method="GET",
+            path=f"/series-profiles/{context['profile_id']}/history",
+        ),
         200,
     )
     context["history_count"] = len(typ.cast("list[object]", payload["items"]))
@@ -161,10 +206,12 @@ def assert_brief(
     """Assert structured brief retrieval."""
     payload = _make_request_and_assert_status(
         canonical_api_client,
-        "GET",
-        f"/series-profiles/{context['profile_id']}/brief",
+        HttpRequest(
+            method="GET",
+            path=f"/series-profiles/{context['profile_id']}/brief",
+            params={"template_id": context["template_id"]},
+        ),
         200,
-        params={"template_id": context["template_id"]},
     )
     series_profile = typ.cast("dict[str, typ.Any]", payload["series_profile"])
     episode_templates = typ.cast(
