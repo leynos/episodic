@@ -191,19 +191,25 @@ class _HistoryRepositoryBase(
         self._mapper = config.mapper
         self._record_builder = config.record_builder
 
+    def _get_parent_field(self) -> typ.Any:  # noqa: ANN401
+        """Retrieve the parent ID field from the record type."""
+        return getattr(self._record_type, self._parent_id_field)
+
+    def _get_revision_field(self) -> typ.Any:  # noqa: ANN401
+        """Retrieve the revision field from the record type."""
+        revision_field_name = "revision"
+        return getattr(self._record_type, revision_field_name)
+
     async def _add_history_entry(self, entry: HistoryEntryT) -> None:
         """Persist a history entry record."""
         await self._add_record(self._record_builder(entry))
 
     async def _list_for_parent(self, parent_id: uuid.UUID) -> list[HistoryEntryT]:
         """List history entries for a parent entity."""
-        parent_field = getattr(self._record_type, self._parent_id_field)
-        order_by_field = "revision"
-        revision_field = getattr(self._record_type, order_by_field)
         return await self._list_where(
             self._record_type,
-            parent_field == parent_id,
-            revision_field,
+            self._get_parent_field() == parent_id,
+            self._get_revision_field(),
             self._mapper,
         )
 
@@ -212,13 +218,10 @@ class _HistoryRepositoryBase(
         parent_id: uuid.UUID,
     ) -> HistoryEntryT | None:
         """Fetch the latest history entry for a parent entity."""
-        parent_field = getattr(self._record_type, self._parent_id_field)
-        order_by_field = "revision"
-        revision_field = getattr(self._record_type, order_by_field)
         return await self._get_latest_where(
             self._record_type,
-            parent_field == parent_id,
-            revision_field.desc(),
+            self._get_parent_field() == parent_id,
+            self._get_revision_field().desc(),
             self._mapper,
         )
 
