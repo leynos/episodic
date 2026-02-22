@@ -253,34 +253,35 @@ def _serialize_episode_template(
     }
 
 
-def _serialize_series_profile_history_entry(
-    entry: SeriesProfileHistoryEntry,
+def _serialize_history_entry(
+    entry: SeriesProfileHistoryEntry | EpisodeTemplateHistoryEntry,
+    parent_id_field: str,
 ) -> dict[str, typ.Any]:
-    """Serialize a profile history entry."""
+    """Serialise a history entry to JSON."""
+    parent_id = getattr(entry, parent_id_field)
     return {
         "id": str(entry.id),
-        "series_profile_id": str(entry.series_profile_id),
+        parent_id_field: str(parent_id),
         "revision": entry.revision,
         "actor": entry.actor,
         "note": entry.note,
         "snapshot": entry.snapshot,
         "created_at": entry.created_at.isoformat(),
     }
+
+
+def _serialize_series_profile_history_entry(
+    entry: SeriesProfileHistoryEntry,
+) -> dict[str, typ.Any]:
+    """Serialize a profile history entry."""
+    return _serialize_history_entry(entry, "series_profile_id")
 
 
 def _serialize_episode_template_history_entry(
     entry: EpisodeTemplateHistoryEntry,
 ) -> dict[str, typ.Any]:
     """Serialize an episode-template history entry."""
-    return {
-        "id": str(entry.id),
-        "episode_template_id": str(entry.episode_template_id),
-        "revision": entry.revision,
-        "actor": entry.actor,
-        "note": entry.note,
-        "snapshot": entry.snapshot,
-        "created_at": entry.created_at.isoformat(),
-    }
+    return _serialize_history_entry(entry, "episode_template_id")
 
 
 class SeriesProfilesResource:
