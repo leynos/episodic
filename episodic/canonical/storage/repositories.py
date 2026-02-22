@@ -81,6 +81,18 @@ HistoryEntryT = TypeVar("HistoryEntryT")
 HistoryRecordT = TypeVar("HistoryRecordT")
 
 
+@dc.dataclass(frozen=True, slots=True)
+class HistoryRepositoryConfig(
+    Generic[HistoryEntryT, HistoryRecordT],  # noqa: UP046
+):
+    """Configuration for a history repository."""
+
+    record_type: type[HistoryRecordT]
+    parent_id_field: str
+    mapper: typ.Callable[[HistoryRecordT], HistoryEntryT]
+    record_builder: typ.Callable[[HistoryEntryT], HistoryRecordT]
+
+
 @dc.dataclass(slots=True)
 class _RepositoryBase:
     """Shared helpers for SQLAlchemy repositories."""
@@ -148,6 +160,19 @@ class _RepositoryBase:
             sa.update(record_type).where(where_clause).values(**values)
         )
 
+    async def _update_entity_fields[EntityT](
+        self,
+        record_type: type[object],
+        entity: EntityT,
+        field_names: cabc.Sequence[str],
+    ) -> None:
+        """Update entity fields using the entity's current attribute values."""
+        values = {field: getattr(entity, field) for field in field_names}
+        id_field_name = "id"
+        entity_id = getattr(entity, id_field_name)
+        id_field = getattr(record_type, id_field_name)
+        await self._update_where(record_type, id_field == entity_id, values)
+
 
 class _HistoryRepositoryBase(
     _RepositoryBase,
@@ -155,19 +180,16 @@ class _HistoryRepositoryBase(
 ):
     """Shared implementation for history repositories."""
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(
         self,
         session: AsyncSession,
-        record_type: type[HistoryRecordT],
-        parent_id_field: str,
-        mapper: typ.Callable[[HistoryRecordT], HistoryEntryT],
-        record_builder: typ.Callable[[HistoryEntryT], HistoryRecordT],
+        config: HistoryRepositoryConfig[HistoryEntryT, HistoryRecordT],
     ) -> None:
         super().__init__(session)
-        self._record_type = record_type
-        self._parent_id_field = parent_id_field
-        self._mapper = mapper
-        self._record_builder = record_builder
+        self._record_type = config.record_type
+        self._parent_id_field = config.parent_id_field
+        self._mapper = config.mapper
+        self._record_builder = config.record_builder
 
     async def _add_history_entry(self, entry: HistoryEntryT) -> None:
         """Persist a history entry record."""
@@ -252,16 +274,10 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
 
     async def update(self, profile: SeriesProfile) -> None:
         """Persist changes to an existing series profile."""
-        await self._update_where(
+        await self._update_entity_fields(
             SeriesProfileRecord,
-            SeriesProfileRecord.id == profile.id,
-            {
-                "slug": profile.slug,
-                "title": profile.title,
-                "description": profile.description,
-                "configuration": profile.configuration,
-                "updated_at": profile.updated_at,
-            },
+            profile,
+            ["slug", "title", "description", "configuration", "updated_at"],
         )
 
 
@@ -522,16 +538,10 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
 
     async def update(self, template: EpisodeTemplate) -> None:
         """Persist changes to an existing episode template."""
-        await self._update_where(
+        await self._update_entity_fields(
             EpisodeTemplateRecord,
-            EpisodeTemplateRecord.id == template.id,
-            {
-                "slug": template.slug,
-                "title": template.title,
-                "description": template.description,
-                "structure": template.structure,
-                "updated_at": template.updated_at,
-            },
+            template,
+            ["slug", "title", "description", "structure", "updated_at"],
         )
 
 
@@ -542,8 +552,7 @@ class SqlAlchemySeriesProfileHistoryRepository(
     """Persist series profile history entries using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(
-            session=session,
+        config = HistoryRepositoryConfig(
             record_type=SeriesProfileHistoryRecord,
             parent_id_field="series_profile_id",
             mapper=_series_profile_history_from_record,
@@ -556,6 +565,10 @@ class SqlAlchemySeriesProfileHistoryRepository(
                 snapshot=entry.snapshot,
                 created_at=entry.created_at,
             ),
+        )
+        super().__init__(
+            session=session,
+            config=config,
         )
 
     async def add(self, entry: SeriesProfileHistoryEntry) -> None:
@@ -587,8 +600,7 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
     """Persist episode template history entries using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(
-            session=session,
+        config = HistoryRepositoryConfig(
             record_type=EpisodeTemplateHistoryRecord,
             parent_id_field="episode_template_id",
             mapper=_episode_template_history_from_record,
@@ -601,6 +613,10 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
                 snapshot=entry.snapshot,
                 created_at=entry.created_at,
             ),
+        )
+        super().__init__(
+            session=session,
+            config=config,
         )
 
     async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:

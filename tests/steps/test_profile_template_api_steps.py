@@ -32,6 +32,15 @@ class HttpRequest:
     params: dict[str, typ.Any] | None = None
 
 
+@dc.dataclass(frozen=True, slots=True)
+class EntityCreationSpec:
+    """Specification for creating an entity and storing its ID."""
+
+    path: str
+    payload: dict[str, typ.Any]
+    context_key: str
+
+
 def _make_request_and_assert_status(
     client: testing.TestClient,
     request: HttpRequest,
@@ -63,19 +72,17 @@ def _make_request_and_assert_status(
 
 def _create_entity_and_store_id(
     client: testing.TestClient,
-    path: str,
-    payload: dict[str, typ.Any],
+    spec: EntityCreationSpec,
     context: ProfileTemplateApiContext,
-    context_key: str,
 ) -> None:
     """Create an entity via POST and store its ID in context."""
     response_payload = _make_request_and_assert_status(
         client,
-        HttpRequest(method="POST", path=path, json=payload),
+        HttpRequest(method="POST", path=spec.path, json=spec.payload),
         201,
     )
     mutable_context = typ.cast("dict[str, typ.Any]", context)
-    mutable_context[context_key] = typ.cast("str", response_payload["id"])
+    mutable_context[spec.context_key] = typ.cast("str", response_payload["id"])
 
 
 def _update_entity_and_assert_revision(
@@ -122,17 +129,19 @@ def create_profile(
     """Create a profile through the API."""
     _create_entity_and_store_id(
         canonical_api_client,
-        "/series-profiles",
-        {
-            "slug": "bdd-profile",
-            "title": "BDD Profile",
-            "description": "BDD profile",
-            "configuration": {"tone": "clear"},
-            "actor": "bdd@example.com",
-            "note": "Initial profile",
-        },
+        EntityCreationSpec(
+            path="/series-profiles",
+            payload={
+                "slug": "bdd-profile",
+                "title": "BDD Profile",
+                "description": "BDD profile",
+                "configuration": {"tone": "clear"},
+                "actor": "bdd@example.com",
+                "note": "Initial profile",
+            },
+            context_key="profile_id",
+        ),
         context,
-        "profile_id",
     )
 
 
@@ -144,18 +153,20 @@ def create_template(
     """Create a template through the API."""
     _create_entity_and_store_id(
         canonical_api_client,
-        "/episode-templates",
-        {
-            "series_profile_id": context["profile_id"],
-            "slug": "bdd-template",
-            "title": "BDD Template",
-            "description": "BDD template",
-            "structure": {"segments": ["intro", "topic", "outro"]},
-            "actor": "bdd@example.com",
-            "note": "Initial template",
-        },
+        EntityCreationSpec(
+            path="/episode-templates",
+            payload={
+                "series_profile_id": context["profile_id"],
+                "slug": "bdd-template",
+                "title": "BDD Template",
+                "description": "BDD template",
+                "structure": {"segments": ["intro", "topic", "outro"]},
+                "actor": "bdd@example.com",
+                "note": "Initial template",
+            },
+            context_key="template_id",
+        ),
         context,
-        "template_id",
     )
 
 
