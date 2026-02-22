@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing as typ
 import uuid
+from abc import ABC, abstractmethod
 from itertools import starmap
 
 import falcon
@@ -284,6 +285,92 @@ def _serialize_episode_template_history_entry(
     return _serialize_history_entry(entry, "episode_template_id")
 
 
+class _GetResourceBase(ABC):
+    """Base resource for fetch-by-id endpoints."""
+
+    def __init__(self, uow_factory: UowFactory) -> None:
+        self._uow_factory = uow_factory
+
+    @staticmethod
+    @abstractmethod
+    def _get_entity_id_from_path(**kwargs: str) -> str:
+        """Return the path parameter value used as the entity identifier."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_id_field_name() -> str:
+        """Return the service argument name for the entity identifier."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
+        """Return the fetch service function for the resource."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_serializer_fn() -> cabc.Callable[[object, int], dict[str, typ.Any]]:
+        """Return the response serializer for the resource."""
+
+    async def on_get(
+        self,
+        req: falcon.Request,
+        resp: falcon.Response,
+        **kwargs: str,
+    ) -> None:
+        """Fetch one entity by identifier."""
+        del req
+        resp.media, resp.status = await _handle_get_entity(
+            uow_factory=self._uow_factory,
+            entity_id=self._get_entity_id_from_path(**kwargs),
+            id_field_name=self._get_id_field_name(),
+            service_fn=self._get_service_fn(),
+            serializer_fn=self._get_serializer_fn(),
+        )
+
+
+class _GetHistoryResourceBase(ABC):
+    """Base resource for history-list endpoints."""
+
+    def __init__(self, uow_factory: UowFactory) -> None:
+        self._uow_factory = uow_factory
+
+    @staticmethod
+    @abstractmethod
+    def _get_entity_id_from_path(**kwargs: str) -> str:
+        """Return the path parameter value used as the entity identifier."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_id_field_name() -> str:
+        """Return the service argument name for the entity identifier."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
+        """Return the history-list service function for the resource."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_serializer_fn() -> cabc.Callable[[object], dict[str, typ.Any]]:
+        """Return the item serializer for the resource."""
+
+    async def on_get(
+        self,
+        req: falcon.Request,
+        resp: falcon.Response,
+        **kwargs: str,
+    ) -> None:
+        """List history entries for one entity."""
+        del req
+        resp.media, resp.status = await _handle_get_history(
+            uow_factory=self._uow_factory,
+            entity_id=self._get_entity_id_from_path(**kwargs),
+            id_field_name=self._get_id_field_name(),
+            service_fn=self._get_service_fn(),
+            serializer_fn=self._get_serializer_fn(),
+        )
+
+
 class SeriesProfilesResource:
     """Collection resource for series profiles."""
 
@@ -328,26 +415,33 @@ class SeriesProfilesResource:
         resp.status = falcon.HTTP_201
 
 
-class SeriesProfileResource:
+class SeriesProfileResource(_GetResourceBase):
     """Single-resource endpoint for series profiles."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
+    @staticmethod
+    def _get_entity_id_from_path(**kwargs: str) -> str:
+        """Return the profile identifier from route params."""
+        return kwargs["profile_id"]
 
-    async def on_get(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-        profile_id: str,
-    ) -> None:
-        """Fetch a series profile."""
-        del req
-        resp.media, resp.status = await _handle_get_entity(
-            uow_factory=self._uow_factory,
-            entity_id=profile_id,
-            id_field_name="profile_id",
-            service_fn=get_series_profile,
-            serializer_fn=_serialize_series_profile,
+    @staticmethod
+    def _get_id_field_name() -> str:
+        """Return the profile identifier service argument."""
+        return "profile_id"
+
+    @staticmethod
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
+        """Return the profile fetch service."""
+        return typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]",
+            get_series_profile,
+        )
+
+    @staticmethod
+    def _get_serializer_fn() -> cabc.Callable[[object, int], dict[str, typ.Any]]:
+        """Return the profile serializer."""
+        return typ.cast(
+            "cabc.Callable[[object, int], dict[str, typ.Any]]",
+            _serialize_series_profile,
         )
 
     async def on_patch(
@@ -370,26 +464,33 @@ class SeriesProfileResource:
         )
 
 
-class SeriesProfileHistoryResource:
+class SeriesProfileHistoryResource(_GetHistoryResourceBase):
     """History endpoint for series profiles."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
+    @staticmethod
+    def _get_entity_id_from_path(**kwargs: str) -> str:
+        """Return the profile identifier from route params."""
+        return kwargs["profile_id"]
 
-    async def on_get(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-        profile_id: str,
-    ) -> None:
-        """List series profile history entries."""
-        del req
-        resp.media, resp.status = await _handle_get_history(
-            uow_factory=self._uow_factory,
-            entity_id=profile_id,
-            id_field_name="profile_id",
-            service_fn=list_series_profile_history,
-            serializer_fn=_serialize_series_profile_history_entry,
+    @staticmethod
+    def _get_id_field_name() -> str:
+        """Return the profile identifier service argument."""
+        return "profile_id"
+
+    @staticmethod
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
+        """Return the profile-history list service."""
+        return typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[list[object]]]",
+            list_series_profile_history,
+        )
+
+    @staticmethod
+    def _get_serializer_fn() -> cabc.Callable[[object], dict[str, typ.Any]]:
+        """Return the profile-history serializer."""
+        return typ.cast(
+            "cabc.Callable[[object], dict[str, typ.Any]]",
+            _serialize_series_profile_history_entry,
         )
 
 
@@ -498,26 +599,33 @@ class EpisodeTemplatesResource:
         resp.status = falcon.HTTP_201
 
 
-class EpisodeTemplateResource:
+class EpisodeTemplateResource(_GetResourceBase):
     """Single-resource endpoint for episode templates."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
+    @staticmethod
+    def _get_entity_id_from_path(**kwargs: str) -> str:
+        """Return the template identifier from route params."""
+        return kwargs["template_id"]
 
-    async def on_get(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-        template_id: str,
-    ) -> None:
-        """Fetch an episode template."""
-        del req
-        resp.media, resp.status = await _handle_get_entity(
-            uow_factory=self._uow_factory,
-            entity_id=template_id,
-            id_field_name="template_id",
-            service_fn=get_episode_template,
-            serializer_fn=_serialize_episode_template,
+    @staticmethod
+    def _get_id_field_name() -> str:
+        """Return the template identifier service argument."""
+        return "template_id"
+
+    @staticmethod
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
+        """Return the template fetch service."""
+        return typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]",
+            get_episode_template,
+        )
+
+    @staticmethod
+    def _get_serializer_fn() -> cabc.Callable[[object, int], dict[str, typ.Any]]:
+        """Return the template serializer."""
+        return typ.cast(
+            "cabc.Callable[[object, int], dict[str, typ.Any]]",
+            _serialize_episode_template,
         )
 
     async def on_patch(
@@ -540,26 +648,33 @@ class EpisodeTemplateResource:
         )
 
 
-class EpisodeTemplateHistoryResource:
+class EpisodeTemplateHistoryResource(_GetHistoryResourceBase):
     """History endpoint for episode templates."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
+    @staticmethod
+    def _get_entity_id_from_path(**kwargs: str) -> str:
+        """Return the template identifier from route params."""
+        return kwargs["template_id"]
 
-    async def on_get(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-        template_id: str,
-    ) -> None:
-        """List episode template history entries."""
-        del req
-        resp.media, resp.status = await _handle_get_history(
-            uow_factory=self._uow_factory,
-            entity_id=template_id,
-            id_field_name="template_id",
-            service_fn=list_episode_template_history,
-            serializer_fn=_serialize_episode_template_history_entry,
+    @staticmethod
+    def _get_id_field_name() -> str:
+        """Return the template identifier service argument."""
+        return "template_id"
+
+    @staticmethod
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
+        """Return the template-history list service."""
+        return typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[list[object]]]",
+            list_episode_template_history,
+        )
+
+    @staticmethod
+    def _get_serializer_fn() -> cabc.Callable[[object], dict[str, typ.Any]]:
+        """Return the template-history serializer."""
+        return typ.cast(
+            "cabc.Callable[[object], dict[str, typ.Any]]",
+            _serialize_episode_template_history_entry,
         )
 
 
