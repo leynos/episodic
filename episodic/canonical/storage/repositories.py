@@ -225,6 +225,34 @@ class _HistoryRepositoryBase(
             self._mapper,
         )
 
+    async def _get_latest_revisions_for_parents(
+        self,
+        parent_ids: cabc.Collection[uuid.UUID],
+    ) -> dict[uuid.UUID, int]:
+        """Fetch latest revision values for parent entity identifiers."""
+        if not parent_ids:
+            return {}
+
+        parent_field = self._get_parent_field()
+        revision_field = self._get_revision_field()
+        latest_revisions = (
+            sa
+            .select(
+                parent_field.label("parent_id"),
+                sa.func.max(revision_field).label("revision"),
+            )
+            .where(parent_field.in_(list(parent_ids)))
+            .group_by(parent_field)
+            .subquery()
+        )
+        result = await self._session.execute(
+            sa.select(
+                latest_revisions.c.parent_id,
+                latest_revisions.c.revision,
+            )
+        )
+        return {row.parent_id: int(row.revision) for row in result}
+
 
 class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository):
     """Persist series profiles using SQLAlchemy."""
@@ -592,6 +620,13 @@ class SqlAlchemySeriesProfileHistoryRepository(
         """Fetch the latest history entry for a series profile."""
         return await self._get_latest_for_parent(profile_id)
 
+    async def get_latest_revisions_for_profiles(
+        self,
+        profile_ids: cabc.Collection[uuid.UUID],
+    ) -> dict[uuid.UUID, int]:
+        """Fetch latest revision numbers for series profiles."""
+        return await self._get_latest_revisions_for_parents(profile_ids)
+
 
 class SqlAlchemyEpisodeTemplateHistoryRepository(
     _HistoryRepositoryBase[
@@ -639,3 +674,10 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
     ) -> EpisodeTemplateHistoryEntry | None:
         """Fetch the latest history entry for an episode template."""
         return await self._get_latest_for_parent(template_id)
+
+    async def get_latest_revisions_for_templates(
+        self,
+        template_ids: cabc.Collection[uuid.UUID],
+    ) -> dict[uuid.UUID, int]:
+        """Fetch latest revision numbers for episode templates."""
+        return await self._get_latest_revisions_for_parents(template_ids)

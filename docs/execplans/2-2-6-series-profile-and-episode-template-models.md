@@ -1,4 +1,4 @@
-# Implement series profile and episode template models, REST endpoints, and change history
+# Implement series profile and episode template models, Representational State Transfer (REST) endpoints, and change history
 
 This Execution Plan (ExecPlan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
@@ -12,9 +12,10 @@ Status: COMPLETE
 ## Purpose and big picture
 
 After this change, downstream generation workflows can retrieve structured
-briefs through stable API contracts instead of piecing data together from
-ingestion artefacts. Series profiles and episode templates become first-class
-versioned resources with change history and optimistic concurrency controls.
+briefs through stable application programming interface (API) contracts instead
+of piecing data together from ingestion artefacts. Series profiles and episode
+templates become first-class versioned resources with change history and
+optimistic concurrency controls.
 
 Success is observable when:
 
@@ -86,7 +87,7 @@ Success is observable when:
 - Risk: optimistic locking semantics may diverge between storage and API.
   Severity: high. Likelihood: medium. Mitigation: define one version token
   contract (for example `version` or `etag`) in domain/service first, then
-  assert it in unit, integration, and BDD tests.
+  assert it in unit, integration, and behaviour-driven development (BDD) tests.
 
 - Risk: dependency on reusable reference-document work may be incomplete at
   implementation time. Severity: medium. Likelihood: medium. Mitigation: keep
@@ -111,11 +112,11 @@ Success is observable when:
 
 ## Surprises & discoveries
 
-- Observation: no MCP resources or templates are available in this environment,
-  so project-memory retrieval via `qdrant-find` is unavailable in-session.
-  Evidence: `list_mcp_resources` and `list_mcp_resource_templates` both
-  returned empty lists. Impact: this plan is based on repository state and
-  checked-in documentation.
+- Observation: no Model Context Protocol (MCP) resources or templates are
+  available in this environment, so project-memory retrieval via `qdrant-find`
+  is unavailable in-session. Evidence: `list_mcp_resources` and
+  `list_mcp_resource_templates` both returned empty lists. Impact: this plan is
+  based on repository state and checked-in documentation.
 
 - Observation: as of 2026-02-20, `docs/roadmap.md` tracks this capability under
   item `2.2.8`, while this ExecPlan filename was requested as `2-2-6`.
@@ -401,11 +402,11 @@ domain-first layering is required):
   - create/update/get/list/history operations for both resources
   - structured brief assembly function for downstream generators
 - API adapter contracts:
-  - Falcon request/response schemas mapped to domain DTOs without leaking
-    storage-layer records.
+  - Falcon request/response schemas mapped to domain data transfer objects
+    (DTOs) without leaking storage-layer records.
 
 ## Revision note
 
 - 2026-02-20: Initial draft created for requested implementation planning scope.
-- 2026-02-20: Updated to reflect implementation progress, discovered FK-flush
-  ordering requirement, and completion status.
+- 2026-02-20: Updated to reflect implementation progress, discovered
+  foreign-key (FK) flush ordering requirement, and completion status.

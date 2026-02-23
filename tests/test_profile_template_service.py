@@ -9,15 +9,18 @@ import pytest
 from episodic.canonical.profile_templates import (
     AuditMetadata,
     EpisodeTemplateData,
+    EpisodeTemplateUpdateFields,
     RevisionConflictError,
     SeriesProfileCreateData,
     SeriesProfileData,
+    UpdateEpisodeTemplateRequest,
     UpdateSeriesProfileRequest,
     build_series_brief,
     create_episode_template,
     create_series_profile,
     list_episode_template_history,
     list_series_profile_history,
+    update_episode_template,
     update_series_profile,
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
@@ -94,6 +97,70 @@ async def test_update_series_profile_rejects_revision_conflicts(
                     ),
                 ),
             )
+
+
+@pytest.mark.asyncio
+async def test_update_episode_template_revision_conflict_raises(
+    session_factory: typ.Callable[[], AsyncSession],
+) -> None:
+    """Updating a template with a stale revision raises conflict."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        profile, _ = await create_series_profile(
+            uow,
+            data=SeriesProfileCreateData(
+                slug="template-conflict-profile",
+                title="Template Conflict Profile",
+                description="Profile for template conflict test",
+                configuration={"tone": "neutral"},
+            ),
+            audit=AuditMetadata(
+                actor="author@example.com",
+                note="Initial profile",
+            ),
+        )
+        template, current_revision = await create_episode_template(
+            uow,
+            series_profile_id=profile.id,
+            data=EpisodeTemplateData(
+                slug="template-conflict",
+                title="Template Conflict",
+                description="Initial template",
+                structure={"segments": ["intro"]},
+                actor="author@example.com",
+                note="Initial template",
+            ),
+        )
+
+    stale_revision = current_revision - 1 if current_revision > 1 else 0
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(RevisionConflictError):
+            await update_episode_template(
+                uow,
+                request=UpdateEpisodeTemplateRequest(
+                    template_id=template.id,
+                    expected_revision=stale_revision,
+                    fields=EpisodeTemplateUpdateFields(
+                        title="Stale Template Update",
+                        description="Should fail",
+                        structure={"segments": ["intro", "outro"]},
+                    ),
+                    audit=AuditMetadata(
+                        actor="editor@example.com",
+                        note="Stale update attempt",
+                    ),
+                ),
+            )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        history = await list_episode_template_history(uow, template_id=template.id)
+
+    assert len(history) == 1, (
+        "Conflicting template update must not create a new history entry."
+    )
+    assert history[0].revision == current_revision, (
+        "History revision must remain at the last successful revision."
+    )
 
 
 @pytest.mark.asyncio

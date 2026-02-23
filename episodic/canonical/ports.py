@@ -23,6 +23,7 @@ from __future__ import annotations
 import typing as typ
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
     from types import TracebackType
 
@@ -381,6 +382,13 @@ class SeriesProfileHistoryRepository(typ.Protocol):
         """Fetch the most recent history entry for a series profile."""
         ...
 
+    async def get_latest_revisions_for_profiles(
+        self,
+        profile_ids: cabc.Collection[uuid.UUID],
+    ) -> dict[uuid.UUID, int]:
+        """Fetch latest revisions for a set of series profiles."""
+        ...
+
 
 class EpisodeTemplateHistoryRepository(typ.Protocol):
     """Persistence interface for episode template history entries."""
@@ -401,6 +409,13 @@ class EpisodeTemplateHistoryRepository(typ.Protocol):
         template_id: uuid.UUID,
     ) -> EpisodeTemplateHistoryEntry | None:
         """Fetch the most recent history entry for an episode template."""
+        ...
+
+    async def get_latest_revisions_for_templates(
+        self,
+        template_ids: cabc.Collection[uuid.UUID],
+    ) -> dict[uuid.UUID, int]:
+        """Fetch latest revisions for a set of episode templates."""
         ...
 
 

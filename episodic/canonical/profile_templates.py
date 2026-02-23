@@ -8,6 +8,8 @@ import typing as typ
 import uuid
 from itertools import starmap
 
+from sqlalchemy.exc import IntegrityError
+
 from .domain import (
     EpisodeTemplate,
     EpisodeTemplateHistoryEntry,
@@ -152,6 +154,23 @@ def _check_revision_conflict(
         raise RevisionConflictError(msg)
 
 
+def _is_revision_conflict_integrity_error(
+    exc: IntegrityError,
+    entity_id_field: str,
+) -> bool:
+    """Return True when an integrity error indicates a revision collision."""
+    detail = str(getattr(exc, "orig", exc))
+    return any(
+        marker in detail
+        for marker in (
+            "uq_series_profile_history_revision",
+            "uq_episode_template_history_revision",
+            f"({entity_id_field}, revision)",
+            f"{entity_id_field}, revision",
+        )
+    )
+
+
 def _build_snapshot_base(
     *,
     entity_id: uuid.UUID,
@@ -206,9 +225,16 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
         created_at=now,
         **{entity_id_field: updated_entity.id},
     )
-    await entity_repo.update(updated_entity)
-    await history_repo.add(history_entry)
-    await uow.commit()
+    try:
+        await entity_repo.update(updated_entity)
+        await history_repo.add(history_entry)
+        await uow.commit()
+    except IntegrityError as exc:
+        if not _is_revision_conflict_integrity_error(exc, entity_id_field):
+            raise
+        await uow.rollback()
+        msg = f"{entity_label} revision conflict: concurrent update detected."
+        raise RevisionConflictError(msg) from exc
     return updated_entity, next_revision
 
 
@@ -298,14 +324,11 @@ async def list_series_profiles(
 ) -> list[tuple[SeriesProfile, int]]:
     """List all series profiles with current revision values."""
     profiles = await uow.series_profiles.list()
-    items: list[tuple[SeriesProfile, int]] = []
-    for profile in profiles:
-        revision = await _get_latest_revision(
-            uow.series_profile_history.get_latest_for_profile,
-            profile.id,
-        )
-        items.append((profile, revision))
-    return items
+    profile_ids = [profile.id for profile in profiles]
+    revisions = await uow.series_profile_history.get_latest_revisions_for_profiles(
+        profile_ids
+    )
+    return [(profile, revisions.get(profile.id, 0)) for profile in profiles]
 
 
 async def update_series_profile(
@@ -408,14 +431,11 @@ async def list_episode_templates(
 ) -> list[tuple[EpisodeTemplate, int]]:
     """List episode templates with current revision values."""
     templates = await uow.episode_templates.list(series_profile_id)
-    items: list[tuple[EpisodeTemplate, int]] = []
-    for template in templates:
-        revision = await _get_latest_revision(
-            uow.episode_template_history.get_latest_for_template,
-            template.id,
-        )
-        items.append((template, revision))
-    return items
+    template_ids = [template.id for template in templates]
+    revisions = await uow.episode_template_history.get_latest_revisions_for_templates(
+        template_ids
+    )
+    return [(template, revisions.get(template.id, 0)) for template in templates]
 
 
 async def update_episode_template(

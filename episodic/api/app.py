@@ -72,6 +72,16 @@ def _build_audit_metadata(payload: dict[str, typ.Any]) -> AuditMetadata:
     )
 
 
+def _parse_expected_revision(payload: dict[str, typ.Any]) -> int:
+    """Parse expected revision or raise HTTP 400."""
+    raw_expected_revision = payload["expected_revision"]
+    try:
+        return int(raw_expected_revision)
+    except (TypeError, ValueError) as exc:
+        msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
+        raise falcon.HTTPBadRequest(description=msg) from exc
+
+
 def _build_update_kwargs[DataT](
     payload: dict[str, typ.Any],
     data_key: str,
@@ -79,7 +89,7 @@ def _build_update_kwargs[DataT](
 ) -> dict[str, typ.Any]:
     """Build generic update service kwargs with optimistic locking."""
     return {
-        "expected_revision": int(payload["expected_revision"]),
+        "expected_revision": _parse_expected_revision(payload),
         data_key: data_builder(payload),
         "audit": _build_audit_metadata(payload),
     }
@@ -115,41 +125,34 @@ def _build_template_update_kwargs(payload: dict[str, typ.Any]) -> dict[str, typ.
     return _build_update_kwargs(payload, "fields", _build_template_fields)
 
 
-def _build_update_request(
+def _build_profile_update_request(
     entity_id: uuid.UUID,
-    id_field_name: str,
     update_kwargs: dict[str, typ.Any],
-) -> UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest:
-    """Build the correct update request object for an entity type."""
+) -> UpdateSeriesProfileRequest:
+    """Build an update request for series profiles."""
     expected_revision = typ.cast("int", update_kwargs["expected_revision"])
     audit = typ.cast("AuditMetadata", update_kwargs["audit"])
-    if id_field_name == "profile_id":
-        return UpdateSeriesProfileRequest(
-            profile_id=entity_id,
-            expected_revision=expected_revision,
-            data=typ.cast("SeriesProfileData", update_kwargs["data"]),
-            audit=audit,
-        )
-    if id_field_name == "template_id":
-        return UpdateEpisodeTemplateRequest(
-            template_id=entity_id,
-            expected_revision=expected_revision,
-            fields=typ.cast("EpisodeTemplateUpdateFields", update_kwargs["fields"]),
-            audit=audit,
-        )
-    msg = f"Unsupported update entity identifier: {id_field_name}"
-    raise RuntimeError(msg)
+    return UpdateSeriesProfileRequest(
+        profile_id=entity_id,
+        expected_revision=expected_revision,
+        data=typ.cast("SeriesProfileData", update_kwargs["data"]),
+        audit=audit,
+    )
 
 
-def _build_update_service_kwargs(
+def _build_template_update_request(
     entity_id: uuid.UUID,
-    id_field_name: str,
     update_kwargs: dict[str, typ.Any],
-) -> dict[str, typ.Any]:
-    """Build kwargs for update service invocation."""
-    return {
-        "request": _build_update_request(entity_id, id_field_name, update_kwargs),
-    }
+) -> UpdateEpisodeTemplateRequest:
+    """Build an update request for episode templates."""
+    expected_revision = typ.cast("int", update_kwargs["expected_revision"])
+    audit = typ.cast("AuditMetadata", update_kwargs["audit"])
+    return UpdateEpisodeTemplateRequest(
+        template_id=entity_id,
+        expected_revision=expected_revision,
+        fields=typ.cast("EpisodeTemplateUpdateFields", update_kwargs["fields"]),
+        audit=audit,
+    )
 
 
 async def _handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917
@@ -193,6 +196,10 @@ async def _handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917
     payload: dict[str, typ.Any],
     required_fields: tuple[str, ...],
     kwargs_builder: cabc.Callable[[dict[str, typ.Any]], dict[str, typ.Any]],
+    request_builder: cabc.Callable[
+        [uuid.UUID, dict[str, typ.Any]],
+        UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,
+    ],
     service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
     serializer_fn: cabc.Callable[[EntityT, int], dict[str, typ.Any]],
 ) -> tuple[dict[str, typ.Any], str]:
@@ -204,15 +211,17 @@ async def _handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917
             raise falcon.HTTPBadRequest(description=msg)
 
     update_payload_kwargs = kwargs_builder(payload)
-    update_kwargs = _build_update_service_kwargs(
+    update_request = request_builder(
         parsed_entity_id,
-        id_field_name,
         update_payload_kwargs,
     )
 
     try:
         async with uow_factory() as uow:
-            entity, revision = await service_fn(uow, **update_kwargs)
+            entity, revision = await service_fn(
+                uow,
+                request=update_request,
+            )
     except EntityNotFoundError as exc:
         raise falcon.HTTPNotFound(description=str(exc)) from exc
     except RevisionConflictError as exc:
@@ -459,6 +468,7 @@ class SeriesProfileResource(_GetResourceBase):
             payload=payload,
             required_fields=("expected_revision", "title", "configuration"),
             kwargs_builder=_build_profile_update_kwargs,
+            request_builder=_build_profile_update_request,
             service_fn=update_series_profile,
             serializer_fn=_serialize_series_profile,
         )
@@ -643,6 +653,7 @@ class EpisodeTemplateResource(_GetResourceBase):
             payload=payload,
             required_fields=("expected_revision", "title", "structure"),
             kwargs_builder=_build_template_update_kwargs,
+            request_builder=_build_template_update_request,
             service_fn=update_episode_template,
             serializer_fn=_serialize_episode_template,
         )
