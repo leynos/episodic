@@ -283,6 +283,44 @@ def _build_snapshot_base(
     }
 
 
+async def _get_entity_with_latest_revision[EntityT: _VersionedEntity](
+    *,
+    entity_id: uuid.UUID,
+    entity_label: str,
+    get_entity: typ.Callable[[uuid.UUID], typ.Awaitable[EntityT | None]],
+    fetch_latest: typ.Callable[[uuid.UUID], typ.Awaitable[_RevisionedEntry | None]],
+) -> tuple[EntityT, int]:
+    """Return an entity with its latest revision or raise if absent."""
+    entity = await get_entity(entity_id)
+    if entity is None:
+        msg = f"{entity_label} {entity_id} not found."
+        raise EntityNotFoundError(msg)
+    revision = await _get_latest_revision(fetch_latest, entity_id)
+    return entity, revision
+
+
+async def _list_history_generic[HistoryT](
+    list_for_parent: typ.Callable[[uuid.UUID], typ.Awaitable[list[HistoryT]]],
+    *,
+    parent_id: uuid.UUID,
+) -> list[HistoryT]:
+    """List history entries for a parent entity."""
+    return await list_for_parent(parent_id)
+
+
+async def _with_latest_revisions[EntityT: _VersionedEntity](
+    entities: typ.Sequence[EntityT],
+    fetch_bulk_revisions: typ.Callable[
+        [typ.Collection[uuid.UUID]],
+        typ.Awaitable[dict[uuid.UUID, int]],
+    ],
+) -> list[tuple[EntityT, int]]:
+    """Pair entities with their latest revision values."""
+    entity_ids = [entity.id for entity in entities]
+    revisions = await fetch_bulk_revisions(entity_ids)
+    return [(entity, revisions.get(entity.id, 0)) for entity in entities]
+
+
 async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913  # Context: https://github.com/leynos/episodic/pull/25
     uow: CanonicalUnitOfWork,
     *,
@@ -439,15 +477,12 @@ async def get_series_profile(
     EntityNotFoundError
         Raised when the profile does not exist.
     """
-    profile = await uow.series_profiles.get(profile_id)
-    if profile is None:
-        msg = f"Series profile {profile_id} not found."
-        raise EntityNotFoundError(msg)
-    revision = await _get_latest_revision(
-        uow.series_profile_history.get_latest_for_profile,
-        profile_id,
+    return await _get_entity_with_latest_revision(
+        entity_id=profile_id,
+        entity_label="Series profile",
+        get_entity=uow.series_profiles.get,
+        fetch_latest=uow.series_profile_history.get_latest_for_profile,
     )
-    return profile, revision
 
 
 async def list_series_profiles(
@@ -466,11 +501,10 @@ async def list_series_profiles(
         Profile records paired with current revision numbers.
     """
     profiles = await uow.series_profiles.list()
-    profile_ids = [profile.id for profile in profiles]
-    revisions = await uow.series_profile_history.get_latest_revisions_for_profiles(
-        profile_ids
+    return await _with_latest_revisions(
+        profiles,
+        uow.series_profile_history.get_latest_revisions_for_profiles,
     )
-    return [(profile, revisions.get(profile.id, 0)) for profile in profiles]
 
 
 async def update_series_profile(
@@ -540,7 +574,10 @@ async def list_series_profile_history(
     list[SeriesProfileHistoryEntry]
         History entries ordered by ascending revision.
     """
-    return await uow.series_profile_history.list_for_profile(profile_id)
+    return await _list_history_generic(
+        uow.series_profile_history.list_for_profile,
+        parent_id=profile_id,
+    )
 
 
 async def create_episode_template(
@@ -626,15 +663,12 @@ async def get_episode_template(
     EntityNotFoundError
         Raised when the template does not exist.
     """
-    template = await uow.episode_templates.get(template_id)
-    if template is None:
-        msg = f"Episode template {template_id} not found."
-        raise EntityNotFoundError(msg)
-    revision = await _get_latest_revision(
-        uow.episode_template_history.get_latest_for_template,
-        template_id,
+    return await _get_entity_with_latest_revision(
+        entity_id=template_id,
+        entity_label="Episode template",
+        get_entity=uow.episode_templates.get,
+        fetch_latest=uow.episode_template_history.get_latest_for_template,
     )
-    return template, revision
 
 
 async def list_episode_templates(
@@ -657,11 +691,10 @@ async def list_episode_templates(
         Template records paired with current revision numbers.
     """
     templates = await uow.episode_templates.list(series_profile_id)
-    template_ids = [template.id for template in templates]
-    revisions = await uow.episode_template_history.get_latest_revisions_for_templates(
-        template_ids
+    return await _with_latest_revisions(
+        templates,
+        uow.episode_template_history.get_latest_revisions_for_templates,
     )
-    return [(template, revisions.get(template.id, 0)) for template in templates]
 
 
 async def update_episode_template(
@@ -731,7 +764,10 @@ async def list_episode_template_history(
     list[EpisodeTemplateHistoryEntry]
         History entries ordered by ascending revision.
     """
-    return await uow.episode_template_history.list_for_template(template_id)
+    return await _list_history_generic(
+        uow.episode_template_history.list_for_template,
+        parent_id=template_id,
+    )
 
 
 def _serialize_profile_for_brief(

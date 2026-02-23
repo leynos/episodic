@@ -91,19 +91,41 @@ def _build_template_fields(
     )
 
 
+def _build_typed_update_request[DataT, RequestT](  # noqa: PLR0913  # Context: generic builder requires explicit typed factories
+    entity_id: uuid.UUID,
+    payload: dict[str, typ.Any],
+    *,
+    data_key: str,
+    data_builder: cabc.Callable[[dict[str, typ.Any]], DataT],
+    request_builder: cabc.Callable[
+        [uuid.UUID, int, DataT, AuditMetadata],
+        RequestT,
+    ],
+) -> RequestT:
+    """Build a typed update request from common payload parsing."""
+    update_kwargs = _build_update_kwargs(payload, data_key, data_builder)
+    expected_revision = typ.cast("int", update_kwargs["expected_revision"])
+    audit = typ.cast("AuditMetadata", update_kwargs["audit"])
+    data_or_fields = typ.cast("DataT", update_kwargs[data_key])
+    return request_builder(entity_id, expected_revision, data_or_fields, audit)
+
+
 def build_profile_update_request(
     entity_id: uuid.UUID,
     payload: dict[str, typ.Any],
 ) -> UpdateSeriesProfileRequest:
     """Build an update request for series profiles."""
-    update_kwargs = _build_update_kwargs(payload, "data", _build_profile_data)
-    expected_revision = typ.cast("int", update_kwargs["expected_revision"])
-    audit = typ.cast("AuditMetadata", update_kwargs["audit"])
-    return UpdateSeriesProfileRequest(
-        profile_id=entity_id,
-        expected_revision=expected_revision,
-        data=typ.cast("SeriesProfileData", update_kwargs["data"]),
-        audit=audit,
+    return _build_typed_update_request(
+        entity_id,
+        payload,
+        data_key="data",
+        data_builder=_build_profile_data,
+        request_builder=lambda eid, rev, data, audit: UpdateSeriesProfileRequest(
+            profile_id=eid,
+            expected_revision=rev,
+            data=typ.cast("SeriesProfileData", data),
+            audit=audit,
+        ),
     )
 
 
@@ -112,12 +134,15 @@ def build_template_update_request(
     payload: dict[str, typ.Any],
 ) -> UpdateEpisodeTemplateRequest:
     """Build an update request for episode templates."""
-    update_kwargs = _build_update_kwargs(payload, "fields", _build_template_fields)
-    expected_revision = typ.cast("int", update_kwargs["expected_revision"])
-    audit = typ.cast("AuditMetadata", update_kwargs["audit"])
-    return UpdateEpisodeTemplateRequest(
-        template_id=entity_id,
-        expected_revision=expected_revision,
-        fields=typ.cast("EpisodeTemplateUpdateFields", update_kwargs["fields"]),
-        audit=audit,
+    return _build_typed_update_request(
+        entity_id,
+        payload,
+        data_key="fields",
+        data_builder=_build_template_fields,
+        request_builder=lambda eid, rev, fields, audit: UpdateEpisodeTemplateRequest(
+            template_id=eid,
+            expected_revision=rev,
+            fields=typ.cast("EpisodeTemplateUpdateFields", fields),
+            audit=audit,
+        ),
     )
