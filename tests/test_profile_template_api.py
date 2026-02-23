@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import typing as typ
+from dataclasses import dataclass  # noqa: ICN003
 
 if typ.TYPE_CHECKING:
     from falcon import testing
+
+
+@dataclass(frozen=True, slots=True)
+class EntityUpdateSpec:
+    """Specification for updating an entity via PATCH."""
+
+    endpoint_path: str
+    payload: dict[str, typ.Any]
+    entity_label: str
 
 
 def _create_profile(
@@ -60,45 +70,98 @@ def _create_template(
     return template_id, template_payload
 
 
+def _update_entity_and_verify_revision(
+    client: testing.TestClient,
+    spec: EntityUpdateSpec,
+) -> None:
+    """Update an entity and verify optimistic-lock revision increment."""
+    update_response = client.simulate_patch(
+        spec.endpoint_path,
+        json=spec.payload,
+    )
+    assert update_response.status_code == 200, (
+        f"Expected {spec.entity_label} update to return 200."
+    )
+    assert update_response.json["revision"] == 2, (
+        f"Expected {spec.entity_label} revision to increment on update."
+    )
+
+
+def _verify_stale_update_rejected_generic(
+    client: testing.TestClient,
+    spec: EntityUpdateSpec,
+) -> None:
+    """Verify stale updates are rejected by optimistic locking."""
+    stale_update_response = client.simulate_patch(
+        spec.endpoint_path,
+        json=spec.payload,
+    )
+    assert stale_update_response.status_code == 409, (
+        f"Expected stale {spec.entity_label} update to return 409."
+    )
+    assert isinstance(stale_update_response.json, dict), (
+        f"Expected stale {spec.entity_label} error as a JSON object."
+    )
+
+
+def _verify_entity_history(
+    client: testing.TestClient,
+    history_path: str,
+    entity_label: str,
+) -> None:
+    """Verify entity history includes both create and update revisions."""
+    history_response = client.simulate_get(history_path)
+    assert history_response.status_code == 200, (
+        f"Expected {entity_label} history endpoint to return 200."
+    )
+
+    history_payload = history_response.json
+    items = (
+        history_payload["items"]
+        if isinstance(history_payload, dict)
+        else history_payload
+    )
+    assert isinstance(items, list), (
+        f"Expected {entity_label} history response to be a JSON list."
+    )
+    assert len(items) == 2, f"Expected two {entity_label} history revisions."
+
+
 def _update_profile(client: testing.TestClient, profile_id: str) -> None:
     """Update a profile and verify revision increment."""
-    update_profile_response = client.simulate_patch(
-        f"/series-profiles/{profile_id}",
-        json={
-            "expected_revision": 1,
-            "title": "API Profile Updated",
-            "description": "Updated through API",
-            "configuration": {"tone": "decisive"},
-            "actor": "editor@example.com",
-            "note": "Profile update",
-        },
-    )
-    assert update_profile_response.status_code == 200, (
-        "Expected profile update to return 200."
-    )
-    assert update_profile_response.json["revision"] == 2, (
-        "Expected revision to increment on update."
+    _update_entity_and_verify_revision(
+        client,
+        EntityUpdateSpec(
+            endpoint_path=f"/series-profiles/{profile_id}",
+            payload={
+                "expected_revision": 1,
+                "title": "API Profile Updated",
+                "description": "Updated through API",
+                "configuration": {"tone": "decisive"},
+                "actor": "editor@example.com",
+                "note": "Profile update",
+            },
+            entity_label="profile",
+        ),
     )
 
 
 def _update_template(client: testing.TestClient, template_id: str) -> None:
     """Update a template and verify revision increment."""
-    update_template_response = client.simulate_patch(
-        f"/episode-templates/{template_id}",
-        json={
-            "expected_revision": 1,
-            "title": "API Template Updated",
-            "description": "Updated template through API",
-            "structure": {"segments": ["intro", "deep-dive", "outro"]},
-            "actor": "editor@example.com",
-            "note": "Template update",
-        },
-    )
-    assert update_template_response.status_code == 200, (
-        "Expected template update to return 200."
-    )
-    assert update_template_response.json["revision"] == 2, (
-        "Expected template revision to increment on update."
+    _update_entity_and_verify_revision(
+        client,
+        EntityUpdateSpec(
+            endpoint_path=f"/episode-templates/{template_id}",
+            payload={
+                "expected_revision": 1,
+                "title": "API Template Updated",
+                "description": "Updated template through API",
+                "structure": {"segments": ["intro", "deep-dive", "outro"]},
+                "actor": "editor@example.com",
+                "note": "Template update",
+            },
+            entity_label="episode-template",
+        ),
     )
 
 
@@ -107,22 +170,20 @@ def _verify_stale_update_rejected(
     profile_id: str,
 ) -> None:
     """Verify stale profile updates are rejected by optimistic locking."""
-    stale_update_response = client.simulate_patch(
-        f"/series-profiles/{profile_id}",
-        json={
-            "expected_revision": 1,
-            "title": "Stale update",
-            "description": "Should fail",
-            "configuration": {"tone": "stale"},
-            "actor": "editor@example.com",
-            "note": "Stale attempt",
-        },
-    )
-    assert stale_update_response.status_code == 409, (
-        "Expected stale update to return 409."
-    )
-    assert isinstance(stale_update_response.json, dict), (
-        "Expected stale update error to be returned as a JSON object."
+    _verify_stale_update_rejected_generic(
+        client,
+        EntityUpdateSpec(
+            endpoint_path=f"/series-profiles/{profile_id}",
+            payload={
+                "expected_revision": 1,
+                "title": "Stale update",
+                "description": "Should fail",
+                "configuration": {"tone": "stale"},
+                "actor": "editor@example.com",
+                "note": "Stale attempt",
+            },
+            entity_label="profile",
+        ),
     )
 
 
@@ -131,33 +192,29 @@ def _verify_episode_template_stale_update_rejected(
     template_id: str,
 ) -> None:
     """Verify stale template updates are rejected by optimistic locking."""
-    stale_update_response = client.simulate_patch(
-        f"/episode-templates/{template_id}",
-        json={
-            "expected_revision": 1,
-            "title": "Stale template update",
-            "description": "Should fail",
-            "structure": {"segments": ["stale"]},
-            "actor": "editor@example.com",
-            "note": "Stale attempt",
-        },
-    )
-    assert stale_update_response.status_code == 409, (
-        "Expected stale episode-template update to return 409."
-    )
-    assert isinstance(stale_update_response.json, dict), (
-        "Expected stale episode-template error as a JSON object."
+    _verify_stale_update_rejected_generic(
+        client,
+        EntityUpdateSpec(
+            endpoint_path=f"/episode-templates/{template_id}",
+            payload={
+                "expected_revision": 1,
+                "title": "Stale template update",
+                "description": "Should fail",
+                "structure": {"segments": ["stale"]},
+                "actor": "editor@example.com",
+                "note": "Stale attempt",
+            },
+            entity_label="episode-template",
+        ),
     )
 
 
 def _verify_profile_history(client: testing.TestClient, profile_id: str) -> None:
     """Verify profile history includes both create and update revisions."""
-    history_response = client.simulate_get(f"/series-profiles/{profile_id}/history")
-    assert history_response.status_code == 200, (
-        "Expected profile history endpoint to return 200."
-    )
-    assert len(history_response.json["items"]) == 2, (
-        "Expected two profile history revisions."
+    _verify_entity_history(
+        client,
+        f"/series-profiles/{profile_id}/history",
+        "profile",
     )
 
 
@@ -166,14 +223,10 @@ def _verify_episode_template_history(
     template_id: str,
 ) -> None:
     """Verify template history includes both create and update revisions."""
-    history_response = client.simulate_get(
+    _verify_entity_history(
+        client,
         f"/episode-templates/{template_id}/history",
-    )
-    assert history_response.status_code == 200, (
-        "Expected template history endpoint to return 200."
-    )
-    assert len(history_response.json["items"]) == 2, (
-        "Expected two episode-template history revisions."
+        "episode-template",
     )
 
 
