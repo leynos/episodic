@@ -467,7 +467,25 @@ class EpisodeTemplateRecord(Base):
 
 
 class SeriesProfileHistoryRecord(Base):
-    """SQLAlchemy model for immutable series profile history entries."""
+    """SQLAlchemy model for immutable series profile history entries.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the history entry.
+    series_profile_id : uuid.UUID
+        Foreign key to the series profile.
+    revision : int
+        Monotonically increasing revision number.
+    actor : str | None
+        Optional identifier for the actor who made the change.
+    note : str | None
+        Optional free-form note describing the change.
+    snapshot : dict[str, object]
+        JSONB snapshot of the profile state at this revision.
+    created_at : datetime.datetime
+        Timestamp when the history entry was created.
+    """
 
     __tablename__ = "series_profile_history"
 
@@ -504,7 +522,25 @@ class SeriesProfileHistoryRecord(Base):
 
 
 class EpisodeTemplateHistoryRecord(Base):
-    """SQLAlchemy model for immutable episode template history entries."""
+    """SQLAlchemy model for immutable episode template history entries.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the history entry.
+    episode_template_id : uuid.UUID
+        Foreign key to the episode template.
+    revision : int
+        Monotonically increasing revision number.
+    actor : str | None
+        Optional identifier for the actor who made the change.
+    note : str | None
+        Optional free-form note describing the change.
+    snapshot : dict[str, object]
+        JSONB snapshot of the template state at this revision.
+    created_at : datetime.datetime
+        Timestamp when the history entry was created.
+    """
 
     __tablename__ = "episode_template_history"
 
