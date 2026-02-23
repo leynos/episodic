@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing as typ
 from abc import ABC, abstractmethod
+from functools import partial
 from itertools import starmap
 
 import falcon
@@ -15,12 +16,9 @@ from episodic.canonical.profile_templates import (
     build_series_brief,
     create_episode_template,
     create_series_profile,
-    get_episode_template,
-    get_series_profile,
-    list_episode_template_history,
-    list_episode_templates,
-    list_series_profile_history,
-    list_series_profiles,
+    get_entity_with_revision,
+    list_entities_with_revisions,
+    list_history,
     update_episode_template,
     update_series_profile,
 )
@@ -141,8 +139,9 @@ class SeriesProfilesResource:
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """List all series profiles."""
         del req
+        service_fn = partial(list_entities_with_revisions, kind="series_profile")
         async with self._uow_factory() as uow:
-            items = await list_series_profiles(uow)
+            items = await service_fn(uow)
 
         resp.media = {"items": list(starmap(serialize_series_profile, items))}
         resp.status = falcon.HTTP_200
@@ -196,7 +195,7 @@ class SeriesProfileResource(_GetResourceBase):
         """Return the profile fetch service."""
         return typ.cast(
             "cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]",
-            get_series_profile,
+            partial(get_entity_with_revision, kind="series_profile"),
         )
 
     @staticmethod
@@ -249,7 +248,7 @@ class SeriesProfileHistoryResource(_GetHistoryResourceBase):
         """Return the profile-history list service."""
         return typ.cast(
             "cabc.Callable[..., cabc.Awaitable[list[object]]]",
-            list_series_profile_history,
+            partial(list_history, kind="series_profile"),
         )
 
     @staticmethod
@@ -316,7 +315,8 @@ class EpisodeTemplatesResource:
         )
 
         async with self._uow_factory() as uow:
-            items = await list_episode_templates(
+            service_fn = partial(list_entities_with_revisions, kind="episode_template")
+            items = await service_fn(
                 uow,
                 series_profile_id=series_profile_id,
             )
@@ -386,7 +386,7 @@ class EpisodeTemplateResource(_GetResourceBase):
         """Return the template fetch service."""
         return typ.cast(
             "cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]",
-            get_episode_template,
+            partial(get_entity_with_revision, kind="episode_template"),
         )
 
     @staticmethod
@@ -439,7 +439,7 @@ class EpisodeTemplateHistoryResource(_GetHistoryResourceBase):
         """Return the template-history list service."""
         return typ.cast(
             "cabc.Callable[..., cabc.Awaitable[list[object]]]",
-            list_episode_template_history,
+            partial(list_history, kind="episode_template"),
         )
 
     @staticmethod

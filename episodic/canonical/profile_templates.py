@@ -7,8 +7,8 @@ optimistic-lock revision rules.
 
 Example
 -------
-Use ``create_series_profile`` followed by ``list_series_profiles`` to create
-and inspect profiles through the ``profile_templates`` service layer.
+Use ``create_series_profile`` followed by ``list_entities_with_revisions`` to
+create and inspect profiles through the ``profile_templates`` service layer.
 """
 
 from __future__ import annotations
@@ -195,6 +195,9 @@ class RevisionConflictError(ValueError):
     """Raised when optimistic-lock revision preconditions are not met."""
 
 
+EntityKind = typ.Literal["series_profile", "episode_template"]
+
+
 class _RevisionedEntry(typ.Protocol):
     """Protocol for history entries that expose a revision."""
 
@@ -219,6 +222,68 @@ class _HistoryRepository[HistoryT](typ.Protocol):
     """Protocol for repositories that persist history entries."""
 
     async def add(self, entry: HistoryT, /) -> None: ...
+
+
+class _SeriesProfileRepository(typ.Protocol):
+    """Protocol for series-profile repository read operations."""
+
+    async def get(self, entity_id: uuid.UUID, /) -> SeriesProfile | None: ...
+
+    async def list(self) -> typ.Sequence[SeriesProfile]: ...
+
+
+class _EpisodeTemplateRepository(typ.Protocol):
+    """Protocol for episode-template repository read operations."""
+
+    async def get(self, entity_id: uuid.UUID, /) -> EpisodeTemplate | None: ...
+
+    async def list(
+        self, series_profile_id: uuid.UUID | None
+    ) -> typ.Sequence[EpisodeTemplate]: ...
+
+
+class _SeriesProfileHistoryRepository(typ.Protocol):
+    """Protocol for series-profile history repository read operations."""
+
+    async def get_latest_for_profile(
+        self,
+        profile_id: uuid.UUID,
+        /,
+    ) -> SeriesProfileHistoryEntry | None: ...
+
+    async def list_for_profile(
+        self,
+        profile_id: uuid.UUID,
+        /,
+    ) -> list[SeriesProfileHistoryEntry]: ...
+
+    async def get_latest_revisions_for_profiles(
+        self,
+        profile_ids: typ.Collection[uuid.UUID],
+        /,
+    ) -> dict[uuid.UUID, int]: ...
+
+
+class _EpisodeTemplateHistoryRepository(typ.Protocol):
+    """Protocol for episode-template history repository read operations."""
+
+    async def get_latest_for_template(
+        self,
+        template_id: uuid.UUID,
+        /,
+    ) -> EpisodeTemplateHistoryEntry | None: ...
+
+    async def list_for_template(
+        self,
+        template_id: uuid.UUID,
+        /,
+    ) -> list[EpisodeTemplateHistoryEntry]: ...
+
+    async def get_latest_revisions_for_templates(
+        self,
+        template_ids: typ.Collection[uuid.UUID],
+        /,
+    ) -> dict[uuid.UUID, int]: ...
 
 
 async def _get_latest_revision[HistoryEntryT: _RevisionedEntry](
@@ -319,6 +384,108 @@ async def _with_latest_revisions[EntityT: _VersionedEntity](
     entity_ids = [entity.id for entity in entities]
     revisions = await fetch_bulk_revisions(entity_ids)
     return [(entity, revisions.get(entity.id, 0)) for entity in entities]
+
+
+def _get_repos_for_kind(
+    uow: CanonicalUnitOfWork,
+    kind: EntityKind,
+) -> tuple[
+    _SeriesProfileRepository | _EpisodeTemplateRepository,
+    _SeriesProfileHistoryRepository | _EpisodeTemplateHistoryRepository,
+    str,
+]:
+    """Resolve repositories and a human label for a specific entity kind."""
+    if kind == "series_profile":
+        return (
+            uow.series_profiles,
+            uow.series_profile_history,
+            "Series profile",
+        )
+    return (
+        uow.episode_templates,
+        uow.episode_template_history,
+        "Episode template",
+    )
+
+
+async def get_entity_with_revision(
+    uow: CanonicalUnitOfWork,
+    *,
+    entity_id: uuid.UUID,
+    kind: EntityKind,
+) -> tuple[object, int]:
+    """Fetch one entity and its latest revision for the requested kind."""
+    entity_repo, history_repo, human_label = _get_repos_for_kind(uow, kind)
+    if kind == "series_profile":
+        profile_repo = typ.cast("_SeriesProfileRepository", entity_repo)
+        profile_history_repo = typ.cast("_SeriesProfileHistoryRepository", history_repo)
+        return await _get_entity_with_latest_revision(
+            entity_id=entity_id,
+            entity_label=human_label,
+            get_entity=profile_repo.get,
+            fetch_latest=profile_history_repo.get_latest_for_profile,
+        )
+
+    template_repo = typ.cast("_EpisodeTemplateRepository", entity_repo)
+    template_history_repo = typ.cast("_EpisodeTemplateHistoryRepository", history_repo)
+    return await _get_entity_with_latest_revision(
+        entity_id=entity_id,
+        entity_label=human_label,
+        get_entity=template_repo.get,
+        fetch_latest=template_history_repo.get_latest_for_template,
+    )
+
+
+async def list_history(
+    uow: CanonicalUnitOfWork,
+    *,
+    parent_id: uuid.UUID,
+    kind: EntityKind,
+) -> list[object]:
+    """List history entries for the requested entity kind."""
+    _, history_repo, _ = _get_repos_for_kind(uow, kind)
+    if kind == "series_profile":
+        profile_history_repo = typ.cast("_SeriesProfileHistoryRepository", history_repo)
+        items = await _list_history_generic(
+            profile_history_repo.list_for_profile,
+            parent_id=parent_id,
+        )
+        return typ.cast("list[object]", items)
+
+    template_history_repo = typ.cast("_EpisodeTemplateHistoryRepository", history_repo)
+    items = await _list_history_generic(
+        template_history_repo.list_for_template,
+        parent_id=parent_id,
+    )
+    return typ.cast("list[object]", items)
+
+
+async def list_entities_with_revisions(
+    uow: CanonicalUnitOfWork,
+    *,
+    kind: EntityKind,
+    series_profile_id: uuid.UUID | None = None,
+) -> list[tuple[object, int]]:
+    """List entities with current revisions for the requested kind."""
+    entity_repo, history_repo, _ = _get_repos_for_kind(uow, kind)
+    if kind == "series_profile":
+        profile_repo = typ.cast("_SeriesProfileRepository", entity_repo)
+        profile_history_repo = typ.cast("_SeriesProfileHistoryRepository", history_repo)
+        profiles = await profile_repo.list()
+        items = await _with_latest_revisions(
+            profiles,
+            profile_history_repo.get_latest_revisions_for_profiles,
+        )
+        return typ.cast("list[tuple[object, int]]", items)
+
+    template_repo = typ.cast("_EpisodeTemplateRepository", entity_repo)
+    template_history_repo = typ.cast("_EpisodeTemplateHistoryRepository", history_repo)
+    templates = await template_repo.list(series_profile_id)
+    items = await _with_latest_revisions(
+        templates,
+        template_history_repo.get_latest_revisions_for_templates,
+    )
+    return typ.cast("list[tuple[object, int]]", items)
 
 
 async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913  # Context: https://github.com/leynos/episodic/pull/25
@@ -453,60 +620,6 @@ async def create_series_profile(
     return profile, 1
 
 
-async def get_series_profile(
-    uow: CanonicalUnitOfWork,
-    *,
-    profile_id: uuid.UUID,
-) -> tuple[SeriesProfile, int]:
-    """Fetch a series profile and latest revision.
-
-    Parameters
-    ----------
-    uow : CanonicalUnitOfWork
-        Active unit of work providing repository access.
-    profile_id : uuid.UUID
-        Identifier of the profile to retrieve.
-
-    Returns
-    -------
-    tuple[SeriesProfile, int]
-        Retrieved profile and its latest revision number.
-
-    Raises
-    ------
-    EntityNotFoundError
-        Raised when the profile does not exist.
-    """
-    return await _get_entity_with_latest_revision(
-        entity_id=profile_id,
-        entity_label="Series profile",
-        get_entity=uow.series_profiles.get,
-        fetch_latest=uow.series_profile_history.get_latest_for_profile,
-    )
-
-
-async def list_series_profiles(
-    uow: CanonicalUnitOfWork,
-) -> list[tuple[SeriesProfile, int]]:
-    """List all series profiles with current revision values.
-
-    Parameters
-    ----------
-    uow : CanonicalUnitOfWork
-        Active unit of work providing repository access.
-
-    Returns
-    -------
-    list[tuple[SeriesProfile, int]]
-        Profile records paired with current revision numbers.
-    """
-    profiles = await uow.series_profiles.list()
-    return await _with_latest_revisions(
-        profiles,
-        uow.series_profile_history.get_latest_revisions_for_profiles,
-    )
-
-
 async def update_series_profile(
     uow: CanonicalUnitOfWork,
     *,
@@ -552,31 +665,6 @@ async def update_series_profile(
         ),
         create_snapshot=_profile_snapshot,
         audit=request.audit,
-    )
-
-
-async def list_series_profile_history(
-    uow: CanonicalUnitOfWork,
-    *,
-    profile_id: uuid.UUID,
-) -> list[SeriesProfileHistoryEntry]:
-    """List immutable history entries for a series profile.
-
-    Parameters
-    ----------
-    uow : CanonicalUnitOfWork
-        Active unit of work providing repository access.
-    profile_id : uuid.UUID
-        Identifier of the profile whose history is requested.
-
-    Returns
-    -------
-    list[SeriesProfileHistoryEntry]
-        History entries ordered by ascending revision.
-    """
-    return await _list_history_generic(
-        uow.series_profile_history.list_for_profile,
-        parent_id=profile_id,
     )
 
 
@@ -639,64 +727,6 @@ async def create_episode_template(
     return template, 1
 
 
-async def get_episode_template(
-    uow: CanonicalUnitOfWork,
-    *,
-    template_id: uuid.UUID,
-) -> tuple[EpisodeTemplate, int]:
-    """Fetch an episode template and latest revision.
-
-    Parameters
-    ----------
-    uow : CanonicalUnitOfWork
-        Active unit of work providing repository access.
-    template_id : uuid.UUID
-        Identifier of the template to retrieve.
-
-    Returns
-    -------
-    tuple[EpisodeTemplate, int]
-        Retrieved template and its latest revision number.
-
-    Raises
-    ------
-    EntityNotFoundError
-        Raised when the template does not exist.
-    """
-    return await _get_entity_with_latest_revision(
-        entity_id=template_id,
-        entity_label="Episode template",
-        get_entity=uow.episode_templates.get,
-        fetch_latest=uow.episode_template_history.get_latest_for_template,
-    )
-
-
-async def list_episode_templates(
-    uow: CanonicalUnitOfWork,
-    *,
-    series_profile_id: uuid.UUID | None,
-) -> list[tuple[EpisodeTemplate, int]]:
-    """List episode templates with current revision values.
-
-    Parameters
-    ----------
-    uow : CanonicalUnitOfWork
-        Active unit of work providing repository access.
-    series_profile_id : uuid.UUID | None
-        Optional profile identifier used to filter template results.
-
-    Returns
-    -------
-    list[tuple[EpisodeTemplate, int]]
-        Template records paired with current revision numbers.
-    """
-    templates = await uow.episode_templates.list(series_profile_id)
-    return await _with_latest_revisions(
-        templates,
-        uow.episode_template_history.get_latest_revisions_for_templates,
-    )
-
-
 async def update_episode_template(
     uow: CanonicalUnitOfWork,
     *,
@@ -742,31 +772,6 @@ async def update_episode_template(
         ),
         create_snapshot=_template_snapshot,
         audit=request.audit,
-    )
-
-
-async def list_episode_template_history(
-    uow: CanonicalUnitOfWork,
-    *,
-    template_id: uuid.UUID,
-) -> list[EpisodeTemplateHistoryEntry]:
-    """List immutable history entries for an episode template.
-
-    Parameters
-    ----------
-    uow : CanonicalUnitOfWork
-        Active unit of work providing repository access.
-    template_id : uuid.UUID
-        Identifier of the template whose history is requested.
-
-    Returns
-    -------
-    list[EpisodeTemplateHistoryEntry]
-        History entries ordered by ascending revision.
-    """
-    return await _list_history_generic(
-        uow.episode_template_history.list_for_template,
-        parent_id=template_id,
     )
 
 
@@ -831,14 +836,29 @@ async def build_series_brief(
         Raised when the profile or requested template does not exist, or when
         the template does not belong to the profile.
     """
-    profile, profile_revision = await get_series_profile(uow, profile_id=profile_id)
+    profile_obj, profile_revision = await get_entity_with_revision(
+        uow,
+        entity_id=profile_id,
+        kind="series_profile",
+    )
+    profile = typ.cast("SeriesProfile", profile_obj)
     if template_id is None:
-        template_items = await list_episode_templates(uow, series_profile_id=profile.id)
-    else:
-        template, template_revision = await get_episode_template(
+        template_items_raw = await list_entities_with_revisions(
             uow,
-            template_id=template_id,
+            kind="episode_template",
+            series_profile_id=profile.id,
         )
+        template_items = [
+            (typ.cast("EpisodeTemplate", template), revision)
+            for template, revision in template_items_raw
+        ]
+    else:
+        template_obj, template_revision = await get_entity_with_revision(
+            uow,
+            entity_id=template_id,
+            kind="episode_template",
+        )
+        template = typ.cast("EpisodeTemplate", template_obj)
         if template.series_profile_id != profile.id:
             msg = (
                 f"Episode template {template.id} does not belong to "

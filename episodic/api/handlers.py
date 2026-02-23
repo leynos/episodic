@@ -35,7 +35,7 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # Context: http
         async with uow_factory() as uow:
             entity, revision = await service_fn(
                 uow,
-                **{id_field_name: parsed_entity_id},
+                entity_id=parsed_entity_id,
             )
     except EntityNotFoundError as exc:
         raise falcon.HTTPNotFound(description=str(exc)) from exc
@@ -52,7 +52,10 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # Context: htt
     """Handle common history-list endpoint behaviour."""
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     async with uow_factory() as uow:
-        items = await service_fn(uow, **{id_field_name: parsed_entity_id})
+        items = await service_fn(
+            uow,
+            parent_id=parsed_entity_id,
+        )
     return {"items": [serializer_fn(item) for item in items]}, falcon.HTTP_200
 
 

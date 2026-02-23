@@ -18,8 +18,7 @@ from episodic.canonical.profile_templates import (
     build_series_brief,
     create_episode_template,
     create_series_profile,
-    list_episode_template_history,
-    list_series_profile_history,
+    list_history,
     update_episode_template,
     update_series_profile,
 )
@@ -27,6 +26,11 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from episodic.canonical.domain import (
+        EpisodeTemplateHistoryEntry,
+        SeriesProfileHistoryEntry,
+    )
 
 
 @pytest.mark.asyncio
@@ -52,11 +56,16 @@ async def test_create_series_profile_creates_initial_history(
     assert revision == 1, "Expected initial revision to be 1."
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        history = await list_series_profile_history(uow, profile_id=profile.id)
+        history = await list_history(
+            uow,
+            parent_id=profile.id,
+            kind="series_profile",
+        )
 
     assert len(history) == 1, "Expected one profile history record."
-    assert history[0].revision == 1, "Expected first revision number to be 1."
-    assert history[0].actor == "author@example.com", "Expected actor in history."
+    first_entry = typ.cast("SeriesProfileHistoryEntry", history[0])
+    assert first_entry.revision == 1, "Expected first revision number to be 1."
+    assert first_entry.actor == "author@example.com", "Expected actor in history."
 
 
 @pytest.mark.asyncio
@@ -153,12 +162,17 @@ async def test_update_episode_template_revision_conflict_raises(
             )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        history = await list_episode_template_history(uow, template_id=template.id)
+        history = await list_history(
+            uow,
+            parent_id=template.id,
+            kind="episode_template",
+        )
 
     assert len(history) == 1, (
         "Conflicting template update must not create a new history entry."
     )
-    assert history[0].revision == current_revision, (
+    first_entry = typ.cast("EpisodeTemplateHistoryEntry", history[0])
+    assert first_entry.revision == current_revision, (
         "History revision must remain at the last successful revision."
     )
 
@@ -198,9 +212,10 @@ async def test_create_episode_template_creates_history_and_brief(
     assert template_revision == 1, "Expected initial template revision to be 1."
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        template_history = await list_episode_template_history(
+        template_history = await list_history(
             uow,
-            template_id=template.id,
+            parent_id=template.id,
+            kind="episode_template",
         )
         brief = await build_series_brief(
             uow,
@@ -209,7 +224,8 @@ async def test_create_episode_template_creates_history_and_brief(
         )
 
     assert len(template_history) == 1, "Expected one template history record."
-    assert template_history[0].revision == 1, "Expected first template revision."
+    first_entry = typ.cast("EpisodeTemplateHistoryEntry", template_history[0])
+    assert first_entry.revision == 1, "Expected first template revision."
     series_profile = typ.cast("dict[str, object]", brief["series_profile"])
     templates = typ.cast("list[dict[str, object]]", brief["episode_templates"])
     assert series_profile["id"] == str(profile.id), (
