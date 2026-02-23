@@ -74,6 +74,10 @@ def _build_audit_metadata(payload: dict[str, typ.Any]) -> AuditMetadata:
 
 def _parse_expected_revision(payload: dict[str, typ.Any]) -> int:
     """Parse expected revision or raise HTTP 400."""
+    if "expected_revision" not in payload:
+        msg = "Missing required field: expected_revision"
+        raise falcon.HTTPBadRequest(description=msg)
+
     raw_expected_revision = payload["expected_revision"]
     try:
         return int(raw_expected_revision)
@@ -388,6 +392,7 @@ class SeriesProfilesResource:
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """List all series profiles."""
+        del req
         async with self._uow_factory() as uow:
             items = await list_series_profiles(uow)
 

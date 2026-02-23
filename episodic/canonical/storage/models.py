@@ -403,7 +403,27 @@ class ApprovalEventRecord(Base):
 
 
 class EpisodeTemplateRecord(Base):
-    """SQLAlchemy model for episode templates."""
+    """SQLAlchemy model for episode templates.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the episode template.
+    series_profile_id : uuid.UUID
+        Foreign key to the owning series profile.
+    slug : str
+        Unique slug within a series profile namespace.
+    title : str
+        Human-readable episode template title.
+    description : str | None
+        Optional longer description of template purpose.
+    structure : dict[str, object]
+        JSON structure used to define template sections.
+    created_at : datetime.datetime
+        Timestamp when the record was created.
+    updated_at : datetime.datetime
+        Timestamp when the record was last updated.
+    """
 
     __tablename__ = "episode_templates"
 

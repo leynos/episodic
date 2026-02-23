@@ -319,3 +319,35 @@ def test_update_rejects_non_integer_expected_revision(
     assert template_response.status_code == 400, (
         "Expected template update with non-integer revision to return 400."
     )
+
+
+def test_update_rejects_missing_expected_revision(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Return 400 when expected_revision is missing."""
+    profile_id, _ = _create_profile(canonical_api_client)
+    template_id, _ = _create_template(canonical_api_client, profile_id)
+
+    profile_response = canonical_api_client.simulate_patch(
+        f"/series-profiles/{profile_id}",
+        json={
+            "title": "Invalid profile update",
+            "description": "Should fail",
+            "configuration": {"tone": "invalid"},
+        },
+    )
+    assert profile_response.status_code == 400, (
+        "Expected profile update without expected_revision to return 400."
+    )
+
+    template_response = canonical_api_client.simulate_patch(
+        f"/episode-templates/{template_id}",
+        json={
+            "title": "Invalid template update",
+            "description": "Should fail",
+            "structure": {"segments": ["invalid"]},
+        },
+    )
+    assert template_response.status_code == 400, (
+        "Expected template update without expected_revision to return 400."
+    )
