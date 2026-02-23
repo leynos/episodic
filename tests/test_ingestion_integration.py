@@ -363,7 +363,7 @@ async def test_ingest_multi_source_records_conflict_metadata(
         assert "conflict_resolution" in doc.metadata, (
             "Expected conflict-resolution metadata to be attached to each source."
         )
-        cr = doc.metadata["conflict_resolution"]
+        cr = typ.cast("dict[str, object]", doc.metadata["conflict_resolution"])
         assert "preferred_sources" in cr, (
             "Expected conflict metadata to include preferred sources."
         )

@@ -250,9 +250,9 @@ def approval_event_persisted(
             "Expected the approval event to transition to draft."
         )
         assert isinstance(event.payload, dict), "Expected a payload dictionary."
-        assert set(event.payload.get("sources", [])) == set(source_uris), (
-            "Expected the approval payload to include the ingested sources."
-        )
+        assert set(typ.cast("list[str]", event.payload.get("sources", []))) == set(
+            source_uris
+        ), "Expected the approval payload to include the ingested sources."
 
     _run_async_step(_function_scoped_runner, _fetch)
 
@@ -312,23 +312,25 @@ def tei_header_provenance_captured(
         assert isinstance(provenance, dict), (
             "Expected TEI header provenance dictionary."
         )
-        assert provenance.get("capture_context") == "source_ingestion", (
+        provenance_dict = typ.cast("dict[str, object]", provenance)
+        assert provenance_dict.get("capture_context") == "source_ingestion", (
             "Expected ingestion provenance context."
         )
-        assert provenance.get("reviewer_identities") == ["producer@example.com"], (
+        assert provenance_dict.get("reviewer_identities") == ["producer@example.com"], (
             "Expected reviewer identity from ingestion request."
         )
-        assert isinstance(provenance.get("ingestion_timestamp"), str), (
+        assert isinstance(provenance_dict.get("ingestion_timestamp"), str), (
             "Expected ingestion timestamp string in provenance."
         )
-        priorities = provenance.get("source_priorities")
+        priorities = provenance_dict.get("source_priorities")
         assert isinstance(priorities, list), (
             "Expected source priorities list in provenance."
         )
+        priority_items = typ.cast("list[dict[str, object]]", priorities)
         assert len(priorities) == len(source_uris), (
             "Expected one source-priority record per source URI."
         )
-        assert priorities[0]["source_uri"] == "https://example.com/report", (
+        assert priority_items[0]["source_uri"] == "https://example.com/report", (
             "Expected highest-weight source URI to be first."
         )
 

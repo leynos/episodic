@@ -10,7 +10,7 @@ if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
 
-type JsonMapping = dict[str, typ.Any]
+type JsonMapping = dict[str, object]
 
 
 class EpisodeStatus(enum.StrEnum):

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import typing as typ
-from dataclasses import dataclass  # noqa: ICN003
 
 if typ.TYPE_CHECKING:
     from falcon import testing
 
 
-@dataclass(frozen=True, slots=True)
+@dc.dataclass(frozen=True, slots=True)
 class EntityUpdateSpec:
     """Specification for updating an entity via PATCH."""
 

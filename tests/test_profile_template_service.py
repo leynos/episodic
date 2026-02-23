@@ -210,9 +210,11 @@ async def test_create_episode_template_creates_history_and_brief(
 
     assert len(template_history) == 1, "Expected one template history record."
     assert template_history[0].revision == 1, "Expected first template revision."
-    assert brief["series_profile"]["id"] == str(profile.id), (
+    series_profile = typ.cast("dict[str, object]", brief["series_profile"])
+    templates = typ.cast("list[dict[str, object]]", brief["episode_templates"])
+    assert series_profile["id"] == str(profile.id), (
         "Expected profile in structured brief."
     )
-    assert brief["episode_templates"][0]["id"] == str(template.id), (
+    assert templates[0]["id"] == str(template.id), (
         "Expected template in structured brief."
     )

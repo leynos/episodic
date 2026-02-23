@@ -89,6 +89,13 @@ def _build_source_document_input(
     )
 
 
+def _coerce_score(value: object, default: float) -> float:
+    """Coerce a score override value to float with a safe default."""
+    if isinstance(value, (int, float, str)):
+        return float(value)
+    return default
+
+
 class InMemorySourceNormaliser:
     """Reference normaliser that converts raw sources into TEI fragments.
 
@@ -112,9 +119,9 @@ class InMemorySourceNormaliser:
         if score_overrides:
             for source_type, overrides in score_overrides.items():
                 self._scores[source_type] = _SourceTypeScores(
-                    quality=float(overrides.get("quality", 0.5)),
-                    freshness=float(overrides.get("freshness", 0.5)),
-                    reliability=float(overrides.get("reliability", 0.5)),
+                    quality=_coerce_score(overrides.get("quality"), 0.5),
+                    freshness=_coerce_score(overrides.get("freshness"), 0.5),
+                    reliability=_coerce_score(overrides.get("reliability"), 0.5),
                 )
 
     async def normalise(

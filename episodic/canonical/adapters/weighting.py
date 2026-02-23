@@ -29,6 +29,13 @@ _DEFAULT_FRESHNESS_COEFFICIENT = 0.3
 _DEFAULT_RELIABILITY_COEFFICIENT = 0.2
 
 
+def _coerce_coefficient(value: object, default: float) -> float:
+    """Coerce coefficient values to float with a safe default."""
+    if isinstance(value, (int, float, str)):
+        return float(value)
+    return default
+
+
 def _extract_coefficients(
     series_configuration: JsonMapping,
 ) -> tuple[float, float, float]:
@@ -45,13 +52,20 @@ def _extract_coefficients(
             _DEFAULT_FRESHNESS_COEFFICIENT,
             _DEFAULT_RELIABILITY_COEFFICIENT,
         )
-    quality = weighting.get("quality_coefficient", _DEFAULT_QUALITY_COEFFICIENT)
-    freshness = weighting.get("freshness_coefficient", _DEFAULT_FRESHNESS_COEFFICIENT)
-    reliability = weighting.get(
-        "reliability_coefficient",
+    weighting_map = typ.cast("dict[str, object]", weighting)
+    quality = _coerce_coefficient(
+        weighting_map.get("quality_coefficient"),
+        _DEFAULT_QUALITY_COEFFICIENT,
+    )
+    freshness = _coerce_coefficient(
+        weighting_map.get("freshness_coefficient"),
+        _DEFAULT_FRESHNESS_COEFFICIENT,
+    )
+    reliability = _coerce_coefficient(
+        weighting_map.get("reliability_coefficient"),
         _DEFAULT_RELIABILITY_COEFFICIENT,
     )
-    return (float(quality), float(freshness), float(reliability))
+    return (quality, freshness, reliability)
 
 
 def _compute_single_weight(
