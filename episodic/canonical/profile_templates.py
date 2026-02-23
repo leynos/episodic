@@ -328,9 +328,9 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
         await history_repo.add(history_entry)
         await uow.commit()
     except IntegrityError as exc:
+        await uow.rollback()
         if not _is_revision_conflict_integrity_error(exc, entity_id_field):
             raise
-        await uow.rollback()
         msg = f"{entity_label} revision conflict: concurrent update detected."
         raise RevisionConflictError(msg) from exc
     return updated_entity, next_revision

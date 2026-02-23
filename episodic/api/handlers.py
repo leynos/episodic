@@ -22,7 +22,7 @@ if typ.TYPE_CHECKING:
     from .types import UowFactory
 
 
-async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917
+async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # Context: https://github.com/leynos/episodic/pull/25
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,
@@ -42,7 +42,7 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 
-async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917
+async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # Context: https://github.com/leynos/episodic/pull/25
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,
@@ -56,7 +56,7 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917
     return {"items": [serializer_fn(item) for item in items]}, falcon.HTTP_200
 
 
-async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917
+async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # Context: https://github.com/leynos/episodic/pull/25
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,

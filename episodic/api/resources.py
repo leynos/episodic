@@ -232,16 +232,19 @@ class SeriesProfileHistoryResource(_GetHistoryResourceBase):
     """History endpoint for series profiles."""
 
     @staticmethod
+    @typ.override
     def _get_entity_id_from_path(**kwargs: str) -> str:
         """Return the profile identifier from route params."""
         return kwargs["profile_id"]
 
     @staticmethod
+    @typ.override
     def _get_id_field_name() -> str:
         """Return the profile identifier service argument."""
         return "profile_id"
 
     @staticmethod
+    @typ.override
     def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
         """Return the profile-history list service."""
         return typ.cast(
@@ -250,6 +253,7 @@ class SeriesProfileHistoryResource(_GetHistoryResourceBase):
         )
 
     @staticmethod
+    @typ.override
     def _get_serializer_fn() -> cabc.Callable[[object], dict[str, typ.Any]]:
         """Return the profile-history serializer."""
         return typ.cast(
@@ -365,16 +369,19 @@ class EpisodeTemplateResource(_GetResourceBase):
     """Single-resource endpoint for episode templates."""
 
     @staticmethod
+    @typ.override
     def _get_entity_id_from_path(**kwargs: str) -> str:
         """Return the template identifier from route params."""
         return kwargs["template_id"]
 
     @staticmethod
+    @typ.override
     def _get_id_field_name() -> str:
         """Return the template identifier service argument."""
         return "template_id"
 
     @staticmethod
+    @typ.override
     def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
         """Return the template fetch service."""
         return typ.cast(
@@ -383,6 +390,7 @@ class EpisodeTemplateResource(_GetResourceBase):
         )
 
     @staticmethod
+    @typ.override
     def _get_serializer_fn() -> cabc.Callable[[object, int], dict[str, typ.Any]]:
         """Return the template serializer."""
         return typ.cast(
@@ -414,16 +422,19 @@ class EpisodeTemplateHistoryResource(_GetHistoryResourceBase):
     """History endpoint for episode templates."""
 
     @staticmethod
+    @typ.override
     def _get_entity_id_from_path(**kwargs: str) -> str:
         """Return the template identifier from route params."""
         return kwargs["template_id"]
 
     @staticmethod
+    @typ.override
     def _get_id_field_name() -> str:
         """Return the template identifier service argument."""
         return "template_id"
 
     @staticmethod
+    @typ.override
     def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
         """Return the template-history list service."""
         return typ.cast(
@@ -432,6 +443,7 @@ class EpisodeTemplateHistoryResource(_GetHistoryResourceBase):
         )
 
     @staticmethod
+    @typ.override
     def _get_serializer_fn() -> cabc.Callable[[object], dict[str, typ.Any]]:
         """Return the template-history serializer."""
         return typ.cast(

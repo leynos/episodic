@@ -1,4 +1,17 @@
-"""Shared types for the Falcon canonical API adapter."""
+"""Shared types for the Falcon canonical API adapter.
+
+This module defines ``UowFactory``, a callable alias used by API adapters to
+obtain a ``CanonicalUnitOfWork`` instance when handling requests.
+
+Example
+-------
+Define and use a unit-of-work factory:
+
+>>> factory: UowFactory = (  # doctest: +SKIP
+...     lambda: SqlAlchemyUnitOfWork(session_factory)
+... )
+>>> uow = factory()  # doctest: +SKIP
+"""
 
 from __future__ import annotations
 

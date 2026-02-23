@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import typing as typ
 
+from episodic.canonical.adapters._coercion import coerce_float
 from episodic.canonical.ingestion import NormalisedSource, WeightingResult
 
 if typ.TYPE_CHECKING:
@@ -27,13 +28,6 @@ if typ.TYPE_CHECKING:
 _DEFAULT_QUALITY_COEFFICIENT = 0.5
 _DEFAULT_FRESHNESS_COEFFICIENT = 0.3
 _DEFAULT_RELIABILITY_COEFFICIENT = 0.2
-
-
-def _coerce_coefficient(value: object, default: float) -> float:
-    """Coerce coefficient values to float with a safe default."""
-    if isinstance(value, (int, float, str)):
-        return float(value)
-    return default
 
 
 def _extract_coefficients(
@@ -53,15 +47,15 @@ def _extract_coefficients(
             _DEFAULT_RELIABILITY_COEFFICIENT,
         )
     weighting_map = typ.cast("dict[str, object]", weighting)
-    quality = _coerce_coefficient(
+    quality = coerce_float(
         weighting_map.get("quality_coefficient"),
         _DEFAULT_QUALITY_COEFFICIENT,
     )
-    freshness = _coerce_coefficient(
+    freshness = coerce_float(
         weighting_map.get("freshness_coefficient"),
         _DEFAULT_FRESHNESS_COEFFICIENT,
     )
-    reliability = _coerce_coefficient(
+    reliability = coerce_float(
         weighting_map.get("reliability_coefficient"),
         _DEFAULT_RELIABILITY_COEFFICIENT,
     )
