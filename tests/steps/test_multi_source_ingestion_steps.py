@@ -321,7 +321,7 @@ def conflict_resolution_metadata_recorded(
                 f"Expected conflict_resolution in source document "
                 f"metadata for doc index={idx} id={doc.id}."
             )
-            cr = doc.metadata["conflict_resolution"]
+            cr = typ.cast("dict[str, object]", doc.metadata["conflict_resolution"])
             assert "preferred_sources" in cr, (
                 f"Expected preferred_sources in conflict_resolution "
                 f"metadata for doc index={idx} id={doc.id}."
@@ -380,20 +380,22 @@ def tei_header_provenance_captures_priorities(
         assert isinstance(provenance, dict), (
             "Expected TEI header to include provenance metadata."
         )
-        assert provenance.get("capture_context") == "source_ingestion", (
+        provenance_dict = typ.cast("dict[str, object]", provenance)
+        assert provenance_dict.get("capture_context") == "source_ingestion", (
             "Expected ingestion capture context in TEI provenance."
         )
-        assert provenance.get("reviewer_identities") == ["bdd-test@example.com"], (
+        assert provenance_dict.get("reviewer_identities") == ["bdd-test@example.com"], (
             "Expected ingestion actor identity in provenance metadata."
         )
-        priorities = provenance.get("source_priorities")
+        priorities = provenance_dict.get("source_priorities")
         assert isinstance(priorities, list), (
             "Expected list of source priorities in TEI provenance."
         )
+        priority_items = typ.cast("list[dict[str, object]]", priorities)
         assert priorities, "Expected at least one source priority entry."
 
         if len(priorities) > 1:
-            assert priorities[0]["source_uri"] == "s3://bucket/transcript.txt", (
+            assert priority_items[0]["source_uri"] == "s3://bucket/transcript.txt", (
                 "Expected transcript source to rank highest in default weighting."
             )
 

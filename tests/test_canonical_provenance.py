@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import typing as typ
 
 import pytest
 
@@ -181,6 +182,7 @@ def test_merge_tei_header_provenance_preserves_unrelated_existing_keys() -> None
     assert isinstance(merged_provenance, dict), (
         "Expected merged provenance payload to remain a mapping."
     )
-    assert merged_provenance["legacy_key"] == "legacy-value", (
+    merged_dict = typ.cast("dict[str, object]", merged_provenance)
+    assert merged_dict["legacy_key"] == "legacy-value", (
         "Expected merge to preserve unknown existing provenance keys."
     )

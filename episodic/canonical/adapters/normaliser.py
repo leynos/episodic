@@ -21,6 +21,7 @@ import typing as typ
 
 import tei_rapporteur as _tei
 
+from episodic.canonical.adapters._coercion import coerce_float
 from episodic.canonical.domain import SourceDocumentInput
 from episodic.canonical.ingestion import NormalisedSource, RawSourceInput
 
@@ -112,9 +113,9 @@ class InMemorySourceNormaliser:
         if score_overrides:
             for source_type, overrides in score_overrides.items():
                 self._scores[source_type] = _SourceTypeScores(
-                    quality=float(overrides.get("quality", 0.5)),
-                    freshness=float(overrides.get("freshness", 0.5)),
-                    reliability=float(overrides.get("reliability", 0.5)),
+                    quality=coerce_float(overrides.get("quality"), 0.5),
+                    freshness=coerce_float(overrides.get("freshness"), 0.5),
+                    reliability=coerce_float(overrides.get("reliability"), 0.5),
                 )
 
     async def normalise(

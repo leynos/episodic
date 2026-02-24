@@ -933,6 +933,59 @@ erDiagram
 
 _Figure 7: Canonical content schema relationships._
 
+The diagram below details the series profile, episode template, and immutable
+revision-history tables used by the current profile-template management flows.
+
+```mermaid
+erDiagram
+    SERIES_PROFILES {
+        uuid id PK
+        string slug
+        string title
+        text description
+        jsonb configuration
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    EPISODE_TEMPLATES {
+        uuid id PK
+        uuid series_profile_id FK
+        string slug
+        string title
+        text description
+        jsonb structure
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    SERIES_PROFILE_HISTORY {
+        uuid id PK
+        uuid series_profile_id FK
+        int revision
+        string actor
+        text note
+        jsonb snapshot
+        timestamptz created_at
+    }
+
+    EPISODE_TEMPLATE_HISTORY {
+        uuid id PK
+        uuid episode_template_id FK
+        int revision
+        string actor
+        text note
+        jsonb snapshot
+        timestamptz created_at
+    }
+
+    SERIES_PROFILES ||--o{ EPISODE_TEMPLATES : has_templates
+    SERIES_PROFILES ||--o{ SERIES_PROFILE_HISTORY : has_profile_history
+    EPISODE_TEMPLATES ||--o{ EPISODE_TEMPLATE_HISTORY : has_template_history
+```
+
+_Figure 8: Series profile, episode template, and history-table relationships._
+
 ### Planned reusable reference-document model
 
 The detailed diagram below extends the canonical schema with reusable
@@ -1022,22 +1075,24 @@ erDiagram
     REFERENCE_DOCUMENT_REVISIONS ||--o{ SOURCE_DOCUMENTS : snapshot
 ```
 
-_Figure 8: Planned reusable reference material and profile schema._
+_Figure 9: Planned reusable reference material and profile schema._
 
 ### Repository and unit-of-work implementation
 
 The canonical persistence layer follows the hexagonal architecture by defining
 Protocol-based port interfaces in `episodic/canonical/ports.py` and
 implementing them as async SQLAlchemy adapters in
-`episodic/canonical/storage/`. Six repository protocols
+`episodic/canonical/storage/`. Nine repository protocols
 (`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
 `IngestionJobRepository`, `SourceDocumentRepository`,
-`ApprovalEventRepository`) define the persistence contract, and
-`CanonicalUnitOfWork` aggregates them behind a transactional boundary with
-`commit()`, `flush()`, and `rollback()` methods.
+`ApprovalEventRepository`, `EpisodeTemplateRepository`,
+`SeriesProfileHistoryRepository`, and `EpisodeTemplateHistoryRepository`)
+define the persistence contract, and `CanonicalUnitOfWork` aggregates them
+behind a transactional boundary with `commit()`, `flush()`, and `rollback()`
+methods.
 
 The `SqlAlchemyUnitOfWork` adapter creates a fresh `AsyncSession` on entry,
-instantiates all six repositories bound to that session, and rolls back
+instantiates all repositories bound to that session, and rolls back
 automatically when the context manager exits with an unhandled exception.
 Repositories translate between frozen domain dataclasses and SQLAlchemy ORM
 records via dedicated mapper functions in
@@ -1049,12 +1104,38 @@ Its contract exposes `add(document)` and `list_for_job(job_id)`, and
 `SourceDocument` entities include `ingestion_job_id`. This supports one-shot
 ingestion provenance, but not a standalone reusable reference library.
 
-`EpisodeTemplateRepository` and reusable reference repositories are planned
-additions. The planned design introduces at least one repository for
-`ReferenceDocument` persistence and additional repository responsibilities for
-revision history and binding resolution across series, templates, and ingestion
-contexts, including `effective_from_episode_id` resolution when selecting
-host/guest profile revisions for a specific episode.
+`EpisodeTemplateRepository` is now implemented with immutable
+`episode_template_history` revisions for auditability and optimistic locking.
+Reusable reference repositories remain planned additions. The planned design
+introduces at least one repository for `ReferenceDocument` persistence and
+additional repository responsibilities for revision history and binding
+resolution across series, templates, and ingestion contexts, including
+`effective_from_episode_id` resolution when selecting host/guest profile
+revisions for a specific episode.
+
+### Profile/template REST (Representational State Transfer) API (Application Programming Interface) specification
+
+The profile/template API (Application Programming Interface) is exposed through
+Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
+`episodic/api/app.py`.
+
+- `POST /series-profiles` creates a profile and revision `1`.
+- `GET /series-profiles` lists profiles with current revision values.
+- `GET /series-profiles/{profile_id}` returns one profile plus revision.
+- `PATCH /series-profiles/{profile_id}` updates profile data; requires
+  `expected_revision` and returns `409 Conflict` on mismatch.
+- `GET /series-profiles/{profile_id}/history` returns append-only revision
+  history (`revision`, `actor`, `note`, `snapshot`, `created_at`).
+- `GET /series-profiles/{profile_id}/brief` returns a structured brief with the
+  selected series profile and associated episode template payload(s).
+- `POST /episode-templates` creates a template and revision `1`.
+- `GET /episode-templates` lists templates, optionally filtered by
+  `series_profile_id`.
+- `GET /episode-templates/{template_id}` returns one template plus revision.
+- `PATCH /episode-templates/{template_id}` updates template data; requires
+  `expected_revision` and returns `409 Conflict` on mismatch.
+- `GET /episode-templates/{template_id}/history` returns append-only revision
+  history (`revision`, `actor`, `note`, `snapshot`, `created_at`).
 
 Integration tests run against an in-process PostgreSQL instance provided by
 py-pglite, with Alembic migrations applied before each test function. The test

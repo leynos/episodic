@@ -8,7 +8,11 @@ Examples
 Ingest sources within a unit-of-work session:
 
 >>> async with SqlAlchemyUnitOfWork(session_factory) as uow:
-...     episode = await ingest_sources(uow, profile, request)
+...     episode = await ingest_sources(
+...         uow=uow,
+...         series_profile=profile,
+...         request=request,
+...     )
 """
 
 from __future__ import annotations

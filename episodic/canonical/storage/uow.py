@@ -22,7 +22,10 @@ from episodic.logging import get_logger, log_info
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
     SqlAlchemyEpisodeRepository,
+    SqlAlchemyEpisodeTemplateHistoryRepository,
+    SqlAlchemyEpisodeTemplateRepository,
     SqlAlchemyIngestionJobRepository,
+    SqlAlchemySeriesProfileHistoryRepository,
     SqlAlchemySeriesProfileRepository,
     SqlAlchemySourceDocumentRepository,
     SqlAlchemyTeiHeaderRepository,
@@ -59,6 +62,12 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for source document persistence.
     approval_events : SqlAlchemyApprovalEventRepository
         Repository for approval event persistence.
+    episode_templates : SqlAlchemyEpisodeTemplateRepository
+        Repository for episode template persistence.
+    series_profile_history : SqlAlchemySeriesProfileHistoryRepository
+        Repository for series profile change history.
+    episode_template_history : SqlAlchemyEpisodeTemplateHistoryRepository
+        Repository for episode template change history.
     """
 
     def __init__(self, session_factory: cabc.Callable[[], AsyncSession]) -> None:
@@ -80,6 +89,13 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         self.ingestion_jobs = SqlAlchemyIngestionJobRepository(self._session)
         self.source_documents = SqlAlchemySourceDocumentRepository(self._session)
         self.approval_events = SqlAlchemyApprovalEventRepository(self._session)
+        self.episode_templates = SqlAlchemyEpisodeTemplateRepository(self._session)
+        self.series_profile_history = SqlAlchemySeriesProfileHistoryRepository(
+            self._session
+        )
+        self.episode_template_history = SqlAlchemyEpisodeTemplateHistoryRepository(
+            self._session
+        )
         return self
 
     async def __aexit__(

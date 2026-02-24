@@ -409,7 +409,7 @@ Create **`episodic/canonical/ingestion_service.py`**:
        - `sources` = list of `SourceDocumentInput` built from each raw source,
          using the computed weight from `WeightingResult`.
        - `requested_by` = `request.requested_by`
-    5. Delegate to `ingest_sources(uow, series_profile, request)`.
+    5. Delegate to `ingest_sources(uow=uow, series_profile=series_profile, request=request)`.
     6. Log the ingestion with source count, conflict resolution summary.
     7. Return the persisted `CanonicalEpisode`.
 

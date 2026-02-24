@@ -128,7 +128,10 @@ def merge_tei_header_provenance(
     """
     existing_provenance = payload.get("episodic_provenance")
     if isinstance(existing_provenance, dict):
-        merged_provenance: JsonMapping = {**existing_provenance, **provenance}
+        merged_provenance: JsonMapping = {
+            **typ.cast("JsonMapping", existing_provenance),
+            **provenance,
+        }
     else:
         merged_provenance = dict(provenance)
     return {**payload, "episodic_provenance": merged_provenance}

@@ -43,6 +43,13 @@ INGESTION_STATUS = sa.Enum(
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )
 
+UQ_SERIES_PROFILE_HISTORY_REVISION = "uq_series_profile_history_revision"
+UQ_EPISODE_TEMPLATE_HISTORY_REVISION = "uq_episode_template_history_revision"
+REVISION_CONSTRAINT_NAMES = (
+    UQ_SERIES_PROFILE_HISTORY_REVISION,
+    UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
+)
+
 
 class SeriesProfileRecord(Base):
     """SQLAlchemy model for series profiles.
@@ -399,4 +406,178 @@ class ApprovalEventRecord(Base):
         sa.DateTime(timezone=True),
         nullable=False,
         server_default=sa.func.now(),
+    )
+
+
+class EpisodeTemplateRecord(Base):
+    """SQLAlchemy model for episode templates.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the episode template.
+    series_profile_id : uuid.UUID
+        Foreign key to the owning series profile.
+    slug : str
+        Unique slug within a series profile namespace.
+    title : str
+        Human-readable episode template title.
+    description : str | None
+        Optional longer description of template purpose.
+    structure : dict[str, object]
+        JSON structure used to define template sections.
+    created_at : datetime.datetime
+        Timestamp when the record was created.
+    updated_at : datetime.datetime
+        Timestamp when the record was last updated.
+    """
+
+    __tablename__ = "episode_templates"
+
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+    )
+    series_profile_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("series_profiles.id"),
+        nullable=False,
+        index=True,
+    )
+    slug: orm.Mapped[str] = orm.mapped_column(sa.String(160), nullable=False)
+    title: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)
+    description: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
+    structure: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        postgresql.JSONB,
+        default=dict,
+        nullable=False,
+    )
+    created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+    updated_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "series_profile_id",
+            "slug",
+            name="uq_episode_templates_series_slug",
+        ),
+    )
+
+
+class SeriesProfileHistoryRecord(Base):
+    """SQLAlchemy model for immutable series profile history entries.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the history entry.
+    series_profile_id : uuid.UUID
+        Foreign key to the series profile.
+    revision : int
+        Monotonically increasing revision number.
+    actor : str | None
+        Optional identifier for the actor who made the change.
+    note : str | None
+        Optional free-form note describing the change.
+    snapshot : dict[str, object]
+        JSONB snapshot of the profile state at this revision.
+    created_at : datetime.datetime
+        Timestamp when the history entry was created.
+    """
+
+    __tablename__ = "series_profile_history"
+
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+    )
+    series_profile_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("series_profiles.id"),
+        nullable=False,
+        index=True,
+    )
+    revision: orm.Mapped[int] = orm.mapped_column(sa.Integer, nullable=False)
+    actor: orm.Mapped[str | None] = orm.mapped_column(sa.String(200), nullable=True)
+    note: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
+    snapshot: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        postgresql.JSONB,
+        nullable=False,
+    )
+    created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "series_profile_id",
+            "revision",
+            name=UQ_SERIES_PROFILE_HISTORY_REVISION,
+        ),
+    )
+
+
+class EpisodeTemplateHistoryRecord(Base):
+    """SQLAlchemy model for immutable episode template history entries.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the history entry.
+    episode_template_id : uuid.UUID
+        Foreign key to the episode template.
+    revision : int
+        Monotonically increasing revision number.
+    actor : str | None
+        Optional identifier for the actor who made the change.
+    note : str | None
+        Optional free-form note describing the change.
+    snapshot : dict[str, object]
+        JSONB snapshot of the template state at this revision.
+    created_at : datetime.datetime
+        Timestamp when the history entry was created.
+    """
+
+    __tablename__ = "episode_template_history"
+
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+    )
+    episode_template_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("episode_templates.id"),
+        nullable=False,
+        index=True,
+    )
+    revision: orm.Mapped[int] = orm.mapped_column(sa.Integer, nullable=False)
+    actor: orm.Mapped[str | None] = orm.mapped_column(sa.String(200), nullable=True)
+    note: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
+    snapshot: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        postgresql.JSONB,
+        nullable=False,
+    )
+    created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "episode_template_id",
+            "revision",
+            name=UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
+        ),
     )

@@ -43,6 +43,12 @@ This guide will cover:
   preferred or rejected. Weighting coefficients are configurable per series
   profile. TEI headers automatically capture provenance metadata including
   source priorities, ingestion timestamps, and reviewer identities.
+- Creating and updating series profiles via the API with optimistic locking
+  (`expected_revision`)
+- Creating and updating episode templates linked to series profiles
+- Retrieving change history for series profiles and episode templates
+- Fetching structured brief payloads for downstream generators through
+  `GET /series-profiles/{id}/brief`
 
 ### Quality & Compliance
 
