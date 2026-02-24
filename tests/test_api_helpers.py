@@ -104,10 +104,10 @@ def test_build_payload_dataclass_raises_when_required_field_is_missing() -> None
     )
 
 
-def test_build_typed_update_request_uses_selected_data_key(
+def test_build_typed_update_request_passes_payload_and_uses_data_builder(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pass dynamic data key values through to request builder."""
+    """Pass payload through and use parsed components from data_builder."""
     captured: dict[str, object] = {}
     entity_id = uuid.uuid4()
 
