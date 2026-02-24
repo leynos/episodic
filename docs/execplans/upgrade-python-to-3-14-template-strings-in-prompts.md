@@ -70,9 +70,9 @@ behaviour.
   repository search shows prompt references mainly in docs. Impact: staged
   prototype-first implementation is required.
 
-- Observation: project memory MCP resources are unavailable in this session.
-  Evidence: resource and template listings are empty. Impact: this plan relies
-  on repository text only.
+- Observation: project memory Model Context Protocol (MCP) resources are
+  unavailable in this session. Evidence: resource and template listings are
+  empty. Impact: this plan relies on repository text only.
 
 ## Decision log
 
@@ -100,8 +100,8 @@ concrete orchestration modules. Planned workflow areas include generation
 prompts, QA remediation prompts, and audio synthesis parameter prompts.
 
 This plan introduces a foundational prompt template abstraction in code so
-future `LLMPort` adapters can consume normalized rendered prompts without
-relying on ad-hoc string formatting.
+future Large Language Model (LLM) port (`LLMPort`) adapters can consume
+normalized rendered prompts without relying on ad-hoc string formatting.
 
 Likely new or modified areas:
 
@@ -140,8 +140,8 @@ Run from repository root.
 
 2. Add rendering tests first and run targeted tests.
 
-    set -o pipefail; uv run pytest -v tests/test_prompt_templates.py 2>&1 \
-      | tee /tmp/py314-tstring-targeted.log |
+    set -o pipefail; uv run pytest -v tests/test_prompt_templates.py \
+      2>&1 | tee /tmp/py314-tstring-targeted.log
 
 3. Implement template utility and integration.
 

@@ -64,10 +64,10 @@ runtime behaviour remains stable, and all quality gates pass.
 
 ## Surprises & discoveries
 
-- Observation: project memory MCP resources are unavailable in this session.
-  Evidence: empty results from `list_mcp_resources` and
-  `list_mcp_resource_templates`. Impact: plan context comes from local
-  repository inspection only.
+- Observation: project memory Model Context Protocol (MCP) resources are
+  unavailable in this session. Evidence: empty results from
+  `list_mcp_resources` and `list_mcp_resource_templates`. Impact: plan context
+  comes from local repository inspection only.
 
 - Observation: the project enables Ruff `FA` rules that enforce
   `from __future__ import annotations`. Evidence: `pyproject.toml` includes
@@ -140,8 +140,7 @@ Run from repository root.
 2. Add or update annotation-sensitive tests first and run them.
 
     set -o pipefail; uv run pytest -v tests/test_canonical_storage.py \
-      tests/test_migration_check.py 2>&1 \
-      | tee /tmp/py314-lazy-ann-targeted.log |
+      tests/test_migration_check.py 2>&1 | tee /tmp/py314-lazy-ann-targeted.log
 
 3. Apply code and tooling changes.
 

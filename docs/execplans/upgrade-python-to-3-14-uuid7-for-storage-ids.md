@@ -58,6 +58,11 @@ existing retrieval behaviour remains unchanged, and full quality gates pass.
   Severity: medium. Likelihood: medium. Mitigation: centralize generation
   behind a small helper to avoid drift.
 
+- Risk: UUIDv7 embeds a Unix timestamp, so IDs that reach external API
+  consumers reveal record-creation timing. Severity: medium. Likelihood:
+  medium. Mitigation: audit API response shapes and event payloads for UUID
+  exposure; use opaque aliases where timing disclosure is unacceptable.
+
 ## Progress
 
 - [x] (2026-02-24 00:00Z) Draft ExecPlan created.
@@ -68,9 +73,10 @@ existing retrieval behaviour remains unchanged, and full quality gates pass.
 
 ## Surprises & discoveries
 
-- Observation: project memory MCP resources are unavailable in this session.
-  Evidence: `list_mcp_resources` and `list_mcp_resource_templates` both
-  returned empty lists. Impact: this plan is based on repository sources only.
+- Observation: project memory Model Context Protocol (MCP) resources are
+  unavailable in this session. Evidence: `list_mcp_resources` and
+  `list_mcp_resource_templates` both returned empty lists. Impact: this plan is
+  based on repository sources only.
 
 - Observation: current canonical ingestion creates IDs in
   `episodic/canonical/services.py` with `uuid.uuid4()` for episodes, jobs,
@@ -148,8 +154,8 @@ Run from repository root.
 
 2. Update tests first, then run targeted test files.
 
-    set -o pipefail; uv run pytest -v tests/test_canonical_storage.py 2>&1 \
-      | tee /tmp/py314-uuid7-targeted.log |
+    set -o pipefail; uv run pytest -v tests/test_canonical_storage.py \
+      2>&1 | tee /tmp/py314-uuid7-targeted.log
 
 3. Implement service-level UUIDv7 generation.
 

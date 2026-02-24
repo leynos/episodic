@@ -12,9 +12,9 @@ Status: DRAFT
 
 After this change, Episodic will use Python 3.14 standard-library Zstandard
 compression for large text payloads where storage and transfer costs matter,
-beginning with canonical TEI-adjacent payloads and future orchestration
-artifacts. The observable outcome is reduced payload size while preserving
-exact round-trip content semantics for domain consumers.
+beginning with canonical Text Encoding Initiative (TEI)-adjacent payloads and
+future orchestration artifacts. The observable outcome is reduced payload size
+while preserving exact round-trip content semantics for domain consumers.
 
 Success is visible when payloads can be compressed and decompressed losslessly,
 read paths remain transparent, and storage behaviour is validated through tests.
@@ -69,9 +69,9 @@ read paths remain transparent, and storage behaviour is validated through tests.
   `raw_xml` and `tei_xml`. Impact: compression rollout requires either
   transparent encode/decode logic or additive schema support.
 
-- Observation: project memory MCP resources are unavailable in this session.
-  Evidence: empty resource/template listings. Impact: migration assumptions
-  rely on local code and docs only.
+- Observation: project memory Model Context Protocol (MCP) resources are
+  unavailable in this session. Evidence: empty resource/template listings.
+  Impact: migration assumptions rely on local code and docs only.
 
 ## Decision log
 
@@ -136,8 +136,8 @@ Run from repository root.
 2. Add tests first and run targeted suites.
 
     set -o pipefail; uv run pytest -v \
-      tests/test_canonical_storage.py tests/test_ingestion_integration.py 2>&1 \
-      | tee /tmp/py314-zstd-targeted.log |
+      tests/test_canonical_storage.py tests/test_ingestion_integration.py \
+      2>&1 | tee /tmp/py314-zstd-targeted.log
 
 3. Implement codec and repository integration.
 

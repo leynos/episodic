@@ -11,10 +11,13 @@ Status: DRAFT
 ## Purpose and big picture
 
 After this change, Episodic async orchestration code will use Python 3.14 task
-creation improvements that propagate keyword arguments through task factories,
-enabling richer task metadata, diagnostics, and execution control without
-custom wrappers at each call site. The observable outcome is consistent,
-centralized task instrumentation and clearer debugging for concurrent flows.
+creation behaviour that reliably propagates `name` and `context` keyword
+arguments through task factories and supports `eager_start`, enabling richer
+task metadata, diagnostics, and execution control without custom wrappers at
+each call site. Earlier Python 3.13.3 support for `**kwargs` propagation is
+recognized, but this plan targets the Python 3.14 consistency guarantees. The
+observable outcome is consistent, centralized task instrumentation and clearer
+debugging for concurrent flows.
 
 Success is visible when task factories receive custom kwargs from
 `asyncio.create_task()` and `TaskGroup.create_task()`, tests validate this
@@ -22,7 +25,7 @@ behaviour, and migrated code paths keep functional behaviour unchanged.
 
 ## Constraints
 
-- Keep business logic independent from event-loop internals.
+- Keep business logic independent of event-loop internals.
 - Preserve existing async behaviour in canonical ingestion paths.
 - Avoid coupling domain modules to concrete asyncio task subclasses.
 - Do not require non-stdlib async frameworks for this migration.
@@ -68,9 +71,9 @@ behaviour, and migrated code paths keep functional behaviour unchanged.
   infrastructure yet. Evidence: direct source inspection. Impact: a shared
   utility module is needed before broader migration.
 
-- Observation: project memory MCP resources are unavailable in this session.
-  Evidence: resource listing calls returned empty arrays. Impact: this plan is
-  based on local repository and Python docs only.
+- Observation: project memory Model Context Protocol (MCP) resources are
+  unavailable in this session. Evidence: resource listing calls returned empty
+  arrays. Impact: this plan is based on local repository and Python docs only.
 
 ## Decision log
 
@@ -133,8 +136,8 @@ Run from repository root.
 
 2. Add tests first for task-factory kwarg propagation.
 
-    set -o pipefail; uv run pytest -v tests/test_async_task_factory.py 2>&1 \
-      | tee /tmp/py314-task-factory-targeted.log |
+    set -o pipefail; uv run pytest -v tests/test_async_task_factory.py \
+      2>&1 | tee /tmp/py314-task-factory-targeted.log
 
 3. Implement task factory utility and migrate one path.
 

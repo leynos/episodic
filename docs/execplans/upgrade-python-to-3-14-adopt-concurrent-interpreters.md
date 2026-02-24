@@ -71,9 +71,9 @@ smoke checks.
   package implementing those components. Impact: this activity should begin as
   an adapter prototype with clear integration seams.
 
-- Observation: project memory MCP resources are unavailable in this session.
-  Evidence: resource listings are empty. Impact: risk assumptions rely on
-  repository documents and Python stdlib docs.
+- Observation: project memory Model Context Protocol (MCP) resources are
+  unavailable in this session. Evidence: resource listings are empty. Impact:
+  risk assumptions rely on repository documents and Python stdlib docs.
 
 ## Decision log
 
@@ -107,7 +107,7 @@ Relevant context files:
 - Future orchestration adapter modules under `episodic/` to be introduced.
 
 No current canonical ingestion path is an immediate candidate for high-cost CPU
-parallelism, so first implementation should target a contained prototype
+parallelism, so the first implementation should target a contained prototype
 workload and adapter abstraction.
 
 ## Plan of work
@@ -139,15 +139,15 @@ Run from repository root.
 
 2. Create tests first for adapter correctness.
 
-    set -o pipefail; uv run pytest -v tests/test_interpreter_executor.py 2>&1 \
-      | tee /tmp/py314-interpreters-targeted.log |
+    set -o pipefail; uv run pytest -v tests/test_interpreter_executor.py \
+      2>&1 | tee /tmp/py314-interpreters-targeted.log
 
 3. Implement adapter and feature flag wiring.
 
 4. Run benchmark comparison for prototype workload.
 
-    set -o pipefail; uv run python -m episodic.benchmarks.interpreters 2>&1 \
-      | tee /tmp/py314-interpreters-bench.log |
+    set -o pipefail; uv run python -m episodic.benchmarks.interpreters \
+      2>&1 | tee /tmp/py314-interpreters-bench.log
 
 5. Run full Python gates.
 

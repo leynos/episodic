@@ -12,9 +12,9 @@ Status: DRAFT
 
 After this change, Episodic's OpenAI-facing adapter code will use explicit type
 narrowing helpers (type guards) to validate and normalize vendor responses
-before converting them into domain-level `LLMPort` outputs. The observable
-outcome is safer parsing with clearer failure modes and stronger static typing
-for response handling.
+before converting them into domain-level Large Language Model (LLM) port
+(`LLMPort`) outputs. The observable outcome is safer parsing with clearer
+failure modes and stronger static typing for response handling.
 
 Success is visible when malformed provider payloads are rejected with clear
 errors, valid payloads are normalized consistently, and adapter tests cover the
@@ -22,8 +22,8 @@ guards.
 
 ## Constraints
 
-- Keep OpenAI SDK handling inside adapter boundaries; no vendor types in domain
-  modules.
+- Keep OpenAI software development kit (SDK) handling inside adapter
+  boundaries; no vendor types in domain modules.
 - Do not weaken hexagonal architecture constraints.
 - Keep planned `LLMPort` contract stable once introduced.
 - Avoid runtime dependence on unchecked dictionary access for provider payloads.
@@ -53,7 +53,7 @@ guards.
 
 - Risk: over-constrained typing could reduce flexibility for multi-provider
   support. Severity: medium. Likelihood: medium. Mitigation: normalize provider
-  payloads into internal DTOs at adapter edge.
+  payloads into internal data transfer objects (DTOs) at adapter edge.
 
 ## Progress
 
@@ -66,14 +66,14 @@ guards.
 ## Surprises & discoveries
 
 - Observation: current repository documents `LLMPort` and orchestration
-  behaviour but does not yet contain a concrete OpenAI adapter implementation.
+  behaviour, but does not yet contain a concrete OpenAI adapter implementation.
   Evidence: search results show `LLMPort` references primarily in docs. Impact:
   this work should be staged as a foundational adapter module with tests, ready
   for later orchestration integration.
 
-- Observation: project memory MCP resources are unavailable in this session.
-  Evidence: empty MCP resource listings. Impact: plan uses local repository
-  context and documented architecture only.
+- Observation: project memory Model Context Protocol (MCP) resources are
+  unavailable in this session. Evidence: empty MCP resource listings. Impact:
+  plan uses local repository context and documented architecture only.
 
 ## Decision log
 
@@ -96,7 +96,7 @@ other providers with minimal additional risk.
 
 Episodic's design docs define planned `LLMPort` behaviour and cost accounting,
 but implementation of provider adapters is pending. This plan introduces
-response validation primitives now so OpenAI adapter development lands with
+response validation primitives now, so OpenAI adapter development lands with
 strong typing from the start.
 
 Relevant context files:
@@ -112,8 +112,8 @@ verified typed shapes before downstream conversion.
 ## Plan of work
 
 Stage A defines interfaces and data shapes. Specify a minimal normalized
-response DTO for `LLMPort` consumption and identify required fields from OpenAI
-responses, including text output and usage metadata.
+response data transfer object (DTO) for `LLMPort` consumption and identify
+required fields from OpenAI responses, including text output and usage metadata.
 
 Stage B writes tests first. Add fixtures for valid chat responses, missing
 fields, wrong types, and partial usage blocks. Ensure tests fail before guard
@@ -138,8 +138,8 @@ Run from repository root.
 
 2. Create guard tests first.
 
-    set -o pipefail; uv run pytest -v tests/test_openai_type_guards.py 2>&1 \
-      | tee /tmp/py314-openai-guards-targeted.log |
+    set -o pipefail; uv run pytest -v tests/test_openai_type_guards.py \
+      2>&1 | tee /tmp/py314-openai-guards-targeted.log
 
 3. Implement guard and normalization modules.
 
