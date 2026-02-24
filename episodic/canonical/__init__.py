@@ -1,4 +1,21 @@
-"""Canonical content domain and persistence interfaces."""
+"""Canonical entities and profile/template service entry points.
+
+This package exposes the canonical domain models together with ingestion and
+profile/template orchestration APIs used by adapters.
+
+Examples
+--------
+Use the exported service functions from application code:
+
+>>> profile, _ = await create_series_profile(uow, data=data, audit=audit)
+>>> template, _ = await create_episode_template(
+...     uow, series_profile_id=profile.id, data=template_data
+... )
+>>> history = await list_history(uow, parent_id=profile.id, kind="series_profile")
+>>> episodes = await ingest_sources(
+...     request, extractor=extractor, deduplicator=deduplicator
+... )
+"""
 
 from __future__ import annotations
 
@@ -41,7 +58,7 @@ from .profile_templates import (
 )
 from .services import ingest_sources
 
-__all__ = [
+__all__: list[str] = [
     "ApprovalEvent",
     "ApprovalState",
     "CanonicalEpisode",

@@ -1,4 +1,19 @@
-"""Falcon resources for profile and template endpoints."""
+"""Falcon resource adapters for canonical profile/template endpoints.
+
+This module defines route-bound resource classes, including
+``SeriesProfilesResource``, ``SeriesProfileResource``,
+``SeriesProfileHistoryResource``, ``SeriesProfileBriefResource``,
+``EpisodeTemplatesResource``, ``EpisodeTemplateResource``, and
+``EpisodeTemplateHistoryResource``. Each resource maps Falcon request objects to
+canonical service calls and serialises service-layer outputs into HTTP payloads.
+
+Examples
+--------
+Create a resource and attach it to a Falcon route:
+
+>>> resource = SeriesProfilesResource(uow_factory)
+>>> app.add_route("/series-profiles", resource)
+"""
 
 from __future__ import annotations
 
@@ -131,13 +146,37 @@ class _GetHistoryResourceBase(ABC):
 
 
 class SeriesProfilesResource:
-    """Collection resource for series profiles."""
+    """Handle collection operations for series profiles.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory used to create request-scoped units of work.
+
+    Raises
+    ------
+    falcon.HTTPBadRequest
+        Raised when required payload fields are missing during creation.
+    """
 
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
-        """List all series profiles."""
+        """List all series profiles.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Incoming Falcon request object.
+        resp : falcon.Response
+            Outgoing Falcon response object populated by this handler.
+
+        Returns
+        -------
+        None
+            Response media is set to an ``items`` list and status ``200``.
+        """
         del req
         service_fn = partial(list_entities_with_revisions, kind="series_profile")
         async with self._uow_factory() as uow:
@@ -147,7 +186,25 @@ class SeriesProfilesResource:
         resp.status = falcon.HTTP_200
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
-        """Create a series profile."""
+        """Create a new series profile.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Incoming Falcon request containing JSON payload.
+        resp : falcon.Response
+            Outgoing Falcon response object populated by this handler.
+
+        Returns
+        -------
+        None
+            Response media is set to the created profile and status ``201``.
+
+        Raises
+        ------
+        falcon.HTTPBadRequest
+            Raised when required payload fields are missing.
+        """
         payload = require_payload_dict(await req.get_media())
         try:
             slug = typ.cast("str", payload["slug"])
@@ -175,7 +232,13 @@ class SeriesProfilesResource:
 
 
 class SeriesProfileResource(_GetResourceBase):
-    """Single-resource endpoint for series profiles."""
+    """Handle single-entity operations for series profiles.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory used to create request-scoped units of work.
+    """
 
     @staticmethod
     @typ.override
@@ -213,7 +276,31 @@ class SeriesProfileResource(_GetResourceBase):
         resp: falcon.Response,
         profile_id: str,
     ) -> None:
-        """Update a series profile using optimistic locking."""
+        """Update a series profile using optimistic locking.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Incoming Falcon request containing update payload JSON.
+        resp : falcon.Response
+            Outgoing Falcon response object populated by this handler.
+        profile_id : str
+            Raw series-profile identifier from the route path.
+
+        Returns
+        -------
+        None
+            Response media is set to the updated profile and status ``200``.
+
+        Raises
+        ------
+        falcon.HTTPBadRequest
+            Raised when the identifier is invalid or payload is malformed.
+        falcon.HTTPNotFound
+            Raised when the profile does not exist.
+        falcon.HTTPConflict
+            Raised when optimistic-lock revision checks fail.
+        """
         payload = require_payload_dict(await req.get_media())
         resp.media, resp.status = await handle_update_entity(
             uow_factory=self._uow_factory,
@@ -228,7 +315,13 @@ class SeriesProfileResource(_GetResourceBase):
 
 
 class SeriesProfileHistoryResource(_GetHistoryResourceBase):
-    """History endpoint for series profiles."""
+    """Handle history retrieval for series profiles.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory used to create request-scoped units of work.
+    """
 
     @staticmethod
     @typ.override
@@ -262,7 +355,13 @@ class SeriesProfileHistoryResource(_GetHistoryResourceBase):
 
 
 class SeriesProfileBriefResource:
-    """Structured brief endpoint for downstream generators."""
+    """Return structured brief payloads for series profiles.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory used to create request-scoped units of work.
+    """
 
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
@@ -273,7 +372,29 @@ class SeriesProfileBriefResource:
         resp: falcon.Response,
         profile_id: str,
     ) -> None:
-        """Fetch a structured brief payload."""
+        """Fetch a structured brief payload.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Incoming request, optionally including ``template_id`` query param.
+        resp : falcon.Response
+            Outgoing response object populated by this handler.
+        profile_id : str
+            Raw series-profile identifier from the route path.
+
+        Returns
+        -------
+        None
+            Response media is set to the brief payload and status ``200``.
+
+        Raises
+        ------
+        falcon.HTTPBadRequest
+            Raised when ``profile_id`` or ``template_id`` is not a valid UUID.
+        falcon.HTTPNotFound
+            Raised when the requested profile or template is not found.
+        """
         parsed_profile_id = parse_uuid(profile_id, "profile_id")
         raw_template_id = req.get_param("template_id")
         template_id = (
@@ -300,13 +421,37 @@ class SeriesProfileBriefResource:
 
 
 class EpisodeTemplatesResource:
-    """Collection resource for episode templates."""
+    """Handle collection operations for episode templates.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory used to create request-scoped units of work.
+    """
 
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
-        """List episode templates."""
+        """List episode templates.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Incoming request, optionally including ``series_profile_id``.
+        resp : falcon.Response
+            Outgoing response object populated by this handler.
+
+        Returns
+        -------
+        None
+            Response media is set to an ``items`` list and status ``200``.
+
+        Raises
+        ------
+        falcon.HTTPBadRequest
+            Raised when ``series_profile_id`` is provided but invalid.
+        """
         raw_series_profile_id = req.get_param("series_profile_id")
         series_profile_id = (
             None
@@ -329,7 +474,27 @@ class EpisodeTemplatesResource:
         req: falcon.Request,
         resp: falcon.Response,
     ) -> None:
-        """Create an episode template."""
+        """Create an episode template.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Incoming request containing template creation payload.
+        resp : falcon.Response
+            Outgoing response object populated by this handler.
+
+        Returns
+        -------
+        None
+            Response media is set to the created template and status ``201``.
+
+        Raises
+        ------
+        falcon.HTTPBadRequest
+            Raised when required payload fields are missing or invalid.
+        falcon.HTTPNotFound
+            Raised when the referenced series profile does not exist.
+        """
         payload = require_payload_dict(await req.get_media())
         try:
             series_profile_id = parse_uuid(
@@ -366,7 +531,13 @@ class EpisodeTemplatesResource:
 
 
 class EpisodeTemplateResource(_GetResourceBase):
-    """Single-resource endpoint for episode templates."""
+    """Handle single-entity operations for episode templates.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory used to create request-scoped units of work.
+    """
 
     @staticmethod
     @typ.override
@@ -404,7 +575,31 @@ class EpisodeTemplateResource(_GetResourceBase):
         resp: falcon.Response,
         template_id: str,
     ) -> None:
-        """Update an episode template using optimistic locking."""
+        """Update an episode template using optimistic locking.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Incoming Falcon request containing update payload JSON.
+        resp : falcon.Response
+            Outgoing Falcon response object populated by this handler.
+        template_id : str
+            Raw episode-template identifier from the route path.
+
+        Returns
+        -------
+        None
+            Response media is set to the updated template and status ``200``.
+
+        Raises
+        ------
+        falcon.HTTPBadRequest
+            Raised when the identifier is invalid or payload is malformed.
+        falcon.HTTPNotFound
+            Raised when the template does not exist.
+        falcon.HTTPConflict
+            Raised when optimistic-lock revision checks fail.
+        """
         payload = require_payload_dict(await req.get_media())
         resp.media, resp.status = await handle_update_entity(
             uow_factory=self._uow_factory,
@@ -419,7 +614,13 @@ class EpisodeTemplateResource(_GetResourceBase):
 
 
 class EpisodeTemplateHistoryResource(_GetHistoryResourceBase):
-    """History endpoint for episode templates."""
+    """Handle history retrieval for episode templates.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory used to create request-scoped units of work.
+    """
 
     @staticmethod
     @typ.override

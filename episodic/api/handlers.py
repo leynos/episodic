@@ -1,4 +1,19 @@
-"""Reusable endpoint handlers shared across Falcon resources."""
+"""Shared Falcon endpoint handlers for canonical API resources.
+
+The module provides reusable request/response helpers for resource adapters:
+``handle_get_entity``, ``handle_get_history``, and ``handle_update_entity``.
+Resources should import these handlers when they need consistent UUID parsing,
+service dispatch, and Falcon HTTP error translation.
+
+Examples
+--------
+>>> media, status = await handle_get_entity(
+...     factory, profile_id, "profile_id", service_fn, serializer_fn
+... )
+>>> media, status = await handle_get_history(
+...     factory, profile_id, "profile_id", history_fn, serializer_fn
+... )
+"""
 
 from __future__ import annotations
 
@@ -29,7 +44,33 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # Context: http
     service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
     serializer_fn: cabc.Callable[[EntityT, int], dict[str, typ.Any]],
 ) -> tuple[dict[str, typ.Any], str]:
-    """Handle common fetch-by-id endpoint behaviour."""
+    """Handle fetch-by-identifier endpoint behaviour.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory that creates unit-of-work instances.
+    entity_id : str
+        Raw entity identifier from the request path.
+    id_field_name : str
+        Name of the identifier field used for validation messages.
+    service_fn : cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]
+        Service function that returns an entity and its revision.
+    serializer_fn : cabc.Callable[[EntityT, int], dict[str, typ.Any]]
+        Serializer that converts the entity payload to response JSON.
+
+    Returns
+    -------
+    tuple[dict[str, typ.Any], str]
+        Serialised response payload and HTTP status code.
+
+    Raises
+    ------
+    falcon.HTTPBadRequest
+        Raised when ``entity_id`` is not a valid UUID.
+    falcon.HTTPNotFound
+        Raised when the requested entity does not exist.
+    """
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     try:
         async with uow_factory() as uow:
@@ -49,13 +90,45 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # Context: htt
     service_fn: cabc.Callable[..., cabc.Awaitable[list[EntityT]]],
     serializer_fn: cabc.Callable[[EntityT], dict[str, typ.Any]],
 ) -> tuple[dict[str, typ.Any], str]:
-    """Handle common history-list endpoint behaviour."""
+    """Handle history-list endpoint behaviour.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory that creates unit-of-work instances.
+    entity_id : str
+        Raw parent-entity identifier from the request path.
+    id_field_name : str
+        Name of the identifier field used for validation messages.
+    service_fn : cabc.Callable[..., cabc.Awaitable[list[EntityT]]]
+        Service function that returns history entries for one parent entity.
+    serializer_fn : cabc.Callable[[EntityT], dict[str, typ.Any]]
+        Serializer for a single history entry.
+
+    Returns
+    -------
+    tuple[dict[str, typ.Any], str]
+        JSON object containing serialised ``items`` and HTTP status code.
+
+    Raises
+    ------
+    falcon.HTTPBadRequest
+        Raised when ``entity_id`` is not a valid UUID.
+    falcon.HTTPNotFound
+        Raised when the parent entity is not found.
+    """
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
-    async with uow_factory() as uow:
-        items = await service_fn(
-            uow,
-            parent_id=parsed_entity_id,
-        )
+    try:
+        async with uow_factory() as uow:
+            items = await service_fn(
+                uow,
+                parent_id=parsed_entity_id,
+            )
+    except EntityNotFoundError as exc:
+        raise falcon.HTTPNotFound(
+            title="Not Found",
+            description="Parent entity not found",
+        ) from exc
     return {"items": [serializer_fn(item) for item in items]}, falcon.HTTP_200
 
 
@@ -72,7 +145,44 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # Context: h
     service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
     serializer_fn: cabc.Callable[[EntityT, int], dict[str, typ.Any]],
 ) -> tuple[dict[str, typ.Any], str]:
-    """Handle common optimistic-lock update endpoint behaviour."""
+    """Handle optimistic-lock update endpoint behaviour.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Factory that creates unit-of-work instances.
+    entity_id : str
+        Raw entity identifier from the request path.
+    id_field_name : str
+        Name of the identifier field used for validation messages.
+    payload : dict[str, typ.Any]
+        Parsed request payload.
+    required_fields : tuple[str, ...]
+        Required payload field names for the update operation.
+    request_builder : cabc.Callable[
+        [uuid.UUID, dict[str, typ.Any]],
+        UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,
+    ]
+        Builder that creates a typed update request object.
+    service_fn : cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]
+        Service function that executes the update and returns entity/revision.
+    serializer_fn : cabc.Callable[[EntityT, int], dict[str, typ.Any]]
+        Serializer that converts the updated entity to response JSON.
+
+    Returns
+    -------
+    tuple[dict[str, typ.Any], str]
+        Serialised response payload and HTTP status code.
+
+    Raises
+    ------
+    falcon.HTTPBadRequest
+        Raised when required fields are missing or the identifier is invalid.
+    falcon.HTTPNotFound
+        Raised when the target entity does not exist.
+    falcon.HTTPConflict
+        Raised when optimistic-lock revision preconditions fail.
+    """
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     for field_name in required_fields:
         if field_name not in payload:

@@ -317,11 +317,9 @@ def _is_revision_conflict_integrity_error(
     exc: IntegrityError,
     entity_id_field: str,
 ) -> bool:
-    """Return True when an integrity error indicates a revision collision.
-
-    Constraint-name markers below are coupled to history uniqueness constraints
-    in ``episodic/canonical/storage/models.py``.
-    """
+    """Return True when an integrity error indicates a revision collision."""
+    # Constraint-name markers below are coupled to history uniqueness
+    # constraints in ``episodic/canonical/storage/models.py``.
     detail = str(getattr(exc, "orig", exc))
     return any(
         marker in detail

@@ -1113,9 +1113,10 @@ resolution across series, templates, and ingestion contexts, including
 `effective_from_episode_id` resolution when selecting host/guest profile
 revisions for a specific episode.
 
-### Profile/template REST API specification
+### Profile/template REST (Representational State Transfer) API (Application Programming Interface) specification
 
-The profile/template API is exposed through Falcon ASGI adapters in
+The profile/template API (Application Programming Interface) is exposed through
+Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
 `episodic/api/app.py`.
 
 - `POST /series-profiles` creates a profile and revision `1`.

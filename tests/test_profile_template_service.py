@@ -1,4 +1,22 @@
-"""Unit and integration tests for profile/template services."""
+"""Profile/template service tests.
+
+Summary
+-------
+Unit and integration tests for canonical profile/template services.
+
+Purpose
+-------
+Validate profile and template create/update flows, revision-conflict handling,
+history persistence, and structured brief generation.
+
+Usage
+-----
+Run this module through pytest as part of the canonical service suite.
+
+Example
+-------
+>>> pytest tests/test_profile_template_service.py -q
+"""
 
 from __future__ import annotations
 
@@ -61,6 +79,7 @@ async def test_create_series_profile_creates_initial_history(
             parent_id=profile.id,
             kind="series_profile",
         )
+    history = sorted(history, key=lambda entry: entry.revision)
 
     assert len(history) == 1, "Expected one profile history record."
     first_entry = typ.cast("SeriesProfileHistoryEntry", history[0])
@@ -89,7 +108,7 @@ async def test_update_series_profile_rejects_revision_conflicts(
         )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(RevisionConflictError):
+        with pytest.raises(RevisionConflictError, match=r"revision conflict"):
             await update_series_profile(
                 uow,
                 request=UpdateSeriesProfileRequest(
@@ -143,7 +162,7 @@ async def test_update_episode_template_revision_conflict_raises(
     stale_revision = current_revision - 1 if current_revision > 1 else 0
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(RevisionConflictError):
+        with pytest.raises(RevisionConflictError, match=r"revision conflict"):
             await update_episode_template(
                 uow,
                 request=UpdateEpisodeTemplateRequest(
@@ -167,6 +186,7 @@ async def test_update_episode_template_revision_conflict_raises(
             parent_id=template.id,
             kind="episode_template",
         )
+    history = sorted(history, key=lambda entry: entry.revision)
 
     assert len(history) == 1, (
         "Conflicting template update must not create a new history entry."
@@ -217,6 +237,10 @@ async def test_create_episode_template_creates_history_and_brief(
             parent_id=template.id,
             kind="episode_template",
         )
+        template_history = sorted(
+            template_history,
+            key=lambda entry: entry.revision,
+        )
         brief = await build_series_brief(
             uow,
             profile_id=profile.id,
@@ -231,6 +255,6 @@ async def test_create_episode_template_creates_history_and_brief(
     assert series_profile["id"] == str(profile.id), (
         "Expected profile in structured brief."
     )
-    assert templates[0]["id"] == str(template.id), (
+    assert any(item["id"] == str(template.id) for item in templates), (
         "Expected template in structured brief."
     )
