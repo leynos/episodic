@@ -52,7 +52,7 @@ def test_build_payload_dataclass_maps_required_and_optional_fields() -> None:
         title="Show title",
         description=None,
         configuration={"tone": "precise"},
-    )
+    ), "Expected payload values to map to _ExampleFields."
 
 
 def test_build_payload_dataclass_supports_key_remapping() -> None:
@@ -77,7 +77,7 @@ def test_build_payload_dataclass_supports_key_remapping() -> None:
         title="Remapped title",
         description="Remapped description",
         structure={"segments": ["intro", "outro"]},
-    )
+    ), "Expected remapped payload keys to populate _MappedFields."
 
 
 def test_build_payload_dataclass_raises_when_required_field_is_missing() -> None:
@@ -86,7 +86,10 @@ def test_build_payload_dataclass_raises_when_required_field_is_missing() -> None
         "configuration": {"tone": "precise"},
     }
 
-    with pytest.raises(falcon.HTTPBadRequest) as exc_info:
+    with pytest.raises(
+        falcon.HTTPBadRequest,
+        match=r"400 Bad Request",
+    ) as exc_info:
         helpers._build_payload_dataclass(
             payload,
             dc_type=_ExampleFields,
@@ -96,7 +99,9 @@ def test_build_payload_dataclass_raises_when_required_field_is_missing() -> None
                 "configuration": ("configuration", False),
             },
         )
-    assert exc_info.value.description == "Missing required field: title"
+    assert exc_info.value.description == "Missing required field: title", (
+        "Expected missing required fields to preserve the HTTP 400 description."
+    )
 
 
 def test_build_typed_update_request_uses_selected_data_key(
@@ -133,10 +138,12 @@ def test_build_typed_update_request_uses_selected_data_key(
         },
     )
 
-    assert captured["payload"] == {"title": "updated"}
+    assert captured["payload"] == {"title": "updated"}, (
+        "Expected helper to pass payload through to _build_update_kwargs."
+    )
     assert request == {
         "entity_id": entity_id,
         "expected_revision": 3,
         "fields": "payload-fields",
         "audit": AuditMetadata(actor="editor@example.com", note="update"),
-    }
+    }, "Expected request builder output to use parsed update components."

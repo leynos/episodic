@@ -186,25 +186,18 @@ def _build_update_kwargs[DataT](
 
 
 def _build_payload_dataclass[DataT](
-    payload: dict[str, typ.Any],
+    payload: JsonPayload,
     *,
     dc_type: type[DataT],
     field_map: dict[str, tuple[str, bool]],
 ) -> DataT:
-    """Construct a dataclass from payload using a field-to-key map.
-
-    Required fields are read via direct indexing. Optional fields are read
-    via ``dict.get`` to preserve ``None`` when absent.
-    """
+    """Construct a dataclass from mapped payload fields."""
     values: dict[str, object] = {}
     for field_name, (payload_key, is_optional) in field_map.items():
         raw = (
             payload.get(payload_key)
             if is_optional
-            else _require_field(
-                typ.cast("JsonPayload", payload),
-                payload_key,
-            )
+            else _require_field(payload, payload_key)
         )
         values[field_name] = raw
     return typ.cast("DataT", dc_type(**values))
