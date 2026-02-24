@@ -31,7 +31,7 @@ from ._typed import (
     update_series_profile,
 )
 
-__all__: list[str] = [
+__all__: tuple[str, ...] = (
     "create_episode_template",
     "create_series_profile",
     "get_entity_with_revision",
@@ -45,4 +45,4 @@ __all__: list[str] = [
     "list_series_profiles",
     "update_episode_template",
     "update_series_profile",
-]
+)

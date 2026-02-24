@@ -186,12 +186,61 @@ class UpdateEpisodeTemplateRequest:
     audit: AuditMetadata
 
 
-class EntityNotFoundError(LookupError):
+class ProfileTemplateError(Exception):
+    """Base exception with structured metadata for profile/template services."""
+
+    code: str
+    entity_id: str | None
+    retryable: bool
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        entity_id: str | None = None,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.entity_id = entity_id
+        self.retryable = retryable
+
+
+class EntityNotFoundError(ProfileTemplateError):
     """Raised when an expected profile or template does not exist."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        entity_id: str | None = None,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(
+            message,
+            code="entity_not_found",
+            entity_id=entity_id,
+            retryable=retryable,
+        )
 
-class RevisionConflictError(ValueError):
+
+class RevisionConflictError(ProfileTemplateError):
     """Raised when optimistic-lock revision preconditions are not met."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        entity_id: str | None = None,
+        retryable: bool = True,
+    ) -> None:
+        super().__init__(
+            message,
+            code="revision_conflict",
+            entity_id=entity_id,
+            retryable=retryable,
+        )
 
 
 class EntityKind(enum.StrEnum):

@@ -107,7 +107,7 @@ async def _get_entity_with_latest_revision[EntityT: _VersionedEntity](
     entity = await get_entity(entity_id)
     if entity is None:
         msg = f"{entity_label} {entity_id} not found."
-        raise EntityNotFoundError(msg)
+        raise EntityNotFoundError(msg, entity_id=str(entity_id))
     revision = await _get_latest_revision(fetch_latest, entity_id)
     return entity, revision
 
@@ -156,7 +156,7 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
     entity = await entity_repo.get(entity_id)
     if entity is None:
         msg = f"{entity_label} {entity_id} not found."
-        raise EntityNotFoundError(msg)
+        raise EntityNotFoundError(msg, entity_id=str(entity_id))
 
     latest_revision = await _get_latest_revision(fetch_latest, entity_id)
     _check_revision_conflict(
@@ -186,7 +186,7 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
         if not _is_revision_conflict_integrity_error(exc, entity_id_field):
             raise
         msg = f"{entity_label} revision conflict: concurrent update detected."
-        raise RevisionConflictError(msg) from exc
+        raise RevisionConflictError(msg, entity_id=str(entity_id)) from exc
     return updated_entity, next_revision
 
 

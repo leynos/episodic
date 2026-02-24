@@ -82,7 +82,7 @@ async def _load_template_items_for_brief(
             f"Episode template {template.id} does not belong to "
             f"series profile {profile_id}."
         )
-        raise EntityNotFoundError(msg)
+        raise EntityNotFoundError(msg, entity_id=str(template.id))
     return [(template, template_revision)]
 
 

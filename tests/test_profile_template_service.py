@@ -125,7 +125,7 @@ async def base_profile_with_template(
 
 
 class TestSeriesProfileService:
-    """Tests for series-profile service behavior."""
+    """Tests for series-profile service behaviour."""
 
     @pytest.mark.asyncio
     async def test_create_series_profile_creates_initial_history(
@@ -237,7 +237,7 @@ class TestSeriesProfileService:
 
 
 class TestEpisodeTemplateService:
-    """Tests for episode-template service behavior."""
+    """Tests for episode-template service behaviour."""
 
     @pytest.mark.asyncio
     async def test_update_episode_template_revision_conflict_raises(

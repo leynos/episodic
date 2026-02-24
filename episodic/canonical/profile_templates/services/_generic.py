@@ -3,7 +3,7 @@
 This module contains kind-dispatched canonical read services shared by profile
 and template adapters. Callers provide an ``EntityKind`` (or matching string),
 and the helpers resolve the correct repositories while preserving consistent
-error behavior.
+error behaviour.
 """
 
 from __future__ import annotations

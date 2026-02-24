@@ -254,6 +254,6 @@ async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev)
     try:
         async with uow_factory() as uow:
             entity, revision = await service_fn(uow, **service_kwargs)
-    except LookupError as exc:
+    except (EntityNotFoundError, LookupError) as exc:
         raise falcon.HTTPNotFound(description=str(exc)) from exc
     return serializer_fn(entity, revision), falcon.HTTP_201

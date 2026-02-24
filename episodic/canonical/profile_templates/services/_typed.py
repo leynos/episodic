@@ -3,6 +3,11 @@
 This module exposes entity-specific canonical services and stable compatibility
 names for adapters. Read/list aliases are bound via ``functools.partial``, while
 create/update operations keep explicit typed request/data contracts.
+
+Examples
+--------
+>>> profile, rev = await create_series_profile(uow, data=data, audit=audit)
+>>> updated, next_rev = await update_series_profile(uow, request=request)
 """
 
 from __future__ import annotations
@@ -179,7 +184,7 @@ async def create_episode_template(
     profile = await uow.series_profiles.get(series_profile_id)
     if profile is None:
         msg = f"Series profile {series_profile_id} not found."
-        raise EntityNotFoundError(msg)
+        raise EntityNotFoundError(msg, entity_id=str(series_profile_id))
 
     now = dt.datetime.now(dt.UTC)
     template = EpisodeTemplate(
