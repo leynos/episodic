@@ -181,7 +181,11 @@ def ingestion_job_records_sources(
         )
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
-            episode = await ingest_sources(uow, profile, request)
+            episode = await ingest_sources(
+                uow=uow,
+                series_profile=profile,
+                request=request,
+            )
 
         async with session_factory() as session:
             result = await session.execute(
