@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .briefs import build_series_brief
 from .domain import (
     ApprovalEvent,
     ApprovalState,
@@ -30,7 +31,6 @@ from .profile_templates import (
     EntityKind,
     EntityNotFoundError,
     RevisionConflictError,
-    build_series_brief,
     create_episode_template,
     create_series_profile,
     get_entity_with_revision,

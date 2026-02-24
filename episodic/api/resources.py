@@ -9,11 +9,11 @@ from itertools import starmap
 
 import falcon
 
+from episodic.canonical.briefs import build_series_brief
 from episodic.canonical.profile_templates import (
     EntityNotFoundError,
     EpisodeTemplateData,
     SeriesProfileCreateData,
-    build_series_brief,
     create_episode_template,
     create_series_profile,
     get_entity_with_revision,
