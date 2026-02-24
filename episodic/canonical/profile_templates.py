@@ -29,7 +29,6 @@ from .domain import (
 )
 
 if typ.TYPE_CHECKING:
-    from .briefs import build_series_brief as build_series_brief
     from .ports import CanonicalUnitOfWork
 
 
@@ -771,13 +770,3 @@ async def update_episode_template(
         create_snapshot=_template_snapshot,
         audit=request.audit,
     )
-
-
-def __getattr__(name: str) -> object:
-    """Lazily expose brief helpers while avoiding circular imports."""
-    if name == "build_series_brief":
-        from .briefs import build_series_brief
-
-        return build_series_brief
-    msg = f"module {__name__!r} has no attribute {name!r}"
-    raise AttributeError(msg)

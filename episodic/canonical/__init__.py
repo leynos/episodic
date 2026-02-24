@@ -19,7 +19,6 @@ Use the exported service functions from application code:
 
 from __future__ import annotations
 
-from .briefs import build_series_brief
 from .domain import (
     ApprovalEvent,
     ApprovalState,
@@ -56,6 +55,9 @@ from .profile_templates import (
     update_episode_template,
     update_series_profile,
 )
+
+# isort: split
+from .briefs import build_series_brief
 from .services import ingest_sources
 
 __all__: list[str] = [

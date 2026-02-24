@@ -24,6 +24,7 @@ import typing as typ
 
 import pytest
 
+from episodic.canonical import build_series_brief
 from episodic.canonical.profile_templates import (
     AuditMetadata,
     EpisodeTemplateData,
@@ -33,7 +34,6 @@ from episodic.canonical.profile_templates import (
     SeriesProfileData,
     UpdateEpisodeTemplateRequest,
     UpdateSeriesProfileRequest,
-    build_series_brief,
     create_episode_template,
     create_series_profile,
     list_history,
