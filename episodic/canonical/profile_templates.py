@@ -808,6 +808,39 @@ def _serialize_template_for_brief(
     }
 
 
+async def _load_template_items_for_brief(
+    uow: CanonicalUnitOfWork,
+    *,
+    profile_id: uuid.UUID,
+    template_id: uuid.UUID | None,
+) -> list[tuple[EpisodeTemplate, int]]:
+    """Load template and revision pairs for structured brief rendering."""
+    if template_id is None:
+        items = await list_entities_with_revisions(
+            uow,
+            kind="episode_template",
+            series_profile_id=profile_id,
+        )
+        return [
+            (typ.cast("EpisodeTemplate", template), revision)
+            for template, revision in items
+        ]
+
+    template_obj, template_revision = await get_entity_with_revision(
+        uow,
+        entity_id=template_id,
+        kind="episode_template",
+    )
+    template = typ.cast("EpisodeTemplate", template_obj)
+    if template.series_profile_id != profile_id:
+        msg = (
+            f"Episode template {template.id} does not belong to "
+            f"series profile {profile_id}."
+        )
+        raise EntityNotFoundError(msg)
+    return [(template, template_revision)]
+
+
 async def build_series_brief(
     uow: CanonicalUnitOfWork,
     *,
@@ -842,30 +875,11 @@ async def build_series_brief(
         kind="series_profile",
     )
     profile = typ.cast("SeriesProfile", profile_obj)
-    if template_id is None:
-        template_items_raw = await list_entities_with_revisions(
-            uow,
-            kind="episode_template",
-            series_profile_id=profile.id,
-        )
-        template_items = [
-            (typ.cast("EpisodeTemplate", template), revision)
-            for template, revision in template_items_raw
-        ]
-    else:
-        template_obj, template_revision = await get_entity_with_revision(
-            uow,
-            entity_id=template_id,
-            kind="episode_template",
-        )
-        template = typ.cast("EpisodeTemplate", template_obj)
-        if template.series_profile_id != profile.id:
-            msg = (
-                f"Episode template {template.id} does not belong to "
-                f"series profile {profile.id}."
-            )
-            raise EntityNotFoundError(msg)
-        template_items = [(template, template_revision)]
+    template_items = await _load_template_items_for_brief(
+        uow,
+        profile_id=profile.id,
+        template_id=template_id,
+    )
 
     return {
         "series_profile": _serialize_profile_for_brief(profile, profile_revision),
