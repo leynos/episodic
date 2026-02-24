@@ -1,7 +1,8 @@
 """Shared types for the Falcon canonical API adapter.
 
-This module defines ``UowFactory``, a callable alias used by API adapters to
-obtain a ``CanonicalUnitOfWork`` instance when handling requests.
+This module defines shared aliases used by API adapters, including
+``UowFactory`` for request-scoped units of work and ``JsonPayload`` for JSON
+response/request dictionaries.
 
 Example
 -------
@@ -22,3 +23,4 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 type UowFactory = cabc.Callable[[], CanonicalUnitOfWork]
+type JsonPayload = dict[str, object]

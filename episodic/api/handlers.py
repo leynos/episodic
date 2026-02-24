@@ -24,8 +24,6 @@ import falcon
 from episodic.canonical.profile_templates import (
     EntityNotFoundError,
     RevisionConflictError,
-    UpdateEpisodeTemplateRequest,
-    UpdateSeriesProfileRequest,
 )
 
 from .helpers import parse_uuid
@@ -34,10 +32,12 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-    from .types import UowFactory
+    from episodic.canonical.profile_templates import (
+        UpdateEpisodeTemplateRequest,
+        UpdateSeriesProfileRequest,
+    )
 
-
-type JsonPayload = dict[str, object]
+    from .types import JsonPayload, UowFactory
 
 
 async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared handler signature for resource adapters
@@ -139,10 +139,10 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,
-    payload: dict[str, typ.Any],
+    payload: JsonPayload,
     required_fields: tuple[str, ...],
     request_builder: cabc.Callable[
-        [uuid.UUID, dict[str, typ.Any]],
+        [uuid.UUID, JsonPayload],
         UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,
     ],
     service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
@@ -158,12 +158,12 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
         Raw entity identifier from the request path.
     id_field_name : str
         Name of the identifier field used for validation messages.
-    payload : dict[str, typ.Any]
+    payload : JsonPayload
         Parsed request payload.
     required_fields : tuple[str, ...]
         Required payload field names for the update operation.
     request_builder : cabc.Callable[
-        [uuid.UUID, dict[str, typ.Any]],
+        [uuid.UUID, JsonPayload],
         UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,
     ]
         Builder that creates a typed update request object.
@@ -209,10 +209,10 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
 
 async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared creator signature for resource adapters
     uow_factory: UowFactory,
-    payload: dict[str, typ.Any],
+    payload: JsonPayload,
     *,
     required_fields: tuple[str, ...],
-    kwargs_builder: cabc.Callable[[dict[str, typ.Any]], dict[str, object]],
+    kwargs_builder: cabc.Callable[[JsonPayload], dict[str, object]],
     service_fn: cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]],
     serializer_fn: cabc.Callable[[EntityT, int], JsonPayload],
 ) -> tuple[JsonPayload, str]:
@@ -222,11 +222,11 @@ async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev)
     ----------
     uow_factory : UowFactory
         Factory that creates unit-of-work instances.
-    payload : dict[str, typ.Any]
+    payload : JsonPayload
         Parsed request payload.
     required_fields : tuple[str, ...]
         Required payload field names for the create operation.
-    kwargs_builder : cabc.Callable[[dict[str, typ.Any]], dict[str, object]]
+    kwargs_builder : cabc.Callable[[JsonPayload], dict[str, object]]
         Builder that maps payload values into service keyword arguments.
     service_fn : cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]
         Service function that creates an entity and returns entity/revision.
