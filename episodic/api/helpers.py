@@ -18,7 +18,6 @@ Build a typed update request from JSON payload:
 
 from __future__ import annotations
 
-import dataclasses as dc
 import re
 import typing as typ
 import uuid
@@ -163,36 +162,48 @@ def _coerce_strict_positive_int(value: object) -> int | None:
     return None
 
 
-@dc.dataclass(frozen=True, slots=True)
-class _ParsedUpdatePayload[DataT]:
-    """Typed parsed components used to build update request objects."""
-
-    expected_revision: int
-    data: DataT
-    audit: AuditMetadata
-
-
 def _build_update_kwargs[DataT](
     payload: JsonPayload,
     *,
+    data_key: str,
     data_builder: cabc.Callable[[JsonPayload], DataT],
-) -> _ParsedUpdatePayload[DataT]:
+) -> dict[str, object]:
     """Build generic update kwargs with optimistic-lock fields."""
-    return _ParsedUpdatePayload(
-        expected_revision=parse_expected_revision(payload),
-        data=data_builder(payload),
-        audit=build_audit_metadata(payload),
-    )
+    return {
+        "expected_revision": parse_expected_revision(payload),
+        data_key: data_builder(payload),
+        "audit": build_audit_metadata(payload),
+    }
+
+
+def _build_payload_dataclass[DataT](
+    payload: dict[str, typ.Any],
+    *,
+    dc_type: type[DataT],
+    field_map: dict[str, tuple[str, bool]],
+) -> DataT:
+    """Construct a dataclass from payload using a field-to-key map.
+
+    Required fields are read via direct indexing. Optional fields are read
+    via ``dict.get`` to preserve ``None`` when absent.
+    """
+    values: dict[str, object] = {}
+    for field_name, (payload_key, is_optional) in field_map.items():
+        raw = payload.get(payload_key) if is_optional else payload[payload_key]
+        values[field_name] = raw
+    return typ.cast("DataT", dc_type(**values))
 
 
 def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:
     """Build ``SeriesProfileUpdateFields`` from payload fields."""
-    title = _require_field(payload, "title")
-    configuration = _require_field(payload, "configuration")
-    return SeriesProfileUpdateFields(
-        title=typ.cast("str", title),
-        description=typ.cast("str | None", payload.get("description")),
-        configuration=typ.cast("dict[str, object]", configuration),
+    return _build_payload_dataclass(
+        payload,
+        dc_type=SeriesProfileUpdateFields,
+        field_map={
+            "title": ("title", False),
+            "description": ("description", True),
+            "configuration": ("configuration", False),
+        },
     )
 
 
@@ -200,12 +211,14 @@ def _build_template_fields(
     payload: JsonPayload,
 ) -> EpisodeTemplateUpdateFields:
     """Build ``EpisodeTemplateUpdateFields`` from payload fields."""
-    title = _require_field(payload, "title")
-    structure = _require_field(payload, "structure")
-    return EpisodeTemplateUpdateFields(
-        title=typ.cast("str", title),
-        description=typ.cast("str | None", payload.get("description")),
-        structure=typ.cast("dict[str, object]", structure),
+    return _build_payload_dataclass(
+        payload,
+        dc_type=EpisodeTemplateUpdateFields,
+        field_map={
+            "title": ("title", False),
+            "description": ("description", True),
+            "structure": ("structure", False),
+        },
     )
 
 
@@ -221,15 +234,19 @@ def _build_typed_update_request[DataT, RequestT](  # noqa: PLR0913  # TODO(@epis
     ],
 ) -> RequestT:
     """Build a typed update request from common payload parsing."""
-    if data_key != "data":
-        msg = f"Unsupported update payload key: {data_key}."
-        raise ValueError(msg)
-    update_kwargs = _build_update_kwargs(payload, data_builder=data_builder)
+    update_kwargs = _build_update_kwargs(
+        payload,
+        data_key=data_key,
+        data_builder=data_builder,
+    )
+    expected_revision = typ.cast("int", update_kwargs["expected_revision"])
+    audit = typ.cast("AuditMetadata", update_kwargs["audit"])
+    data_or_fields = typ.cast("DataT", update_kwargs[data_key])
     return request_builder(
         entity_id,
-        update_kwargs.expected_revision,
-        update_kwargs.data,
-        update_kwargs.audit,
+        expected_revision,
+        data_or_fields,
+        audit,
     )
 
 
@@ -340,7 +357,7 @@ def build_profile_update_request(
         request_builder=lambda eid, rev, data, audit: UpdateSeriesProfileRequest(
             profile_id=eid,
             expected_revision=rev,
-            data=data,
+            data=typ.cast("SeriesProfileUpdateFields", data),
             audit=audit,
         ),
     )
@@ -373,12 +390,12 @@ def build_template_update_request(
     return _build_typed_update_request(
         entity_id,
         payload,
-        data_key="data",
+        data_key="fields",
         data_builder=_build_template_fields,
-        request_builder=lambda eid, rev, data, audit: UpdateEpisodeTemplateRequest(
+        request_builder=lambda eid, rev, fields, audit: UpdateEpisodeTemplateRequest(
             template_id=eid,
             expected_revision=rev,
-            data=data,
+            data=typ.cast("EpisodeTemplateUpdateFields", fields),
             audit=audit,
         ),
     )
