@@ -1,4 +1,15 @@
-"""Types, protocols, and exceptions for profile/template services."""
+"""Types, protocols, and exceptions for profile/template services.
+
+This module defines typed request/data objects, repository/history protocols,
+and domain-specific exceptions used by profile/template service functions.
+Import these symbols when building adapters, implementing repositories, or
+handling canonical profile/template errors.
+
+Examples
+--------
+>>> from episodic.canonical.profile_templates.types import EntityNotFoundError
+>>> raise EntityNotFoundError("Series profile <id> not found.")
+"""
 
 from __future__ import annotations
 

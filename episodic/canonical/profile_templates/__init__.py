@@ -1,4 +1,14 @@
-"""Profile/template service package exports."""
+"""Public exports for ``episodic.canonical.profile_templates``.
+
+This package groups canonical profile/template lifecycle APIs, shared request
+types, and errors used by adapters and application services. Import from this
+module when you need the stable public surface re-exported via ``__all__``.
+
+Examples
+--------
+>>> from episodic.canonical.profile_templates import create_series_profile, list_history
+>>> profile, revision = await create_series_profile(uow, data=data, audit=audit)
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,15 @@
-"""Shared base resources for Falcon canonical API adapters."""
+"""Shared base resources for Falcon canonical API adapters.
+
+This module provides abstract resource mixins that standardize common GET,
+history-list, create, and update endpoint behavior across concrete adapters.
+Subclasses provide identifier extraction, service functions, and serializers,
+while the base classes handle payload validation and shared handler dispatch.
+
+Examples
+--------
+>>> class MyEntityResource(_GetResourceBase): ...
+>>> resource = MyEntityResource(uow_factory)  # Handles GET via shared handler.
+"""
 
 from __future__ import annotations
 

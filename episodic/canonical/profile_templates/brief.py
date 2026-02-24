@@ -100,7 +100,37 @@ async def build_series_brief(
     profile_id: uuid.UUID,
     template_id: uuid.UUID | None,
 ) -> JsonMapping:
-    """Build a structured brief payload for downstream generators."""
+    """Build a structured brief payload for downstream generators.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work instance used to load profile and template state.
+    profile_id : uuid.UUID
+        Identifier of the series profile to include in the brief.
+    template_id : uuid.UUID | None
+        Optional episode-template identifier. When provided, only that template
+        is included. When ``None``, all templates for ``profile_id`` are
+        included.
+
+    Returns
+    -------
+    JsonMapping
+        Mapping with keys:
+        ``series_profile`` (``dict[str, object]``) and
+        ``episode_templates`` (``list[dict[str, object]]``), where each entry
+        contains serialized entity fields and revision metadata expected by
+        downstream generation flows.
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when the profile/template does not exist, or when a selected
+        template does not belong to the requested profile.
+    ValueError
+        Raised when an unsupported entity kind is passed to delegated generic
+        loaders.
+    """
     profile_obj, profile_revision = await get_entity_with_revision(
         uow,
         entity_id=profile_id,

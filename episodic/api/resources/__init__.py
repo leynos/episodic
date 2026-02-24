@@ -1,4 +1,24 @@
-"""Falcon resource adapters for canonical profile/template endpoints."""
+"""Falcon resources for canonical profile and template endpoints.
+
+This package exposes route adapter classes that translate Falcon request/
+response handling into calls to canonical profile/template services.
+
+Utilities provided
+------------------
+- Shared read base classes: ``_GetResourceBase``, ``_GetHistoryResourceBase``
+- Series profile resources:
+  ``SeriesProfilesResource``, ``SeriesProfileResource``,
+  ``SeriesProfileHistoryResource``, ``SeriesProfileBriefResource``
+- Episode template resources:
+  ``EpisodeTemplatesResource``, ``EpisodeTemplateResource``,
+  ``EpisodeTemplateHistoryResource``
+
+Examples
+--------
+>>> from episodic.api.resources import SeriesProfilesResource, EpisodeTemplatesResource
+>>> api.add_route("/profiles", SeriesProfilesResource(uow_factory))
+>>> api.add_route("/templates", EpisodeTemplatesResource(uow_factory))
+"""
 
 from __future__ import annotations
 

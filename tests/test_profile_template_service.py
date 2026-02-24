@@ -20,6 +20,7 @@ Example
 
 from __future__ import annotations
 
+import dataclasses as dc
 import typing as typ
 
 import pytest
@@ -47,18 +48,38 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import (
+        EpisodeTemplate,
         EpisodeTemplateHistoryEntry,
+        SeriesProfile,
         SeriesProfileHistoryEntry,
     )
+
+
+@dc.dataclass(slots=True)
+class BaseProfileFixture:
+    """Typed fixture payload for a base series profile."""
+
+    profile: SeriesProfile
+    profile_revision: int
+
+
+@dc.dataclass(slots=True)
+class BaseProfileWithTemplateFixture:
+    """Typed fixture payload for a base profile and one template."""
+
+    profile: SeriesProfile
+    profile_revision: int
+    template: EpisodeTemplate
+    template_revision: int
 
 
 @pytest_asyncio.fixture
 async def base_profile(
     session_factory: typ.Callable[[], AsyncSession],
-) -> tuple:
+) -> BaseProfileFixture:
     """Create a reusable base series profile fixture."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        return await create_series_profile(
+        profile, profile_revision = await create_series_profile(
             uow,
             data=SeriesProfileCreateData(
                 slug="service-profile",
@@ -71,15 +92,17 @@ async def base_profile(
                 note="Initial version",
             ),
         )
+    return BaseProfileFixture(profile=profile, profile_revision=profile_revision)
 
 
 @pytest_asyncio.fixture
 async def base_profile_with_template(
     session_factory: typ.Callable[[], AsyncSession],
-    base_profile: tuple,
-) -> tuple:
+    base_profile: BaseProfileFixture,
+) -> BaseProfileWithTemplateFixture:
     """Create a reusable base profile fixture with one episode template."""
-    profile, profile_revision = base_profile
+    profile = base_profile.profile
+    profile_revision = base_profile.profile_revision
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         template, template_revision = await create_episode_template(
             uow,
@@ -93,7 +116,12 @@ async def base_profile_with_template(
                 note="Initial template",
             ),
         )
-    return profile, profile_revision, template, template_revision
+    return BaseProfileWithTemplateFixture(
+        profile=profile,
+        profile_revision=profile_revision,
+        template=template,
+        template_revision=template_revision,
+    )
 
 
 class TestSeriesProfileService:
@@ -103,10 +131,11 @@ class TestSeriesProfileService:
     async def test_create_series_profile_creates_initial_history(
         self,
         session_factory: typ.Callable[[], AsyncSession],
-        base_profile: tuple,
+        base_profile: BaseProfileFixture,
     ) -> None:
         """Creating a profile also creates revision 1 history."""
-        profile, revision = base_profile
+        profile = base_profile.profile
+        revision = base_profile.profile_revision
 
         assert revision == 1, "Expected initial revision to be 1."
 
@@ -127,10 +156,10 @@ class TestSeriesProfileService:
     async def test_update_series_profile_rejects_revision_conflicts(
         self,
         session_factory: typ.Callable[[], AsyncSession],
-        base_profile: tuple,
+        base_profile: BaseProfileFixture,
     ) -> None:
         """Updating with stale expected revision raises conflict."""
-        profile, _ = base_profile
+        profile = base_profile.profile
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             with pytest.raises(RevisionConflictError, match=r"revision conflict"):
@@ -159,10 +188,11 @@ class TestEpisodeTemplateService:
     async def test_update_episode_template_revision_conflict_raises(
         self,
         session_factory: typ.Callable[[], AsyncSession],
-        base_profile_with_template: tuple,
+        base_profile_with_template: BaseProfileWithTemplateFixture,
     ) -> None:
         """Updating a template with a stale revision raises conflict."""
-        _, _, template, current_revision = base_profile_with_template
+        template = base_profile_with_template.template
+        current_revision = base_profile_with_template.template_revision
 
         stale_revision = current_revision - 1 if current_revision > 1 else 0
 
@@ -205,10 +235,12 @@ class TestEpisodeTemplateService:
     async def test_create_episode_template_creates_history_and_brief(
         self,
         session_factory: typ.Callable[[], AsyncSession],
-        base_profile_with_template: tuple,
+        base_profile_with_template: BaseProfileWithTemplateFixture,
     ) -> None:
         """Creating a template records history and is retrievable in brief output."""
-        profile, _, template, template_revision = base_profile_with_template
+        profile = base_profile_with_template.profile
+        template = base_profile_with_template.template
+        template_revision = base_profile_with_template.template_revision
 
         assert template_revision == 1, "Expected initial template revision to be 1."
 

@@ -1,4 +1,14 @@
-"""Internal helper utilities for profile/template services."""
+"""Internal helper utilities for profile/template service operations.
+
+This module provides reusable revision, snapshot, and optimistic-lock helpers
+used by profile/template service functions. Use these helpers when composing
+service-layer workflows that need consistent history revision behavior.
+
+Examples
+--------
+>>> from episodic.canonical.profile_templates import helpers
+>>> revision = await helpers._get_latest_revision(fetch_latest, entity_id)
+"""
 
 from __future__ import annotations
 

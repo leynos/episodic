@@ -65,7 +65,7 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
     Returns
     -------
     tuple[JsonPayload, str]
-        Serialised response payload and HTTP status code.
+        Serialized response payload and HTTP status code.
 
     Raises
     ------
@@ -111,7 +111,7 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episod
     Returns
     -------
     tuple[JsonPayload, str]
-        JSON object containing serialised ``items`` and HTTP status code.
+        JSON object containing serialized ``items`` and HTTP status code.
 
     Raises
     ------
@@ -175,7 +175,7 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
     Returns
     -------
     tuple[JsonPayload, str]
-        Serialised response payload and HTTP status code.
+        Serialized response payload and HTTP status code.
 
     Raises
     ------
@@ -236,7 +236,7 @@ async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev)
     Returns
     -------
     tuple[JsonPayload, str]
-        Serialised response payload and HTTP status code.
+        Serialized response payload and HTTP status code.
 
     Raises
     ------

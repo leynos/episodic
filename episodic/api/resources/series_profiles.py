@@ -1,4 +1,14 @@
-"""Series-profile Falcon resources."""
+"""Falcon resources for series-profile API endpoints.
+
+This module exposes resource classes for listing, reading, updating, history
+lookup, and structured-brief retrieval of series profiles. Use these adapters
+when wiring Falcon routes to canonical series-profile services.
+
+Examples
+--------
+>>> from episodic.api.resources.series_profiles import SeriesProfilesResource
+>>> app.add_route("/series-profiles", SeriesProfilesResource(uow_factory))
+"""
 
 from __future__ import annotations
 

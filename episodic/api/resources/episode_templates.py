@@ -1,4 +1,15 @@
-"""Episode-template Falcon resources."""
+"""Falcon resources for episode-template API endpoints.
+
+This module defines route resources that expose episode-template create, read,
+update, list, and history operations. Callers use these classes to register
+template endpoints on a Falcon app while reusing shared validation and handler
+behavior from the API resource base layer.
+
+Examples
+--------
+>>> from episodic.api.resources.episode_templates import EpisodeTemplatesResource
+>>> app.add_route("/episode-templates", EpisodeTemplatesResource(uow_factory))
+"""
 
 from __future__ import annotations
 

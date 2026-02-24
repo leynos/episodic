@@ -1,4 +1,15 @@
-"""Public application services for profile/template lifecycle operations."""
+"""Public services for profile/template lifecycle operations.
+
+This module exposes canonical application services used by API/resource
+adapters to create, update, retrieve, and list profiles/templates with revision
+metadata. Most functions return ``(entity, revision)`` pairs or history lists
+and raise typed domain errors for missing entities or revision conflicts.
+
+Examples
+--------
+>>> profile, revision = await create_series_profile(uow, data=data, audit=audit)
+>>> template, rev = await get_episode_template(uow, template_id=template_id)
+"""
 
 from __future__ import annotations
 
@@ -73,7 +84,29 @@ async def get_entity_with_revision(
     entity_id: uuid.UUID,
     kind: EntityKind | str,
 ) -> tuple[object, int]:
-    """Fetch one entity and its latest revision for the requested kind."""
+    """Fetch one entity and its latest persisted revision.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    entity_id : uuid.UUID
+        Identifier of the entity to fetch.
+    kind : EntityKind | str
+        Entity kind selector (series profile or episode template).
+
+    Returns
+    -------
+    tuple[object, int]
+        Tuple of the loaded entity object and its latest revision number.
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when the requested entity does not exist.
+    ValueError
+        Raised when ``kind`` is unsupported.
+    """
     entity_repo, history_repo, human_label = _get_repos_for_kind(uow, kind)
     match kind:
         case EntityKind.SERIES_PROFILE | "series_profile":
@@ -111,7 +144,27 @@ async def list_history(
     parent_id: uuid.UUID,
     kind: EntityKind | str,
 ) -> list[object]:
-    """List history entries for the requested entity kind."""
+    """List history entries for one parent entity.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    parent_id : uuid.UUID
+        Identifier of the parent entity.
+    kind : EntityKind | str
+        Entity kind selector (series profile or episode template).
+
+    Returns
+    -------
+    list[object]
+        History entries for the requested parent entity.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``kind`` is unsupported.
+    """
     _, history_repo, _ = _get_repos_for_kind(uow, kind)
     match kind:
         case EntityKind.SERIES_PROFILE | "series_profile":
@@ -145,7 +198,27 @@ async def list_entities_with_revisions(  # noqa: PLR0914  # TODO(@episodic-dev):
     kind: EntityKind | str,
     series_profile_id: uuid.UUID | None = None,
 ) -> list[tuple[object, int]]:
-    """List entities with current revisions for the requested kind."""
+    """List entities paired with their latest revisions.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    kind : EntityKind | str
+        Entity kind selector (series profile or episode template).
+    series_profile_id : uuid.UUID | None, default None
+        Optional profile filter used for episode-template listing.
+
+    Returns
+    -------
+    list[tuple[object, int]]
+        Sequence of ``(entity, latest_revision)`` pairs.
+
+    Raises
+    ------
+    ValueError
+        Raised when ``kind`` is unsupported.
+    """
     entity_repo, history_repo, _ = _get_repos_for_kind(uow, kind)
     match kind:
         case EntityKind.SERIES_PROFILE | "series_profile":
@@ -182,7 +255,27 @@ async def get_series_profile(
     *,
     profile_id: uuid.UUID,
 ) -> tuple[SeriesProfile, int]:
-    """Fetch one series profile and its latest revision."""
+    """Fetch one series profile and its latest revision.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    profile_id : uuid.UUID
+        Identifier of the profile to load.
+
+    Returns
+    -------
+    tuple[SeriesProfile, int]
+        Loaded profile and latest revision.
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when the profile does not exist.
+    ValueError
+        Raised when delegated kind dispatch is unsupported.
+    """
     entity, revision = await get_entity_with_revision(
         uow,
         entity_id=profile_id,
@@ -194,7 +287,23 @@ async def get_series_profile(
 async def list_series_profiles(
     uow: CanonicalUnitOfWork,
 ) -> list[tuple[SeriesProfile, int]]:
-    """List series profiles with latest revisions."""
+    """List all series profiles with latest revisions.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+
+    Returns
+    -------
+    list[tuple[SeriesProfile, int]]
+        Sequence of profile/revision pairs.
+
+    Raises
+    ------
+    ValueError
+        Raised when delegated kind dispatch is unsupported.
+    """
     items = await list_entities_with_revisions(uow, kind="series_profile")
     return [(typ.cast("SeriesProfile", entity), revision) for entity, revision in items]
 
@@ -204,7 +313,25 @@ async def list_series_profile_history(
     *,
     profile_id: uuid.UUID,
 ) -> list[SeriesProfileHistoryEntry]:
-    """List history entries for one series profile."""
+    """List history entries for one series profile.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    profile_id : uuid.UUID
+        Identifier of the profile whose history is requested.
+
+    Returns
+    -------
+    list[SeriesProfileHistoryEntry]
+        History entries for the given profile.
+
+    Raises
+    ------
+    ValueError
+        Raised when delegated kind dispatch is unsupported.
+    """
     items = await list_history(uow, parent_id=profile_id, kind="series_profile")
     return typ.cast("list[SeriesProfileHistoryEntry]", items)
 
@@ -214,7 +341,27 @@ async def get_episode_template(
     *,
     template_id: uuid.UUID,
 ) -> tuple[EpisodeTemplate, int]:
-    """Fetch one episode template and its latest revision."""
+    """Fetch one episode template and its latest revision.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    template_id : uuid.UUID
+        Identifier of the template to load.
+
+    Returns
+    -------
+    tuple[EpisodeTemplate, int]
+        Loaded template and latest revision.
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when the template does not exist.
+    ValueError
+        Raised when delegated kind dispatch is unsupported.
+    """
     entity, revision = await get_entity_with_revision(
         uow,
         entity_id=template_id,
@@ -228,7 +375,25 @@ async def list_episode_templates(
     *,
     series_profile_id: uuid.UUID | None = None,
 ) -> list[tuple[EpisodeTemplate, int]]:
-    """List episode templates with latest revisions."""
+    """List episode templates with latest revisions.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    series_profile_id : uuid.UUID | None, default None
+        Optional profile filter for template listing.
+
+    Returns
+    -------
+    list[tuple[EpisodeTemplate, int]]
+        Sequence of template/revision pairs.
+
+    Raises
+    ------
+    ValueError
+        Raised when delegated kind dispatch is unsupported.
+    """
     items = await list_entities_with_revisions(
         uow,
         kind="episode_template",
@@ -244,7 +409,25 @@ async def list_episode_template_history(
     *,
     template_id: uuid.UUID,
 ) -> list[EpisodeTemplateHistoryEntry]:
-    """List history entries for one episode template."""
+    """List history entries for one episode template.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    template_id : uuid.UUID
+        Identifier of the template whose history is requested.
+
+    Returns
+    -------
+    list[EpisodeTemplateHistoryEntry]
+        History entries for the given template.
+
+    Raises
+    ------
+    ValueError
+        Raised when delegated kind dispatch is unsupported.
+    """
     items = await list_history(uow, parent_id=template_id, kind="episode_template")
     return typ.cast("list[EpisodeTemplateHistoryEntry]", items)
 
@@ -255,7 +438,22 @@ async def create_series_profile(
     data: SeriesProfileCreateData,
     audit: AuditMetadata,
 ) -> tuple[SeriesProfile, int]:
-    """Create a series profile and initial history entry."""
+    """Create a series profile and initial history entry.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    data : SeriesProfileCreateData
+        Input data for the new profile.
+    audit : AuditMetadata
+        Actor metadata recorded in the initial history entry.
+
+    Returns
+    -------
+    tuple[SeriesProfile, int]
+        Created profile and initial revision (``1``).
+    """
     now = dt.datetime.now(dt.UTC)
     profile = SeriesProfile(
         id=uuid.uuid4(),
@@ -287,7 +485,28 @@ async def update_series_profile(
     *,
     request: UpdateSeriesProfileRequest,
 ) -> tuple[SeriesProfile, int]:
-    """Update a series profile with optimistic-lock revision checks."""
+    """Update a series profile with optimistic-lock checks.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    request : UpdateSeriesProfileRequest
+        Typed update request containing target id, expected revision, updated
+        fields, and audit metadata.
+
+    Returns
+    -------
+    tuple[SeriesProfile, int]
+        Updated profile and the next revision number.
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when the profile does not exist.
+    RevisionConflictError
+        Raised when expected and latest revisions do not match.
+    """
     return await _update_versioned_entity(
         uow,
         entity_id=request.profile_id,
@@ -316,7 +535,28 @@ async def create_episode_template(
     series_profile_id: uuid.UUID,
     data: EpisodeTemplateData,
 ) -> tuple[EpisodeTemplate, int]:
-    """Create an episode template and initial history entry."""
+    """Create an episode template and initial history entry.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    series_profile_id : uuid.UUID
+        Identifier of the parent series profile.
+    data : EpisodeTemplateData
+        Input data for the new template.
+
+    Returns
+    -------
+    tuple[EpisodeTemplate, int]
+        Created template and initial revision (``1``).
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when ``series_profile_id`` does not reference an existing
+        profile.
+    """
     profile = await uow.series_profiles.get(series_profile_id)
     if profile is None:
         msg = f"Series profile {series_profile_id} not found."
@@ -354,7 +594,28 @@ async def update_episode_template(
     *,
     request: UpdateEpisodeTemplateRequest,
 ) -> tuple[EpisodeTemplate, int]:
-    """Update an episode template with optimistic-lock revision checks."""
+    """Update an episode template with optimistic-lock checks.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work providing repositories and transactional boundaries.
+    request : UpdateEpisodeTemplateRequest
+        Typed update request containing target id, expected revision, updated
+        fields, and audit metadata.
+
+    Returns
+    -------
+    tuple[EpisodeTemplate, int]
+        Updated template and the next revision number.
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when the template does not exist.
+    RevisionConflictError
+        Raised when expected and latest revisions do not match.
+    """
     return await _update_versioned_entity(
         uow,
         entity_id=request.template_id,

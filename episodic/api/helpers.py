@@ -1,6 +1,6 @@
 """Request parsing and payload builders for Falcon resource adapters.
 
-This module centralises common API-layer transformations used by resource
+This module centralizes common API-layer transformations used by resource
 classes and shared handlers. It provides utilities for UUID parsing, payload
 shape validation, optimistic-lock field parsing, and construction of typed
 service request objects for profile/template create and update operations.
@@ -18,6 +18,7 @@ Build a typed update request from JSON payload:
 
 from __future__ import annotations
 
+import re
 import typing as typ
 import uuid
 
@@ -128,14 +129,19 @@ def parse_expected_revision(payload: JsonPayload) -> int:
         Raised when ``expected_revision`` is missing or not an integer.
     """
     raw_expected_revision = _require_field(payload, "expected_revision")
-    if not isinstance(raw_expected_revision, str | int | float):
+    if isinstance(raw_expected_revision, bool):
         msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
         raise falcon.HTTPBadRequest(description=msg)
-    try:
+    if isinstance(raw_expected_revision, int):
+        return raw_expected_revision
+    if isinstance(raw_expected_revision, str):
+        if re.fullmatch(r"[+-]?\d+", raw_expected_revision) is None:
+            msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
+            raise falcon.HTTPBadRequest(description=msg)
         return int(raw_expected_revision)
-    except (TypeError, ValueError) as exc:
-        msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
-        raise falcon.HTTPBadRequest(description=msg) from exc
+
+    msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
+    raise falcon.HTTPBadRequest(description=msg)
 
 
 def _require_field(payload: JsonPayload, field_name: str) -> object:
