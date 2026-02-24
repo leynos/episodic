@@ -12,8 +12,8 @@ Use the exported service functions from application code:
 ...     uow, series_profile_id=profile.id, data=template_data, audit=audit
 ... )
 >>> history = await list_history(uow, parent_id=profile.id, kind="series_profile")
->>> episodes = await ingest_sources(
-...     request, extractor=extractor, deduplicator=deduplicator
+>>> episode = await ingest_sources(
+...     uow=uow, series_profile=profile, request=request
 ... )
 """
 
@@ -57,6 +57,8 @@ from .profile_templates import (
 )
 
 # isort: split
+# Intentional: avoids import cycle with .profile_templates.
+# Remove when circular dependency is resolved.
 from .briefs import build_series_brief
 from .services import ingest_sources
 

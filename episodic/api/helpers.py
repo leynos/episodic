@@ -65,7 +65,7 @@ def parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
     """
     try:
         return uuid.UUID(raw_value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, AttributeError) as exc:
         msg = f"Invalid UUID for {field_name}: {raw_value!r}."
         raise falcon.HTTPBadRequest(description=msg) from exc
 

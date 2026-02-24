@@ -3,7 +3,7 @@
 This module defines route resources that expose episode-template create, read,
 update, list, and history operations. Callers use these classes to register
 template endpoints on a Falcon app while reusing shared validation and handler
-behavior from the API resource base layer.
+behaviour from the API resource base layer.
 
 Examples
 --------

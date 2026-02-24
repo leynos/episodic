@@ -13,13 +13,13 @@ Examples
 
 from __future__ import annotations
 
+import collections.abc as cabc
 import dataclasses as dc
 import enum
 import typing as typ
+import uuid
 
 if typ.TYPE_CHECKING:
-    import uuid
-
     from episodic.canonical.domain import (
         EpisodeTemplate,
         EpisodeTemplateHistoryEntry,
@@ -27,6 +27,12 @@ if typ.TYPE_CHECKING:
         SeriesProfile,
         SeriesProfileHistoryEntry,
     )
+
+type LatestRevisionsMap = dict[uuid.UUID, int]
+type BulkLatestRevisionsFn = cabc.Callable[
+    [cabc.Collection[uuid.UUID]],
+    cabc.Awaitable[LatestRevisionsMap],
+]
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -304,11 +310,7 @@ class _SeriesProfileHistoryRepository(typ.Protocol):
         /,
     ) -> list[SeriesProfileHistoryEntry]: ...
 
-    async def get_latest_revisions_for_profiles(
-        self,
-        profile_ids: typ.Collection[uuid.UUID],
-        /,
-    ) -> dict[uuid.UUID, int]: ...
+    get_latest_revisions_for_profiles: BulkLatestRevisionsFn
 
 
 class _EpisodeTemplateHistoryRepository(typ.Protocol):
@@ -326,8 +328,4 @@ class _EpisodeTemplateHistoryRepository(typ.Protocol):
         /,
     ) -> list[EpisodeTemplateHistoryEntry]: ...
 
-    async def get_latest_revisions_for_templates(
-        self,
-        template_ids: typ.Collection[uuid.UUID],
-        /,
-    ) -> dict[uuid.UUID, int]: ...
+    get_latest_revisions_for_templates: BulkLatestRevisionsFn
