@@ -216,7 +216,6 @@ class EntityNotFoundError(ProfileTemplateError):
     """Raised when an expected profile or template does not exist."""
 
     error_code: typ.ClassVar[str] = "entity_not_found"
-    default_retryable: typ.ClassVar[bool] = False
 
 
 class RevisionConflictError(ProfileTemplateError):
