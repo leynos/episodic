@@ -67,6 +67,17 @@ class _ExpectedError:
             ),
             id="revision-conflict-defaults",
         ),
+        pytest.param(
+            RevisionConflictError,
+            {"message": "revision conflict", "retryable": False},
+            _ExpectedError(
+                message="revision conflict",
+                code="revision_conflict",
+                entity_id=None,
+                retryable=False,
+            ),
+            id="revision-conflict-retryable-override",
+        ),
     ],
 )
 def test_error_class_defaults(
