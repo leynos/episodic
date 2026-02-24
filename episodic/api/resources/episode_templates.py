@@ -49,7 +49,7 @@ if typ.TYPE_CHECKING:
     from episodic.api.types import JsonPayload
 
 
-class EpisodeTemplatesResource(_CreateResourceBase):
+class EpisodeTemplatesResource(_CreateResourceBase[object]):
     """Handle collection operations for episode templates.
 
     Parameters
@@ -129,7 +129,7 @@ class EpisodeTemplatesResource(_CreateResourceBase):
 # NOTE: Intentional MRO-safe diamond inheritance: both parent ``__init__``
 # implementations are identical, and placing ``_UpdateResourceBase`` first
 # ensures patch-specific hooks resolve before shared get-by-id behavior.
-class EpisodeTemplateResource(_UpdateResourceBase, _GetResourceBase):
+class EpisodeTemplateResource(_UpdateResourceBase[object], _GetResourceBase[object]):
     """Handle single-entity operations for episode templates.
 
     Parameters
@@ -201,7 +201,7 @@ class EpisodeTemplateResource(_UpdateResourceBase, _GetResourceBase):
         return ("expected_revision", "title", "structure")
 
 
-class EpisodeTemplateHistoryResource(_GetHistoryResourceBase):
+class EpisodeTemplateHistoryResource(_GetHistoryResourceBase[object]):
     """Handle history retrieval for episode templates.
 
     Parameters

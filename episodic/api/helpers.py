@@ -30,7 +30,7 @@ from episodic.canonical.profile_templates import (
     EpisodeTemplateData,
     EpisodeTemplateUpdateFields,
     SeriesProfileCreateData,
-    SeriesProfileData,
+    SeriesProfileUpdateFields,
     UpdateEpisodeTemplateRequest,
     UpdateSeriesProfileRequest,
 )
@@ -39,6 +39,8 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from .types import JsonPayload
+
+_INT_RE = re.compile(r"[+-]?\d+")
 
 
 def parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
@@ -130,26 +132,11 @@ def parse_expected_revision(payload: JsonPayload) -> int:
         Raised when ``expected_revision`` is missing, not an integer, or not
         strictly positive.
     """
-    raw_expected_revision = _require_field(payload, "expected_revision")
-    if isinstance(raw_expected_revision, bool):
-        msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
-        raise falcon.HTTPBadRequest(description=msg)
-    if isinstance(raw_expected_revision, int):
-        if raw_expected_revision <= 0:
-            msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
-            raise falcon.HTTPBadRequest(description=msg)
-        return raw_expected_revision
-    if isinstance(raw_expected_revision, str):
-        if re.fullmatch(r"[+-]?\d+", raw_expected_revision) is None:
-            msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
-            raise falcon.HTTPBadRequest(description=msg)
-        parsed_expected_revision = int(raw_expected_revision)
-        if parsed_expected_revision <= 0:
-            msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
-            raise falcon.HTTPBadRequest(description=msg)
-        return parsed_expected_revision
-
-    msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
+    raw = _require_field(payload, "expected_revision")
+    parsed = _coerce_strict_positive_int(raw)
+    if parsed is not None:
+        return parsed
+    msg = f"Invalid integer for expected_revision: {raw!r}."
     raise falcon.HTTPBadRequest(description=msg)
 
 
@@ -159,6 +146,21 @@ def _require_field(payload: JsonPayload, field_name: str) -> object:
         msg = f"Missing required field: {field_name}"
         raise falcon.HTTPBadRequest(description=msg)
     return payload[field_name]
+
+
+def _coerce_strict_positive_int(value: object) -> int | None:
+    """Return ``value`` as a strict positive integer or ``None``."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str):
+        stripped_value = value.strip()
+        if _INT_RE.fullmatch(stripped_value) is None:
+            return None
+        parsed = int(stripped_value)
+        return parsed if parsed > 0 else None
+    return None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -183,11 +185,11 @@ def _build_update_kwargs[DataT](
     )
 
 
-def _build_profile_data(payload: JsonPayload) -> SeriesProfileData:
-    """Build ``SeriesProfileData`` from payload fields."""
+def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:
+    """Build ``SeriesProfileUpdateFields`` from payload fields."""
     title = _require_field(payload, "title")
     configuration = _require_field(payload, "configuration")
-    return SeriesProfileData(
+    return SeriesProfileUpdateFields(
         title=typ.cast("str", title),
         description=typ.cast("str | None", payload.get("description")),
         configuration=typ.cast("dict[str, object]", configuration),
@@ -295,8 +297,6 @@ def build_template_create_kwargs(payload: JsonPayload) -> dict[str, object]:
         title=typ.cast("str", title),
         description=typ.cast("str | None", payload.get("description")),
         structure=typ.cast("dict[str, object]", structure),
-        actor=audit.actor,
-        note=audit.note,
     )
     return {
         "series_profile_id": parse_uuid(
@@ -304,6 +304,7 @@ def build_template_create_kwargs(payload: JsonPayload) -> dict[str, object]:
             "series_profile_id",
         ),
         "data": data,
+        "audit": audit,
     }
 
 

@@ -9,7 +9,7 @@ Use the exported service functions from application code:
 
 >>> profile, _ = await create_series_profile(uow, data=data, audit=audit)
 >>> template, _ = await create_episode_template(
-...     uow, series_profile_id=profile.id, data=template_data
+...     uow, series_profile_id=profile.id, data=template_data, audit=audit
 ... )
 >>> history = await list_history(uow, parent_id=profile.id, kind="series_profile")
 >>> episodes = await ingest_sources(

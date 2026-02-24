@@ -33,7 +33,7 @@ from episodic.canonical.profile_templates import (
     EpisodeTemplateUpdateFields,
     RevisionConflictError,
     SeriesProfileCreateData,
-    SeriesProfileData,
+    SeriesProfileUpdateFields,
     UpdateEpisodeTemplateRequest,
     UpdateSeriesProfileRequest,
     create_episode_template,
@@ -112,6 +112,8 @@ async def base_profile_with_template(
                 title="Weekly Template",
                 description="Template for weekly episodes",
                 structure={"segments": ["intro", "news", "outro"]},
+            ),
+            audit=AuditMetadata(
                 actor="editor@example.com",
                 note="Initial template",
             ),
@@ -169,7 +171,7 @@ class TestSeriesProfileService:
                     request=UpdateSeriesProfileRequest(
                         profile_id=profile.id,
                         expected_revision=5,
-                        data=SeriesProfileData(
+                        data=SeriesProfileUpdateFields(
                             title="Profile Conflict Updated",
                             description="Changed profile",
                             configuration={"tone": "assertive"},
@@ -193,7 +195,7 @@ class TestSeriesProfileService:
             actor="reviewer@example.com",
             note="Apply canonical profile update",
         )
-        update_payload = SeriesProfileData(
+        update_payload = SeriesProfileUpdateFields(
             title="Service Profile Updated",
             description="Updated profile description",
             configuration={"tone": "assertive"},

@@ -45,11 +45,26 @@ type UpdateRequestBuilder = cabc.Callable[
 ]
 
 
-class _GetResourceBase(ABC):
-    """Base resource for fetch-by-id endpoints."""
+class _ResourceBase(ABC):
+    """Shared base resource that stores the unit-of-work factory."""
 
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
+
+    @staticmethod
+    @abstractmethod
+    def _resource_base_marker() -> None:
+        """Marker hook to keep the base mixin abstract."""
+
+
+class _GetResourceBase[EntityT: object](_ResourceBase, ABC):
+    """Base resource for fetch-by-id endpoints."""
+
+    @staticmethod
+    @typ.override
+    def _resource_base_marker() -> None:
+        """Concrete marker implementation inherited by get resources."""
+        pass
 
     @staticmethod
     @abstractmethod
@@ -63,12 +78,12 @@ class _GetResourceBase(ABC):
 
     @staticmethod
     @abstractmethod
-    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]:
         """Return the fetch service function for the resource."""
 
     @staticmethod
     @abstractmethod
-    def _get_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+    def _get_serializer_fn() -> cabc.Callable[[EntityT, int], JsonPayload]:
         """Return the response serializer for the resource."""
 
     async def on_get(
@@ -88,11 +103,14 @@ class _GetResourceBase(ABC):
         )
 
 
-class _GetHistoryResourceBase(ABC):
+class _GetHistoryResourceBase[HistoryT: object](_ResourceBase, ABC):
     """Base resource for history-list endpoints."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
+    @staticmethod
+    @typ.override
+    def _resource_base_marker() -> None:
+        """Concrete marker implementation inherited by history resources."""
+        pass
 
     @staticmethod
     @abstractmethod
@@ -106,12 +124,12 @@ class _GetHistoryResourceBase(ABC):
 
     @staticmethod
     @abstractmethod
-    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[HistoryT]]]:
         """Return the history-list service function for the resource."""
 
     @staticmethod
     @abstractmethod
-    def _get_serializer_fn() -> cabc.Callable[[object], JsonPayload]:
+    def _get_serializer_fn() -> cabc.Callable[[HistoryT], JsonPayload]:
         """Return the item serializer for the resource."""
 
     async def on_get(
@@ -131,11 +149,14 @@ class _GetHistoryResourceBase(ABC):
         )
 
 
-class _CreateResourceBase(ABC):
+class _CreateResourceBase[EntityT: object](_ResourceBase, ABC):
     """Base resource for create endpoints."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
+    @staticmethod
+    @typ.override
+    def _resource_base_marker() -> None:
+        """Concrete marker implementation inherited by create resources."""
+        pass
 
     @staticmethod
     @abstractmethod
@@ -149,16 +170,26 @@ class _CreateResourceBase(ABC):
 
     @staticmethod
     @abstractmethod
-    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[EntityT, int]]]:
         """Return the create service function for the resource."""
 
     @staticmethod
     @abstractmethod
-    def _get_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+    def _get_serializer_fn() -> cabc.Callable[[EntityT, int], JsonPayload]:
         """Return the response serializer for the resource."""
 
-    async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
-        """Create a new entity for a collection endpoint."""
+    async def on_post(
+        self,
+        req: falcon.Request,
+        resp: falcon.Response,
+        **kwargs: str,
+    ) -> None:
+        """Create a new entity for a collection endpoint.
+
+        Path params are currently unsupported for create routes. Extend
+        ``_get_kwargs_builder`` if nested create routes are introduced.
+        """
+        del kwargs
         payload = require_payload_dict(await req.get_media())
         resp.media, resp.status = await handle_create_entity(
             uow_factory=self._uow_factory,
@@ -170,11 +201,14 @@ class _CreateResourceBase(ABC):
         )
 
 
-class _UpdateResourceBase(ABC):
+class _UpdateResourceBase[EntityT: object](_ResourceBase, ABC):
     """Base resource for update-by-id endpoints."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
+    @staticmethod
+    @typ.override
+    def _resource_base_marker() -> None:
+        """Concrete marker implementation inherited by update resources."""
+        pass
 
     @staticmethod
     @abstractmethod
@@ -194,13 +228,13 @@ class _UpdateResourceBase(ABC):
     @staticmethod
     @abstractmethod
     def _get_update_service_fn() -> cabc.Callable[
-        ..., cabc.Awaitable[tuple[object, int]]
+        ..., cabc.Awaitable[tuple[EntityT, int]]
     ]:
         """Return the update service function for the resource."""
 
     @staticmethod
     @abstractmethod
-    def _get_update_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+    def _get_update_serializer_fn() -> cabc.Callable[[EntityT, int], JsonPayload]:
         """Return the response serializer for the resource."""
 
     @staticmethod

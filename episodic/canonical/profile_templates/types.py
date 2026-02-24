@@ -128,18 +128,12 @@ class EpisodeTemplateData:
         Optional longer template description.
     structure : JsonMapping
         JSON structure that defines template segments.
-    actor : str | None
-        Optional identifier for the actor creating the template.
-    note : str | None
-        Optional free-form audit note.
     """
 
     slug: str
     title: str
     description: str | None
     structure: JsonMapping
-    actor: str | None
-    note: str | None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -152,7 +146,7 @@ class UpdateSeriesProfileRequest:
         Identifier of the profile to update.
     expected_revision : int
         Revision expected by the caller for optimistic locking.
-    data : SeriesProfileData
+    data : SeriesProfileUpdateFields
         Updated profile field values.
     audit : AuditMetadata
         Actor metadata captured for history tracking.
@@ -160,7 +154,7 @@ class UpdateSeriesProfileRequest:
 
     profile_id: uuid.UUID
     expected_revision: int
-    data: SeriesProfileData
+    data: SeriesProfileUpdateFields
     audit: AuditMetadata
 
 

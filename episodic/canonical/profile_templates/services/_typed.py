@@ -158,6 +158,7 @@ async def create_episode_template(
     *,
     series_profile_id: uuid.UUID,
     data: EpisodeTemplateData,
+    audit: AuditMetadata,
 ) -> tuple[EpisodeTemplate, int]:
     """Create an episode template and initial history entry.
 
@@ -169,6 +170,8 @@ async def create_episode_template(
         Identifier of the parent series profile.
     data : EpisodeTemplateData
         Input data for the new template.
+    audit : AuditMetadata
+        Actor metadata recorded in the initial history entry.
 
     Returns
     -------
@@ -201,8 +204,8 @@ async def create_episode_template(
         id=uuid.uuid4(),
         episode_template_id=template.id,
         revision=1,
-        actor=data.actor,
-        note=data.note,
+        actor=audit.actor,
+        note=audit.note,
         snapshot=_template_snapshot(template),
         created_at=now,
     )

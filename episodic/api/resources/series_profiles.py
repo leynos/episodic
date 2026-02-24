@@ -50,7 +50,7 @@ if typ.TYPE_CHECKING:
     from episodic.api.types import JsonPayload, UowFactory
 
 
-class SeriesProfilesResource(_CreateResourceBase):
+class SeriesProfilesResource(_CreateResourceBase[object]):
     """Handle collection operations for series profiles.
 
     Parameters
@@ -121,7 +121,7 @@ class SeriesProfilesResource(_CreateResourceBase):
 # NOTE: Intentional MRO-safe diamond inheritance: both parent ``__init__``
 # implementations are identical, and placing ``_UpdateResourceBase`` first
 # ensures patch-specific hooks resolve before shared get-by-id behavior.
-class SeriesProfileResource(_UpdateResourceBase, _GetResourceBase):
+class SeriesProfileResource(_UpdateResourceBase[object], _GetResourceBase[object]):
     """Handle single-entity operations for series profiles.
 
     Parameters
@@ -193,7 +193,7 @@ class SeriesProfileResource(_UpdateResourceBase, _GetResourceBase):
         return ("expected_revision", "title", "configuration")
 
 
-class SeriesProfileHistoryResource(_GetHistoryResourceBase):
+class SeriesProfileHistoryResource(_GetHistoryResourceBase[object]):
     """Handle history retrieval for series profiles.
 
     Parameters
