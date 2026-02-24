@@ -96,8 +96,8 @@ Success is observable when:
   sets.
 
 - Risk: Behavioral tests may only verify approval payload today, not TEI
-  header payload. Severity: low Likelihood: medium Mitigation: add explicit
-  BDD steps that query persisted TEI headers and assert provenance fields.
+  header payload. Severity: low Likelihood: medium Mitigation: add explicit BDD
+  steps that query persisted TEI headers and assert provenance fields.
 
 ## Progress
 
@@ -117,10 +117,10 @@ Success is observable when:
 ## Surprises & discoveries
 
 - Observation: No Qdrant project-memory Model Context Protocol (MCP) endpoints
-  are available in this
-  environment, so repository and docs inspection are the only context source.
-  Evidence: MCP resource and template listings returned empty results. Impact:
-  No long-term memory recall/write can be performed for this session.
+  are available in this environment, so repository and docs inspection are the
+  only context source. Evidence: MCP resource and template listings returned
+  empty results. Impact: No long-term memory recall/write can be performed for
+  this session.
 
 - Observation: Existing ingestion already captures conflict metadata under
   source-document metadata and source URIs in approval-event payload, but TEI
