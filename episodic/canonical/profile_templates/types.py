@@ -81,6 +81,9 @@ class SeriesProfileCreateData(SeriesProfileData):
 class SeriesProfileUpdateFields(SeriesProfileData):
     """Entity data for updating a series profile.
 
+    This subclass is intentionally nominal and carries the same fields as
+    ``SeriesProfileData`` so update call sites can express intent explicitly.
+
     Attributes
     ----------
     title : str
@@ -171,7 +174,7 @@ class UpdateEpisodeTemplateRequest:
         Identifier of the template to update.
     expected_revision : int
         Revision expected by the caller for optimistic locking.
-    fields : EpisodeTemplateUpdateFields
+    data : EpisodeTemplateUpdateFields
         Updated template field values.
     audit : AuditMetadata
         Actor metadata captured for history tracking.
@@ -179,7 +182,7 @@ class UpdateEpisodeTemplateRequest:
 
     template_id: uuid.UUID
     expected_revision: int
-    fields: EpisodeTemplateUpdateFields
+    data: EpisodeTemplateUpdateFields
     audit: AuditMetadata
 
 

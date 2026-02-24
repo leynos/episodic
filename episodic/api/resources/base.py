@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import collections.abc as cabc
 import typing as typ
+import uuid
 from abc import ABC, abstractmethod
 
 from episodic.api.handlers import (
@@ -25,17 +26,15 @@ from episodic.api.handlers import (
 )
 from episodic.api.helpers import require_payload_dict
 from episodic.api.types import JsonPayload
+from episodic.canonical.profile_templates import (
+    UpdateEpisodeTemplateRequest,
+    UpdateSeriesProfileRequest,
+)
 
 if typ.TYPE_CHECKING:
-    import uuid
-
     import falcon
 
     from episodic.api.types import UowFactory
-    from episodic.canonical.profile_templates import (
-        UpdateEpisodeTemplateRequest,
-        UpdateSeriesProfileRequest,
-    )
 
 
 # NOTE: request builders accept validated JSON payload and return a typed

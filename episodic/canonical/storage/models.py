@@ -43,6 +43,13 @@ INGESTION_STATUS = sa.Enum(
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )
 
+UQ_SERIES_PROFILE_HISTORY_REVISION = "uq_series_profile_history_revision"
+UQ_EPISODE_TEMPLATE_HISTORY_REVISION = "uq_episode_template_history_revision"
+REVISION_CONSTRAINT_NAMES = (
+    UQ_SERIES_PROFILE_HISTORY_REVISION,
+    UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
+)
+
 
 class SeriesProfileRecord(Base):
     """SQLAlchemy model for series profiles.
@@ -516,7 +523,7 @@ class SeriesProfileHistoryRecord(Base):
         sa.UniqueConstraint(
             "series_profile_id",
             "revision",
-            name="uq_series_profile_history_revision",
+            name=UQ_SERIES_PROFILE_HISTORY_REVISION,
         ),
     )
 
@@ -571,6 +578,6 @@ class EpisodeTemplateHistoryRecord(Base):
         sa.UniqueConstraint(
             "episode_template_id",
             "revision",
-            name="uq_episode_template_history_revision",
+            name=UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
         ),
     )

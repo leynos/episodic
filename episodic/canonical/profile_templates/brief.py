@@ -18,6 +18,7 @@ from __future__ import annotations
 import typing as typ
 from itertools import starmap
 
+from .helpers import _profile_payload_fields, _template_payload_fields
 from .services import get_entity_with_revision, list_entities_with_revisions
 from .types import EntityNotFoundError
 
@@ -34,11 +35,7 @@ def _serialize_profile_for_brief(
 ) -> JsonMapping:
     """Serialize profile with revision for structured brief payloads."""
     return {
-        "id": str(profile.id),
-        "slug": profile.slug,
-        "title": profile.title,
-        "description": profile.description,
-        "configuration": profile.configuration,
+        **_profile_payload_fields(profile),
         "revision": revision,
         "updated_at": profile.updated_at.isoformat(),
     }
@@ -50,12 +47,7 @@ def _serialize_template_for_brief(
 ) -> JsonMapping:
     """Serialize episode template with revision for structured brief payloads."""
     return {
-        "id": str(template.id),
-        "series_profile_id": str(template.series_profile_id),
-        "slug": template.slug,
-        "title": template.title,
-        "description": template.description,
-        "structure": template.structure,
+        **_template_payload_fields(template),
         "revision": revision,
         "updated_at": template.updated_at.isoformat(),
     }

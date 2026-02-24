@@ -18,6 +18,7 @@ Build a typed update request from JSON payload:
 
 from __future__ import annotations
 
+import dataclasses as dc
 import re
 import typing as typ
 import uuid
@@ -126,19 +127,27 @@ def parse_expected_revision(payload: JsonPayload) -> int:
     Raises
     ------
     falcon.HTTPBadRequest
-        Raised when ``expected_revision`` is missing or not an integer.
+        Raised when ``expected_revision`` is missing, not an integer, or not
+        strictly positive.
     """
     raw_expected_revision = _require_field(payload, "expected_revision")
     if isinstance(raw_expected_revision, bool):
         msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
         raise falcon.HTTPBadRequest(description=msg)
     if isinstance(raw_expected_revision, int):
+        if raw_expected_revision <= 0:
+            msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
+            raise falcon.HTTPBadRequest(description=msg)
         return raw_expected_revision
     if isinstance(raw_expected_revision, str):
         if re.fullmatch(r"[+-]?\d+", raw_expected_revision) is None:
             msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
             raise falcon.HTTPBadRequest(description=msg)
-        return int(raw_expected_revision)
+        parsed_expected_revision = int(raw_expected_revision)
+        if parsed_expected_revision <= 0:
+            msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
+            raise falcon.HTTPBadRequest(description=msg)
+        return parsed_expected_revision
 
     msg = f"Invalid integer for expected_revision: {raw_expected_revision!r}."
     raise falcon.HTTPBadRequest(description=msg)
@@ -152,17 +161,26 @@ def _require_field(payload: JsonPayload, field_name: str) -> object:
     return payload[field_name]
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _ParsedUpdatePayload[DataT]:
+    """Typed parsed components used to build update request objects."""
+
+    expected_revision: int
+    data: DataT
+    audit: AuditMetadata
+
+
 def _build_update_kwargs[DataT](
     payload: JsonPayload,
-    data_key: str,
+    *,
     data_builder: cabc.Callable[[JsonPayload], DataT],
-) -> dict[str, object]:
+) -> _ParsedUpdatePayload[DataT]:
     """Build generic update kwargs with optimistic-lock fields."""
-    return {
-        "expected_revision": parse_expected_revision(payload),
-        data_key: data_builder(payload),
-        "audit": build_audit_metadata(payload),
-    }
+    return _ParsedUpdatePayload(
+        expected_revision=parse_expected_revision(payload),
+        data=data_builder(payload),
+        audit=build_audit_metadata(payload),
+    )
 
 
 def _build_profile_data(payload: JsonPayload) -> SeriesProfileData:
@@ -201,11 +219,16 @@ def _build_typed_update_request[DataT, RequestT](  # noqa: PLR0913  # TODO(@epis
     ],
 ) -> RequestT:
     """Build a typed update request from common payload parsing."""
-    update_kwargs = _build_update_kwargs(payload, data_key, data_builder)
-    expected_revision = typ.cast("int", update_kwargs["expected_revision"])
-    audit = typ.cast("AuditMetadata", update_kwargs["audit"])
-    data_or_fields = typ.cast("DataT", update_kwargs[data_key])
-    return request_builder(entity_id, expected_revision, data_or_fields, audit)
+    if data_key != "data":
+        msg = f"Unsupported update payload key: {data_key}."
+        raise ValueError(msg)
+    update_kwargs = _build_update_kwargs(payload, data_builder=data_builder)
+    return request_builder(
+        entity_id,
+        update_kwargs.expected_revision,
+        update_kwargs.data,
+        update_kwargs.audit,
+    )
 
 
 def build_profile_create_kwargs(payload: JsonPayload) -> dict[str, object]:
@@ -316,7 +339,7 @@ def build_profile_update_request(
         request_builder=lambda eid, rev, data, audit: UpdateSeriesProfileRequest(
             profile_id=eid,
             expected_revision=rev,
-            data=typ.cast("SeriesProfileData", data),
+            data=data,
             audit=audit,
         ),
     )
@@ -349,12 +372,12 @@ def build_template_update_request(
     return _build_typed_update_request(
         entity_id,
         payload,
-        data_key="fields",
+        data_key="data",
         data_builder=_build_template_fields,
-        request_builder=lambda eid, rev, fields, audit: UpdateEpisodeTemplateRequest(
+        request_builder=lambda eid, rev, data, audit: UpdateEpisodeTemplateRequest(
             template_id=eid,
             expected_revision=rev,
-            fields=typ.cast("EpisodeTemplateUpdateFields", fields),
+            data=data,
             audit=audit,
         ),
     )

@@ -12,11 +12,14 @@ Examples
 
 from __future__ import annotations
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
 
 from sqlalchemy.exc import IntegrityError
+
+from episodic.canonical.storage.models import REVISION_CONSTRAINT_NAMES
 
 from .types import (
     AuditMetadata,
@@ -65,14 +68,16 @@ def _is_revision_conflict_integrity_error(
     entity_id_field: str,
 ) -> bool:
     """Return True when an integrity error indicates a revision collision."""
-    # Constraint-name markers below are coupled to history uniqueness
-    # constraints in ``episodic/canonical/storage/models.py``.
-    detail = str(getattr(exc, "orig", exc))
+    orig_exc = getattr(exc, "orig", exc)
+    diag = getattr(orig_exc, "diag", None)
+    constraint_name = getattr(diag, "constraint_name", None)
+    if constraint_name in REVISION_CONSTRAINT_NAMES:
+        return True
+    detail = str(orig_exc)
     return any(
         marker in detail
         for marker in (
-            "uq_series_profile_history_revision",
-            "uq_episode_template_history_revision",
+            *REVISION_CONSTRAINT_NAMES,
             f"({entity_id_field}, revision)",
             f"{entity_id_field}, revision",
         )
@@ -81,13 +86,11 @@ def _is_revision_conflict_integrity_error(
 
 def _build_snapshot_base(
     *,
-    entity_id: uuid.UUID,
     created_at: dt.datetime,
     updated_at: dt.datetime,
 ) -> JsonMapping:
     """Build shared snapshot fields."""
     return {
-        "id": str(entity_id),
         "created_at": created_at.isoformat(),
         "updated_at": updated_at.isoformat(),
     }
@@ -107,15 +110,6 @@ async def _get_entity_with_latest_revision[EntityT: _VersionedEntity](
         raise EntityNotFoundError(msg)
     revision = await _get_latest_revision(fetch_latest, entity_id)
     return entity, revision
-
-
-async def _list_history_generic[HistoryT](
-    list_for_parent: typ.Callable[[uuid.UUID], typ.Awaitable[list[HistoryT]]],
-    *,
-    parent_id: uuid.UUID,
-) -> list[HistoryT]:
-    """List history entries for a parent entity."""
-    return await list_for_parent(parent_id)
 
 
 async def _with_latest_revisions[EntityT: _VersionedEntity](
@@ -147,6 +141,18 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
     audit: AuditMetadata,
 ) -> tuple[EntityT, int]:
     """Update a versioned entity using optimistic locking."""
+    try:
+        history_entry_fields = {field.name for field in dc.fields(history_entry_class)}
+    except TypeError as exc:  # pragma: no cover - defensive guard
+        msg = "history_entry_class must be a dataclass type."
+        raise TypeError(msg) from exc
+    if entity_id_field not in history_entry_fields:
+        msg = (
+            f"History entry type {history_entry_class.__name__} does not define "
+            f"required field {entity_id_field!r}."
+        )
+        raise ValueError(msg)
+
     entity = await entity_repo.get(entity_id)
     if entity is None:
         msg = f"{entity_label} {entity_id} not found."
@@ -184,14 +190,10 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
     return updated_entity, next_revision
 
 
-def _profile_snapshot(profile: SeriesProfile) -> JsonMapping:
-    """Return a stable JSON snapshot for profile history."""
+def _profile_payload_fields(profile: SeriesProfile) -> JsonMapping:
+    """Return shared serialized profile fields for snapshots/briefs."""
     return {
-        **_build_snapshot_base(
-            entity_id=profile.id,
-            created_at=profile.created_at,
-            updated_at=profile.updated_at,
-        ),
+        "id": str(profile.id),
         "slug": profile.slug,
         "title": profile.title,
         "description": profile.description,
@@ -199,17 +201,35 @@ def _profile_snapshot(profile: SeriesProfile) -> JsonMapping:
     }
 
 
-def _template_snapshot(template: EpisodeTemplate) -> JsonMapping:
-    """Return a stable JSON snapshot for template history."""
+def _template_payload_fields(template: EpisodeTemplate) -> JsonMapping:
+    """Return shared serialized template fields for snapshots/briefs."""
     return {
-        **_build_snapshot_base(
-            entity_id=template.id,
-            created_at=template.created_at,
-            updated_at=template.updated_at,
-        ),
+        "id": str(template.id),
         "series_profile_id": str(template.series_profile_id),
         "slug": template.slug,
         "title": template.title,
         "description": template.description,
         "structure": template.structure,
+    }
+
+
+def _profile_snapshot(profile: SeriesProfile) -> JsonMapping:
+    """Return a stable JSON snapshot for profile history."""
+    return {
+        **_profile_payload_fields(profile),
+        **_build_snapshot_base(
+            created_at=profile.created_at,
+            updated_at=profile.updated_at,
+        ),
+    }
+
+
+def _template_snapshot(template: EpisodeTemplate) -> JsonMapping:
+    """Return a stable JSON snapshot for template history."""
+    return {
+        **_template_payload_fields(template),
+        **_build_snapshot_base(
+            created_at=template.created_at,
+            updated_at=template.updated_at,
+        ),
     }

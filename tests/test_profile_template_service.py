@@ -145,7 +145,8 @@ class TestSeriesProfileService:
                 parent_id=profile.id,
                 kind="series_profile",
             )
-        history = sorted(history, key=lambda entry: entry.revision)
+        typed_history = typ.cast("list[SeriesProfileHistoryEntry]", history)
+        history = sorted(typed_history, key=lambda entry: entry.revision)
 
         assert len(history) == 1, "Expected one profile history record."
         first_entry = typ.cast("SeriesProfileHistoryEntry", history[0])
@@ -180,6 +181,60 @@ class TestSeriesProfileService:
                     ),
                 )
 
+    @pytest.mark.asyncio
+    async def test_update_series_profile_updates_entity_and_appends_history(
+        self,
+        session_factory: typ.Callable[[], AsyncSession],
+        base_profile: BaseProfileFixture,
+    ) -> None:
+        """Updating with the current revision mutates entity data and history."""
+        profile = base_profile.profile
+        audit = AuditMetadata(
+            actor="reviewer@example.com",
+            note="Apply canonical profile update",
+        )
+        update_payload = SeriesProfileData(
+            title="Service Profile Updated",
+            description="Updated profile description",
+            configuration={"tone": "assertive"},
+        )
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            updated_profile, updated_revision = await update_series_profile(
+                uow,
+                request=UpdateSeriesProfileRequest(
+                    profile_id=profile.id,
+                    expected_revision=1,
+                    data=update_payload,
+                    audit=audit,
+                ),
+            )
+
+        assert updated_revision == 2, "Expected profile revision to increment to 2."
+        assert updated_profile.title == update_payload.title, (
+            "Expected updated profile title."
+        )
+        assert updated_profile.description == update_payload.description, (
+            "Expected updated profile description."
+        )
+        assert updated_profile.configuration == update_payload.configuration, (
+            "Expected updated profile configuration."
+        )
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            history = await list_history(
+                uow,
+                parent_id=profile.id,
+                kind="series_profile",
+            )
+        typed_history = typ.cast("list[SeriesProfileHistoryEntry]", history)
+        sorted_history = sorted(typed_history, key=lambda entry: entry.revision)
+
+        assert len(sorted_history) == 2, "Expected two profile history records."
+        latest_entry = sorted_history[-1]
+        assert latest_entry.revision == 2, "Expected latest revision number to be 2."
+        assert latest_entry.actor == audit.actor, "Expected actor in history."
+
 
 class TestEpisodeTemplateService:
     """Tests for episode-template service behavior."""
@@ -203,7 +258,7 @@ class TestEpisodeTemplateService:
                     request=UpdateEpisodeTemplateRequest(
                         template_id=template.id,
                         expected_revision=stale_revision,
-                        fields=EpisodeTemplateUpdateFields(
+                        data=EpisodeTemplateUpdateFields(
                             title="Stale Template Update",
                             description="Should fail",
                             structure={"segments": ["intro", "outro"]},
@@ -221,7 +276,8 @@ class TestEpisodeTemplateService:
                 parent_id=template.id,
                 kind="episode_template",
             )
-        history = sorted(history, key=lambda entry: entry.revision)
+        typed_history = typ.cast("list[EpisodeTemplateHistoryEntry]", history)
+        history = sorted(typed_history, key=lambda entry: entry.revision)
 
         assert len(history) == 1, (
             "Conflicting template update must not create a new history entry."
@@ -250,8 +306,12 @@ class TestEpisodeTemplateService:
                 parent_id=template.id,
                 kind="episode_template",
             )
-            template_history = sorted(
+            typed_template_history = typ.cast(
+                "list[EpisodeTemplateHistoryEntry]",
                 template_history,
+            )
+            template_history = sorted(
+                typed_template_history,
                 key=lambda entry: entry.revision,
             )
             brief = await build_series_brief(
