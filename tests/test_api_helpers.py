@@ -6,6 +6,7 @@ import dataclasses as dc
 import typing as typ
 import uuid
 
+import falcon
 import pytest
 
 from episodic.api import helpers
@@ -19,6 +20,15 @@ class _ExampleFields:
     title: str
     description: str | None
     configuration: dict[str, object]
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _MappedFields:
+    """Example dataclass with fields mapped from differently named keys."""
+
+    title: str
+    description: str | None
+    structure: dict[str, object]
 
 
 def test_build_payload_dataclass_maps_required_and_optional_fields() -> None:
@@ -45,13 +55,38 @@ def test_build_payload_dataclass_maps_required_and_optional_fields() -> None:
     )
 
 
+def test_build_payload_dataclass_supports_key_remapping() -> None:
+    """Map payload keys with different names to dataclass fields."""
+    payload = {
+        "profile_title": "Remapped title",
+        "profile_description": "Remapped description",
+        "template_structure": {"segments": ["intro", "outro"]},
+    }
+
+    parsed = helpers._build_payload_dataclass(
+        payload,
+        dc_type=_MappedFields,
+        field_map={
+            "title": ("profile_title", False),
+            "description": ("profile_description", True),
+            "structure": ("template_structure", False),
+        },
+    )
+
+    assert parsed == _MappedFields(
+        title="Remapped title",
+        description="Remapped description",
+        structure={"segments": ["intro", "outro"]},
+    )
+
+
 def test_build_payload_dataclass_raises_when_required_field_is_missing() -> None:
-    """Raise KeyError when a required field is absent from the payload."""
+    """Raise HTTP 400 when a required field is absent from the payload."""
     payload = {
         "configuration": {"tone": "precise"},
     }
 
-    with pytest.raises(KeyError):
+    with pytest.raises(falcon.HTTPBadRequest) as exc_info:
         helpers._build_payload_dataclass(
             payload,
             dc_type=_ExampleFields,
@@ -61,6 +96,7 @@ def test_build_payload_dataclass_raises_when_required_field_is_missing() -> None
                 "configuration": ("configuration", False),
             },
         )
+    assert exc_info.value.description == "Missing required field: title"
 
 
 def test_build_typed_update_request_uses_selected_data_key(
@@ -73,24 +109,21 @@ def test_build_typed_update_request_uses_selected_data_key(
     def fake_build_update_kwargs(
         payload: dict[str, object],
         *,
-        data_key: str,
         data_builder: typ.Callable[[dict[str, object]], str],
-    ) -> dict[str, object]:
+    ) -> helpers._ParsedUpdatePayload[str]:
         captured["payload"] = payload
-        captured["data_key"] = data_key
         captured["data_builder"] = data_builder
-        return {
-            "expected_revision": 3,
-            data_key: "payload-fields",
-            "audit": AuditMetadata(actor="editor@example.com", note="update"),
-        }
+        return helpers._ParsedUpdatePayload(
+            expected_revision=3,
+            data="payload-fields",
+            audit=AuditMetadata(actor="editor@example.com", note="update"),
+        )
 
     monkeypatch.setattr(helpers, "_build_update_kwargs", fake_build_update_kwargs)
 
     request = helpers._build_typed_update_request(
         entity_id,
         {"title": "updated"},
-        data_key="fields",
         data_builder=lambda payload: typ.cast("str", payload["title"]),
         request_builder=lambda eid, rev, fields, audit: {
             "entity_id": eid,
@@ -101,7 +134,6 @@ def test_build_typed_update_request_uses_selected_data_key(
     )
 
     assert captured["payload"] == {"title": "updated"}
-    assert captured["data_key"] == "fields"
     assert request == {
         "entity_id": entity_id,
         "expected_revision": 3,
