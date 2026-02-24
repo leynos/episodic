@@ -933,6 +933,59 @@ erDiagram
 
 _Figure 7: Canonical content schema relationships._
 
+The diagram below details the series profile, episode template, and immutable
+revision-history tables used by the current profile-template management flows.
+
+```mermaid
+erDiagram
+    SERIES_PROFILES {
+        uuid id PK
+        string slug
+        string title
+        text description
+        jsonb configuration
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    EPISODE_TEMPLATES {
+        uuid id PK
+        uuid series_profile_id FK
+        string slug
+        string title
+        text description
+        jsonb structure
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    SERIES_PROFILE_HISTORY {
+        uuid id PK
+        uuid series_profile_id FK
+        int revision
+        string actor
+        text note
+        jsonb snapshot
+        timestamptz created_at
+    }
+
+    EPISODE_TEMPLATE_HISTORY {
+        uuid id PK
+        uuid episode_template_id FK
+        int revision
+        string actor
+        text note
+        jsonb snapshot
+        timestamptz created_at
+    }
+
+    SERIES_PROFILES ||--o{ EPISODE_TEMPLATES : has_templates
+    SERIES_PROFILES ||--o{ SERIES_PROFILE_HISTORY : has_profile_history
+    EPISODE_TEMPLATES ||--o{ EPISODE_TEMPLATE_HISTORY : has_template_history
+```
+
+_Figure 8: Series profile, episode template, and history-table relationships._
+
 ### Planned reusable reference-document model
 
 The detailed diagram below extends the canonical schema with reusable
@@ -1022,7 +1075,7 @@ erDiagram
     REFERENCE_DOCUMENT_REVISIONS ||--o{ SOURCE_DOCUMENTS : snapshot
 ```
 
-_Figure 8: Planned reusable reference material and profile schema._
+_Figure 9: Planned reusable reference material and profile schema._
 
 ### Repository and unit-of-work implementation
 
