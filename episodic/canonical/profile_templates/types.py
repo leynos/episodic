@@ -189,8 +189,8 @@ class UpdateEpisodeTemplateRequest:
 class ProfileTemplateError(Exception):
     """Base exception with structured metadata for profile/template services."""
 
-    error_code: str = "profile_template_error"
-    default_retryable: bool = False
+    error_code: typ.ClassVar[str] = "profile_template_error"
+    default_retryable: typ.ClassVar[bool] = False
 
     code: str
     entity_id: str | None
@@ -215,15 +215,15 @@ class ProfileTemplateError(Exception):
 class EntityNotFoundError(ProfileTemplateError):
     """Raised when an expected profile or template does not exist."""
 
-    error_code = "entity_not_found"
-    default_retryable = False
+    error_code: typ.ClassVar[str] = "entity_not_found"
+    default_retryable: typ.ClassVar[bool] = False
 
 
 class RevisionConflictError(ProfileTemplateError):
     """Raised when optimistic-lock revision preconditions are not met."""
 
-    error_code = "revision_conflict"
-    default_retryable = True
+    error_code: typ.ClassVar[str] = "revision_conflict"
+    default_retryable: typ.ClassVar[bool] = True
 
 
 class EntityKind(enum.StrEnum):

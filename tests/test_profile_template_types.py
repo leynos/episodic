@@ -51,3 +51,35 @@ def test_subclass_constructor_allows_code_override() -> None:
     assert error.code == "custom_not_found", "Expected explicit code override."
     assert error.entity_id == "p-999", "Expected provided entity identifier."
     assert error.retryable is True, "Expected explicit retryable override."
+
+
+def test_custom_subclass_uses_class_level_defaults() -> None:
+    """Custom subclasses should inherit default metadata behavior."""
+
+    class CustomProfileTemplateError(ProfileTemplateError):
+        error_code = "custom_profile_template_error"
+        default_retryable = True
+
+    error = CustomProfileTemplateError("custom failure", entity_id="custom-123")
+
+    assert str(error) == "custom failure", "Expected message to be preserved."
+    assert error.code == "custom_profile_template_error", (
+        "Expected subclass-level error code to be used."
+    )
+    assert error.entity_id == "custom-123", "Expected provided entity identifier."
+    assert error.retryable is True, "Expected subclass-level retryable default."
+
+
+def test_subclass_constructor_uses_default_when_code_is_none() -> None:
+    """Passing code=None should still use subclass default error metadata."""
+    error = EntityNotFoundError(
+        "entity missing",
+        code=None,
+        entity_id="p-321",
+    )
+
+    assert error.code == "entity_not_found", (
+        "Expected subclass default code when code is None."
+    )
+    assert error.entity_id == "p-321", "Expected provided entity identifier."
+    assert error.retryable is False, "Expected subclass retryable default to apply."
