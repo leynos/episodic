@@ -392,17 +392,19 @@ def _get_repos_for_kind(
     str,
 ]:
     """Resolve repositories and a human label for a specific entity kind."""
-    if kind == "series_profile":
-        return (
-            uow.series_profiles,
-            uow.series_profile_history,
-            "Series profile",
-        )
-    return (
-        uow.episode_templates,
-        uow.episode_template_history,
-        "Episode template",
-    )
+    match kind:
+        case "series_profile":
+            return (
+                uow.series_profiles,
+                uow.series_profile_history,
+                "Series profile",
+            )
+        case "episode_template":
+            return (
+                uow.episode_templates,
+                uow.episode_template_history,
+                "Episode template",
+            )
 
 
 async def get_entity_with_revision(
@@ -413,24 +415,31 @@ async def get_entity_with_revision(
 ) -> tuple[object, int]:
     """Fetch one entity and its latest revision for the requested kind."""
     entity_repo, history_repo, human_label = _get_repos_for_kind(uow, kind)
-    if kind == "series_profile":
-        profile_repo = typ.cast("_SeriesProfileRepository", entity_repo)
-        profile_history_repo = typ.cast("_SeriesProfileHistoryRepository", history_repo)
-        return await _get_entity_with_latest_revision(
-            entity_id=entity_id,
-            entity_label=human_label,
-            get_entity=profile_repo.get,
-            fetch_latest=profile_history_repo.get_latest_for_profile,
-        )
-
-    template_repo = typ.cast("_EpisodeTemplateRepository", entity_repo)
-    template_history_repo = typ.cast("_EpisodeTemplateHistoryRepository", history_repo)
-    return await _get_entity_with_latest_revision(
-        entity_id=entity_id,
-        entity_label=human_label,
-        get_entity=template_repo.get,
-        fetch_latest=template_history_repo.get_latest_for_template,
-    )
+    match kind:
+        case "series_profile":
+            profile_repo = typ.cast("_SeriesProfileRepository", entity_repo)
+            profile_history_repo = typ.cast(
+                "_SeriesProfileHistoryRepository",
+                history_repo,
+            )
+            return await _get_entity_with_latest_revision(
+                entity_id=entity_id,
+                entity_label=human_label,
+                get_entity=profile_repo.get,
+                fetch_latest=profile_history_repo.get_latest_for_profile,
+            )
+        case "episode_template":
+            template_repo = typ.cast("_EpisodeTemplateRepository", entity_repo)
+            template_history_repo = typ.cast(
+                "_EpisodeTemplateHistoryRepository",
+                history_repo,
+            )
+            return await _get_entity_with_latest_revision(
+                entity_id=entity_id,
+                entity_label=human_label,
+                get_entity=template_repo.get,
+                fetch_latest=template_history_repo.get_latest_for_template,
+            )
 
 
 async def list_history(
@@ -441,20 +450,27 @@ async def list_history(
 ) -> list[object]:
     """List history entries for the requested entity kind."""
     _, history_repo, _ = _get_repos_for_kind(uow, kind)
-    if kind == "series_profile":
-        profile_history_repo = typ.cast("_SeriesProfileHistoryRepository", history_repo)
-        items = await _list_history_generic(
-            profile_history_repo.list_for_profile,
-            parent_id=parent_id,
-        )
-        return typ.cast("list[object]", items)
-
-    template_history_repo = typ.cast("_EpisodeTemplateHistoryRepository", history_repo)
-    items = await _list_history_generic(
-        template_history_repo.list_for_template,
-        parent_id=parent_id,
-    )
-    return typ.cast("list[object]", items)
+    match kind:
+        case "series_profile":
+            profile_history_repo = typ.cast(
+                "_SeriesProfileHistoryRepository",
+                history_repo,
+            )
+            items = await _list_history_generic(
+                profile_history_repo.list_for_profile,
+                parent_id=parent_id,
+            )
+            return typ.cast("list[object]", items)
+        case "episode_template":
+            template_history_repo = typ.cast(
+                "_EpisodeTemplateHistoryRepository",
+                history_repo,
+            )
+            items = await _list_history_generic(
+                template_history_repo.list_for_template,
+                parent_id=parent_id,
+            )
+            return typ.cast("list[object]", items)
 
 
 async def list_entities_with_revisions(
@@ -465,27 +481,34 @@ async def list_entities_with_revisions(
 ) -> list[tuple[object, int]]:
     """List entities with current revisions for the requested kind."""
     entity_repo, history_repo, _ = _get_repos_for_kind(uow, kind)
-    if kind == "series_profile":
-        profile_repo = typ.cast("_SeriesProfileRepository", entity_repo)
-        profile_history_repo = typ.cast("_SeriesProfileHistoryRepository", history_repo)
-        profiles = await profile_repo.list()
-        items = await _with_latest_revisions(
-            profiles,
-            profile_history_repo.get_latest_revisions_for_profiles,
-        )
-        return typ.cast("list[tuple[object, int]]", items)
+    match kind:
+        case "series_profile":
+            profile_repo = typ.cast("_SeriesProfileRepository", entity_repo)
+            profile_history_repo = typ.cast(
+                "_SeriesProfileHistoryRepository",
+                history_repo,
+            )
+            profiles = await profile_repo.list()
+            items = await _with_latest_revisions(
+                profiles,
+                profile_history_repo.get_latest_revisions_for_profiles,
+            )
+            return typ.cast("list[tuple[object, int]]", items)
+        case "episode_template":
+            template_repo = typ.cast("_EpisodeTemplateRepository", entity_repo)
+            template_history_repo = typ.cast(
+                "_EpisodeTemplateHistoryRepository",
+                history_repo,
+            )
+            templates = await template_repo.list(series_profile_id)
+            items = await _with_latest_revisions(
+                templates,
+                template_history_repo.get_latest_revisions_for_templates,
+            )
+            return typ.cast("list[tuple[object, int]]", items)
 
-    template_repo = typ.cast("_EpisodeTemplateRepository", entity_repo)
-    template_history_repo = typ.cast("_EpisodeTemplateHistoryRepository", history_repo)
-    templates = await template_repo.list(series_profile_id)
-    items = await _with_latest_revisions(
-        templates,
-        template_history_repo.get_latest_revisions_for_templates,
-    )
-    return typ.cast("list[tuple[object, int]]", items)
 
-
-async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913  # Context: https://github.com/leynos/episodic/pull/25
+async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 dependency-injected collaborators keep this explicit
     uow: CanonicalUnitOfWork,
     *,
     entity_id: uuid.UUID,

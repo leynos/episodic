@@ -9,7 +9,9 @@ import falcon
 
 from episodic.canonical.profile_templates import (
     AuditMetadata,
+    EpisodeTemplateData,
     EpisodeTemplateUpdateFields,
+    SeriesProfileCreateData,
     SeriesProfileData,
     UpdateEpisodeTemplateRequest,
     UpdateSeriesProfileRequest,
@@ -108,6 +110,40 @@ def _build_typed_update_request[DataT, RequestT](  # noqa: PLR0913  # Context: g
     audit = typ.cast("AuditMetadata", update_kwargs["audit"])
     data_or_fields = typ.cast("DataT", update_kwargs[data_key])
     return request_builder(entity_id, expected_revision, data_or_fields, audit)
+
+
+def build_profile_create_kwargs(payload: dict[str, typ.Any]) -> dict[str, object]:
+    """Build create kwargs for ``create_series_profile``."""
+    data = SeriesProfileCreateData(
+        slug=typ.cast("str", payload["slug"]),
+        title=typ.cast("str", payload["title"]),
+        description=typ.cast("str | None", payload.get("description")),
+        configuration=typ.cast("dict[str, object]", payload["configuration"]),
+    )
+    return {
+        "data": data,
+        "audit": build_audit_metadata(payload),
+    }
+
+
+def build_template_create_kwargs(payload: dict[str, typ.Any]) -> dict[str, object]:
+    """Build create kwargs for ``create_episode_template``."""
+    audit = build_audit_metadata(payload)
+    data = EpisodeTemplateData(
+        slug=typ.cast("str", payload["slug"]),
+        title=typ.cast("str", payload["title"]),
+        description=typ.cast("str | None", payload.get("description")),
+        structure=typ.cast("dict[str, object]", payload["structure"]),
+        actor=audit.actor,
+        note=audit.note,
+    )
+    return {
+        "series_profile_id": parse_uuid(
+            typ.cast("str", payload["series_profile_id"]),
+            "series_profile_id",
+        ),
+        "data": data,
+    }
 
 
 def build_profile_update_request(

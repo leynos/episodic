@@ -17,6 +17,7 @@ Create a resource and attach it to a Falcon route:
 
 from __future__ import annotations
 
+import collections.abc as cabc
 import typing as typ
 from abc import ABC, abstractmethod
 from functools import partial
@@ -27,8 +28,6 @@ import falcon
 from episodic.canonical.briefs import build_series_brief
 from episodic.canonical.profile_templates import (
     EntityNotFoundError,
-    EpisodeTemplateData,
-    SeriesProfileCreateData,
     create_episode_template,
     create_series_profile,
     get_entity_with_revision,
@@ -38,10 +37,16 @@ from episodic.canonical.profile_templates import (
     update_series_profile,
 )
 
-from .handlers import handle_get_entity, handle_get_history, handle_update_entity
+from .handlers import (
+    handle_create_entity,
+    handle_get_entity,
+    handle_get_history,
+    handle_update_entity,
+)
 from .helpers import (
-    build_audit_metadata,
+    build_profile_create_kwargs,
     build_profile_update_request,
+    build_template_create_kwargs,
     build_template_update_request,
     parse_uuid,
     require_payload_dict,
@@ -54,9 +59,21 @@ from .serializers import (
 )
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+    import uuid
+
+    from episodic.canonical.profile_templates import (
+        UpdateEpisodeTemplateRequest,
+        UpdateSeriesProfileRequest,
+    )
 
     from .types import UowFactory
+
+
+type JsonPayload = dict[str, object]
+type UpdateRequestBuilder = cabc.Callable[
+    [uuid.UUID, dict[str, typ.Any]],
+    UpdateSeriesProfileRequest | UpdateEpisodeTemplateRequest,
+]
 
 
 class _GetResourceBase(ABC):
@@ -82,7 +99,7 @@ class _GetResourceBase(ABC):
 
     @staticmethod
     @abstractmethod
-    def _get_serializer_fn() -> cabc.Callable[[object, int], dict[str, typ.Any]]:
+    def _get_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
         """Return the response serializer for the resource."""
 
     async def on_get(
@@ -125,7 +142,7 @@ class _GetHistoryResourceBase(ABC):
 
     @staticmethod
     @abstractmethod
-    def _get_serializer_fn() -> cabc.Callable[[object], dict[str, typ.Any]]:
+    def _get_serializer_fn() -> cabc.Callable[[object], JsonPayload]:
         """Return the item serializer for the resource."""
 
     async def on_get(
@@ -145,7 +162,104 @@ class _GetHistoryResourceBase(ABC):
         )
 
 
-class SeriesProfilesResource:
+class _CreateResourceBase(ABC):
+    """Base resource for create endpoints."""
+
+    def __init__(self, uow_factory: UowFactory) -> None:
+        self._uow_factory = uow_factory
+
+    @staticmethod
+    @abstractmethod
+    def _get_required_fields() -> tuple[str, ...]:
+        """Return required payload fields for create operations."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_kwargs_builder() -> cabc.Callable[[dict[str, typ.Any]], dict[str, object]]:
+        """Return payload-to-service-kwargs builder."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
+        """Return the create service function for the resource."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+        """Return the response serializer for the resource."""
+
+    async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
+        """Create a new entity for a collection endpoint."""
+        payload = require_payload_dict(await req.get_media())
+        resp.media, resp.status = await handle_create_entity(
+            uow_factory=self._uow_factory,
+            payload=payload,
+            required_fields=self._get_required_fields(),
+            kwargs_builder=self._get_kwargs_builder(),
+            service_fn=self._get_service_fn(),
+            serializer_fn=self._get_serializer_fn(),
+        )
+
+
+class _UpdateResourceBase(ABC):
+    """Base resource for update-by-id endpoints."""
+
+    def __init__(self, uow_factory: UowFactory) -> None:
+        self._uow_factory = uow_factory
+
+    @staticmethod
+    @abstractmethod
+    def _get_entity_id_from_path(**kwargs: str) -> str:
+        """Return the path parameter value used as the entity identifier."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_id_field_name() -> str:
+        """Return the service argument name for the entity identifier."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_request_builder() -> UpdateRequestBuilder:
+        """Return the payload-to-request-object builder."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_update_service_fn() -> cabc.Callable[
+        ..., cabc.Awaitable[tuple[object, int]]
+    ]:
+        """Return the update service function for the resource."""
+
+    @staticmethod
+    @abstractmethod
+    def _get_update_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+        """Return the response serializer for the resource."""
+
+    @staticmethod
+    def _get_required_fields() -> tuple[str, ...]:
+        """Return required payload fields for update operations."""
+        return ("expected_revision",)
+
+    async def on_patch(
+        self,
+        req: falcon.Request,
+        resp: falcon.Response,
+        **kwargs: str,
+    ) -> None:
+        """Update one entity by identifier."""
+        payload = require_payload_dict(await req.get_media())
+        resp.media, resp.status = await handle_update_entity(
+            uow_factory=self._uow_factory,
+            entity_id=self._get_entity_id_from_path(**kwargs),
+            id_field_name=self._get_id_field_name(),
+            payload=payload,
+            required_fields=self._get_required_fields(),
+            request_builder=self._get_request_builder(),
+            service_fn=self._get_update_service_fn(),
+            serializer_fn=self._get_update_serializer_fn(),
+        )
+
+
+class SeriesProfilesResource(_CreateResourceBase):
     """Handle collection operations for series profiles.
 
     Parameters
@@ -158,9 +272,6 @@ class SeriesProfilesResource:
     falcon.HTTPBadRequest
         Raised when required payload fields are missing during creation.
     """
-
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """List all series profiles.
@@ -185,53 +296,38 @@ class SeriesProfilesResource:
         resp.media = {"items": list(starmap(serialize_series_profile, items))}
         resp.status = falcon.HTTP_200
 
-    async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
-        """Create a new series profile.
+    @staticmethod
+    @typ.override
+    def _get_required_fields() -> tuple[str, ...]:
+        """Return required payload fields for profile creation."""
+        return ("slug", "title", "configuration")
 
-        Parameters
-        ----------
-        req : falcon.Request
-            Incoming Falcon request containing JSON payload.
-        resp : falcon.Response
-            Outgoing Falcon response object populated by this handler.
+    @staticmethod
+    @typ.override
+    def _get_kwargs_builder() -> cabc.Callable[[dict[str, typ.Any]], dict[str, object]]:
+        """Return the profile create kwargs builder."""
+        return build_profile_create_kwargs
 
-        Returns
-        -------
-        None
-            Response media is set to the created profile and status ``201``.
+    @staticmethod
+    @typ.override
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
+        """Return the profile create service."""
+        return typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]",
+            create_series_profile,
+        )
 
-        Raises
-        ------
-        falcon.HTTPBadRequest
-            Raised when required payload fields are missing.
-        """
-        payload = require_payload_dict(await req.get_media())
-        try:
-            slug = typ.cast("str", payload["slug"])
-            title = typ.cast("str", payload["title"])
-            description = typ.cast("str | None", payload.get("description"))
-            configuration = typ.cast("dict[str, typ.Any]", payload["configuration"])
-        except KeyError as exc:
-            msg = f"Missing required field: {exc.args[0]}"
-            raise falcon.HTTPBadRequest(description=msg) from exc
-
-        async with self._uow_factory() as uow:
-            profile, revision = await create_series_profile(
-                uow,
-                data=SeriesProfileCreateData(
-                    slug=slug,
-                    title=title,
-                    description=description,
-                    configuration=configuration,
-                ),
-                audit=build_audit_metadata(payload),
-            )
-
-        resp.media = serialize_series_profile(profile, revision)
-        resp.status = falcon.HTTP_201
+    @staticmethod
+    @typ.override
+    def _get_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+        """Return the profile serializer."""
+        return typ.cast(
+            "cabc.Callable[[object, int], JsonPayload]",
+            serialize_series_profile,
+        )
 
 
-class SeriesProfileResource(_GetResourceBase):
+class SeriesProfileResource(_UpdateResourceBase, _GetResourceBase):
     """Handle single-entity operations for series profiles.
 
     Parameters
@@ -263,55 +359,44 @@ class SeriesProfileResource(_GetResourceBase):
 
     @staticmethod
     @typ.override
-    def _get_serializer_fn() -> cabc.Callable[[object, int], dict[str, typ.Any]]:
+    def _get_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
         """Return the profile serializer."""
         return typ.cast(
-            "cabc.Callable[[object, int], dict[str, typ.Any]]",
+            "cabc.Callable[[object, int], JsonPayload]",
             serialize_series_profile,
         )
 
-    async def on_patch(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-        profile_id: str,
-    ) -> None:
-        """Update a series profile using optimistic locking.
+    @staticmethod
+    @typ.override
+    def _get_request_builder() -> UpdateRequestBuilder:
+        """Return the profile update-request builder."""
+        return build_profile_update_request
 
-        Parameters
-        ----------
-        req : falcon.Request
-            Incoming Falcon request containing update payload JSON.
-        resp : falcon.Response
-            Outgoing Falcon response object populated by this handler.
-        profile_id : str
-            Raw series-profile identifier from the route path.
-
-        Returns
-        -------
-        None
-            Response media is set to the updated profile and status ``200``.
-
-        Raises
-        ------
-        falcon.HTTPBadRequest
-            Raised when the identifier is invalid or payload is malformed.
-        falcon.HTTPNotFound
-            Raised when the profile does not exist.
-        falcon.HTTPConflict
-            Raised when optimistic-lock revision checks fail.
-        """
-        payload = require_payload_dict(await req.get_media())
-        resp.media, resp.status = await handle_update_entity(
-            uow_factory=self._uow_factory,
-            entity_id=profile_id,
-            id_field_name="profile_id",
-            payload=payload,
-            required_fields=("expected_revision", "title", "configuration"),
-            request_builder=build_profile_update_request,
-            service_fn=update_series_profile,
-            serializer_fn=serialize_series_profile,
+    @staticmethod
+    @typ.override
+    def _get_update_service_fn() -> cabc.Callable[
+        ..., cabc.Awaitable[tuple[object, int]]
+    ]:
+        """Return the profile update service."""
+        return typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]",
+            update_series_profile,
         )
+
+    @staticmethod
+    @typ.override
+    def _get_update_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+        """Return the profile update serializer."""
+        return typ.cast(
+            "cabc.Callable[[object, int], JsonPayload]",
+            serialize_series_profile,
+        )
+
+    @staticmethod
+    @typ.override
+    def _get_required_fields() -> tuple[str, ...]:
+        """Return required payload fields for profile updates."""
+        return ("expected_revision", "title", "configuration")
 
 
 class SeriesProfileHistoryResource(_GetHistoryResourceBase):
@@ -346,10 +431,10 @@ class SeriesProfileHistoryResource(_GetHistoryResourceBase):
 
     @staticmethod
     @typ.override
-    def _get_serializer_fn() -> cabc.Callable[[object], dict[str, typ.Any]]:
+    def _get_serializer_fn() -> cabc.Callable[[object], JsonPayload]:
         """Return the profile-history serializer."""
         return typ.cast(
-            "cabc.Callable[[object], dict[str, typ.Any]]",
+            "cabc.Callable[[object], JsonPayload]",
             serialize_series_profile_history_entry,
         )
 
@@ -420,7 +505,7 @@ class SeriesProfileBriefResource:
         resp.status = falcon.HTTP_200
 
 
-class EpisodeTemplatesResource:
+class EpisodeTemplatesResource(_CreateResourceBase):
     """Handle collection operations for episode templates.
 
     Parameters
@@ -428,9 +513,6 @@ class EpisodeTemplatesResource:
     uow_factory : UowFactory
         Factory used to create request-scoped units of work.
     """
-
-    def __init__(self, uow_factory: UowFactory) -> None:
-        self._uow_factory = uow_factory
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """List episode templates.
@@ -469,68 +551,38 @@ class EpisodeTemplatesResource:
         resp.media = {"items": list(starmap(serialize_episode_template, items))}
         resp.status = falcon.HTTP_200
 
-    async def on_post(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-    ) -> None:
-        """Create an episode template.
+    @staticmethod
+    @typ.override
+    def _get_required_fields() -> tuple[str, ...]:
+        """Return required payload fields for template creation."""
+        return ("series_profile_id", "slug", "title", "structure")
 
-        Parameters
-        ----------
-        req : falcon.Request
-            Incoming request containing template creation payload.
-        resp : falcon.Response
-            Outgoing response object populated by this handler.
+    @staticmethod
+    @typ.override
+    def _get_kwargs_builder() -> cabc.Callable[[dict[str, typ.Any]], dict[str, object]]:
+        """Return the template create kwargs builder."""
+        return build_template_create_kwargs
 
-        Returns
-        -------
-        None
-            Response media is set to the created template and status ``201``.
+    @staticmethod
+    @typ.override
+    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]:
+        """Return the template create service."""
+        return typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]",
+            create_episode_template,
+        )
 
-        Raises
-        ------
-        falcon.HTTPBadRequest
-            Raised when required payload fields are missing or invalid.
-        falcon.HTTPNotFound
-            Raised when the referenced series profile does not exist.
-        """
-        payload = require_payload_dict(await req.get_media())
-        try:
-            series_profile_id = parse_uuid(
-                typ.cast("str", payload["series_profile_id"]),
-                "series_profile_id",
-            )
-            slug = typ.cast("str", payload["slug"])
-            title = typ.cast("str", payload["title"])
-            description = typ.cast("str | None", payload.get("description"))
-            structure = typ.cast("dict[str, typ.Any]", payload["structure"])
-        except KeyError as exc:
-            msg = f"Missing required field: {exc.args[0]}"
-            raise falcon.HTTPBadRequest(description=msg) from exc
-
-        try:
-            async with self._uow_factory() as uow:
-                template, revision = await create_episode_template(
-                    uow,
-                    series_profile_id=series_profile_id,
-                    data=EpisodeTemplateData(
-                        slug=slug,
-                        title=title,
-                        description=description,
-                        structure=structure,
-                        actor=typ.cast("str | None", payload.get("actor")),
-                        note=typ.cast("str | None", payload.get("note")),
-                    ),
-                )
-        except EntityNotFoundError as exc:
-            raise falcon.HTTPNotFound(description=str(exc)) from exc
-
-        resp.media = serialize_episode_template(template, revision)
-        resp.status = falcon.HTTP_201
+    @staticmethod
+    @typ.override
+    def _get_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+        """Return the template serializer."""
+        return typ.cast(
+            "cabc.Callable[[object, int], JsonPayload]",
+            serialize_episode_template,
+        )
 
 
-class EpisodeTemplateResource(_GetResourceBase):
+class EpisodeTemplateResource(_UpdateResourceBase, _GetResourceBase):
     """Handle single-entity operations for episode templates.
 
     Parameters
@@ -562,55 +614,44 @@ class EpisodeTemplateResource(_GetResourceBase):
 
     @staticmethod
     @typ.override
-    def _get_serializer_fn() -> cabc.Callable[[object, int], dict[str, typ.Any]]:
+    def _get_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
         """Return the template serializer."""
         return typ.cast(
-            "cabc.Callable[[object, int], dict[str, typ.Any]]",
+            "cabc.Callable[[object, int], JsonPayload]",
             serialize_episode_template,
         )
 
-    async def on_patch(
-        self,
-        req: falcon.Request,
-        resp: falcon.Response,
-        template_id: str,
-    ) -> None:
-        """Update an episode template using optimistic locking.
+    @staticmethod
+    @typ.override
+    def _get_request_builder() -> UpdateRequestBuilder:
+        """Return the template update-request builder."""
+        return build_template_update_request
 
-        Parameters
-        ----------
-        req : falcon.Request
-            Incoming Falcon request containing update payload JSON.
-        resp : falcon.Response
-            Outgoing Falcon response object populated by this handler.
-        template_id : str
-            Raw episode-template identifier from the route path.
-
-        Returns
-        -------
-        None
-            Response media is set to the updated template and status ``200``.
-
-        Raises
-        ------
-        falcon.HTTPBadRequest
-            Raised when the identifier is invalid or payload is malformed.
-        falcon.HTTPNotFound
-            Raised when the template does not exist.
-        falcon.HTTPConflict
-            Raised when optimistic-lock revision checks fail.
-        """
-        payload = require_payload_dict(await req.get_media())
-        resp.media, resp.status = await handle_update_entity(
-            uow_factory=self._uow_factory,
-            entity_id=template_id,
-            id_field_name="template_id",
-            payload=payload,
-            required_fields=("expected_revision", "title", "structure"),
-            request_builder=build_template_update_request,
-            service_fn=update_episode_template,
-            serializer_fn=serialize_episode_template,
+    @staticmethod
+    @typ.override
+    def _get_update_service_fn() -> cabc.Callable[
+        ..., cabc.Awaitable[tuple[object, int]]
+    ]:
+        """Return the template update service."""
+        return typ.cast(
+            "cabc.Callable[..., cabc.Awaitable[tuple[object, int]]]",
+            update_episode_template,
         )
+
+    @staticmethod
+    @typ.override
+    def _get_update_serializer_fn() -> cabc.Callable[[object, int], JsonPayload]:
+        """Return the template update serializer."""
+        return typ.cast(
+            "cabc.Callable[[object, int], JsonPayload]",
+            serialize_episode_template,
+        )
+
+    @staticmethod
+    @typ.override
+    def _get_required_fields() -> tuple[str, ...]:
+        """Return required payload fields for template updates."""
+        return ("expected_revision", "title", "structure")
 
 
 class EpisodeTemplateHistoryResource(_GetHistoryResourceBase):
@@ -645,9 +686,9 @@ class EpisodeTemplateHistoryResource(_GetHistoryResourceBase):
 
     @staticmethod
     @typ.override
-    def _get_serializer_fn() -> cabc.Callable[[object], dict[str, typ.Any]]:
+    def _get_serializer_fn() -> cabc.Callable[[object], JsonPayload]:
         """Return the template-history serializer."""
         return typ.cast(
-            "cabc.Callable[[object], dict[str, typ.Any]]",
+            "cabc.Callable[[object], JsonPayload]",
             serialize_episode_template_history_entry,
         )

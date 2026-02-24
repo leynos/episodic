@@ -1,4 +1,17 @@
-"""Structured-brief assembly helpers for series profiles and templates."""
+"""Structured-brief assembly helpers for series profiles and templates.
+
+Use this module when an adapter needs a single payload that combines one series
+profile with either all of its episode templates or one selected template.
+Helpers here fetch current entity revisions, enforce profile/template ownership
+constraints, and return a JSON mapping without mutating persisted state.
+
+Examples
+--------
+Build a structured brief for one profile and optional template filter:
+
+>>> brief = await build_series_brief(uow, profile_id=profile_id, template_id=None)
+>>> brief["episode_templates"]  # list[dict[str, object]]
+"""
 
 from __future__ import annotations
 
