@@ -1,0 +1,329 @@
+From e28a2d584666706f450ecc43fab35353b84f2bc5 Mon Sep 17 00:00:00 2001
+From: Leynos <leynos@troubledskies.net>
+Date: Wed, 25 Feb 2026 15:13:54 +0000
+Subject: [PATCH] Resolve workspace dependencies by name, not package ID
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+`_lookup_workspace_target` relied on `entry.get("package")` to identify
+workspace dependencies. Real `cargo metadata` output does not include a
+`package` key on dependency entries — the package name is in `name` and
+any manifest alias in `rename`. This caused all path+version dependency
+requirements to be silently dropped from the workspace graph, so
+`lading bump` never updated their version fields.
+
+Build a name-to-ID index from the package lookup and resolve
+dependencies by matching `entry["name"]` against workspace member names.
+Derive `manifest_name` from `entry["rename"]` when present, falling back
+to `entry["name"]` for non-aliased dependencies.
+
+- Add `_build_workspace_members_by_name` helper
+- Thread `workspace_members_by_name` through the build chain
+- Update existing test data to match real `cargo metadata` shape
+- Add regression tests for path+version and aliased dependency cases
+
+Closes #56
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ lading/workspace/models.py                    |  52 +++++---
+ tests/helpers/workspace_metadata.py           |   2 +-
+ tests/unit/test_workspace_metadata.py         | 114 +++++++++++++++++-
+ .../unit/test_workspace_models_validation.py  |   4 +-
+ 4 files changed, 153 insertions(+), 19 deletions(-)
+
+diff --git a/lading/workspace/models.py b/lading/workspace/models.py
+index 12f6bcf..0b874ce 100644
+--- a/lading/workspace/models.py
++++ b/lading/workspace/models.py
+@@ -200,8 +200,8 @@ def build_workspace_graph(
+         )
+     )
+     package_lookup = _index_workspace_packages(packages, workspace_member_ids)
++    workspace_members_by_name = _build_workspace_members_by_name(package_lookup)
+     crates: list[WorkspaceCrate] = []
+-    workspace_member_set = set(workspace_member_ids)
+     for member_id in workspace_member_ids:
+         raw_package = package_lookup.get(member_id)
+         if raw_package is None:
+@@ -211,7 +211,7 @@ def build_workspace_graph(
+             _build_crate(
+                 raw_package,
+                 package_lookup,
+-                workspace_member_set,
++                workspace_members_by_name,
+             )
+         )
+     return WorkspaceGraph(workspace_root=workspace_root, crates=tuple(crates))
+@@ -233,10 +233,20 @@ def _index_workspace_packages(
+     return index
+ 
+ 
++def _build_workspace_members_by_name(
++    package_lookup: cabc.Mapping[str, cabc.Mapping[str, typ.Any]],
++) -> dict[str, str]:
++    """Return a name-to-ID index for workspace member packages."""
++    return {
++        _expect_string(pkg.get("name"), f"package {pkg_id!r} name"): pkg_id
++        for pkg_id, pkg in package_lookup.items()
++    }
++
++
+ def _build_crate(
+     package: cabc.Mapping[str, typ.Any],
+     package_lookup: cabc.Mapping[str, cabc.Mapping[str, typ.Any]],
+-    workspace_member_ids: set[str],
++    workspace_members_by_name: dict[str, str],
+ ) -> WorkspaceCrate:
+     """Construct a :class:`WorkspaceCrate` from ``cargo metadata`` package data."""
+     package_id = _expect_string(package.get("id"), "packages[].id")
+@@ -245,7 +255,9 @@ def _build_crate(
+     manifest_path = _normalise_manifest_path(
+         package.get("manifest_path"), f"package {package_id!r} manifest_path"
+     )
+-    dependencies = _build_dependencies(package, package_lookup, workspace_member_ids)
++    dependencies = _build_dependencies(
++        package, package_lookup, workspace_members_by_name
++    )
+     publish = _coerce_publish_setting(package.get("publish"), package_id)
+     readme_is_workspace = _manifest_uses_workspace_readme(manifest_path)
+     root_path = manifest_path.parent
+@@ -264,7 +276,7 @@ def _build_crate(
+ def _build_dependencies(
+     package: cabc.Mapping[str, typ.Any],
+     package_lookup: cabc.Mapping[str, cabc.Mapping[str, typ.Any]],
+-    workspace_member_ids: set[str],
++    workspace_members_by_name: dict[str, str],
+ ) -> tuple[WorkspaceDependency, ...]:
+     """Return dependencies that reference other workspace members."""
+     raw_dependencies = _expect_sequence(
+@@ -277,7 +289,7 @@ def _build_dependencies(
+     return tuple(
+         dependency
+         for dependency in (
+-            _as_workspace_dependency(entry, package_lookup, workspace_member_ids)
++            _as_workspace_dependency(entry, package_lookup, workspace_members_by_name)
+             for entry in raw_dependencies
+         )
+         if dependency is not None
+@@ -297,11 +309,14 @@ def _validate_dependency_mapping(
+ def _lookup_workspace_target(
+     entry: cabc.Mapping[str, typ.Any],
+     package_lookup: cabc.Mapping[str, cabc.Mapping[str, typ.Any]],
+-    workspace_member_ids: set[str],
++    workspace_members_by_name: dict[str, str],
+ ) -> tuple[str, str] | None:
+     """Return the dependency target id and name when in the workspace."""
+-    target_id = entry.get("package")
+-    if not isinstance(target_id, str) or target_id not in workspace_member_ids:
++    package_name = entry.get("name")
++    if not isinstance(package_name, str):
++        return None
++    target_id = workspace_members_by_name.get(package_name)
++    if target_id is None:
+         return None
+     target_package = package_lookup.get(target_id)
+     if target_package is None:
+@@ -333,17 +348,26 @@ def _validate_dependency_kind(
+ def _as_workspace_dependency(
+     entry: cabc.Mapping[str, typ.Any] | object,
+     package_lookup: cabc.Mapping[str, cabc.Mapping[str, typ.Any]],
+-    workspace_member_ids: set[str],
++    workspace_members_by_name: dict[str, str],
+ ) -> WorkspaceDependency | None:
+     """Convert ``entry`` into a :class:`WorkspaceDependency` when possible."""
+     dependency = _validate_dependency_mapping(entry)
+-    target = _lookup_workspace_target(dependency, package_lookup, workspace_member_ids)
++    target = _lookup_workspace_target(
++        dependency, package_lookup, workspace_members_by_name
++    )
+     if target is None:
+         return None
+     target_id, target_name = target
+-    manifest_name = _expect_string(
+-        dependency.get("name"),
+-        f"dependency {target_id!r} name",
++    # Aliased dependencies carry a ``rename`` field in cargo metadata;
++    # non-aliased entries omit it, so we fall back to the entry name.
++    rename_value = dependency.get("rename")
++    manifest_name = (
++        rename_value
++        if isinstance(rename_value, str) and rename_value
++        else _expect_string(
++            dependency.get("name"),
++            f"dependency {target_id!r} name",
++        )
+     )
+     kind_literal = _validate_dependency_kind(dependency)
+     return WorkspaceDependency(
+diff --git a/tests/helpers/workspace_metadata.py b/tests/helpers/workspace_metadata.py
+index 69e29b4..6b6a73a 100644
+--- a/tests/helpers/workspace_metadata.py
++++ b/tests/helpers/workspace_metadata.py
+@@ -14,7 +14,7 @@ if typ.TYPE_CHECKING:
+ class PackageKwargs(typ.TypedDict, total=False):
+     """Optional arguments accepted by :func:`build_test_package`."""
+ 
+-    dependencies: list[dict[str, str]]
++    dependencies: list[dict[str, str | None]]
+     publish: list[str] | None
+ 
+ 
+diff --git a/tests/unit/test_workspace_metadata.py b/tests/unit/test_workspace_metadata.py
+index 04b7acb..6d7cdb3 100644
+--- a/tests/unit/test_workspace_metadata.py
++++ b/tests/unit/test_workspace_metadata.py
+@@ -257,8 +257,8 @@ def test_build_workspace_graph_constructs_models(tmp_path: Path) -> None:
+                 "0.1.0",
+                 crate_manifest,
+                 dependencies=[
+-                    {"name": "helper", "package": "helper-id", "kind": "dev"},
+-                    {"name": "external", "package": "external-id"},
++                    {"name": "helper", "kind": "dev", "req": "^0.1.0"},
++                    {"name": "external"},
+                 ],
+                 publish=[],
+             ),
+@@ -295,6 +295,116 @@ def test_build_workspace_graph_constructs_models(tmp_path: Path) -> None:
+     assert helper.dependencies == ()
+ 
+ 
++def test_build_workspace_graph_path_version_dependency(tmp_path: Path) -> None:
++    """Path+version dependencies should be resolved as workspace members."""
++    workspace_root = tmp_path
++    crate_manifest = create_test_manifest(
++        workspace_root,
++        "bumpy_road_function",
++        """
++        [package]
++        name = "bumpy_road_function"
++        version = "0.2.0"
++        """,
++    )
++    whitaker_manifest = create_test_manifest(
++        workspace_root,
++        "whitaker",
++        """
++        [package]
++        name = "whitaker"
++        version = "0.2.0"
++        """,
++    )
++    metadata = {
++        "workspace_root": str(workspace_root),
++        "packages": [
++            build_test_package(
++                "bumpy_road_function",
++                "0.2.0",
++                crate_manifest,
++                dependencies=[
++                    {
++                        "name": "whitaker",
++                        "req": "^0.1.0",
++                        "kind": None,
++                        "path": str(whitaker_manifest.parent),
++                    },
++                ],
++            ),
++            build_test_package("whitaker", "0.2.0", whitaker_manifest),
++        ],
++        "workspace_members": ["bumpy_road_function-id", "whitaker-id"],
++    }
++
++    graph = build_workspace_graph(metadata)
++
++    crate = graph.crates_by_name["bumpy_road_function"]
++    assert crate.dependencies == (
++        WorkspaceDependency(
++            package_id="whitaker-id",
++            name="whitaker",
++            manifest_name="whitaker",
++            kind=None,
++        ),
++    )
++
++
++def test_build_workspace_graph_aliased_dependency(tmp_path: Path) -> None:
++    """Aliased dependencies should use ``rename`` as the manifest name."""
++    workspace_root = tmp_path
++    consumer_manifest = create_test_manifest(
++        workspace_root,
++        "consumer",
++        """
++        [package]
++        name = "consumer"
++        version = "0.1.0"
++        """,
++    )
++    alpha_manifest = create_test_manifest(
++        workspace_root,
++        "alpha",
++        """
++        [package]
++        name = "alpha"
++        version = "0.1.0"
++        """,
++    )
++    metadata = {
++        "workspace_root": str(workspace_root),
++        "packages": [
++            build_test_package(
++                "consumer",
++                "0.1.0",
++                consumer_manifest,
++                dependencies=[
++                    {
++                        "name": "alpha",
++                        "rename": "alpha-core",
++                        "req": "^0.1.0",
++                        "kind": None,
++                    },
++                ],
++            ),
++            build_test_package("alpha", "0.1.0", alpha_manifest),
++        ],
++        "workspace_members": ["consumer-id", "alpha-id"],
++    }
++
++    graph = build_workspace_graph(metadata)
++
++    consumer = graph.crates_by_name["consumer"]
++    assert consumer.dependencies == (
++        WorkspaceDependency(
++            package_id="alpha-id",
++            name="alpha",
++            manifest_name="alpha-core",
++            kind=None,
++        ),
++    )
++
++
+ def test_build_workspace_graph_rejects_missing_members(tmp_path: Path) -> None:
+     """Missing package entries should surface as ``WorkspaceModelError``."""
+     metadata = {
+diff --git a/tests/unit/test_workspace_models_validation.py b/tests/unit/test_workspace_models_validation.py
+index 0e0b96f..752b737 100644
+--- a/tests/unit/test_workspace_models_validation.py
++++ b/tests/unit/test_workspace_models_validation.py
+@@ -42,7 +42,7 @@ def test_build_dependencies_handles_missing_entries() -> None:
+     """None dependencies should be treated as empty."""
+     package = {"id": "crate", "dependencies": None}
+ 
+-    dependencies = models._build_dependencies(package, {}, set())
++    dependencies = models._build_dependencies(package, {}, {})
+ 
+     assert dependencies == ()
+ 
+@@ -77,7 +77,7 @@ def test_dependency_validation_errors(
+ 
+ def test_lookup_workspace_target_handles_missing_entries() -> None:
+     """Targets outside the workspace should return None."""
+-    result = models._lookup_workspace_target({}, {}, set())
++    result = models._lookup_workspace_target({}, {}, {})
+ 
+     assert result is None
+ 
+-- 
+2.43.0
+
