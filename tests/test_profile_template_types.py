@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     import typing as typ
 
 
-@dc.dataclass(slots=True)
+@dc.dataclass(slots=True, frozen=True)
 class _ExpectedError:
     """Expected error payload for parametrized exception tests."""
 
