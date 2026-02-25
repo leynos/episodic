@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING  # noqa: ICN003 - used for type-only imports
+from typing import TYPE_CHECKING  # noqa: ICN003 - see TYP-KWARGS-001
 
 import pytest
 
@@ -67,6 +67,17 @@ class _ExpectedError:
             ),
             id="revision-conflict-defaults",
         ),
+        pytest.param(
+            RevisionConflictError,
+            {"message": "revision conflict", "retryable": False},
+            _ExpectedError(
+                message="revision conflict",
+                code="revision_conflict",
+                entity_id=None,
+                retryable=False,
+            ),
+            id="revision-conflict-retryable-override",
+        ),
     ],
 )
 def test_error_class_defaults(
@@ -78,13 +89,18 @@ def test_error_class_defaults(
     """Errors should expose class-level defaults when values are omitted."""
     error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType]  # ty: ignore[invalid-argument-type]  # https://github.com/leynos/episodic/issues/27
 
-    assert str(error) == expected.message, "Expected message to be preserved."
-    assert error.code == expected.code, "Expected default error code."
+    error_str = str(error)
+    assert error_str == expected.message, (
+        f"expected message {expected.message!r} but got {error_str!r}"
+    )
+    assert error.code == expected.code, (
+        f"expected error.code {expected.code!r} but got {error.code!r}"
+    )
     assert error.entity_id == expected.entity_id, (
-        "Expected default or provided entity identifier."
+        f"expected error.entity_id {expected.entity_id!r} but got {error.entity_id!r}"
     )
     assert error.retryable is expected.retryable, (
-        "Expected default or provided retryability."
+        f"expected error.retryable {expected.retryable!r} but got {error.retryable!r}"
     )
 
 
