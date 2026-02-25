@@ -89,8 +89,9 @@ def test_error_class_defaults(
     """Errors should expose class-level defaults when values are omitted."""
     error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType]  # ty: ignore[invalid-argument-type]  # https://github.com/leynos/episodic/issues/27
 
-    assert str(error) == expected.message, (
-        f"expected message {expected.message!r} but got {str(error)!r}"
+    error_str = str(error)
+    assert error_str == expected.message, (
+        f"expected message {expected.message!r} but got {error_str!r}"
     )
     assert error.code == expected.code, (
         f"expected error.code {expected.code!r} but got {error.code!r}"
