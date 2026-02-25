@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import typing as typ
 
 import pytest
@@ -13,41 +14,54 @@ from episodic.canonical.profile_templates.types import (
 )
 
 
+@dc.dataclass(frozen=True)
+class ExpectedError:
+    """Expected error payload for parametrized exception tests."""
+
+    message: str
+    code: str
+    entity_id: str | None
+    retryable: bool
+
+
 @pytest.mark.parametrize(
     (
         "error_cls",
         "kwargs",
-        "expected_message",
-        "expected_code",
-        "expected_entity_id",
-        "expected_retryable",
+        "expected",
     ),
     [
         pytest.param(
             ProfileTemplateError,
             {"message": "base failure"},
-            "base failure",
-            "profile_template_error",
-            None,
-            False,
+            ExpectedError(
+                message="base failure",
+                code="profile_template_error",
+                entity_id=None,
+                retryable=False,
+            ),
             id="profile-template-error-defaults",
         ),
         pytest.param(
             EntityNotFoundError,
             {"message": "profile missing", "entity_id": "p-123"},
-            "profile missing",
-            "entity_not_found",
-            "p-123",
-            False,
+            ExpectedError(
+                message="profile missing",
+                code="entity_not_found",
+                entity_id="p-123",
+                retryable=False,
+            ),
             id="entity-not-found-defaults",
         ),
         pytest.param(
             RevisionConflictError,
             {"message": "revision conflict", "entity_id": "t-123"},
-            "revision conflict",
-            "revision_conflict",
-            "t-123",
-            True,
+            ExpectedError(
+                message="revision conflict",
+                code="revision_conflict",
+                entity_id="t-123",
+                retryable=True,
+            ),
             id="revision-conflict-defaults",
         ),
     ],
@@ -56,20 +70,17 @@ def test_error_class_defaults(
     *,
     error_cls: type[ProfileTemplateError],
     kwargs: dict[str, str | bool | None],
-    expected_message: str,
-    expected_code: str,
-    expected_entity_id: str | None,
-    expected_retryable: bool,
+    expected: ExpectedError,
 ) -> None:
     """Errors should expose class-level defaults when values are omitted."""
     error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType]  # ty: ignore[invalid-argument-type]
 
-    assert str(error) == expected_message, "Expected message to be preserved."
-    assert error.code == expected_code, "Expected default error code."
-    assert error.entity_id == expected_entity_id, (
+    assert str(error) == expected.message, "Expected message to be preserved."
+    assert error.code == expected.code, "Expected default error code."
+    assert error.entity_id == expected.entity_id, (
         "Expected default or provided entity identifier."
     )
-    assert error.retryable is expected_retryable, (
+    assert error.retryable is expected.retryable, (
         "Expected default or provided retryability."
     )
 
