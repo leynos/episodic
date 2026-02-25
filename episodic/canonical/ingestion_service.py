@@ -197,7 +197,9 @@ async def ingest_multi_source(
         requested_by=request.requested_by,
     )
 
-    episode = await ingest_sources(uow, series_profile, ingestion_request)
+    episode = await ingest_sources(
+        uow=uow, series_profile=series_profile, request=ingestion_request
+    )
 
     log_info(
         logger,
