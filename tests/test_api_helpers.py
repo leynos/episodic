@@ -28,6 +28,9 @@ import pytest
 from episodic.api import helpers
 from episodic.canonical.profile_templates import AuditMetadata
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 
 @dc.dataclass(frozen=True, slots=True)
 class _ExampleFields:
@@ -141,7 +144,7 @@ class TestTypedUpdateRequest:
         def fake_build_update_kwargs(
             payload: dict[str, object],
             *,
-            data_builder: typ.Callable[[dict[str, object]], str],
+            data_builder: cabc.Callable[[dict[str, object]], str],
         ) -> helpers._ParsedUpdatePayload[str]:
             captured["payload"] = payload
             captured["data_builder"] = data_builder
