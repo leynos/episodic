@@ -189,6 +189,9 @@ class UpdateEpisodeTemplateRequest:
 class ProfileTemplateError(Exception):
     """Base exception with structured metadata for profile/template services."""
 
+    error_code: typ.ClassVar[str] = "profile_template_error"
+    default_retryable: typ.ClassVar[bool] = False
+
     code: str
     entity_id: str | None
     retryable: bool
@@ -197,50 +200,29 @@ class ProfileTemplateError(Exception):
         self,
         message: str,
         *,
-        code: str,
+        code: str | None = None,
         entity_id: str | None = None,
-        retryable: bool = False,
+        retryable: bool | None = None,
     ) -> None:
         super().__init__(message)
-        self.code = code
+        self.code = code if code is not None else type(self).error_code
         self.entity_id = entity_id
-        self.retryable = retryable
+        self.retryable = (
+            type(self).default_retryable if retryable is None else retryable
+        )
 
 
 class EntityNotFoundError(ProfileTemplateError):
     """Raised when an expected profile or template does not exist."""
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        entity_id: str | None = None,
-        retryable: bool = False,
-    ) -> None:
-        super().__init__(
-            message,
-            code="entity_not_found",
-            entity_id=entity_id,
-            retryable=retryable,
-        )
+    error_code: typ.ClassVar[str] = "entity_not_found"
 
 
 class RevisionConflictError(ProfileTemplateError):
     """Raised when optimistic-lock revision preconditions are not met."""
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        entity_id: str | None = None,
-        retryable: bool = True,
-    ) -> None:
-        super().__init__(
-            message,
-            code="revision_conflict",
-            entity_id=entity_id,
-            retryable=retryable,
-        )
+    error_code: typ.ClassVar[str] = "revision_conflict"
+    default_retryable: typ.ClassVar[bool] = True
 
 
 class EntityKind(enum.StrEnum):
