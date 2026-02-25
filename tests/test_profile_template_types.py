@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING  # noqa: ICN003 - used for type-only imports; see TYP-KWARGS-001
+from typing import TYPE_CHECKING  # noqa: ICN003 - see TYP-KWARGS-001
 
 import pytest
 
@@ -96,12 +96,10 @@ def test_error_class_defaults(
         f"expected error.code {expected.code!r} but got {error.code!r}"
     )
     assert error.entity_id == expected.entity_id, (
-        "expected error.entity_id "
-        f"{expected.entity_id!r} but got {error.entity_id!r}"
+        f"expected error.entity_id {expected.entity_id!r} but got {error.entity_id!r}"
     )
     assert error.retryable is expected.retryable, (
-        "expected error.retryable "
-        f"{expected.retryable!r} but got {error.retryable!r}"
+        f"expected error.retryable {expected.retryable!r} but got {error.retryable!r}"
     )
 
 
