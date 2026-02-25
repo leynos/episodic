@@ -53,15 +53,16 @@ from episodic.canonical.profile_templates.types import (
     ],
 )
 def test_error_class_defaults(
+    *,
     error_cls: type[ProfileTemplateError],
-    kwargs: dict[str, typ.Any],
+    kwargs: dict[str, str | bool | None],
     expected_message: str,
     expected_code: str,
     expected_entity_id: str | None,
-    expected_retryable: object,
+    expected_retryable: bool,
 ) -> None:
     """Errors should expose class-level defaults when values are omitted."""
-    error = error_cls(**kwargs)
+    error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType]  # ty: ignore[invalid-argument-type]
 
     assert str(error) == expected_message, "Expected message to be preserved."
     assert error.code == expected_code, "Expected default error code."
