@@ -135,6 +135,9 @@ class TestTypedUpdateRequest:
         captured: dict[str, object] = {}
         entity_id = uuid.uuid4()
 
+        def sentinel_data_builder(payload: dict[str, object]) -> str:
+            return typ.cast("str", payload["title"])
+
         def fake_build_update_kwargs(
             payload: dict[str, object],
             *,
@@ -157,7 +160,7 @@ class TestTypedUpdateRequest:
         request = helpers._build_typed_update_request(
             entity_id,
             {"title": "updated"},
-            data_builder=lambda payload: typ.cast("str", payload["title"]),
+            data_builder=sentinel_data_builder,
             request_builder=lambda eid, rev, fields, audit: {
                 "entity_id": eid,
                 "expected_revision": rev,
@@ -168,6 +171,10 @@ class TestTypedUpdateRequest:
 
         assert captured["payload"] == {"title": "updated"}, (
             "Expected helper to pass payload through to _build_update_kwargs."
+        )
+        assert captured["data_builder"] is sentinel_data_builder, (
+            "Expected _build_typed_update_request to forward the same "
+            "data_builder callable to _build_update_kwargs."
         )
         assert request == {
             "entity_id": entity_id,
