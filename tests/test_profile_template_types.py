@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses as dc
-import typing as typ
+from typing import TYPE_CHECKING  # noqa: ICN003
 
 import pytest
 
@@ -13,9 +13,12 @@ from episodic.canonical.profile_templates.types import (
     RevisionConflictError,
 )
 
+if TYPE_CHECKING:
+    import typing as typ
 
-@dc.dataclass(frozen=True)
-class ExpectedError:
+
+@dc.dataclass(slots=True)
+class _ExpectedError:
     """Expected error payload for parametrized exception tests."""
 
     message: str
@@ -34,7 +37,7 @@ class ExpectedError:
         pytest.param(
             ProfileTemplateError,
             {"message": "base failure"},
-            ExpectedError(
+            _ExpectedError(
                 message="base failure",
                 code="profile_template_error",
                 entity_id=None,
@@ -45,7 +48,7 @@ class ExpectedError:
         pytest.param(
             EntityNotFoundError,
             {"message": "profile missing", "entity_id": "p-123"},
-            ExpectedError(
+            _ExpectedError(
                 message="profile missing",
                 code="entity_not_found",
                 entity_id="p-123",
@@ -56,7 +59,7 @@ class ExpectedError:
         pytest.param(
             RevisionConflictError,
             {"message": "revision conflict", "entity_id": "t-123"},
-            ExpectedError(
+            _ExpectedError(
                 message="revision conflict",
                 code="revision_conflict",
                 entity_id="t-123",
@@ -70,10 +73,10 @@ def test_error_class_defaults(
     *,
     error_cls: type[ProfileTemplateError],
     kwargs: dict[str, str | bool | None],
-    expected: ExpectedError,
+    expected: _ExpectedError,
 ) -> None:
     """Errors should expose class-level defaults when values are omitted."""
-    error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType]  # ty: ignore[invalid-argument-type]
+    error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType] (ref: TYP-KWARGS-001)  # ty: ignore[invalid-argument-type] (ref: TYP-KWARGS-001)
 
     assert str(error) == expected.message, "Expected message to be preserved."
     assert error.code == expected.code, "Expected default error code."
