@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING  # noqa: ICN003 - used for type-only imports
+from typing import TYPE_CHECKING  # noqa: ICN003 - used for type-only imports; see TYP-KWARGS-001
 
 import pytest
 
@@ -89,13 +89,19 @@ def test_error_class_defaults(
     """Errors should expose class-level defaults when values are omitted."""
     error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType]  # ty: ignore[invalid-argument-type]  # https://github.com/leynos/episodic/issues/27
 
-    assert str(error) == expected.message, "Expected message to be preserved."
-    assert error.code == expected.code, "Expected default error code."
+    assert str(error) == expected.message, (
+        f"expected message {expected.message!r} but got {str(error)!r}"
+    )
+    assert error.code == expected.code, (
+        f"expected error.code {expected.code!r} but got {error.code!r}"
+    )
     assert error.entity_id == expected.entity_id, (
-        "Expected default or provided entity identifier."
+        "expected error.entity_id "
+        f"{expected.entity_id!r} but got {error.entity_id!r}"
     )
     assert error.retryable is expected.retryable, (
-        "Expected default or provided retryability."
+        "expected error.retryable "
+        f"{expected.retryable!r} but got {error.retryable!r}"
     )
 
 
