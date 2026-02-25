@@ -185,14 +185,34 @@ def _build_update_kwargs[DataT](
     )
 
 
+def _build_payload_dataclass[DataT](
+    payload: JsonPayload,
+    *,
+    dc_type: type[DataT],
+    field_map: dict[str, tuple[str, bool]],
+) -> DataT:
+    """Construct a dataclass from mapped payload fields."""
+    values: dict[str, object] = {}
+    for field_name, (payload_key, is_optional) in field_map.items():
+        raw = (
+            payload.get(payload_key)
+            if is_optional
+            else _require_field(payload, payload_key)
+        )
+        values[field_name] = raw
+    return typ.cast("DataT", dc_type(**values))
+
+
 def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:
     """Build ``SeriesProfileUpdateFields`` from payload fields."""
-    title = _require_field(payload, "title")
-    configuration = _require_field(payload, "configuration")
-    return SeriesProfileUpdateFields(
-        title=typ.cast("str", title),
-        description=typ.cast("str | None", payload.get("description")),
-        configuration=typ.cast("dict[str, object]", configuration),
+    return _build_payload_dataclass(
+        payload,
+        dc_type=SeriesProfileUpdateFields,
+        field_map={
+            "title": ("title", False),
+            "description": ("description", True),
+            "configuration": ("configuration", False),
+        },
     )
 
 
@@ -200,20 +220,21 @@ def _build_template_fields(
     payload: JsonPayload,
 ) -> EpisodeTemplateUpdateFields:
     """Build ``EpisodeTemplateUpdateFields`` from payload fields."""
-    title = _require_field(payload, "title")
-    structure = _require_field(payload, "structure")
-    return EpisodeTemplateUpdateFields(
-        title=typ.cast("str", title),
-        description=typ.cast("str | None", payload.get("description")),
-        structure=typ.cast("dict[str, object]", structure),
+    return _build_payload_dataclass(
+        payload,
+        dc_type=EpisodeTemplateUpdateFields,
+        field_map={
+            "title": ("title", False),
+            "description": ("description", True),
+            "structure": ("structure", False),
+        },
     )
 
 
-def _build_typed_update_request[DataT, RequestT](  # noqa: PLR0913  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit collaborators keep type-safe generic mapping clear
+def _build_typed_update_request[DataT, RequestT](
     entity_id: uuid.UUID,
     payload: JsonPayload,
     *,
-    data_key: str,
     data_builder: cabc.Callable[[JsonPayload], DataT],
     request_builder: cabc.Callable[
         [uuid.UUID, int, DataT, AuditMetadata],
@@ -221,9 +242,6 @@ def _build_typed_update_request[DataT, RequestT](  # noqa: PLR0913  # TODO(@epis
     ],
 ) -> RequestT:
     """Build a typed update request from common payload parsing."""
-    if data_key != "data":
-        msg = f"Unsupported update payload key: {data_key}."
-        raise ValueError(msg)
     update_kwargs = _build_update_kwargs(payload, data_builder=data_builder)
     return request_builder(
         entity_id,
@@ -335,12 +353,11 @@ def build_profile_update_request(
     return _build_typed_update_request(
         entity_id,
         payload,
-        data_key="data",
         data_builder=_build_profile_data,
         request_builder=lambda eid, rev, data, audit: UpdateSeriesProfileRequest(
             profile_id=eid,
             expected_revision=rev,
-            data=data,
+            data=typ.cast("SeriesProfileUpdateFields", data),
             audit=audit,
         ),
     )
@@ -373,12 +390,11 @@ def build_template_update_request(
     return _build_typed_update_request(
         entity_id,
         payload,
-        data_key="data",
         data_builder=_build_template_fields,
-        request_builder=lambda eid, rev, data, audit: UpdateEpisodeTemplateRequest(
+        request_builder=lambda eid, rev, fields, audit: UpdateEpisodeTemplateRequest(
             template_id=eid,
             expected_revision=rev,
-            data=data,
+            data=typ.cast("EpisodeTemplateUpdateFields", fields),
             audit=audit,
         ),
     )
