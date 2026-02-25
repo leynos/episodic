@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING  # noqa: ICN003
+from typing import TYPE_CHECKING  # noqa: ICN003 - used for type-only imports
 
 import pytest
 
@@ -76,7 +76,7 @@ def test_error_class_defaults(
     expected: _ExpectedError,
 ) -> None:
     """Errors should expose class-level defaults when values are omitted."""
-    error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType] (ref: TYP-KWARGS-001)  # ty: ignore[invalid-argument-type] (ref: TYP-KWARGS-001)
+    error = error_cls(**kwargs)  # pyright: ignore[reportUnknownArgumentType]  # ty: ignore[invalid-argument-type]  # https://github.com/leynos/episodic/issues/27
 
     assert str(error) == expected.message, "Expected message to be preserved."
     assert error.code == expected.code, "Expected default error code."
