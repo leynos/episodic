@@ -43,6 +43,11 @@ def _is_non_negative_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
+def _is_non_empty_string(value: object) -> bool:
+    """Check whether a value is a non-empty string."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 def is_openai_usage_payload(payload: object) -> bool:
     """Validate OpenAI usage payload shape.
 
@@ -101,6 +106,30 @@ def is_openai_choice_payload(payload: object) -> bool:
     return isinstance(payload_mapping["finish_reason"], (str, type(None)))
 
 
+def _has_valid_identity(payload_mapping: cabc.Mapping[str, object]) -> bool:
+    """Check whether payload identity fields are valid non-empty strings."""
+    payload_id = payload_mapping.get("id")
+    model = payload_mapping.get("model")
+    return _is_non_empty_string(payload_id) and _is_non_empty_string(model)
+
+
+def _has_valid_choices(payload_mapping: cabc.Mapping[str, object]) -> bool:
+    """Check whether payload choices are present and structurally valid."""
+    choices = payload_mapping.get("choices")
+    return (
+        isinstance(choices, list)
+        and bool(choices)
+        and all(is_openai_choice_payload(choice) for choice in choices)
+    )
+
+
+def _has_valid_usage(payload_mapping: cabc.Mapping[str, object]) -> bool:
+    """Check whether optional payload usage metadata is valid."""
+    return "usage" not in payload_mapping or is_openai_usage_payload(
+        payload_mapping["usage"]
+    )
+
+
 def is_openai_chat_completion_payload(payload: object) -> bool:
     """Validate OpenAI chat completion payload shape.
 
@@ -118,24 +147,48 @@ def is_openai_chat_completion_payload(payload: object) -> bool:
         return False
     payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
 
-    payload_id = payload_mapping.get("id")
-    model = payload_mapping.get("model")
-    choices = payload_mapping.get("choices")
-    has_valid_identity = (
-        isinstance(payload_id, str)
-        and bool(payload_id.strip())
-        and isinstance(model, str)
-        and bool(model.strip())
+    return (
+        _has_valid_identity(payload_mapping)
+        and _has_valid_choices(payload_mapping)
+        and _has_valid_usage(payload_mapping)
     )
-    has_valid_choices = (
-        isinstance(choices, list)
-        and bool(choices)
-        and all(is_openai_choice_payload(choice) for choice in choices)
+
+
+def _validate_and_extract_token_count(value: object, field_name: str) -> int:
+    """Validate a token count value and return it as an integer."""
+    _ = field_name
+    if not _is_non_negative_int(value):
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+    return typ.cast("int", value)
+
+
+def _resolve_total_tokens(
+    input_tokens: int, output_tokens: int, total_tokens_value: object
+) -> int:
+    """Resolve total tokens from explicit value or computed sum."""
+    if total_tokens_value is None:
+        return input_tokens + output_tokens
+    if not _is_non_negative_int(total_tokens_value):
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+    return typ.cast("int", total_tokens_value)
+
+
+def _extract_token_count(
+    usage_payload: cabc.Mapping[str, object], field_name: str, default: int = 0
+) -> int:
+    """Extract and validate a token count field from usage payload."""
+    return _validate_and_extract_token_count(
+        usage_payload.get(field_name, default), field_name
     )
-    has_valid_usage = "usage" not in payload_mapping or is_openai_usage_payload(
-        payload_mapping["usage"]
+
+
+def _compute_total_tokens(
+    usage_payload: cabc.Mapping[str, object], input_tokens: int, output_tokens: int
+) -> int:
+    """Compute total tokens from usage payload and component counts."""
+    return _resolve_total_tokens(
+        input_tokens, output_tokens, usage_payload.get("total_tokens")
     )
-    return has_valid_identity and has_valid_choices and has_valid_usage
 
 
 def _normalize_usage(usage_payload: cabc.Mapping[str, object] | None) -> LLMUsage:
@@ -143,30 +196,26 @@ def _normalize_usage(usage_payload: cabc.Mapping[str, object] | None) -> LLMUsag
     if usage_payload is None:
         return LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0)
 
-    input_tokens_value = usage_payload.get("prompt_tokens", 0)
-    output_tokens_value = usage_payload.get("completion_tokens", 0)
-    total_tokens_value = usage_payload.get("total_tokens")
-
-    if not _is_non_negative_int(input_tokens_value):
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
-    if not _is_non_negative_int(output_tokens_value):
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
-    input_tokens = typ.cast("int", input_tokens_value)
-    output_tokens = typ.cast("int", output_tokens_value)
-
-    computed_total_tokens = input_tokens + output_tokens
-    if total_tokens_value is None:
-        total = computed_total_tokens
-    else:
-        if not _is_non_negative_int(total_tokens_value):
-            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
-        total = typ.cast("int", total_tokens_value)
+    input_tokens = _extract_token_count(usage_payload, "prompt_tokens")
+    output_tokens = _extract_token_count(usage_payload, "completion_tokens")
+    total = _compute_total_tokens(usage_payload, input_tokens, output_tokens)
 
     return LLMUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total,
     )
+
+
+def _extract_message_content(payload_mapping: cabc.Mapping[str, object]) -> str:
+    """Extract and validate stripped generated text from first choice message."""
+    choices = typ.cast("list[object]", payload_mapping["choices"])
+    first_choice = typ.cast("cabc.Mapping[str, object]", choices[0])
+    message = typ.cast("cabc.Mapping[str, object]", first_choice["message"])
+    generated_text = typ.cast("str", message["content"]).strip()
+    if not generated_text:
+        raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
+    return generated_text
 
 
 class OpenAIChatCompletionAdapter:
@@ -179,14 +228,10 @@ class OpenAIChatCompletionAdapter:
             raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
 
         payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
+        generated_text = _extract_message_content(payload_mapping)
+
         choices = typ.cast("list[object]", payload_mapping["choices"])
         first_choice = typ.cast("cabc.Mapping[str, object]", choices[0])
-        message = typ.cast("cabc.Mapping[str, object]", first_choice["message"])
-
-        generated_text = typ.cast("str", message["content"]).strip()
-        if not generated_text:
-            raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
-
         finish_reason_value = first_choice.get("finish_reason")
         finish_reason = (
             finish_reason_value if isinstance(finish_reason_value, str) else None

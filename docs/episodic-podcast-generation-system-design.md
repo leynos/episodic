@@ -1452,8 +1452,8 @@ stateDiagram-v2
    the graph tracks segment completion in state.
 3. Music supervisor rules choose background beds and stings based on template
    cues; stems assemble into the mixing timeline.
-4. Mixer combines narration and stems, runs the loudness normalization step,
-   and produces a low-bitrate preview.
+4. The mixer combines narration and stems, runs loudness normalization, and
+   produces a low-bitrate preview.
 5. The graph pauses at a feedback checkpoint, publishing the preview via signed
    URLs for audio engineer and producer review.
 6. Stakeholders provide feedback through the console or CLI; the graph routes
