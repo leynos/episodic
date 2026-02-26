@@ -35,6 +35,31 @@ class TaskCreateKwargs(typ.TypedDict, total=False):
     metadata: TaskMetadata | None
 
 
+def _validate_string_metadata_field(
+    metadata: TaskMetadata,
+    field_name: str,
+) -> str | None:
+    """Validate one optional string metadata field."""
+    value = metadata.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        msg = f"Task metadata {field_name!r} must be a non-empty string."
+        raise TypeError(msg)
+    return value
+
+
+def _validate_priority_hint_field(metadata: TaskMetadata) -> int | None:
+    """Validate the optional integer priority hint field."""
+    priority_hint = metadata.get("priority_hint")
+    if priority_hint is None:
+        return None
+    if isinstance(priority_hint, bool) or not isinstance(priority_hint, int):
+        msg = "Task metadata 'priority_hint' must be an integer."
+        raise TypeError(msg)
+    return priority_hint
+
+
 def _validate_task_metadata(
     metadata: TaskMetadata,
 ) -> TaskMetadata | None:
@@ -46,20 +71,16 @@ def _validate_task_metadata(
         raise ValueError(msg)
 
     validated: TaskMetadata = {}
-    for text_key in ("operation_name", "correlation_id"):
-        value = metadata.get(text_key)
-        if value is None:
-            continue
-        if not isinstance(value, str) or not value:
-            msg = f"Task metadata {text_key!r} must be a non-empty string."
-            raise TypeError(msg)
-        validated[text_key] = value
+    operation_name = _validate_string_metadata_field(metadata, "operation_name")
+    if operation_name is not None:
+        validated["operation_name"] = operation_name
 
-    priority_hint = metadata.get("priority_hint")
+    correlation_id = _validate_string_metadata_field(metadata, "correlation_id")
+    if correlation_id is not None:
+        validated["correlation_id"] = correlation_id
+
+    priority_hint = _validate_priority_hint_field(metadata)
     if priority_hint is not None:
-        if isinstance(priority_hint, bool) or not isinstance(priority_hint, int):
-            msg = "Task metadata 'priority_hint' must be an integer."
-            raise TypeError(msg)
         validated["priority_hint"] = priority_hint
 
     return validated or None
