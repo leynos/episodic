@@ -27,6 +27,7 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.services import ingest_sources
 from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
+from tests.test_uuid_assertions import assert_uuid7
 
 
 def _run_async_step(
@@ -82,14 +83,9 @@ def _assert_episode_title(episode: CanonicalEpisode) -> None:
     assert episode.title == "Bridgewater", "Expected the episode title."
 
 
-def _assert_uuid7(identifier: uuid.UUID, entity_name: str) -> None:
-    """Assert a generated identifier uses UUID version 7."""
-    assert identifier.version == 7, f"Expected {entity_name} ID to use UUIDv7."
-
-
 def _assert_episode_is_draft(episode: CanonicalEpisode) -> None:
     """Assert the canonical episode approval state is draft."""
-    _assert_uuid7(episode.id, "canonical episode")
+    assert_uuid7(episode.id, "canonical episode")
     assert episode.approval_state is ApprovalState.DRAFT, (
         "Expected the episode approval state to be draft."
     )
@@ -255,7 +251,7 @@ def approval_event_persisted(
 
         assert events, "Expected approval events for the episode."
         event = events[0]
-        _assert_uuid7(event.id, "approval event")
+        assert_uuid7(event.id, "approval event")
         assert event.from_state is None, "Expected the initial approval event."
         assert event.to_state is ApprovalState.DRAFT, (
             "Expected the approval event to transition to draft."
@@ -281,8 +277,8 @@ def source_documents_linked(
         episode_id = context["episode_id"]
         source_uris = context["source_uris"]
 
-        _assert_uuid7(job_id, "ingestion job")
-        _assert_uuid7(episode_id, "canonical episode")
+        assert_uuid7(job_id, "ingestion job")
+        assert_uuid7(episode_id, "canonical episode")
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             documents = await uow.source_documents.list_for_job(job_id)
@@ -291,7 +287,7 @@ def source_documents_linked(
             "Expected one persisted document per ingested source."
         )
         for document in documents:
-            _assert_uuid7(document.id, "source document")
+            assert_uuid7(document.id, "source document")
             assert document.ingestion_job_id == job_id, (
                 "Expected document to reference the ingestion job."
             )
@@ -320,12 +316,12 @@ def tei_header_provenance_captured(
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             episode = await uow.episodes.get(episode_id)
             assert episode is not None, "Expected a persisted canonical episode."
-            _assert_uuid7(episode.id, "canonical episode")
-            _assert_uuid7(episode.tei_header_id, "TEI header reference")
+            assert_uuid7(episode.id, "canonical episode")
+            assert_uuid7(episode.tei_header_id, "TEI header reference")
             header = await uow.tei_headers.get(episode.tei_header_id)
 
         assert header is not None, "Expected the TEI header to be persisted."
-        _assert_uuid7(header.id, "TEI header")
+        assert_uuid7(header.id, "TEI header")
         provenance = header.payload.get("episodic_provenance")
         assert isinstance(provenance, dict), (
             "Expected TEI header provenance dictionary."

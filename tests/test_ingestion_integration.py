@@ -15,10 +15,9 @@ from _ingestion_service_helpers import (
 from episodic.canonical.ingestion import MultiSourceRequest
 from episodic.canonical.ingestion_service import ingest_multi_source
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from tests.test_uuid_assertions import assert_uuid7
 
 if typ.TYPE_CHECKING:
-    import uuid
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import SeriesProfile
@@ -97,18 +96,13 @@ def _verify_source_documents(
         "Expected all input sources to be persisted as source documents."
     )
     for document in documents:
-        _assert_uuid7(document.id, "source document")
+        assert_uuid7(document.id, "source document")
         assert document.weight > 0.0, (
             "Expected persisted source weight to be greater than zero."
         )
         assert document.weight <= 1.0, (
             "Expected persisted source weight to be capped at one."
         )
-
-
-def _assert_uuid7(identifier: uuid.UUID, entity_name: str) -> None:
-    """Assert a generated identifier uses UUID version 7."""
-    assert identifier.version == 7, f"Expected {entity_name} ID to use UUIDv7."
 
 
 async def _assert_ingestion_raises(
@@ -189,10 +183,10 @@ async def test_ingest_multi_source_end_to_end(
     assert persisted.title == "Primary Episode", (
         "Expected winning source title to persist as canonical episode title."
     )
-    _assert_uuid7(persisted.id, "canonical episode")
-    _assert_uuid7(persisted.tei_header_id, "TEI header reference")
+    assert_uuid7(persisted.id, "canonical episode")
+    assert_uuid7(persisted.tei_header_id, "TEI header reference")
     assert header is not None, "Expected a persisted TEI header."
-    _assert_uuid7(header.id, "TEI header")
+    assert_uuid7(header.id, "TEI header")
 
     provenance = _require_provenance_payload(header.payload)
     _verify_provenance_metadata(
@@ -205,7 +199,7 @@ async def test_ingest_multi_source_end_to_end(
     )
 
     job_record = await _get_job_record_for_episode(session_factory, episode.id)
-    _assert_uuid7(job_record.id, "ingestion job")
+    assert_uuid7(job_record.id, "ingestion job")
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)

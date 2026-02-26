@@ -22,6 +22,7 @@ import typing as typ
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.util import CommandError
+from sqlalchemy.exc import SQLAlchemyError
 
 from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
@@ -33,6 +34,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine
 
 _logger = get_logger(__name__)
+_INFRASTRUCTURE_ERRORS = (OSError, RuntimeError, SQLAlchemyError, CommandError)
 
 
 def _compare_schema(
@@ -85,7 +87,6 @@ async def check_migrations_cli() -> int:
     from pathlib import Path
 
     from py_pglite import PGliteConfig, PGliteManager
-    from sqlalchemy.exc import SQLAlchemyError
     from sqlalchemy.ext.asyncio import create_async_engine
 
     try:
@@ -109,7 +110,7 @@ async def check_migrations_cli() -> int:
                     diffs = await detect_schema_drift(engine)
                 finally:
                     await engine.dispose()
-    except OSError, RuntimeError, SQLAlchemyError, CommandError:
+    except _INFRASTRUCTURE_ERRORS:
         log_error(_logger, "Infrastructure error.", exc_info=True)
         return 2
 
