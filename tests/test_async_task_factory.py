@@ -305,15 +305,16 @@ async def test_create_task_in_group_forwards_task_factory_kwargs() -> None:
 
 def test_create_task_rejects_unsupported_metadata_key() -> None:
     """Unsupported metadata keys are rejected with a clear error."""
-    coro = asyncio.sleep(0)
+    coro: typ.Coroutine[object, object, object] | None = None
     try:
         with pytest.raises(ValueError, match="Unsupported task metadata keys"):
             create_task(
-                coro,
+                coro := asyncio.sleep(0),
                 metadata=typ.cast("dict[str, object]", {"unsupported_key": "nope"}),
             )
     finally:
-        coro.close()
+        if coro is not None:
+            coro.close()
 
 
 @pytest.mark.parametrize(
