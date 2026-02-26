@@ -6,7 +6,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -58,10 +58,19 @@ behaviour.
 ## Progress
 
 - [x] (2026-02-24 00:00Z) Draft ExecPlan created.
-- [ ] Stage A: Confirm concrete prompt-construction touchpoints.
-- [ ] Stage B: Add renderer tests and template fixtures before implementation.
-- [ ] Stage C: Implement template-string-backed prompt builder.
-- [ ] Stage D: Integrate selectively and run full gates.
+- [x] (2026-02-26 00:40Z) Stage A: confirmed concrete prompt touchpoint in the
+  structured-brief flow (`build_series_brief`) that feeds downstream generators.
+- [x] (2026-02-26 00:54Z) Stage B: added tests first in
+  `tests/test_prompt_templates.py` and extended
+  `tests/test_profile_template_service.py`; pre-implementation run failed with
+  expected import errors for missing prompt modules/APIs.
+- [x] (2026-02-26 01:03Z) Stage C: implemented
+  `episodic/canonical/prompts.py` with template-string (`t"..."`) scaffolding,
+  deterministic rendering, interpolation audit metadata, and escape-policy
+  hooks. Added integration helper `build_series_brief_prompt`.
+- [x] (2026-02-26 01:35Z) Stage D: updated developer/user docs and ran full
+  quality gates (`make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, and `make nixie`) with passing results.
 
 ## Surprises & discoveries
 
@@ -74,6 +83,12 @@ behaviour.
   unavailable in this session. Evidence: resource and template listings are
   empty. Impact: this plan relies on repository text only.
 
+- Observation: direct `uv run` commands can fail building `tei-rapporteur`
+  against Python 3.14 without compatibility override. Evidence: PyO3 error
+  (`configured Python interpreter version (3.14) is newer than ... (3.13)`).
+  Impact: use Makefile targets (which export
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`) for gate execution.
+
 ## Decision log
 
 - Decision: start with a dedicated prompt-template utility module and tests,
@@ -85,12 +100,31 @@ behaviour.
   engines. Rationale: lower dependency surface and direct Python 3.14 feature
   adoption. Date/Author: 2026-02-24 / Codex.
 
+- Decision: anchor initial concrete integration on structured-brief prompt
+  scaffolding via `build_series_brief_prompt`, rather than speculative LLM
+  adapter modules not yet implemented. Rationale: delivers a real prompt path
+  now while preserving hexagonal boundaries and existing adapter contracts.
+  Date/Author: 2026-02-26 / Codex.
+
 ## Outcomes & retrospective
 
-Pending implementation.
+Implementation completed through all planned stages.
 
-Completion should leave a tested, reusable prompt templating primitive and
-clear migration guidance for future LLM adapters.
+Current outcomes:
+
+- Added reusable prompt-template primitives under
+  `episodic/canonical/prompts.py`.
+- Added deterministic rendering output with explicit static/interpolation parts
+  for auditability.
+- Added escape-policy support via interpolation callbacks.
+- Added concrete integrated path `build_series_brief_prompt` that composes
+  structured-brief loading and template rendering.
+- Added unit and service-level tests validating interpolation ordering,
+  deterministic output, and escaping behaviour.
+- Passed full quality gates, including markdown and Mermaid validation.
+- Adjusted project interpreter metadata (`requires-python >=3.14`) and Ruff
+  target version (`py314`) so template-string syntax and lint/format behaviour
+  are internally consistent.
 
 ## Context and orientation
 

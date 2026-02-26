@@ -26,7 +26,7 @@ import typing as typ
 import pytest
 import pytest_asyncio
 
-from episodic.canonical import build_series_brief
+from episodic.canonical import build_series_brief, build_series_brief_prompt
 from episodic.canonical.profile_templates import (
     AuditMetadata,
     EpisodeTemplateData,
@@ -321,6 +321,11 @@ class TestEpisodeTemplateService:
                 profile_id=profile.id,
                 template_id=template.id,
             )
+            rendered_prompt = await build_series_brief_prompt(
+                uow,
+                profile_id=profile.id,
+                template_id=template.id,
+            )
 
         assert len(template_history) == 1, "Expected one template history record."
         first_entry = typ.cast("EpisodeTemplateHistoryEntry", template_history[0])
@@ -332,4 +337,10 @@ class TestEpisodeTemplateService:
         )
         assert any(item["id"] == str(template.id) for item in templates), (
             "Expected template in structured brief."
+        )
+        assert "Series slug: service-profile" in rendered_prompt.text, (
+            "Expected prompt to include series slug context."
+        )
+        assert "Weekly Template" in rendered_prompt.text, (
+            "Expected prompt to include template details."
         )
