@@ -134,6 +134,21 @@ def is_openai_message_payload(payload: object) -> typ.TypeIs[OpenAIMessagePayloa
     return isinstance(payload.get("content"), str)
 
 
+def _has_valid_choices(payload: _StringKeyedObjectDict) -> bool:
+    """Check whether a payload contains a valid non-empty choices list."""
+    choices = payload.get("choices")
+    return (
+        isinstance(choices, list)
+        and bool(choices)
+        and all(is_openai_choice_payload(choice) for choice in choices)
+    )
+
+
+def _has_valid_usage(payload: _StringKeyedObjectDict) -> bool:
+    """Check whether an optional usage field is valid."""
+    return "usage" not in payload or is_openai_usage_payload(payload["usage"])
+
+
 def is_openai_chat_completion_payload(
     payload: object,
 ) -> typ.TypeIs[OpenAIChatCompletionPayload]:
@@ -152,20 +167,11 @@ def is_openai_chat_completion_payload(
     if not _is_string_keyed_dict(payload):
         return False
 
-    choices = payload.get("choices")
-    has_valid_choices = (
-        isinstance(choices, list)
-        and bool(choices)
-        and all(is_openai_choice_payload(choice) for choice in choices)
-    )
-    has_valid_usage = "usage" not in payload or is_openai_usage_payload(
-        payload["usage"]
-    )
     return (
         isinstance(payload.get("id"), str)
         and isinstance(payload.get("model"), str)
-        and has_valid_choices
-        and has_valid_usage
+        and _has_valid_choices(payload)
+        and _has_valid_usage(payload)
     )
 
 
