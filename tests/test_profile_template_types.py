@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses as dc
-from typing import TYPE_CHECKING  # noqa: ICN003 - see TYP-KWARGS-001
+import typing as typ
 
 import pytest
 
@@ -12,9 +12,6 @@ from episodic.canonical.profile_templates.types import (
     ProfileTemplateError,
     RevisionConflictError,
 )
-
-if TYPE_CHECKING:
-    import typing as typ
 
 
 @dc.dataclass(slots=True, frozen=True)

@@ -124,7 +124,6 @@ def _emit(
         exc_info=exc_info,
         stack_info=False,
     )
-    return  # noqa: PLR1711
 
 
 def log_info(
@@ -156,7 +155,6 @@ def log_info(
         If the template and arguments do not align for percent formatting.
     """
     _emit(logger, LogLevel.INFO, _format_message(template, args), exc_info=exc_info)
-    return  # noqa: PLR1711
 
 
 def log_warning(
@@ -188,7 +186,6 @@ def log_warning(
         If the template and arguments do not align for percent formatting.
     """
     _emit(logger, LogLevel.WARNING, _format_message(template, args), exc_info=exc_info)
-    return  # noqa: PLR1711
 
 
 def log_error(
@@ -220,7 +217,6 @@ def log_error(
         If the template and arguments do not align for percent formatting.
     """
     _emit(logger, LogLevel.ERROR, _format_message(template, args), exc_info=exc_info)
-    return  # noqa: PLR1711
 
 
 __all__ = (
