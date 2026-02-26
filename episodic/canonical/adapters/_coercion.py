@@ -25,5 +25,8 @@ def coerce_float(value: object, default: float) -> float:
         return default
     try:
         return float(value)
-    except TypeError, ValueError:
+    except (
+        TypeError,
+        ValueError,
+    ):
         return default
