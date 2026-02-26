@@ -13,6 +13,7 @@ import pytest
 
 from episodic.asyncio_tasks import (
     TASK_METADATA_KWARG,
+    TaskMetadata,
     create_task,
     create_task_in_group,
 )
@@ -85,6 +86,22 @@ def _recording_task_factory() -> typ.Iterator[list[dict[str, object]]]:
         yield captured
     finally:
         loop.set_task_factory(previous_factory)
+
+
+def _select_captured_task_kwargs(
+    captured_task_kwargs: list[dict[str, object]],
+    expected_name: str,
+) -> dict[str, object]:
+    """Return captured kwargs for a task name, tolerating extra loop tasks."""
+    matching = [
+        kwargs for kwargs in captured_task_kwargs if kwargs.get("name") == expected_name
+    ]
+    captured_names = [kwargs.get("name") for kwargs in captured_task_kwargs]
+    assert matching, (
+        f"Expected a captured task named {expected_name!r}; "
+        f"captured names were {captured_names!r}."
+    )
+    return matching[-1]
 
 
 def _make_profile(slug: str = "series-slug") -> SeriesProfile:
@@ -249,8 +266,7 @@ async def test_create_task_forwards_task_factory_kwargs() -> None:
         result = await task
 
     assert result == "done"
-    assert len(captured) == 1
-    kwargs = captured[0]
+    kwargs = _select_captured_task_kwargs(captured, "create-task-test")
     assert kwargs["name"] == "create-task-test"
     assert kwargs["context"] is context
     assert kwargs["eager_start"] is True
@@ -281,8 +297,7 @@ async def test_create_task_in_group_forwards_task_factory_kwargs() -> None:
             )
 
     assert task.result() == "group-done"
-    assert len(captured) == 1
-    kwargs = captured[0]
+    kwargs = _select_captured_task_kwargs(captured, "task-group-test")
     assert kwargs["name"] == "task-group-test"
     assert kwargs["eager_start"] is False
     assert kwargs[TASK_METADATA_KWARG] == metadata
@@ -297,6 +312,56 @@ def test_create_task_rejects_unsupported_metadata_key() -> None:
                 coro,
                 metadata=typ.cast("dict[str, object]", {"unsupported_key": "nope"}),
             )
+    finally:
+        coro.close()
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected_pattern"),
+    [
+        (
+            {"operation_name": 123},
+            "operation_name",
+        ),
+        (
+            {"operation_name": ""},
+            "operation_name",
+        ),
+        (
+            {"correlation_id": 123},
+            "correlation_id",
+        ),
+        (
+            {"correlation_id": ""},
+            "correlation_id",
+        ),
+        (
+            {"priority_hint": "high"},
+            "priority_hint",
+        ),
+        (
+            {"priority_hint": True},
+            "priority_hint",
+        ),
+    ],
+    ids=[
+        "operation_name_non_string",
+        "operation_name_empty",
+        "correlation_id_non_string",
+        "correlation_id_empty",
+        "priority_hint_non_int",
+        "priority_hint_bool",
+    ],
+)
+def test_create_task_rejects_invalid_metadata_values(
+    metadata: dict[str, object],
+    expected_pattern: str,
+) -> None:
+    """Invalid metadata values raise typed validation errors."""
+    coro = asyncio.sleep(0)
+    try:
+        with pytest.raises(TypeError, match=expected_pattern):
+            create_task(coro, metadata=typ.cast("TaskMetadata", metadata))
     finally:
         coro.close()
 
@@ -320,6 +385,54 @@ async def test_create_task_ignores_metadata_without_custom_factory() -> None:
         assert await task == "ok"
     finally:
         loop.set_task_factory(previous_factory)
+
+
+@pytest.mark.asyncio
+async def test_create_task_empty_metadata_is_not_forwarded() -> None:
+    """An empty metadata dictionary is treated as absent metadata."""
+
+    async def _job() -> str:
+        await asyncio.sleep(0)
+        return "done"
+
+    with _recording_task_factory() as captured:
+        task = create_task(
+            _job(),
+            name="create-task-empty-metadata",
+            metadata=typ.cast("TaskMetadata", {}),
+        )
+        result = await task
+
+    assert result == "done"
+    kwargs = _select_captured_task_kwargs(captured, "create-task-empty-metadata")
+    assert kwargs["name"] == "create-task-empty-metadata"
+    assert TASK_METADATA_KWARG not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_create_task_partial_metadata_forwards_present_keys_only() -> None:
+    """Partial metadata is forwarded without synthesizing missing keys."""
+
+    async def _job() -> str:
+        await asyncio.sleep(0)
+        return "done"
+
+    metadata: TaskMetadata = {"operation_name": "tests.create_task.partial"}
+
+    with _recording_task_factory() as captured:
+        task = create_task(
+            _job(),
+            name="create-task-partial-metadata",
+            metadata=metadata,
+        )
+        result = await task
+
+    assert result == "done"
+    kwargs = _select_captured_task_kwargs(captured, "create-task-partial-metadata")
+    forwarded_metadata = typ.cast("dict[str, object]", kwargs[TASK_METADATA_KWARG])
+    assert forwarded_metadata["operation_name"] == "tests.create_task.partial"
+    assert "correlation_id" not in forwarded_metadata
+    assert "priority_hint" not in forwarded_metadata
 
 
 @pytest.mark.asyncio
@@ -353,11 +466,14 @@ async def test_ingest_multi_source_emits_metadata_aware_normalisation_tasks(
     assert episode.series_profile_id == profile.id
     assert len(captured_sources) == 2
 
-    normalise_task_kwargs = [
-        kwargs
-        for kwargs in captured_task_kwargs
-        if typ.cast("str", kwargs["name"]).startswith("canonical.ingestion.normalise:")
-    ]
+    normalise_task_kwargs: list[dict[str, object]] = []
+    for kwargs in captured_task_kwargs:
+        task_name = kwargs.get("name")
+        if isinstance(task_name, str) and task_name.startswith(
+            "canonical.ingestion.normalise:"
+        ):
+            normalise_task_kwargs.append(kwargs)
+
     assert len(normalise_task_kwargs) == 2
     for index, kwargs in enumerate(normalise_task_kwargs, start=1):
         metadata = typ.cast("dict[str, object]", kwargs[TASK_METADATA_KWARG])

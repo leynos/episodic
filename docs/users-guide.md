@@ -43,7 +43,7 @@ This guide will cover:
   preferred or rejected. Weighting coefficients are configurable per series
   profile. TEI headers automatically capture provenance metadata including
   source priorities, ingestion timestamps, and reviewer identities. Source
-  normalization fan-out now uses metadata-aware asyncio task creation, so
+  normalisation fan-out now uses metadata-aware asyncio task creation, so
   custom event-loop task factories can receive operation metadata
   (`operation_name`, `correlation_id`, `priority_hint`) for diagnostics.
   Storage identifiers generated during canonical ingestion use time-ordered
