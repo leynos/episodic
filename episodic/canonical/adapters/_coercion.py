@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+_COERCE_FLOAT_ERRORS = (TypeError, ValueError)
+
 
 def coerce_float(value: object, default: float) -> float:
     """Coerce ``value`` to ``float`` and return ``default`` on failure.
@@ -25,8 +27,5 @@ def coerce_float(value: object, default: float) -> float:
         return default
     try:
         return float(value)
-    except (
-        TypeError,
-        ValueError,
-    ):
+    except _COERCE_FLOAT_ERRORS:
         return default
