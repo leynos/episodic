@@ -12,9 +12,6 @@ import dataclasses as dc
 import json
 import typing as typ
 from string.templatelib import Interpolation, Template, convert
-from typing import TypeVar  # noqa: ICN003
-
-T = TypeVar("T")
 
 if typ.TYPE_CHECKING:
     from .domain import JsonMapping
@@ -39,22 +36,40 @@ class RenderedPrompt:
     interpolations: tuple[PromptInterpolation, ...]
 
 
-def _coerce_value(  # noqa: PLR0913, UP047
+def _coerce_required_value[T](
     value: object,
     *,
     field_name: str,
     expected_type: type[T],
     type_description: str,
-    allow_none: bool = False,
-    none_default: object = None,
 ) -> T:
-    """Validate a value type with optional ``None`` handling."""
-    if allow_none and value is None:
-        return typ.cast("T", none_default)
+    """Validate a required value type."""
+    if isinstance(value, expected_type):
+        return value
+
+    msg = f"{field_name} must be {type_description}."
+    raise TypeError(msg)
+
+
+def _coerce_optional_value[T](
+    value: object,
+    *,
+    field_name: str,
+    expected_type: type[T],
+    none_default: T,
+) -> T:
+    """Validate an optional value type with None normalisation."""
+    if value is None:
+        return none_default
 
     if isinstance(value, expected_type):
-        return typ.cast("T", value)
+        return value
 
+    type_description = (
+        "a string or null"
+        if expected_type is str
+        else f"an instance of {expected_type.__name__} or null"
+    )
     msg = f"{field_name} must be {type_description}."
     raise TypeError(msg)
 
@@ -67,7 +82,7 @@ def _coerce_mapping(
     """Require a JSON-style mapping value."""
     return typ.cast(
         "JsonMapping",
-        _coerce_value(
+        _coerce_required_value(
             value,
             field_name=field_name,
             expected_type=dict,
@@ -93,7 +108,7 @@ def _coerce_string(
     field_name: str,
 ) -> str:
     """Require a string value."""
-    return _coerce_value(
+    return _coerce_required_value(
         value,
         field_name=field_name,
         expected_type=str,
@@ -107,12 +122,10 @@ def _coerce_optional_string(
     field_name: str,
 ) -> str:
     """Require a string-or-None value and normalize to a string."""
-    return _coerce_value(
+    return _coerce_optional_value(
         value,
         field_name=field_name,
         expected_type=str,
-        type_description="a string or null",
-        allow_none=True,
         none_default="",
     )
 
