@@ -179,38 +179,30 @@ def test_build_series_brief_template_rejects_non_mapping_episode_template_entrie
         build_series_brief_template(brief)
 
 
-def test_build_series_brief_template_rejects_non_string_slug() -> None:
-    """Reject non-string series slugs."""
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value", "error_pattern"),
+    [
+        ("slug", 123, r"^series_profile\.slug must be a string\.$"),
+        ("title", {"not": "a string"}, r"^series_profile\.title must be a string\.$"),
+        (
+            "description",
+            math.pi,
+            r"^series_profile\.description must be a string or null\.$",
+        ),
+    ],
+    ids=["non-string-slug", "non-string-title", "invalid-optional-description"],
+)
+def test_build_series_brief_template_rejects_invalid_field_types(
+    field_name: str,
+    invalid_value: object,
+    error_pattern: str,
+) -> None:
+    """Reject invalid field types in series profile."""
     brief = _sample_brief()
     series_profile = typ.cast("dict[str, object]", brief["series_profile"])
-    series_profile["slug"] = 123
+    series_profile[field_name] = invalid_value
 
-    with pytest.raises(TypeError, match=r"^series_profile\.slug must be a string\.$"):
-        build_series_brief_template(brief)
-
-
-def test_build_series_brief_template_rejects_non_string_title() -> None:
-    """Reject non-string series titles."""
-    brief = _sample_brief()
-    series_profile = typ.cast("dict[str, object]", brief["series_profile"])
-    series_profile["title"] = {"not": "a string"}
-
-    with pytest.raises(TypeError, match=r"^series_profile\.title must be a string\.$"):
-        build_series_brief_template(brief)
-
-
-def test_build_series_brief_template_rejects_invalid_optional_description_type() -> (
-    None
-):
-    """Reject non-string, non-null description values."""
-    brief = _sample_brief()
-    series_profile = typ.cast("dict[str, object]", brief["series_profile"])
-    series_profile["description"] = math.pi
-
-    with pytest.raises(
-        TypeError,
-        match=r"^series_profile\.description must be a string or null\.$",
-    ):
+    with pytest.raises(TypeError, match=error_pattern):
         build_series_brief_template(brief)
 
 

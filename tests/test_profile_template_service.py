@@ -54,6 +54,7 @@ if typ.TYPE_CHECKING:
         SeriesProfile,
         SeriesProfileHistoryEntry,
     )
+    from episodic.canonical.prompts import RenderedPrompt
 
 
 @dc.dataclass(slots=True)
@@ -141,6 +142,41 @@ def _reconstruct_prompt_text(
             fillvalue="",
         )
     )
+
+
+def _assert_rendered_prompt_properties(
+    rendered_prompt: object,
+    *,
+    expected_expressions: list[str],
+) -> None:
+    """Verify RenderedPrompt contains expected interpolation and static metadata.
+
+    Args:
+        rendered_prompt: The RenderedPrompt object to verify.
+        expected_expressions: List of interpolation expressions that must be present.
+    """
+    prompt = typ.cast("RenderedPrompt", rendered_prompt)
+
+    assert prompt.interpolations, (
+        "Expected prompt rendering to include interpolation metadata."
+    )
+
+    for expression in expected_expressions:
+        assert any(item.expression == expression for item in prompt.interpolations), (
+            f"Expected interpolation metadata to include {expression}."
+        )
+
+    assert prompt.static_parts, (
+        "Expected prompt rendering to include static template parts."
+    )
+
+    assert (
+        _reconstruct_prompt_text(
+            static_parts=prompt.static_parts,
+            interpolation_values=tuple(item.value for item in prompt.interpolations),
+        )
+        == prompt.text
+    ), "Expected static and interpolation metadata to reconstruct text."
 
 
 class TestSeriesProfileService:
@@ -366,25 +402,7 @@ class TestEpisodeTemplateService:
         assert "<<service-profile>>" in escaped_prompt.text, (
             "Expected canonical prompt entrypoint to forward escape callback."
         )
-        assert rendered_prompt.interpolations, (
-            "Expected prompt rendering to include interpolation metadata."
+        _assert_rendered_prompt_properties(
+            rendered_prompt,
+            expected_expressions=["series_slug", "template_count"],
         )
-        assert any(
-            item.expression == "series_slug" for item in rendered_prompt.interpolations
-        ), "Expected interpolation metadata to include series slug."
-        assert any(
-            item.expression == "template_count"
-            for item in rendered_prompt.interpolations
-        ), "Expected interpolation metadata to include template count."
-        assert rendered_prompt.static_parts, (
-            "Expected prompt rendering to include static template parts."
-        )
-        assert (
-            _reconstruct_prompt_text(
-                static_parts=rendered_prompt.static_parts,
-                interpolation_values=tuple(
-                    item.value for item in rendered_prompt.interpolations
-                ),
-            )
-            == rendered_prompt.text
-        ), "Expected static and interpolation metadata to reconstruct text."
