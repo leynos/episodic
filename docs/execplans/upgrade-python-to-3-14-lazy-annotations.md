@@ -75,9 +75,10 @@ runtime behaviour remains stable, and all quality gates pass.
 - Observation: direct `uv run pytest` fails in this environment on Python 3.14
   when building `tei-rapporteur` through PyO3 unless
   `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` is set. Evidence: targeted pre-check
-  failed with `configured Python interpreter version (3.14) is newer than
-  PyO3's maximum supported version (3.13)`. Impact: run tests through Makefile
-  targets (which already export the variable) or set the variable explicitly.
+  failed with
+  `configured Python interpreter version (3.14) is newer than PyO3's maximum`
+  `supported version (3.13)`. Impact: run tests through Makefile targets (which
+  already export the variable) or set the variable explicitly.
 
 - Observation: pytest-bdd step discovery inspects function annotations and can
   trigger `NameError` when annotation-only imports remain in `TYPE_CHECKING`
@@ -223,7 +224,7 @@ Acceptance criteria:
 Capture during implementation:
 
 - `git diff -- pyproject.toml episodic tests docs`
-- `/tmp/py314-lazy-ann-targeted.log`
+- `/tmp/py314-lazy-ann-targeted-pre.log`
 - `/tmp/py314-lazy-ann-check-fmt.log`
 - `/tmp/py314-lazy-ann-lint.log`
 - `/tmp/py314-lazy-ann-typecheck.log`

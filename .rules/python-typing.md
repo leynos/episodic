@@ -175,7 +175,9 @@ or modified files. The project baseline is `>=3.14`.
 
 Repository exception: existing pytest-bdd step modules under
 `tests/steps/test_*_steps.py` deliberately keep this import because step
-discovery can inspect annotations at runtime.
+discovery inspects annotations at runtime and deferred evaluation would cause
+`NameError` for types imported only under `TYPE_CHECKING` blocks, so
+`from __future__ import annotations` must be retained in those step modules.
 
 Use this import only in external or legacy code that must remain compatible
 with Python versions earlier than 3.14.
