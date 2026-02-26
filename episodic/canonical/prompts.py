@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses as dc
 import json
 import typing as typ
-from string.templatelib import Interpolation, Template, convert
+from string.templatelib import Template, convert
 
 if typ.TYPE_CHECKING:
     from .domain import JsonMapping
@@ -36,59 +36,16 @@ class RenderedPrompt:
     interpolations: tuple[PromptInterpolation, ...]
 
 
-def _coerce_required_value[T](
-    value: object,
-    *,
-    field_name: str,
-    expected_type: type[T],
-    type_description: str,
-) -> T:
-    """Validate a required value type."""
-    if isinstance(value, expected_type):
-        return value
-
-    msg = f"{field_name} must be {type_description}."
-    raise TypeError(msg)
-
-
-def _coerce_optional_value[T](
-    value: object,
-    *,
-    field_name: str,
-    expected_type: type[T],
-    none_default: T,
-) -> T:
-    """Validate an optional value type with None normalisation."""
-    if value is None:
-        return none_default
-
-    if isinstance(value, expected_type):
-        return value
-
-    type_description = (
-        "a string or null"
-        if expected_type is str
-        else f"an instance of {expected_type.__name__} or null"
-    )
-    msg = f"{field_name} must be {type_description}."
-    raise TypeError(msg)
-
-
 def _coerce_mapping(
     value: object,
     *,
     field_name: str,
 ) -> JsonMapping:
     """Require a JSON-style mapping value."""
-    return typ.cast(
-        "JsonMapping",
-        _coerce_required_value(
-            value,
-            field_name=field_name,
-            expected_type=dict,
-            type_description="a mapping",
-        ),
-    )
+    if not isinstance(value, dict):
+        msg = f"{field_name} must be a mapping."
+        raise TypeError(msg)
+    return typ.cast("JsonMapping", value)
 
 
 def _coerce_template_list(value: object) -> list[JsonMapping]:
@@ -109,25 +66,16 @@ def _coerce_string(
     optional: bool = False,
 ) -> str:
     """Require a string value, optionally normalising None to empty string."""
-    if optional:
-        return _coerce_optional_value(
-            value,
-            field_name=field_name,
-            expected_type=str,
-            none_default="",
-        )
-    return _coerce_required_value(
-        value,
-        field_name=field_name,
-        expected_type=str,
-        type_description="a string",
-    )
-
-
-def _render_interpolation_value(interpolation: Interpolation) -> str:
-    """Render one interpolation with Python format semantics."""
-    converted = convert(interpolation.value, interpolation.conversion)
-    return format(converted, interpolation.format_spec)
+    if value is None:
+        if optional:
+            return ""
+        msg = f"{field_name} must be a string."
+        raise TypeError(msg)
+    if isinstance(value, str):
+        return value
+    type_description = "a string or null" if optional else "a string"
+    msg = f"{field_name} must be {type_description}."
+    raise TypeError(msg)
 
 
 def render_template(
@@ -154,7 +102,8 @@ def render_template(
             continue
 
         interpolation = template.interpolations[index]
-        rendered_value = _render_interpolation_value(interpolation)
+        converted = convert(interpolation.value, interpolation.conversion)
+        rendered_value = format(converted, interpolation.format_spec)
         if escape_interpolation is not None:
             rendered_value = escape_interpolation(rendered_value)
 

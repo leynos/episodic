@@ -30,6 +30,7 @@ async def build_series_brief_prompt(
     *,
     profile_id: uuid.UUID,
     template_id: uuid.UUID | None,
+    escape_interpolation: typ.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
     """Build and render a deterministic prompt scaffold from series brief data.
 
@@ -41,6 +42,9 @@ async def build_series_brief_prompt(
         Identifier of the series profile to include in the prompt context.
     template_id : uuid.UUID | None
         Optional episode-template identifier used to narrow prompt context.
+    escape_interpolation : typing.Callable[[str], str] | None
+        Optional callback applied to each rendered interpolation string before
+        prompt assembly.
 
     Returns
     -------
@@ -53,7 +57,10 @@ async def build_series_brief_prompt(
         profile_id=profile_id,
         template_id=template_id,
     )
-    return render_series_brief_prompt(brief)
+    return render_series_brief_prompt(
+        brief,
+        escape_interpolation=escape_interpolation,
+    )
 
 
 __all__: list[str] = ["build_series_brief", "build_series_brief_prompt"]

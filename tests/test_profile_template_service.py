@@ -21,6 +21,7 @@ Example
 from __future__ import annotations
 
 import dataclasses as dc
+import itertools
 import typing as typ
 
 import pytest
@@ -123,6 +124,22 @@ async def base_profile_with_template(
         profile_revision=profile_revision,
         template=template,
         template_revision=template_revision,
+    )
+
+
+def _reconstruct_prompt_text(
+    *,
+    static_parts: tuple[str, ...],
+    interpolation_values: tuple[str, ...],
+) -> str:
+    """Rebuild rendered prompt text from its static/interpolation metadata."""
+    return "".join(
+        f"{part}{value}"
+        for part, value in itertools.zip_longest(
+            static_parts,
+            interpolation_values,
+            fillvalue="",
+        )
     )
 
 
@@ -308,12 +325,8 @@ class TestEpisodeTemplateService:
                 parent_id=template.id,
                 kind="episode_template",
             )
-            typed_template_history = typ.cast(
-                "list[EpisodeTemplateHistoryEntry]",
-                template_history,
-            )
             template_history = sorted(
-                typed_template_history,
+                typ.cast("list[EpisodeTemplateHistoryEntry]", template_history),
                 key=lambda entry: entry.revision,
             )
             brief = await build_series_brief(
@@ -325,6 +338,12 @@ class TestEpisodeTemplateService:
                 uow,
                 profile_id=profile.id,
                 template_id=template.id,
+            )
+            escaped_prompt = await build_series_brief_prompt(
+                uow,
+                profile_id=profile.id,
+                template_id=template.id,
+                escape_interpolation=lambda value: f"<<{value}>>",
             )
 
         assert len(template_history) == 1, "Expected one template history record."
@@ -344,3 +363,28 @@ class TestEpisodeTemplateService:
         assert "Weekly Template" in rendered_prompt.text, (
             "Expected prompt to include template details."
         )
+        assert "<<service-profile>>" in escaped_prompt.text, (
+            "Expected canonical prompt entrypoint to forward escape callback."
+        )
+        assert rendered_prompt.interpolations, (
+            "Expected prompt rendering to include interpolation metadata."
+        )
+        assert any(
+            item.expression == "series_slug" for item in rendered_prompt.interpolations
+        ), "Expected interpolation metadata to include series slug."
+        assert any(
+            item.expression == "template_count"
+            for item in rendered_prompt.interpolations
+        ), "Expected interpolation metadata to include template count."
+        assert rendered_prompt.static_parts, (
+            "Expected prompt rendering to include static template parts."
+        )
+        assert (
+            _reconstruct_prompt_text(
+                static_parts=rendered_prompt.static_parts,
+                interpolation_values=tuple(
+                    item.value for item in rendered_prompt.interpolations
+                ),
+            )
+            == rendered_prompt.text
+        ), "Expected static and interpolation metadata to reconstruct text."

@@ -182,8 +182,8 @@ from structured briefs:
   - `render_series_brief_prompt(...)` as the standard convenience renderer for
     brief payloads.
 
-The renderer accepts an optional interpolation escape callback so adapters can
-apply policy-specific sanitisation (for example, XML/HTML escaping) without
+The renderer accepts an optional interpolation escape callback, so adapters can
+apply policy-specific sanitization (for example, XML/HTML escaping) without
 changing canonical prompt assembly rules.
 
 ## Multi-source ingestion
