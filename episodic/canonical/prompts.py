@@ -12,6 +12,9 @@ import dataclasses as dc
 import json
 import typing as typ
 from string.templatelib import Interpolation, Template, convert
+from typing import TypeVar  # noqa: ICN003
+
+T = TypeVar("T")
 
 if typ.TYPE_CHECKING:
     from .domain import JsonMapping
@@ -36,16 +39,41 @@ class RenderedPrompt:
     interpolations: tuple[PromptInterpolation, ...]
 
 
+def _coerce_value(  # noqa: PLR0913, UP047
+    value: object,
+    *,
+    field_name: str,
+    expected_type: type[T],
+    type_description: str,
+    allow_none: bool = False,
+    none_default: object = None,
+) -> T:
+    """Validate a value type with optional ``None`` handling."""
+    if allow_none and value is None:
+        return typ.cast("T", none_default)
+
+    if isinstance(value, expected_type):
+        return typ.cast("T", value)
+
+    msg = f"{field_name} must be {type_description}."
+    raise TypeError(msg)
+
+
 def _coerce_mapping(
     value: object,
     *,
     field_name: str,
 ) -> JsonMapping:
     """Require a JSON-style mapping value."""
-    if isinstance(value, dict):
-        return typ.cast("JsonMapping", value)
-    msg = f"{field_name} must be a mapping."
-    raise TypeError(msg)
+    return typ.cast(
+        "JsonMapping",
+        _coerce_value(
+            value,
+            field_name=field_name,
+            expected_type=dict,
+            type_description="a mapping",
+        ),
+    )
 
 
 def _coerce_template_list(value: object) -> list[JsonMapping]:
@@ -65,10 +93,12 @@ def _coerce_string(
     field_name: str,
 ) -> str:
     """Require a string value."""
-    if isinstance(value, str):
-        return value
-    msg = f"{field_name} must be a string."
-    raise TypeError(msg)
+    return _coerce_value(
+        value,
+        field_name=field_name,
+        expected_type=str,
+        type_description="a string",
+    )
 
 
 def _coerce_optional_string(
@@ -77,12 +107,14 @@ def _coerce_optional_string(
     field_name: str,
 ) -> str:
     """Require a string-or-None value and normalize to a string."""
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value
-    msg = f"{field_name} must be a string or null."
-    raise TypeError(msg)
+    return _coerce_value(
+        value,
+        field_name=field_name,
+        expected_type=str,
+        type_description="a string or null",
+        allow_none=True,
+        none_default="",
+    )
 
 
 def _render_interpolation_value(interpolation: Interpolation) -> str:
