@@ -289,6 +289,12 @@ work to prefork pools. This separation keeps long-running work isolated from
 orchestration throughput and allows worker profiles to match workload
 characteristics.
 
+For selected pure-Python CPU workloads, adapters may optionally use Python 3.14
+interpreter pools within a worker process before escalating to broader process
+fan-out. This path remains explicitly opt-in through feature flags and
+task-size thresholds so small workloads avoid dispatch overhead and unsupported
+runtime environments fall back to baseline inline execution.
+
 #### Execution patterns for long-running tasks
 
 Long-running operations follow two patterns depending on whether the graph

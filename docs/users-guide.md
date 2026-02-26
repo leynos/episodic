@@ -85,6 +85,10 @@ This guide will cover:
 - Customizing LangGraph workflows
 - Integrating with external systems via API
 - Managing multi-tenant deployments
+- Enabling optional interpreter-pool execution for CPU-heavy pure-Python tasks
+  by setting `EPISODIC_USE_INTERPRETER_POOL=1`; tune dispatch thresholds with
+  `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` and worker count with
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`
 - Troubleshooting common issues
 
 ## In the Meantime
