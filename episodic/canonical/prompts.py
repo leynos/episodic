@@ -106,27 +106,21 @@ def _coerce_string(
     value: object,
     *,
     field_name: str,
+    optional: bool = False,
 ) -> str:
-    """Require a string value."""
+    """Require a string value, optionally normalising None to empty string."""
+    if optional:
+        return _coerce_optional_value(
+            value,
+            field_name=field_name,
+            expected_type=str,
+            none_default="",
+        )
     return _coerce_required_value(
         value,
         field_name=field_name,
         expected_type=str,
         type_description="a string",
-    )
-
-
-def _coerce_optional_string(
-    value: object,
-    *,
-    field_name: str,
-) -> str:
-    """Require a string-or-None value and normalize to a string."""
-    return _coerce_optional_value(
-        value,
-        field_name=field_name,
-        expected_type=str,
-        none_default="",
     )
 
 
@@ -195,9 +189,10 @@ def build_series_brief_template(brief: JsonMapping) -> Template:
         series_profile.get("title"),
         field_name="series_profile.title",
     )
-    series_description = _coerce_optional_string(
+    series_description = _coerce_string(
         series_profile.get("description"),
         field_name="series_profile.description",
+        optional=True,
     )
     series_configuration = json.dumps(
         series_profile.get("configuration", {}),
