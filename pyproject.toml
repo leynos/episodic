@@ -3,7 +3,7 @@ name = "episodic"
 version = "0.1.0"
 description = "episodic package"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 license = { text = "ISC" }
 authors = [{ name = "Payton McIntosh", email = "pmcintosh@df12.net" }]
 dependencies = [

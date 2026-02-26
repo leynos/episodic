@@ -118,6 +118,8 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Defines TEI-based domain entities for episodes, series profiles, and
   templates.
 - Hosts the Postgres schema, repositories, and unit-of-work abstractions.
+- Generates storage-backed canonical identifiers as UUIDv7 values to preserve
+  chronological ordering semantics and improve index insertion locality.
 - Generates TEI header provenance automatically, including ingested sources,
   weighting decisions, and reviewer metadata.
 

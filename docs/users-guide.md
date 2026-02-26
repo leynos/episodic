@@ -42,7 +42,9 @@ This guide will cover:
   with all source material retained for audit regardless of whether it was
   preferred or rejected. Weighting coefficients are configurable per series
   profile. TEI headers automatically capture provenance metadata including
-  source priorities, ingestion timestamps, and reviewer identities.
+  source priorities, ingestion timestamps, and reviewer identities. Storage
+  identifiers generated during canonical ingestion use time-ordered UUIDv7
+  values for improved chronological locality.
 - Creating and updating series profiles via the API with optimistic locking
   (`expected_revision`)
 - Creating and updating episode templates linked to series profiles
