@@ -27,6 +27,8 @@ from episodic.canonical.domain import (
     TeiHeader,
 )
 
+from .compression import decode_text_from_storage
+
 if typ.TYPE_CHECKING:
     from episodic.canonical.storage.models import (
         ApprovalEventRecord,
@@ -82,7 +84,11 @@ def _tei_header_from_record(record: TeiHeaderRecord) -> TeiHeader:
         id=record.id,
         title=record.title,
         payload=record.payload,
-        raw_xml=record.raw_xml,
+        raw_xml=decode_text_from_storage(
+            text_value=record.raw_xml,
+            compressed_value=record.raw_xml_zstd,
+            field_name="tei_headers.raw_xml",
+        ),
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -95,7 +101,11 @@ def _episode_from_record(record: EpisodeRecord) -> CanonicalEpisode:
         series_profile_id=record.series_profile_id,
         tei_header_id=record.tei_header_id,
         title=record.title,
-        tei_xml=record.tei_xml,
+        tei_xml=decode_text_from_storage(
+            text_value=record.tei_xml,
+            compressed_value=record.tei_xml_zstd,
+            field_name="episodes.tei_xml",
+        ),
         status=record.status,
         approval_state=record.approval_state,
         created_at=record.created_at,
