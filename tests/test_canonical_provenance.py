@@ -92,7 +92,7 @@ def test_build_tei_header_provenance_rejects_naive_timestamp() -> None:
         )
 
 
-def test_build_tei_header_provenance_normalises_reviewer_identities() -> None:
+def test_build_tei_header_provenance_normalizes_reviewer_identities() -> None:
     """Reviewer identities are stripped, deduplicated, and blank-filtered."""
     provenance = build_tei_header_provenance(
         sources=[_source("https://example.com/source", weight=0.5)],

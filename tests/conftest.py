@@ -214,19 +214,19 @@ async def ingestion_pipeline() -> IngestionPipeline:
     -------
     IngestionPipeline
         The ``ingestion_pipeline`` fixture instance configured with
-        ``InMemorySourceNormaliser``, ``DefaultWeightingStrategy``, and
+        ``InMemorySourceNormalizer``, ``DefaultWeightingStrategy``, and
         ``HighestWeightConflictResolver``.
     """
     # Yield control once so async fixture setup is consistently scheduled.
     await asyncio.sleep(0)
 
-    from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
+    from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
     from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
     from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
     from episodic.canonical.ingestion_service import IngestionPipeline
 
     return IngestionPipeline(
-        normaliser=InMemorySourceNormaliser(),
+        normalizer=InMemorySourceNormalizer(),
         weighting=DefaultWeightingStrategy(),
         resolver=HighestWeightConflictResolver(),
     )

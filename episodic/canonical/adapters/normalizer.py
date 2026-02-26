@@ -1,15 +1,15 @@
-"""Reference source normaliser adapter.
+"""Reference source normalizer adapter.
 
-This adapter normalises raw source content into minimal valid TEI XML
+This adapter normalizes raw source content into minimal valid TEI XML
 fragments using the tei-rapporteur library. Quality, freshness, and
 reliability scores are assigned based on configurable source type defaults.
 
 Examples
 --------
-Normalise a transcript source:
+Normalize a transcript source:
 
->>> normaliser = InMemorySourceNormaliser()
->>> result = await normaliser.normalise(raw_source)
+>>> normalizer = InMemorySourceNormalizer()
+>>> result = await normalizer.normalize(raw_source)
 >>> result.quality_score
 0.9
 """
@@ -23,7 +23,7 @@ import tei_rapporteur as _tei
 
 from episodic.canonical.adapters._coercion import coerce_float
 from episodic.canonical.domain import SourceDocumentInput
-from episodic.canonical.ingestion import NormalisedSource, RawSourceInput
+from episodic.canonical.ingestion import NormalizedSource, RawSourceInput
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import JsonMapping
@@ -69,7 +69,7 @@ def _build_tei_xml(title: str) -> str:
 
     This is a placeholder implementation that constructs a TEI document
     containing only the title.  Raw source content is **not** embedded in
-    the fragment; a production normaliser should parse or transform the
+    the fragment; a production normalizer should parse or transform the
     content into TEI body elements.
     """
     document = _tei.Document(title)
@@ -90,8 +90,8 @@ def _build_source_document_input(
     )
 
 
-class InMemorySourceNormaliser:
-    """Reference normaliser that converts raw sources into TEI fragments.
+class InMemorySourceNormalizer:
+    """Reference normalizer that converts raw sources into TEI fragments.
 
     Scores are assigned from a configurable mapping of source type to
     quality, freshness, and reliability defaults. Unrecognized source types
@@ -118,21 +118,21 @@ class InMemorySourceNormaliser:
                     reliability=coerce_float(overrides.get("reliability"), 0.5),
                 )
 
-    async def normalise(
+    async def normalize(
         self,
         raw_source: RawSourceInput,
-    ) -> NormalisedSource:
-        """Normalise a raw source into a TEI fragment.
+    ) -> NormalizedSource:
+        """Normalize a raw source into a TEI fragment.
 
         Parameters
         ----------
         raw_source : RawSourceInput
-            The raw source to normalise.
+            The raw source to normalize.
 
         Returns
         -------
-        NormalisedSource
-            Normalised source with TEI fragment and quality scores.
+        NormalizedSource
+            Normalized source with TEI fragment and quality scores.
         """
         scores = self._scores.get(raw_source.source_type, _FALLBACK_SCORES)
         title = _infer_title(raw_source)
@@ -141,7 +141,7 @@ class InMemorySourceNormaliser:
         # Weight placeholder; the weighting strategy computes the final weight.
         source_input = _build_source_document_input(raw_source, 0.0)
 
-        return NormalisedSource(
+        return NormalizedSource(
             source_input=source_input,
             title=title,
             tei_fragment=tei_fragment,

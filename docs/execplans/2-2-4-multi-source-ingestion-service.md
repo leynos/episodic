@@ -24,7 +24,7 @@ Success is observable when:
 1. Running `make test` passes all existing tests plus new unit tests and
    Behaviour-Driven Development (BDD) scenarios covering normalization,
    weighting, conflict resolution, and end-to-end multi-source ingestion.
-2. Three new port protocols (`SourceNormaliser`, `WeightingStrategy`,
+2. Three new port protocols (`SourceNormalizer`, `WeightingStrategy`,
    `ConflictResolver`) define the extension points for normalization,
    weighting, and conflict resolution.
 3. Reference in-memory adapters implement all three ports, sufficient for
@@ -116,7 +116,7 @@ Success is observable when:
 ## Surprises and discoveries
 
 - The `ingest_multi_source()` orchestrator initially had six parameters (uow,
-  series\_profile, request, normaliser, weighting, resolver). The project's
+  series\_profile, request, normalizer, weighting, resolver). The project's
   ruff configuration enforces PLR0913 (max 4 positional parameters) and PLR0917
   (max 4 positional-or-keyword arguments). Resolved by bundling the three
   adapter parameters into an `IngestionPipeline` frozen dataclass.
@@ -141,7 +141,7 @@ Success is observable when:
   open/closed principle and minimizes blast radius. Date/Author: 2026-02-15,
   plan phase.
 
-- Decision: Define three separate port protocols (`SourceNormaliser`,
+- Decision: Define three separate port protocols (`SourceNormalizer`,
   `WeightingStrategy`, `ConflictResolver`) rather than a single monolithic
   ingestion port. Rationale: Each concern (normalization, weighting, conflict
   resolution) is independently swappable and testable. This follows the
@@ -175,7 +175,7 @@ Success is observable when:
   migration. Date/Author: 2026-02-15, plan phase.
 
 - Decision: Introduce `IngestionPipeline` frozen dataclass to bundle the three
-  adapter parameters (`normaliser`, `weighting`, `resolver`) rather than
+  adapter parameters (`normalizer`, `weighting`, `resolver`) rather than
   passing them as separate positional arguments. Rationale: The project
   enforces PLR0913 (max 4 positional parameters). Bundling the adapters into a
   single pipeline object also makes the API cleaner for callers and follows the
@@ -201,7 +201,7 @@ Implementation completed on 2026-02-15. All acceptance criteria met.
 
 - The composition pattern around `ingest_sources()` worked cleanly. No
   changes to the existing persistence logic were needed.
-- The three-port architecture (normaliser, weighting, resolver) made each
+- The three-port architecture (normalizer, weighting, resolver) made each
   concern independently testable with lightweight unit tests.
 - BDD scenarios with distinct step text avoided conflicts with the existing
   canonical ingestion steps.
@@ -278,7 +278,7 @@ Create two new modules in `episodic/canonical/`:
 
 **`episodic/canonical/ingestion.py`** — Domain value objects:
 
-- `NormalisedSource` (frozen dataclass): Represents a single source document
+- `NormalizedSource` (frozen dataclass): Represents a single source document
   after normalization into a TEI-compatible fragment.
   - `source_input: SourceDocumentInput` — the original source metadata.
   - `title: str` — extracted or inferred title from the source.
@@ -289,7 +289,7 @@ Create two new modules in `episodic/canonical/`:
 
 - `WeightingResult` (frozen dataclass): The computed weight for a single
   normalized source, along with the reasoning.
-  - `source: NormalisedSource` — the normalized source.
+  - `source: NormalizedSource` — the normalized source.
   - `computed_weight: float` — final weight (0–1) after heuristic application.
   - `factors: JsonMapping` — breakdown of weighting factors for audit.
 
@@ -320,14 +320,14 @@ Create two new modules in `episodic/canonical/`:
 
 **`episodic/canonical/ingestion_ports.py`** — Port protocols:
 
-- `SourceNormaliser` (Protocol): Normalizes a raw source into a TEI fragment
+- `SourceNormalizer` (Protocol): Normalizes a raw source into a TEI fragment
   with quality, freshness, and reliability scores.
 
-      class SourceNormaliser(typ.Protocol):
-          async def normalise(
+      class SourceNormalizer(typ.Protocol):
+          async def normalize(
               self,
               raw_source: RawSourceInput,
-          ) -> NormalisedSource: …
+          ) -> NormalizedSource: …
 
 - `WeightingStrategy` (Protocol): Computes weights for normalized sources
   using series-level configuration.
@@ -335,7 +335,7 @@ Create two new modules in `episodic/canonical/`:
       class WeightingStrategy(typ.Protocol):
           async def compute_weights(
               self,
-              sources: list[NormalisedSource],
+              sources: list[NormalizedSource],
               series_configuration: JsonMapping,
           ) -> list[WeightingResult]: …
 
@@ -357,7 +357,7 @@ Create `episodic/canonical/adapters/` package with reference implementations:
 **`episodic/canonical/adapters/__init__.py`** — Package init with `__all__`
 re-exports.
 
-**`episodic/canonical/adapters/normaliser.py`** — `InMemorySourceNormaliser`:
+**`episodic/canonical/adapters/normalizer.py`** — `InMemorySourceNormalizer`:
 
 - Wraps raw content in a minimal valid TEI XML structure using
   `tei_rapporteur.Document()` and `tei_rapporteur.emit_xml()`.
@@ -396,12 +396,12 @@ Create **`episodic/canonical/ingestion_service.py`**:
     - `uow: CanonicalUnitOfWork`
     - `series_profile: SeriesProfile`
     - `request: MultiSourceRequest`
-    - `normaliser: SourceNormaliser`
+    - `normalizer: SourceNormalizer`
     - `weighting: WeightingStrategy`
     - `resolver: ConflictResolver`
   - Returns: `CanonicalEpisode`
   - Orchestration:
-    1. Normalize each raw source via `normaliser.normalise()`.
+    1. Normalize each raw source via `normalizer.normalize()`.
     2. Compute weights via `weighting.compute_weights()`.
     3. Resolve conflicts via `resolver.resolve()`.
     4. Build an `IngestionRequest` from the resolved output:
@@ -409,12 +409,13 @@ Create **`episodic/canonical/ingestion_service.py`**:
        - `sources` = list of `SourceDocumentInput` built from each raw source,
          using the computed weight from `WeightingResult`.
        - `requested_by` = `request.requested_by`
-    5. Delegate to `ingest_sources(uow=uow, series_profile=series_profile, request=request)`.
+    5. Delegate to
+       `ingest_sources(uow=uow, series_profile=series_profile, request=request)`.
     6. Log the ingestion with source count, conflict resolution summary.
     7. Return the persisted `CanonicalEpisode`.
 
 Update **`episodic/canonical/__init__.py`** to export new public types:
-`NormalisedSource`, `WeightingResult`, `ConflictOutcome`, `MultiSourceRequest`,
+`NormalizedSource`, `WeightingResult`, `ConflictOutcome`, `MultiSourceRequest`,
 `RawSourceInput`, `ingest_multi_source`.
 
 Validation: `make typecheck` and `make lint` pass.
@@ -423,12 +424,12 @@ Validation: `make typecheck` and `make lint` pass.
 
 Create **`tests/test_ingestion_service.py`** with the following tests:
 
-1. `test_normaliser_produces_valid_tei_fragment` — The
-   `InMemorySourceNormaliser` produces a `NormalisedSource` with valid TEI XML
+1. `test_normalizer_produces_valid_tei_fragment` — The
+   `InMemorySourceNormalizer` produces a `NormalizedSource` with valid TEI XML
    (parseable by `parse_tei_header()`), correct scores based on source type
    defaults, and matching metadata.
 
-2. `test_normaliser_unknown_source_type_uses_defaults` — An unknown source
+2. `test_normalizer_unknown_source_type_uses_defaults` — An unknown source
    type gets default mid-range scores rather than raising an error.
 
 3. `test_weighting_strategy_computes_weighted_average` — The
@@ -545,19 +546,19 @@ Write this document to `docs/execplans/2-2-4-multi-source-ingestion-service.md`.
 ### Step 2: Create domain value objects
 
 Create `episodic/canonical/ingestion.py` with the frozen dataclasses
-`RawSourceInput`, `NormalisedSource`, `WeightingResult`, `ConflictOutcome`, and
+`RawSourceInput`, `NormalizedSource`, `WeightingResult`, `ConflictOutcome`, and
 `MultiSourceRequest` as described in Stage B.
 
 ### Step 3: Create port protocols
 
 Create `episodic/canonical/ingestion_ports.py` with the protocols
-`SourceNormaliser`, `WeightingStrategy`, and `ConflictResolver` as described in
+`SourceNormalizer`, `WeightingStrategy`, and `ConflictResolver` as described in
 Stage B.
 
 ### Step 4: Create the adapters package
 
 Create `episodic/canonical/adapters/__init__.py`,
-`episodic/canonical/adapters/normaliser.py`,
+`episodic/canonical/adapters/normalizer.py`,
 `episodic/canonical/adapters/weighting.py`, and
 `episodic/canonical/adapters/resolver.py` as described in Stage C.
 
@@ -619,7 +620,7 @@ Acceptance requires all of the following:
 - `make typecheck` passes.
 - `make lint` passes.
 - `make markdownlint` passes.
-- Three new port protocols (`SourceNormaliser`, `WeightingStrategy`,
+- Three new port protocols (`SourceNormalizer`, `WeightingStrategy`,
   `ConflictResolver`) are defined with full docstrings and type annotations.
 - Reference adapters implement all three ports with configurable defaults.
 - The `ingest_multi_source()` orchestrator composes normalization → weighting
@@ -665,16 +666,16 @@ New interfaces introduced:
 
 In `episodic/canonical/ingestion_ports.py`:
 
-    class SourceNormaliser(typ.Protocol):
-        async def normalise(
+    class SourceNormalizer(typ.Protocol):
+        async def normalize(
             self,
             raw_source: RawSourceInput,
-        ) -> NormalisedSource: …
+        ) -> NormalizedSource: …
 
     class WeightingStrategy(typ.Protocol):
         async def compute_weights(
             self,
-            sources: list[NormalisedSource],
+            sources: list[NormalizedSource],
             series_configuration: JsonMapping,
         ) -> list[WeightingResult]: …
 
@@ -688,7 +689,7 @@ In `episodic/canonical/ingestion_service.py`:
 
     @dc.dataclass(frozen=True, slots=True)
     class IngestionPipeline:
-        normaliser: SourceNormaliser
+        normalizer: SourceNormalizer
         weighting: WeightingStrategy
         resolver: ConflictResolver
 
@@ -702,7 +703,7 @@ In `episodic/canonical/ingestion_service.py`:
 New domain value objects in `episodic/canonical/ingestion.py`:
 
     RawSourceInput(source_type, source_uri, content, content_hash, metadata)
-    NormalisedSource(source_input, title, tei_fragment, quality_score,
+    NormalizedSource(source_input, title, tei_fragment, quality_score,
                      freshness_score, reliability_score)
     WeightingResult(source, computed_weight, factors)
     ConflictOutcome(merged_tei_xml, merged_title, preferred_sources,
@@ -711,7 +712,7 @@ New domain value objects in `episodic/canonical/ingestion.py`:
 
 Reference adapters in `episodic/canonical/adapters/`:
 
-    InMemorySourceNormaliser — normaliser.py
+    InMemorySourceNormalizer — normalizer.py
     DefaultWeightingStrategy — weighting.py
     HighestWeightConflictResolver — resolver.py
 

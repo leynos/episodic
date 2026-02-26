@@ -113,7 +113,7 @@ def is_openai_choice_payload(payload: object) -> typ.TypeIs[OpenAIChoicePayload]
         return False
     if "finish_reason" not in payload:
         return True
-    return isinstance(payload["finish_reason"], str | type(None))
+    return isinstance(payload["finish_reason"], (str, type(None)))
 
 
 def is_openai_message_payload(payload: object) -> typ.TypeIs[OpenAIMessagePayload]:
@@ -175,7 +175,7 @@ def is_openai_chat_completion_payload(
     )
 
 
-def _normalise_usage(usage_payload: OpenAIUsagePayload | None) -> LLMUsage:
+def _normalize_usage(usage_payload: OpenAIUsagePayload | None) -> LLMUsage:
     """Convert OpenAI usage payload into provider-agnostic usage metadata."""
     if usage_payload is None:
         return LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0)
@@ -194,7 +194,7 @@ def _normalise_usage(usage_payload: OpenAIUsagePayload | None) -> LLMUsage:
     )
 
 
-def normalise_openai_chat_completion(payload: object) -> LLMResponse:
+def normalize_openai_chat_completion(payload: object) -> LLMResponse:
     """Normalize a validated OpenAI chat completion payload.
 
     Parameters
@@ -227,7 +227,7 @@ def normalise_openai_chat_completion(payload: object) -> LLMResponse:
         model=payload["model"],
         provider_response_id=payload["id"],
         finish_reason=finish_reason,
-        usage=_normalise_usage(usage_payload),
+        usage=_normalize_usage(usage_payload),
     )
 
 
@@ -235,6 +235,6 @@ class OpenAIChatCompletionAdapter:
     """Adapter entrypoint for OpenAI chat completion payload normalization."""
 
     @staticmethod
-    def normalise_chat_completion(payload: object) -> LLMResponse:
+    def normalize_chat_completion(payload: object) -> LLMResponse:
         """Validate and normalize a raw OpenAI chat completion payload."""
-        return normalise_openai_chat_completion(payload)
+        return normalize_openai_chat_completion(payload)

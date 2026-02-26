@@ -1,32 +1,32 @@
-"""Unit tests for source normalisation adapters."""
+"""Unit tests for source normalization adapters."""
 
 from __future__ import annotations
 
 import pytest
 from _ingestion_service_helpers import _make_raw_source
 
-from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
+from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
 from episodic.canonical.tei import parse_tei_header
 
 
 @pytest.fixture
-def normaliser() -> InMemorySourceNormaliser:
-    """Provide a normaliser instance for adapter tests."""
-    return InMemorySourceNormaliser()
+def normalizer() -> InMemorySourceNormalizer:
+    """Provide a normalizer instance for adapter tests."""
+    return InMemorySourceNormalizer()
 
 
 @pytest.mark.asyncio
-async def test_normaliser_produces_valid_tei_fragment(
-    normaliser: InMemorySourceNormaliser,
+async def test_normalizer_produces_valid_tei_fragment(
+    normalizer: InMemorySourceNormalizer,
 ) -> None:
-    """The normaliser produces a NormalisedSource with parseable TEI XML."""
+    """The normalizer produces a NormalizedSource with parseable TEI XML."""
     raw = _make_raw_source(
         source_type="transcript",
         content="Transcript content here",
         metadata={"title": "My Transcript"},
     )
 
-    result = await normaliser.normalise(raw)
+    result = await normalizer.normalize(raw)
 
     parsed = parse_tei_header(result.tei_fragment)
     assert parsed.title == "My Transcript", (
@@ -50,13 +50,13 @@ async def test_normaliser_produces_valid_tei_fragment(
 
 
 @pytest.mark.asyncio
-async def test_normaliser_unknown_source_type_uses_defaults(
-    normaliser: InMemorySourceNormaliser,
+async def test_normalizer_unknown_source_type_uses_defaults(
+    normalizer: InMemorySourceNormalizer,
 ) -> None:
     """An unknown source type gets mid-range fallback scores."""
     raw = _make_raw_source(source_type="unknown_format")
 
-    result = await normaliser.normalise(raw)
+    result = await normalizer.normalize(raw)
 
     assert result.quality_score == pytest.approx(0.5), (
         "Expected unknown source types to fall back to default quality."
@@ -70,8 +70,8 @@ async def test_normaliser_unknown_source_type_uses_defaults(
 
 
 @pytest.mark.asyncio
-async def test_normaliser_infers_title_from_content(
-    normaliser: InMemorySourceNormaliser,
+async def test_normalizer_infers_title_from_content(
+    normalizer: InMemorySourceNormalizer,
 ) -> None:
     """Without a metadata title, the first content line is used."""
     raw = _make_raw_source(
@@ -79,7 +79,7 @@ async def test_normaliser_infers_title_from_content(
         metadata={},
     )
 
-    result = await normaliser.normalise(raw)
+    result = await normalizer.normalize(raw)
 
     assert result.title == "First line of content", (
         "Expected title to be inferred from the first content line."
@@ -87,8 +87,8 @@ async def test_normaliser_infers_title_from_content(
 
 
 @pytest.mark.asyncio
-async def test_normaliser_infers_title_from_source_type(
-    normaliser: InMemorySourceNormaliser,
+async def test_normalizer_infers_title_from_source_type(
+    normalizer: InMemorySourceNormalizer,
 ) -> None:
     """With no metadata title and empty content, source_type is used."""
     raw = _make_raw_source(
@@ -97,7 +97,7 @@ async def test_normaliser_infers_title_from_source_type(
         metadata={},
     )
 
-    result = await normaliser.normalise(raw)
+    result = await normalizer.normalize(raw)
 
     assert result.title == "Press Release", (
         "Expected title fallback to convert source type into title case."

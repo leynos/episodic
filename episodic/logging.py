@@ -57,7 +57,7 @@ class LogLevel(enum.StrEnum):
 
 
 def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, bool]:
-    """Configure femtologging and return the normalised level.
+    """Configure femtologging and return the normalized level.
 
     Parameters
     ----------
@@ -75,20 +75,20 @@ def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, b
     requested = level.strip().upper() if level else None
     if not requested or requested not in LogLevel.__members__:
         used_default = True
-        normalised = LogLevel.INFO
+        normalized = LogLevel.INFO
     else:
         used_default = False
-        normalised = LogLevel(requested)
-        if normalised is LogLevel.WARN:
+        normalized = LogLevel(requested)
+        if normalized is LogLevel.WARN:
             warnings.warn(
                 "LogLevel.WARN is deprecated; use LogLevel.WARNING instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-            normalised = LogLevel.WARNING
+            normalized = LogLevel.WARNING
 
-    basicConfig(level=normalised, force=force)
-    return (normalised, used_default)
+    basicConfig(level=normalized, force=force)
+    return (normalized, used_default)
 
 
 # _SupportsLog is private because callers can rely on structural typing instead.

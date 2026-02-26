@@ -58,8 +58,9 @@ guards.
 ## Progress
 
 - [x] (2026-02-24 00:00Z) Draft ExecPlan created.
-- [x] (2026-02-26 10:29Z) Stage A: Defined `LLMPort` response DTO contract and
-  guard requirements for OpenAI chat completion payloads.
+- [x] (2026-02-26 10:29Z) Stage A: Defined `LLMPort` response data transfer
+  object (DTO) contract and guard requirements for OpenAI chat completion
+  payloads.
 - [x] (2026-02-26 10:32Z) Stage B: Added fail-first guard and adapter tests in
   `tests/test_openai_type_guards.py`; initial run failed with
   `ModuleNotFoundError` before adapter implementation.
@@ -81,8 +82,8 @@ guards.
 - Observation: direct `uv run pytest` under Python 3.14 can fail building
   `tei-rapporteur` unless `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` is set.
   Evidence: targeted test run failed in dependency build before test
-  collection. Impact: use the ABI compatibility environment variable for direct
-  `uv run` commands in this workstream.
+  collection. Impact: use the application binary interface (ABI) compatibility
+  environment variable for direct `uv run` commands in this workstream.
 
 ## Decision log
 

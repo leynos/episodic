@@ -5,7 +5,7 @@ from __future__ import annotations
 import typing as typ
 
 from episodic.canonical.ingestion import (
-    NormalisedSource,
+    NormalizedSource,
     RawSourceInput,
     WeightingResult,
 )
@@ -52,19 +52,19 @@ def _make_raw_source(**kwargs: typ.Unpack[RawSourceInputOverrides]) -> RawSource
     return RawSourceInput(**merged)
 
 
-def _make_normalised_source(
+def _make_normalized_source(
     title: str = "Test Title",
     quality: float = 0.8,
     freshness: float = 0.7,
     reliability: float = 0.6,
-) -> NormalisedSource:
-    """Build a normalised source for testing."""
+) -> NormalizedSource:
+    """Build a normalized source for testing."""
     import tei_rapporteur as _tei
 
     from episodic.canonical.domain import SourceDocumentInput
 
     tei_fragment = _tei.emit_xml(_tei.Document(title))
-    return NormalisedSource(
+    return NormalizedSource(
         source_input=SourceDocumentInput(
             source_type="transcript",
             source_uri="s3://bucket/test.txt",
@@ -90,7 +90,7 @@ def _make_weighting_result(
     quality = resolved.get("quality", 0.8)
     freshness = resolved.get("freshness", 0.7)
     reliability = resolved.get("reliability", 0.6)
-    source = _make_normalised_source(title, quality, freshness, reliability)
+    source = _make_normalized_source(title, quality, freshness, reliability)
     return WeightingResult(
         source=source,
         computed_weight=weight,

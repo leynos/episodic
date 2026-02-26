@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from _ingestion_service_helpers import _make_normalised_source
+from _ingestion_service_helpers import _make_normalized_source
 
 from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
 
@@ -19,7 +19,7 @@ async def test_weighting_strategy_computes_weighted_average(
     weighting_strategy: DefaultWeightingStrategy,
 ) -> None:
     """The strategy computes weights as a weighted average with defaults."""
-    source = _make_normalised_source(
+    source = _make_normalized_source(
         quality=0.9,
         freshness=0.8,
         reliability=0.9,
@@ -44,7 +44,7 @@ async def test_weighting_strategy_respects_series_configuration(
     weighting_strategy: DefaultWeightingStrategy,
 ) -> None:
     """Custom coefficients from series configuration are used."""
-    source = _make_normalised_source(
+    source = _make_normalized_source(
         quality=1.0,
         freshness=0.0,
         reliability=0.0,
@@ -69,7 +69,7 @@ async def test_weighting_strategy_clamps_to_unit_interval(
     weighting_strategy: DefaultWeightingStrategy,
 ) -> None:
     """Weights are clamped to [0, 1] even with extreme scores."""
-    source = _make_normalised_source(
+    source = _make_normalized_source(
         quality=2.0,
         freshness=2.0,
         reliability=2.0,

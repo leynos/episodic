@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from .normaliser import InMemorySourceNormaliser
+from .normalizer import InMemorySourceNormalizer
 from .resolver import HighestWeightConflictResolver
 from .weighting import DefaultWeightingStrategy
 
 __all__ = [
     "DefaultWeightingStrategy",
     "HighestWeightConflictResolver",
-    "InMemorySourceNormaliser",
+    "InMemorySourceNormalizer",
 ]

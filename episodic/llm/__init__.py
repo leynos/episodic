@@ -13,7 +13,7 @@ from .openai_client import (
     is_openai_choice_payload,
     is_openai_message_payload,
     is_openai_usage_payload,
-    normalise_openai_chat_completion,
+    normalize_openai_chat_completion,
 )
 from .ports import LLMPort, LLMResponse, LLMUsage
 
@@ -31,5 +31,5 @@ __all__: list[str] = [
     "is_openai_choice_payload",
     "is_openai_message_payload",
     "is_openai_usage_payload",
-    "normalise_openai_chat_completion",
+    "normalize_openai_chat_completion",
 ]

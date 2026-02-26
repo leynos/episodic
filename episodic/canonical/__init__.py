@@ -38,7 +38,7 @@ from .domain import (
 from .ingestion import (
     ConflictOutcome,
     MultiSourceRequest,
-    NormalisedSource,
+    NormalizedSource,
     RawSourceInput,
     WeightingResult,
 )
@@ -77,7 +77,7 @@ __all__: list[str] = [
     "IngestionRequest",
     "IngestionStatus",
     "MultiSourceRequest",
-    "NormalisedSource",
+    "NormalizedSource",
     "RawSourceInput",
     "RevisionConflictError",
     "SeriesProfile",

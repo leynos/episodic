@@ -188,7 +188,7 @@ that align with the system design.
   beats.
 - [ ] 4.2.3. Build the mixing engine to combine narration and stems, applying
   ducking, fades, and scene transitions.
-- [ ] 4.2.4. Enforce loudness normalisation to -16 LUFS +/- 1 LU and peak
+- [ ] 4.2.4. Enforce loudness normalization to -16 LUFS +/- 1 LU and peak
   limiting across stereo channels.
 - [ ] 4.2.5. Generate shareable previews via the `PreviewPublisherPort`,
   storing artefacts in object storage with signed URLs.

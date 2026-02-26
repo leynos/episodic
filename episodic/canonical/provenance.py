@@ -35,7 +35,7 @@ class TeiHeaderProvenanceRecord(typ.TypedDict):
     reviewer_identities: list[str]
 
 
-def _normalise_capture_timestamp(captured_at: dt.datetime) -> str:
+def _normalize_capture_timestamp(captured_at: dt.datetime) -> str:
     """Return an ISO-8601 timestamp normalized to UTC."""
     if captured_at.tzinfo is None:
         msg = "captured_at must be timezone-aware."
@@ -43,7 +43,7 @@ def _normalise_capture_timestamp(captured_at: dt.datetime) -> str:
     return captured_at.astimezone(dt.UTC).isoformat()
 
 
-def _normalise_reviewer_identities(
+def _normalize_reviewer_identities(
     reviewer_identities: list[str],
 ) -> list[str]:
     """Return reviewer identities stripped, deduplicated, and ordered."""
@@ -102,9 +102,9 @@ def build_tei_header_provenance(
     """
     return {
         "capture_context": capture_context,
-        "ingestion_timestamp": _normalise_capture_timestamp(captured_at),
+        "ingestion_timestamp": _normalize_capture_timestamp(captured_at),
         "source_priorities": _build_source_priorities(sources),
-        "reviewer_identities": _normalise_reviewer_identities(reviewer_identities),
+        "reviewer_identities": _normalize_reviewer_identities(reviewer_identities),
     }
 
 

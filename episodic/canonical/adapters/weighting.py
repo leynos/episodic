@@ -6,7 +6,7 @@ configuration or sensible defaults.
 
 Examples
 --------
-Compute weights for normalised sources:
+Compute weights for normalized sources:
 
 >>> strategy = DefaultWeightingStrategy()
 >>> results = await strategy.compute_weights(sources, config)
@@ -19,7 +19,7 @@ from __future__ import annotations
 import typing as typ
 
 from episodic.canonical.adapters._coercion import coerce_float
-from episodic.canonical.ingestion import NormalisedSource, WeightingResult
+from episodic.canonical.ingestion import NormalizedSource, WeightingResult
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import JsonMapping
@@ -63,12 +63,12 @@ def _extract_coefficients(
 
 
 def _compute_single_weight(
-    source: NormalisedSource,
+    source: NormalizedSource,
     quality_coeff: float,
     freshness_coeff: float,
     reliability_coeff: float,
 ) -> WeightingResult:
-    """Compute the weighted average for a single normalised source."""
+    """Compute the weighted average for a single normalized source."""
     raw_weight = (
         source.quality_score * quality_coeff
         + source.freshness_score * freshness_coeff
@@ -105,15 +105,15 @@ class DefaultWeightingStrategy:
 
     async def compute_weights(  # noqa: PLR6301
         self,
-        sources: list[NormalisedSource],
+        sources: list[NormalizedSource],
         series_configuration: JsonMapping,
     ) -> list[WeightingResult]:
-        """Compute weights for normalised sources.
+        """Compute weights for normalized sources.
 
         Parameters
         ----------
-        sources : list[NormalisedSource]
-            Normalised sources to weight.
+        sources : list[NormalizedSource]
+            Normalized sources to weight.
         series_configuration : JsonMapping
             Series-level configuration containing weighting coefficients.
 

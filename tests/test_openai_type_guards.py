@@ -68,11 +68,19 @@ def test_chat_completion_guard_rejects_missing_choices() -> None:
     )
 
 
-def test_adapter_normalises_valid_payload() -> None:
+def test_is_openai_chat_completion_payload_accepts_valid_payload() -> None:
+    """A clearly valid payload is accepted by the type guard."""
+    payload: object = _valid_chat_completion_payload()
+    assert is_openai_chat_completion_payload(payload), (
+        "Expected guard to accept valid chat completion payloads."
+    )
+
+
+def test_adapter_normalizes_valid_payload() -> None:
     """Adapter converts valid payloads into internal response DTOs."""
     adapter = OpenAIChatCompletionAdapter()
 
-    result = adapter.normalise_chat_completion(_valid_chat_completion_payload())
+    result = adapter.normalize_chat_completion(_valid_chat_completion_payload())
 
     assert result.provider_response_id == "chatcmpl_123", (
         "Expected response identifier to be copied from provider payload."
@@ -94,13 +102,13 @@ def test_adapter_normalises_valid_payload() -> None:
     )
 
 
-def test_adapter_normalises_partial_usage_payload() -> None:
+def test_adapter_normalizes_partial_usage_payload() -> None:
     """Adapter derives total tokens when provider omits the total."""
     adapter = OpenAIChatCompletionAdapter()
     payload = _valid_chat_completion_payload()
     payload["usage"] = {"prompt_tokens": 7, "completion_tokens": 3}
 
-    result = adapter.normalise_chat_completion(payload)
+    result = adapter.normalize_chat_completion(payload)
 
     assert result.usage.input_tokens == 7, (
         "Expected prompt_tokens to map to input_tokens."
@@ -122,4 +130,30 @@ def test_adapter_rejects_malformed_payload_with_deterministic_error() -> None:
         OpenAIResponseValidationError,
         match=r"Invalid OpenAI chat completion payload\.",
     ):
-        adapter.normalise_chat_completion(payload)
+        adapter.normalize_chat_completion(payload)
+
+
+def test_adapter_rejects_blank_choice_message_content() -> None:
+    """Blank message content is rejected with a deterministic validation error."""
+    adapter = OpenAIChatCompletionAdapter()
+    payload: object = {
+        "id": "chatcmpl_123",
+        "model": "gpt-4.1-mini",
+        "choices": [
+            {
+                "message": {"content": "   "},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 35,
+            "total_tokens": 155,
+        },
+    }
+
+    with pytest.raises(
+        OpenAIResponseValidationError,
+        match=r"choices\[0\]\.message\.content must be a non-empty string\.",
+    ):
+        adapter.normalize_chat_completion(payload)
