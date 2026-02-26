@@ -320,6 +320,8 @@ adapter implementations.
 - `CheckpointPort` saves and restores StateGraph checkpoints.
 - `TaskResumePort` accepts Celery callback payloads and resumes suspended runs.
 - `LLMPort` surfaces token usage metadata for cost accounting callbacks.
+  Provider adapters validate vendor payloads at the boundary and normalize
+  responses into provider-agnostic DTOs before orchestration consumes them.
 
 #### Inference strategy and tool integration
 

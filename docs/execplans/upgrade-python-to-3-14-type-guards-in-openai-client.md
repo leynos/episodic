@@ -6,7 +6,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -58,10 +58,17 @@ guards.
 ## Progress
 
 - [x] (2026-02-24 00:00Z) Draft ExecPlan created.
-- [ ] Stage A: Define adapter response contract and guard requirements.
-- [ ] Stage B: Add fail-first tests for valid and invalid provider payloads.
-- [ ] Stage C: Implement type guards and normalization layer.
-- [ ] Stage D: Integrate with adapter and run full gates.
+- [x] (2026-02-26 10:29Z) Stage A: Defined `LLMPort` response DTO contract and
+  guard requirements for OpenAI chat completion payloads.
+- [x] (2026-02-26 10:32Z) Stage B: Added fail-first guard and adapter tests in
+  `tests/test_openai_type_guards.py`; initial run failed with
+  `ModuleNotFoundError` before adapter implementation.
+- [x] (2026-02-26 10:34Z) Stage C: Implemented
+  `episodic/llm/openai_client.py`, `episodic/llm/ports.py`, and package exports
+  with `TypeIs`-based guards and normalization.
+- [x] (2026-02-26 10:39Z) Stage D: Integrated adapter modules and passed full
+  quality gates (`make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, and `make nixie`).
 
 ## Surprises & discoveries
 
@@ -71,9 +78,11 @@ guards.
   this work should be staged as a foundational adapter module with tests, ready
   for later orchestration integration.
 
-- Observation: project memory Model Context Protocol (MCP) resources are
-  unavailable in this session. Evidence: empty MCP resource listings. Impact:
-  plan uses local repository context and documented architecture only.
+- Observation: direct `uv run pytest` under Python 3.14 can fail building
+  `tei-rapporteur` unless `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` is set.
+  Evidence: targeted test run failed in dependency build before test
+  collection. Impact: use the ABI compatibility environment variable for direct
+  `uv run` commands in this workstream.
 
 ## Decision log
 
@@ -85,12 +94,34 @@ guards.
   Rationale: edge-case resilience is the main value of this activity.
   Date/Author: 2026-02-24 / Codex.
 
+- Decision: introduce a minimal provider-agnostic DTO surface in
+  `episodic/llm/ports.py` (`LLMResponse`, `LLMUsage`) and normalize OpenAI
+  payloads into that shape. Rationale: keeps vendor schema handling in the
+  adapter layer while enabling stable orchestration-facing contracts.
+  Date/Author: 2026-02-26 / Codex.
+
 ## Outcomes & retrospective
 
-Pending implementation.
+Implementation completed successfully.
 
-Completion should leave a typed normalization layer that can be reused for
-other providers with minimal additional risk.
+Delivered outcomes:
+
+- Added fail-first then passing guard/adapter tests in
+  `tests/test_openai_type_guards.py` covering valid payloads, malformed
+  payloads, wrong field types, and partial usage blocks.
+- Added OpenAI adapter boundary validation and normalization in
+  `episodic/llm/openai_client.py` with deterministic validation errors.
+- Added provider-agnostic response DTOs and port contract in
+  `episodic/llm/ports.py`.
+- Updated architecture and user documentation to describe guard-backed OpenAI
+  normalization behaviour.
+
+Verification summary:
+
+- Targeted tests: `uv run pytest -v tests/test_openai_type_guards.py` passed.
+- Python gates: `make check-fmt`, `make lint`, `make typecheck`, and
+  `make test` all passed.
+- Markdown gates: `make markdownlint` and `make nixie` both passed.
 
 ## Context and orientation
 
