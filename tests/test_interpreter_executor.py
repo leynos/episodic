@@ -46,29 +46,28 @@ async def test_interpreter_executor_propagates_worker_exception() -> None:
 
 
 @pytest.mark.parametrize(
-    ("env_flag", "mock_support", "expected_type", "test_id"),
+    ("env_flag", "mock_support", "expected_type"),
     [
-        pytest.param(
+        (
             "0",
             None,
             ci.InlineCpuTaskExecutor,
-            "feature-flag-disabled",
-            id="feature-flag-disabled",
         ),
-        pytest.param(
+        (
             "1",
             False,
             ci.InlineCpuTaskExecutor,
-            "interpreters-unavailable",
-            id="interpreters-unavailable",
         ),
-        pytest.param(
+        (
             "1",
             True,
             ci.InterpreterPoolCpuTaskExecutor,
-            "enabled-and-supported",
-            id="enabled-and-supported",
         ),
+    ],
+    ids=[
+        "feature_flag_disabled",
+        "interpreters_unavailable",
+        "enabled_and_supported",
     ],
 )
 def test_builder_selects_executor_based_on_environment(
@@ -77,7 +76,6 @@ def test_builder_selects_executor_based_on_environment(
     env_flag: str,
     mock_support: bool | None,
     expected_type: type[object],
-    test_id: str,
 ) -> None:
     """Builder picks the expected executor for each environment combination."""
     monkeypatch.setenv("EPISODIC_USE_INTERPRETER_POOL", env_flag)
@@ -87,5 +85,5 @@ def test_builder_selects_executor_based_on_environment(
     executor = ci.build_cpu_task_executor_from_environment()
 
     assert isinstance(executor, expected_type), (
-        f"Expected {expected_type.__name__} for case '{test_id}'."
+        f"Expected {expected_type.__name__} based on environment configuration."
     )
