@@ -118,7 +118,7 @@ Implementation completed with the following outcomes:
 
 - Removed future annotation imports from all `episodic/` modules and nearly all
   `tests/` modules.
-- Retained future annotation imports in five pytest-bdd step modules due
+- Retained future annotation imports in five pytest-bdd step modules due to
   runtime annotation introspection constraints.
 - Removed Ruff `FA` selection and raised `requires-python` to `>=3.14`.
 - Updated README and scripting/docs guidance to Python 3.14 semantics.

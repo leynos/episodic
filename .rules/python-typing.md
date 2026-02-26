@@ -170,8 +170,11 @@ longer required in project modules.
 from __future__ import annotations
 ```
 
-Only use this import when a file must remain compatible with Python versions
-earlier than 3.14.
+For this repository, do not add `from __future__ import annotations` in new
+or modified files. The project baseline is `>=3.14`.
+
+Use this import only in external or legacy code that must remain compatible
+with Python versions earlier than 3.14.
 
 ## `if typing.TYPE_CHECKING`
 
