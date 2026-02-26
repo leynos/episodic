@@ -45,42 +45,47 @@ async def test_interpreter_executor_propagates_worker_exception() -> None:
         await executor.map_ordered(_explode_on_three, (1, 2, 3, 4))
 
 
-def test_builder_returns_inline_when_feature_flag_disabled(
+@pytest.mark.parametrize(
+    ("env_flag", "mock_support", "expected_type", "test_id"),
+    [
+        pytest.param(
+            "0",
+            None,
+            ci.InlineCpuTaskExecutor,
+            "feature-flag-disabled",
+            id="feature-flag-disabled",
+        ),
+        pytest.param(
+            "1",
+            False,
+            ci.InlineCpuTaskExecutor,
+            "interpreters-unavailable",
+            id="interpreters-unavailable",
+        ),
+        pytest.param(
+            "1",
+            True,
+            ci.InterpreterPoolCpuTaskExecutor,
+            "enabled-and-supported",
+            id="enabled-and-supported",
+        ),
+    ],
+)
+def test_builder_selects_executor_based_on_environment(
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    env_flag: str,
+    mock_support: bool | None,
+    expected_type: type[object],
+    test_id: str,
 ) -> None:
-    """Disabled feature flag forces baseline inline execution."""
-    monkeypatch.setenv("EPISODIC_USE_INTERPRETER_POOL", "0")
+    """Builder picks the expected executor for each environment combination."""
+    monkeypatch.setenv("EPISODIC_USE_INTERPRETER_POOL", env_flag)
+    if mock_support is not None:
+        monkeypatch.setattr(ci, "interpreter_pool_supported", lambda: mock_support)
 
     executor = ci.build_cpu_task_executor_from_environment()
 
-    assert isinstance(executor, ci.InlineCpuTaskExecutor), (
-        "Expected inline executor when interpreter pool feature flag is disabled."
-    )
-
-
-def test_builder_returns_inline_when_interpreters_unavailable(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Unsupported runtimes fall back to inline execution."""
-    monkeypatch.setenv("EPISODIC_USE_INTERPRETER_POOL", "1")
-    monkeypatch.setattr(ci, "interpreter_pool_supported", lambda: False)
-
-    executor = ci.build_cpu_task_executor_from_environment()
-
-    assert isinstance(executor, ci.InlineCpuTaskExecutor), (
-        "Expected inline executor when runtime lacks interpreter-pool support."
-    )
-
-
-def test_builder_selects_interpreter_executor_when_enabled_and_supported(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Enabled feature flag plus support selects interpreter executor."""
-    monkeypatch.setenv("EPISODIC_USE_INTERPRETER_POOL", "1")
-    monkeypatch.setattr(ci, "interpreter_pool_supported", lambda: True)
-
-    executor = ci.build_cpu_task_executor_from_environment()
-
-    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
-        "Expected interpreter executor when feature flag is enabled and supported."
+    assert isinstance(executor, expected_type), (
+        f"Expected {expected_type.__name__} for case '{test_id}'."
     )
