@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import dataclasses as dc
 import typing as typ
-from typing import Generic, TypeVar  # noqa: ICN003
 
 import sqlalchemy as sa
 
@@ -77,14 +76,9 @@ if typ.TYPE_CHECKING:
         TeiHeader,
     )
 
-HistoryEntryT = TypeVar("HistoryEntryT")
-HistoryRecordT = TypeVar("HistoryRecordT")
-
 
 @dc.dataclass(frozen=True, slots=True)
-class HistoryRepositoryConfig(
-    Generic[HistoryEntryT, HistoryRecordT],  # noqa: UP046
-):
+class HistoryRepositoryConfig[HistoryEntryT, HistoryRecordT]:
     """Configuration for a history repository."""
 
     record_type: type[HistoryRecordT]
@@ -174,10 +168,7 @@ class _RepositoryBase:
         await self._update_where(record_type, id_field == entity_id, values)
 
 
-class _HistoryRepositoryBase(
-    _RepositoryBase,
-    Generic[HistoryEntryT, HistoryRecordT],  # noqa: UP046
-):
+class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):
     """Shared implementation for history repositories."""
 
     def __init__(
