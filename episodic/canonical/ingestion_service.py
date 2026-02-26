@@ -1,7 +1,7 @@
 """Multi-source ingestion orchestrator.
 
 This module provides the high-level ``ingest_multi_source`` function that
-normalises heterogeneous source documents, computes weights, resolves
+normalizes heterogeneous source documents, computes weights, resolves
 conflicts, and delegates persistence to the existing ``ingest_sources``
 service.
 
@@ -9,7 +9,7 @@ Examples
 --------
 Ingest multiple sources within a unit-of-work session:
 
->>> pipeline = IngestionPipeline(normaliser, weighting, resolver)
+>>> pipeline = IngestionPipeline(normalizer, weighting, resolver)
 >>> async with SqlAlchemyUnitOfWork(session_factory) as uow:
 ...     episode = await ingest_multi_source(
 ...         uow, profile, request, pipeline,
@@ -38,7 +38,7 @@ if typ.TYPE_CHECKING:
     )
     from .ingestion_ports import (
         ConflictResolver,
-        SourceNormaliser,
+        SourceNormalizer,
         WeightingStrategy,
     )
     from .ports import CanonicalUnitOfWork
@@ -50,15 +50,15 @@ class IngestionPipeline:
 
     Attributes
     ----------
-    normaliser : SourceNormaliser
-        Adapter for normalising raw sources into TEI fragments.
+    normalizer : SourceNormalizer
+        Adapter for normalizing raw sources into TEI fragments.
     weighting : WeightingStrategy
         Adapter for computing source weights.
     resolver : ConflictResolver
         Adapter for resolving conflicts between weighted sources.
     """
 
-    normaliser: SourceNormaliser
+    normalizer: SourceNormalizer
     weighting: WeightingStrategy
     resolver: ConflictResolver
 
@@ -138,11 +138,11 @@ async def ingest_multi_source(
     request: MultiSourceRequest,
     pipeline: IngestionPipeline,
 ) -> CanonicalEpisode:
-    """Normalise, weight, resolve, and persist multi-source content.
+    """Normalize, weight, resolve, and persist multi-source content.
 
     This orchestrator runs the full ingestion pipeline:
 
-    1. Normalise each raw source into a TEI fragment via the normaliser
+    1. Normalize each raw source into a TEI fragment via the normalizer
        (concurrently using ``asyncio.gather``).
     2. Compute weights using the weighting strategy and series
        configuration.
@@ -161,7 +161,7 @@ async def ingest_multi_source(
     request : MultiSourceRequest
         Multi-source ingestion payload with raw source inputs.
     pipeline : IngestionPipeline
-        Bundled normaliser, weighting strategy, and conflict resolver.
+        Bundled normalizer, weighting strategy, and conflict resolver.
 
     Returns
     -------
@@ -177,14 +177,14 @@ async def ingest_multi_source(
     """
     _validate_ingestion_request(request, series_profile)
 
-    normalised = list(
+    normalized = list(
         await asyncio.gather(
-            *(pipeline.normaliser.normalise(raw) for raw in request.raw_sources),
+            *(pipeline.normalizer.normalize(raw) for raw in request.raw_sources),
         ),
     )
 
     weighted = await pipeline.weighting.compute_weights(
-        normalised,
+        normalized,
         series_profile.configuration,
     )
     outcome = await pipeline.resolver.resolve(weighted)

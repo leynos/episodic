@@ -1,16 +1,16 @@
 """Port protocols for multi-source ingestion.
 
 This module defines protocol interfaces for the three extension points in the
-multi-source ingestion pipeline: normalisation, weighting, and conflict
+multi-source ingestion pipeline: normalization, weighting, and conflict
 resolution. Adapters implement these protocols so different strategies can be
 swapped without impacting the orchestration logic.
 
 Examples
 --------
-Implement a custom normaliser that satisfies the protocol:
+Implement a custom normalizer that satisfies the protocol:
 
->>> class MyNormaliser:
-...     async def normalise(self, raw_source: RawSourceInput) -> NormalisedSource:
+>>> class MyNormalizer:
+...     async def normalize(self, raw_source: RawSourceInput) -> NormalizedSource:
 ...         ...
 """
 
@@ -22,49 +22,49 @@ if typ.TYPE_CHECKING:
     from .domain import JsonMapping
     from .ingestion import (
         ConflictOutcome,
-        NormalisedSource,
+        NormalizedSource,
         RawSourceInput,
         WeightingResult,
     )
 
 
-class SourceNormaliser(typ.Protocol):
-    """Normalises a raw source into a TEI fragment with quality scores.
+class SourceNormalizer(typ.Protocol):
+    """Normalizes a raw source into a TEI fragment with quality scores.
 
     Implementations convert heterogeneous source content (transcripts, briefs,
     Really Simple Syndication (RSS) feeds, press releases, and research notes)
-    into normalised TEI fragments with classifier-assigned quality, freshness,
+    into normalized TEI fragments with classifier-assigned quality, freshness,
     and reliability scores.
 
     Methods
     -------
-    normalise(raw_source)
-        Normalise a single raw source into a TEI-compatible fragment.
+    normalize(raw_source)
+        Normalize a single raw source into a TEI-compatible fragment.
     """
 
-    async def normalise(
+    async def normalize(
         self,
         raw_source: RawSourceInput,
-    ) -> NormalisedSource:
-        """Normalise a raw source into a TEI fragment.
+    ) -> NormalizedSource:
+        """Normalize a raw source into a TEI fragment.
 
         Parameters
         ----------
         raw_source : RawSourceInput
-            The raw source to normalise.
+            The raw source to normalize.
 
         Returns
         -------
-        NormalisedSource
-            The normalised source with TEI fragment and quality scores.
+        NormalizedSource
+            The normalized source with TEI fragment and quality scores.
         """
         ...
 
 
 class WeightingStrategy(typ.Protocol):
-    """Computes weights for normalised sources using series configuration.
+    """Computes weights for normalized sources using series configuration.
 
-    Implementations apply weighting heuristics to normalised sources,
+    Implementations apply weighting heuristics to normalized sources,
     producing a computed weight for each source based on quality, freshness,
     and reliability scores combined with series-level configuration
     coefficients.
@@ -72,20 +72,20 @@ class WeightingStrategy(typ.Protocol):
     Methods
     -------
     compute_weights(sources, series_configuration)
-        Compute weights for a list of normalised sources.
+        Compute weights for a list of normalized sources.
     """
 
     async def compute_weights(
         self,
-        sources: list[NormalisedSource],
+        sources: list[NormalizedSource],
         series_configuration: JsonMapping,
     ) -> list[WeightingResult]:
-        """Compute weights for normalised sources.
+        """Compute weights for normalized sources.
 
         Parameters
         ----------
-        sources : list[NormalisedSource]
-            Normalised sources to weight.
+        sources : list[NormalizedSource]
+            Normalized sources to weight.
         series_configuration : JsonMapping
             Series-level configuration containing weighting coefficients.
 

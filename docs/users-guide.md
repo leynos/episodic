@@ -68,6 +68,9 @@ This guide will cover:
 ### Cost Management
 
 - Understanding token usage and metering
+- OpenAI adapter payloads are validated with explicit type guards, and malformed
+  responses fail with deterministic validation errors before orchestration
+  consumes generated content or usage metadata
 - Setting budget limits per user or organization
 - Monitoring spend and usage dashboards
 - Optimizing costs with model tiering

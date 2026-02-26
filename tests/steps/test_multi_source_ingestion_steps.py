@@ -17,7 +17,7 @@ import pytest
 import sqlalchemy as sa
 from pytest_bdd import given, parsers, scenario, then, when
 
-from episodic.canonical.adapters.normaliser import InMemorySourceNormaliser
+from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
 from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
 from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
 from episodic.canonical.domain import (
@@ -204,7 +204,7 @@ def multi_source_ingestion_processes(
         profile = multi_source_context["profile"]
         raw_sources = multi_source_context["raw_sources"]
         pipeline = IngestionPipeline(
-            normaliser=InMemorySourceNormaliser(),
+            normalizer=InMemorySourceNormalizer(),
             weighting=DefaultWeightingStrategy(),
             resolver=HighestWeightConflictResolver(),
         )

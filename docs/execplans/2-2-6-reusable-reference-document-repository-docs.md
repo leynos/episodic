@@ -181,7 +181,7 @@ episode-template repository contract.
 
 Current roadmap text in `docs/roadmap.md` includes:
 
-- 2.2.4 ingestion normalisation and conflict resolution, and
+- 2.2.4 ingestion normalization and conflict resolution, and
 - 2.2.6 reusable reference-document models and repository contracts.
 
 It does not explicitly include a reusable reference-document repository layer

@@ -180,7 +180,7 @@ into a canonical TEI episode. The service is implemented as an orchestrator
 Three Protocol-based interfaces in `episodic/canonical/ingestion_ports.py`
 define the pipeline extension points:
 
-- `SourceNormaliser` — converts a `RawSourceInput` into a `NormalisedSource`
+- `SourceNormalizer` — converts a `RawSourceInput` into a `NormalizedSource`
   containing a TEI XML fragment and quality, freshness, and reliability scores.
 - `WeightingStrategy` — computes a `WeightingResult` for each normalized
   source using series-level configuration coefficients.
@@ -192,7 +192,7 @@ define the pipeline extension points:
 Reference implementations in `episodic/canonical/adapters/` are suitable for
 testing and initial deployments:
 
-- `InMemorySourceNormaliser` — assigns quality, freshness, and reliability
+- `InMemorySourceNormalizer` — assigns quality, freshness, and reliability
   scores based on source type defaults. Known types and their defaults:
   - `transcript`: quality=0.9, freshness=0.8, reliability=0.9
   - `brief`: quality=0.8, freshness=0.7, reliability=0.8
@@ -214,7 +214,7 @@ testing and initial deployments:
 from episodic.canonical.adapters import (
     DefaultWeightingStrategy,
     HighestWeightConflictResolver,
-    InMemorySourceNormaliser,
+    InMemorySourceNormalizer,
 )
 from episodic.canonical.ingestion import MultiSourceRequest, RawSourceInput
 from episodic.canonical.ingestion_service import (
@@ -223,7 +223,7 @@ from episodic.canonical.ingestion_service import (
 )
 
 pipeline = IngestionPipeline(
-    normaliser=InMemorySourceNormaliser(),
+    normalizer=InMemorySourceNormalizer(),
     weighting=DefaultWeightingStrategy(),
     resolver=HighestWeightConflictResolver(),
 )
@@ -254,17 +254,17 @@ applied by `ingest_sources` in `episodic/canonical/services.py`.
 ### Implementing custom adapters
 
 To implement a custom adapter, create a class that satisfies the corresponding
-protocol. For example, a custom normaliser for RSS feeds:
+protocol. For example, a custom normalizer for RSS feeds:
 
 ```python
-class RssNormaliser:
-    async def normalise(self, raw_source: RawSourceInput) -> NormalisedSource:
+class RssNormalizer:
+    async def normalize(self, raw_source: RawSourceInput) -> NormalizedSource:
         # Parse RSS XML, extract title and content, build TEI fragment.
         ...
 ```
 
 The adapter can then be passed to `IngestionPipeline` in place of the reference
-normaliser.
+normalizer.
 
 ## Logging
 

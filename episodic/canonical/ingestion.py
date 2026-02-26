@@ -1,7 +1,7 @@
 """Domain value objects for multi-source ingestion.
 
 This module defines the intermediate representations used during the
-multi-source ingestion pipeline: raw inputs, normalised fragments, weighting
+multi-source ingestion pipeline: raw inputs, normalized fragments, weighting
 results, and conflict resolution outcomes.
 
 Examples
@@ -28,7 +28,7 @@ if typ.TYPE_CHECKING:
 
 @dc.dataclass(frozen=True, slots=True)
 class RawSourceInput:
-    """A single raw source before normalisation.
+    """A single raw source before normalization.
 
     Attributes
     ----------
@@ -53,8 +53,8 @@ class RawSourceInput:
 
 
 @dc.dataclass(frozen=True, slots=True)
-class NormalisedSource:
-    """A source document after normalisation into a TEI-compatible fragment.
+class NormalizedSource:
+    """A source document after normalization into a TEI-compatible fragment.
 
     Attributes
     ----------
@@ -63,7 +63,7 @@ class NormalisedSource:
     title : str
         Title extracted or inferred from the source content.
     tei_fragment : str
-        Normalised TEI XML fragment for this source.
+        Normalized TEI XML fragment for this source.
     quality_score : float
         Classifier-assigned quality score in the range [0, 1].
     freshness_score : float
@@ -82,19 +82,19 @@ class NormalisedSource:
 
 @dc.dataclass(frozen=True, slots=True)
 class WeightingResult:
-    """Computed weight for a single normalised source.
+    """Computed weight for a single normalized source.
 
     Attributes
     ----------
-    source : NormalisedSource
-        The normalised source that was weighted.
+    source : NormalizedSource
+        The normalized source that was weighted.
     computed_weight : float
         Final weight in the range [0, 1] after heuristic application.
     factors : JsonMapping
         Breakdown of weighting factors for audit and provenance.
     """
 
-    source: NormalisedSource
+    source: NormalizedSource
     computed_weight: float
     factors: JsonMapping
 
@@ -132,7 +132,7 @@ class MultiSourceRequest:
     Attributes
     ----------
     raw_sources : list[RawSourceInput]
-        Heterogeneous source inputs to normalise, weight, and merge.
+        Heterogeneous source inputs to normalize, weight, and merge.
     series_slug : str
         Slug identifying the target series profile.
     requested_by : str | None

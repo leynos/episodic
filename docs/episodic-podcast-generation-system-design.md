@@ -214,7 +214,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Constructs timelines combining narration, background music, and sound effect
   stems drawn from managed catalogues.
 - Executes automated mixing: ducking, crossfades, EQ presets, and loudness
-  normalisation to -16 LUFS +/- 1 LU.
+  normalization to -16 LUFS +/- 1 LU.
 - Employs a LangGraph StateGraph for preview-feedback-regeneration cycles:
   - Initial synthesis produces low-bitrate previews for stakeholder review.
   - Human-in-the-loop checkpoints capture audio engineer feedback on pacing,
@@ -320,6 +320,9 @@ adapter implementations.
 - `CheckpointPort` saves and restores StateGraph checkpoints.
 - `TaskResumePort` accepts Celery callback payloads and resumes suspended runs.
 - `LLMPort` surfaces token usage metadata for cost accounting callbacks.
+  Provider adapters validate vendor payloads at the boundary and normalize
+  responses into provider-agnostic data transfer objects (DTOs) before the
+  orchestration layer consumes them.
 
 #### Inference strategy and tool integration
 
@@ -482,7 +485,7 @@ feedback loops:
 2. **Synthesize Narration:** Invoke `TTSPort` for each segment; handle retries
    and fallback voices.
 3. **Mix Stems:** Combine narration, music, and effects; apply ducking and
-   normalisation.
+   normalization.
 4. **Generate Preview:** Produce low-bitrate preview for stakeholder review.
 5. **Await Feedback (checkpoint):** Pause for audio engineer or producer input.
 6. **Route:** Conditional edge based on feedback:
@@ -1152,7 +1155,7 @@ The multi-source ingestion service composes a higher-level orchestrator
 function. Three Protocol-based port interfaces define the pipeline extension
 points:
 
-- `SourceNormaliser` converts heterogeneous raw sources (transcripts, briefs,
+- `SourceNormalizer` converts heterogeneous raw sources (transcripts, briefs,
   Really Simple Syndication (RSS) feeds, press releases, and research notes)
   into normalized TEI fragments with quality, freshness, and reliability scores.
 - `WeightingStrategy` computes a final weight for each normalized source using
@@ -1449,8 +1452,8 @@ stateDiagram-v2
    the graph tracks segment completion in state.
 3. Music supervisor rules choose background beds and stings based on template
    cues; stems assemble into the mixing timeline.
-4. Mixer combines narration and stems, runs loudness normalisation, and produces
-   a low-bitrate preview.
+4. The mixer combines narration and stems, runs loudness normalization, and
+   produces a low-bitrate preview.
 5. The graph pauses at a feedback checkpoint, publishing the preview via signed
    URLs for audio engineer and producer review.
 6. Stakeholders provide feedback through the console or CLI; the graph routes
