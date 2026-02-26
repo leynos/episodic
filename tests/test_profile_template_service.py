@@ -18,8 +18,6 @@ Example
 >>> pytest tests/test_profile_template_service.py -q
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import itertools
 import typing as typ

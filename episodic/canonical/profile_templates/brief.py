@@ -13,8 +13,6 @@ Build a structured brief for one profile and optional template filter:
 >>> brief["episode_templates"]  # list[dict[str, object]]
 """
 
-from __future__ import annotations
-
 import typing as typ
 from itertools import starmap
 

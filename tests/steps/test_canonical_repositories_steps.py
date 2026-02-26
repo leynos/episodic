@@ -29,6 +29,12 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
+if typ.TYPE_CHECKING:
+    import asyncio
+    import collections.abc as cabc
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
 
 def _run_async_step(
     runner: asyncio.Runner,
@@ -83,13 +89,6 @@ class RepositoryContext(typ.TypedDict, total=False):
     integrity_error_raised: bool
     _job_id: uuid.UUID
     _episode_id: uuid.UUID
-
-
-if typ.TYPE_CHECKING:
-    import asyncio
-    import collections.abc as cabc
-
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # -- Scenario: Repository round-trip persists and retrieves a series profile

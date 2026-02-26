@@ -17,8 +17,6 @@ Use the exported service functions from application code:
 ... )
 """
 
-from __future__ import annotations
-
 from .domain import (
     ApprovalEvent,
     ApprovalState,

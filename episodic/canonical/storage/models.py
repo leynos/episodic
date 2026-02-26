@@ -5,8 +5,6 @@ canonical content schema. The models are used by repositories and Alembic
 migrations to describe the database structure.
 """
 
-from __future__ import annotations
-
 import datetime as dt  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
 import uuid  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
 

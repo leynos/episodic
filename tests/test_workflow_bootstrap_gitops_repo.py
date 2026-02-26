@@ -1,7 +1,5 @@
 """Workflow integration tests for the GitOps bootstrap workflow."""
 
-from __future__ import annotations
-
 import json
 import os
 import socket

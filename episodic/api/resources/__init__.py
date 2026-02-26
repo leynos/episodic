@@ -20,8 +20,6 @@ Examples
 >>> api.add_route("/templates", EpisodeTemplatesResource(uow_factory))
 """
 
-from __future__ import annotations
-
 from .base import _GetHistoryResourceBase, _GetResourceBase
 from .episode_templates import (
     EpisodeTemplateHistoryResource,

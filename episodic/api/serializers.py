@@ -1,7 +1,5 @@
 """Response serializers for Falcon profile and template endpoints."""
 
-from __future__ import annotations
-
 import typing as typ
 
 if typ.TYPE_CHECKING:

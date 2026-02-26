@@ -12,8 +12,6 @@ Use the unit-of-work to fetch a canonical episode:
 ...     episode = await uow.episodes.get(episode_id)
 """
 
-from __future__ import annotations
-
 from .migration_check import detect_schema_drift
 from .models import (
     ApprovalEventRecord,

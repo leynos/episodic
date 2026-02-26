@@ -16,8 +16,6 @@ Ingest multiple sources within a unit-of-work session:
 ...     )
 """
 
-from __future__ import annotations
-
 import asyncio
 import dataclasses as dc
 import typing as typ

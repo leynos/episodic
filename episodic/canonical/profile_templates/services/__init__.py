@@ -11,8 +11,6 @@ Examples
 >>> template, rev = await get_episode_template(uow, template_id=template_id)
 """
 
-from __future__ import annotations
-
 from ._generic import (
     get_entity_with_revision,
     list_entities_with_revisions,

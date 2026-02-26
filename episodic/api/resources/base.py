@@ -11,8 +11,6 @@ Examples
 >>> resource = MyEntityResource(uow_factory)  # Handles GET via shared handler.
 """
 
-from __future__ import annotations
-
 import collections.abc as cabc
 import typing as typ
 import uuid

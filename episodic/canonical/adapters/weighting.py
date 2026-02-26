@@ -14,8 +14,6 @@ Compute weights for normalized sources:
 0.87
 """
 
-from __future__ import annotations
-
 import functools
 import os
 import typing as typ

@@ -7,8 +7,6 @@ Run migration drift detection tests:
 >>> pytest tests/test_migration_check.py -v
 """
 
-from __future__ import annotations
-
 import typing as typ
 
 import pytest

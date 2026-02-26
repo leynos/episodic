@@ -12,8 +12,6 @@ Run the drift check from the command line:
 >>> python -m episodic.canonical.storage.migration_check
 """
 
-from __future__ import annotations
-
 import asyncio
 import importlib.util
 import sys

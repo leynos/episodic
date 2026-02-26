@@ -1,7 +1,5 @@
 """Unit tests for profile/template exception metadata types."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 

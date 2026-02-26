@@ -12,8 +12,6 @@ Apply all migrations to an async engine:
 >>> await apply_migrations(engine)
 """
 
-from __future__ import annotations
-
 import pathlib
 import typing as typ
 

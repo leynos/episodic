@@ -11,8 +11,6 @@ Examples
 >>> app.add_route("/episode-templates", EpisodeTemplatesResource(uow_factory))
 """
 
-from __future__ import annotations
-
 import typing as typ
 from functools import partial
 from itertools import starmap

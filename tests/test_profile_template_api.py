@@ -1,7 +1,5 @@
 """Integration tests for profile/template REST endpoints."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 

@@ -5,8 +5,6 @@ provenance capture is consistent across ingestion and future script generation
 flows.
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 

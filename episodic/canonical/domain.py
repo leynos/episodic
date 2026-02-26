@@ -1,7 +1,5 @@
 """Domain models for canonical content storage."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import enum
 import typing as typ
