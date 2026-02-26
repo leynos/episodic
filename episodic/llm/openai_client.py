@@ -1,4 +1,4 @@
-"""OpenAI adapter helpers with explicit response type guards.
+"""OpenAI adapter helpers with explicit response validation.
 
 This module validates and normalizes OpenAI chat completion payloads at the
 adapter boundary before converting them into provider-agnostic DTOs.
@@ -6,41 +6,10 @@ adapter boundary before converting them into provider-agnostic DTOs.
 
 from __future__ import annotations
 
+import collections.abc as cabc
 import typing as typ
 
 from episodic.llm.ports import LLMResponse, LLMUsage
-
-type _StringKeyedObjectDict = dict[str, object]
-
-
-class OpenAIUsagePayload(typ.TypedDict, total=False):
-    """Subset of OpenAI token usage metadata used by Episodic."""
-
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-
-
-class OpenAIMessagePayload(typ.TypedDict):
-    """Subset of OpenAI chat message payload used by Episodic."""
-
-    content: str
-
-
-class OpenAIChoicePayload(typ.TypedDict):
-    """Subset of OpenAI chat choice payload used by Episodic."""
-
-    message: OpenAIMessagePayload
-    finish_reason: typ.NotRequired[str | None]
-
-
-class OpenAIChatCompletionPayload(typ.TypedDict):
-    """Subset of OpenAI chat completion payload used by Episodic."""
-
-    id: str
-    model: str
-    choices: list[OpenAIChoicePayload]
-    usage: typ.NotRequired[OpenAIUsagePayload]
 
 
 class OpenAIResponseValidationError(ValueError):
@@ -48,18 +17,23 @@ class OpenAIResponseValidationError(ValueError):
 
 
 _INVALID_CHAT_COMPLETION_MESSAGE = (
-    "Invalid OpenAI chat completion payload. Expected string id/model, "
+    "Invalid OpenAI chat completion payload. Expected non-empty string id/model, "
     "a non-empty choices list, and choices with message.content strings."
 )
 _EMPTY_CONTENT_MESSAGE = (
     "Invalid OpenAI chat completion payload. choices[0].message.content must be "
     "a non-empty string."
 )
+_USAGE_TOKEN_FIELDS: tuple[str, ...] = (
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+)
 
 
-def _is_string_keyed_dict(value: object) -> typ.TypeIs[_StringKeyedObjectDict]:
-    """Check whether a value is a dictionary with string keys."""
-    return isinstance(value, dict) and all(
+def _is_string_keyed_mapping(value: object) -> bool:
+    """Check whether a value is a mapping with string keys."""
+    return isinstance(value, cabc.Mapping) and all(
         isinstance(candidate_key, str) for candidate_key in value
     )
 
@@ -69,7 +43,7 @@ def _is_non_negative_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
-def is_openai_usage_payload(payload: object) -> typ.TypeIs[OpenAIUsagePayload]:
+def is_openai_usage_payload(payload: object) -> bool:
     """Validate OpenAI usage payload shape.
 
     Parameters
@@ -80,18 +54,23 @@ def is_openai_usage_payload(payload: object) -> typ.TypeIs[OpenAIUsagePayload]:
     Returns
     -------
     bool
-        ``True`` when token fields are present with non-negative integer values.
+        ``True`` when recognized token fields are present with non-negative
+        integer values.
     """
-    if not _is_string_keyed_dict(payload):
+    if not _is_string_keyed_mapping(payload):
+        return False
+    payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
+
+    if not any(key in payload_mapping for key in _USAGE_TOKEN_FIELDS):
         return False
 
-    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
-        if key in payload and not _is_non_negative_int(payload[key]):
+    for key in _USAGE_TOKEN_FIELDS:
+        if key in payload_mapping and not _is_non_negative_int(payload_mapping[key]):
             return False
     return True
 
 
-def is_openai_choice_payload(payload: object) -> typ.TypeIs[OpenAIChoicePayload]:
+def is_openai_choice_payload(payload: object) -> bool:
     """Validate OpenAI choice payload shape.
 
     Parameters
@@ -105,53 +84,24 @@ def is_openai_choice_payload(payload: object) -> typ.TypeIs[OpenAIChoicePayload]
         ``True`` when payload contains a valid message object and optional
         finish reason.
     """
-    if not _is_string_keyed_dict(payload):
+    if not _is_string_keyed_mapping(payload):
         return False
-    if "message" not in payload:
+    payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
+
+    message = payload_mapping.get("message")
+    if not _is_string_keyed_mapping(message):
         return False
-    if not is_openai_message_payload(payload["message"]):
+    message_mapping = typ.cast("cabc.Mapping[str, object]", message)
+
+    if not isinstance(message_mapping.get("content"), str):
         return False
-    if "finish_reason" not in payload:
+
+    if "finish_reason" not in payload_mapping:
         return True
-    return isinstance(payload["finish_reason"], (str, type(None)))
+    return isinstance(payload_mapping["finish_reason"], (str, type(None)))
 
 
-def is_openai_message_payload(payload: object) -> typ.TypeIs[OpenAIMessagePayload]:
-    """Validate OpenAI message payload shape.
-
-    Parameters
-    ----------
-    payload : object
-        Candidate message payload.
-
-    Returns
-    -------
-    bool
-        ``True`` when a ``content`` field exists with string content.
-    """
-    if not _is_string_keyed_dict(payload):
-        return False
-    return isinstance(payload.get("content"), str)
-
-
-def _has_valid_choices(payload: _StringKeyedObjectDict) -> bool:
-    """Check whether a payload contains a valid non-empty choices list."""
-    choices = payload.get("choices")
-    return (
-        isinstance(choices, list)
-        and bool(choices)
-        and all(is_openai_choice_payload(choice) for choice in choices)
-    )
-
-
-def _has_valid_usage(payload: _StringKeyedObjectDict) -> bool:
-    """Check whether an optional usage field is valid."""
-    return "usage" not in payload or is_openai_usage_payload(payload["usage"])
-
-
-def is_openai_chat_completion_payload(
-    payload: object,
-) -> typ.TypeIs[OpenAIChatCompletionPayload]:
+def is_openai_chat_completion_payload(payload: object) -> bool:
     """Validate OpenAI chat completion payload shape.
 
     Parameters
@@ -164,70 +114,58 @@ def is_openai_chat_completion_payload(
     bool
         ``True`` when required keys and nested structures are valid.
     """
-    if not _is_string_keyed_dict(payload):
+    if not _is_string_keyed_mapping(payload):
         return False
+    payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
 
-    return (
-        isinstance(payload.get("id"), str)
-        and isinstance(payload.get("model"), str)
-        and _has_valid_choices(payload)
-        and _has_valid_usage(payload)
+    payload_id = payload_mapping.get("id")
+    model = payload_mapping.get("model")
+    choices = payload_mapping.get("choices")
+    has_valid_identity = (
+        isinstance(payload_id, str)
+        and bool(payload_id.strip())
+        and isinstance(model, str)
+        and bool(model.strip())
     )
+    has_valid_choices = (
+        isinstance(choices, list)
+        and bool(choices)
+        and all(is_openai_choice_payload(choice) for choice in choices)
+    )
+    has_valid_usage = "usage" not in payload_mapping or is_openai_usage_payload(
+        payload_mapping["usage"]
+    )
+    return has_valid_identity and has_valid_choices and has_valid_usage
 
 
-def _normalize_usage(usage_payload: OpenAIUsagePayload | None) -> LLMUsage:
+def _normalize_usage(usage_payload: cabc.Mapping[str, object] | None) -> LLMUsage:
     """Convert OpenAI usage payload into provider-agnostic usage metadata."""
     if usage_payload is None:
         return LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0)
 
-    input_tokens = usage_payload.get("prompt_tokens", 0)
-    output_tokens = usage_payload.get("completion_tokens", 0)
-    total_tokens = (
-        usage_payload["total_tokens"]
-        if "total_tokens" in usage_payload
-        else input_tokens + output_tokens
-    )
+    input_tokens_value = usage_payload.get("prompt_tokens", 0)
+    output_tokens_value = usage_payload.get("completion_tokens", 0)
+    total_tokens_value = usage_payload.get("total_tokens")
+
+    if not _is_non_negative_int(input_tokens_value):
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+    if not _is_non_negative_int(output_tokens_value):
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+    input_tokens = typ.cast("int", input_tokens_value)
+    output_tokens = typ.cast("int", output_tokens_value)
+
+    computed_total_tokens = input_tokens + output_tokens
+    if total_tokens_value is None:
+        total = computed_total_tokens
+    else:
+        if not _is_non_negative_int(total_tokens_value):
+            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+        total = typ.cast("int", total_tokens_value)
+
     return LLMUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        total_tokens=total_tokens,
-    )
-
-
-def normalize_openai_chat_completion(payload: object) -> LLMResponse:
-    """Normalize a validated OpenAI chat completion payload.
-
-    Parameters
-    ----------
-    payload : object
-        Provider payload returned by the OpenAI chat completion endpoint.
-
-    Returns
-    -------
-    LLMResponse
-        Provider-agnostic response DTO for orchestration code.
-
-    Raises
-    ------
-    OpenAIResponseValidationError
-        If the payload shape is invalid or generated text content is blank.
-    """
-    if not is_openai_chat_completion_payload(payload):
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
-
-    first_choice = payload["choices"][0]
-    generated_text = first_choice["message"]["content"].strip()
-    if not generated_text:
-        raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
-
-    usage_payload = payload.get("usage", None)
-    finish_reason = first_choice.get("finish_reason", None)
-    return LLMResponse(
-        text=generated_text,
-        model=payload["model"],
-        provider_response_id=payload["id"],
-        finish_reason=finish_reason,
-        usage=_normalize_usage(usage_payload),
+        total_tokens=total,
     )
 
 
@@ -237,4 +175,34 @@ class OpenAIChatCompletionAdapter:
     @staticmethod
     def normalize_chat_completion(payload: object) -> LLMResponse:
         """Validate and normalize a raw OpenAI chat completion payload."""
-        return normalize_openai_chat_completion(payload)
+        if not is_openai_chat_completion_payload(payload):
+            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+
+        payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
+        choices = typ.cast("list[object]", payload_mapping["choices"])
+        first_choice = typ.cast("cabc.Mapping[str, object]", choices[0])
+        message = typ.cast("cabc.Mapping[str, object]", first_choice["message"])
+
+        generated_text = typ.cast("str", message["content"]).strip()
+        if not generated_text:
+            raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
+
+        finish_reason_value = first_choice.get("finish_reason")
+        finish_reason = (
+            finish_reason_value if isinstance(finish_reason_value, str) else None
+        )
+
+        usage_value = payload_mapping.get("usage")
+        usage_payload = (
+            typ.cast("cabc.Mapping[str, object]", usage_value)
+            if _is_string_keyed_mapping(usage_value)
+            else None
+        )
+
+        return LLMResponse(
+            text=generated_text,
+            model=typ.cast("str", payload_mapping["model"]),
+            provider_response_id=typ.cast("str", payload_mapping["id"]),
+            finish_reason=finish_reason,
+            usage=_normalize_usage(usage_payload),
+        )

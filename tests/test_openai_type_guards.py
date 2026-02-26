@@ -52,6 +52,16 @@ def test_usage_guard_rejects_wrong_token_type() -> None:
     )
 
 
+@pytest.mark.parametrize("payload", [{}, {"input_tokens": 12}])
+def test_usage_guard_rejects_payload_without_recognized_token_fields(
+    payload: object,
+) -> None:
+    """Usage payloads must include at least one recognized token field."""
+    assert not is_openai_usage_payload(payload), (
+        "Expected usage guard to reject payloads with no recognized token fields."
+    )
+
+
 def test_choice_guard_accepts_message_content() -> None:
     """Choices with a message content string pass validation."""
     payload: object = {"message": {"content": "Draft content"}, "finish_reason": None}
@@ -65,6 +75,27 @@ def test_chat_completion_guard_rejects_missing_choices() -> None:
     payload: object = {"id": "chatcmpl_123", "model": "gpt-4.1-mini"}
     assert not is_openai_chat_completion_payload(payload), (
         "Expected guard to reject payloads missing choices."
+    )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("id", ""),
+        ("id", "   "),
+        ("model", ""),
+        ("model", "   "),
+    ],
+)
+def test_chat_completion_guard_rejects_blank_required_string_fields(
+    field_name: str,
+    field_value: str,
+) -> None:
+    """Blank identifiers and model names fail boundary validation."""
+    payload = _valid_chat_completion_payload()
+    payload[field_name] = field_value
+    assert not is_openai_chat_completion_payload(payload), (
+        "Expected guard to reject blank id/model values."
     )
 
 
