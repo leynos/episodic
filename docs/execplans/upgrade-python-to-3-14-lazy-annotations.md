@@ -223,7 +223,7 @@ Acceptance criteria:
 Capture during implementation:
 
 - `git diff -- pyproject.toml episodic tests docs`
-- `/tmp/py314-lazy-ann-targeted-pre.log`
+- `/tmp/py314-lazy-ann-targeted.log`
 - `/tmp/py314-lazy-ann-check-fmt.log`
 - `/tmp/py314-lazy-ann-lint.log`
 - `/tmp/py314-lazy-ann-typecheck.log`
