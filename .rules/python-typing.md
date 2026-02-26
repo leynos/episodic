@@ -173,6 +173,10 @@ from __future__ import annotations
 For this repository, do not add `from __future__ import annotations` in new
 or modified files. The project baseline is `>=3.14`.
 
+Repository exception: existing pytest-bdd step modules under
+`tests/steps/test_*_steps.py` deliberately keep this import because step
+discovery can inspect annotations at runtime.
+
 Use this import only in external or legacy code that must remain compatible
 with Python versions earlier than 3.14.
 

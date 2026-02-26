@@ -180,7 +180,7 @@ Run from repository root.
 
     set -o pipefail; PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv run pytest -v \
       tests/test_canonical_storage.py tests/test_migration_check.py 2>&1 | \
-      tee /tmp/py314-lazy-ann-targeted.log
+      tee /tmp/py314-lazy-ann-targeted-pre.log
 
 3. Apply code and tooling changes.
 
@@ -190,6 +190,8 @@ Run from repository root.
     set -o pipefail; make lint 2>&1 | tee /tmp/py314-lazy-ann-lint.log
     set -o pipefail; make typecheck 2>&1 | tee /tmp/py314-lazy-ann-typecheck.log
     set -o pipefail; make test 2>&1 | tee /tmp/py314-lazy-ann-test.log
+    set -o pipefail; make markdownlint 2>&1 | tee /tmp/py314-lazy-ann-markdownlint.log
+    set -o pipefail; make nixie 2>&1 | tee /tmp/py314-lazy-ann-nixie.log
 
 Expected success indicators:
 
