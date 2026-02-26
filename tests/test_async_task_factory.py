@@ -135,6 +135,94 @@ def _make_episode(series_profile_id: uuid.UUID) -> CanonicalEpisode:
     )
 
 
+class _TestNormaliser:
+    """Normalize raw sources deterministically for this test."""
+
+    async def normalise(self, raw_source: RawSourceInput) -> NormalisedSource:
+        await asyncio.sleep(0)
+        return _make_normalised_source(raw_source)
+
+
+class _TestWeighting:
+    """Return deterministic weights in source input order."""
+
+    async def compute_weights(
+        self,
+        sources: list[NormalisedSource],
+        series_configuration: dict[str, object],
+    ) -> list[WeightingResult]:
+        _ = series_configuration
+        return [
+            WeightingResult(
+                source=source,
+                computed_weight=max(0.1, 1.0 - (index * 0.1)),
+                factors={"quality_score": source.quality_score},
+            )
+            for index, source in enumerate(sources)
+        ]
+
+
+class _TestResolver:
+    """Mark the first source as preferred and retain the rest."""
+
+    async def resolve(
+        self,
+        weighted_sources: list[WeightingResult],
+    ) -> ConflictOutcome:
+        return ConflictOutcome(
+            merged_tei_xml="<TEI/>",
+            merged_title="Merged title",
+            preferred_sources=weighted_sources[:1],
+            rejected_sources=weighted_sources[1:],
+            resolution_notes="Preferred first source by deterministic order.",
+        )
+
+
+def _make_fake_ingest_sources(
+    profile_id: uuid.UUID,
+    captured_sources: list[SourceDocumentInput],
+) -> typ.Callable[
+    [object, SeriesProfile, IngestionRequest], typ.Awaitable[CanonicalEpisode]
+]:
+    """Create a fake ingest function that records persisted sources."""
+
+    async def _fake_ingest_sources(
+        uow: object,
+        series_profile: SeriesProfile,
+        request: IngestionRequest,
+    ) -> CanonicalEpisode:
+        await asyncio.sleep(0)
+        _ = (uow, series_profile)
+        captured_sources.extend(request.sources)
+        return _make_episode(profile_id)
+
+    return _fake_ingest_sources
+
+
+def _make_multi_source_request(slug: str) -> MultiSourceRequest:
+    """Build a deterministic two-source ingestion request for tests."""
+    return MultiSourceRequest(
+        raw_sources=[
+            RawSourceInput(
+                source_type="transcript",
+                source_uri="s3://bucket/source-1.txt",
+                content="Source one",
+                content_hash="hash-1",
+                metadata={"title": "Source One"},
+            ),
+            RawSourceInput(
+                source_type="brief",
+                source_uri="s3://bucket/source-2.txt",
+                content="Source two",
+                content_hash="hash-2",
+                metadata={"title": "Source Two"},
+            ),
+        ],
+        series_slug=slug,
+        requested_by="test@example.com",
+    )
+
+
 @pytest.mark.asyncio
 async def test_create_task_forwards_task_factory_kwargs() -> None:
     """`create_task` forwards stdlib and custom kwargs to task factories."""
@@ -242,85 +330,16 @@ async def test_ingest_multi_source_emits_metadata_aware_normalisation_tasks(
     profile = _make_profile()
     captured_sources: list[SourceDocumentInput] = []
 
-    class TestNormaliser:
-        """Normalize raw sources deterministically for this test."""
-
-        async def normalise(self, raw_source: RawSourceInput) -> NormalisedSource:
-            await asyncio.sleep(0)
-            return _make_normalised_source(raw_source)
-
-    class TestWeighting:
-        """Return deterministic weights in source input order."""
-
-        async def compute_weights(
-            self,
-            sources: list[NormalisedSource],
-            series_configuration: dict[str, object],
-        ) -> list[WeightingResult]:
-            _ = series_configuration
-            return [
-                WeightingResult(
-                    source=source,
-                    computed_weight=max(0.1, 1.0 - (index * 0.1)),
-                    factors={"quality_score": source.quality_score},
-                )
-                for index, source in enumerate(sources)
-            ]
-
-    class TestResolver:
-        """Mark the first source as preferred and retain the rest."""
-
-        async def resolve(
-            self,
-            weighted_sources: list[WeightingResult],
-        ) -> ConflictOutcome:
-            return ConflictOutcome(
-                merged_tei_xml="<TEI/>",
-                merged_title="Merged title",
-                preferred_sources=weighted_sources[:1],
-                rejected_sources=weighted_sources[1:],
-                resolution_notes="Preferred first source by deterministic order.",
-            )
-
-    async def _fake_ingest_sources(
-        uow: object,
-        series_profile: SeriesProfile,
-        request: IngestionRequest,
-    ) -> CanonicalEpisode:
-        await asyncio.sleep(0)
-        _ = (uow, series_profile)
-        captured_sources.extend(request.sources)
-        return _make_episode(profile.id)
-
     monkeypatch.setattr(
         "episodic.canonical.ingestion_service.ingest_sources",
-        _fake_ingest_sources,
+        _make_fake_ingest_sources(profile.id, captured_sources),
     )
 
-    request = MultiSourceRequest(
-        raw_sources=[
-            RawSourceInput(
-                source_type="transcript",
-                source_uri="s3://bucket/source-1.txt",
-                content="Source one",
-                content_hash="hash-1",
-                metadata={"title": "Source One"},
-            ),
-            RawSourceInput(
-                source_type="brief",
-                source_uri="s3://bucket/source-2.txt",
-                content="Source two",
-                content_hash="hash-2",
-                metadata={"title": "Source Two"},
-            ),
-        ],
-        series_slug=profile.slug,
-        requested_by="test@example.com",
-    )
+    request = _make_multi_source_request(profile.slug)
     pipeline = IngestionPipeline(
-        normaliser=TestNormaliser(),
-        weighting=TestWeighting(),
-        resolver=TestResolver(),
+        normaliser=_TestNormaliser(),
+        weighting=_TestWeighting(),
+        resolver=_TestResolver(),
     )
 
     with _recording_task_factory() as captured_task_kwargs:
