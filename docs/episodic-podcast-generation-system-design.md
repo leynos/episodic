@@ -1220,6 +1220,13 @@ persisted as `SourceDocument` entities regardless of whether they were
 preferred or rejected during conflict resolution. This ensures rejected content
 is retained for audit as specified in the system design.
 
+Normalization fan-out now uses metadata-aware asyncio task creation through
+`episodic/asyncio_tasks.py`. Tasks are created with explicit names and optional
+metadata (`operation_name`, `correlation_id`, `priority_hint`) that is
+forwarded to custom loop task factories when present. This keeps business logic
+independent of event-loop internals while enabling centralized diagnostics for
+concurrent ingestion flows.
+
 During persistence, `ingest_sources` enriches the TEI header payload with
 provenance automatically. Source priorities are derived from final source
 weights (descending, preserving source input order on equal weights), ingestion

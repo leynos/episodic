@@ -1,0 +1,347 @@
+"""Tests for asyncio task-factory keyword propagation utilities."""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import contextvars as cv
+import datetime as dt
+import typing as typ
+import uuid
+
+import pytest
+
+from episodic.asyncio_tasks import (
+    TASK_METADATA_KWARG,
+    create_task,
+    create_task_in_group,
+)
+from episodic.canonical.domain import (
+    ApprovalState,
+    CanonicalEpisode,
+    EpisodeStatus,
+    IngestionRequest,
+    SeriesProfile,
+    SourceDocumentInput,
+)
+from episodic.canonical.ingestion import (
+    ConflictOutcome,
+    MultiSourceRequest,
+    NormalisedSource,
+    RawSourceInput,
+    WeightingResult,
+)
+from episodic.canonical.ingestion_service import (
+    IngestionPipeline,
+    ingest_multi_source,
+)
+
+if typ.TYPE_CHECKING:
+    from episodic.canonical.ports import CanonicalUnitOfWork
+
+
+class _TaskConstructorKwargs(typ.TypedDict):
+    """Kwargs accepted by `asyncio.Task` for the recording test factory."""
+
+    name: str | None
+    context: cv.Context | None
+    eager_start: bool
+
+
+def _extract_task_constructor_kwargs(
+    task_kwargs: dict[str, object],
+) -> _TaskConstructorKwargs:
+    """Return kwargs accepted by `asyncio.Task` constructor."""
+    eager_start = typ.cast("bool | None", task_kwargs["eager_start"])
+    return {
+        "name": typ.cast("str | None", task_kwargs["name"]),
+        "context": typ.cast("cv.Context | None", task_kwargs["context"]),
+        "eager_start": eager_start if eager_start is not None else False,
+    }
+
+
+@contextlib.contextmanager
+def _recording_task_factory() -> typ.Iterator[list[dict[str, object]]]:
+    """Install a task factory that records kwargs for every created task."""
+    loop = asyncio.get_running_loop()
+    previous_factory = loop.get_task_factory()
+    captured: list[dict[str, object]] = []
+
+    def _factory(
+        running_loop: asyncio.AbstractEventLoop,
+        coro: typ.Coroutine[object, object, object],
+        **task_kwargs: object,
+    ) -> asyncio.Task[object]:
+        task_kwargs_dict = dict(task_kwargs)
+        captured.append(task_kwargs_dict)
+        return asyncio.Task(
+            coro,
+            loop=running_loop,
+            **_extract_task_constructor_kwargs(task_kwargs_dict),
+        )
+
+    loop.set_task_factory(_factory)
+    try:
+        yield captured
+    finally:
+        loop.set_task_factory(previous_factory)
+
+
+def _make_profile(slug: str = "series-slug") -> SeriesProfile:
+    """Return a minimal series profile for orchestration tests."""
+    now = dt.datetime.now(dt.UTC)
+    return SeriesProfile(
+        id=uuid.uuid4(),
+        slug=slug,
+        title="Series",
+        description=None,
+        configuration={"tone": "neutral"},
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _make_normalised_source(raw: RawSourceInput) -> NormalisedSource:
+    """Create a deterministic normalized source from raw input."""
+    return NormalisedSource(
+        source_input=SourceDocumentInput(
+            source_type=raw.source_type,
+            source_uri=raw.source_uri,
+            weight=0.0,
+            content_hash=raw.content_hash,
+            metadata=raw.metadata,
+        ),
+        title=typ.cast("str", raw.metadata.get("title", "Untitled")),
+        tei_fragment=f"<div>{raw.content}</div>",
+        quality_score=0.8,
+        freshness_score=0.7,
+        reliability_score=0.6,
+    )
+
+
+def _make_episode(series_profile_id: uuid.UUID) -> CanonicalEpisode:
+    """Create a canonical episode for ingestion-service stubbing."""
+    now = dt.datetime.now(dt.UTC)
+    return CanonicalEpisode(
+        id=uuid.uuid4(),
+        series_profile_id=series_profile_id,
+        tei_header_id=uuid.uuid4(),
+        title="Merged title",
+        tei_xml="<TEI/>",
+        status=EpisodeStatus.DRAFT,
+        approval_state=ApprovalState.DRAFT,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_task_forwards_task_factory_kwargs() -> None:
+    """`create_task` forwards stdlib and custom kwargs to task factories."""
+
+    async def _job() -> str:
+        await asyncio.sleep(0)
+        return "done"
+
+    metadata = {
+        "operation_name": "tests.create_task",
+        "correlation_id": "corr-123",
+        "priority_hint": 3,
+    }
+    context = cv.copy_context()
+
+    with _recording_task_factory() as captured:
+        task = create_task(
+            _job(),
+            name="create-task-test",
+            context=context,
+            eager_start=True,
+            metadata=metadata,
+        )
+        result = await task
+
+    assert result == "done"
+    assert len(captured) == 1
+    kwargs = captured[0]
+    assert kwargs["name"] == "create-task-test"
+    assert kwargs["context"] is context
+    assert kwargs["eager_start"] is True
+    assert kwargs[TASK_METADATA_KWARG] == metadata
+
+
+@pytest.mark.asyncio
+async def test_create_task_in_group_forwards_task_factory_kwargs() -> None:
+    """`create_task_in_group` forwards kwargs to task factories."""
+
+    async def _job() -> str:
+        await asyncio.sleep(0)
+        return "group-done"
+
+    metadata = {
+        "operation_name": "tests.task_group",
+        "correlation_id": "group-456",
+    }
+
+    with _recording_task_factory() as captured:
+        async with asyncio.TaskGroup() as group:
+            task = create_task_in_group(
+                group,
+                _job(),
+                name="task-group-test",
+                eager_start=False,
+                metadata=metadata,
+            )
+
+    assert task.result() == "group-done"
+    assert len(captured) == 1
+    kwargs = captured[0]
+    assert kwargs["name"] == "task-group-test"
+    assert kwargs["eager_start"] is False
+    assert kwargs[TASK_METADATA_KWARG] == metadata
+
+
+def test_create_task_rejects_unsupported_metadata_key() -> None:
+    """Unsupported metadata keys are rejected with a clear error."""
+    coro = asyncio.sleep(0)
+    try:
+        with pytest.raises(ValueError, match="Unsupported task metadata keys"):
+            create_task(
+                coro,
+                metadata=typ.cast("dict[str, object]", {"unsupported_key": "nope"}),
+            )
+    finally:
+        coro.close()
+
+
+@pytest.mark.asyncio
+async def test_create_task_ignores_metadata_without_custom_factory() -> None:
+    """Custom metadata is ignored when the running loop has no task factory."""
+    loop = asyncio.get_running_loop()
+    previous_factory = loop.get_task_factory()
+    loop.set_task_factory(None)
+    try:
+
+        async def _job() -> str:
+            await asyncio.sleep(0)
+            return "ok"
+
+        task = create_task(
+            _job(),
+            metadata={"operation_name": "tests.no_factory"},
+        )
+        assert await task == "ok"
+    finally:
+        loop.set_task_factory(previous_factory)
+
+
+@pytest.mark.asyncio
+async def test_ingest_multi_source_emits_metadata_aware_normalisation_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ingestion fan-out creates metadata-aware normalization tasks."""
+    profile = _make_profile()
+    captured_sources: list[SourceDocumentInput] = []
+
+    class TestNormaliser:
+        """Normalize raw sources deterministically for this test."""
+
+        async def normalise(self, raw_source: RawSourceInput) -> NormalisedSource:
+            await asyncio.sleep(0)
+            return _make_normalised_source(raw_source)
+
+    class TestWeighting:
+        """Return deterministic weights in source input order."""
+
+        async def compute_weights(
+            self,
+            sources: list[NormalisedSource],
+            series_configuration: dict[str, object],
+        ) -> list[WeightingResult]:
+            _ = series_configuration
+            return [
+                WeightingResult(
+                    source=source,
+                    computed_weight=max(0.1, 1.0 - (index * 0.1)),
+                    factors={"quality_score": source.quality_score},
+                )
+                for index, source in enumerate(sources)
+            ]
+
+    class TestResolver:
+        """Mark the first source as preferred and retain the rest."""
+
+        async def resolve(
+            self,
+            weighted_sources: list[WeightingResult],
+        ) -> ConflictOutcome:
+            return ConflictOutcome(
+                merged_tei_xml="<TEI/>",
+                merged_title="Merged title",
+                preferred_sources=weighted_sources[:1],
+                rejected_sources=weighted_sources[1:],
+                resolution_notes="Preferred first source by deterministic order.",
+            )
+
+    async def _fake_ingest_sources(
+        uow: object,
+        series_profile: SeriesProfile,
+        request: IngestionRequest,
+    ) -> CanonicalEpisode:
+        await asyncio.sleep(0)
+        _ = (uow, series_profile)
+        captured_sources.extend(request.sources)
+        return _make_episode(profile.id)
+
+    monkeypatch.setattr(
+        "episodic.canonical.ingestion_service.ingest_sources",
+        _fake_ingest_sources,
+    )
+
+    request = MultiSourceRequest(
+        raw_sources=[
+            RawSourceInput(
+                source_type="transcript",
+                source_uri="s3://bucket/source-1.txt",
+                content="Source one",
+                content_hash="hash-1",
+                metadata={"title": "Source One"},
+            ),
+            RawSourceInput(
+                source_type="brief",
+                source_uri="s3://bucket/source-2.txt",
+                content="Source two",
+                content_hash="hash-2",
+                metadata={"title": "Source Two"},
+            ),
+        ],
+        series_slug=profile.slug,
+        requested_by="test@example.com",
+    )
+    pipeline = IngestionPipeline(
+        normaliser=TestNormaliser(),
+        weighting=TestWeighting(),
+        resolver=TestResolver(),
+    )
+
+    with _recording_task_factory() as captured_task_kwargs:
+        episode = await ingest_multi_source(
+            typ.cast("CanonicalUnitOfWork", object()),
+            profile,
+            request,
+            pipeline,
+        )
+
+    assert episode.series_profile_id == profile.id
+    assert len(captured_sources) == 2
+
+    normalise_task_kwargs = [
+        kwargs
+        for kwargs in captured_task_kwargs
+        if typ.cast("str", kwargs["name"]).startswith("canonical.ingestion.normalise:")
+    ]
+    assert len(normalise_task_kwargs) == 2
+    for index, kwargs in enumerate(normalise_task_kwargs, start=1):
+        metadata = typ.cast("dict[str, object]", kwargs[TASK_METADATA_KWARG])
+        assert metadata["operation_name"] == "canonical.ingestion.normalise"
+        assert metadata["correlation_id"] == profile.slug
+        assert metadata["priority_hint"] == index
