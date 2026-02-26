@@ -6,7 +6,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -66,23 +66,35 @@ existing retrieval behaviour remains unchanged, and full quality gates pass.
 ## Progress
 
 - [x] (2026-02-24 00:00Z) Draft ExecPlan created.
-- [ ] Stage A: Map all runtime UUID generation sites and impacted tests.
-- [ ] Stage B: Add or update tests to require UUIDv7 generation.
-- [ ] Stage C: Implement UUIDv7 generation in canonical ingestion paths.
-- [ ] Stage D: Run quality gates and finalize docs.
+- [x] (2026-02-26 10:29Z) Stage A complete: mapped runtime UUID generation
+  and narrowed scope to `episodic/canonical/services.py` ingestion writes.
+- [x] (2026-02-26 10:33Z) Stage B complete: added UUIDv7 assertions to
+  ingestion behavioural and integration tests, then captured red-phase
+  failures.
+- [x] (2026-02-26 10:34Z) Stage C complete: implemented `_new_storage_id()`
+  using `uuid.uuid7()` and replaced canonical ingestion storage ID call sites.
+- [x] (2026-02-26 10:52Z) Stage D complete: updated Python baseline files,
+  refreshed docs, and passed all applicable quality gates.
 
 ## Surprises & discoveries
-
-- Observation: project memory Model Context Protocol (MCP) resources are
-  unavailable in this session. Evidence: `list_mcp_resources` and
-  `list_mcp_resource_templates` both returned empty lists. Impact: this plan is
-  based on repository sources only.
 
 - Observation: current canonical ingestion creates IDs in
   `episodic/canonical/services.py` with `uuid.uuid4()` for episodes, jobs,
   headers, source documents, and approval events. Evidence: direct source
   inspection. Impact: one concentrated module can deliver the primary behaviour
   change.
+
+- Observation: direct `uv run pytest ...` fails before test execution unless
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` is set. Evidence:
+  `/tmp/py314-uuid7-targeted-red.log` from the first red-phase attempt.
+  Impact: the plan's targeted test command needs this environment variable in
+  this container.
+
+- Observation: `make check-fmt` on Python 3.14 expects ruff-formatted
+  multi-exception syntax (`except TypeError, ValueError:`) in two existing
+  modules outside the feature area. Evidence: check-fmt output in
+  `/tmp/py314-uuid7-check-fmt.log`. Impact: two formatting-only files were
+  updated to satisfy required gates.
 
 ## Decision log
 
@@ -95,15 +107,45 @@ existing retrieval behaviour remains unchanged, and full quality gates pass.
   Rationale: PostgreSQL UUID columns are version-agnostic and existing records
   remain valid identifiers. Date/Author: 2026-02-24 / Codex.
 
+- Decision: execute red/green by adding UUID version assertions first in
+  ingestion behaviour and integration tests. Rationale: this verifies the
+  behaviour contract before implementation and prevents silent regressions.
+  Date/Author: 2026-02-26 / Codex.
+
+- Decision: centralize canonical storage ID creation behind
+  `_new_storage_id()` in `episodic/canonical/services.py`. Rationale: one
+  helper removes duplicated generation logic and keeps call sites aligned.
+  Date/Author: 2026-02-26 / Codex.
+
+- Decision: raise project minimum Python to 3.14 in packaging and CI entry
+  points (`pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`,
+  `.github/workflows/release.yml`). Rationale: stdlib `uuid.uuid7()` is a
+  Python 3.14 feature; declaring 3.13 support would be inaccurate.
+  Date/Author: 2026-02-26 / Codex.
+
 ## Outcomes & retrospective
 
-Pending implementation.
+Completed.
 
-Success criteria at completion:
+Delivered outcomes:
 
-- New canonical records receive UUIDv7 IDs.
-- Existing tests and behaviour remain compatible with prior rows.
-- All Python quality gates pass.
+- Canonical ingestion now generates UUIDv7 IDs for TEI headers, canonical
+  episodes, ingestion jobs, source documents, and approval events.
+- UUID version assertions were added to ingestion tests and passed after
+  implementation (`6 passed` in targeted suite).
+- Project baseline now declares Python 3.14 compatibility for packaging and CI
+  entry points.
+- Documentation now states UUIDv7 storage-ID behaviour in user and design
+  guides.
+
+Validation outcomes:
+
+- `make check-fmt` passed.
+- `make lint` passed.
+- `make typecheck` passed (with one pre-existing `ty` warning).
+- `make test` passed (`74 passed, 2 skipped`).
+- `make markdownlint` passed.
+- `make nixie` passed.
 
 ## Context and orientation
 
@@ -154,7 +196,9 @@ Run from repository root.
 
 2. Update tests first, then run targeted test files.
 
-    set -o pipefail; uv run pytest -v tests/test_canonical_storage.py \
+    set -o pipefail; PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 \
+      uv run pytest -v tests/steps/test_canonical_ingestion_steps.py \
+      tests/test_ingestion_integration.py \
       2>&1 | tee /tmp/py314-uuid7-targeted.log
 
 3. Implement service-level UUIDv7 generation.
@@ -179,6 +223,7 @@ Acceptance is met when all of the following are true:
 - No repository interface signatures changed.
 - Existing persisted data compatibility assumptions remain valid.
 - `make check-fmt`, `make lint`, `make typecheck`, and `make test` all pass.
+- `make markdownlint` and `make nixie` pass for documentation updates.
 
 ## Idempotence and recovery
 
@@ -194,10 +239,13 @@ Capture the following evidence during implementation:
 
 - `git diff -- episodic/canonical/services.py tests`
 - `/tmp/py314-uuid7-targeted.log`
+- `/tmp/py314-uuid7-targeted-red.log`
 - `/tmp/py314-uuid7-check-fmt.log`
 - `/tmp/py314-uuid7-lint.log`
 - `/tmp/py314-uuid7-typecheck.log`
 - `/tmp/py314-uuid7-test.log`
+- `/tmp/py314-uuid7-markdownlint.log`
+- `/tmp/py314-uuid7-nixie.log`
 
 ## Interfaces and dependencies
 
@@ -211,3 +259,5 @@ Capture the following evidence during implementation:
 
 Initial draft created to scope UUIDv7 adoption for storage ID generation after
 raising the project minimum Python version to 3.14.
+
+Implementation completed on 2026-02-26 with full quality-gate evidence.

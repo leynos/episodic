@@ -15,6 +15,7 @@ from _ingestion_service_helpers import (
 from episodic.canonical.ingestion import MultiSourceRequest
 from episodic.canonical.ingestion_service import ingest_multi_source
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from tests.test_uuid_assertions import assert_uuid7
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,6 +96,7 @@ def _verify_source_documents(
         "Expected all input sources to be persisted as source documents."
     )
     for document in documents:
+        assert_uuid7(document.id, "source document")
         assert document.weight > 0.0, (
             "Expected persisted source weight to be greater than zero."
         )
@@ -181,7 +183,10 @@ async def test_ingest_multi_source_end_to_end(
     assert persisted.title == "Primary Episode", (
         "Expected winning source title to persist as canonical episode title."
     )
+    assert_uuid7(persisted.id, "canonical episode")
+    assert_uuid7(persisted.tei_header_id, "TEI header reference")
     assert header is not None, "Expected a persisted TEI header."
+    assert_uuid7(header.id, "TEI header")
 
     provenance = _require_provenance_payload(header.payload)
     _verify_provenance_metadata(
@@ -194,6 +199,7 @@ async def test_ingest_multi_source_end_to_end(
     )
 
     job_record = await _get_job_record_for_episode(session_factory, episode.id)
+    assert_uuid7(job_record.id, "ingestion job")
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)

@@ -45,6 +45,11 @@ if typ.TYPE_CHECKING:
     from .ports import CanonicalUnitOfWork
 
 
+def _new_storage_id() -> uuid.UUID:
+    """Create a monotonic storage identifier for persisted canonical records."""
+    return uuid.uuid7()
+
+
 def _with_ingestion_provenance(
     header_payload: TeiHeaderPayload,
     request: IngestionRequest,
@@ -134,7 +139,7 @@ def _create_source_documents(
     """Create source document entities for an ingestion request."""
     return [
         SourceDocument(
-            id=uuid.uuid4(),
+            id=_new_storage_id(),
             ingestion_job_id=job_id,
             canonical_episode_id=episode_id,
             source_type=source.source_type,
@@ -155,7 +160,7 @@ def _create_initial_approval_event(
 ) -> ApprovalEvent:
     """Create the initial approval event entity."""
     return ApprovalEvent(
-        id=uuid.uuid4(),
+        id=_new_storage_id(),
         episode_id=episode_id,
         actor=request.requested_by,
         from_state=None,
@@ -207,9 +212,9 @@ async def ingest_sources(
         request=request,
         captured_at=now,
     )
-    header_id = uuid.uuid4()
-    episode_id = uuid.uuid4()
-    job_id = uuid.uuid4()
+    header_id = _new_storage_id()
+    episode_id = _new_storage_id()
+    job_id = _new_storage_id()
 
     header = _create_tei_header(header_id, header_payload, request.tei_xml, now)
     episode = _create_canonical_episode(episode_id, series_profile, header, now)
