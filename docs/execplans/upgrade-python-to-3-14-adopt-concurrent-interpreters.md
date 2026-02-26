@@ -111,7 +111,7 @@ smoke checks.
 
 Implemented.
 
-Delivered artifacts:
+Delivered artefacts:
 
 - `episodic/concurrent_interpreters.py` defines:
   - `CpuTaskExecutor` port,

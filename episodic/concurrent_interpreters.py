@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures as cf
-import importlib.util
 import os
+import threading
 import typing as typ
 
 if typ.TYPE_CHECKING:
@@ -65,34 +65,29 @@ def _flag_enabled(raw_value: str | None) -> bool:
 
 def interpreter_pool_supported() -> bool:
     """Return True when interpreter pools are available in this runtime."""
-    if importlib.util.find_spec("concurrent.interpreters") is None:
-        return False
     return hasattr(cf, "InterpreterPoolExecutor")
 
 
 def _create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
     """Build an ``InterpreterPoolExecutor`` instance."""
-    interpreter_pool_executor = getattr(cf, "InterpreterPoolExecutor", None)
-    if interpreter_pool_executor is None:
+    try:
+        interpreter_pool_executor = cf.InterpreterPoolExecutor  # type: ignore[attr-defined]
+    except AttributeError:
         msg = "InterpreterPoolExecutor is not available in this Python runtime."
-        raise RuntimeError(msg)
-    return typ.cast("cf.Executor", interpreter_pool_executor(max_workers=max_workers))
+        raise RuntimeError(msg) from None
+    return interpreter_pool_executor(max_workers=max_workers)
 
 
-class InlineCpuTaskExecutor:
+class InlineCpuTaskExecutor(CpuTaskExecutor):
     """Baseline CPU-task adapter that runs work inline in the caller process."""
 
-    def __init__(self) -> None:
-        self._execution_mode = "inline"
-
+    @typ.override
     async def map_ordered(
         self,
         task: cabc.Callable[[_InputT], _OutputT],
         items: tuple[_InputT, ...],
     ) -> list[_OutputT]:
         """Apply ``task`` sequentially and preserve input ordering."""
-        # Keep this adapter instance-oriented so it cleanly satisfies the port.
-        _ = self._execution_mode
         return [task(item) for item in items]
 
 
@@ -103,31 +98,39 @@ class InterpreterPoolCpuTaskExecutor:
     ----------
     max_workers : int | None
         Optional explicit worker count for interpreter pool creation.
-    executor_factory : Callable[[int | None], concurrent.futures.Executor] | None
-        Optional factory used to create a fresh executor per dispatch.
-        Primarily useful for deterministic tests.
     """
 
     def __init__(
         self,
         *,
         max_workers: int | None = None,
-        executor_factory: cabc.Callable[[int | None], cf.Executor] | None = None,
     ) -> None:
         self._max_workers = max_workers
-        self._executor_factory = (
-            executor_factory
-            if executor_factory is not None
-            else _create_interpreter_pool_executor
-        )
+        self._executor: cf.Executor | None = None
+        self._executor_lock = threading.Lock()
+
+    def _get_executor(self) -> cf.Executor:
+        """Create the interpreter pool lazily and reuse it for subsequent calls."""
+        with self._executor_lock:
+            if self._executor is None:
+                self._executor = _create_interpreter_pool_executor(self._max_workers)
+            return self._executor
+
+    def shutdown(self) -> None:
+        """Shut down the interpreter pool if it has been created."""
+        with self._executor_lock:
+            executor = self._executor
+            self._executor = None
+        if executor is not None:
+            executor.shutdown(wait=True)
 
     def _map_ordered_sync(
         self,
         task: cabc.Callable[[_InputT], _OutputT],
         items: tuple[_InputT, ...],
     ) -> list[_OutputT]:
-        with self._executor_factory(self._max_workers) as executor:
-            return list(executor.map(task, items))
+        executor = self._get_executor()
+        return list(executor.map(task, items))
 
     async def map_ordered(
         self,
@@ -135,6 +138,8 @@ class InterpreterPoolCpuTaskExecutor:
         items: tuple[_InputT, ...],
     ) -> list[_OutputT]:
         """Dispatch ``task`` across interpreter workers and preserve order."""
+        if not items:
+            return []
         mapped = await asyncio.to_thread(self._map_ordered_sync, task, items)
         return typ.cast("list[_OutputT]", mapped)
 
