@@ -118,8 +118,8 @@ async def test_weighting_strategy_uses_executor_at_threshold() -> None:
         min_parallel_items=2,
     )
     sources = [
-        _make_normalised_source(quality=0.8, freshness=0.7, reliability=0.9),
-        _make_normalised_source(quality=0.7, freshness=0.8, reliability=0.6),
+        _make_normalized_source(quality=0.8, freshness=0.7, reliability=0.9),
+        _make_normalized_source(quality=0.7, freshness=0.8, reliability=0.6),
     ]
 
     results = await strategy.compute_weights(sources, {})
@@ -138,7 +138,7 @@ async def test_weighting_strategy_skips_executor_below_threshold() -> None:
         cpu_executor=recording_executor,
         min_parallel_items=3,
     )
-    source = _make_normalised_source(
+    source = _make_normalized_source(
         quality=0.8,
         freshness=0.7,
         reliability=0.9,
