@@ -54,6 +54,9 @@ This guide will cover:
 - Retrieving change history for series profiles and episode templates
 - Fetching structured brief payloads for downstream generators through
   `GET /series-profiles/{id}/brief`
+- Rendering deterministic prompt scaffolds from structured briefs for
+  downstream Large Language Model (LLM) adapters, including interpolation audit
+  metadata and optional escaping policies
 
 ### Quality & Compliance
 

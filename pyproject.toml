@@ -38,6 +38,7 @@ dev = [
 [tool.ruff]
 line-length = 88
 preview = true
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [

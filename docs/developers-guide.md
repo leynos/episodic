@@ -182,6 +182,25 @@ adapter (`episodic/api/app.py`) over domain services in
 - `episode_templates`: one template when `template_id` is provided, or all
   templates for the series profile when omitted.
 
+### Prompt scaffolding for generators
+
+Use the canonical prompt helpers to build deterministic generation scaffolds
+from structured briefs:
+
+- `build_series_brief_prompt(...)` in `episodic.canonical` loads a structured
+  brief and returns a rendered prompt payload.
+- `episodic.canonical.prompts` exposes:
+  - `build_series_brief_template(...)` to construct a Python 3.14 template
+    string (`t"..."`) representation.
+  - `render_template(...)` to render prompt text while preserving static and
+    interpolation metadata for audit trails.
+  - `render_series_brief_prompt(...)` as the standard convenience renderer for
+    brief payloads.
+
+The renderer accepts an optional interpolation escape callback, so adapters can
+apply policy-specific sanitization (for example, XML/HTML escaping) without
+changing canonical prompt assembly rules.
+
 ## Multi-source ingestion
 
 The multi-source ingestion service normalizes heterogeneous source documents,
