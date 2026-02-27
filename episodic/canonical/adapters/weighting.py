@@ -16,10 +16,16 @@ Compute weights for normalized sources:
 
 from __future__ import annotations
 
+import functools
+import os
 import typing as typ
 
 from episodic.canonical.adapters._coercion import coerce_float
 from episodic.canonical.ingestion import NormalizedSource, WeightingResult
+from episodic.concurrent_interpreters import (
+    CpuTaskExecutor,
+    build_cpu_task_executor_from_environment,
+)
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import JsonMapping
@@ -28,6 +34,19 @@ if typ.TYPE_CHECKING:
 _DEFAULT_QUALITY_COEFFICIENT = 0.5
 _DEFAULT_FRESHNESS_COEFFICIENT = 0.3
 _DEFAULT_RELIABILITY_COEFFICIENT = 0.2
+_DEFAULT_INTERPRETER_POOL_MIN_ITEMS = 64
+_INTERPRETER_POOL_MIN_ITEMS_ENV = "EPISODIC_INTERPRETER_POOL_MIN_ITEMS"
+
+
+def _parse_min_parallel_items(raw_value: str | None) -> int:
+    """Parse minimum batch size before interpreter execution is attempted."""
+    if raw_value is None:
+        return _DEFAULT_INTERPRETER_POOL_MIN_ITEMS
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return _DEFAULT_INTERPRETER_POOL_MIN_ITEMS
+    return max(1, parsed)
 
 
 def _extract_coefficients(
@@ -103,7 +122,25 @@ class DefaultWeightingStrategy:
     reliability=0.2) when absent. Results are clamped to [0, 1].
     """
 
-    async def compute_weights(  # noqa: PLR6301
+    def __init__(
+        self,
+        *,
+        cpu_executor: CpuTaskExecutor | None = None,
+        min_parallel_items: int | None = None,
+    ) -> None:
+        self._cpu_executor = (
+            cpu_executor
+            if cpu_executor is not None
+            else build_cpu_task_executor_from_environment()
+        )
+        if min_parallel_items is None:
+            self._min_parallel_items = _parse_min_parallel_items(
+                os.getenv(_INTERPRETER_POOL_MIN_ITEMS_ENV),
+            )
+        else:
+            self._min_parallel_items = max(1, min_parallel_items)
+
+    async def compute_weights(
         self,
         sources: list[NormalizedSource],
         series_configuration: JsonMapping,
@@ -125,12 +162,24 @@ class DefaultWeightingStrategy:
         quality_coeff, freshness_coeff, reliability_coeff = _extract_coefficients(
             series_configuration,
         )
-        return [
-            _compute_single_weight(
-                source,
-                quality_coeff,
-                freshness_coeff,
-                reliability_coeff,
-            )
-            for source in sources
-        ]
+        if len(sources) < self._min_parallel_items:
+            return [
+                _compute_single_weight(
+                    source=source,
+                    quality_coeff=quality_coeff,
+                    freshness_coeff=freshness_coeff,
+                    reliability_coeff=reliability_coeff,
+                )
+                for source in sources
+            ]
+
+        compute_with_coefficients = functools.partial(
+            _compute_single_weight,
+            quality_coeff=quality_coeff,
+            freshness_coeff=freshness_coeff,
+            reliability_coeff=reliability_coeff,
+        )
+        return await self._cpu_executor.map_ordered(
+            compute_with_coefficients,
+            tuple(sources),
+        )

@@ -2,10 +2,34 @@
 
 from __future__ import annotations
 
+import typing as typ
+
 import pytest
 from _ingestion_service_helpers import _make_normalized_source
 
 from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+_InputT = typ.TypeVar("_InputT")
+_OutputT = typ.TypeVar("_OutputT")
+
+
+class RecordingCpuTaskExecutor:
+    """Test double that records how many map dispatches occurred."""
+
+    def __init__(self) -> None:
+        self.map_calls = 0
+
+    async def map_ordered(
+        self,
+        task: cabc.Callable[[_InputT], _OutputT],
+        items: tuple[_InputT, ...],
+    ) -> list[_OutputT]:
+        """Map inputs and record invocation count for assertions."""
+        self.map_calls += 1
+        return [task(item) for item in items]
 
 
 @pytest.fixture
@@ -83,3 +107,59 @@ async def test_weighting_strategy_clamps_to_unit_interval(
     assert results[0].computed_weight >= 0.0, (
         "Expected computed weights to be clamped to the lower bound."
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("min_parallel_items", "source_scores", "expected_map_calls", "expected_weights"),
+    [
+        (
+            2,
+            (
+                (0.8, 0.7, 0.9),
+                (0.7, 0.8, 0.6),
+            ),
+            1,
+            [0.79, 0.71],
+        ),
+        (
+            3,
+            ((0.8, 0.7, 0.9),),
+            0,
+            [0.79],
+        ),
+    ],
+    ids=["uses_executor_at_threshold", "skips_executor_below_threshold"],
+)
+async def test_weighting_strategy_threshold_dispatch(
+    min_parallel_items: int,
+    source_scores: tuple[tuple[float, float, float], ...],
+    expected_map_calls: int,
+    expected_weights: list[float],
+) -> None:
+    """Threshold controls executor dispatch while preserving correct outputs."""
+    recording_executor = RecordingCpuTaskExecutor()
+    strategy = DefaultWeightingStrategy(
+        cpu_executor=recording_executor,
+        min_parallel_items=min_parallel_items,
+    )
+    sources = [
+        _make_normalized_source(
+            quality=quality,
+            freshness=freshness,
+            reliability=reliability,
+        )
+        for quality, freshness, reliability in source_scores
+    ]
+
+    results = await strategy.compute_weights(sources, {})
+
+    assert len(results) == len(expected_weights), (
+        "Expected one weighting result per input source."
+    )
+    assert recording_executor.map_calls == expected_map_calls, (
+        "Expected threshold configuration to control executor dispatch."
+    )
+    assert [result.computed_weight for result in results] == pytest.approx(
+        expected_weights,
+    ), "Expected deterministic computed weights for both dispatch paths."

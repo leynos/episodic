@@ -6,7 +6,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -58,10 +58,16 @@ smoke checks.
 ## Progress
 
 - [x] (2026-02-24 00:00Z) Draft ExecPlan created.
-- [ ] Stage A: Define eligible workloads and baseline metrics.
-- [ ] Stage B: Add tests and prototype executor adapter.
-- [ ] Stage C: Integrate behind a port and feature flag.
-- [ ] Stage D: Validate functional correctness and compare performance.
+- [x] (2026-02-26 10:35Z) Stage A: Defined benchmark workload as deterministic
+  prime-count tasks and captured baseline/interpreter metrics.
+- [x] (2026-02-26 10:39Z) Stage B: Added fail-first adapter tests in
+  `tests/test_interpreter_executor.py`, then implemented prototype executor
+  adapter in `episodic/concurrent_interpreters.py`.
+- [x] (2026-02-26 10:43Z) Stage C: Integrated adapter behind a port and feature
+  flag in `episodic/canonical/adapters/weighting.py` with minimum batch-size
+  gating and capability checks.
+- [x] (2026-02-26 10:47Z) Stage D: Ran targeted tests, benchmark, and full
+  quality gates; all passed.
 
 ## Surprises & discoveries
 
@@ -75,6 +81,12 @@ smoke checks.
   unavailable in this session. Evidence: resource listings are empty. Impact:
   risk assumptions rely on repository documents and Python stdlib docs.
 
+- Observation: direct `uv run ...` can fail while building Rust-backed
+  dependencies under Python 3.14 unless `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`
+  is set. Evidence: `tei-rapporteur` build failure while running targeted
+  commands without that environment variable. Impact: benchmark and targeted
+  commands were executed with the compatibility variable enabled.
+
 ## Decision log
 
 - Decision: implement interpreter execution as an optional adapter first.
@@ -85,13 +97,54 @@ smoke checks.
   interpreter pools. Rationale: concurrency changes without measurement can
   regress throughput. Date/Author: 2026-02-24 / Codex.
 
+- Decision: integrate interpreter dispatch in `DefaultWeightingStrategy` only
+  when source-batch size meets a configurable threshold. Rationale: preserves
+  baseline behaviour for small workloads where serialization and pool startup
+  overhead dominate. Date/Author: 2026-02-26 / Codex.
+
+- Decision: use a pure-Python prime-count workload for benchmark evidence.
+  Rationale: validates deterministic behaviour and multi-core scaling without
+  C-extension compatibility ambiguity in early rollout. Date/Author: 2026-02-26
+  / Codex.
+
 ## Outcomes & retrospective
 
-Pending implementation.
+Implemented.
 
-Completion should produce a safe adoption path with measured trade-offs,
-including explicit guidance for when to use interpreter pools versus existing
-Celery worker profiles.
+Delivered artefacts:
+
+- `episodic/concurrent_interpreters.py` defines:
+  - `CpuTaskExecutor` port,
+  - `InlineCpuTaskExecutor` baseline adapter,
+  - `InterpreterPoolCpuTaskExecutor` adapter,
+  - `build_cpu_task_executor_from_environment()` with capability checks.
+- `DefaultWeightingStrategy` now supports optional interpreter-backed dispatch
+  behind `EPISODIC_USE_INTERPRETER_POOL` and threshold
+  `EPISODIC_INTERPRETER_POOL_MIN_ITEMS`.
+- Benchmark CLI added at `episodic/benchmarks/interpreters.py`.
+- User and architecture docs updated with feature-flag guidance.
+
+Validation evidence:
+
+- Targeted tests:
+  - `tests/test_interpreter_executor.py`: 5 passed.
+  - `tests/test_ingestion_weighting.py`: 5 passed.
+- Benchmark (`python -m episodic.benchmarks.interpreters`):
+  - inline mean: `0.6368s`
+  - interpreter-pool mean: `0.2530s`
+  - speedup: `2.517x` (`-60.27%` delta vs baseline)
+- Full quality gates passed:
+  - `make check-fmt`
+  - `make lint`
+  - `make typecheck`
+  - `make test`
+
+Tolerance review:
+
+- Scope: met (implementation remained below the 14-file trigger).
+- Safety: met (prototype workload and adapter tests are pure Python).
+- Performance: met (interpreter benchmark improved throughput).
+- Validation: met (no nondeterministic failures observed).
 
 ## Context and orientation
 

@@ -289,6 +289,50 @@ work to prefork pools. This separation keeps long-running work isolated from
 orchestration throughput and allows worker profiles to match workload
 characteristics.
 
+For selected pure-Python CPU workloads, adapters may optionally use Python 3.14
+interpreter pools within a worker process before escalating to broader process
+fan-out. This path remains explicitly opt-in through feature flags and
+task-size thresholds so small workloads avoid dispatch overhead and unsupported
+runtime environments fall back to baseline inline execution.
+
+The following sequence diagram illustrates how `DefaultWeightingStrategy`
+selects and uses a `CpuTaskExecutor` for batch weighting.
+
+```mermaid
+sequenceDiagram
+    actor Caller
+    participant DefaultWeightingStrategy
+    participant CpuTaskExecutor
+    participant InlineCpuTaskExecutor
+    participant InterpreterPoolCpuTaskExecutor
+
+    Caller->>DefaultWeightingStrategy: __init__(cpu_executor=None, min_parallel_items=None)
+    DefaultWeightingStrategy->>DefaultWeightingStrategy: build_cpu_task_executor_from_environment()
+    DefaultWeightingStrategy-->>CpuTaskExecutor: selected executor instance
+
+    Caller->>DefaultWeightingStrategy: compute_weights(sources, series_configuration)
+    DefaultWeightingStrategy->>DefaultWeightingStrategy: _extract_coefficients(series_configuration)
+    DefaultWeightingStrategy->>DefaultWeightingStrategy: bind coefficients with functools.partial
+    DefaultWeightingStrategy->>DefaultWeightingStrategy: check len(sources) < _min_parallel_items
+
+    alt batch size below threshold
+        DefaultWeightingStrategy->>DefaultWeightingStrategy: sequential _compute_single_weight(source, coeffs)
+        DefaultWeightingStrategy-->>Caller: list of WeightingResult
+    else batch size meets threshold
+        DefaultWeightingStrategy->>CpuTaskExecutor: async map_ordered(partial(_compute_single_weight, coeffs), sources)
+        alt executor is InlineCpuTaskExecutor
+            CpuTaskExecutor-->>InlineCpuTaskExecutor: delegate map_ordered
+            InlineCpuTaskExecutor-->>DefaultWeightingStrategy: ordered results
+        else executor is InterpreterPoolCpuTaskExecutor
+            CpuTaskExecutor-->>InterpreterPoolCpuTaskExecutor: delegate map_ordered
+            InterpreterPoolCpuTaskExecutor-->>DefaultWeightingStrategy: ordered results
+        end
+        DefaultWeightingStrategy-->>Caller: list of WeightingResult
+    end
+```
+
+_Figure: default weighting strategy executor-selection and dispatch sequence._
+
 #### Execution patterns for long-running tasks
 
 Long-running operations follow two patterns depending on whether the graph
