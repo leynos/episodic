@@ -71,7 +71,7 @@ def interpreter_pool_supported() -> bool:
 def _create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
     """Build an ``InterpreterPoolExecutor`` instance."""
     try:
-        interpreter_pool_executor = cf.InterpreterPoolExecutor  # type: ignore[attr-defined]
+        interpreter_pool_executor = cf.InterpreterPoolExecutor
     except AttributeError:
         msg = "InterpreterPoolExecutor is not available in this Python runtime."
         raise RuntimeError(msg) from None
@@ -124,14 +124,6 @@ class InterpreterPoolCpuTaskExecutor:
         if executor is not None:
             executor.shutdown(wait=True)
 
-    def _map_ordered_sync(
-        self,
-        task: cabc.Callable[[_InputT], _OutputT],
-        items: tuple[_InputT, ...],
-    ) -> list[_OutputT]:
-        executor = self._get_executor()
-        return list(executor.map(task, items))
-
     async def map_ordered(
         self,
         task: cabc.Callable[[_InputT], _OutputT],
@@ -140,8 +132,12 @@ class InterpreterPoolCpuTaskExecutor:
         """Dispatch ``task`` across interpreter workers and preserve order."""
         if not items:
             return []
-        mapped = await asyncio.to_thread(self._map_ordered_sync, task, items)
-        return typ.cast("list[_OutputT]", mapped)
+        executor = self._get_executor()
+
+        def map_ordered_sync() -> list[_OutputT]:
+            return list(executor.map(task, items))
+
+        return await asyncio.to_thread(map_ordered_sync)
 
 
 def build_cpu_task_executor_from_environment() -> CpuTaskExecutor:
