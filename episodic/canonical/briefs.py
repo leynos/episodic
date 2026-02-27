@@ -52,6 +52,16 @@ async def build_series_brief_prompt(
     RenderedPrompt
         Rendered prompt text and interpolation metadata derived from the
         structured brief payload.
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when the requested series profile or template cannot be found.
+    ValueError
+        Raised when brief construction fails due to invalid canonical state.
+    TypeError
+        Raised when structured brief payload values fail prompt-rendering
+        coercion checks.
     """
     brief = await build_series_brief(
         uow,
