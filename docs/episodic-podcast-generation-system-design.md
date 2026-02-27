@@ -310,16 +310,16 @@ sequenceDiagram
     DefaultWeightingStrategy->>DefaultWeightingStrategy: build_cpu_task_executor_from_environment()
     DefaultWeightingStrategy-->>CpuTaskExecutor: selected executor instance
 
-    Caller->>DefaultWeightingStrategy: compute_weights(sources, series_configuration, context)
+    Caller->>DefaultWeightingStrategy: compute_weights(sources, series_configuration)
     DefaultWeightingStrategy->>DefaultWeightingStrategy: _extract_coefficients(series_configuration)
-    DefaultWeightingStrategy->>DefaultWeightingStrategy: build _WeightComputationInput for each source
-    DefaultWeightingStrategy->>DefaultWeightingStrategy: check len(computations) < _min_parallel_items
+    DefaultWeightingStrategy->>DefaultWeightingStrategy: bind coefficients with functools.partial
+    DefaultWeightingStrategy->>DefaultWeightingStrategy: check len(sources) < _min_parallel_items
 
     alt batch size below threshold
-        DefaultWeightingStrategy->>DefaultWeightingStrategy: sequential _compute_single_weight for each computation
+        DefaultWeightingStrategy->>DefaultWeightingStrategy: sequential _compute_single_weight(source, coeffs)
         DefaultWeightingStrategy-->>Caller: list of WeightingResult
     else batch size meets threshold
-        DefaultWeightingStrategy->>CpuTaskExecutor: async map_ordered(_compute_single_weight, computations)
+        DefaultWeightingStrategy->>CpuTaskExecutor: async map_ordered(partial(_compute_single_weight, coeffs), sources)
         alt executor is InlineCpuTaskExecutor
             CpuTaskExecutor-->>InlineCpuTaskExecutor: delegate map_ordered
             InlineCpuTaskExecutor-->>DefaultWeightingStrategy: ordered results

@@ -72,9 +72,9 @@ def _create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
     """Build an ``InterpreterPoolExecutor`` instance."""
     try:
         interpreter_pool_executor = cf.InterpreterPoolExecutor
-    except AttributeError:
+    except AttributeError as err:
         msg = "InterpreterPoolExecutor is not available in this Python runtime."
-        raise RuntimeError(msg) from None
+        raise RuntimeError(msg) from err
     return interpreter_pool_executor(max_workers=max_workers)
 
 
@@ -91,7 +91,7 @@ class InlineCpuTaskExecutor(CpuTaskExecutor):
         return [task(item) for item in items]
 
 
-class InterpreterPoolCpuTaskExecutor:
+class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
     """CPU-task adapter backed by ``InterpreterPoolExecutor``.
 
     Parameters
@@ -124,6 +124,7 @@ class InterpreterPoolCpuTaskExecutor:
         if executor is not None:
             executor.shutdown(wait=True)
 
+    @typ.override
     async def map_ordered(
         self,
         task: cabc.Callable[[_InputT], _OutputT],

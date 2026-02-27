@@ -99,7 +99,7 @@ smoke checks.
 
 - Decision: integrate interpreter dispatch in `DefaultWeightingStrategy` only
   when source-batch size meets a configurable threshold. Rationale: preserves
-  baseline behaviour for small workloads where serialisation and pool startup
+  baseline behaviour for small workloads where serialization and pool startup
   overhead dominate. Date/Author: 2026-02-26 / Codex.
 
 - Decision: use a pure-Python prime-count workload for benchmark evidence.

@@ -19,6 +19,9 @@ if typ.TYPE_CHECKING:
     from episodic.concurrent_interpreters import CpuTaskExecutor
 
 _LOWEST_PRIME = 2
+_INTERPRETER_OUTPUT_MISMATCH_MSG = (
+    "Interpreter benchmark outputs did not match baseline results."
+)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -173,17 +176,20 @@ async def _main_async() -> int:
         )
         return 0
 
-    interpreter_result, interpreter_outputs = await _run_benchmark(
-        label="interpreter-pool",
-        executor=InterpreterPoolCpuTaskExecutor(max_workers=args.max_workers),
-        tasks=tasks,
-        repeats=args.repeats,
-    )
+    interpreter_executor = InterpreterPoolCpuTaskExecutor(max_workers=args.max_workers)
+    try:
+        interpreter_result, interpreter_outputs = await _run_benchmark(
+            label="interpreter-pool",
+            executor=interpreter_executor,
+            tasks=tasks,
+            repeats=args.repeats,
+        )
+    finally:
+        interpreter_executor.shutdown()
     _print_result(interpreter_result)
 
     if interpreter_outputs != baseline_outputs:
-        msg = "Interpreter benchmark outputs did not match baseline results."
-        raise RuntimeError(msg)
+        raise RuntimeError(_INTERPRETER_OUTPUT_MISMATCH_MSG)
 
     speedup = baseline_result.mean_seconds / interpreter_result.mean_seconds
     delta_percent = (

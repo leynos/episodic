@@ -110,43 +110,56 @@ async def test_weighting_strategy_clamps_to_unit_interval(
 
 
 @pytest.mark.asyncio
-async def test_weighting_strategy_uses_executor_at_threshold() -> None:
-    """Configured threshold dispatches CPU work through the executor port."""
+@pytest.mark.parametrize(
+    ("min_parallel_items", "source_scores", "expected_map_calls", "expected_weights"),
+    [
+        (
+            2,
+            (
+                (0.8, 0.7, 0.9),
+                (0.7, 0.8, 0.6),
+            ),
+            1,
+            [0.79, 0.71],
+        ),
+        (
+            3,
+            ((0.8, 0.7, 0.9),),
+            0,
+            [0.79],
+        ),
+    ],
+    ids=["uses_executor_at_threshold", "skips_executor_below_threshold"],
+)
+async def test_weighting_strategy_threshold_dispatch(
+    min_parallel_items: int,
+    source_scores: tuple[tuple[float, float, float], ...],
+    expected_map_calls: int,
+    expected_weights: list[float],
+) -> None:
+    """Threshold controls executor dispatch while preserving correct outputs."""
     recording_executor = RecordingCpuTaskExecutor()
     strategy = DefaultWeightingStrategy(
         cpu_executor=recording_executor,
-        min_parallel_items=2,
+        min_parallel_items=min_parallel_items,
     )
     sources = [
-        _make_normalized_source(quality=0.8, freshness=0.7, reliability=0.9),
-        _make_normalized_source(quality=0.7, freshness=0.8, reliability=0.6),
+        _make_normalized_source(
+            quality=quality,
+            freshness=freshness,
+            reliability=reliability,
+        )
+        for quality, freshness, reliability in source_scores
     ]
 
     results = await strategy.compute_weights(sources, {})
 
-    assert len(results) == 2, "Expected one weighting result per input source."
-    assert recording_executor.map_calls == 1, (
-        "Expected executor-based dispatch when batch size reaches threshold."
+    assert len(results) == len(expected_weights), (
+        "Expected one weighting result per input source."
     )
-
-
-@pytest.mark.asyncio
-async def test_weighting_strategy_skips_executor_below_threshold() -> None:
-    """Small batches stay inline to avoid interpreter dispatch overhead."""
-    recording_executor = RecordingCpuTaskExecutor()
-    strategy = DefaultWeightingStrategy(
-        cpu_executor=recording_executor,
-        min_parallel_items=3,
+    assert recording_executor.map_calls == expected_map_calls, (
+        "Expected threshold configuration to control executor dispatch."
     )
-    source = _make_normalized_source(
-        quality=0.8,
-        freshness=0.7,
-        reliability=0.9,
-    )
-
-    results = await strategy.compute_weights([source], {})
-
-    assert len(results) == 1, "Expected one weighting result for one source."
-    assert recording_executor.map_calls == 0, (
-        "Expected inline computation when batch size is below threshold."
-    )
+    assert [result.computed_weight for result in results] == pytest.approx(
+        expected_weights,
+    ), "Expected deterministic computed weights for both dispatch paths."
