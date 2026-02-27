@@ -53,10 +53,10 @@ def _extract_task_constructor_kwargs(
     task_kwargs: dict[str, object],
 ) -> _TaskConstructorKwargs:
     """Return kwargs accepted by `asyncio.Task` constructor."""
-    eager_start = typ.cast("bool | None", task_kwargs["eager_start"])
+    eager_start = typ.cast("bool | None", task_kwargs.get("eager_start", False))
     return {
-        "name": typ.cast("str | None", task_kwargs["name"]),
-        "context": typ.cast("cv.Context | None", task_kwargs["context"]),
+        "name": typ.cast("str | None", task_kwargs.get("name")),
+        "context": typ.cast("cv.Context | None", task_kwargs.get("context")),
         "eager_start": eager_start if eager_start is not None else False,
     }
 
