@@ -265,12 +265,20 @@ async def test_create_task_forwards_task_factory_kwargs() -> None:
         )
         result = await task
 
-    assert result == "done"
+    assert result == "done", f"expected result == 'done', got {result!r}"
     kwargs = _select_captured_task_kwargs(captured, "create-task-test")
-    assert kwargs["name"] == "create-task-test"
-    assert kwargs["context"] is context
-    assert kwargs["eager_start"] is True
-    assert kwargs[TASK_METADATA_KWARG] == metadata
+    assert kwargs["name"] == "create-task-test", (
+        f"expected task name 'create-task-test', got {kwargs['name']!r}"
+    )
+    assert kwargs["context"] is context, (
+        f"expected task context object {context!r}, got {kwargs['context']!r}"
+    )
+    assert kwargs["eager_start"] is True, (
+        f"expected eager_start True, got {kwargs['eager_start']!r}"
+    )
+    assert kwargs[TASK_METADATA_KWARG] == metadata, (
+        f"expected metadata {metadata!r}, got {kwargs[TASK_METADATA_KWARG]!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -296,11 +304,20 @@ async def test_create_task_in_group_forwards_task_factory_kwargs() -> None:
                 metadata=metadata,
             )
 
-    assert task.result() == "group-done"
+    task_result = task.result()
+    assert task_result == "group-done", (
+        f"expected task group result 'group-done', got {task_result!r}"
+    )
     kwargs = _select_captured_task_kwargs(captured, "task-group-test")
-    assert kwargs["name"] == "task-group-test"
-    assert kwargs["eager_start"] is False
-    assert kwargs[TASK_METADATA_KWARG] == metadata
+    assert kwargs["name"] == "task-group-test", (
+        f"expected task name 'task-group-test', got {kwargs['name']!r}"
+    )
+    assert kwargs["eager_start"] is False, (
+        f"expected eager_start False, got {kwargs['eager_start']!r}"
+    )
+    assert kwargs[TASK_METADATA_KWARG] == metadata, (
+        f"expected metadata {metadata!r}, got {kwargs[TASK_METADATA_KWARG]!r}"
+    )
 
 
 def test_create_task_rejects_unsupported_metadata_key() -> None:
@@ -383,7 +400,10 @@ async def test_create_task_ignores_metadata_without_custom_factory() -> None:
             _job(),
             metadata={"operation_name": "tests.no_factory"},
         )
-        assert await task == "ok"
+        task_result = await task
+        assert task_result == "ok", (
+            f"expected task result 'ok' without custom factory, got {task_result!r}"
+        )
     finally:
         loop.set_task_factory(previous_factory)
 
@@ -404,10 +424,14 @@ async def test_create_task_empty_metadata_is_not_forwarded() -> None:
         )
         result = await task
 
-    assert result == "done"
+    assert result == "done", f"expected result == 'done', got {result!r}"
     kwargs = _select_captured_task_kwargs(captured, "create-task-empty-metadata")
-    assert kwargs["name"] == "create-task-empty-metadata"
-    assert TASK_METADATA_KWARG not in kwargs
+    assert kwargs["name"] == "create-task-empty-metadata", (
+        f"expected task name 'create-task-empty-metadata', got {kwargs['name']!r}"
+    )
+    assert TASK_METADATA_KWARG not in kwargs, (
+        f"expected no {TASK_METADATA_KWARG!r} in task kwargs, got {kwargs!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -428,12 +452,21 @@ async def test_create_task_partial_metadata_forwards_present_keys_only() -> None
         )
         result = await task
 
-    assert result == "done"
+    assert result == "done", f"expected result == 'done', got {result!r}"
     kwargs = _select_captured_task_kwargs(captured, "create-task-partial-metadata")
     forwarded_metadata = typ.cast("dict[str, object]", kwargs[TASK_METADATA_KWARG])
-    assert forwarded_metadata["operation_name"] == "tests.create_task.partial"
-    assert "correlation_id" not in forwarded_metadata
-    assert "priority_hint" not in forwarded_metadata
+    assert forwarded_metadata["operation_name"] == "tests.create_task.partial", (
+        "expected operation_name 'tests.create_task.partial', "
+        f"got {forwarded_metadata['operation_name']!r}"
+    )
+    assert "correlation_id" not in forwarded_metadata, (
+        "expected forwarded metadata to omit 'correlation_id', "
+        f"got {forwarded_metadata!r}"
+    )
+    assert "priority_hint" not in forwarded_metadata, (
+        "expected forwarded metadata to omit 'priority_hint', "
+        f"got {forwarded_metadata!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -464,8 +497,13 @@ async def test_ingest_multi_source_emits_metadata_aware_normalisation_tasks(
             pipeline,
         )
 
-    assert episode.series_profile_id == profile.id
-    assert len(captured_sources) == 2
+    assert episode.series_profile_id == profile.id, (
+        f"expected episode.series_profile_id {profile.id!r}, "
+        f"got {episode.series_profile_id!r}"
+    )
+    assert len(captured_sources) == 2, (
+        f"expected 2 captured sources, got {len(captured_sources)}"
+    )
 
     normalise_task_kwargs: list[dict[str, object]] = []
     for kwargs in captured_task_kwargs:
@@ -475,9 +513,20 @@ async def test_ingest_multi_source_emits_metadata_aware_normalisation_tasks(
         ):
             normalise_task_kwargs.append(kwargs)
 
-    assert len(normalise_task_kwargs) == 2
+    assert len(normalise_task_kwargs) == 2, (
+        "expected 2 normalisation task kwargs entries, "
+        f"got {len(normalise_task_kwargs)}"
+    )
     for index, kwargs in enumerate(normalise_task_kwargs, start=1):
         metadata = typ.cast("dict[str, object]", kwargs[TASK_METADATA_KWARG])
-        assert metadata["operation_name"] == "canonical.ingestion.normalise"
-        assert metadata["correlation_id"] == profile.slug
-        assert metadata["priority_hint"] == index
+        assert metadata["operation_name"] == "canonical.ingestion.normalise", (
+            "expected operation_name 'canonical.ingestion.normalise', "
+            f"got {metadata['operation_name']!r}"
+        )
+        assert metadata["correlation_id"] == profile.slug, (
+            f"expected correlation_id {profile.slug!r}, "
+            f"got {metadata['correlation_id']!r}"
+        )
+        assert metadata["priority_hint"] == index, (
+            f"expected priority_hint {index}, got {metadata['priority_hint']!r}"
+        )
