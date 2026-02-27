@@ -21,7 +21,7 @@ from __future__ import annotations
 from compression import zstd
 
 _MINIMUM_COMPRESS_BYTES = 1024
-_COMPRESSED_TEXT_SENTINEL = ""
+_COMPRESSED_TEXT_SENTINEL = "__zstd__"
 
 
 def encode_text_for_storage(
@@ -94,6 +94,12 @@ def decode_text_from_storage(
         If compressed payload metadata is inconsistent or decompression fails.
     """
     if compressed_value is None:
+        if text_value == _COMPRESSED_TEXT_SENTINEL:
+            msg = (
+                f"Inconsistent compressed payload marker for {field_name}: "
+                "sentinel text value present without compressed bytes."
+            )
+            raise ValueError(msg)
         return text_value
     if text_value != _COMPRESSED_TEXT_SENTINEL:
         msg = (

@@ -29,6 +29,16 @@ def test_decode_text_from_storage_rejects_non_sentinel_marker() -> None:
         )
 
 
+def test_decode_text_from_storage_rejects_sentinel_without_compressed_bytes() -> None:
+    """Decoding fails when sentinel text is present without compressed bytes."""
+    with pytest.raises(ValueError, match=r"test\.field.*sentinel"):
+        decode_text_from_storage(
+            text_value="__zstd__",
+            compressed_value=None,
+            field_name="test.field",
+        )
+
+
 def test_decode_text_from_storage_round_trips_compressed_payload() -> None:
     """Decoding returns original text when sentinel and compressed bytes match."""
     payload = "<TEI>" + ("episode " * 1500) + "</TEI>"

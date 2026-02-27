@@ -408,8 +408,8 @@ async def test_tei_header_large_raw_xml_round_trip_uses_compressed_storage(
     assert record.raw_xml_zstd is not None, (
         "Expected large TEI header XML to persist in compressed storage."
     )
-    assert record.raw_xml == "", (
-        "Expected text column to be emptied when compressed storage is used."
+    assert record.raw_xml == "__zstd__", (
+        "Expected text column to store the compression sentinel marker."
     )
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
@@ -461,7 +461,7 @@ async def test_tei_header_get_raises_for_corrupt_compressed_payload(
         id=uuid.uuid4(),
         title="Corrupt Header",
         payload={"file_desc": {"title": "Corrupt Header"}},
-        raw_xml="",
+        raw_xml="__zstd__",
         raw_xml_zstd=b"definitely-not-zstd",
         created_at=now,
         updated_at=now,
@@ -531,8 +531,8 @@ async def test_episode_large_tei_xml_round_trip_uses_compressed_storage(
     assert record.tei_xml_zstd is not None, (
         "Expected large episode TEI XML to persist in compressed storage."
     )
-    assert record.tei_xml == "", (
-        "Expected episode text column to be emptied when compressed storage is used."
+    assert record.tei_xml == "__zstd__", (
+        "Expected episode text column to store the compression sentinel marker."
     )
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
@@ -606,7 +606,7 @@ async def test_episode_get_raises_for_corrupt_compressed_payload(
                 series_profile_id=episode.series_profile_id,
                 tei_header_id=episode.tei_header_id,
                 title=episode.title,
-                tei_xml="",
+                tei_xml="__zstd__",
                 tei_xml_zstd=b"corrupt-zstd-payload",
                 status=episode.status,
                 approval_state=episode.approval_state,
