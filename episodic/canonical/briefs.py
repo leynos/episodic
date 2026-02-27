@@ -7,7 +7,7 @@ scaffold from the structured brief output.
 
 Examples
 --------
->>> from episodic.canonical.briefs import build_series_brief
+>>> from episodic.canonical.briefs import build_series_brief, build_series_brief_prompt
 >>> payload = await build_series_brief(uow, profile_id=pid, template_id=None)
 >>> prompt = await build_series_brief_prompt(uow, profile_id=pid, template_id=None)
 """
