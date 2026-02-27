@@ -84,9 +84,9 @@ runtime behaviour remains stable, and all quality gates pass.
   trigger `NameError` when annotation-only imports remain in `TYPE_CHECKING`
   blocks under Python 3.14 deferred semantics. Evidence: failures in
   `tests/steps/*` referencing `asyncio`, `cabc`, `testing`, and `AsyncEngine`
-  after removing all future imports. Impact: retain `from __future__ import
-  annotations` in five BDD step modules to preserve unevaluated annotation
-  strings while keeping strict `TC00x` lint rules.
+  after removing all future imports. Impact: retain
+  `from __future__ import annotations` in five BDD step modules to preserve
+  unevaluated annotation strings while keeping strict `TC00x` lint rules.
 
 ## Decision log
 
@@ -109,9 +109,9 @@ runtime behaviour remains stable, and all quality gates pass.
   `tests/steps/test_multi_source_ingestion_steps.py`,
   `tests/steps/test_profile_template_api_steps.py`, and
   `tests/steps/test_schema_migrations_steps.py`. Rationale: avoids pytest-bdd
-  annotation-resolution `NameError` while preserving the existing Ruff
-  `TC00x` policy that keeps type-only imports in `TYPE_CHECKING`.
-  Date/Author: 2026-02-26 / Codex.
+  annotation-resolution `NameError` while preserving the existing Ruff `TC00x`
+  policy that keeps type-only imports in `TYPE_CHECKING`. Date/Author:
+  2026-02-26 / Codex.
 
 ## Outcomes & retrospective
 
