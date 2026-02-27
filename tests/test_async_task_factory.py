@@ -334,6 +334,52 @@ def test_create_task_rejects_unsupported_metadata_key() -> None:
             coro.close()
 
 
+def test_create_task_rejects_unsupported_metadata_keys_with_mixed_types() -> None:
+    """Unsupported metadata-key formatting handles mixed key types safely."""
+    coro = asyncio.sleep(0)
+    try:
+        with pytest.raises(
+            ValueError,
+            match=r"Unsupported task metadata keys: 'unsupported_key', 1",
+        ):
+            create_task(
+                coro,
+                metadata=typ.cast(
+                    "TaskMetadata",
+                    typ.cast("dict[str, object]", {1: "nope", "unsupported_key": "x"}),
+                ),
+            )
+    finally:
+        coro.close()
+
+
+def test_create_task_rejects_unknown_task_kwargs() -> None:
+    """Unknown task kwargs are rejected instead of being silently ignored."""
+    coro = asyncio.sleep(0)
+    try:
+        with pytest.raises(TypeError, match="unsupported_kwarg"):
+            create_task(
+                coro,
+                **typ.cast("dict[str, object]", {"unsupported_kwarg": "value"}),
+            )
+    finally:
+        coro.close()
+
+
+def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
+    """Group task creation rejects unknown task kwargs."""
+    coro = asyncio.sleep(0)
+    try:
+        with pytest.raises(TypeError, match="unsupported_kwarg"):
+            create_task_in_group(
+                asyncio.TaskGroup(),
+                coro,
+                **typ.cast("dict[str, object]", {"unsupported_kwarg": "value"}),
+            )
+    finally:
+        coro.close()
+
+
 @pytest.mark.parametrize(
     ("metadata", "expected_exception", "expected_pattern"),
     [

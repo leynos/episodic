@@ -35,6 +35,9 @@ class TaskCreateKwargs(typ.TypedDict, total=False):
     metadata: TaskMetadata | None
 
 
+_TASK_CREATE_KWARGS_KEYS = frozenset({"name", "context", "eager_start", "metadata"})
+
+
 def _validate_string_metadata_field(
     metadata: TaskMetadata,
     field_name: str,
@@ -72,7 +75,7 @@ def _validate_task_metadata(
     """Validate metadata shape and return a narrowed typed payload."""
     unsupported_keys = set(metadata) - _TASK_METADATA_KEYS
     if unsupported_keys:
-        keys = ", ".join(sorted(unsupported_keys))
+        keys = ", ".join(repr(key) for key in sorted(unsupported_keys, key=repr))
         msg = f"Unsupported task metadata keys: {keys}"
         raise ValueError(msg)
 
@@ -90,6 +93,16 @@ def _validate_task_metadata(
         validated["priority_hint"] = priority_hint
 
     return validated or None
+
+
+def _validate_task_create_kwargs(kwargs: dict[str, object]) -> TaskCreateKwargs:
+    """Validate accepted task-creation kwargs and return a typed payload."""
+    unexpected_keys = set(kwargs) - _TASK_CREATE_KWARGS_KEYS
+    if unexpected_keys:
+        keys = ", ".join(sorted(unexpected_keys, key=repr))
+        msg = f"Unsupported task creation kwargs: {keys}"
+        raise TypeError(msg)
+    return typ.cast("TaskCreateKwargs", kwargs)
 
 
 def _create_with_optional_metadata[T](
@@ -128,7 +141,7 @@ def create_task[T](
     **kwargs: typ.Unpack[TaskCreateKwargs],
 ) -> asyncio.Task[T]:
     """Create an asyncio task with optional task-factory metadata."""
-    task_kwargs = typ.cast("TaskCreateKwargs", kwargs)
+    task_kwargs = _validate_task_create_kwargs(kwargs)
     metadata = task_kwargs.get("metadata")
     if metadata is not None:
         task_kwargs["metadata"] = _validate_task_metadata(metadata)
@@ -152,7 +165,7 @@ def create_task_in_group[T](
     **kwargs: typ.Unpack[TaskCreateKwargs],
 ) -> asyncio.Task[T]:
     """Create a task in `task_group` with optional task-factory metadata."""
-    task_kwargs = typ.cast("TaskCreateKwargs", kwargs)
+    task_kwargs = _validate_task_create_kwargs(kwargs)
     metadata = task_kwargs.get("metadata")
     if metadata is not None:
         task_kwargs["metadata"] = _validate_task_metadata(metadata)
