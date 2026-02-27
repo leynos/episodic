@@ -118,7 +118,7 @@ def _make_profile(slug: str = "series-slug") -> SeriesProfile:
     )
 
 
-def _make_normalised_source(raw: RawSourceInput) -> NormalizedSource:
+def _make_normalized_source(raw: RawSourceInput) -> NormalizedSource:
     """Create a deterministic normalized source from raw input."""
     return NormalizedSource(
         source_input=SourceDocumentInput(
@@ -152,12 +152,12 @@ def _make_episode(series_profile_id: uuid.UUID) -> CanonicalEpisode:
     )
 
 
-class _TestNormaliser:
+class _TestNormalizer:
     """Normalize raw sources deterministically for this test."""
 
     async def normalize(self, raw_source: RawSourceInput) -> NormalizedSource:
         await asyncio.sleep(0)
-        return _make_normalised_source(raw_source)
+        return _make_normalized_source(raw_source)
 
 
 class _TestWeighting:
@@ -484,7 +484,7 @@ async def test_ingest_multi_source_emits_metadata_aware_normalisation_tasks(
 
     request = _make_multi_source_request(profile.slug)
     pipeline = IngestionPipeline(
-        normalizer=_TestNormaliser(),
+        normalizer=_TestNormalizer(),
         weighting=_TestWeighting(),
         resolver=_TestResolver(),
     )
