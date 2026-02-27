@@ -92,6 +92,11 @@ def render_template(
     escape_interpolation : typing.Callable[[str], str] | None
         Optional callback applied to each rendered interpolation string before
         assembly.
+
+    Returns
+    -------
+    RenderedPrompt
+        Rendered text plus static and interpolation metadata for auditing.
     """
     rendered_parts: list[str] = []
     interpolation_parts: list[PromptInterpolation] = []
@@ -125,7 +130,22 @@ def render_template(
 
 
 def build_series_brief_template(brief: JsonMapping) -> Template:
-    """Build the standard generation prompt scaffold from a structured brief."""
+    """Build the standard generation prompt scaffold from a structured brief.
+
+    Parameters
+    ----------
+    brief : JsonMapping
+        Structured brief mapping containing:
+        - ``series_profile`` mapping with ``slug``, ``title``, and optional
+          ``description`` fields.
+        - ``episode_templates`` list of template-entry mappings.
+
+    Returns
+    -------
+    Template
+        Python 3.14 template literal representing the canonical prompt
+        scaffold.
+    """
     series_profile = _coerce_mapping(
         brief.get("series_profile"), field_name="series_profile"
     )
@@ -164,7 +184,27 @@ def render_series_brief_prompt(
     *,
     escape_interpolation: typ.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
-    """Render the standard prompt scaffold for a structured series brief."""
+    """Render the standard prompt scaffold for a structured series brief.
+
+    Parameters
+    ----------
+    brief : JsonMapping
+        Structured brief payload expected by ``build_series_brief_template``.
+    escape_interpolation : typing.Callable[[str], str] | None
+        Optional callback applied to each interpolation value prior to text
+        assembly.
+
+    Returns
+    -------
+    RenderedPrompt
+        Rendered prompt text with interpolation metadata.
+
+    Raises
+    ------
+    TypeError
+        If ``brief`` contains invalid field types or missing required
+        structures.
+    """
     return render_template(
         build_series_brief_template(brief),
         escape_interpolation=escape_interpolation,

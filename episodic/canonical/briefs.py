@@ -17,12 +17,13 @@ from __future__ import annotations
 import typing as typ
 
 from .profile_templates.brief import build_series_brief
-from .prompts import RenderedPrompt, render_series_brief_prompt
+from .prompts import render_series_brief_prompt
 
 if typ.TYPE_CHECKING:
     import uuid
 
     from .ports import CanonicalUnitOfWork
+    from .prompts import RenderedPrompt
 
 
 async def build_series_brief_prompt(
