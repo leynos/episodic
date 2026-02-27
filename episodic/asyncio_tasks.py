@@ -43,9 +43,15 @@ def _validate_string_metadata_field(
     value = metadata.get(field_name)
     if value is None:
         return None
-    if not isinstance(value, str) or not value:
-        msg = f"Task metadata {field_name!r} must be a non-empty string."
+    if not isinstance(value, str):
+        msg = (
+            f"Task metadata {field_name!r} must be a string, "
+            f"got {type(value).__name__!r}."
+        )
         raise TypeError(msg)
+    if not value:
+        msg = f"Task metadata {field_name!r} must be a non-empty string."
+        raise ValueError(msg)
     return value
 
 

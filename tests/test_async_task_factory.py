@@ -335,30 +335,36 @@ def test_create_task_rejects_unsupported_metadata_key() -> None:
 
 
 @pytest.mark.parametrize(
-    ("metadata", "expected_pattern"),
+    ("metadata", "expected_exception", "expected_pattern"),
     [
         (
             {"operation_name": 123},
+            TypeError,
             "operation_name",
         ),
         (
             {"operation_name": ""},
+            ValueError,
             "operation_name",
         ),
         (
             {"correlation_id": 123},
+            TypeError,
             "correlation_id",
         ),
         (
             {"correlation_id": ""},
+            ValueError,
             "correlation_id",
         ),
         (
             {"priority_hint": "high"},
+            TypeError,
             "priority_hint",
         ),
         (
             {"priority_hint": True},
+            TypeError,
             "priority_hint",
         ),
     ],
@@ -373,12 +379,13 @@ def test_create_task_rejects_unsupported_metadata_key() -> None:
 )
 def test_create_task_rejects_invalid_metadata_values(
     metadata: dict[str, object],
+    expected_exception: type[Exception],
     expected_pattern: str,
 ) -> None:
     """Invalid metadata values raise typed validation errors."""
     coro = asyncio.sleep(0)
     try:
-        with pytest.raises(TypeError, match=expected_pattern):
+        with pytest.raises(expected_exception, match=expected_pattern):
             create_task(coro, metadata=typ.cast("TaskMetadata", metadata))
     finally:
         coro.close()
