@@ -7,13 +7,19 @@ Examples
 --------
 Compress and decode payloads:
 
->>> text_value, compressed = encode_text_for_storage("example")
+>>> payload = "example " * 256
+>>> text_value, compressed = encode_text_for_storage(payload)
+>>> text_value
+'__zstd__'
+>>> compressed is not None
+True
 >>> decode_text_from_storage(
 ...     text_value=text_value,
 ...     compressed_value=compressed,
 ...     field_name="example.field",
 ... )
-'example'
+... == payload
+True
 """
 
 from __future__ import annotations

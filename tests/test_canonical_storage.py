@@ -9,10 +9,12 @@ Run the repository test suite:
 
 from __future__ import annotations
 
+import base64
 import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
+from compression import zstd
 
 import pytest
 import sqlalchemy as sa
@@ -98,6 +100,17 @@ def _episode_fixture(
     )
 
     return (series, header, episode, job, source)
+
+
+def _build_precompressed_tei_xml_payload() -> str:
+    """Return deterministic TEI payload that remains below compression threshold."""
+    seed_bytes = bytes(range(256))
+    precompressed_body = base64.b64encode(zstd.compress(seed_bytes)).decode("ascii")
+    payload = f"<TEI>{precompressed_body}</TEI>"
+    assert len(payload.encode("utf-8")) < 1024, (
+        "Expected test payload to remain below default compression threshold."
+    )
+    return payload
 
 
 @pytest.mark.asyncio
@@ -541,6 +554,51 @@ async def test_episode_large_tei_xml_round_trip_uses_compressed_storage(
     assert fetched is not None, "Expected compressed episode row to be retrievable."
     assert fetched.tei_xml == large_tei_xml, (
         "Expected episode read path to transparently decompress payloads."
+    )
+
+
+@pytest.mark.asyncio
+async def test_episode_precompressed_tei_xml_round_trip(
+    session_factory: object,
+) -> None:
+    """Pre-compressed episode payload strings remain in plain-text storage."""
+    now = dt.datetime.now(dt.UTC)
+    series, header, episode, _, _ = _episode_fixture(now)
+    precompressed_tei_xml = _build_precompressed_tei_xml_payload()
+    episode = dc.replace(episode, tei_xml=precompressed_tei_xml)
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.tei_headers.add(header)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.episodes.add(episode)
+        await uow.commit()
+
+    async with factory() as session:
+        result = await session.execute(
+            sa.select(EpisodeRecord).where(EpisodeRecord.id == episode.id)
+        )
+        record = result.scalar_one()
+
+    assert record.tei_xml_zstd is None, (
+        "Expected below-threshold episode payloads to skip compressed storage."
+    )
+    assert record.tei_xml == precompressed_tei_xml, (
+        "Expected text column to keep the original pre-compressed payload."
+    )
+    assert record.tei_xml != "__zstd__", (
+        "Expected non-compressed rows to avoid the compression sentinel."
+    )
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        fetched = await uow.episodes.get(episode.id)
+
+    assert fetched is not None, "Expected pre-compressed episode row to be retrievable."
+    assert fetched.tei_xml == precompressed_tei_xml, (
+        "Expected read path to return stored uncompressed episode payload."
     )
 
 
