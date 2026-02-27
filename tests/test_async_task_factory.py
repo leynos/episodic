@@ -28,7 +28,7 @@ from episodic.canonical.domain import (
 from episodic.canonical.ingestion import (
     ConflictOutcome,
     MultiSourceRequest,
-    NormalisedSource,
+    NormalizedSource,
     RawSourceInput,
     WeightingResult,
 )
@@ -118,9 +118,9 @@ def _make_profile(slug: str = "series-slug") -> SeriesProfile:
     )
 
 
-def _make_normalised_source(raw: RawSourceInput) -> NormalisedSource:
+def _make_normalised_source(raw: RawSourceInput) -> NormalizedSource:
     """Create a deterministic normalized source from raw input."""
-    return NormalisedSource(
+    return NormalizedSource(
         source_input=SourceDocumentInput(
             source_type=raw.source_type,
             source_uri=raw.source_uri,
@@ -155,7 +155,7 @@ def _make_episode(series_profile_id: uuid.UUID) -> CanonicalEpisode:
 class _TestNormaliser:
     """Normalize raw sources deterministically for this test."""
 
-    async def normalise(self, raw_source: RawSourceInput) -> NormalisedSource:
+    async def normalize(self, raw_source: RawSourceInput) -> NormalizedSource:
         await asyncio.sleep(0)
         return _make_normalised_source(raw_source)
 
@@ -165,7 +165,7 @@ class _TestWeighting:
 
     async def compute_weights(
         self,
-        sources: list[NormalisedSource],
+        sources: list[NormalizedSource],
         series_configuration: dict[str, object],
     ) -> list[WeightingResult]:
         _ = series_configuration
@@ -451,7 +451,7 @@ async def test_ingest_multi_source_emits_metadata_aware_normalisation_tasks(
 
     request = _make_multi_source_request(profile.slug)
     pipeline = IngestionPipeline(
-        normaliser=_TestNormaliser(),
+        normalizer=_TestNormaliser(),
         weighting=_TestWeighting(),
         resolver=_TestResolver(),
     )

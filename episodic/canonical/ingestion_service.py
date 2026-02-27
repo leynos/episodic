@@ -35,7 +35,7 @@ if typ.TYPE_CHECKING:
     from .ingestion import (
         ConflictOutcome,
         MultiSourceRequest,
-        NormalisedSource,
+        NormalizedSource,
         WeightingResult,
     )
     from .ingestion_ports import (
@@ -151,7 +151,7 @@ def _create_normalisation_tasks(
     *,
     pipeline: IngestionPipeline,
     request: MultiSourceRequest,
-) -> list[asyncio.Task[NormalisedSource]]:
+) -> list[asyncio.Task[NormalizedSource]]:
     """Create normalization tasks with metadata-aware task kwargs."""
     return [
         create_task(
