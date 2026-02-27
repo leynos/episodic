@@ -116,6 +116,8 @@ class TeiHeaderRecord(Base):
         Parsed TEI header payload stored as JSONB.
     raw_xml : str
         Raw TEI XML payload for auditing or reprocessing.
+    raw_xml_zstd : bytes | None
+        Zstandard-compressed TEI XML payload for large records.
     created_at : datetime.datetime
         Timestamp when the record was created.
     updated_at : datetime.datetime
@@ -134,6 +136,10 @@ class TeiHeaderRecord(Base):
         nullable=False,
     )
     raw_xml: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
+    raw_xml_zstd: orm.Mapped[bytes | None] = orm.mapped_column(
+        postgresql.BYTEA,
+        nullable=True,
+    )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
@@ -162,6 +168,8 @@ class EpisodeRecord(Base):
         Episode title.
     tei_xml : str
         Raw TEI XML associated with the episode.
+    tei_xml_zstd : bytes | None
+        Zstandard-compressed TEI XML associated with the episode.
     status : EpisodeStatus
         Episode status enum.
     approval_state : ApprovalState
@@ -191,6 +199,10 @@ class EpisodeRecord(Base):
     )
     title: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)
     tei_xml: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
+    tei_xml_zstd: orm.Mapped[bytes | None] = orm.mapped_column(
+        postgresql.BYTEA,
+        nullable=True,
+    )
     status: orm.Mapped[EpisodeStatus] = orm.mapped_column(
         EPISODE_STATUS,
         nullable=False,

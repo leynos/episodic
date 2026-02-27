@@ -130,6 +130,21 @@ Database-level constraints (unique slugs, foreign keys, and CHECK constraints
 such as the weight bound on source documents) are enforced by Postgres and
 raise `sqlalchemy.exc.IntegrityError` on violation.
 
+### TEI payload compression
+
+Canonical TEI payload storage now supports transparent Zstandard compression
+for large XML values:
+
+- `tei_headers.raw_xml_zstd` stores compressed header XML.
+- `episodes.tei_xml_zstd` stores compressed episode XML.
+- `tei_headers.raw_xml` and `episodes.tei_xml` remain the backward-compatible
+  legacy text columns for older rows and small payloads.
+
+Compression is applied in repository write paths when the UTF-8 payload size is
+at least 1024 bytes and only when compression reduces size. Repository read
+paths always return plain `str` values to domain callers by decoding compressed
+payloads automatically.
+
 ## Series profile and episode template APIs
 
 Series profile and episode template workflows are implemented as a driving

@@ -6,7 +6,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -57,10 +57,19 @@ read paths remain transparent, and storage behaviour is validated through tests.
 ## Progress
 
 - [x] (2026-02-24 00:00Z) Draft ExecPlan created.
-- [ ] Stage A: Select first payload targets and define storage policy.
-- [ ] Stage B: Add fail-first round-trip and compatibility tests.
-- [ ] Stage C: Implement codec utilities and persistence integration.
-- [ ] Stage D: Run migrations, gates, and performance smoke checks.
+- [x] (2026-02-26 10:20Z) Stage A completed: selected `tei_headers.raw_xml`
+  and `episodes.tei_xml` as first payload targets; adopted schema-additive
+  policy with nullable compressed columns and dual-read compatibility.
+- [x] (2026-02-26 10:35Z) Stage B completed: added fail-first storage tests for
+  compressed round-trip, legacy uncompressed compatibility, and corrupt
+  compressed payload handling.
+- [x] (2026-02-26 10:45Z) Stage C completed: introduced
+  `episodic/canonical/storage/compression.py`, integrated write/read paths in
+  repositories and mappers, and added Alembic migration
+  `20260226_000003_add_zstd_payload_columns.py`.
+- [x] (2026-02-26 11:05Z) Stage D completed: ran targeted tests, migration
+  drift check, full gates, markdown validation, and a compression smoke
+  benchmark.
 
 ## Surprises & discoveries
 
@@ -73,6 +82,17 @@ read paths remain transparent, and storage behaviour is validated through tests.
   unavailable in this session. Evidence: empty resource/template listings.
   Impact: migration assumptions rely on local code and docs only.
 
+- Observation: direct `uv run ...` commands can fail under Python 3.14 when
+  Rust-backed dependencies are built without
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`. Evidence: local build failure while
+  introspecting `compression.zstd` directly. Impact: use Makefile targets or
+  keep repository `UV_ENV` variables for ad hoc commands.
+
+- Observation: raising `requires-python` to 3.14 changed Ruff formatter output
+  for multi-exception `except` clauses. Evidence: `make check-fmt` required
+  syntax normalization updates in existing files. Impact: baseline upgrades can
+  introduce small formatting-only diffs.
+
 ## Decision log
 
 - Decision: implement a codec utility layer first, then integrate into selected
@@ -83,12 +103,48 @@ read paths remain transparent, and storage behaviour is validated through tests.
   Rationale: avoids hard cutover risk and preserves readability for historical
   rows. Date/Author: 2026-02-24 / Codex.
 
+- Decision: implement compression as a schema-additive change with nullable
+  `BYTEA` columns (`tei_headers.raw_xml_zstd`, `episodes.tei_xml_zstd`) while
+  preserving legacy text columns. Rationale: avoids blocking rewrites of
+  historical rows and keeps rollback simple. Date/Author: 2026-02-26 / Codex.
+
+- Decision: apply compression only when UTF-8 payload size is at least
+  1024 bytes and the compressed payload is smaller than the original.
+  Rationale: avoids latency/storage overhead for small or incompressible
+  payloads. Date/Author: 2026-02-26 / Codex.
+
+- Decision: when compressed storage is selected, persist an empty string in the
+  legacy text column and store bytes in the new compressed column. Rationale:
+  keeps existing non-null constraints intact while reducing text storage.
+  Date/Author: 2026-02-26 / Codex.
+
 ## Outcomes & retrospective
 
-Pending implementation.
+Implemented and validated.
 
-Completion should prove lossless compression, backward-compatible reads, and
-acceptable performance trade-offs for selected payload classes.
+What shipped:
+
+- Added `compression.zstd`-backed codec helpers for storage payloads in
+  `episodic/canonical/storage/compression.py`.
+- Added compressed payload columns via Alembic migration
+  `20260226_000003_add_zstd_payload_columns.py`.
+- Integrated compression write-path and transparent read-path decoding for
+  `TeiHeaderRecord.raw_xml` and `EpisodeRecord.tei_xml`.
+- Added repository tests covering compressed round-trip, legacy compatibility,
+  and corrupt compressed payload errors for both payload classes.
+- Updated docs for users and developers and set project baseline to
+  Python `>=3.14`.
+
+Validation evidence:
+
+- Targeted tests: `22 passed` (`tests/test_canonical_storage.py` and
+  `tests/test_ingestion_integration.py`).
+- Full tests: `80 passed, 2 skipped`.
+- Migration drift check passed after adding the new migration.
+- `make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, and `make nixie` all passed.
+- Compression smoke benchmark showed large payload compression activation and
+  substantial byte reduction for representative repetitive TEI payloads.
 
 ## Context and orientation
 
@@ -187,6 +243,9 @@ Capture during implementation:
 - `/tmp/py314-zstd-lint.log`
 - `/tmp/py314-zstd-typecheck.log`
 - `/tmp/py314-zstd-test.log`
+- `/tmp/py314-zstd-markdownlint.log`
+- `/tmp/py314-zstd-nixie.log`
+- `/tmp/py314-zstd-perf-smoke.log`
 
 ## Interfaces and dependencies
 

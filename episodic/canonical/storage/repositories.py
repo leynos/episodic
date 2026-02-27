@@ -37,6 +37,7 @@ from episodic.canonical.ports import (
     TeiHeaderRepository,
 )
 
+from .compression import encode_text_for_storage
 from .mappers import (
     _approval_event_from_record,
     _episode_from_record,
@@ -315,12 +316,14 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
             Parsed TEI header to persist.
 
         """
+        raw_xml, raw_xml_zstd = encode_text_for_storage(header.raw_xml)
         await self._add_record(
             TeiHeaderRecord(
                 id=header.id,
                 title=header.title,
                 payload=header.payload,
-                raw_xml=header.raw_xml,
+                raw_xml=raw_xml,
+                raw_xml_zstd=raw_xml_zstd,
                 created_at=header.created_at,
                 updated_at=header.updated_at,
             )
@@ -347,13 +350,15 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
             Canonical episode domain entity to persist.
 
         """
+        tei_xml, tei_xml_zstd = encode_text_for_storage(episode.tei_xml)
         await self._add_record(
             EpisodeRecord(
                 id=episode.id,
                 series_profile_id=episode.series_profile_id,
                 tei_header_id=episode.tei_header_id,
                 title=episode.title,
-                tei_xml=episode.tei_xml,
+                tei_xml=tei_xml,
+                tei_xml_zstd=tei_xml_zstd,
                 status=episode.status,
                 approval_state=episode.approval_state,
                 created_at=episode.created_at,

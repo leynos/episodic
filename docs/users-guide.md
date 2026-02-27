@@ -45,6 +45,9 @@ This guide will cover:
   source priorities, ingestion timestamps, and reviewer identities. Storage
   identifiers generated during canonical ingestion use time-ordered UUIDv7
   values for improved chronological locality.
+- Large canonical TEI XML payloads are compressed with standard-library
+  Zstandard in persistence storage while API and domain read paths continue to
+  return plain text transparently.
 - Creating and updating series profiles via the API with optimistic locking
   (`expected_revision`)
 - Creating and updating episode templates linked to series profiles
