@@ -10,8 +10,6 @@ Examples
 >>> profile, revision = await create_series_profile(uow, data=data, audit=audit)
 """
 
-from __future__ import annotations
-
 from .brief import build_series_brief
 from .services import (
     create_episode_template,

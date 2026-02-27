@@ -14,8 +14,6 @@ Resolve conflicts between weighted sources:
 'Preferred Source Title'
 """
 
-from __future__ import annotations
-
 from episodic.canonical.ingestion import ConflictOutcome, WeightingResult
 
 

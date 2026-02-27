@@ -11,8 +11,6 @@ Convert a record to a domain entity:
 >>> entity = _series_profile_from_record(record)
 """
 
-from __future__ import annotations
-
 import typing as typ
 
 from episodic.canonical.domain import (

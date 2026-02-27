@@ -1,7 +1,5 @@
 """Tests for the episodic.compat shim behaviour."""
 
-from __future__ import annotations
-
 import typing as typ
 
 from episodic import compat

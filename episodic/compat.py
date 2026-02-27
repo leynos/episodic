@@ -1,7 +1,5 @@
 """Compatibility helpers for optional Rust extensions."""
 
-from __future__ import annotations
-
 import importlib
 import typing as typ
 

@@ -69,8 +69,7 @@ existing retrieval behaviour remains unchanged, and full quality gates pass.
 - [x] (2026-02-26 10:29Z) Stage A complete: mapped runtime UUID generation
   and narrowed scope to `episodic/canonical/services.py` ingestion writes.
 - [x] (2026-02-26 10:33Z) Stage B complete: added UUIDv7 assertions to
-  ingestion behavioural and integration tests, then captured red-phase
-  failures.
+  ingestion behavioural and integration tests, then captured red-phase failures.
 - [x] (2026-02-26 10:34Z) Stage C complete: implemented `_new_storage_id()`
   using `uuid.uuid7()` and replaced canonical ingestion storage ID call sites.
 - [x] (2026-02-26 10:52Z) Stage D complete: updated Python baseline files,
@@ -86,9 +85,9 @@ existing retrieval behaviour remains unchanged, and full quality gates pass.
 
 - Observation: direct `uv run pytest ...` fails before test execution unless
   `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` is set. Evidence:
-  `/tmp/py314-uuid7-targeted-red.log` from the first red-phase attempt.
-  Impact: the plan's targeted test command needs this environment variable in
-  this container.
+  `/tmp/py314-uuid7-targeted-red.log` from the first red-phase attempt. Impact:
+  the plan's targeted test command needs this environment variable in this
+  container.
 
 - Observation: `make check-fmt` on Python 3.14 expects ruff-formatted
   multi-exception syntax (`except TypeError, ValueError:`) in two existing
@@ -120,8 +119,8 @@ existing retrieval behaviour remains unchanged, and full quality gates pass.
 - Decision: raise project minimum Python to 3.14 in packaging and CI entry
   points (`pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`,
   `.github/workflows/release.yml`). Rationale: stdlib `uuid.uuid7()` is a
-  Python 3.14 feature; declaring 3.13 support would be inaccurate.
-  Date/Author: 2026-02-26 / Codex.
+  Python 3.14 feature; declaring 3.13 support would be inaccurate. Date/Author:
+  2026-02-26 / Codex.
 
 ## Outcomes & retrospective
 

@@ -9,8 +9,6 @@ Import the package to inspect its public surface:
 >>> import episodic
 """
 
-from __future__ import annotations
-
 import episodic
 
 

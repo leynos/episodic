@@ -1,7 +1,5 @@
 """Integration tests for the multi-source ingestion service."""
 
-from __future__ import annotations
-
 import dataclasses
 import datetime as dt
 import typing as typ

@@ -6,8 +6,6 @@ and the helpers resolve the correct repositories while preserving consistent
 error behaviour.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 

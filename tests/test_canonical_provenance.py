@@ -1,7 +1,5 @@
 """Unit tests for TEI header provenance helpers."""
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 

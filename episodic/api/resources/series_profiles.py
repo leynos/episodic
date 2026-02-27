@@ -10,8 +10,6 @@ Examples
 >>> app.add_route("/series-profiles", SeriesProfilesResource(uow_factory))
 """
 
-from __future__ import annotations
-
 import typing as typ
 from functools import partial
 from itertools import starmap

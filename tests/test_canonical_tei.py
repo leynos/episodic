@@ -1,7 +1,5 @@
 """Unit tests for TEI header parsing."""
 
-from __future__ import annotations
-
 import typing as typ
 
 import pytest

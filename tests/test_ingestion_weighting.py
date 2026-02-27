@@ -1,7 +1,5 @@
 """Unit tests for weighting strategy adapters."""
 
-from __future__ import annotations
-
 import typing as typ
 
 import pytest

@@ -17,8 +17,6 @@ Configure logging and emit a message:
 >>> log_info(get_logger(__name__), "Started %s", "ingestion")
 """
 
-from __future__ import annotations
-
 import enum
 import typing as typ
 import warnings

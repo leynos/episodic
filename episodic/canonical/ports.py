@@ -18,8 +18,6 @@ Implement a repository that satisfies the protocol:
 ...         self._items[profile.id] = profile
 """
 
-from __future__ import annotations
-
 import typing as typ
 
 if typ.TYPE_CHECKING:

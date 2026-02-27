@@ -12,8 +12,6 @@ Examples
 >>> prompt = await build_series_brief_prompt(uow, profile_id=pid, template_id=None)
 """
 
-from __future__ import annotations
-
 import typing as typ
 
 from .profile_templates.brief import build_series_brief

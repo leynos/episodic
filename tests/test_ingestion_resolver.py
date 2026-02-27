@@ -1,7 +1,5 @@
 """Unit tests for conflict resolution adapters."""
 
-from __future__ import annotations
-
 import pytest
 from _ingestion_service_helpers import _make_weighting_result
 

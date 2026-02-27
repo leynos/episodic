@@ -10,8 +10,6 @@ from episodic.api.app import create_app
 app = create_app(uow_factory)  # Returns a Falcon ASGI app with API routes.
 """
 
-from __future__ import annotations
-
 import typing as typ
 
 from falcon import asgi

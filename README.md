@@ -73,7 +73,7 @@ planned features.
 
 ## Technology Stack
 
-- **Language:** Python 3.13+ (with optional Rust extensions)
+- **Language:** Python 3.14+ (with optional Rust extensions)
 - **Web Framework:** [Falcon](https://falconframework.org/) 4.2.x on
   [Granian](https://github.com/emmett-framework/granian) (Rust-based ASGI
   server)
@@ -97,7 +97,7 @@ This ensures testability, flexibility, and long-term maintainability.
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.14+
 - [uv](https://docs.astral.sh/uv/) (fast Python package and project manager)
 - Make
 - Docker (for local development)

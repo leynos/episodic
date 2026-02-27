@@ -29,6 +29,12 @@ from episodic.canonical.services import ingest_sources
 from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 from tests.test_uuid_assertions import assert_uuid7
 
+if typ.TYPE_CHECKING:
+    import asyncio
+    import collections.abc as cabc
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
 
 def _run_async_step(
     runner: asyncio.Runner,
@@ -89,13 +95,6 @@ def _assert_episode_is_draft(episode: CanonicalEpisode) -> None:
     assert episode.approval_state is ApprovalState.DRAFT, (
         "Expected the episode approval state to be draft."
     )
-
-
-if typ.TYPE_CHECKING:
-    import asyncio
-    import collections.abc as cabc
-
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @scenario(

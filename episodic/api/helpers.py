@@ -16,8 +16,6 @@ Build a typed update request from JSON payload:
 >>> request = build_profile_update_request(profile_id, payload)
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import re
 import typing as typ

@@ -10,8 +10,6 @@ Examples
 >>> revision = await helpers._get_latest_revision(fetch_latest, entity_id)
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import datetime as dt
 import typing as typ

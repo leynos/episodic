@@ -14,8 +14,6 @@ Define and use a unit-of-work factory:
 >>> uow = factory()  # doctest: +SKIP
 """
 
-from __future__ import annotations
-
 import collections.abc as cabc
 import typing as typ
 

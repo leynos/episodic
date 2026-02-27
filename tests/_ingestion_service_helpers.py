@@ -1,7 +1,5 @@
 """Shared helpers and fixtures for ingestion service tests."""
 
-from __future__ import annotations
-
 import typing as typ
 
 from episodic.canonical.ingestion import (

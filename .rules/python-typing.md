@@ -1,6 +1,6 @@
-# Advanced Typing and Language Features (Python 3.13)
+# Advanced Typing and Language Features (Python 3.14)
 
-> This section documents forward-looking Python 3.13 typing features and best
+> This section documents forward-looking Python 3.14 typing features and best
 > practices to improve clarity, correctness, and tooling support. Use these
 > features to write expressive, modern Python.
 
@@ -163,15 +163,24 @@ Place alias definitions after the import block and group shared aliases in
 
 ## `from __future__ import annotations`
 
-Use this import in modules with type annotations to defer evaluation of
-annotation expressions to runtime. This prevents issues with forward references
-and circular imports.
+Python 3.14 defers annotation evaluation by default, so this import is no
+longer required in project modules.
 
 ```python
 from __future__ import annotations
 ```
 
-Recommended in all modern Python files using type hints.
+For this repository, do not add `from __future__ import annotations` in new
+or modified files. The project baseline is `>=3.14`.
+
+Repository exception: existing pytest-bdd step modules under
+`tests/steps/test_*_steps.py` deliberately keep this import because step
+discovery inspects annotations at runtime and deferred evaluation would cause
+`NameError` for types imported only under `TYPE_CHECKING` blocks, so
+`from __future__ import annotations` must be retained in those step modules.
+
+Use this import only in external or legacy code that must remain compatible
+with Python versions earlier than 3.14.
 
 ## `if typing.TYPE_CHECKING`
 

@@ -118,7 +118,6 @@ commands inside the containers.
 
 ```python
 # tests/test_workflow_integration.py
-from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path

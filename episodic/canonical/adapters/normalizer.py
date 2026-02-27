@@ -14,8 +14,6 @@ Normalize a transcript source:
 0.9
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 

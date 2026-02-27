@@ -1,7 +1,5 @@
 """Shared coercion helpers for canonical adapter configuration values."""
 
-from __future__ import annotations
-
 _COERCE_FLOAT_ERRORS = (TypeError, ValueError)
 
 

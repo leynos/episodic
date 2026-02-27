@@ -1,7 +1,5 @@
 """Unit tests for source normalization adapters."""
 
-from __future__ import annotations
-
 import pytest
 from _ingestion_service_helpers import _make_raw_source
 

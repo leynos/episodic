@@ -10,8 +10,6 @@ Examples
 >>> updated, next_rev = await update_series_profile(uow, request=request)
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import datetime as dt
 import typing as typ
