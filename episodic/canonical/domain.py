@@ -48,6 +48,31 @@ class IngestionStatus(enum.StrEnum):
     FAILED = "failed"
 
 
+class ReferenceDocumentKind(enum.StrEnum):
+    """Supported reusable reference-document kinds."""
+
+    STYLE_GUIDE = "style_guide"
+    HOST_PROFILE = "host_profile"
+    GUEST_PROFILE = "guest_profile"
+    RESEARCH_BRIEF = "research_brief"
+
+
+class ReferenceDocumentLifecycleState(enum.StrEnum):
+    """Lifecycle states for reusable reference documents."""
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class ReferenceBindingTargetKind(enum.StrEnum):
+    """Supported target contexts for reusable reference bindings."""
+
+    SERIES_PROFILE = "series_profile"
+    EPISODE_TEMPLATE = "episode_template"
+    INGESTION_JOB = "ingestion_job"
+
+
 @dc.dataclass(frozen=True)
 class SeriesProfile:
     """Series metadata required for canonical ingestion."""
@@ -117,6 +142,82 @@ class SourceDocument:
     content_hash: str
     metadata: JsonMapping
     created_at: dt.datetime
+
+
+@dc.dataclass(frozen=True, slots=True)
+class ReferenceDocument:
+    """Reusable reference document metadata independent of ingestion jobs."""
+
+    id: uuid.UUID
+    owner_series_profile_id: uuid.UUID
+    kind: ReferenceDocumentKind
+    lifecycle_state: ReferenceDocumentLifecycleState
+    metadata: JsonMapping
+    created_at: dt.datetime
+    updated_at: dt.datetime
+
+
+@dc.dataclass(frozen=True, slots=True)
+class ReferenceDocumentRevision:
+    """Immutable content revision for a reusable reference document."""
+
+    id: uuid.UUID
+    reference_document_id: uuid.UUID
+    content: JsonMapping
+    content_hash: str
+    author: str | None
+    change_note: str | None
+    created_at: dt.datetime
+
+    def __post_init__(self) -> None:
+        """Validate content-hash invariants."""
+        if self.content_hash.strip() == "":
+            msg = "content_hash must be a non-empty string."
+            raise ValueError(msg)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class ReferenceBinding:
+    """Pinned reusable reference revision linked to one target context."""
+
+    id: uuid.UUID
+    reference_document_revision_id: uuid.UUID
+    target_kind: ReferenceBindingTargetKind
+    series_profile_id: uuid.UUID | None
+    episode_template_id: uuid.UUID | None
+    ingestion_job_id: uuid.UUID | None
+    effective_from_episode_id: uuid.UUID | None
+    created_at: dt.datetime
+
+    def __post_init__(self) -> None:
+        """Validate target and applicability invariants."""
+        target_pairs = (
+            (ReferenceBindingTargetKind.SERIES_PROFILE, self.series_profile_id),
+            (
+                ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+                self.episode_template_id,
+            ),
+            (ReferenceBindingTargetKind.INGESTION_JOB, self.ingestion_job_id),
+        )
+        populated_targets = [kind for kind, value in target_pairs if value is not None]
+        if len(populated_targets) != 1:
+            msg = "ReferenceBinding must set exactly one target identifier."
+            raise ValueError(msg)
+
+        populated_target = populated_targets[0]
+        if populated_target is not self.target_kind:
+            msg = "ReferenceBinding target_kind does not match populated target."
+            raise ValueError(msg)
+
+        if (
+            self.effective_from_episode_id is not None
+            and self.target_kind is not ReferenceBindingTargetKind.SERIES_PROFILE
+        ):
+            msg = (
+                "ReferenceBinding effective_from_episode_id is only valid for "
+                "series_profile targets."
+            )
+            raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True)

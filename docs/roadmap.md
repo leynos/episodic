@@ -70,7 +70,7 @@ that align with the system design.
   including source priorities, ingestion timestamps, and reviewer identities;
   validated by integration and BDD tests that assert persisted TEI header
   provenance fields and ordering.
-- [ ] 2.2.6. Define the reusable reference-document model (`ReferenceDocument`,
+- [x] 2.2.6. Define the reusable reference-document model (`ReferenceDocument`,
   `ReferenceDocumentRevision`, and `ReferenceBinding`) and repository contracts
   independent of ingestion-job scope, including series-aligned host and guest
   profile documents. Finish line: approved ER diagram, glossary entries for all

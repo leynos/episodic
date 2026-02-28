@@ -228,6 +228,9 @@ def assert_brief(
     episode_templates = typ.cast(
         "list[dict[str, typ.Any]]", payload["episode_templates"]
     )
+    reference_documents = typ.cast(
+        "list[dict[str, typ.Any]]", payload["reference_documents"]
+    )
     context["brief_profile_id"] = typ.cast("str", series_profile["id"])
     context["brief_template_id"] = typ.cast("str", episode_templates[0]["id"])
     assert context["brief_profile_id"] == context["profile_id"], (
@@ -235,4 +238,7 @@ def assert_brief(
     )
     assert context["brief_template_id"] == context["template_id"], (
         "Expected brief to include selected template."
+    )
+    assert reference_documents == [], (
+        "Expected empty reference_documents list without configured bindings."
     )

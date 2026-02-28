@@ -7,7 +7,7 @@ proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -80,95 +80,131 @@ Success is observable when:
 ## Risks
 
 - Risk: Overlap between 2.2.6 and already-implemented 2.2.8 could create
-  duplicate history/version semantics.
-  Severity: high.
-  Likelihood: medium.
+  duplicate history/version semantics. Severity: high. Likelihood: medium.
   Mitigation: keep `SeriesProfile`/`EpisodeTemplate` revisions intact, add
   reference-document revisions as a separate concern, and align brief/service
   contracts through explicit binding fields.
 
 - Risk: `ReferenceBinding` target cardinality could drift into ambiguous
-  multi-target rows.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: encode invariant in domain and DB constraints so each binding
-  targets exactly one context kind (`series_profile`, `episode_template`, or
-  `ingestion_job`) with optional `effective_from_episode_id`.
+  multi-target rows. Severity: high. Likelihood: medium. Mitigation: encode
+  invariant in domain and DB constraints so each binding targets exactly one
+  context kind (`series_profile`, `episode_template`, or `ingestion_job`) with
+  optional `effective_from_episode_id`.
 
 - Risk: Existing profile/template tests may pass while silently ignoring new
-  reference semantics.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: update 2.2.8 unit and BDD tests to assert aligned contract
-  behaviour explicitly.
+  reference semantics. Severity: medium. Likelihood: medium. Mitigation: update
+  2.2.8 unit and BDD tests to assert aligned contract behaviour explicitly.
 
 - Risk: Missing glossary location in docs can cause acceptance ambiguity.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: add an explicit glossary subsection in the system design document
-  and reference it from developers guide.
+  Severity: medium. Likelihood: high. Mitigation: add an explicit glossary
+  subsection in the system design document and reference it from developers
+  guide.
 
 ## Progress
 
 - [x] (2026-02-28 15:04Z) Drafted ExecPlan for roadmap item 2.2.6 with
   explicit 2.2.8 alignment scope.
-- [ ] Stage A: Add/adjust failing tests (unit + pytest-bdd) that define the
-  reusable model and 2.2.8 alignment behaviour.
-- [ ] Stage B: Add domain entities and repository contracts
-  (`ReferenceDocument`, `ReferenceDocumentRevision`, `ReferenceBinding`).
-- [ ] Stage C: Implement SQLAlchemy models, mappers, repositories, UoW wiring,
-  and Alembic migration.
-- [ ] Stage D: Align 2.2.8 profile/template services and brief payload shaping
-  with reference binding contracts.
-- [ ] Stage E: Update system design, glossary entries, users/developers guides,
-  API/repository acceptance criteria docs, and roadmap status.
-- [ ] Stage F: Run full quality gates and capture evidence logs.
+- [x] (2026-02-28 15:08Z) Stage A complete: added fail-first unit and BDD
+  coverage for reusable reference model behaviour and 2.2.8 brief alignment.
+- [x] (2026-02-28 15:14Z) Stage B complete: added `ReferenceDocument`,
+  `ReferenceDocumentRevision`, `ReferenceBinding`, enums, and repository port
+  contracts in canonical domain/ports.
+- [x] (2026-02-28 15:18Z) Stage C complete: added SQLAlchemy tables, mappers,
+  repositories, unit-of-work wiring, and additive migration
+  `20260228_000004_add_reference_document_model.py`.
+- [x] (2026-02-28 15:22Z) Stage D complete: aligned profile/template brief
+  shaping with reference bindings while preserving existing brief keys.
+- [x] (2026-02-28 15:26Z) Stage E complete: updated system design glossary and
+  acceptance criteria, developers/users guides, and marked roadmap 2.2.6 done.
+- [x] (2026-02-28 15:30Z) Stage F complete: required quality gates and markdown
+  gates executed with passing logs.
 
 ## Surprises & discoveries
 
 - Observation: roadmap item 2.2.8 is already marked done even though it lists
-  2.2.6 as a dependency.
-  Evidence: `docs/roadmap.md` shows `[x] 2.2.8` and `[ ] 2.2.6`.
-  Impact: this plan must explicitly retrofit 2.2.8 contracts to the new
-  reusable model without regressing existing API behaviour.
+  2.2.6 as a dependency. Evidence: `docs/roadmap.md` shows `[x] 2.2.8` and
+  `[ ] 2.2.6`. Impact: this plan must explicitly retrofit 2.2.8 contracts to
+  the new reusable model without regressing existing API behaviour.
 
 - Observation: the codebase currently contains no
   `ReferenceDocument`/`ReferenceDocumentRevision`/`ReferenceBinding` domain or
-  repository types.
-  Evidence: repository-wide search in `episodic/` and `tests/`.
-  Impact: model, ports, storage, migration, and tests are all net-new.
+  repository types. Evidence: repository-wide search in `episodic/` and
+  `tests/`. Impact: model, ports, storage, migration, and tests are all net-new.
 
 - Observation: no dedicated glossary document exists under `docs/`.
-  Evidence: `rg -n "Glossary|glossary" docs`.
-  Impact: glossary acceptance should be satisfied by a new glossary section in
-  the system design document.
+  Evidence: `rg -n "Glossary|glossary" docs`. Impact: glossary acceptance
+  should be satisfied by a new glossary section in the system design document.
+
+- Observation: creating `ReferenceBinding` rows in the same transaction as new
+  `ReferenceDocumentRevision` rows can fail on FK enforcement if the session
+  has not flushed pending revisions yet. Evidence: early storage/BDD runs
+  raised FK violations in
+  `reference_document_bindings.reference_document_revision_id`. Impact: tests
+  and implementation paths that add dependent bindings in the same UoW need
+  explicit `await uow.flush()` between revision and binding adds.
 
 ## Decision log
 
 - Decision: implement 2.2.6 as additive domain/storage contracts plus
-  documentation acceptance criteria, not as endpoint delivery.
-  Rationale: roadmap separates endpoint delivery into 2.2.7; this milestone
-  must provide the model foundation.
-  Date/Author: 2026-02-28 / Codex.
+  documentation acceptance criteria, not as endpoint delivery. Rationale:
+  roadmap separates endpoint delivery into 2.2.7; this milestone must provide
+  the model foundation. Date/Author: 2026-02-28 / Codex.
 
 - Decision: align 2.2.8 by updating profile/template contract surfaces to
   expose reference-binding-aware structured brief metadata without removing
-  existing fields.
-  Rationale: preserves backward compatibility while bringing the implemented
-  feature into line with the new model.
-  Date/Author: 2026-02-28 / Codex.
+  existing fields. Rationale: preserves backward compatibility while bringing
+  the implemented feature into line with the new model. Date/Author: 2026-02-28
+  / Codex.
 
 - Decision: treat host and guest profiles as reference-document kinds that are
   series-aligned, with revision applicability controlled by
-  `effective_from_episode_id`.
-  Rationale: this matches roadmap and design text, and avoids episode-bound
-  duplication for recurring hosts/guests.
-  Date/Author: 2026-02-28 / Codex.
+  `effective_from_episode_id`. Rationale: this matches roadmap and design text,
+  and avoids episode-bound duplication for recurring hosts/guests. Date/Author:
+  2026-02-28 / Codex.
 
 ## Outcomes & retrospective
 
-Execution has not started yet. This section must be updated after each
-implementation stage and finalized once 2.2.6 is complete.
+2.2.6 implementation is complete.
+
+Delivered outcomes:
+
+- Added reusable canonical model contracts:
+  - domain entities and enums in `episodic/canonical/domain.py`,
+  - repository protocols and UoW contract additions in
+    `episodic/canonical/ports.py`.
+- Added persistence implementation:
+  - ORM records in `episodic/canonical/storage/models.py`,
+  - mapper support in `episodic/canonical/storage/mappers.py`,
+  - repositories in `episodic/canonical/storage/repositories.py`,
+  - UoW wiring in `episodic/canonical/storage/uow.py`,
+  - exports in `episodic/canonical/storage/__init__.py`,
+  - additive migration
+    `alembic/versions/20260228_000004_add_reference_document_model.py`.
+- Aligned 2.2.8 brief contract with reusable reference bindings in
+  `episodic/canonical/profile_templates/brief.py`.
+- Added/updated tests:
+  - unit: `tests/test_reference_document_models.py`,
+  - storage integration: `tests/canonical_storage/test_reference_documents.py`,
+  - behaviour: `tests/features/reference_document_model.feature`,
+    `tests/steps/test_reference_document_model_steps.py`,
+  - 2.2.8 alignment updates:
+    `tests/test_profile_template_api.py`,
+    `tests/steps/test_profile_template_api_steps.py`.
+- Updated documentation:
+  - system design glossary, ER model, and acceptance criteria in
+    `docs/episodic-podcast-generation-system-design.md`,
+  - internal contract guidance in `docs/developers-guide.md`,
+  - user-facing behaviour notes in `docs/users-guide.md`,
+  - roadmap progress in `docs/roadmap.md` (`2.2.6` now `[x]`).
+
+Retrospective notes:
+
+- Additive migration and port-first modeling kept hexagonal boundaries intact
+  and avoided endpoint-scope creep into 2.2.7.
+- `uow.flush()` sequencing for dependent binding inserts is a practical
+  invariant worth keeping explicit in storage-focused tests.
+- Brief payload extension with `reference_documents` preserved compatibility by
+  retaining existing keys and adding deterministic empty-list defaults.
 
 ## Context and orientation
 
@@ -415,3 +451,6 @@ These are implemented in SQLAlchemy adapters and exposed through
 
 Initial draft created to implement roadmap item 2.2.6 with explicit 2.2.8
 alignment, mandatory test strategy, and documentation finish-line criteria.
+
+Updated 2026-02-28: execution completed, progress and outcomes recorded, and
+gate evidence captured.

@@ -23,6 +23,9 @@ from .repositories import (
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemyEpisodeTemplateRepository,
     SqlAlchemyIngestionJobRepository,
+    SqlAlchemyReferenceBindingRepository,
+    SqlAlchemyReferenceDocumentRepository,
+    SqlAlchemyReferenceDocumentRevisionRepository,
     SqlAlchemySeriesProfileHistoryRepository,
     SqlAlchemySeriesProfileRepository,
     SqlAlchemySourceDocumentRepository,
@@ -66,6 +69,12 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for series profile change history.
     episode_template_history : SqlAlchemyEpisodeTemplateHistoryRepository
         Repository for episode template change history.
+    reference_documents : SqlAlchemyReferenceDocumentRepository
+        Repository for reusable reference document persistence.
+    reference_document_revisions : SqlAlchemyReferenceDocumentRevisionRepository
+        Repository for immutable reusable reference document revisions.
+    reference_bindings : SqlAlchemyReferenceBindingRepository
+        Repository for reusable reference binding persistence.
     """
 
     def __init__(self, session_factory: cabc.Callable[[], AsyncSession]) -> None:
@@ -94,6 +103,11 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         self.episode_template_history = SqlAlchemyEpisodeTemplateHistoryRepository(
             self._session
         )
+        self.reference_documents = SqlAlchemyReferenceDocumentRepository(self._session)
+        self.reference_document_revisions = (
+            SqlAlchemyReferenceDocumentRevisionRepository(self._session)
+        )
+        self.reference_bindings = SqlAlchemyReferenceBindingRepository(self._session)
         return self
 
     async def __aexit__(

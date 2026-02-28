@@ -21,6 +21,10 @@ import sqlalchemy as sa
 
 from episodic.canonical.domain import (
     EpisodeTemplateHistoryEntry,
+    ReferenceBinding,
+    ReferenceBindingTargetKind,
+    ReferenceDocument,
+    ReferenceDocumentRevision,
     SeriesProfileHistoryEntry,
 )
 from episodic.canonical.ports import (
@@ -29,6 +33,9 @@ from episodic.canonical.ports import (
     EpisodeTemplateHistoryRepository,
     EpisodeTemplateRepository,
     IngestionJobRepository,
+    ReferenceBindingRepository,
+    ReferenceDocumentRepository,
+    ReferenceDocumentRevisionRepository,
     SeriesProfileHistoryRepository,
     SeriesProfileRepository,
     SourceDocumentRepository,
@@ -42,6 +49,9 @@ from .mappers import (
     _episode_template_from_record,
     _episode_template_history_from_record,
     _ingestion_job_from_record,
+    _reference_binding_from_record,
+    _reference_document_from_record,
+    _reference_document_revision_from_record,
     _series_profile_from_record,
     _series_profile_history_from_record,
     _source_document_from_record,
@@ -53,6 +63,9 @@ from .models import (
     EpisodeTemplateHistoryRecord,
     EpisodeTemplateRecord,
     IngestionJobRecord,
+    ReferenceBindingRecord,
+    ReferenceDocumentRecord,
+    ReferenceDocumentRevisionRecord,
     SeriesProfileHistoryRecord,
     SeriesProfileRecord,
     SourceDocumentRecord,
@@ -453,6 +466,163 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
             SourceDocumentRecord.ingestion_job_id == job_id,
             SourceDocumentRecord.created_at,
             _source_document_from_record,
+        )
+
+
+class SqlAlchemyReferenceDocumentRepository(
+    _RepositoryBase, ReferenceDocumentRepository
+):
+    """Persist reusable reference documents using SQLAlchemy."""
+
+    async def add(self, document: ReferenceDocument) -> None:
+        """Add a reusable reference document record."""
+        await self._add_record(
+            ReferenceDocumentRecord(
+                id=document.id,
+                owner_series_profile_id=document.owner_series_profile_id,
+                kind=document.kind,
+                lifecycle_state=document.lifecycle_state,
+                metadata_payload=document.metadata,
+                created_at=document.created_at,
+                updated_at=document.updated_at,
+            )
+        )
+
+    async def get(self, document_id: uuid.UUID) -> ReferenceDocument | None:
+        """Fetch a reusable reference document by identifier."""
+        return await self._get_one_or_none(
+            ReferenceDocumentRecord,
+            ReferenceDocumentRecord.id == document_id,
+            _reference_document_from_record,
+        )
+
+    async def list_for_series(
+        self,
+        series_profile_id: uuid.UUID,
+    ) -> list[ReferenceDocument]:
+        """List reusable reference documents for one series profile."""
+        return await self._list_where(
+            ReferenceDocumentRecord,
+            ReferenceDocumentRecord.owner_series_profile_id == series_profile_id,
+            ReferenceDocumentRecord.created_at,
+            _reference_document_from_record,
+        )
+
+    async def update(self, document: ReferenceDocument) -> None:
+        """Persist changes to an existing reusable reference document."""
+        await self._update_where(
+            ReferenceDocumentRecord,
+            ReferenceDocumentRecord.id == document.id,
+            {
+                "owner_series_profile_id": document.owner_series_profile_id,
+                "kind": document.kind,
+                "lifecycle_state": document.lifecycle_state,
+                "metadata_payload": document.metadata,
+                "updated_at": document.updated_at,
+            },
+        )
+
+
+class SqlAlchemyReferenceDocumentRevisionRepository(
+    _RepositoryBase, ReferenceDocumentRevisionRepository
+):
+    """Persist reusable reference document revisions using SQLAlchemy."""
+
+    async def add(self, revision: ReferenceDocumentRevision) -> None:
+        """Add an immutable reusable reference revision record."""
+        await self._add_record(
+            ReferenceDocumentRevisionRecord(
+                id=revision.id,
+                reference_document_id=revision.reference_document_id,
+                content_payload=revision.content,
+                content_hash=revision.content_hash,
+                author=revision.author,
+                change_note=revision.change_note,
+                created_at=revision.created_at,
+            )
+        )
+
+    async def get(self, revision_id: uuid.UUID) -> ReferenceDocumentRevision | None:
+        """Fetch a reusable reference revision by identifier."""
+        return await self._get_one_or_none(
+            ReferenceDocumentRevisionRecord,
+            ReferenceDocumentRevisionRecord.id == revision_id,
+            _reference_document_revision_from_record,
+        )
+
+    async def list_for_document(
+        self,
+        document_id: uuid.UUID,
+    ) -> list[ReferenceDocumentRevision]:
+        """List revisions for one reusable reference document."""
+        return await self._list_where(
+            ReferenceDocumentRevisionRecord,
+            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
+            ReferenceDocumentRevisionRecord.created_at,
+            _reference_document_revision_from_record,
+        )
+
+    async def get_latest_for_document(
+        self,
+        document_id: uuid.UUID,
+    ) -> ReferenceDocumentRevision | None:
+        """Fetch the latest revision for one reusable reference document."""
+        return await self._get_latest_where(
+            ReferenceDocumentRevisionRecord,
+            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
+            ReferenceDocumentRevisionRecord.created_at.desc(),
+            _reference_document_revision_from_record,
+        )
+
+
+class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepository):
+    """Persist reusable reference bindings using SQLAlchemy."""
+
+    @staticmethod
+    def _target_field(target_kind: ReferenceBindingTargetKind) -> typ.Any:  # noqa: ANN401
+        """Resolve the SQLAlchemy target column for a binding target kind."""
+        match target_kind:
+            case ReferenceBindingTargetKind.SERIES_PROFILE:
+                return ReferenceBindingRecord.series_profile_id
+            case ReferenceBindingTargetKind.EPISODE_TEMPLATE:
+                return ReferenceBindingRecord.episode_template_id
+            case ReferenceBindingTargetKind.INGESTION_JOB:
+                return ReferenceBindingRecord.ingestion_job_id
+            case _:
+                msg = f"Unsupported reference binding target kind: {target_kind}"
+                raise ValueError(msg)
+
+    async def add(self, binding: ReferenceBinding) -> None:
+        """Add a reusable reference binding record."""
+        await self._add_record(
+            ReferenceBindingRecord(
+                id=binding.id,
+                reference_document_revision_id=binding.reference_document_revision_id,
+                target_kind=binding.target_kind,
+                series_profile_id=binding.series_profile_id,
+                episode_template_id=binding.episode_template_id,
+                ingestion_job_id=binding.ingestion_job_id,
+                effective_from_episode_id=binding.effective_from_episode_id,
+                created_at=binding.created_at,
+            )
+        )
+
+    async def list_for_target(
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_id: uuid.UUID,
+    ) -> list[ReferenceBinding]:
+        """List reusable reference bindings for one target context."""
+        target_field = self._target_field(target_kind)
+        return await self._list_where(
+            ReferenceBindingRecord,
+            sa.and_(
+                ReferenceBindingRecord.target_kind == target_kind,
+                target_field == target_id,
+            ),
+            ReferenceBindingRecord.created_at,
+            _reference_binding_from_record,
         )
 
 

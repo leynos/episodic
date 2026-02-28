@@ -31,6 +31,10 @@ if typ.TYPE_CHECKING:
         EpisodeTemplate,
         EpisodeTemplateHistoryEntry,
         IngestionJob,
+        ReferenceBinding,
+        ReferenceBindingTargetKind,
+        ReferenceDocument,
+        ReferenceDocumentRevision,
         SeriesProfile,
         SeriesProfileHistoryEntry,
         SourceDocument,
@@ -328,6 +332,75 @@ class ApprovalEventRepository(typ.Protocol):
         ...
 
 
+class ReferenceDocumentRepository(typ.Protocol):
+    """Persistence interface for reusable reference documents."""
+
+    async def add(self, document: ReferenceDocument) -> None:
+        """Persist a reusable reference document."""
+        ...
+
+    async def get(self, document_id: uuid.UUID) -> ReferenceDocument | None:
+        """Fetch a reusable reference document by identifier."""
+        ...
+
+    async def list_for_series(
+        self,
+        series_profile_id: uuid.UUID,
+    ) -> list[ReferenceDocument]:
+        """List reusable reference documents owned by one series profile."""
+        ...
+
+    async def update(self, document: ReferenceDocument) -> None:
+        """Persist changes to an existing reusable reference document."""
+        ...
+
+
+class ReferenceDocumentRevisionRepository(typ.Protocol):
+    """Persistence interface for reusable reference document revisions."""
+
+    async def add(self, revision: ReferenceDocumentRevision) -> None:
+        """Persist a reusable reference document revision."""
+        ...
+
+    async def get(
+        self,
+        revision_id: uuid.UUID,
+    ) -> ReferenceDocumentRevision | None:
+        """Fetch a reusable reference document revision by identifier."""
+        ...
+
+    async def list_for_document(
+        self,
+        document_id: uuid.UUID,
+    ) -> list[ReferenceDocumentRevision]:
+        """List immutable revisions for one reusable reference document."""
+        ...
+
+    async def get_latest_for_document(
+        self,
+        document_id: uuid.UUID,
+    ) -> ReferenceDocumentRevision | None:
+        """Fetch the latest immutable revision for a reference document."""
+        ...
+
+
+class ReferenceBindingRepository(typ.Protocol):
+    """Persistence interface for reusable reference bindings."""
+
+    async def add(self, binding: ReferenceBinding) -> None:
+        """Persist a reusable reference binding."""
+        ...
+
+    async def list_for_target(
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_id: uuid.UUID,
+    ) -> list[ReferenceBinding]:
+        """List bindings for one target context."""
+        ...
+
+
 class EpisodeTemplateRepository(typ.Protocol):
     """Persistence interface for episode templates."""
 
@@ -440,6 +513,12 @@ class CanonicalUnitOfWork(typ.Protocol):
         Repository for series profile change history.
     episode_template_history : EpisodeTemplateHistoryRepository
         Repository for episode template change history.
+    reference_documents : ReferenceDocumentRepository
+        Repository for reusable reference document persistence.
+    reference_document_revisions : ReferenceDocumentRevisionRepository
+        Repository for immutable reference document revisions.
+    reference_bindings : ReferenceBindingRepository
+        Repository for reusable reference bindings.
     """
 
     series_profiles: SeriesProfileRepository
@@ -451,6 +530,9 @@ class CanonicalUnitOfWork(typ.Protocol):
     episode_templates: EpisodeTemplateRepository
     series_profile_history: SeriesProfileHistoryRepository
     episode_template_history: EpisodeTemplateHistoryRepository
+    reference_documents: ReferenceDocumentRepository
+    reference_document_revisions: ReferenceDocumentRevisionRepository
+    reference_bindings: ReferenceBindingRepository
 
     async def __aenter__(self) -> CanonicalUnitOfWork:
         """Enter the unit-of-work context.

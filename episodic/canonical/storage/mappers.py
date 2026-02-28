@@ -19,6 +19,9 @@ from episodic.canonical.domain import (
     EpisodeTemplate,
     EpisodeTemplateHistoryEntry,
     IngestionJob,
+    ReferenceBinding,
+    ReferenceDocument,
+    ReferenceDocumentRevision,
     SeriesProfile,
     SeriesProfileHistoryEntry,
     SourceDocument,
@@ -34,6 +37,9 @@ if typ.TYPE_CHECKING:
         EpisodeTemplateHistoryRecord,
         EpisodeTemplateRecord,
         IngestionJobRecord,
+        ReferenceBindingRecord,
+        ReferenceDocumentRecord,
+        ReferenceDocumentRevisionRecord,
         SeriesProfileHistoryRecord,
         SeriesProfileRecord,
         SourceDocumentRecord,
@@ -197,4 +203,50 @@ def _episode_template_history_from_record(
             entity_class=EpisodeTemplateHistoryEntry,
             parent_id_field="episode_template_id",
         ),
+    )
+
+
+def _reference_document_from_record(
+    record: ReferenceDocumentRecord,
+) -> ReferenceDocument:
+    """Map a reusable reference document record to a domain entity."""
+    return ReferenceDocument(
+        id=record.id,
+        owner_series_profile_id=record.owner_series_profile_id,
+        kind=record.kind,
+        lifecycle_state=record.lifecycle_state,
+        metadata=record.metadata_payload,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _reference_document_revision_from_record(
+    record: ReferenceDocumentRevisionRecord,
+) -> ReferenceDocumentRevision:
+    """Map a reusable reference revision record to a domain entity."""
+    return ReferenceDocumentRevision(
+        id=record.id,
+        reference_document_id=record.reference_document_id,
+        content=record.content_payload,
+        content_hash=record.content_hash,
+        author=record.author,
+        change_note=record.change_note,
+        created_at=record.created_at,
+    )
+
+
+def _reference_binding_from_record(
+    record: ReferenceBindingRecord,
+) -> ReferenceBinding:
+    """Map a reusable reference binding record to a domain entity."""
+    return ReferenceBinding(
+        id=record.id,
+        reference_document_revision_id=record.reference_document_revision_id,
+        target_kind=record.target_kind,
+        series_profile_id=record.series_profile_id,
+        episode_template_id=record.episode_template_id,
+        ingestion_job_id=record.ingestion_job_id,
+        effective_from_episode_id=record.effective_from_episode_id,
+        created_at=record.created_at,
     )

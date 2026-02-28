@@ -181,6 +181,31 @@ adapter (`episodic/api/app.py`) over domain services in
 - `series_profile`: profile metadata, configuration, and current revision.
 - `episode_templates`: one template when `template_id` is provided, or all
   templates for the series profile when omitted.
+- `reference_documents`: reusable reference bindings resolved for the selected
+  series profile and template context.
+
+### Reusable reference-document repositories
+
+The canonical unit of work now exposes reusable reference repositories
+independent of ingestion-job scope:
+
+- `reference_documents`
+- `reference_document_revisions`
+- `reference_bindings`
+
+These repositories are implemented in
+`episodic/canonical/storage/repositories.py` and enforce these invariants:
+
+- A binding targets exactly one context kind (`series_profile`,
+  `episode_template`, or `ingestion_job`).
+- `effective_from_episode_id` is only valid for `series_profile` bindings.
+- Host and guest profiles are represented through
+  `ReferenceDocumentKind.HOST_PROFILE` and
+  `ReferenceDocumentKind.GUEST_PROFILE`.
+
+For profile/template brief assembly, `build_series_brief(...)` resolves
+reference bindings from the selected profile and template contexts and emits
+serialized `reference_documents` payload entries with pinned revision metadata.
 
 ### Prompt scaffolding for generators
 

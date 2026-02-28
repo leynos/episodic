@@ -12,7 +12,14 @@ import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
-from episodic.canonical.domain import ApprovalState, EpisodeStatus, IngestionStatus
+from episodic.canonical.domain import (
+    ApprovalState,
+    EpisodeStatus,
+    IngestionStatus,
+    ReferenceBindingTargetKind,
+    ReferenceDocumentKind,
+    ReferenceDocumentLifecycleState,
+)
 
 
 class Base(orm.DeclarativeBase):
@@ -40,12 +47,31 @@ INGESTION_STATUS = sa.Enum(
     name="ingestion_status",
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )
+REFERENCE_DOCUMENT_KIND = sa.Enum(
+    ReferenceDocumentKind,
+    name="reference_document_kind",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+REFERENCE_DOCUMENT_LIFECYCLE_STATE = sa.Enum(
+    ReferenceDocumentLifecycleState,
+    name="reference_document_lifecycle_state",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+REFERENCE_BINDING_TARGET_KIND = sa.Enum(
+    ReferenceBindingTargetKind,
+    name="reference_binding_target_kind",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
 
 UQ_SERIES_PROFILE_HISTORY_REVISION = "uq_series_profile_history_revision"
 UQ_EPISODE_TEMPLATE_HISTORY_REVISION = "uq_episode_template_history_revision"
 REVISION_CONSTRAINT_NAMES = (
     UQ_SERIES_PROFILE_HISTORY_REVISION,
     UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
+)
+CK_REFERENCE_BINDINGS_TARGET = "ck_reference_document_bindings_target"
+CK_REFERENCE_BINDINGS_EFFECTIVE_EPISODE = (
+    "ck_reference_document_bindings_effective_episode"
 )
 
 
@@ -358,6 +384,160 @@ class SourceDocumentRecord(Base):
         sa.CheckConstraint(
             "weight >= 0 AND weight <= 1",
             name="ck_source_documents_weight",
+        ),
+    )
+
+
+class ReferenceDocumentRecord(Base):
+    """SQLAlchemy model for reusable reference documents."""
+
+    __tablename__ = "reference_documents"
+
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+    )
+    owner_series_profile_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("series_profiles.id"),
+        nullable=False,
+        index=True,
+    )
+    kind: orm.Mapped[ReferenceDocumentKind] = orm.mapped_column(
+        REFERENCE_DOCUMENT_KIND,
+        nullable=False,
+    )
+    lifecycle_state: orm.Mapped[ReferenceDocumentLifecycleState] = orm.mapped_column(
+        REFERENCE_DOCUMENT_LIFECYCLE_STATE,
+        nullable=False,
+    )
+    metadata_payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        "metadata",
+        postgresql.JSONB,
+        default=dict,
+        nullable=False,
+    )
+    created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+    updated_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+    )
+
+
+class ReferenceDocumentRevisionRecord(Base):
+    """SQLAlchemy model for immutable reusable reference revisions."""
+
+    __tablename__ = "reference_document_revisions"
+
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+    )
+    reference_document_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("reference_documents.id"),
+        nullable=False,
+        index=True,
+    )
+    content_payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        "content",
+        postgresql.JSONB,
+        nullable=False,
+    )
+    content_hash: orm.Mapped[str] = orm.mapped_column(sa.String(128), nullable=False)
+    author: orm.Mapped[str | None] = orm.mapped_column(sa.String(200), nullable=True)
+    change_note: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
+    created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "reference_document_id",
+            "content_hash",
+            name="uq_reference_document_revisions_document_hash",
+        ),
+    )
+
+
+class ReferenceBindingRecord(Base):
+    """SQLAlchemy model for reusable reference bindings."""
+
+    __tablename__ = "reference_document_bindings"
+
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+    )
+    reference_document_revision_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("reference_document_revisions.id"),
+        nullable=False,
+        index=True,
+    )
+    target_kind: orm.Mapped[ReferenceBindingTargetKind] = orm.mapped_column(
+        REFERENCE_BINDING_TARGET_KIND,
+        nullable=False,
+    )
+    series_profile_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("series_profiles.id"),
+        nullable=True,
+        index=True,
+    )
+    episode_template_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("episode_templates.id"),
+        nullable=True,
+        index=True,
+    )
+    ingestion_job_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("ingestion_jobs.id"),
+        nullable=True,
+        index=True,
+    )
+    effective_from_episode_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("episodes.id"),
+        nullable=True,
+    )
+    created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+
+    __table_args__ = (
+        sa.CheckConstraint(
+            "((target_kind = 'series_profile' AND series_profile_id IS NOT NULL "
+            "AND episode_template_id IS NULL AND ingestion_job_id IS NULL) OR "
+            "(target_kind = 'episode_template' AND episode_template_id IS NOT NULL "
+            "AND series_profile_id IS NULL AND ingestion_job_id IS NULL) OR "
+            "(target_kind = 'ingestion_job' AND ingestion_job_id IS NOT NULL "
+            "AND series_profile_id IS NULL AND episode_template_id IS NULL))",
+            name=CK_REFERENCE_BINDINGS_TARGET,
+        ),
+        sa.CheckConstraint(
+            "(effective_from_episode_id IS NULL OR target_kind = 'series_profile')",
+            name=CK_REFERENCE_BINDINGS_EFFECTIVE_EPISODE,
+        ),
+        sa.UniqueConstraint(
+            "reference_document_revision_id",
+            "target_kind",
+            "series_profile_id",
+            "episode_template_id",
+            "ingestion_job_id",
+            "effective_from_episode_id",
+            name="uq_reference_document_bindings_target_revision",
         ),
     )
 

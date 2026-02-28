@@ -16,6 +16,8 @@ Build a structured brief for one profile and optional template filter:
 import typing as typ
 from itertools import starmap
 
+from episodic.canonical.domain import ReferenceBindingTargetKind
+
 from .helpers import _profile_payload_fields, _template_payload_fields
 from .services import get_entity_with_revision, list_entities_with_revisions
 from .types import EntityNotFoundError
@@ -23,7 +25,14 @@ from .types import EntityNotFoundError
 if typ.TYPE_CHECKING:
     import uuid
 
-    from episodic.canonical.domain import EpisodeTemplate, JsonMapping, SeriesProfile
+    from episodic.canonical.domain import (
+        EpisodeTemplate,
+        JsonMapping,
+        ReferenceBinding,
+        ReferenceDocument,
+        ReferenceDocumentRevision,
+        SeriesProfile,
+    )
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 
@@ -48,6 +57,31 @@ def _serialize_template_for_brief(
         **_template_payload_fields(template),
         "revision": revision,
         "updated_at": template.updated_at.isoformat(),
+    }
+
+
+def _serialize_reference_document_for_brief(
+    *,
+    binding: ReferenceBinding,
+    document: ReferenceDocument,
+    revision: ReferenceDocumentRevision,
+) -> JsonMapping:
+    """Serialize a reference binding/document/revision triple."""
+    return {
+        "binding_id": str(binding.id),
+        "document_id": str(document.id),
+        "revision_id": str(revision.id),
+        "kind": document.kind.value,
+        "target_kind": binding.target_kind.value,
+        "effective_from_episode_id": (
+            None
+            if binding.effective_from_episode_id is None
+            else str(binding.effective_from_episode_id)
+        ),
+        "lifecycle_state": document.lifecycle_state.value,
+        "metadata": document.metadata,
+        "content": revision.content,
+        "content_hash": revision.content_hash,
     }
 
 
@@ -82,6 +116,68 @@ async def _load_template_items_for_brief(
         )
         raise EntityNotFoundError(msg, entity_id=str(template.id))
     return [(template, template_revision)]
+
+
+async def _load_reference_documents_for_target(
+    uow: CanonicalUnitOfWork,
+    *,
+    target_kind: ReferenceBindingTargetKind,
+    target_id: uuid.UUID,
+) -> list[JsonMapping]:
+    """Load serialized reference documents for one binding target."""
+    bindings = await uow.reference_bindings.list_for_target(
+        target_kind=target_kind,
+        target_id=target_id,
+    )
+    serialized: list[JsonMapping] = []
+    for binding in bindings:
+        revision = await uow.reference_document_revisions.get(
+            binding.reference_document_revision_id
+        )
+        if revision is None:
+            msg = (
+                "Reference binding points to missing revision: "
+                f"{binding.reference_document_revision_id}"
+            )
+            raise ValueError(msg)
+        document = await uow.reference_documents.get(revision.reference_document_id)
+        if document is None:
+            msg = (
+                "Reference revision points to missing document: "
+                f"{revision.reference_document_id}"
+            )
+            raise ValueError(msg)
+        serialized.append(
+            _serialize_reference_document_for_brief(
+                binding=binding,
+                document=document,
+                revision=revision,
+            )
+        )
+    return serialized
+
+
+async def _load_reference_documents_for_brief(
+    uow: CanonicalUnitOfWork,
+    *,
+    profile_id: uuid.UUID,
+    template_items: list[tuple[EpisodeTemplate, int]],
+) -> list[JsonMapping]:
+    """Load serialized reference documents for profile/template contexts."""
+    reference_documents = await _load_reference_documents_for_target(
+        uow,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        target_id=profile_id,
+    )
+    for template, _ in template_items:
+        reference_documents.extend(
+            await _load_reference_documents_for_target(
+                uow,
+                target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+                target_id=template.id,
+            )
+        )
+    return reference_documents
 
 
 async def build_series_brief(
@@ -132,10 +228,16 @@ async def build_series_brief(
         profile_id=profile.id,
         template_id=template_id,
     )
+    reference_documents = await _load_reference_documents_for_brief(
+        uow,
+        profile_id=profile.id,
+        template_items=template_items,
+    )
 
     return {
         "series_profile": _serialize_profile_for_brief(profile, profile_revision),
         "episode_templates": list(
             starmap(_serialize_template_for_brief, template_items)
         ),
+        "reference_documents": reference_documents,
     }
