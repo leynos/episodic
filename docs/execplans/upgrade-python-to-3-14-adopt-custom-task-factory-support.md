@@ -6,7 +6,7 @@ This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETED
 
 ## Purpose and big picture
 
@@ -59,10 +59,20 @@ behaviour, and migrated code paths keep functional behaviour unchanged.
 ## Progress
 
 - [x] (2026-02-24 00:00Z) Draft ExecPlan created.
-- [ ] Stage A: Define task metadata schema and first migration target.
-- [ ] Stage B: Add fail-first tests for custom task factory kwargs.
-- [ ] Stage C: Implement task factory utilities and migrate target path.
-- [ ] Stage D: Run full gates and document usage guidance.
+- [x] (2026-02-26 10:32Z) Stage A: Defined metadata schema
+  (`operation_name`, `correlation_id`, `priority_hint`) and selected
+  `episodic/canonical/ingestion_service.py` normalization fan-out as the
+  migration target.
+- [x] (2026-02-26 10:33Z) Stage B: Added fail-first tests in
+  `tests/test_async_task_factory.py`; initial run failed with
+  `ModuleNotFoundError: episodic.asyncio_tasks`.
+- [x] (2026-02-26 10:34Z) Stage C: Implemented
+  `episodic/asyncio_tasks.py` and migrated ingestion fan-out to
+  metadata-aware `create_task` calls while preserving `asyncio.gather`
+  result ordering semantics.
+- [x] (2026-02-26 10:46Z) Stage D: Ran gates (`make check-fmt`, `make lint`,
+  `make typecheck`, `make test`, `make markdownlint`, `make nixie`) and
+  updated user/design docs with task metadata guidance.
 
 ## Surprises & discoveries
 
@@ -71,9 +81,12 @@ behaviour, and migrated code paths keep functional behaviour unchanged.
   infrastructure yet. Evidence: direct source inspection. Impact: a shared
   utility module is needed before broader migration.
 
-- Observation: project memory Model Context Protocol (MCP) resources are
-  unavailable in this session. Evidence: resource listing calls returned empty
-  arrays. Impact: this plan is based on local repository and Python docs only.
+- Observation: running direct `uv run` commands under Python 3.14 requires
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` for current Rust-backed dependency
+  builds (`tei-rapporteur` via PyO3 0.23.5). Evidence: targeted test run/build
+  failures before setting the env var; successful builds afterwards. Impact:
+  all local command examples for this work should use Makefile targets (which
+  already set this env var) or include the variable explicitly.
 
 ## Decision log
 
@@ -85,12 +98,39 @@ behaviour, and migrated code paths keep functional behaviour unchanged.
   Rationale: instrumentation should not alter orchestration semantics.
   Date/Author: 2026-02-24 / Codex.
 
+- Decision: keep the ingestion normalization fan-out on `asyncio.gather`
+  semantics while switching coroutine fan-out to explicit task creation.
+  Rationale: preserves existing completion and ordering behaviour while enabling
+  metadata-aware instrumentation.
+  Date/Author: 2026-02-26 / Codex.
+
 ## Outcomes & retrospective
 
-Pending implementation.
+Implemented and validated.
 
-Completion should provide a reusable task-factory pattern for upcoming
-LangGraph/Celery integration work without destabilizing current ingestion code.
+Delivered artefacts:
+
+- New utility module `episodic/asyncio_tasks.py` for metadata-aware task
+  creation with explicit metadata schema validation.
+- Migrated ingestion normalization fan-out in
+  `episodic/canonical/ingestion_service.py` to explicit task creation with
+  task names and metadata payloads.
+- Added tests in `tests/test_async_task_factory.py` covering
+  `asyncio.create_task`, `TaskGroup.create_task`, unsupported metadata keys,
+  no-factory fallback, and ingestion-path task metadata emission.
+- Updated docs in `docs/users-guide.md` and
+  `docs/episodic-podcast-generation-system-design.md`.
+- Updated runtime floor to Python 3.14 in `pyproject.toml` and `README.md`.
+
+Validation summary:
+
+- `make check-fmt`: pass.
+- `make lint`: pass.
+- `make typecheck`: pass (existing unrelated warning retained in
+  `episodic/api/helpers.py`).
+- `make test`: pass (`79 passed, 2 skipped`).
+- `make markdownlint`: pass.
+- `make nixie`: pass.
 
 ## Context and orientation
 
@@ -136,7 +176,8 @@ Run from repository root.
 
 2. Add tests first for task-factory kwarg propagation.
 
-    set -o pipefail; uv run pytest -v tests/test_async_task_factory.py \
+    set -o pipefail; PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv run pytest -v \
+      tests/test_async_task_factory.py \
       2>&1 | tee /tmp/py314-task-factory-targeted.log
 
 3. Implement task factory utility and migrate one path.

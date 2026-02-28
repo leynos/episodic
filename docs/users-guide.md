@@ -42,9 +42,12 @@ This guide will cover:
   with all source material retained for audit regardless of whether it was
   preferred or rejected. Weighting coefficients are configurable per series
   profile. TEI headers automatically capture provenance metadata including
-  source priorities, ingestion timestamps, and reviewer identities. Storage
-  identifiers generated during canonical ingestion use time-ordered UUIDv7
-  values for improved chronological locality.
+  source priorities, ingestion timestamps, and reviewer identities. Source
+  normalisation fan-out now uses metadata-aware asyncio task creation, so
+  custom event-loop task factories can receive operation metadata
+  (`operation_name`, `correlation_id`, `priority_hint`) for diagnostics.
+  Storage identifiers generated during canonical ingestion use time-ordered
+  UUIDv7 values for improved chronological locality.
 - Large canonical TEI XML payloads are compressed with standard-library
   Zstandard in persistence storage while API and domain read paths continue to
   return plain text transparently.

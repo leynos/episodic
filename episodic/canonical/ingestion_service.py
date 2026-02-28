@@ -20,6 +20,7 @@ import asyncio
 import dataclasses as dc
 import typing as typ
 
+from episodic.asyncio_tasks import TaskMetadata, create_task
 from episodic.logging import get_logger, log_info
 
 from .domain import IngestionRequest
@@ -32,6 +33,7 @@ if typ.TYPE_CHECKING:
     from .ingestion import (
         ConflictOutcome,
         MultiSourceRequest,
+        NormalizedSource,
         WeightingResult,
     )
     from .ingestion_ports import (
@@ -130,6 +132,39 @@ def _validate_ingestion_request(
         raise ValueError(msg)
 
 
+def _normalisation_task_metadata(
+    *,
+    series_slug: str,
+    source_index: int,
+) -> TaskMetadata:
+    """Build task metadata for a source-normalization task."""
+    return {
+        "operation_name": "canonical.ingestion.normalise",
+        "correlation_id": series_slug,
+        "priority_hint": source_index,
+    }
+
+
+def _create_normalisation_tasks(
+    *,
+    pipeline: IngestionPipeline,
+    request: MultiSourceRequest,
+) -> list[asyncio.Task[NormalizedSource]]:
+    """Create normalization tasks with metadata-aware task kwargs."""
+    return [
+        create_task(
+            pipeline.normalizer.normalize(raw_source),
+            name=f"canonical.ingestion.normalise:{source_index}",
+            eager_start=True,
+            metadata=_normalisation_task_metadata(
+                series_slug=request.series_slug,
+                source_index=source_index,
+            ),
+        )
+        for source_index, raw_source in enumerate(request.raw_sources, start=1)
+    ]
+
+
 async def ingest_multi_source(
     uow: CanonicalUnitOfWork,
     series_profile: SeriesProfile,
@@ -175,11 +210,11 @@ async def ingest_multi_source(
     """
     _validate_ingestion_request(request, series_profile)
 
-    normalized = list(
-        await asyncio.gather(
-            *(pipeline.normalizer.normalize(raw) for raw in request.raw_sources),
-        ),
+    normalisation_tasks = _create_normalisation_tasks(
+        pipeline=pipeline,
+        request=request,
     )
+    normalized = list(await asyncio.gather(*normalisation_tasks))
 
     weighted = await pipeline.weighting.compute_weights(
         normalized,
