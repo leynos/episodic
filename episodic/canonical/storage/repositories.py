@@ -644,17 +644,20 @@ class SqlAlchemySeriesProfileHistoryRepository(
 ):
     """Persist series profile history entries using SQLAlchemy."""
 
+    _config: typ.ClassVar[
+        HistoryRepositoryConfig[
+            SeriesProfileHistoryEntry,
+            SeriesProfileHistoryRecord,
+        ]
+    ] = HistoryRepositoryConfig(
+        record_type=SeriesProfileHistoryRecord,
+        parent_id_field="series_profile_id",
+        mapper=_series_profile_history_from_record,
+        record_builder=_series_profile_history_to_record,
+    )
+
     def __init__(self, session: AsyncSession) -> None:
-        config = HistoryRepositoryConfig(
-            record_type=SeriesProfileHistoryRecord,
-            parent_id_field="series_profile_id",
-            mapper=_series_profile_history_from_record,
-            record_builder=_series_profile_history_to_record,
-        )
-        super().__init__(
-            session=session,
-            config=config,
-        )
+        super().__init__(session=session, config=self._config)
 
     async def add(self, entry: SeriesProfileHistoryEntry) -> None:
         """Add a profile history entry."""
@@ -691,17 +694,20 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
 ):
     """Persist episode template history entries using SQLAlchemy."""
 
+    _config: typ.ClassVar[
+        HistoryRepositoryConfig[
+            EpisodeTemplateHistoryEntry,
+            EpisodeTemplateHistoryRecord,
+        ]
+    ] = HistoryRepositoryConfig(
+        record_type=EpisodeTemplateHistoryRecord,
+        parent_id_field="episode_template_id",
+        mapper=_episode_template_history_from_record,
+        record_builder=_episode_template_history_to_record,
+    )
+
     def __init__(self, session: AsyncSession) -> None:
-        config = HistoryRepositoryConfig(
-            record_type=EpisodeTemplateHistoryRecord,
-            parent_id_field="episode_template_id",
-            mapper=_episode_template_history_from_record,
-            record_builder=_episode_template_history_to_record,
-        )
-        super().__init__(
-            session=session,
-            config=config,
-        )
+        super().__init__(session=session, config=self._config)
 
     async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:
         """Add a template history entry."""
