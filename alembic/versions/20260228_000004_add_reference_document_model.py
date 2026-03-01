@@ -124,7 +124,7 @@ def _create_reference_document_revisions_table() -> None:
 
 
 def _create_reference_document_bindings_table() -> None:
-    """Create reference_document_bindings table and all target lookup indexes."""
+    """Create reference_document_bindings table with constraints."""
     op.create_table(
         "reference_document_bindings",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -192,6 +192,10 @@ def _create_reference_document_bindings_table() -> None:
             name="uq_reference_document_bindings_target_revision",
         ),
     )
+
+
+def _create_reference_document_bindings_indexes() -> None:
+    """Create all target lookup indexes for reference_document_bindings."""
     op.create_index(
         "ix_reference_document_bindings_reference_document_revision_id",
         "reference_document_bindings",
@@ -223,6 +227,7 @@ def upgrade() -> None:
     _create_reference_documents_table()
     _create_reference_document_revisions_table()
     _create_reference_document_bindings_table()
+    _create_reference_document_bindings_indexes()
 
 
 def downgrade() -> None:
