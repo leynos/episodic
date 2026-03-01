@@ -36,16 +36,32 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 
+def _serialize_entity_for_brief(
+    entity: SeriesProfile | EpisodeTemplate,
+    revision: int,
+    payload_fields_fn: typ.Callable[[SeriesProfile | EpisodeTemplate], JsonMapping],
+) -> JsonMapping:
+    """Serialize entities with revision for structured brief payloads."""
+    return {
+        **payload_fields_fn(entity),
+        "revision": revision,
+        "updated_at": entity.updated_at.isoformat(),
+    }
+
+
 def _serialize_profile_for_brief(
     profile: SeriesProfile,
     revision: int,
 ) -> JsonMapping:
     """Serialize profile with revision for structured brief payloads."""
-    return {
-        **_profile_payload_fields(profile),
-        "revision": revision,
-        "updated_at": profile.updated_at.isoformat(),
-    }
+    return _serialize_entity_for_brief(
+        profile,
+        revision,
+        typ.cast(
+            "typ.Callable[[SeriesProfile | EpisodeTemplate], JsonMapping]",
+            _profile_payload_fields,
+        ),
+    )
 
 
 def _serialize_template_for_brief(
@@ -53,11 +69,14 @@ def _serialize_template_for_brief(
     revision: int,
 ) -> JsonMapping:
     """Serialize episode template with revision for structured brief payloads."""
-    return {
-        **_template_payload_fields(template),
-        "revision": revision,
-        "updated_at": template.updated_at.isoformat(),
-    }
+    return _serialize_entity_for_brief(
+        template,
+        revision,
+        typ.cast(
+            "typ.Callable[[SeriesProfile | EpisodeTemplate], JsonMapping]",
+            _template_payload_fields,
+        ),
+    )
 
 
 def _serialize_reference_document_for_brief(

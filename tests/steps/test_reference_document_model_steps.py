@@ -95,6 +95,61 @@ def create_profile_and_template(
     context["template_id"] = typ.cast("str", template_response.json["id"])
 
 
+def _build_reference_document_set(
+    *,
+    profile_uuid: uuid.UUID,
+    template_uuid: uuid.UUID,
+    kind: ReferenceDocumentKind,
+    target_kind: ReferenceBindingTargetKind,
+    name: str,
+    bio: str,
+    content_hash: str,
+    now: dt.datetime,
+) -> tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding]:
+    """Build a reusable reference document, revision, and binding tuple."""
+    change_notes = {
+        ReferenceDocumentKind.HOST_PROFILE: "Create host revision",
+        ReferenceDocumentKind.GUEST_PROFILE: "Create guest revision",
+    }
+    document = ReferenceDocument(
+        id=uuid.uuid4(),
+        owner_series_profile_id=profile_uuid,
+        kind=kind,
+        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+        metadata={"name": name},
+        created_at=now,
+        updated_at=now,
+    )
+    revision = ReferenceDocumentRevision(
+        id=uuid.uuid4(),
+        reference_document_id=document.id,
+        content={"bio": bio},
+        content_hash=content_hash,
+        author="bdd@example.com",
+        change_note=change_notes[kind],
+        created_at=now,
+    )
+    binding = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=revision.id,
+        target_kind=target_kind,
+        series_profile_id=(
+            profile_uuid
+            if target_kind is ReferenceBindingTargetKind.SERIES_PROFILE
+            else None
+        ),
+        episode_template_id=(
+            template_uuid
+            if target_kind is ReferenceBindingTargetKind.EPISODE_TEMPLATE
+            else None
+        ),
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=now,
+    )
+    return document, revision, binding
+
+
 @given("host and guest reference revisions are bound to the profile and template")
 def bind_reference_revisions(
     _function_scoped_runner: asyncio.Runner,
@@ -108,62 +163,26 @@ def bind_reference_revisions(
         profile_uuid = uuid.UUID(context["profile_id"])
         template_uuid = uuid.UUID(context["template_id"])
 
-        host_document = ReferenceDocument(
-            id=uuid.uuid4(),
-            owner_series_profile_id=profile_uuid,
+        host_document, host_revision, host_binding = _build_reference_document_set(
+            profile_uuid=profile_uuid,
+            template_uuid=template_uuid,
             kind=ReferenceDocumentKind.HOST_PROFILE,
-            lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
-            metadata={"name": "Host One"},
-            created_at=now,
-            updated_at=now,
-        )
-        host_revision = ReferenceDocumentRevision(
-            id=uuid.uuid4(),
-            reference_document_id=host_document.id,
-            content={"bio": "Host profile content"},
-            content_hash="hash-host-bdd",
-            author="bdd@example.com",
-            change_note="Create host revision",
-            created_at=now,
-        )
-        host_binding = ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=host_revision.id,
             target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=profile_uuid,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=now,
+            name="Host One",
+            bio="Host profile content",
+            content_hash="hash-host-bdd",
+            now=now,
         )
 
-        guest_document = ReferenceDocument(
-            id=uuid.uuid4(),
-            owner_series_profile_id=profile_uuid,
+        guest_document, guest_revision, guest_binding = _build_reference_document_set(
+            profile_uuid=profile_uuid,
+            template_uuid=template_uuid,
             kind=ReferenceDocumentKind.GUEST_PROFILE,
-            lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
-            metadata={"name": "Guest One"},
-            created_at=now,
-            updated_at=now,
-        )
-        guest_revision = ReferenceDocumentRevision(
-            id=uuid.uuid4(),
-            reference_document_id=guest_document.id,
-            content={"bio": "Guest profile content"},
-            content_hash="hash-guest-bdd",
-            author="bdd@example.com",
-            change_note="Create guest revision",
-            created_at=now,
-        )
-        guest_binding = ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=guest_revision.id,
             target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
-            series_profile_id=None,
-            episode_template_id=template_uuid,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=now,
+            name="Guest One",
+            bio="Guest profile content",
+            content_hash="hash-guest-bdd",
+            now=now,
         )
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:

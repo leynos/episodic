@@ -40,6 +40,16 @@ class ReferenceFixtureBundle:
     bindings: tuple[ReferenceBinding, ...]
 
 
+@dc.dataclass(frozen=True, slots=True)
+class BaseEntitiesBundle:
+    """Bundle base canonical entities needed for reference-binding tests."""
+
+    series: SeriesProfile
+    header: TeiHeader
+    episode: CanonicalEpisode
+    job: IngestionJob
+
+
 def _build_reference_document(
     *,
     owner_series_profile_id: uuid.UUID,
@@ -78,18 +88,14 @@ def _build_reference_revision(
 
 async def _persist_base_entities(
     uow: SqlAlchemyUnitOfWork,
-    *,
-    series: SeriesProfile,
-    header: TeiHeader,
-    episode: CanonicalEpisode,
-    job: IngestionJob,
+    entities: BaseEntitiesBundle,
 ) -> None:
     """Persist prerequisite canonical entities for binding FKs."""
-    await uow.series_profiles.add(series)
-    await uow.tei_headers.add(header)
+    await uow.series_profiles.add(entities.series)
+    await uow.tei_headers.add(entities.header)
     await uow.commit()
-    await uow.episodes.add(episode)
-    await uow.ingestion_jobs.add(job)
+    await uow.episodes.add(entities.episode)
+    await uow.ingestion_jobs.add(entities.job)
     await uow.commit()
 
 
@@ -107,10 +113,12 @@ async def _persist_entities_from_fixture(
     series, header, episode, job, _ = episode_fixture
     await _persist_base_entities(
         uow,
-        series=series,
-        header=header,
-        episode=episode,
-        job=job,
+        BaseEntitiesBundle(
+            series=series,
+            header=header,
+            episode=episode,
+            job=job,
+        ),
     )
 
 

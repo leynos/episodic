@@ -20,21 +20,24 @@ from episodic.canonical.domain import (
 def _build_reference_binding(
     *,
     target_kind: ReferenceBindingTargetKind,
-    series_profile_id: uuid.UUID | None = None,
-    episode_template_id: uuid.UUID | None = None,
-    ingestion_job_id: uuid.UUID | None = None,
-    effective_from_episode_id: uuid.UUID | None = None,
+    **kwargs: uuid.UUID | None,
 ) -> ReferenceBinding:
-    """Build a reference binding for tests."""
+    """Build a reference binding for tests.
+
+    Args:
+        target_kind: The kind of binding target.
+        **kwargs: Optional target identifiers (series_profile_id,
+            episode_template_id, ingestion_job_id, effective_from_episode_id).
+    """
     now = dt.datetime.now(dt.UTC)
     return ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=uuid.uuid4(),
         target_kind=target_kind,
-        series_profile_id=series_profile_id,
-        episode_template_id=episode_template_id,
-        ingestion_job_id=ingestion_job_id,
-        effective_from_episode_id=effective_from_episode_id,
+        series_profile_id=kwargs.get("series_profile_id"),
+        episode_template_id=kwargs.get("episode_template_id"),
+        ingestion_job_id=kwargs.get("ingestion_job_id"),
+        effective_from_episode_id=kwargs.get("effective_from_episode_id"),
         created_at=now,
     )
 

@@ -191,6 +191,12 @@ class ReferenceBinding:
 
     def __post_init__(self) -> None:
         """Validate target and applicability invariants."""
+        self._validate_single_target()
+        self._validate_target_kind_matches()
+        self._validate_effective_from_constraint()
+
+    def _validate_single_target(self) -> None:
+        """Validate that exactly one target identifier is populated."""
         target_pairs = (
             (ReferenceBindingTargetKind.SERIES_PROFILE, self.series_profile_id),
             (
@@ -204,11 +210,23 @@ class ReferenceBinding:
             msg = "ReferenceBinding must set exactly one target identifier."
             raise ValueError(msg)
 
+    def _validate_target_kind_matches(self) -> None:
+        """Validate target_kind matches the populated target identifier."""
+        target_mapping = {
+            ReferenceBindingTargetKind.SERIES_PROFILE: self.series_profile_id,
+            ReferenceBindingTargetKind.EPISODE_TEMPLATE: self.episode_template_id,
+            ReferenceBindingTargetKind.INGESTION_JOB: self.ingestion_job_id,
+        }
+        populated_targets = [
+            kind for kind, value in target_mapping.items() if value is not None
+        ]
         populated_target = populated_targets[0]
         if populated_target is not self.target_kind:
             msg = "ReferenceBinding target_kind does not match populated target."
             raise ValueError(msg)
 
+    def _validate_effective_from_constraint(self) -> None:
+        """Validate effective_from applicability constraint."""
         if (
             self.effective_from_episode_id is not None
             and self.target_kind is not ReferenceBindingTargetKind.SERIES_PROFILE
