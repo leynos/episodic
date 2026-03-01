@@ -1035,14 +1035,13 @@ erDiagram
 
 _Figure 8: Series profile, episode template, and history-table relationships._
 
-### Planned reusable reference-document model
+### Reusable reference-document model
 
-The detailed diagram below extends the canonical schema with reusable
-reference-document tables. These tables are planned and not yet implemented in
-the canonical ports and storage repositories. Host and guest profiles are
-represented as series-aligned `REFERENCE_DOCUMENTS` kinds, while
-`effective_from_episode_id` supports revision applicability from a specific
-episode onwards.
+The diagram below extends the canonical schema with reusable reference-document
+tables that are now implemented in canonical ports and storage repositories.
+Host and guest profiles are represented as series-aligned `REFERENCE_DOCUMENTS`
+kinds, while `effective_from_episode_id` supports revision applicability from a
+specific episode onwards.
 
 ```mermaid
 erDiagram
@@ -1124,21 +1123,70 @@ erDiagram
     REFERENCE_DOCUMENT_REVISIONS ||--o{ SOURCE_DOCUMENTS : snapshot
 ```
 
-_Figure 9: Planned reusable reference material and profile schema._
+_Figure 9: Approved reusable reference material and profile schema._
+
+### Reference-document glossary
+
+- `ReferenceDocument`:
+  Stable reusable document identity scoped to an owning series profile. The
+  entity tracks document kind (`style_guide`, `host_profile`, `guest_profile`,
+  or `research_brief`), lifecycle state, and metadata.
+- `ReferenceDocumentRevision`:
+  Immutable content snapshot for a `ReferenceDocument`. Each revision stores
+  structured content, a content hash, optional author metadata, and optional
+  change notes.
+- `ReferenceBinding`:
+  Pinned association between a `ReferenceDocumentRevision` and exactly one
+  consuming target context (`series_profile`, `episode_template`, or
+  `ingestion_job`). Series-profile bindings may also set
+  `effective_from_episode_id` for forward-only applicability.
+
+### Reusable reference repository contract acceptance criteria
+
+The reusable reference repository layer is accepted when all criteria below are
+met:
+
+- Domain entities (`ReferenceDocument`, `ReferenceDocumentRevision`,
+  `ReferenceBinding`) are represented as immutable canonical dataclasses.
+- Port contracts expose repository operations for create/read/list over all
+  three entities, independent of ingestion-job ownership.
+- Storage adapters enforce target invariants:
+  exactly one binding target identifier is populated and matches `target_kind`.
+- Storage adapters support series-aligned host and guest profile documents.
+- Integration tests cover round-trip persistence and target-specific binding
+  retrieval semantics for series profile, episode template, and ingestion-job
+  targets.
+
+### Reusable reference API contract acceptance criteria
+
+The reusable reference API contract is accepted when item 2.2.7 is implemented
+and all criteria below are met:
+
+- Public endpoints provide create/get/list/update operations for
+  `ReferenceDocument`.
+- Revision workflows support create/list/get for `ReferenceDocumentRevision`,
+  preserving immutable revision history.
+- Binding workflows support create/list/get for `ReferenceBinding` with
+  optimistic-lock-safe behaviour where required by endpoint contracts.
+- API responses expose binding target context, pinned revision identifiers, and
+  `effective_from_episode_id` when present.
+- Contract tests verify optimistic-lock conflict behaviour, history retrieval,
+  and host/guest profile access for series-aligned documents.
 
 ### Repository and unit-of-work implementation
 
 The canonical persistence layer follows the hexagonal architecture by defining
 Protocol-based port interfaces in `episodic/canonical/ports.py` and
 implementing them as async SQLAlchemy adapters in
-`episodic/canonical/storage/`. Nine repository protocols
+`episodic/canonical/storage/`. Twelve repository protocols
 (`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
 `IngestionJobRepository`, `SourceDocumentRepository`,
 `ApprovalEventRepository`, `EpisodeTemplateRepository`,
-`SeriesProfileHistoryRepository`, and `EpisodeTemplateHistoryRepository`)
-define the persistence contract, and `CanonicalUnitOfWork` aggregates them
-behind a transactional boundary with `commit()`, `flush()`, and `rollback()`
-methods.
+`SeriesProfileHistoryRepository`, `EpisodeTemplateHistoryRepository`,
+`ReferenceDocumentRepository`, `ReferenceDocumentRevisionRepository`, and
+`ReferenceBindingRepository`) define the persistence contract, and
+`CanonicalUnitOfWork` aggregates them behind a transactional boundary with
+`commit()`, `flush()`, and `rollback()` methods.
 
 The `SqlAlchemyUnitOfWork` adapter creates a fresh `AsyncSession` on entry,
 instantiates all repositories bound to that session, and rolls back
@@ -1153,14 +1201,12 @@ Its contract exposes `add(document)` and `list_for_job(job_id)`, and
 `SourceDocument` entities include `ingestion_job_id`. This supports one-shot
 ingestion provenance, but not a standalone reusable reference library.
 
-`EpisodeTemplateRepository` is now implemented with immutable
+`EpisodeTemplateRepository` is implemented with immutable
 `episode_template_history` revisions for auditability and optimistic locking.
-Reusable reference repositories remain planned additions. The planned design
-introduces at least one repository for `ReferenceDocument` persistence and
-additional repository responsibilities for revision history and binding
-resolution across series, templates, and ingestion contexts, including
-`effective_from_episode_id` resolution when selecting host/guest profile
-revisions for a specific episode.
+Reusable reference repositories are implemented through dedicated adapters for
+`ReferenceDocument`, `ReferenceDocumentRevision`, and `ReferenceBinding`,
+including target-kind enforcement and `effective_from_episode_id` applicability
+rules.
 
 ### Profile/template REST (Representational State Transfer) API (Application Programming Interface) specification
 
@@ -1176,7 +1222,8 @@ Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
 - `GET /series-profiles/{profile_id}/history` returns append-only revision
   history (`revision`, `actor`, `note`, `snapshot`, `created_at`).
 - `GET /series-profiles/{profile_id}/brief` returns a structured brief with the
-  selected series profile and associated episode template payload(s).
+  selected series profile, associated episode template payload(s), and reusable
+  reference-document payloads resolved from series/template bindings.
 - `POST /episode-templates` creates a template and revision `1`.
 - `GET /episode-templates` lists templates, optionally filtered by
   `series_profile_id`.

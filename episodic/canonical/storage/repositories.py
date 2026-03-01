@@ -21,6 +21,10 @@ import sqlalchemy as sa
 
 from episodic.canonical.domain import (
     EpisodeTemplateHistoryEntry,
+    ReferenceBinding,
+    ReferenceBindingTargetKind,
+    ReferenceDocument,
+    ReferenceDocumentRevision,
     SeriesProfileHistoryEntry,
 )
 from episodic.canonical.ports import (
@@ -29,23 +33,40 @@ from episodic.canonical.ports import (
     EpisodeTemplateHistoryRepository,
     EpisodeTemplateRepository,
     IngestionJobRepository,
+    ReferenceBindingRepository,
+    ReferenceDocumentRepository,
+    ReferenceDocumentRevisionRepository,
     SeriesProfileHistoryRepository,
     SeriesProfileRepository,
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
 
-from .compression import encode_text_for_storage
 from .mappers import (
     _approval_event_from_record,
+    _approval_event_to_record,
     _episode_from_record,
     _episode_template_from_record,
     _episode_template_history_from_record,
+    _episode_template_history_to_record,
+    _episode_template_to_record,
+    _episode_to_record,
     _ingestion_job_from_record,
+    _ingestion_job_to_record,
+    _reference_binding_from_record,
+    _reference_binding_to_record,
+    _reference_document_from_record,
+    _reference_document_revision_from_record,
+    _reference_document_revision_to_record,
+    _reference_document_to_record,
     _series_profile_from_record,
     _series_profile_history_from_record,
+    _series_profile_history_to_record,
+    _series_profile_to_record,
     _source_document_from_record,
+    _source_document_to_record,
     _tei_header_from_record,
+    _tei_header_to_record,
 )
 from .models import (
     ApprovalEventRecord,
@@ -53,6 +74,9 @@ from .models import (
     EpisodeTemplateHistoryRecord,
     EpisodeTemplateRecord,
     IngestionJobRecord,
+    ReferenceBindingRecord,
+    ReferenceDocumentRecord,
+    ReferenceDocumentRevisionRecord,
     SeriesProfileHistoryRecord,
     SeriesProfileRecord,
     SourceDocumentRecord,
@@ -256,17 +280,7 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
             Series profile domain entity to persist.
 
         """
-        await self._add_record(
-            SeriesProfileRecord(
-                id=profile.id,
-                slug=profile.slug,
-                title=profile.title,
-                description=profile.description,
-                configuration=profile.configuration,
-                created_at=profile.created_at,
-                updated_at=profile.updated_at,
-            )
-        )
+        await self._add_record(_series_profile_to_record(profile))
 
     async def get(self, profile_id: uuid.UUID) -> SeriesProfile | None:
         """Fetch a series profile by identifier."""
@@ -314,18 +328,7 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
             Parsed TEI header to persist.
 
         """
-        raw_xml, raw_xml_zstd = encode_text_for_storage(header.raw_xml)
-        await self._add_record(
-            TeiHeaderRecord(
-                id=header.id,
-                title=header.title,
-                payload=header.payload,
-                raw_xml=raw_xml,
-                raw_xml_zstd=raw_xml_zstd,
-                created_at=header.created_at,
-                updated_at=header.updated_at,
-            )
-        )
+        await self._add_record(_tei_header_to_record(header))
 
     async def get(self, header_id: uuid.UUID) -> TeiHeader | None:
         """Fetch a TEI header by identifier."""
@@ -348,21 +351,7 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
             Canonical episode domain entity to persist.
 
         """
-        tei_xml, tei_xml_zstd = encode_text_for_storage(episode.tei_xml)
-        await self._add_record(
-            EpisodeRecord(
-                id=episode.id,
-                series_profile_id=episode.series_profile_id,
-                tei_header_id=episode.tei_header_id,
-                title=episode.title,
-                tei_xml=tei_xml,
-                tei_xml_zstd=tei_xml_zstd,
-                status=episode.status,
-                approval_state=episode.approval_state,
-                created_at=episode.created_at,
-                updated_at=episode.updated_at,
-            )
-        )
+        await self._add_record(_episode_to_record(episode))
 
     async def get(self, episode_id: uuid.UUID) -> CanonicalEpisode | None:
         """Fetch a canonical episode by identifier."""
@@ -385,20 +374,7 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
             Ingestion job domain entity to persist.
 
         """
-        await self._add_record(
-            IngestionJobRecord(
-                id=job.id,
-                series_profile_id=job.series_profile_id,
-                target_episode_id=job.target_episode_id,
-                status=job.status,
-                requested_at=job.requested_at,
-                started_at=job.started_at,
-                completed_at=job.completed_at,
-                error_message=job.error_message,
-                created_at=job.created_at,
-                updated_at=job.updated_at,
-            )
-        )
+        await self._add_record(_ingestion_job_to_record(job))
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
         """Fetch an ingestion job by identifier."""
@@ -421,19 +397,7 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
             Source document domain entity to persist.
 
         """
-        await self._add_record(
-            SourceDocumentRecord(
-                id=document.id,
-                ingestion_job_id=document.ingestion_job_id,
-                canonical_episode_id=document.canonical_episode_id,
-                source_type=document.source_type,
-                source_uri=document.source_uri,
-                weight=document.weight,
-                content_hash=document.content_hash,
-                metadata_payload=document.metadata,
-                created_at=document.created_at,
-            )
-        )
+        await self._add_record(_source_document_to_record(document))
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:
         """List source documents for an ingestion job.
@@ -456,6 +420,132 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
         )
 
 
+class SqlAlchemyReferenceDocumentRepository(
+    _RepositoryBase, ReferenceDocumentRepository
+):
+    """Persist reusable reference documents using SQLAlchemy."""
+
+    async def add(self, document: ReferenceDocument) -> None:
+        """Add a reusable reference document record."""
+        await self._add_record(_reference_document_to_record(document))
+
+    async def get(self, document_id: uuid.UUID) -> ReferenceDocument | None:
+        """Fetch a reusable reference document by identifier."""
+        return await self._get_one_or_none(
+            ReferenceDocumentRecord,
+            ReferenceDocumentRecord.id == document_id,
+            _reference_document_from_record,
+        )
+
+    async def list_for_series(
+        self,
+        series_profile_id: uuid.UUID,
+    ) -> list[ReferenceDocument]:
+        """List reusable reference documents for one series profile."""
+        return await self._list_where(
+            ReferenceDocumentRecord,
+            ReferenceDocumentRecord.owner_series_profile_id == series_profile_id,
+            ReferenceDocumentRecord.created_at,
+            _reference_document_from_record,
+        )
+
+    async def update(self, document: ReferenceDocument) -> None:
+        """Persist changes to an existing reusable reference document."""
+        await self._update_where(
+            ReferenceDocumentRecord,
+            ReferenceDocumentRecord.id == document.id,
+            {
+                "owner_series_profile_id": document.owner_series_profile_id,
+                "kind": document.kind,
+                "lifecycle_state": document.lifecycle_state,
+                "metadata_payload": document.metadata,
+                "updated_at": document.updated_at,
+            },
+        )
+
+
+class SqlAlchemyReferenceDocumentRevisionRepository(
+    _RepositoryBase, ReferenceDocumentRevisionRepository
+):
+    """Persist reusable reference document revisions using SQLAlchemy."""
+
+    async def add(self, revision: ReferenceDocumentRevision) -> None:
+        """Add an immutable reusable reference revision record."""
+        await self._add_record(_reference_document_revision_to_record(revision))
+
+    async def get(self, revision_id: uuid.UUID) -> ReferenceDocumentRevision | None:
+        """Fetch a reusable reference revision by identifier."""
+        return await self._get_one_or_none(
+            ReferenceDocumentRevisionRecord,
+            ReferenceDocumentRevisionRecord.id == revision_id,
+            _reference_document_revision_from_record,
+        )
+
+    async def list_for_document(
+        self,
+        document_id: uuid.UUID,
+    ) -> list[ReferenceDocumentRevision]:
+        """List revisions for one reusable reference document."""
+        return await self._list_where(
+            ReferenceDocumentRevisionRecord,
+            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
+            ReferenceDocumentRevisionRecord.created_at,
+            _reference_document_revision_from_record,
+        )
+
+    async def get_latest_for_document(
+        self,
+        document_id: uuid.UUID,
+    ) -> ReferenceDocumentRevision | None:
+        """Fetch the latest revision for one reusable reference document."""
+        return await self._get_latest_where(
+            ReferenceDocumentRevisionRecord,
+            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
+            ReferenceDocumentRevisionRecord.created_at.desc(),
+            _reference_document_revision_from_record,
+        )
+
+
+class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepository):
+    """Persist reusable reference bindings using SQLAlchemy."""
+
+    @staticmethod
+    def _target_field(target_kind: ReferenceBindingTargetKind) -> typ.Any:  # noqa: ANN401
+        """Resolve the SQLAlchemy target column for a binding target kind."""
+        match target_kind:
+            case ReferenceBindingTargetKind.SERIES_PROFILE:
+                return ReferenceBindingRecord.series_profile_id
+            case ReferenceBindingTargetKind.EPISODE_TEMPLATE:
+                return ReferenceBindingRecord.episode_template_id
+            case ReferenceBindingTargetKind.INGESTION_JOB:
+                return ReferenceBindingRecord.ingestion_job_id
+            case _:
+                msg = f"Unsupported reference binding target kind: {target_kind}"
+                raise ValueError(msg)
+
+    async def add(self, binding: ReferenceBinding) -> None:
+        """Add a reusable reference binding record."""
+        await self._add_record(_reference_binding_to_record(binding))
+
+    async def list_for_target(
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_id: uuid.UUID,
+    ) -> list[ReferenceBinding]:
+        """List reusable reference bindings for one target context."""
+        target_field = self._target_field(target_kind)
+        return await self._list_where(
+            ReferenceBindingRecord,
+            sa.and_(
+                ReferenceBindingRecord.target_kind == target_kind,
+                target_field == target_id,
+            ),
+            ReferenceBindingRecord.created_at,
+            _reference_binding_from_record,
+        )
+
+
 class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository):
     """Persist approval events using SQLAlchemy."""
 
@@ -468,18 +558,7 @@ class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository
             Approval event domain entity to persist.
 
         """
-        await self._add_record(
-            ApprovalEventRecord(
-                id=event.id,
-                episode_id=event.episode_id,
-                actor=event.actor,
-                from_state=event.from_state,
-                to_state=event.to_state,
-                note=event.note,
-                payload=event.payload,
-                created_at=event.created_at,
-            )
-        )
+        await self._add_record(_approval_event_to_record(event))
 
     async def list_for_episode(
         self,
@@ -510,18 +589,7 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
 
     async def add(self, template: EpisodeTemplate) -> None:
         """Add an episode template record."""
-        await self._add_record(
-            EpisodeTemplateRecord(
-                id=template.id,
-                series_profile_id=template.series_profile_id,
-                slug=template.slug,
-                title=template.title,
-                description=template.description,
-                structure=template.structure,
-                created_at=template.created_at,
-                updated_at=template.updated_at,
-            )
-        )
+        await self._add_record(_episode_template_to_record(template))
 
     async def get(self, template_id: uuid.UUID) -> EpisodeTemplate | None:
         """Fetch an episode template by identifier."""
@@ -581,15 +649,7 @@ class SqlAlchemySeriesProfileHistoryRepository(
             record_type=SeriesProfileHistoryRecord,
             parent_id_field="series_profile_id",
             mapper=_series_profile_history_from_record,
-            record_builder=lambda entry: SeriesProfileHistoryRecord(
-                id=entry.id,
-                series_profile_id=entry.series_profile_id,
-                revision=entry.revision,
-                actor=entry.actor,
-                note=entry.note,
-                snapshot=entry.snapshot,
-                created_at=entry.created_at,
-            ),
+            record_builder=_series_profile_history_to_record,
         )
         super().__init__(
             session=session,
@@ -636,15 +696,7 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
             record_type=EpisodeTemplateHistoryRecord,
             parent_id_field="episode_template_id",
             mapper=_episode_template_history_from_record,
-            record_builder=lambda entry: EpisodeTemplateHistoryRecord(
-                id=entry.id,
-                episode_template_id=entry.episode_template_id,
-                revision=entry.revision,
-                actor=entry.actor,
-                note=entry.note,
-                snapshot=entry.snapshot,
-                created_at=entry.created_at,
-            ),
+            record_builder=_episode_template_history_to_record,
         )
         super().__init__(
             session=session,

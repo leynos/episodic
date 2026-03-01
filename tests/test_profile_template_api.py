@@ -247,6 +247,9 @@ def _verify_structured_brief(
     assert brief_response.json["episode_templates"][0]["id"] == template_id, (
         "Expected structured brief to include template."
     )
+    assert brief_response.json["reference_documents"] == [], (
+        "Expected brief to expose reusable reference_documents list."
+    )
 
 
 def test_profile_and_template_api_round_trip(
