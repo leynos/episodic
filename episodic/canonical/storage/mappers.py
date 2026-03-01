@@ -293,6 +293,21 @@ def _series_profile_history_from_record(
     )
 
 
+def _series_profile_history_to_record(
+    entry: SeriesProfileHistoryEntry,
+) -> SeriesProfileHistoryRecord:
+    """Map a series profile history entry to an ORM record."""
+    return SeriesProfileHistoryRecord(
+        id=entry.id,
+        series_profile_id=entry.series_profile_id,
+        revision=entry.revision,
+        actor=entry.actor,
+        note=entry.note,
+        snapshot=entry.snapshot,
+        created_at=entry.created_at,
+    )
+
+
 def _episode_template_history_from_record(
     record: EpisodeTemplateHistoryRecord,
 ) -> EpisodeTemplateHistoryEntry:
@@ -304,6 +319,21 @@ def _episode_template_history_from_record(
             entity_class=EpisodeTemplateHistoryEntry,
             parent_id_field="episode_template_id",
         ),
+    )
+
+
+def _episode_template_history_to_record(
+    entry: EpisodeTemplateHistoryEntry,
+) -> EpisodeTemplateHistoryRecord:
+    """Map an episode template history entry to an ORM record."""
+    return EpisodeTemplateHistoryRecord(
+        id=entry.id,
+        episode_template_id=entry.episode_template_id,
+        revision=entry.revision,
+        actor=entry.actor,
+        note=entry.note,
+        snapshot=entry.snapshot,
+        created_at=entry.created_at,
     )
 
 

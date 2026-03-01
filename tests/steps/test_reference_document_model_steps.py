@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -95,15 +96,22 @@ def create_profile_and_template(
     context["template_id"] = typ.cast("str", template_response.json["id"])
 
 
+@dc.dataclass(frozen=True, slots=True)
+class ReferenceDocumentSetConfig:
+    """Configuration for building a reference document set in tests."""
+
+    kind: ReferenceDocumentKind
+    target_kind: ReferenceBindingTargetKind
+    name: str
+    bio: str
+    content_hash: str
+
+
 def _build_reference_document_set(
     *,
     profile_uuid: uuid.UUID,
     template_uuid: uuid.UUID,
-    kind: ReferenceDocumentKind,
-    target_kind: ReferenceBindingTargetKind,
-    name: str,
-    bio: str,
-    content_hash: str,
+    config: ReferenceDocumentSetConfig,
     now: dt.datetime,
 ) -> tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding]:
     """Build a reusable reference document, revision, and binding tuple."""
@@ -114,33 +122,33 @@ def _build_reference_document_set(
     document = ReferenceDocument(
         id=uuid.uuid4(),
         owner_series_profile_id=profile_uuid,
-        kind=kind,
+        kind=config.kind,
         lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
-        metadata={"name": name},
+        metadata={"name": config.name},
         created_at=now,
         updated_at=now,
     )
     revision = ReferenceDocumentRevision(
         id=uuid.uuid4(),
         reference_document_id=document.id,
-        content={"bio": bio},
-        content_hash=content_hash,
+        content={"bio": config.bio},
+        content_hash=config.content_hash,
         author="bdd@example.com",
-        change_note=change_notes[kind],
+        change_note=change_notes[config.kind],
         created_at=now,
     )
     binding = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision.id,
-        target_kind=target_kind,
+        target_kind=config.target_kind,
         series_profile_id=(
             profile_uuid
-            if target_kind is ReferenceBindingTargetKind.SERIES_PROFILE
+            if config.target_kind is ReferenceBindingTargetKind.SERIES_PROFILE
             else None
         ),
         episode_template_id=(
             template_uuid
-            if target_kind is ReferenceBindingTargetKind.EPISODE_TEMPLATE
+            if config.target_kind is ReferenceBindingTargetKind.EPISODE_TEMPLATE
             else None
         ),
         ingestion_job_id=None,
@@ -166,22 +174,26 @@ def bind_reference_revisions(
         host_document, host_revision, host_binding = _build_reference_document_set(
             profile_uuid=profile_uuid,
             template_uuid=template_uuid,
-            kind=ReferenceDocumentKind.HOST_PROFILE,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            name="Host One",
-            bio="Host profile content",
-            content_hash="hash-host-bdd",
+            config=ReferenceDocumentSetConfig(
+                kind=ReferenceDocumentKind.HOST_PROFILE,
+                target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+                name="Host One",
+                bio="Host profile content",
+                content_hash="hash-host-bdd",
+            ),
             now=now,
         )
 
         guest_document, guest_revision, guest_binding = _build_reference_document_set(
             profile_uuid=profile_uuid,
             template_uuid=template_uuid,
-            kind=ReferenceDocumentKind.GUEST_PROFILE,
-            target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
-            name="Guest One",
-            bio="Guest profile content",
-            content_hash="hash-guest-bdd",
+            config=ReferenceDocumentSetConfig(
+                kind=ReferenceDocumentKind.GUEST_PROFILE,
+                target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+                name="Guest One",
+                bio="Guest profile content",
+                content_hash="hash-guest-bdd",
+            ),
             now=now,
         )
 

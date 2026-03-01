@@ -48,6 +48,7 @@ from .mappers import (
     _episode_from_record,
     _episode_template_from_record,
     _episode_template_history_from_record,
+    _episode_template_history_to_record,
     _episode_template_to_record,
     _episode_to_record,
     _ingestion_job_from_record,
@@ -60,6 +61,7 @@ from .mappers import (
     _reference_document_to_record,
     _series_profile_from_record,
     _series_profile_history_from_record,
+    _series_profile_history_to_record,
     _series_profile_to_record,
     _source_document_from_record,
     _source_document_to_record,
@@ -647,15 +649,7 @@ class SqlAlchemySeriesProfileHistoryRepository(
             record_type=SeriesProfileHistoryRecord,
             parent_id_field="series_profile_id",
             mapper=_series_profile_history_from_record,
-            record_builder=lambda entry: SeriesProfileHistoryRecord(
-                id=entry.id,
-                series_profile_id=entry.series_profile_id,
-                revision=entry.revision,
-                actor=entry.actor,
-                note=entry.note,
-                snapshot=entry.snapshot,
-                created_at=entry.created_at,
-            ),
+            record_builder=_series_profile_history_to_record,
         )
         super().__init__(
             session=session,
@@ -702,15 +696,7 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
             record_type=EpisodeTemplateHistoryRecord,
             parent_id_field="episode_template_id",
             mapper=_episode_template_history_from_record,
-            record_builder=lambda entry: EpisodeTemplateHistoryRecord(
-                id=entry.id,
-                episode_template_id=entry.episode_template_id,
-                revision=entry.revision,
-                actor=entry.actor,
-                note=entry.note,
-                snapshot=entry.snapshot,
-                created_at=entry.created_at,
-            ),
+            record_builder=_episode_template_history_to_record,
         )
         super().__init__(
             session=session,
