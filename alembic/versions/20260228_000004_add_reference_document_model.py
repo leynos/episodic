@@ -51,13 +51,8 @@ def _reference_binding_target_kind_enum() -> postgresql.ENUM:
     )
 
 
-def upgrade() -> None:
-    """Apply schema changes."""
-    bind = op.get_bind()
-    _reference_document_kind_enum().create(bind, checkfirst=True)
-    _reference_document_lifecycle_state_enum().create(bind, checkfirst=True)
-    _reference_binding_target_kind_enum().create(bind, checkfirst=True)
-
+def _create_reference_documents_table() -> None:
+    """Create reference_documents table and owner_series_profile_id index."""
     op.create_table(
         "reference_documents",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -93,6 +88,9 @@ def upgrade() -> None:
         ["owner_series_profile_id"],
     )
 
+
+def _create_reference_document_revisions_table() -> None:
+    """Create reference_document_revisions table and reference_document_id index."""
     op.create_table(
         "reference_document_revisions",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -124,6 +122,9 @@ def upgrade() -> None:
         ["reference_document_id"],
     )
 
+
+def _create_reference_document_bindings_table() -> None:
+    """Create reference_document_bindings table and all target lookup indexes."""
     op.create_table(
         "reference_document_bindings",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -211,6 +212,17 @@ def upgrade() -> None:
         "reference_document_bindings",
         ["ingestion_job_id"],
     )
+
+
+def upgrade() -> None:
+    """Apply schema changes."""
+    bind = op.get_bind()
+    _reference_document_kind_enum().create(bind, checkfirst=True)
+    _reference_document_lifecycle_state_enum().create(bind, checkfirst=True)
+    _reference_binding_target_kind_enum().create(bind, checkfirst=True)
+    _create_reference_documents_table()
+    _create_reference_document_revisions_table()
+    _create_reference_document_bindings_table()
 
 
 def downgrade() -> None:
