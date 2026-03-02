@@ -28,6 +28,7 @@ if typ.TYPE_CHECKING:
     import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -54,11 +55,11 @@ class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):
         self._mapper = config.mapper
         self._record_builder = config.record_builder
 
-    def _get_parent_field(self) -> typ.Any:  # noqa: ANN401
+    def _get_parent_field(self) -> InstrumentedAttribute[object]:
         """Retrieve the parent ID field from the record type."""
         return getattr(self._record_type, self._parent_id_field)
 
-    def _get_revision_field(self) -> typ.Any:  # noqa: ANN401
+    def _get_revision_field(self) -> InstrumentedAttribute[object]:
         """Retrieve the revision field from the record type."""
         revision_field_name = "revision"
         return getattr(self._record_type, revision_field_name)

@@ -141,7 +141,22 @@ async def _load_reference_documents_for_target(
         uow=uow,
         revisions=revisions_by_id.values(),
     )
+    return _serialize_bindings_for_owner(
+        bindings=bindings,
+        revisions_by_id=revisions_by_id,
+        documents_by_id=documents_by_id,
+        owner_series_profile_id=owner_series_profile_id,
+    )
 
+
+def _serialize_bindings_for_owner(
+    *,
+    bindings: list[ReferenceBinding],
+    revisions_by_id: dict[uuid.UUID, ReferenceDocumentRevision],
+    documents_by_id: dict[uuid.UUID, ReferenceDocument],
+    owner_series_profile_id: uuid.UUID,
+) -> list[JsonMapping]:
+    """Serialize bindings after validating owner alignment for each document."""
     serialized: list[JsonMapping] = []
     for binding in bindings:
         revision = revisions_by_id[binding.reference_document_revision_id]
@@ -218,22 +233,36 @@ async def _load_reference_documents_for_brief(
     template_items: list[tuple[EpisodeTemplate, int]],
 ) -> list[JsonMapping]:
     """Load serialized reference documents for profile/template contexts."""
-    reference_documents = await _load_reference_documents_for_target(
-        uow,
+    all_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         target_id=profile_id,
-        owner_series_profile_id=profile_id,
     )
+
     for template, _ in template_items:
-        reference_documents.extend(
-            await _load_reference_documents_for_target(
-                uow,
+        all_bindings.extend(
+            await uow.reference_bindings.list_for_target(
                 target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
                 target_id=template.id,
-                owner_series_profile_id=profile_id,
             )
         )
-    return reference_documents
+
+    if not all_bindings:
+        return []
+
+    revisions_by_id = await _load_revisions_by_id(
+        uow=uow,
+        bindings=all_bindings,
+    )
+    documents_by_id = await _load_documents_by_id(
+        uow=uow,
+        revisions=revisions_by_id.values(),
+    )
+    return _serialize_bindings_for_owner(
+        bindings=all_bindings,
+        revisions_by_id=revisions_by_id,
+        documents_by_id=documents_by_id,
+        owner_series_profile_id=profile_id,
+    )
 
 
 async def build_series_brief(

@@ -1,7 +1,5 @@
 """Storage tests for reusable reference-document repositories."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -343,7 +341,10 @@ async def test_reference_binding_repository_enforces_unique_target_revision(
         await uow.commit()
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
-        with pytest.raises(IntegrityError):
+        with pytest.raises(
+            IntegrityError,
+            match=r"uq_ref_doc_bindings_series_rev_no_effective",
+        ):
             await _add_binding_and_commit(uow, duplicate_binding)
 
 

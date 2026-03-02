@@ -442,7 +442,7 @@ class ReferenceDocumentRevisionRepository(Protocol):
 class ReferenceBindingRepository(Protocol):
     async def add(self, binding: ReferenceBinding) -> None: ...
     async def list_for_target(
-        self, *, target_kind: str, target_id: uuid.UUID
+        self, *, target_kind: ReferenceBindingTargetKind, target_id: uuid.UUID
     ) -> list[ReferenceBinding]: ...
 ```
 

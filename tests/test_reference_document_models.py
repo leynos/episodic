@@ -1,7 +1,5 @@
 """Unit tests for reusable reference-document domain models."""
 
-from __future__ import annotations
-
 import datetime as dt
 import uuid
 
@@ -44,8 +42,12 @@ def _build_reference_binding(
 
 def test_reference_document_kind_supports_host_and_guest_profiles() -> None:
     """Host and guest profile kinds should be part of the reusable model."""
-    assert ReferenceDocumentKind.HOST_PROFILE.value == "host_profile"
-    assert ReferenceDocumentKind.GUEST_PROFILE.value == "guest_profile"
+    assert ReferenceDocumentKind.HOST_PROFILE.value == "host_profile", (
+        "expected host_profile for ReferenceDocumentKind.HOST_PROFILE"
+    )
+    assert ReferenceDocumentKind.GUEST_PROFILE.value == "guest_profile", (
+        "expected guest_profile for ReferenceDocumentKind.GUEST_PROFILE"
+    )
 
 
 def test_reference_document_revision_requires_non_empty_content_hash() -> None:
@@ -102,8 +104,12 @@ def test_reference_binding_accepts_series_target_with_effective_from_episode() -
         effective_from_episode_id=effective_from_episode_id,
     )
 
-    assert binding.series_profile_id == series_profile_id
-    assert binding.effective_from_episode_id == effective_from_episode_id
+    assert binding.series_profile_id == series_profile_id, (
+        "expected series_profile_id to match the provided UUID"
+    )
+    assert binding.effective_from_episode_id == effective_from_episode_id, (
+        "expected effective_from_episode_id to match the provided UUID"
+    )
 
 
 def test_reference_binding_accepts_ingestion_job_target() -> None:
@@ -116,9 +122,15 @@ def test_reference_binding_accepts_ingestion_job_target() -> None:
         effective_from_episode_id=None,
     )
 
-    assert binding.target_kind is ReferenceBindingTargetKind.INGESTION_JOB
-    assert binding.ingestion_job_id == ingestion_job_id
-    assert binding.effective_from_episode_id is None
+    assert binding.target_kind is ReferenceBindingTargetKind.INGESTION_JOB, (
+        "expected target_kind to remain INGESTION_JOB"
+    )
+    assert binding.ingestion_job_id == ingestion_job_id, (
+        "expected ingestion_job_id to match the provided UUID"
+    )
+    assert binding.effective_from_episode_id is None, (
+        "expected effective_from_episode_id to remain None for ingestion targets"
+    )
 
 
 def test_reference_document_accepts_series_aligned_host_profile() -> None:
@@ -134,5 +146,9 @@ def test_reference_document_accepts_series_aligned_host_profile() -> None:
         updated_at=now,
     )
 
-    assert document.kind is ReferenceDocumentKind.HOST_PROFILE
-    assert document.lifecycle_state is ReferenceDocumentLifecycleState.ACTIVE
+    assert document.kind is ReferenceDocumentKind.HOST_PROFILE, (
+        "expected document.kind to be HOST_PROFILE"
+    )
+    assert document.lifecycle_state is ReferenceDocumentLifecycleState.ACTIVE, (
+        "expected document.lifecycle_state to be ACTIVE"
+    )
