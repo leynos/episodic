@@ -140,8 +140,8 @@ Success is observable when:
   the session has not flushed pending revisions yet. Evidence: early
   storage/BDD runs raised FK violations in
   `reference_document_bindings.reference_document_revision_id`. Impact: tests
-  and implementation paths that add dependent bindings in the same UoW need
-  explicit `await uow.flush()` between revision and binding adds.
+  and implementation paths that add dependent bindings in the same unit of work
+  (UoW) need explicit `await uow.flush()` between revision and binding adds.
 
 ## Decision log
 

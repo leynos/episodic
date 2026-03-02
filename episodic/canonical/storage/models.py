@@ -20,6 +20,10 @@ from episodic.canonical.domain import (
     ReferenceDocumentKind,
     ReferenceDocumentLifecycleState,
 )
+from episodic.canonical.storage.reference_document_schema import (
+    REFERENCE_BINDINGS_EFFECTIVE_EPISODE_CHECK_SQL,
+    REFERENCE_BINDINGS_TARGET_CHECK_SQL,
+)
 
 
 class Base(orm.DeclarativeBase):
@@ -580,16 +584,11 @@ class ReferenceBindingRecord(Base):
 
     __table_args__ = (
         sa.CheckConstraint(
-            "((target_kind = 'series_profile' AND series_profile_id IS NOT NULL "
-            "AND episode_template_id IS NULL AND ingestion_job_id IS NULL) OR "
-            "(target_kind = 'episode_template' AND episode_template_id IS NOT NULL "
-            "AND series_profile_id IS NULL AND ingestion_job_id IS NULL) OR "
-            "(target_kind = 'ingestion_job' AND ingestion_job_id IS NOT NULL "
-            "AND series_profile_id IS NULL AND episode_template_id IS NULL))",
+            REFERENCE_BINDINGS_TARGET_CHECK_SQL,
             name=CK_REFERENCE_BINDINGS_TARGET,
         ),
         sa.CheckConstraint(
-            "(effective_from_episode_id IS NULL OR target_kind = 'series_profile')",
+            REFERENCE_BINDINGS_EFFECTIVE_EPISODE_CHECK_SQL,
             name=CK_REFERENCE_BINDINGS_EFFECTIVE_EPISODE,
         ),
         sa.Index(

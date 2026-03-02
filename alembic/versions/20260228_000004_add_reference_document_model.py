@@ -11,6 +11,16 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
+from episodic.canonical.storage.reference_document_schema import (
+    REFERENCE_BINDING_TARGET_KIND_VALUES,
+    REFERENCE_BINDINGS_EFFECTIVE_EPISODE_CHECK_SQL,
+    REFERENCE_BINDINGS_TARGET_CHECK_SQL,
+    REFERENCE_DOCUMENT_KIND_VALUES,
+    REFERENCE_DOCUMENT_LIFECYCLE_STATE_VALUES,
+    TARGET_KIND_EPISODE_TEMPLATE,
+    TARGET_KIND_INGESTION_JOB,
+    TARGET_KIND_SERIES_PROFILE,
+)
 
 revision = "20260228_000004"
 down_revision = "20260226_000003"
@@ -20,10 +30,7 @@ depends_on = None
 
 def _reference_document_kind_enum() -> postgresql.ENUM:
     return postgresql.ENUM(
-        "style_guide",
-        "host_profile",
-        "guest_profile",
-        "research_brief",
+        *REFERENCE_DOCUMENT_KIND_VALUES,
         name="reference_document_kind",
         create_type=False,
     )
@@ -31,9 +38,7 @@ def _reference_document_kind_enum() -> postgresql.ENUM:
 
 def _reference_document_lifecycle_state_enum() -> postgresql.ENUM:
     return postgresql.ENUM(
-        "draft",
-        "active",
-        "archived",
+        *REFERENCE_DOCUMENT_LIFECYCLE_STATE_VALUES,
         name="reference_document_lifecycle_state",
         create_type=False,
     )
@@ -41,9 +46,7 @@ def _reference_document_lifecycle_state_enum() -> postgresql.ENUM:
 
 def _reference_binding_target_kind_enum() -> postgresql.ENUM:
     return postgresql.ENUM(
-        "series_profile",
-        "episode_template",
-        "ingestion_job",
+        *REFERENCE_BINDING_TARGET_KIND_VALUES,
         name="reference_binding_target_kind",
         create_type=False,
     )
@@ -168,16 +171,11 @@ def _create_reference_document_bindings_table() -> None:
             server_default=sa.func.now(),
         ),
         sa.CheckConstraint(
-            "((target_kind = 'series_profile' AND series_profile_id IS NOT NULL "
-            "AND episode_template_id IS NULL AND ingestion_job_id IS NULL) OR "
-            "(target_kind = 'episode_template' AND episode_template_id IS NOT NULL "
-            "AND series_profile_id IS NULL AND ingestion_job_id IS NULL) OR "
-            "(target_kind = 'ingestion_job' AND ingestion_job_id IS NOT NULL "
-            "AND series_profile_id IS NULL AND episode_template_id IS NULL))",
+            REFERENCE_BINDINGS_TARGET_CHECK_SQL,
             name="ck_reference_document_bindings_target",
         ),
         sa.CheckConstraint(
-            "(effective_from_episode_id IS NULL OR target_kind = 'series_profile')",
+            REFERENCE_BINDINGS_EFFECTIVE_EPISODE_CHECK_SQL,
             name="ck_reference_document_bindings_effective_episode",
         ),
     )
@@ -215,7 +213,8 @@ def _create_reference_document_bindings_indexes() -> None:
         ],
         unique=True,
         postgresql_where=sa.text(
-            "target_kind = 'series_profile' AND effective_from_episode_id IS NOT NULL"
+            f"target_kind = '{TARGET_KIND_SERIES_PROFILE}' "
+            "AND effective_from_episode_id IS NOT NULL"
         ),
     )
     op.create_index(
@@ -224,7 +223,8 @@ def _create_reference_document_bindings_indexes() -> None:
         ["reference_document_revision_id", "series_profile_id"],
         unique=True,
         postgresql_where=sa.text(
-            "target_kind = 'series_profile' AND effective_from_episode_id IS NULL"
+            f"target_kind = '{TARGET_KIND_SERIES_PROFILE}' "
+            "AND effective_from_episode_id IS NULL"
         ),
     )
     op.create_index(
@@ -232,14 +232,14 @@ def _create_reference_document_bindings_indexes() -> None:
         "reference_document_bindings",
         ["reference_document_revision_id", "episode_template_id"],
         unique=True,
-        postgresql_where=sa.text("target_kind = 'episode_template'"),
+        postgresql_where=sa.text(f"target_kind = '{TARGET_KIND_EPISODE_TEMPLATE}'"),
     )
     op.create_index(
         "uq_ref_doc_bindings_job_rev",
         "reference_document_bindings",
         ["reference_document_revision_id", "ingestion_job_id"],
         unique=True,
-        postgresql_where=sa.text("target_kind = 'ingestion_job'"),
+        postgresql_where=sa.text(f"target_kind = '{TARGET_KIND_INGESTION_JOB}'"),
     )
 
 
