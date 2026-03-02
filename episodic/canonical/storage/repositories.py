@@ -14,54 +14,34 @@ Create a repository with the unit-of-work session:
 ...     await uow.commit()
 """
 
-import dataclasses as dc
 import typing as typ
 
 import sqlalchemy as sa
 
-from episodic.canonical.domain import (
-    EpisodeTemplateHistoryEntry,
-    ReferenceBinding,
-    ReferenceBindingTargetKind,
-    ReferenceDocument,
-    ReferenceDocumentRevision,
-    SeriesProfileHistoryEntry,
-)
 from episodic.canonical.ports import (
     ApprovalEventRepository,
     EpisodeRepository,
-    EpisodeTemplateHistoryRepository,
     EpisodeTemplateRepository,
     IngestionJobRepository,
-    ReferenceBindingRepository,
-    ReferenceDocumentRepository,
-    ReferenceDocumentRevisionRepository,
-    SeriesProfileHistoryRepository,
     SeriesProfileRepository,
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
 
+from .history_repositories import (
+    SqlAlchemyEpisodeTemplateHistoryRepository,
+    SqlAlchemySeriesProfileHistoryRepository,
+)
 from .mappers import (
     _approval_event_from_record,
     _approval_event_to_record,
     _episode_from_record,
     _episode_template_from_record,
-    _episode_template_history_from_record,
-    _episode_template_history_to_record,
     _episode_template_to_record,
     _episode_to_record,
     _ingestion_job_from_record,
     _ingestion_job_to_record,
-    _reference_binding_from_record,
-    _reference_binding_to_record,
-    _reference_document_from_record,
-    _reference_document_revision_from_record,
-    _reference_document_revision_to_record,
-    _reference_document_to_record,
     _series_profile_from_record,
-    _series_profile_history_from_record,
-    _series_profile_history_to_record,
     _series_profile_to_record,
     _source_document_from_record,
     _source_document_to_record,
@@ -71,23 +51,21 @@ from .mappers import (
 from .models import (
     ApprovalEventRecord,
     EpisodeRecord,
-    EpisodeTemplateHistoryRecord,
     EpisodeTemplateRecord,
     IngestionJobRecord,
-    ReferenceBindingRecord,
-    ReferenceDocumentRecord,
-    ReferenceDocumentRevisionRecord,
-    SeriesProfileHistoryRecord,
     SeriesProfileRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
 )
+from .reference_repositories import (
+    SqlAlchemyReferenceBindingRepository,
+    SqlAlchemyReferenceDocumentRepository,
+    SqlAlchemyReferenceDocumentRevisionRepository,
+)
+from .repository_base import _RepositoryBase
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import uuid
-
-    from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import (
         ApprovalEvent,
@@ -98,174 +76,6 @@ if typ.TYPE_CHECKING:
         SourceDocument,
         TeiHeader,
     )
-
-
-@dc.dataclass(frozen=True, slots=True)
-class HistoryRepositoryConfig[HistoryEntryT, HistoryRecordT]:
-    """Configuration for a history repository."""
-
-    record_type: type[HistoryRecordT]
-    parent_id_field: str
-    mapper: typ.Callable[[HistoryRecordT], HistoryEntryT]
-    record_builder: typ.Callable[[HistoryEntryT], HistoryRecordT]
-
-
-@dc.dataclass(slots=True)
-class _RepositoryBase:
-    """Shared helpers for SQLAlchemy repositories."""
-
-    _session: AsyncSession
-
-    async def _get_one_or_none[RecordT, DomainT](
-        self,
-        record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        mapper: cabc.Callable[[RecordT], DomainT],
-    ) -> DomainT | None:
-        """Return a mapped record for the query or None."""
-        result = await self._session.execute(sa.select(record_type).where(where_clause))
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return mapper(record)
-
-    async def _add_record[RecordT](self, record: RecordT) -> None:
-        """Add a record to the current SQLAlchemy session."""
-        self._session.add(record)
-
-    async def _list_where[RecordT, DomainT](
-        self,
-        record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        order_by_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        mapper: cabc.Callable[[RecordT], DomainT],
-    ) -> list[DomainT]:
-        """List mapped records matching a filter and ordering."""
-        result = await self._session.execute(
-            sa.select(record_type).where(where_clause).order_by(order_by_clause)
-        )
-        return [mapper(row) for row in result.scalars()]
-
-    async def _get_latest_where[RecordT, DomainT](
-        self,
-        record_type: type[RecordT],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        order_by_desc_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        mapper: cabc.Callable[[RecordT], DomainT],
-    ) -> DomainT | None:
-        """Return the latest mapped record matching a filter."""
-        result = await self._session.execute(
-            sa
-            .select(record_type)
-            .where(where_clause)
-            .order_by(order_by_desc_clause)
-            .limit(1)
-        )
-        record = result.scalar_one_or_none()
-        if record is None:
-            return None
-        return mapper(record)
-
-    async def _update_where(
-        self,
-        record_type: type[object],
-        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
-        values: dict[str, typ.Any],
-    ) -> None:
-        """Execute an update statement for matching records."""
-        await self._session.execute(
-            sa.update(record_type).where(where_clause).values(**values)
-        )
-
-    async def _update_entity_fields[EntityT](
-        self,
-        record_type: type[object],
-        entity: EntityT,
-        field_names: cabc.Sequence[str],
-    ) -> None:
-        """Update entity fields using the entity's current attribute values."""
-        values = {field: getattr(entity, field) for field in field_names}
-        id_field_name = "id"
-        entity_id = getattr(entity, id_field_name)
-        id_field = getattr(record_type, id_field_name)
-        await self._update_where(record_type, id_field == entity_id, values)
-
-
-class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):
-    """Shared implementation for history repositories."""
-
-    def __init__(
-        self,
-        session: AsyncSession,
-        config: HistoryRepositoryConfig[HistoryEntryT, HistoryRecordT],
-    ) -> None:
-        super().__init__(session)
-        self._record_type = config.record_type
-        self._parent_id_field = config.parent_id_field
-        self._mapper = config.mapper
-        self._record_builder = config.record_builder
-
-    def _get_parent_field(self) -> typ.Any:  # noqa: ANN401
-        """Retrieve the parent ID field from the record type."""
-        return getattr(self._record_type, self._parent_id_field)
-
-    def _get_revision_field(self) -> typ.Any:  # noqa: ANN401
-        """Retrieve the revision field from the record type."""
-        revision_field_name = "revision"
-        return getattr(self._record_type, revision_field_name)
-
-    async def _add_history_entry(self, entry: HistoryEntryT) -> None:
-        """Persist a history entry record."""
-        await self._add_record(self._record_builder(entry))
-
-    async def _list_for_parent(self, parent_id: uuid.UUID) -> list[HistoryEntryT]:
-        """List history entries for a parent entity."""
-        return await self._list_where(
-            self._record_type,
-            self._get_parent_field() == parent_id,
-            self._get_revision_field(),
-            self._mapper,
-        )
-
-    async def _get_latest_for_parent(
-        self,
-        parent_id: uuid.UUID,
-    ) -> HistoryEntryT | None:
-        """Fetch the latest history entry for a parent entity."""
-        return await self._get_latest_where(
-            self._record_type,
-            self._get_parent_field() == parent_id,
-            self._get_revision_field().desc(),
-            self._mapper,
-        )
-
-    async def _get_latest_revisions_for_parents(
-        self,
-        parent_ids: cabc.Collection[uuid.UUID],
-    ) -> dict[uuid.UUID, int]:
-        """Fetch latest revision values for parent entity identifiers."""
-        if not parent_ids:
-            return {}
-
-        parent_field = self._get_parent_field()
-        revision_field = self._get_revision_field()
-        latest_revisions = (
-            sa
-            .select(
-                parent_field.label("parent_id"),
-                sa.func.max(revision_field).label("revision"),
-            )
-            .where(parent_field.in_(list(parent_ids)))
-            .group_by(parent_field)
-            .subquery()
-        )
-        result = await self._session.execute(
-            sa.select(
-                latest_revisions.c.parent_id,
-                latest_revisions.c.revision,
-            )
-        )
-        return {row.parent_id: int(row.revision) for row in result}
 
 
 class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository):
@@ -420,132 +230,6 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
         )
 
 
-class SqlAlchemyReferenceDocumentRepository(
-    _RepositoryBase, ReferenceDocumentRepository
-):
-    """Persist reusable reference documents using SQLAlchemy."""
-
-    async def add(self, document: ReferenceDocument) -> None:
-        """Add a reusable reference document record."""
-        await self._add_record(_reference_document_to_record(document))
-
-    async def get(self, document_id: uuid.UUID) -> ReferenceDocument | None:
-        """Fetch a reusable reference document by identifier."""
-        return await self._get_one_or_none(
-            ReferenceDocumentRecord,
-            ReferenceDocumentRecord.id == document_id,
-            _reference_document_from_record,
-        )
-
-    async def list_for_series(
-        self,
-        series_profile_id: uuid.UUID,
-    ) -> list[ReferenceDocument]:
-        """List reusable reference documents for one series profile."""
-        return await self._list_where(
-            ReferenceDocumentRecord,
-            ReferenceDocumentRecord.owner_series_profile_id == series_profile_id,
-            ReferenceDocumentRecord.created_at,
-            _reference_document_from_record,
-        )
-
-    async def update(self, document: ReferenceDocument) -> None:
-        """Persist changes to an existing reusable reference document."""
-        await self._update_where(
-            ReferenceDocumentRecord,
-            ReferenceDocumentRecord.id == document.id,
-            {
-                "owner_series_profile_id": document.owner_series_profile_id,
-                "kind": document.kind,
-                "lifecycle_state": document.lifecycle_state,
-                "metadata_payload": document.metadata,
-                "updated_at": document.updated_at,
-            },
-        )
-
-
-class SqlAlchemyReferenceDocumentRevisionRepository(
-    _RepositoryBase, ReferenceDocumentRevisionRepository
-):
-    """Persist reusable reference document revisions using SQLAlchemy."""
-
-    async def add(self, revision: ReferenceDocumentRevision) -> None:
-        """Add an immutable reusable reference revision record."""
-        await self._add_record(_reference_document_revision_to_record(revision))
-
-    async def get(self, revision_id: uuid.UUID) -> ReferenceDocumentRevision | None:
-        """Fetch a reusable reference revision by identifier."""
-        return await self._get_one_or_none(
-            ReferenceDocumentRevisionRecord,
-            ReferenceDocumentRevisionRecord.id == revision_id,
-            _reference_document_revision_from_record,
-        )
-
-    async def list_for_document(
-        self,
-        document_id: uuid.UUID,
-    ) -> list[ReferenceDocumentRevision]:
-        """List revisions for one reusable reference document."""
-        return await self._list_where(
-            ReferenceDocumentRevisionRecord,
-            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
-            ReferenceDocumentRevisionRecord.created_at,
-            _reference_document_revision_from_record,
-        )
-
-    async def get_latest_for_document(
-        self,
-        document_id: uuid.UUID,
-    ) -> ReferenceDocumentRevision | None:
-        """Fetch the latest revision for one reusable reference document."""
-        return await self._get_latest_where(
-            ReferenceDocumentRevisionRecord,
-            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
-            ReferenceDocumentRevisionRecord.created_at.desc(),
-            _reference_document_revision_from_record,
-        )
-
-
-class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepository):
-    """Persist reusable reference bindings using SQLAlchemy."""
-
-    @staticmethod
-    def _target_field(target_kind: ReferenceBindingTargetKind) -> typ.Any:  # noqa: ANN401
-        """Resolve the SQLAlchemy target column for a binding target kind."""
-        match target_kind:
-            case ReferenceBindingTargetKind.SERIES_PROFILE:
-                return ReferenceBindingRecord.series_profile_id
-            case ReferenceBindingTargetKind.EPISODE_TEMPLATE:
-                return ReferenceBindingRecord.episode_template_id
-            case ReferenceBindingTargetKind.INGESTION_JOB:
-                return ReferenceBindingRecord.ingestion_job_id
-            case _:
-                msg = f"Unsupported reference binding target kind: {target_kind}"
-                raise ValueError(msg)
-
-    async def add(self, binding: ReferenceBinding) -> None:
-        """Add a reusable reference binding record."""
-        await self._add_record(_reference_binding_to_record(binding))
-
-    async def list_for_target(
-        self,
-        *,
-        target_kind: ReferenceBindingTargetKind,
-        target_id: uuid.UUID,
-    ) -> list[ReferenceBinding]:
-        """List reusable reference bindings for one target context."""
-        target_field = self._target_field(target_kind)
-        return await self._list_where(
-            ReferenceBindingRecord,
-            sa.and_(
-                ReferenceBindingRecord.target_kind == target_kind,
-                target_field == target_id,
-            ),
-            ReferenceBindingRecord.created_at,
-            _reference_binding_from_record,
-        )
-
-
 class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository):
     """Persist approval events using SQLAlchemy."""
 
@@ -638,98 +322,17 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
         )
 
 
-class SqlAlchemySeriesProfileHistoryRepository(
-    _HistoryRepositoryBase[SeriesProfileHistoryEntry, SeriesProfileHistoryRecord],
-    SeriesProfileHistoryRepository,
-):
-    """Persist series profile history entries using SQLAlchemy."""
-
-    _config: typ.ClassVar[
-        HistoryRepositoryConfig[
-            SeriesProfileHistoryEntry,
-            SeriesProfileHistoryRecord,
-        ]
-    ] = HistoryRepositoryConfig(
-        record_type=SeriesProfileHistoryRecord,
-        parent_id_field="series_profile_id",
-        mapper=_series_profile_history_from_record,
-        record_builder=_series_profile_history_to_record,
-    )
-
-    def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session=session, config=self._config)
-
-    async def add(self, entry: SeriesProfileHistoryEntry) -> None:
-        """Add a profile history entry."""
-        await self._add_history_entry(entry)
-
-    async def list_for_profile(
-        self,
-        profile_id: uuid.UUID,
-    ) -> list[SeriesProfileHistoryEntry]:
-        """List history entries for a series profile."""
-        return await self._list_for_parent(profile_id)
-
-    async def get_latest_for_profile(
-        self,
-        profile_id: uuid.UUID,
-    ) -> SeriesProfileHistoryEntry | None:
-        """Fetch the latest history entry for a series profile."""
-        return await self._get_latest_for_parent(profile_id)
-
-    async def get_latest_revisions_for_profiles(
-        self,
-        profile_ids: cabc.Collection[uuid.UUID],
-    ) -> dict[uuid.UUID, int]:
-        """Fetch latest revision numbers for series profiles."""
-        return await self._get_latest_revisions_for_parents(profile_ids)
-
-
-class SqlAlchemyEpisodeTemplateHistoryRepository(
-    _HistoryRepositoryBase[
-        EpisodeTemplateHistoryEntry,
-        EpisodeTemplateHistoryRecord,
-    ],
-    EpisodeTemplateHistoryRepository,
-):
-    """Persist episode template history entries using SQLAlchemy."""
-
-    _config: typ.ClassVar[
-        HistoryRepositoryConfig[
-            EpisodeTemplateHistoryEntry,
-            EpisodeTemplateHistoryRecord,
-        ]
-    ] = HistoryRepositoryConfig(
-        record_type=EpisodeTemplateHistoryRecord,
-        parent_id_field="episode_template_id",
-        mapper=_episode_template_history_from_record,
-        record_builder=_episode_template_history_to_record,
-    )
-
-    def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session=session, config=self._config)
-
-    async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:
-        """Add a template history entry."""
-        await self._add_history_entry(entry)
-
-    async def list_for_template(
-        self,
-        template_id: uuid.UUID,
-    ) -> list[EpisodeTemplateHistoryEntry]:
-        """List history entries for an episode template."""
-        return await self._list_for_parent(template_id)
-
-    async def get_latest_for_template(
-        self,
-        template_id: uuid.UUID,
-    ) -> EpisodeTemplateHistoryEntry | None:
-        """Fetch the latest history entry for an episode template."""
-        return await self._get_latest_for_parent(template_id)
-
-    async def get_latest_revisions_for_templates(
-        self,
-        template_ids: cabc.Collection[uuid.UUID],
-    ) -> dict[uuid.UUID, int]:
-        """Fetch latest revision numbers for episode templates."""
-        return await self._get_latest_revisions_for_parents(template_ids)
+__all__ = (
+    "SqlAlchemyApprovalEventRepository",
+    "SqlAlchemyEpisodeRepository",
+    "SqlAlchemyEpisodeTemplateHistoryRepository",
+    "SqlAlchemyEpisodeTemplateRepository",
+    "SqlAlchemyIngestionJobRepository",
+    "SqlAlchemyReferenceBindingRepository",
+    "SqlAlchemyReferenceDocumentRepository",
+    "SqlAlchemyReferenceDocumentRevisionRepository",
+    "SqlAlchemySeriesProfileHistoryRepository",
+    "SqlAlchemySeriesProfileRepository",
+    "SqlAlchemySourceDocumentRepository",
+    "SqlAlchemyTeiHeaderRepository",
+)

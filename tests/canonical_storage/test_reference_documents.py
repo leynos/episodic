@@ -8,6 +8,7 @@ import typing as typ
 import uuid
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import (
     ReferenceBinding,
@@ -120,6 +121,15 @@ async def _persist_entities_from_fixture(
             job=job,
         ),
     )
+
+
+async def _add_binding_and_commit(
+    uow: SqlAlchemyUnitOfWork,
+    binding: ReferenceBinding,
+) -> None:
+    """Persist one binding and commit the unit of work."""
+    await uow.reference_bindings.add(binding)
+    await uow.commit()
 
 
 async def _assert_host_bundle_round_trip(
@@ -263,6 +273,78 @@ async def test_reference_document_repositories_round_trip(
             series_id=episode_fixture[0].id,
             host_bundle=host_bundle,
         )
+
+
+@pytest.mark.asyncio
+async def test_reference_document_repository_update_persists_changes(
+    session_factory: object,
+    episode_fixture: tuple[
+        SeriesProfile,
+        TeiHeader,
+        CanonicalEpisode,
+        IngestionJob,
+        SourceDocument,
+    ],
+) -> None:
+    """Reference document updates should persist lifecycle and metadata changes."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    host_bundle = _build_host_bundle(
+        series_id=episode_fixture[0].id,
+        episode_id=episode_fixture[2].id,
+    )
+    updated_document = dc.replace(
+        host_bundle.document,
+        lifecycle_state=ReferenceDocumentLifecycleState.ARCHIVED,
+        metadata={"title": "host_profile-doc", "status": "archived"},
+        updated_at=dt.datetime.now(dt.UTC),
+    )
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await _persist_entities_from_fixture(uow, episode_fixture)
+        await uow.reference_documents.add(host_bundle.document)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.reference_documents.update(updated_document)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        refreshed = await uow.reference_documents.get(updated_document.id)
+        assert refreshed is not None
+        assert refreshed.lifecycle_state is ReferenceDocumentLifecycleState.ARCHIVED
+        assert refreshed.metadata == {"title": "host_profile-doc", "status": "archived"}
+
+
+@pytest.mark.asyncio
+async def test_reference_binding_repository_enforces_unique_target_revision(
+    session_factory: object,
+    episode_fixture: tuple[
+        SeriesProfile,
+        TeiHeader,
+        CanonicalEpisode,
+        IngestionJob,
+        SourceDocument,
+    ],
+) -> None:
+    """Duplicate series-target bindings for one revision should fail."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    guest_bundle = _build_guest_bundle(
+        series_id=episode_fixture[0].id,
+        job_id=episode_fixture[3].id,
+    )
+    duplicate_binding = dc.replace(guest_bundle.bindings[0], id=uuid.uuid4())
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await _persist_entities_from_fixture(uow, episode_fixture)
+        await uow.reference_documents.add(guest_bundle.document)
+        await uow.reference_document_revisions.add(guest_bundle.revision)
+        await uow.flush()
+        await uow.reference_bindings.add(guest_bundle.bindings[0])
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        with pytest.raises(IntegrityError):
+            await _add_binding_and_commit(uow, duplicate_binding)
 
 
 @pytest.mark.asyncio

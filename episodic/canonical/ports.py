@@ -350,6 +350,13 @@ class ReferenceDocumentRepository(typ.Protocol):
         """List reusable reference documents owned by one series profile."""
         ...
 
+    async def list_by_ids(
+        self,
+        document_ids: cabc.Collection[uuid.UUID],
+    ) -> list[ReferenceDocument]:
+        """List reusable reference documents by identifiers."""
+        ...
+
     async def update(self, document: ReferenceDocument) -> None:
         """Persist changes to an existing reusable reference document."""
         ...
@@ -374,6 +381,13 @@ class ReferenceDocumentRevisionRepository(typ.Protocol):
         document_id: uuid.UUID,
     ) -> list[ReferenceDocumentRevision]:
         """List immutable revisions for one reusable reference document."""
+        ...
+
+    async def list_by_ids(
+        self,
+        revision_ids: cabc.Collection[uuid.UUID],
+    ) -> list[ReferenceDocumentRevision]:
+        """List reusable reference document revisions by identifiers."""
         ...
 
     async def get_latest_for_document(

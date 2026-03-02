@@ -123,28 +123,33 @@ async def _load_reference_documents_for_target(
     *,
     target_kind: ReferenceBindingTargetKind,
     target_id: uuid.UUID,
+    owner_series_profile_id: uuid.UUID,
 ) -> list[JsonMapping]:
     """Load serialized reference documents for one binding target."""
     bindings = await uow.reference_bindings.list_for_target(
         target_kind=target_kind,
         target_id=target_id,
     )
+    if not bindings:
+        return []
+
+    revisions_by_id = await _load_revisions_by_id(
+        uow=uow,
+        bindings=bindings,
+    )
+    documents_by_id = await _load_documents_by_id(
+        uow=uow,
+        revisions=revisions_by_id.values(),
+    )
+
     serialized: list[JsonMapping] = []
     for binding in bindings:
-        revision = await uow.reference_document_revisions.get(
-            binding.reference_document_revision_id
-        )
-        if revision is None:
+        revision = revisions_by_id[binding.reference_document_revision_id]
+        document = documents_by_id[revision.reference_document_id]
+        if document.owner_series_profile_id != owner_series_profile_id:
             msg = (
-                "Reference binding points to missing revision: "
-                f"{binding.reference_document_revision_id}"
-            )
-            raise ValueError(msg)
-        document = await uow.reference_documents.get(revision.reference_document_id)
-        if document is None:
-            msg = (
-                "Reference revision points to missing document: "
-                f"{revision.reference_document_id}"
+                f"Reference document {document.id} does not belong to requested "
+                f"series profile {owner_series_profile_id}."
             )
             raise ValueError(msg)
         serialized.append(
@@ -155,6 +160,55 @@ async def _load_reference_documents_for_target(
             )
         )
     return serialized
+
+
+async def _load_revisions_by_id(
+    *,
+    uow: CanonicalUnitOfWork,
+    bindings: list[ReferenceBinding],
+) -> dict[uuid.UUID, ReferenceDocumentRevision]:
+    """Load revisions referenced by bindings and fail on missing identifiers."""
+    revision_ids = {binding.reference_document_revision_id for binding in bindings}
+    revisions = await uow.reference_document_revisions.list_by_ids(revision_ids)
+    revisions_by_id = {revision.id: revision for revision in revisions}
+    _raise_if_missing_ids(
+        expected_ids=revision_ids,
+        found_ids=set(revisions_by_id),
+        label="Reference binding points to missing revision",
+    )
+    return revisions_by_id
+
+
+async def _load_documents_by_id(
+    *,
+    uow: CanonicalUnitOfWork,
+    revisions: typ.Iterable[ReferenceDocumentRevision],
+) -> dict[uuid.UUID, ReferenceDocument]:
+    """Load documents referenced by revisions and fail on missing identifiers."""
+    document_ids = {revision.reference_document_id for revision in revisions}
+    documents = await uow.reference_documents.list_by_ids(document_ids)
+    documents_by_id = {document.id: document for document in documents}
+    _raise_if_missing_ids(
+        expected_ids=document_ids,
+        found_ids=set(documents_by_id),
+        label="Reference revision points to missing document",
+    )
+    return documents_by_id
+
+
+def _raise_if_missing_ids(
+    *,
+    expected_ids: set[uuid.UUID],
+    found_ids: set[uuid.UUID],
+    label: str,
+) -> None:
+    """Raise ValueError when any expected identifier is missing."""
+    missing_ids = expected_ids - found_ids
+    if not missing_ids:
+        return
+    missing_id = next(iter(missing_ids))
+    msg = f"{label}: {missing_id}"
+    raise ValueError(msg)
 
 
 async def _load_reference_documents_for_brief(
@@ -168,6 +222,7 @@ async def _load_reference_documents_for_brief(
         uow,
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         target_id=profile_id,
+        owner_series_profile_id=profile_id,
     )
     for template, _ in template_items:
         reference_documents.extend(
@@ -175,6 +230,7 @@ async def _load_reference_documents_for_brief(
                 uow,
                 target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
                 target_id=template.id,
+                owner_series_profile_id=profile_id,
             )
         )
     return reference_documents
@@ -204,8 +260,9 @@ async def build_series_brief(
     JsonMapping
         Mapping with keys:
         ``series_profile`` (``dict[str, object]``) and
-        ``episode_templates`` (``list[dict[str, object]]``), where each entry
-        contains serialized entity fields and revision metadata expected by
+        ``episode_templates`` (``list[dict[str, object]]``), and
+        ``reference_documents`` (``list[dict[str, object]]``), where entries
+        contain serialized entity fields and revision metadata expected by
         downstream generation flows.
 
     Raises

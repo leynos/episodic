@@ -52,16 +52,17 @@ def test_reference_document_revision_requires_non_empty_content_hash() -> None:
     """Revision content hash must be a non-empty string."""
     now = dt.datetime.now(dt.UTC)
 
-    with pytest.raises(ValueError, match="content_hash"):
-        ReferenceDocumentRevision(
-            id=uuid.uuid4(),
-            reference_document_id=uuid.uuid4(),
-            content={},
-            content_hash="",
-            author="author@example.com",
-            change_note="Empty hash should fail.",
-            created_at=now,
-        )
+    for invalid_hash in ("", "   "):
+        with pytest.raises(ValueError, match="content_hash"):
+            ReferenceDocumentRevision(
+                id=uuid.uuid4(),
+                reference_document_id=uuid.uuid4(),
+                content={},
+                content_hash=invalid_hash,
+                author="author@example.com",
+                change_note="Empty or whitespace-only hash should fail.",
+                created_at=now,
+            )
 
 
 def test_reference_binding_rejects_missing_target_identifier() -> None:
@@ -103,6 +104,21 @@ def test_reference_binding_accepts_series_target_with_effective_from_episode() -
 
     assert binding.series_profile_id == series_profile_id
     assert binding.effective_from_episode_id == effective_from_episode_id
+
+
+def test_reference_binding_accepts_ingestion_job_target() -> None:
+    """Non-series bindings are accepted without effective_from_episode_id."""
+    ingestion_job_id = uuid.uuid4()
+
+    binding = _build_reference_binding(
+        target_kind=ReferenceBindingTargetKind.INGESTION_JOB,
+        ingestion_job_id=ingestion_job_id,
+        effective_from_episode_id=None,
+    )
+
+    assert binding.target_kind is ReferenceBindingTargetKind.INGESTION_JOB
+    assert binding.ingestion_job_id == ingestion_job_id
+    assert binding.effective_from_episode_id is None
 
 
 def test_reference_document_accepts_series_aligned_host_profile() -> None:

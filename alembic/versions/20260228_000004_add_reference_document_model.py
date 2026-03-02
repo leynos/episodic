@@ -7,8 +7,6 @@ This migration introduces canonical reusable-reference tables:
 - reference_document_bindings
 """
 
-from __future__ import annotations
-
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -182,15 +180,6 @@ def _create_reference_document_bindings_table() -> None:
             "(effective_from_episode_id IS NULL OR target_kind = 'series_profile')",
             name="ck_reference_document_bindings_effective_episode",
         ),
-        sa.UniqueConstraint(
-            "reference_document_revision_id",
-            "target_kind",
-            "series_profile_id",
-            "episode_template_id",
-            "ingestion_job_id",
-            "effective_from_episode_id",
-            name="uq_reference_document_bindings_target_revision",
-        ),
     )
 
 
@@ -216,6 +205,42 @@ def _create_reference_document_bindings_indexes() -> None:
         "reference_document_bindings",
         ["ingestion_job_id"],
     )
+    op.create_index(
+        "uq_ref_doc_bindings_series_rev_effective",
+        "reference_document_bindings",
+        [
+            "reference_document_revision_id",
+            "series_profile_id",
+            "effective_from_episode_id",
+        ],
+        unique=True,
+        postgresql_where=sa.text(
+            "target_kind = 'series_profile' AND effective_from_episode_id IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_ref_doc_bindings_series_rev_no_effective",
+        "reference_document_bindings",
+        ["reference_document_revision_id", "series_profile_id"],
+        unique=True,
+        postgresql_where=sa.text(
+            "target_kind = 'series_profile' AND effective_from_episode_id IS NULL"
+        ),
+    )
+    op.create_index(
+        "uq_ref_doc_bindings_template_rev",
+        "reference_document_bindings",
+        ["reference_document_revision_id", "episode_template_id"],
+        unique=True,
+        postgresql_where=sa.text("target_kind = 'episode_template'"),
+    )
+    op.create_index(
+        "uq_ref_doc_bindings_job_rev",
+        "reference_document_bindings",
+        ["reference_document_revision_id", "ingestion_job_id"],
+        unique=True,
+        postgresql_where=sa.text("target_kind = 'ingestion_job'"),
+    )
 
 
 def upgrade() -> None:
@@ -232,6 +257,22 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Revert schema changes."""
+    op.drop_index(
+        "uq_ref_doc_bindings_job_rev",
+        table_name="reference_document_bindings",
+    )
+    op.drop_index(
+        "uq_ref_doc_bindings_template_rev",
+        table_name="reference_document_bindings",
+    )
+    op.drop_index(
+        "uq_ref_doc_bindings_series_rev_no_effective",
+        table_name="reference_document_bindings",
+    )
+    op.drop_index(
+        "uq_ref_doc_bindings_series_rev_effective",
+        table_name="reference_document_bindings",
+    )
     op.drop_index(
         "ix_reference_document_bindings_ingestion_job_id",
         table_name="reference_document_bindings",

@@ -19,13 +19,23 @@ Example
 """
 
 import dataclasses as dc
+import datetime as dt
 import itertools
 import typing as typ
+import uuid
 
 import pytest
 import pytest_asyncio
 
 from episodic.canonical import build_series_brief, build_series_brief_prompt
+from episodic.canonical.domain import (
+    ReferenceBinding,
+    ReferenceBindingTargetKind,
+    ReferenceDocument,
+    ReferenceDocumentKind,
+    ReferenceDocumentLifecycleState,
+    ReferenceDocumentRevision,
+)
 from episodic.canonical.profile_templates import (
     AuditMetadata,
     EpisodeTemplateData,
@@ -404,3 +414,73 @@ class TestEpisodeTemplateService:
             rendered_prompt,
             expected_expressions=["series_slug", "template_count"],
         )
+
+    @pytest.mark.asyncio
+    async def test_build_series_brief_rejects_cross_series_reference_documents(
+        self,
+        session_factory: typ.Callable[[], AsyncSession],
+        base_profile_with_template: BaseProfileWithTemplateFixture,
+    ) -> None:
+        """Brief generation should reject references owned by another series."""
+        profile = base_profile_with_template.profile
+        template = base_profile_with_template.template
+        now = dt.datetime.now(dt.UTC)
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            foreign_profile, _ = await create_series_profile(
+                uow,
+                data=SeriesProfileCreateData(
+                    slug="foreign-profile",
+                    title="Foreign Profile",
+                    description="Cross-series owner",
+                    configuration={"tone": "direct"},
+                ),
+                audit=AuditMetadata(
+                    actor="author@example.com",
+                    note="Create foreign profile",
+                ),
+            )
+            foreign_document = ReferenceDocument(
+                id=uuid.uuid4(),
+                owner_series_profile_id=foreign_profile.id,
+                kind=ReferenceDocumentKind.GUEST_PROFILE,
+                lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+                metadata={"name": "Foreign Guest"},
+                created_at=now,
+                updated_at=now,
+            )
+            foreign_revision = ReferenceDocumentRevision(
+                id=uuid.uuid4(),
+                reference_document_id=foreign_document.id,
+                content={"bio": "Foreign profile content"},
+                content_hash="foreign-hash",
+                author="author@example.com",
+                change_note="Cross-series revision",
+                created_at=now,
+            )
+            cross_series_binding = ReferenceBinding(
+                id=uuid.uuid4(),
+                reference_document_revision_id=foreign_revision.id,
+                target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+                series_profile_id=None,
+                episode_template_id=template.id,
+                ingestion_job_id=None,
+                effective_from_episode_id=None,
+                created_at=now,
+            )
+            await uow.reference_documents.add(foreign_document)
+            await uow.reference_document_revisions.add(foreign_revision)
+            await uow.flush()
+            await uow.reference_bindings.add(cross_series_binding)
+            await uow.commit()
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            with pytest.raises(
+                ValueError,
+                match="does not belong to requested series profile",
+            ):
+                await build_series_brief(
+                    uow,
+                    profile_id=profile.id,
+                    template_id=template.id,
+                )

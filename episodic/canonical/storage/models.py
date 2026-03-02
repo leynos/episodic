@@ -73,6 +73,12 @@ CK_REFERENCE_BINDINGS_TARGET = "ck_reference_document_bindings_target"
 CK_REFERENCE_BINDINGS_EFFECTIVE_EPISODE = (
     "ck_reference_document_bindings_effective_episode"
 )
+UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE = "uq_ref_doc_bindings_series_rev_effective"
+UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE = (
+    "uq_ref_doc_bindings_series_rev_no_effective"
+)
+UQ_REF_DOC_BINDINGS_TEMPLATE_REV = "uq_ref_doc_bindings_template_rev"
+UQ_REF_DOC_BINDINGS_JOB_REV = "uq_ref_doc_bindings_job_rev"
 
 
 class SeriesProfileRecord(Base):
@@ -389,7 +395,25 @@ class SourceDocumentRecord(Base):
 
 
 class ReferenceDocumentRecord(Base):
-    """SQLAlchemy model for reusable reference documents."""
+    """SQLAlchemy model for reusable reference documents.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the reference document.
+    owner_series_profile_id : uuid.UUID
+        Foreign key to the owning series profile.
+    kind : ReferenceDocumentKind
+        Document kind enum describing reusable profile/brief intent.
+    lifecycle_state : ReferenceDocumentLifecycleState
+        Lifecycle state enum for activation/archive workflows.
+    metadata_payload : dict[str, object]
+        JSON metadata payload stored under the ``metadata`` column.
+    created_at : datetime.datetime
+        Timestamp when the record was created.
+    updated_at : datetime.datetime
+        Timestamp when the record was last updated.
+    """
 
     __tablename__ = "reference_documents"
 
@@ -431,7 +455,25 @@ class ReferenceDocumentRecord(Base):
 
 
 class ReferenceDocumentRevisionRecord(Base):
-    """SQLAlchemy model for immutable reusable reference revisions."""
+    """SQLAlchemy model for immutable reusable reference revisions.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the immutable reference revision.
+    reference_document_id : uuid.UUID
+        Foreign key to the parent reference document.
+    content_payload : dict[str, object]
+        JSON revision content stored under the ``content`` column.
+    content_hash : str
+        Deterministic hash for revision deduplication.
+    author : str | None
+        Optional author identifier for audit trails.
+    change_note : str | None
+        Optional human-readable note describing revision intent.
+    created_at : datetime.datetime
+        Timestamp when the revision was created.
+    """
 
     __tablename__ = "reference_document_revisions"
 
@@ -469,7 +511,27 @@ class ReferenceDocumentRevisionRecord(Base):
 
 
 class ReferenceBindingRecord(Base):
-    """SQLAlchemy model for reusable reference bindings."""
+    """SQLAlchemy model for reusable reference bindings.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the reference binding.
+    reference_document_revision_id : uuid.UUID
+        Foreign key to the bound immutable reference revision.
+    target_kind : ReferenceBindingTargetKind
+        Target context kind enum (series profile, template, or ingestion job).
+    series_profile_id : uuid.UUID | None
+        Series profile target identifier when ``target_kind`` is series profile.
+    episode_template_id : uuid.UUID | None
+        Episode template target identifier when ``target_kind`` is template.
+    ingestion_job_id : uuid.UUID | None
+        Ingestion job target identifier when ``target_kind`` is ingestion job.
+    effective_from_episode_id : uuid.UUID | None
+        Optional episode boundary for series-profile target applicability.
+    created_at : datetime.datetime
+        Timestamp when the binding was created.
+    """
 
     __tablename__ = "reference_document_bindings"
 
@@ -530,14 +592,40 @@ class ReferenceBindingRecord(Base):
             "(effective_from_episode_id IS NULL OR target_kind = 'series_profile')",
             name=CK_REFERENCE_BINDINGS_EFFECTIVE_EPISODE,
         ),
-        sa.UniqueConstraint(
-            "reference_document_revision_id",
-            "target_kind",
-            "series_profile_id",
-            "episode_template_id",
-            "ingestion_job_id",
-            "effective_from_episode_id",
-            name="uq_reference_document_bindings_target_revision",
+        sa.Index(
+            UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
+            reference_document_revision_id,
+            series_profile_id,
+            effective_from_episode_id,
+            unique=True,
+            postgresql_where=sa.and_(
+                target_kind == ReferenceBindingTargetKind.SERIES_PROFILE,
+                effective_from_episode_id.is_not(None),
+            ),
+        ),
+        sa.Index(
+            UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
+            reference_document_revision_id,
+            series_profile_id,
+            unique=True,
+            postgresql_where=sa.and_(
+                target_kind == ReferenceBindingTargetKind.SERIES_PROFILE,
+                effective_from_episode_id.is_(None),
+            ),
+        ),
+        sa.Index(
+            UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
+            reference_document_revision_id,
+            episode_template_id,
+            unique=True,
+            postgresql_where=target_kind == ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+        ),
+        sa.Index(
+            UQ_REF_DOC_BINDINGS_JOB_REV,
+            reference_document_revision_id,
+            ingestion_job_id,
+            unique=True,
+            postgresql_where=target_kind == ReferenceBindingTargetKind.INGESTION_JOB,
         ),
     )
 

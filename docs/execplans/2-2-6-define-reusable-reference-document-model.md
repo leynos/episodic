@@ -136,9 +136,9 @@ Success is observable when:
   should be satisfied by a new glossary section in the system design document.
 
 - Observation: creating `ReferenceBinding` rows in the same transaction as new
-  `ReferenceDocumentRevision` rows can fail on FK enforcement if the session
-  has not flushed pending revisions yet. Evidence: early storage/BDD runs
-  raised FK violations in
+  `ReferenceDocumentRevision` rows can fail on foreign key (FK) enforcement if
+  the session has not flushed pending revisions yet. Evidence: early
+  storage/BDD runs raised FK violations in
   `reference_document_bindings.reference_document_revision_id`. Impact: tests
   and implementation paths that add dependent bindings in the same UoW need
   explicit `await uow.flush()` between revision and binding adds.
@@ -202,7 +202,8 @@ Retrospective notes:
 - Additive migration and port-first modeling kept hexagonal boundaries intact
   and avoided endpoint-scope creep into 2.2.7.
 - `uow.flush()` sequencing for dependent binding inserts is a practical
-  invariant worth keeping explicit in storage-focused tests.
+  invariant for the same unit of work (UoW) and should remain explicit in
+  storage-focused tests.
 - Brief payload extension with `reference_documents` preserved compatibility by
   retaining existing keys and adding deterministic empty-list defaults.
 
@@ -401,8 +402,9 @@ Quality acceptance:
 - If migration or tests fail, fix forward; do not delete migration history.
 - If docs formatting touches unrelated files, revert unrelated diffs and rerun
   markdown gates.
-- If alignment changes risk breaking existing API consumers, keep backward
-  compatible fields and document deprecation path instead of removing keys.
+- If alignment changes risk breaking existing API consumers, keep
+  backward-compatible fields and document deprecation path instead of removing
+  keys.
 
 ## Artifacts and notes
 
