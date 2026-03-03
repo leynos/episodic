@@ -6,7 +6,6 @@ migrations to describe the database structure.
 """
 
 import datetime as dt  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
-import importlib
 import typing as typ
 import uuid  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
 
@@ -634,7 +633,40 @@ class EpisodeTemplateHistoryRecord(Base):
     )
 
 
-_reference_models = importlib.import_module(".reference_models", __package__)
-ReferenceBindingRecord = _reference_models.ReferenceBindingRecord
-ReferenceDocumentRecord = _reference_models.ReferenceDocumentRecord
-ReferenceDocumentRevisionRecord = _reference_models.ReferenceDocumentRevisionRecord
+_REFERENCE_MODEL_EXPORT_NAMES: tuple[str, ...] = (
+    "ReferenceBindingRecord",
+    "ReferenceDocumentRecord",
+    "ReferenceDocumentRevisionRecord",
+)
+
+
+@typ.overload
+def __getattr__(
+    name: typ.Literal["ReferenceBindingRecord"],
+) -> type[ReferenceBindingRecord]: ...
+
+
+@typ.overload
+def __getattr__(
+    name: typ.Literal["ReferenceDocumentRecord"],
+) -> type[ReferenceDocumentRecord]: ...
+
+
+@typ.overload
+def __getattr__(
+    name: typ.Literal["ReferenceDocumentRevisionRecord"],
+) -> type[ReferenceDocumentRevisionRecord]: ...
+
+
+@typ.overload
+def __getattr__(name: str) -> object: ...
+
+
+def __getattr__(name: str) -> object:
+    """Lazily re-export reference-record ORM models from ``reference_models``."""
+    if name in _REFERENCE_MODEL_EXPORT_NAMES:
+        from . import reference_models
+
+        return getattr(reference_models, name)
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
