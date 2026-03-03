@@ -6,13 +6,28 @@ migrations to describe the database structure.
 """
 
 import datetime as dt  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
+import typing as typ
 import uuid  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
 
 import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
-from episodic.canonical.domain import ApprovalState, EpisodeStatus, IngestionStatus
+from episodic.canonical.domain import (
+    ApprovalState,
+    EpisodeStatus,
+    IngestionStatus,
+    ReferenceBindingTargetKind,
+    ReferenceDocumentKind,
+    ReferenceDocumentLifecycleState,
+)
+
+if typ.TYPE_CHECKING:
+    from .reference_models import (
+        ReferenceBindingRecord,
+        ReferenceDocumentRecord,
+        ReferenceDocumentRevisionRecord,
+    )
 
 
 class Base(orm.DeclarativeBase):
@@ -40,6 +55,21 @@ INGESTION_STATUS = sa.Enum(
     name="ingestion_status",
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )
+REFERENCE_DOCUMENT_KIND = sa.Enum(
+    ReferenceDocumentKind,
+    name="reference_document_kind",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+REFERENCE_DOCUMENT_LIFECYCLE_STATE = sa.Enum(
+    ReferenceDocumentLifecycleState,
+    name="reference_document_lifecycle_state",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+REFERENCE_BINDING_TARGET_KIND = sa.Enum(
+    ReferenceBindingTargetKind,
+    name="reference_binding_target_kind",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
 
 UQ_SERIES_PROFILE_HISTORY_REVISION = "uq_series_profile_history_revision"
 UQ_EPISODE_TEMPLATE_HISTORY_REVISION = "uq_episode_template_history_revision"
@@ -47,6 +77,16 @@ REVISION_CONSTRAINT_NAMES = (
     UQ_SERIES_PROFILE_HISTORY_REVISION,
     UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
 )
+CK_REFERENCE_BINDINGS_TARGET = "ck_reference_document_bindings_target"
+CK_REFERENCE_BINDINGS_EFFECTIVE_EPISODE = (
+    "ck_reference_document_bindings_effective_episode"
+)
+UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE = "uq_ref_doc_bindings_series_rev_effective"
+UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE = (
+    "uq_ref_doc_bindings_series_rev_no_effective"
+)
+UQ_REF_DOC_BINDINGS_TEMPLATE_REV = "uq_ref_doc_bindings_template_rev"
+UQ_REF_DOC_BINDINGS_JOB_REV = "uq_ref_doc_bindings_job_rev"
 
 
 class SeriesProfileRecord(Base):
@@ -591,3 +631,42 @@ class EpisodeTemplateHistoryRecord(Base):
             name=UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
         ),
     )
+
+
+_REFERENCE_MODEL_EXPORT_NAMES: tuple[str, ...] = (
+    "ReferenceBindingRecord",
+    "ReferenceDocumentRecord",
+    "ReferenceDocumentRevisionRecord",
+)
+
+
+@typ.overload
+def __getattr__(
+    name: typ.Literal["ReferenceBindingRecord"],
+) -> type[ReferenceBindingRecord]: ...
+
+
+@typ.overload
+def __getattr__(
+    name: typ.Literal["ReferenceDocumentRecord"],
+) -> type[ReferenceDocumentRecord]: ...
+
+
+@typ.overload
+def __getattr__(
+    name: typ.Literal["ReferenceDocumentRevisionRecord"],
+) -> type[ReferenceDocumentRevisionRecord]: ...
+
+
+@typ.overload
+def __getattr__(name: str) -> object: ...
+
+
+def __getattr__(name: str) -> object:
+    """Lazily re-export reference-record ORM models from ``reference_models``."""
+    if name in _REFERENCE_MODEL_EXPORT_NAMES:
+        from . import reference_models
+
+        return getattr(reference_models, name)
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

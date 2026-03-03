@@ -16,6 +16,8 @@ Build a structured brief for one profile and optional template filter:
 import typing as typ
 from itertools import starmap
 
+from episodic.canonical.domain import ReferenceBindingTargetKind
+
 from .helpers import _profile_payload_fields, _template_payload_fields
 from .services import get_entity_with_revision, list_entities_with_revisions
 from .types import EntityNotFoundError
@@ -23,7 +25,14 @@ from .types import EntityNotFoundError
 if typ.TYPE_CHECKING:
     import uuid
 
-    from episodic.canonical.domain import EpisodeTemplate, JsonMapping, SeriesProfile
+    from episodic.canonical.domain import (
+        EpisodeTemplate,
+        JsonMapping,
+        ReferenceBinding,
+        ReferenceDocument,
+        ReferenceDocumentRevision,
+        SeriesProfile,
+    )
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 
@@ -48,6 +57,31 @@ def _serialize_template_for_brief(
         **_template_payload_fields(template),
         "revision": revision,
         "updated_at": template.updated_at.isoformat(),
+    }
+
+
+def _serialize_reference_document_for_brief(
+    *,
+    binding: ReferenceBinding,
+    document: ReferenceDocument,
+    revision: ReferenceDocumentRevision,
+) -> JsonMapping:
+    """Serialize a reference binding/document/revision triple."""
+    return {
+        "binding_id": str(binding.id),
+        "document_id": str(document.id),
+        "revision_id": str(revision.id),
+        "kind": document.kind.value,
+        "target_kind": binding.target_kind.value,
+        "effective_from_episode_id": (
+            None
+            if binding.effective_from_episode_id is None
+            else str(binding.effective_from_episode_id)
+        ),
+        "lifecycle_state": document.lifecycle_state.value,
+        "metadata": document.metadata,
+        "content": revision.content,
+        "content_hash": revision.content_hash,
     }
 
 
@@ -84,6 +118,153 @@ async def _load_template_items_for_brief(
     return [(template, template_revision)]
 
 
+async def _load_reference_documents_for_target(
+    uow: CanonicalUnitOfWork,
+    *,
+    target_kind: ReferenceBindingTargetKind,
+    target_id: uuid.UUID,
+    owner_series_profile_id: uuid.UUID,
+) -> list[JsonMapping]:
+    """Load serialized reference documents for one binding target."""
+    bindings = await uow.reference_bindings.list_for_target(
+        target_kind=target_kind,
+        target_id=target_id,
+    )
+    if not bindings:
+        return []
+
+    revisions_by_id = await _load_revisions_by_id(
+        uow=uow,
+        bindings=bindings,
+    )
+    documents_by_id = await _load_documents_by_id(
+        uow=uow,
+        revisions=revisions_by_id.values(),
+    )
+    return _serialize_bindings_for_owner(
+        bindings=bindings,
+        revisions_by_id=revisions_by_id,
+        documents_by_id=documents_by_id,
+        owner_series_profile_id=owner_series_profile_id,
+    )
+
+
+def _serialize_bindings_for_owner(
+    *,
+    bindings: list[ReferenceBinding],
+    revisions_by_id: dict[uuid.UUID, ReferenceDocumentRevision],
+    documents_by_id: dict[uuid.UUID, ReferenceDocument],
+    owner_series_profile_id: uuid.UUID,
+) -> list[JsonMapping]:
+    """Serialize bindings after validating owner alignment for each document."""
+    serialized: list[JsonMapping] = []
+    for binding in bindings:
+        revision = revisions_by_id[binding.reference_document_revision_id]
+        document = documents_by_id[revision.reference_document_id]
+        if document.owner_series_profile_id != owner_series_profile_id:
+            msg = (
+                f"Reference document {document.id} does not belong to requested "
+                f"series profile {owner_series_profile_id}."
+            )
+            raise ValueError(msg)
+        serialized.append(
+            _serialize_reference_document_for_brief(
+                binding=binding,
+                document=document,
+                revision=revision,
+            )
+        )
+    return serialized
+
+
+async def _load_revisions_by_id(
+    *,
+    uow: CanonicalUnitOfWork,
+    bindings: list[ReferenceBinding],
+) -> dict[uuid.UUID, ReferenceDocumentRevision]:
+    """Load revisions referenced by bindings and fail on missing identifiers."""
+    revision_ids = {binding.reference_document_revision_id for binding in bindings}
+    revisions = await uow.reference_document_revisions.list_by_ids(revision_ids)
+    revisions_by_id = {revision.id: revision for revision in revisions}
+    _raise_if_missing_ids(
+        expected_ids=revision_ids,
+        found_ids=set(revisions_by_id),
+        label="Reference binding points to missing revision",
+    )
+    return revisions_by_id
+
+
+async def _load_documents_by_id(
+    *,
+    uow: CanonicalUnitOfWork,
+    revisions: typ.Iterable[ReferenceDocumentRevision],
+) -> dict[uuid.UUID, ReferenceDocument]:
+    """Load documents referenced by revisions and fail on missing identifiers."""
+    document_ids = {revision.reference_document_id for revision in revisions}
+    documents = await uow.reference_documents.list_by_ids(document_ids)
+    documents_by_id = {document.id: document for document in documents}
+    _raise_if_missing_ids(
+        expected_ids=document_ids,
+        found_ids=set(documents_by_id),
+        label="Reference revision points to missing document",
+    )
+    return documents_by_id
+
+
+def _raise_if_missing_ids(
+    *,
+    expected_ids: set[uuid.UUID],
+    found_ids: set[uuid.UUID],
+    label: str,
+) -> None:
+    """Raise ValueError when any expected identifier is missing."""
+    missing_ids = expected_ids - found_ids
+    if not missing_ids:
+        return
+    missing_id = next(iter(missing_ids))
+    msg = f"{label}: {missing_id}"
+    raise ValueError(msg)
+
+
+async def _load_reference_documents_for_brief(
+    uow: CanonicalUnitOfWork,
+    *,
+    profile_id: uuid.UUID,
+    template_items: list[tuple[EpisodeTemplate, int]],
+) -> list[JsonMapping]:
+    """Load serialized reference documents for profile/template contexts."""
+    all_bindings = await uow.reference_bindings.list_for_target(
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        target_id=profile_id,
+    )
+
+    for template, _ in template_items:
+        all_bindings.extend(
+            await uow.reference_bindings.list_for_target(
+                target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+                target_id=template.id,
+            )
+        )
+
+    if not all_bindings:
+        return []
+
+    revisions_by_id = await _load_revisions_by_id(
+        uow=uow,
+        bindings=all_bindings,
+    )
+    documents_by_id = await _load_documents_by_id(
+        uow=uow,
+        revisions=revisions_by_id.values(),
+    )
+    return _serialize_bindings_for_owner(
+        bindings=all_bindings,
+        revisions_by_id=revisions_by_id,
+        documents_by_id=documents_by_id,
+        owner_series_profile_id=profile_id,
+    )
+
+
 async def build_series_brief(
     uow: CanonicalUnitOfWork,
     *,
@@ -108,8 +289,9 @@ async def build_series_brief(
     JsonMapping
         Mapping with keys:
         ``series_profile`` (``dict[str, object]``) and
-        ``episode_templates`` (``list[dict[str, object]]``), where each entry
-        contains serialized entity fields and revision metadata expected by
+        ``episode_templates`` (``list[dict[str, object]]``), and
+        ``reference_documents`` (``list[dict[str, object]]``), where entries
+        contain serialized entity fields and revision metadata expected by
         downstream generation flows.
 
     Raises
@@ -132,10 +314,16 @@ async def build_series_brief(
         profile_id=profile.id,
         template_id=template_id,
     )
+    reference_documents = await _load_reference_documents_for_brief(
+        uow,
+        profile_id=profile.id,
+        template_items=template_items,
+    )
 
     return {
         "series_profile": _serialize_profile_for_brief(profile, profile_revision),
         "episode_templates": list(
             starmap(_serialize_template_for_brief, template_items)
         ),
+        "reference_documents": reference_documents,
     }
