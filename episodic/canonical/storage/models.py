@@ -6,6 +6,8 @@ migrations to describe the database structure.
 """
 
 import datetime as dt  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
+import importlib
+import typing as typ
 import uuid  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
 
 import sqlalchemy as sa
@@ -20,6 +22,13 @@ from episodic.canonical.domain import (
     ReferenceDocumentKind,
     ReferenceDocumentLifecycleState,
 )
+
+if typ.TYPE_CHECKING:
+    from .reference_models import (
+        ReferenceBindingRecord,
+        ReferenceDocumentRecord,
+        ReferenceDocumentRevisionRecord,
+    )
 
 
 class Base(orm.DeclarativeBase):
@@ -394,19 +403,6 @@ class SourceDocumentRecord(Base):
     )
 
 
-from .reference_models import (  # noqa: E402
-    ReferenceBindingRecord,
-    ReferenceDocumentRecord,
-    ReferenceDocumentRevisionRecord,
-)
-
-_REFERENCE_MODEL_EXPORTS = (
-    ReferenceBindingRecord,
-    ReferenceDocumentRecord,
-    ReferenceDocumentRevisionRecord,
-)
-
-
 class ApprovalEventRecord(Base):
     """SQLAlchemy model for approval events.
 
@@ -636,3 +632,9 @@ class EpisodeTemplateHistoryRecord(Base):
             name=UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
         ),
     )
+
+
+_reference_models = importlib.import_module(".reference_models", __package__)
+ReferenceBindingRecord = _reference_models.ReferenceBindingRecord
+ReferenceDocumentRecord = _reference_models.ReferenceDocumentRecord
+ReferenceDocumentRevisionRecord = _reference_models.ReferenceDocumentRevisionRecord

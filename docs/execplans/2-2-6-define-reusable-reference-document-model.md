@@ -26,8 +26,9 @@ Success is observable when:
 
 1. New domain entities, ports, and SQLAlchemy repository adapters are
    implemented and covered by unit and behavioural tests.
-2. A new ER diagram for reusable reference documents is approved and checked
-   into `docs/episodic-podcast-generation-system-design.md`.
+2. A new Entity-Relationship (ER) diagram for reusable reference documents is
+   approved and checked into
+   `docs/episodic-podcast-generation-system-design.md`.
 3. Glossary entries exist for all three entities in the design documentation.
 4. Repository contract and API contract acceptance criteria are documented in
    the design docs.
@@ -87,7 +88,7 @@ Success is observable when:
 
 - Risk: `ReferenceBinding` target cardinality could drift into ambiguous
   multi-target rows. Severity: high. Likelihood: medium. Mitigation: encode
-  invariant in domain and DB constraints so each binding targets exactly one
+  invariant in domain and DB constraints, so each binding targets exactly one
   context kind (`series_profile`, `episode_template`, or `ingestion_job`) with
   optional `effective_from_episode_id`.
 
@@ -97,7 +98,7 @@ Success is observable when:
 
 - Risk: Missing glossary location in docs can cause acceptance ambiguity.
   Severity: medium. Likelihood: high. Mitigation: add an explicit glossary
-  subsection in the system design document and reference it from developers
+  subsection in the system design document and reference it from developers'
   guide.
 
 ## Progress
@@ -261,10 +262,8 @@ scope:
   - `ReferenceDocumentRevision`
   - `ReferenceBinding`
   - supporting enums/value constraints for kind/state/target-kind.
-- Update `episodic/canonical/ports.py` with repositories for:
-  - reference documents,
-  - document revisions,
-  - bindings.
+- Update `episodic/canonical/ports.py` with repositories for reference
+  documents, document revisions, and bindings:
 - Extend `CanonicalUnitOfWork` with these repositories.
 
 Go/no-go: domain/port unit tests pass and type checking remains green.
