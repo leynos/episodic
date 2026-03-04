@@ -1,5 +1,6 @@
 """Integration tests for reusable reference-document REST endpoints."""
 
+import dataclasses
 import dataclasses as dc
 import typing as typ
 
@@ -16,11 +17,26 @@ class _ApiFixture:
     template_id: str
 
 
+def _post_and_return_id(
+    client: testing.TestClient,
+    path: str,
+    body: dict[str, object],
+    *,
+    assertion_message: str | None = None,
+) -> str:
+    """POST *body* to *path*, assert HTTP 201, and return the ``id`` field."""
+    response = client.simulate_post(path, json=body)
+    msg = assertion_message or f"Expected POST {path} to return 201."
+    assert response.status_code == 201, msg
+    return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
+
+
 def _create_profile(client: testing.TestClient, slug: str) -> str:
     """Create one series profile and return its identifier."""
-    response = client.simulate_post(
+    return _post_and_return_id(
+        client,
         "/series-profiles",
-        json={
+        {
             "slug": slug,
             "title": f"{slug} title",
             "description": f"{slug} description",
@@ -28,16 +44,16 @@ def _create_profile(client: testing.TestClient, slug: str) -> str:
             "actor": "api-reference@example.com",
             "note": "Create profile",
         },
+        assertion_message="Expected profile creation to return 201.",
     )
-    assert response.status_code == 201, "Expected profile creation to return 201."
-    return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
 
 
 def _create_template(client: testing.TestClient, profile_id: str, slug: str) -> str:
     """Create one episode template and return its identifier."""
-    response = client.simulate_post(
+    return _post_and_return_id(
+        client,
         "/episode-templates",
-        json={
+        {
             "series_profile_id": profile_id,
             "slug": slug,
             "title": f"{slug} title",
@@ -46,9 +62,8 @@ def _create_template(client: testing.TestClient, profile_id: str, slug: str) -> 
             "actor": "api-reference@example.com",
             "note": "Create template",
         },
+        assertion_message="Expected template creation to return 201.",
     )
-    assert response.status_code == 201, "Expected template creation to return 201."
-    return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
 
 
 def _build_api_fixture(client: testing.TestClient) -> _ApiFixture:
@@ -108,22 +123,27 @@ def _assert_reference_document_list(
     return items
 
 
+@dataclasses.dataclass(frozen=True)
+class _RevisionRequest:
+    summary: str
+    content_hash: str
+
+
 def _create_reference_document_revision(
     client: testing.TestClient,
     *,
     profile_id: str,
     document_id: str,
-    summary: str,
-    content_hash: str,
+    revision: _RevisionRequest,
 ) -> str:
     """Create one immutable reference-document revision and return its id."""
     response = client.simulate_post(
         f"/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
         json={
-            "content": {"summary": summary},
-            "content_hash": content_hash,
+            "content": {"summary": revision.summary},
+            "content_hash": revision.content_hash,
             "author": "api-reference@example.com",
-            "change_note": summary,
+            "change_note": revision.summary,
         },
     )
     assert response.status_code == 201
@@ -217,15 +237,19 @@ def _assert_revision_and_binding_workflow(
         client,
         profile_id=profile_id,
         document_id=document_id,
-        summary="first revision",
-        content_hash="api-reference-hash-1",
+        revision=_RevisionRequest(
+            summary="first revision",
+            content_hash="api-reference-hash-1",
+        ),
     )
     second_revision_id = _create_reference_document_revision(
         client,
         profile_id=profile_id,
         document_id=document_id,
-        summary="second revision",
-        content_hash="api-reference-hash-2",
+        revision=_RevisionRequest(
+            summary="second revision",
+            content_hash="api-reference-hash-2",
+        ),
     )
     revisions_items = _assert_reference_revision_history(
         client,

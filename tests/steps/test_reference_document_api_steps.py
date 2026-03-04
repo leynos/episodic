@@ -47,6 +47,20 @@ def _create_profile(client: testing.TestClient, slug: str) -> str:
     return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
 
 
+def _simulate_request(
+    client: testing.TestClient,
+    method: str,
+    path: str,
+    *,
+    json: dict[str, object],
+    expected_status: int,
+) -> dict[str, object]:
+    """Simulate an HTTP request, assert the status code, and return the JSON payload."""
+    response = getattr(client, f"simulate_{method}")(path, json=json)
+    assert response.status_code == expected_status
+    return typ.cast("dict[str, object]", response.json)
+
+
 @given("reusable-reference API fixtures exist", target_fixture="context")
 def reference_fixtures(
     canonical_api_client: testing.TestClient,
@@ -86,16 +100,17 @@ def create_host_document(
     context: ReferenceDocumentApiContext,
 ) -> None:
     """Create one host reference document for the primary profile."""
-    response = canonical_api_client.simulate_post(
+    payload = _simulate_request(
+        canonical_api_client,
+        "post",
         f"/series-profiles/{context['primary_profile_id']}/reference-documents",
         json={
             "kind": "host_profile",
             "lifecycle_state": "active",
             "metadata": {"name": "BDD Host"},
         },
+        expected_status=201,
     )
-    assert response.status_code == 201
-    payload = typ.cast("dict[str, object]", response.json)
     context["document_id"] = typ.cast("str", payload["id"])
 
 
@@ -105,7 +120,9 @@ def update_host_document(
     context: ReferenceDocumentApiContext,
 ) -> None:
     """Update the host reference document with lock precondition."""
-    response = canonical_api_client.simulate_patch(
+    payload = _simulate_request(
+        canonical_api_client,
+        "patch",
         (
             f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
             f"{context['document_id']}"
@@ -115,9 +132,8 @@ def update_host_document(
             "lifecycle_state": "active",
             "metadata": {"name": "BDD Host Updated"},
         },
+        expected_status=200,
     )
-    assert response.status_code == 200
-    payload = typ.cast("dict[str, object]", response.json)
     assert payload["lock_version"] == 2
 
 

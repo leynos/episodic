@@ -44,6 +44,16 @@ class ServiceFixture(typ.TypedDict):
     template_id: str
 
 
+class _SupportsId(typ.Protocol):
+    """Structural protocol for objects exposing an identifier."""
+
+    id: object
+
+
+type ReferenceDocument = object
+type ReferenceDocumentRevision = object
+
+
 @pytest_asyncio.fixture
 async def service_fixture(
     session_factory: typ.Callable[[], AsyncSession],
@@ -202,12 +212,10 @@ async def test_reference_document_revision_history_round_trip(
     assert fetched_second.id == second.id, "Expected to fetch revision by id."
 
 
-@pytest.mark.asyncio
-async def test_series_aligned_host_guest_access_and_binding_workflow(
+async def _create_host_and_guest_documents(
     session_factory: typ.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
-) -> None:
-    """Host/guest docs should be series aligned and bindable to templates."""
+) -> tuple[ReferenceDocument, ReferenceDocument]:
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         host_document = await create_reference_document(
             uow,
@@ -227,11 +235,21 @@ async def test_series_aligned_host_guest_access_and_binding_workflow(
                 metadata={"name": "Guest Service Alignment"},
             ),
         )
+    return host_document, guest_document
 
+
+async def _create_revisions_for_host_and_guest(
+    session_factory: typ.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+    host_document: ReferenceDocument,
+    guest_document: ReferenceDocument,
+) -> ReferenceDocumentRevision:
+    host_document_with_id = typ.cast("_SupportsId", host_document)
+    guest_document_with_id = typ.cast("_SupportsId", guest_document)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         host_revision = await create_reference_document_revision(
             uow,
-            document_id=str(host_document.id),
+            document_id=str(host_document_with_id.id),
             owner_series_profile_id=service_fixture["primary_profile_id"],
             data=ReferenceDocumentRevisionData(
                 content={"bio": "Host profile"},
@@ -242,7 +260,7 @@ async def test_series_aligned_host_guest_access_and_binding_workflow(
         )
         _ = await create_reference_document_revision(
             uow,
-            document_id=str(guest_document.id),
+            document_id=str(guest_document_with_id.id),
             owner_series_profile_id=service_fixture["primary_profile_id"],
             data=ReferenceDocumentRevisionData(
                 content={"bio": "Guest profile"},
@@ -251,7 +269,15 @@ async def test_series_aligned_host_guest_access_and_binding_workflow(
                 change_note="Guest revision",
             ),
         )
+    return host_revision
 
+
+async def _list_documents_and_bind(
+    session_factory: typ.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+    host_revision: ReferenceDocumentRevision,
+) -> tuple[list[ReferenceDocument], list[ReferenceDocument]]:
+    host_revision_with_id = typ.cast("_SupportsId", host_revision)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         host_documents = await list_reference_documents(
             uow,
@@ -274,7 +300,7 @@ async def test_series_aligned_host_guest_access_and_binding_workflow(
         await create_reference_binding(
             uow,
             data=ReferenceBindingData(
-                reference_document_revision_id=str(host_revision.id),
+                reference_document_revision_id=str(host_revision_with_id.id),
                 target_kind="episode_template",
                 series_profile_id=None,
                 episode_template_id=service_fixture["template_id"],
@@ -282,14 +308,42 @@ async def test_series_aligned_host_guest_access_and_binding_workflow(
                 effective_from_episode_id=None,
             ),
         )
+    return typ.cast(
+        "tuple[list[ReferenceDocument], list[ReferenceDocument]]",
+        (host_documents, guest_documents),
+    )
+
+
+@pytest.mark.asyncio
+async def test_series_aligned_host_guest_access_and_binding_workflow(
+    session_factory: typ.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Host/guest docs should be series aligned and bindable to templates."""
+    host_document, guest_document = await _create_host_and_guest_documents(
+        session_factory,
+        service_fixture,
+    )
+    host_revision = await _create_revisions_for_host_and_guest(
+        session_factory,
+        service_fixture,
+        host_document,
+        guest_document,
+    )
+    host_documents, guest_documents = await _list_documents_and_bind(
+        session_factory,
+        service_fixture,
+        host_revision,
+    )
 
     assert len(host_documents) == 1, "Expected one host document for the series."
     assert len(guest_documents) == 1, "Expected one guest document for the series."
 
+    host_document_with_id = typ.cast("_SupportsId", host_document)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(ReferenceEntityNotFoundError):
             await get_reference_document(
                 uow,
-                document_id=str(host_document.id),
+                document_id=str(host_document_with_id.id),
                 owner_series_profile_id=service_fixture["secondary_profile_id"],
             )
