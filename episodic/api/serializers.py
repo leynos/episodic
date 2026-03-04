@@ -6,6 +6,9 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         EpisodeTemplate,
         EpisodeTemplateHistoryEntry,
+        ReferenceBinding,
+        ReferenceDocument,
+        ReferenceDocumentRevision,
         SeriesProfile,
         SeriesProfileHistoryEntry,
     )
@@ -74,3 +77,60 @@ def serialize_episode_template_history_entry(
 ) -> dict[str, typ.Any]:
     """Serialize an episode-template history entry."""
     return _serialize_history_entry(entry, "episode_template_id")
+
+
+def serialize_reference_document(document: ReferenceDocument) -> dict[str, typ.Any]:
+    """Serialize a reusable reference-document response payload."""
+    return {
+        "id": str(document.id),
+        "owner_series_profile_id": str(document.owner_series_profile_id),
+        "kind": document.kind.value,
+        "lifecycle_state": document.lifecycle_state.value,
+        "metadata": document.metadata,
+        "lock_version": document.lock_version,
+        "created_at": document.created_at.isoformat(),
+        "updated_at": document.updated_at.isoformat(),
+    }
+
+
+def serialize_reference_document_revision(
+    revision: ReferenceDocumentRevision,
+) -> dict[str, typ.Any]:
+    """Serialize a reusable reference-document revision payload."""
+    return {
+        "id": str(revision.id),
+        "reference_document_id": str(revision.reference_document_id),
+        "content": revision.content,
+        "content_hash": revision.content_hash,
+        "author": revision.author,
+        "change_note": revision.change_note,
+        "created_at": revision.created_at.isoformat(),
+    }
+
+
+def serialize_reference_binding(binding: ReferenceBinding) -> dict[str, typ.Any]:
+    """Serialize a reusable reference-binding payload."""
+    return {
+        "id": str(binding.id),
+        "reference_document_revision_id": str(binding.reference_document_revision_id),
+        "target_kind": binding.target_kind.value,
+        "series_profile_id": (
+            None
+            if binding.series_profile_id is None
+            else str(binding.series_profile_id)
+        ),
+        "episode_template_id": (
+            None
+            if binding.episode_template_id is None
+            else str(binding.episode_template_id)
+        ),
+        "ingestion_job_id": (
+            None if binding.ingestion_job_id is None else str(binding.ingestion_job_id)
+        ),
+        "effective_from_episode_id": (
+            None
+            if binding.effective_from_episode_id is None
+            else str(binding.effective_from_episode_id)
+        ),
+        "created_at": binding.created_at.isoformat(),
+    }

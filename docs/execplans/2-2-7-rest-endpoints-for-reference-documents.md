@@ -7,7 +7,7 @@ proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -125,17 +125,22 @@ Success is observable when:
 
 - [x] (2026-03-03 23:21Z) Drafted ExecPlan for roadmap item `2.2.7` in
   `docs/execplans/2-2-7-rest-endpoints-for-reference-documents.md`.
-- [ ] Stage A complete: API specification and fail-first tests drafted.
-- [ ] Stage B complete: schema/migration updates for locking and workflow
+- [x] (2026-03-04 09:05Z) Added fail-first unit, integration, and behavioural
+  tests for reusable reference-document endpoints and workflows.
+- [x] (2026-03-04 09:37Z) Implemented reusable reference service layer, API
+  resources, serializers, route wiring, and storage updates.
+- [x] Stage A complete: API specification and fail-first tests drafted.
+- [x] Stage B complete: schema/migration updates for locking and workflow
   retrieval support.
-- [ ] Stage C complete: optimistic-lock semantics implemented and validated.
-- [ ] Stage D complete: REST endpoints implemented for document/revision/
+- [x] Stage C complete: optimistic-lock semantics implemented and validated.
+- [x] Stage D complete: REST endpoints implemented for document/revision/
   binding workflows.
-- [ ] Stage E complete: change-history retrieval behaviour implemented and
+- [x] Stage E complete: change-history retrieval behaviour implemented and
   validated.
-- [ ] Stage F complete: host/guest profile access paths implemented and
+- [x] Stage F complete: host/guest profile access paths implemented and
   validated.
-- [ ] Stage G complete: docs, roadmap completion, and all quality gates green.
+- [x] (2026-03-04 16:22Z) Stage G complete: docs updated, roadmap entry marked
+  done, and all quality gates green.
 
 ## Surprises & discoveries
 
@@ -163,6 +168,12 @@ Success is observable when:
   `episodic/canonical/profile_templates/` service structure. Impact: new
   application services should mirror profile/template patterns.
 
+- Observation: behavioural test collection can fail when runtime evaluation
+  resolves type annotations to symbols imported only in `TYPE_CHECKING`.
+  Evidence: initial `NameError` raised against `testing.TestClient` annotations
+  during `pytest-bdd` collection. Impact: step modules must use postponed
+  annotations (or runtime imports) for test-client type hints.
+
 ## Decision log
 
 - Decision: implement `2.2.7` as a new service + resource stack parallel to
@@ -181,20 +192,40 @@ Success is observable when:
   canonical history mechanism for reference content. Date/Author: 2026-03-03 /
   Codex.
 
+- Decision: scope document CRUD and revision-history routes under
+  `/series-profiles/{profile_id}` while keeping revision and binding direct
+  lookup routes globally addressable. Rationale: series-scoped paths enforce
+  owner alignment for host/guest documents, while global lookup routes preserve
+  stable identifiers for SDK consumers. Date/Author: 2026-03-04 / Codex.
+
+- Decision: standardize pagination to `limit`/`offset` with defaults
+  (`limit=20`, `offset=0`) and maximum `limit=100` across document, revision,
+  and binding list routes. Rationale: one envelope contract simplifies clients
+  and repository adapter behaviour. Date/Author: 2026-03-04 / Codex.
+
 ## Outcomes & retrospective
 
-This section will be completed during implementation.
+Implemented outcomes:
 
-Target outcomes:
-
-- Published reusable reference-document REST API specification.
-- Implemented create/get/list/update endpoints for `ReferenceDocument`.
-- Implemented revision/binding workflow endpoints.
-- Verified optimistic-lock conflict behaviour.
-- Verified change-history retrieval.
-- Verified host/guest series-aligned access behaviour.
-- Updated users' and developers' documentation.
-- Marked roadmap item `2.2.7` done only after all validations pass.
+- Published reusable reference-document REST API specification in
+  `docs/episodic-podcast-generation-system-design.md`, including pagination and
+  error contracts.
+- Implemented create/get/list/update endpoints for `ReferenceDocument`, plus
+  revision and binding workflows.
+- Added optimistic-locking support via `lock_version` migration and
+  repository-level compare-and-update semantics.
+- Added unit, integration, and behavioural tests validating optimistic-lock
+  conflicts, revision history retrieval, and host/guest series-aligned access.
+- Updated `docs/users-guide.md` and `docs/developers-guide.md` with user-facing
+  and internal API behaviour.
+- Marked roadmap item `2.2.7` done in `docs/roadmap.md`.
+- Passed required quality gates:
+  - `make check-fmt`
+  - `make typecheck`
+  - `make lint`
+  - `make test`
+  - `PATH=/root/.bun/bin:$PATH make markdownlint`
+  - `make nixie`
 
 ## Context and orientation
 
@@ -234,12 +265,13 @@ Define and publish reusable reference endpoint contracts before implementation.
 Update `docs/episodic-podcast-generation-system-design.md` with a dedicated
 spec section for these endpoints:
 
-- `POST /reference-documents`
-- `GET /reference-documents`
-- `GET /reference-documents/{document_id}`
-- `PATCH /reference-documents/{document_id}` (optimistic lock)
-- `POST /reference-documents/{document_id}/revisions`
-- `GET /reference-documents/{document_id}/revisions`
+- `POST /series-profiles/{profile_id}/reference-documents`
+- `GET /series-profiles/{profile_id}/reference-documents`
+- `GET /series-profiles/{profile_id}/reference-documents/{document_id}`
+- `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`
+  (optimistic lock)
+- `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
 - `GET /reference-document-revisions/{revision_id}`
 - `POST /reference-bindings`
 - `GET /reference-bindings`
@@ -304,10 +336,7 @@ Implement Falcon inbound adapters for reusable references.
 Planned file changes:
 
 - `episodic/api/resources/reference_documents.py` (new)
-- `episodic/api/resources/reference_document_revisions.py` (new)
 - `episodic/api/resources/reference_bindings.py` (new)
-- `episodic/api/helpers.py` (payload parsing for new requests)
-- `episodic/api/handlers.py` (shared handler support for new typed errors)
 - `episodic/api/serializers.py` (new serializers)
 - `episodic/api/resources/__init__.py`
 - `episodic/api/app.py` (route wiring)
@@ -481,9 +510,8 @@ Planned interfaces and modules (subject to implementation-stage validation):
   - `list_reference_bindings`
   - `get_reference_binding`
 - API serializers for all three entity payload types.
-- Shared pagination parsing helper(s) in `episodic/api/helpers.py`.
-- Error mapping for reusable-reference service errors to Falcon HTTP responses
-  in `episodic/api/handlers.py`.
+- Per-resource pagination parsing and reusable-reference error mapping in new
+  Falcon resources.
 - Dependency assumptions to confirm before implementation:
   - authn/authz policy contract and enforcement hooks,
   - migration plan for existing reusable documents,
@@ -493,3 +521,8 @@ Planned interfaces and modules (subject to implementation-stage validation):
 
 - 2026-03-03: Initial draft created for roadmap item `2.2.7` with required
   sequencing, test strategy, docs updates, and quality-gate commands.
+- 2026-03-04: Updated status to `IN PROGRESS`; recorded implemented service,
+  repository, migration, API, and test progress. Stage G remains open pending
+  full quality gates and roadmap completion update.
+- 2026-03-04: Updated status to `COMPLETE`; confirmed Stage G completion with
+  full gate success and roadmap item `2.2.7` marked done.

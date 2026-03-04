@@ -76,7 +76,7 @@ that align with the system design.
   profile documents. Finish line: approved ER diagram, glossary entries for all
   three entities, and documented repository plus API contract acceptance
   criteria.
-- [ ] 2.2.7. Define REST endpoints for reusable reference documents
+- [x] 2.2.7. Define REST endpoints for reusable reference documents
   (`ReferenceDocument`, `ReferenceDocumentRevision`, and `ReferenceBinding`)
   with optimistic locking, change history retrieval, and series-aligned host
   and guest profile access. Acceptance criteria: published API specification;

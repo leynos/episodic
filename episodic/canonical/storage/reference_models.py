@@ -46,6 +46,8 @@ class ReferenceDocumentRecord(Base):
         Lifecycle state enum for activation/archive workflows.
     metadata_payload : dict[str, object]
         JSON metadata payload stored under the ``metadata`` column.
+    lock_version : int
+        Optimistic-lock token incremented on each successful update.
     created_at : datetime.datetime
         Timestamp when the record was created.
     updated_at : datetime.datetime
@@ -77,6 +79,11 @@ class ReferenceDocumentRecord(Base):
         postgresql.JSONB,
         default=dict,
         nullable=False,
+    )
+    lock_version: orm.Mapped[int] = orm.mapped_column(
+        sa.Integer,
+        nullable=False,
+        server_default=sa.text("1"),
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
