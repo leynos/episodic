@@ -1,6 +1,5 @@
 """Integration tests for reusable reference-document REST endpoints."""
 
-import dataclasses
 import dataclasses as dc
 import typing as typ
 
@@ -31,46 +30,46 @@ def _post_and_return_id(
     return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
 
 
-def _create_profile(client: testing.TestClient, slug: str) -> str:
-    """Create one series profile and return its identifier."""
-    return _post_and_return_id(
+def _profile_body(slug: str) -> dict[str, object]:
+    """Return a series-profile creation body for *slug*."""
+    return {
+        "slug": slug,
+        "title": f"{slug} title",
+        "description": f"{slug} description",
+        "configuration": {"tone": "neutral"},
+        "actor": "api-reference@example.com",
+        "note": "Create profile",
+    }
+
+
+def _build_api_fixture(client: testing.TestClient) -> _ApiFixture:
+    """Build common API fixture entities for reference-document endpoint tests."""
+    primary_profile_id = _post_and_return_id(
         client,
         "/series-profiles",
-        {
-            "slug": slug,
-            "title": f"{slug} title",
-            "description": f"{slug} description",
-            "configuration": {"tone": "neutral"},
-            "actor": "api-reference@example.com",
-            "note": "Create profile",
-        },
+        _profile_body("api-reference-primary"),
         assertion_message="Expected profile creation to return 201.",
     )
-
-
-def _create_template(client: testing.TestClient, profile_id: str, slug: str) -> str:
-    """Create one episode template and return its identifier."""
-    return _post_and_return_id(
+    secondary_profile_id = _post_and_return_id(
+        client,
+        "/series-profiles",
+        _profile_body("api-reference-secondary"),
+        assertion_message="Expected profile creation to return 201.",
+    )
+    template_id = _post_and_return_id(
         client,
         "/episode-templates",
         {
-            "series_profile_id": profile_id,
-            "slug": slug,
-            "title": f"{slug} title",
-            "description": f"{slug} description",
+            "series_profile_id": primary_profile_id,
+            "slug": "api-reference-template",
+            "title": "api-reference-template title",
+            "description": "api-reference-template description",
             "structure": {"segments": ["intro", "main", "outro"]},
             "actor": "api-reference@example.com",
             "note": "Create template",
         },
         assertion_message="Expected template creation to return 201.",
     )
-
-
-def _build_api_fixture(client: testing.TestClient) -> _ApiFixture:
-    """Build common API fixture entities for reference-document endpoint tests."""
-    primary_profile_id = _create_profile(client, "api-reference-primary")
-    secondary_profile_id = _create_profile(client, "api-reference-secondary")
-    template_id = _create_template(client, primary_profile_id, "api-reference-template")
     return _ApiFixture(
         primary_profile_id=primary_profile_id,
         secondary_profile_id=secondary_profile_id,
@@ -123,7 +122,7 @@ def _assert_reference_document_list(
     return items
 
 
-@dataclasses.dataclass(frozen=True)
+@dc.dataclass(frozen=True)
 class _RevisionRequest:
     summary: str
     content_hash: str

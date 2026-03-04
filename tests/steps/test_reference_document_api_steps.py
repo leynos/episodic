@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 
 from pytest_bdd import given, scenario, then, when
@@ -47,17 +48,23 @@ def _create_profile(client: testing.TestClient, slug: str) -> str:
     return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
 
 
+@dataclasses.dataclass(frozen=True)
+class _SimulateRequest:
+    method: str
+    path: str
+    json: dict[str, object]
+    expected_status: int
+
+
 def _simulate_request(
     client: testing.TestClient,
-    method: str,
-    path: str,
-    *,
-    json: dict[str, object],
-    expected_status: int,
+    request: _SimulateRequest,
 ) -> dict[str, object]:
     """Simulate an HTTP request, assert the status code, and return the JSON payload."""
-    response = getattr(client, f"simulate_{method}")(path, json=json)
-    assert response.status_code == expected_status
+    response = getattr(client, f"simulate_{request.method}")(
+        request.path, json=request.json
+    )
+    assert response.status_code == request.expected_status
     return typ.cast("dict[str, object]", response.json)
 
 
@@ -102,14 +109,16 @@ def create_host_document(
     """Create one host reference document for the primary profile."""
     payload = _simulate_request(
         canonical_api_client,
-        "post",
-        f"/series-profiles/{context['primary_profile_id']}/reference-documents",
-        json={
-            "kind": "host_profile",
-            "lifecycle_state": "active",
-            "metadata": {"name": "BDD Host"},
-        },
-        expected_status=201,
+        _SimulateRequest(
+            method="post",
+            path=f"/series-profiles/{context['primary_profile_id']}/reference-documents",
+            json={
+                "kind": "host_profile",
+                "lifecycle_state": "active",
+                "metadata": {"name": "BDD Host"},
+            },
+            expected_status=201,
+        ),
     )
     context["document_id"] = typ.cast("str", payload["id"])
 
@@ -122,17 +131,19 @@ def update_host_document(
     """Update the host reference document with lock precondition."""
     payload = _simulate_request(
         canonical_api_client,
-        "patch",
-        (
-            f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
-            f"{context['document_id']}"
+        _SimulateRequest(
+            method="patch",
+            path=(
+                f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
+                f"{context['document_id']}"
+            ),
+            json={
+                "expected_lock_version": 1,
+                "lifecycle_state": "active",
+                "metadata": {"name": "BDD Host Updated"},
+            },
+            expected_status=200,
         ),
-        json={
-            "expected_lock_version": 1,
-            "lifecycle_state": "active",
-            "metadata": {"name": "BDD Host Updated"},
-        },
-        expected_status=200,
     )
     assert payload["lock_version"] == 2
 
