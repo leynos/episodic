@@ -133,7 +133,9 @@ async def test_async_insert_and_query():
     # Start a PGlite instance manually and get connection details
     from py_pglite import PGliteConfig, PGliteManager
 
-    config = PGliteConfig(tcp_port=54321, tcp_host="127.0.0.1")  # use TCP mode on a free port
+    config = PGliteConfig(
+        tcp_port=54321, tcp_host="127.0.0.1"
+    )  # use TCP mode on a free port
     async with PGliteManager(config) as pg_manager:  # start the Postgres WASM instance
         # Build an AsyncEngine using asyncpg driver
         pg_url = f"postgresql+asyncpg://postgres:postgres@{config.tcp_host}:{config.tcp_port}/postgres"

@@ -223,7 +223,9 @@ class SQLAlchemySessionManager:
                         await session.commit()
                     else:  # Rollback on client/server error or if req_succeeded is False
                         await session.rollback()
-            except SQLAlchemyError:  # Catch SQLAlchemy specific errors during commit/rollback
+            except (
+                SQLAlchemyError
+            ):  # Catch SQLAlchemy specific errors during commit/rollback
                 await session.rollback()
                 # Potentially log the error
                 raise  # Re-raise to allow Falcon's error handling to take over
@@ -233,7 +235,9 @@ class SQLAlchemySessionManager:
                 # Potentially log the error
                 raise  # Re-raise
             finally:
-                await session.close()  # Always close the session to return connection to pool
+                await (
+                    session.close()
+                )  # Always close the session to return connection to pool
 ```
 
 9 The transaction handling within process\_response is crucial. The example
@@ -415,6 +419,7 @@ async def create_new_user(session: AsyncSession, name: str, email: str) -> User:
     # await session.refresh(new_user)  # May be needed if there are other server-side triggers not covered by flush
     return new_user
 
+
 async def update_user_email(
     session: AsyncSession, user_id: int, new_email: str
 ) -> User | None:
@@ -435,7 +440,6 @@ async def remove_user(session: AsyncSession, user_id: int) -> bool:
         # Commit is typically handled by middleware or at the end of request logic.
         return True
     return False
-
 ```
 
 20
@@ -913,9 +917,7 @@ from sqlalchemy.ext.asyncio import (
 
 # from my_app.models import Base  # Assuming your declarative base
 
-TEST_DATABASE_URL = (
-    "postgresql+asyncpg://test_user:test_password@localhost/test_db"  # Replace with your test DB URL
-)
+TEST_DATABASE_URL = "postgresql+asyncpg://test_user:test_password@localhost/test_db"  # Replace with your test DB URL
 
 
 @pytest.fixture(scope="session")
@@ -970,7 +972,9 @@ async def db_session(db_connection: AsyncConnection) -> AsyncSession:
     # unless a new savepoint is begun.
     @event.listens_for(async_sess.sync_session, "after_transaction_end")
     def restart_savepoint(session, transaction):
-        if transaction.nested and not transaction._parent.nested:  # Check if it was a top-level savepoint for this session
+        if (
+            transaction.nested and not transaction._parent.nested
+        ):  # Check if it was a top-level savepoint for this session
             # Ensure the connection is still valid and in a transaction
             if db_connection.is_active and not db_connection.in_transaction():
                 # This state should ideally not be reached if connection fixture manages transaction properly
@@ -1026,7 +1030,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.fixture
-async def client(db_session: AsyncSession):  # Uses the transactional db_session from above
+async def client(
+    db_session: AsyncSession,
+):  # Uses the transactional db_session from above
     # Test middleware that injects the transactional db_session
     class TestSessionMiddleware:
         async def process_request(self, req, resp):
