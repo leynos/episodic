@@ -32,6 +32,13 @@ from episodic.canonical.profile_templates import (
     UpdateEpisodeTemplateRequest,
     UpdateSeriesProfileRequest,
 )
+from episodic.canonical.reference_documents import (
+    ReferenceConflictError,
+    ReferenceDocumentError,
+    ReferenceEntityNotFoundError,
+    ReferenceRevisionConflictError,
+    ReferenceValidationError,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -39,6 +46,8 @@ if typ.TYPE_CHECKING:
     from .types import JsonPayload
 
 _INT_RE = re.compile(r"[+-]?\d+")
+_DEFAULT_PAGE_LIMIT = 20
+_MAX_PAGE_LIMIT = 100
 
 
 def parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
@@ -90,6 +99,55 @@ def require_payload_dict(payload: object) -> JsonPayload:
         msg = "JSON object payload is required."
         raise falcon.HTTPBadRequest(description=msg)
     return typ.cast("JsonPayload", payload)
+
+
+def require_query_params(req: falcon.Request, *names: str) -> dict[str, str]:
+    """Return required query parameters or raise HTTP 400."""
+    values: dict[str, str] = {}
+    for name in names:
+        value = req.get_param(name)
+        if value is None:
+            msg = f"Missing required query parameter: {name}"
+            raise falcon.HTTPBadRequest(description=msg)
+        values[name] = value
+    return values
+
+
+def parse_pagination(req: falcon.Request) -> tuple[int, int]:
+    """Parse and validate common `limit`/`offset` query parameters."""
+    raw_limit = req.get_param("limit")
+    raw_offset = req.get_param("offset")
+
+    try:
+        limit = _DEFAULT_PAGE_LIMIT if raw_limit is None else int(raw_limit)
+        offset = 0 if raw_offset is None else int(raw_offset)
+    except ValueError as exc:
+        msg = "Pagination parameters limit/offset must be integers."
+        raise falcon.HTTPBadRequest(description=msg) from exc
+
+    if limit < 1 or limit > _MAX_PAGE_LIMIT:
+        msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
+        raise falcon.HTTPBadRequest(description=msg)
+    if offset < 0:
+        msg = "offset must be a non-negative integer."
+        raise falcon.HTTPBadRequest(description=msg)
+    return limit, offset
+
+
+def map_reference_error(
+    exc: ReferenceDocumentError,
+    *,
+    context: str,
+) -> falcon.HTTPError:
+    """Map reusable reference-document domain errors to Falcon HTTP errors."""
+    if isinstance(exc, ReferenceValidationError):
+        return falcon.HTTPBadRequest(description=str(exc))
+    if isinstance(exc, ReferenceEntityNotFoundError):
+        return falcon.HTTPNotFound(description=str(exc))
+    if isinstance(exc, (ReferenceRevisionConflictError, ReferenceConflictError)):
+        return falcon.HTTPConflict(description=str(exc))
+    msg = f"Unexpected {context} error."
+    return falcon.HTTPInternalServerError(description=msg)
 
 
 def build_audit_metadata(payload: JsonPayload) -> AuditMetadata:

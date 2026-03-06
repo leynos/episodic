@@ -290,6 +290,59 @@ def _assert_revision_and_binding_workflow(
     assert len(bindings_items) == 1, "Expected one binding in list response."
 
 
+def _assert_bad_request_error(
+    response: object,
+    *,
+    description: str | None = None,
+) -> None:
+    """Assert Falcon returned the stable HTTP 400 JSON error envelope."""
+    http_response = typ.cast("testing.Result", response)
+    assert http_response.status_code == 400
+    payload = typ.cast("dict[str, object]", http_response.json)
+    assert payload["title"] == "400 Bad Request"
+    if description is not None:
+        assert payload["description"] == description
+
+
+def _binding_list_params(
+    fixture: _ApiFixture,
+    **extra_params: str,
+) -> dict[str, str]:
+    """Build list-binding query params while preserving a valid target."""
+    return {
+        "target_kind": "episode_template",
+        "target_id": fixture.template_id,
+        **extra_params,
+    }
+
+
+def _seed_reference_binding(
+    client: testing.TestClient,
+    fixture: _ApiFixture,
+) -> None:
+    """Create one document, revision, and binding for negative-path list tests."""
+    document_id = _create_reference_document(
+        client,
+        profile_id=fixture.primary_profile_id,
+        kind="host_profile",
+        name="Host API Validation",
+    )
+    revision_id = _create_reference_document_revision(
+        client,
+        profile_id=fixture.primary_profile_id,
+        document_id=document_id,
+        revision=_RevisionRequest(
+            summary="validation revision",
+            content_hash="api-reference-validation-hash",
+        ),
+    )
+    _create_reference_binding(
+        client,
+        revision_id=revision_id,
+        template_id=fixture.template_id,
+    )
+
+
 def test_reference_document_round_trip_and_binding_workflow(
     canonical_api_client: testing.TestClient,
 ) -> None:
@@ -376,4 +429,129 @@ def test_series_aligned_host_guest_access_paths(
     )
     assert cross_series_get.status_code == 404, (
         "Expected cross-series document lookup to return 404."
+    )
+
+
+def test_reference_document_api_rejects_invalid_query_params(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Reference-document list endpoints should reject invalid query inputs."""
+    fixture = _build_api_fixture(canonical_api_client)
+    _seed_reference_binding(canonical_api_client, fixture)
+
+    bad_pagination_requests = (
+        (
+            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+            {"limit": "not-an-int"},
+            "Pagination parameters limit/offset must be integers.",
+        ),
+        (
+            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+            {"offset": "not-an-int"},
+            "Pagination parameters limit/offset must be integers.",
+        ),
+        (
+            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+            {"limit": "0"},
+            "limit must be between 1 and 100.",
+        ),
+        (
+            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+            {"limit": "101"},
+            "limit must be between 1 and 100.",
+        ),
+        (
+            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+            {"offset": "-1"},
+            "offset must be a non-negative integer.",
+        ),
+        (
+            "/reference-bindings",
+            _binding_list_params(fixture, limit="not-an-int"),
+            "Pagination parameters limit/offset must be integers.",
+        ),
+        (
+            "/reference-bindings",
+            _binding_list_params(fixture, offset="not-an-int"),
+            "Pagination parameters limit/offset must be integers.",
+        ),
+        (
+            "/reference-bindings",
+            _binding_list_params(fixture, limit="0"),
+            "limit must be between 1 and 100.",
+        ),
+        (
+            "/reference-bindings",
+            _binding_list_params(fixture, limit="101"),
+            "limit must be between 1 and 100.",
+        ),
+        (
+            "/reference-bindings",
+            _binding_list_params(fixture, offset="-1"),
+            "offset must be a non-negative integer.",
+        ),
+    )
+    for path, params, description in bad_pagination_requests:
+        response = canonical_api_client.simulate_get(path, params=params)
+        _assert_bad_request_error(response, description=description)
+
+    missing_target_kind = canonical_api_client.simulate_get(
+        "/reference-bindings",
+        params={"target_id": fixture.template_id},
+    )
+    _assert_bad_request_error(
+        missing_target_kind,
+        description="Missing required query parameter: target_kind",
+    )
+
+    missing_target_id = canonical_api_client.simulate_get(
+        "/reference-bindings",
+        params={"target_kind": "episode_template"},
+    )
+    _assert_bad_request_error(
+        missing_target_id,
+        description="Missing required query parameter: target_id",
+    )
+
+
+def test_reference_document_api_rejects_invalid_uuids(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Reference-document endpoints should reject syntactically invalid UUIDs."""
+    fixture = _build_api_fixture(canonical_api_client)
+
+    invalid_document_id = canonical_api_client.simulate_get(
+        f"/series-profiles/{fixture.primary_profile_id}/reference-documents/not-a-valid-uuid"
+    )
+    _assert_bad_request_error(
+        invalid_document_id,
+        description="Invalid UUID for document_id: 'not-a-valid-uuid'.",
+    )
+
+    invalid_revision_id = canonical_api_client.simulate_get(
+        "/reference-document-revisions/not-a-valid-uuid"
+    )
+    _assert_bad_request_error(
+        invalid_revision_id,
+        description="Invalid UUID for revision_id: 'not-a-valid-uuid'.",
+    )
+
+    invalid_binding_id = canonical_api_client.simulate_get(
+        "/reference-bindings/not-a-valid-uuid"
+    )
+    _assert_bad_request_error(
+        invalid_binding_id,
+        description="Invalid UUID for binding_id: 'not-a-valid-uuid'.",
+    )
+
+    invalid_target_id = canonical_api_client.simulate_get(
+        "/reference-bindings",
+        params={
+            "target_kind": "episode_template",
+            "target_id": "not-a-valid-uuid",
+        },
+    )
+    _assert_bad_request_error(
+        invalid_target_id,
+        description="Invalid UUID for target_id: 'not-a-valid-uuid'.",
     )

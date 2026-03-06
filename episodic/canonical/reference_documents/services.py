@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import datetime as dt
+import enum
 import typing as typ
 import uuid
 
@@ -43,31 +44,45 @@ def _parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
         raise ReferenceValidationError(msg) from exc
 
 
+def _parse_enum[EnumT: enum.Enum](
+    raw_value: str,
+    enum_cls: type[EnumT],
+    *,
+    field_label: str,
+) -> EnumT:
+    """Parse one enum value and preserve domain-specific error wording."""
+    try:
+        return enum_cls(raw_value)
+    except ValueError as exc:
+        msg = f"Unsupported {field_label}: {raw_value!r}."
+        raise ReferenceValidationError(msg) from exc
+
+
 def _parse_reference_kind(raw_value: str) -> ReferenceDocumentKind:
     """Parse a document kind string into the enum value."""
-    try:
-        return ReferenceDocumentKind(raw_value)
-    except ValueError as exc:
-        msg = f"Unsupported reference document kind: {raw_value!r}."
-        raise ReferenceValidationError(msg) from exc
+    return _parse_enum(
+        raw_value,
+        ReferenceDocumentKind,
+        field_label="reference document kind",
+    )
 
 
 def _parse_lifecycle_state(raw_value: str) -> ReferenceDocumentLifecycleState:
     """Parse a lifecycle-state string into the enum value."""
-    try:
-        return ReferenceDocumentLifecycleState(raw_value)
-    except ValueError as exc:
-        msg = f"Unsupported reference document lifecycle_state: {raw_value!r}."
-        raise ReferenceValidationError(msg) from exc
+    return _parse_enum(
+        raw_value,
+        ReferenceDocumentLifecycleState,
+        field_label="reference document lifecycle_state",
+    )
 
 
 def _parse_target_kind(raw_value: str) -> ReferenceBindingTargetKind:
     """Parse a binding target-kind string into the enum value."""
-    try:
-        return ReferenceBindingTargetKind(raw_value)
-    except ValueError as exc:
-        msg = f"Unsupported reference binding target_kind: {raw_value!r}."
-        raise ReferenceValidationError(msg) from exc
+    return _parse_enum(
+        raw_value,
+        ReferenceBindingTargetKind,
+        field_label="reference binding target_kind",
+    )
 
 
 def _validate_pagination(limit: int, offset: int) -> None:
@@ -225,12 +240,6 @@ async def update_reference_document(
         document_id=parsed_document_id,
         owner_series_profile_id=parsed_owner_id,
     )
-    if current_document.lock_version != request.expected_lock_version:
-        msg = (
-            "Reference document revision conflict: expected "
-            f"{request.expected_lock_version}, found {current_document.lock_version}."
-        )
-        raise ReferenceRevisionConflictError(msg)
 
     updated_document = dc.replace(
         current_document,
@@ -402,25 +411,25 @@ async def _validate_binding_target_alignment(
     alignment: _BindingTargetAlignment,
 ) -> None:
     """Validate target context existence and owner-series alignment."""
-    if alignment.target_kind is ReferenceBindingTargetKind.SERIES_PROFILE:
-        await _validate_series_profile_binding_target(
-            uow,
-            series_profile_id=alignment.series_profile_id,
-            document_owner_series_id=alignment.document_owner_series_id,
-        )
-        return
-    if alignment.target_kind is ReferenceBindingTargetKind.EPISODE_TEMPLATE:
-        await _validate_episode_template_binding_target(
-            uow,
-            episode_template_id=alignment.episode_template_id,
-            document_owner_series_id=alignment.document_owner_series_id,
-        )
-        return
-    await _validate_ingestion_job_binding_target(
-        uow,
-        ingestion_job_id=alignment.ingestion_job_id,
-        document_owner_series_id=alignment.document_owner_series_id,
-    )
+    match alignment.target_kind:
+        case ReferenceBindingTargetKind.SERIES_PROFILE:
+            await _validate_series_profile_binding_target(
+                uow,
+                series_profile_id=alignment.series_profile_id,
+                document_owner_series_id=alignment.document_owner_series_id,
+            )
+        case ReferenceBindingTargetKind.EPISODE_TEMPLATE:
+            await _validate_episode_template_binding_target(
+                uow,
+                episode_template_id=alignment.episode_template_id,
+                document_owner_series_id=alignment.document_owner_series_id,
+            )
+        case ReferenceBindingTargetKind.INGESTION_JOB:
+            await _validate_ingestion_job_binding_target(
+                uow,
+                ingestion_job_id=alignment.ingestion_job_id,
+                document_owner_series_id=alignment.document_owner_series_id,
+            )
 
 
 async def create_reference_binding(

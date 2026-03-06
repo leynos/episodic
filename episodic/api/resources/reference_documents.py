@@ -4,21 +4,23 @@ import typing as typ
 
 import falcon
 
-from episodic.api.helpers import parse_uuid, require_payload_dict
+from episodic.api.helpers import (
+    map_reference_error,
+    parse_pagination,
+    parse_uuid,
+    require_payload_dict,
+)
 from episodic.api.serializers import (
     serialize_reference_document,
     serialize_reference_document_revision,
 )
 from episodic.canonical.reference_documents import (
-    ReferenceConflictError,
     ReferenceDocumentCreateData,
+    ReferenceDocumentError,
     ReferenceDocumentListRequest,
     ReferenceDocumentRevisionData,
     ReferenceDocumentRevisionListRequest,
     ReferenceDocumentUpdateRequest,
-    ReferenceEntityNotFoundError,
-    ReferenceRevisionConflictError,
-    ReferenceValidationError,
     create_reference_document,
     create_reference_document_revision,
     get_reference_document,
@@ -30,30 +32,6 @@ from episodic.canonical.reference_documents import (
 
 if typ.TYPE_CHECKING:
     from episodic.api.types import JsonPayload, UowFactory
-
-_DEFAULT_PAGE_LIMIT = 20
-_MAX_PAGE_LIMIT = 100
-
-
-def _parse_pagination(req: falcon.Request) -> tuple[int, int]:
-    """Parse `limit` and `offset` query parameters."""
-    raw_limit = req.get_param("limit")
-    raw_offset = req.get_param("offset")
-
-    try:
-        limit = _DEFAULT_PAGE_LIMIT if raw_limit is None else int(raw_limit)
-        offset = 0 if raw_offset is None else int(raw_offset)
-    except ValueError as exc:
-        msg = "Pagination parameters limit/offset must be integers."
-        raise falcon.HTTPBadRequest(description=msg) from exc
-
-    if limit < 1 or limit > _MAX_PAGE_LIMIT:
-        msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
-        raise falcon.HTTPBadRequest(description=msg)
-    if offset < 0:
-        msg = "offset must be a non-negative integer."
-        raise falcon.HTTPBadRequest(description=msg)
-    return limit, offset
 
 
 def _parse_expected_lock_version(payload: JsonPayload) -> int:
@@ -71,18 +49,6 @@ def _parse_expected_lock_version(payload: JsonPayload) -> int:
         msg = "expected_lock_version must be a positive integer."
         raise falcon.HTTPBadRequest(description=msg)
     return expected
-
-
-def _map_reference_error(exc: Exception) -> falcon.HTTPError:
-    """Map reference-document service errors to Falcon HTTP errors."""
-    if isinstance(exc, ReferenceValidationError):
-        return falcon.HTTPBadRequest(description=str(exc))
-    if isinstance(exc, ReferenceEntityNotFoundError):
-        return falcon.HTTPNotFound(description=str(exc))
-    if isinstance(exc, (ReferenceRevisionConflictError, ReferenceConflictError)):
-        return falcon.HTTPConflict(description=str(exc))
-    msg = "Unexpected reference-document error."
-    return falcon.HTTPInternalServerError(description=msg)
 
 
 class ReferenceDocumentsResource:
@@ -118,8 +84,8 @@ class ReferenceDocumentsResource:
         try:
             async with self._uow_factory() as uow:
                 document = await create_reference_document(uow, data=data)
-        except Exception as exc:
-            raise _map_reference_error(exc) from exc
+        except ReferenceDocumentError as exc:
+            raise map_reference_error(exc, context="reference-document") from exc
 
         resp.media = serialize_reference_document(document)
         resp.status = falcon.HTTP_201
@@ -131,7 +97,7 @@ class ReferenceDocumentsResource:
         profile_id: str,
     ) -> None:
         """List reusable reference documents for one series profile."""
-        limit, offset = _parse_pagination(req)
+        limit, offset = parse_pagination(req)
         kind = req.get_param("kind")
 
         try:
@@ -147,8 +113,8 @@ class ReferenceDocumentsResource:
                         offset=offset,
                     ),
                 )
-        except Exception as exc:
-            raise _map_reference_error(exc) from exc
+        except ReferenceDocumentError as exc:
+            raise map_reference_error(exc, context="reference-document") from exc
 
         resp.media = {
             "items": [serialize_reference_document(item) for item in documents],
@@ -180,8 +146,8 @@ class ReferenceDocumentResource:
                     document_id=str(parse_uuid(document_id, "document_id")),
                     owner_series_profile_id=str(parse_uuid(profile_id, "profile_id")),
                 )
-        except Exception as exc:
-            raise _map_reference_error(exc) from exc
+        except ReferenceDocumentError as exc:
+            raise map_reference_error(exc, context="reference-document") from exc
 
         resp.media = serialize_reference_document(document)
         resp.status = falcon.HTTP_200
@@ -216,8 +182,8 @@ class ReferenceDocumentResource:
                     uow,
                     request=request,
                 )
-        except Exception as exc:
-            raise _map_reference_error(exc) from exc
+        except ReferenceDocumentError as exc:
+            raise map_reference_error(exc, context="reference-document") from exc
 
         resp.media = serialize_reference_document(updated)
         resp.status = falcon.HTTP_200
@@ -260,8 +226,8 @@ class ReferenceDocumentRevisionsResource:
                     owner_series_profile_id=str(parse_uuid(profile_id, "profile_id")),
                     data=data,
                 )
-        except Exception as exc:
-            raise _map_reference_error(exc) from exc
+        except ReferenceDocumentError as exc:
+            raise map_reference_error(exc, context="reference-document") from exc
 
         resp.media = serialize_reference_document_revision(revision)
         resp.status = falcon.HTTP_201
@@ -274,7 +240,7 @@ class ReferenceDocumentRevisionsResource:
         document_id: str,
     ) -> None:
         """List immutable revisions for one reusable reference document."""
-        limit, offset = _parse_pagination(req)
+        limit, offset = parse_pagination(req)
 
         try:
             async with self._uow_factory() as uow:
@@ -289,8 +255,8 @@ class ReferenceDocumentRevisionsResource:
                         offset=offset,
                     ),
                 )
-        except Exception as exc:
-            raise _map_reference_error(exc) from exc
+        except ReferenceDocumentError as exc:
+            raise map_reference_error(exc, context="reference-document") from exc
 
         resp.media = {
             "items": [
@@ -333,8 +299,8 @@ class ReferenceDocumentRevisionResource:
                         )
                     ),
                 )
-        except Exception as exc:
-            raise _map_reference_error(exc) from exc
+        except ReferenceDocumentError as exc:
+            raise map_reference_error(exc, context="reference-document") from exc
 
         resp.media = serialize_reference_document_revision(revision)
         resp.status = falcon.HTTP_200
