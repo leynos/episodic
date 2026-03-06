@@ -256,29 +256,26 @@ from langgraph.types import Command, interrupt
 from my_celery_app import heavy_rag_task
 import uuid
 
+
 def tool_execution_node(state, config):
     # 1. Identify the task arguments
     tool_call = state["messages"][-1].tool_calls
-    
+
     # 2. Extract the persistent thread_id
     thread_id = config["configurable"]["thread_id"]
-    
+
     # 3. Dispatch to Celery
     # Pass the thread_id to the worker so the callback can resume the graph.
-    task = heavy_rag_task.delay(
-        query=tool_call["args"]["query"],
-        thread_id=thread_id
-    )
-    
+    task = heavy_rag_task.delay(query=tool_call["args"]["query"], thread_id=thread_id)
+
     # 4. Suspend Execution
-    # The interrupt function halts the graph. The value passed is 
+    # The interrupt function halts the graph. The value passed is
     # surfaced to the client, indicating the system is "sleeping".
     return interrupt({
         "type": "background_task_pending",
         "task_id": task.id,
-        "description": "Processing heavy RAG index..."
+        "description": "Processing heavy RAG index...",
     })
-
 ```
 
 At this point, the Python process running the LangGraph node finishes. The
@@ -296,6 +293,7 @@ request to the LangGraph orchestration API.
 import requests
 from celery import shared_task
 
+
 @shared_task(bind=True)
 def heavy_rag_task(self, query, thread_id):
     try:
@@ -312,13 +310,12 @@ def heavy_rag_task(self, query, thread_id):
         "thread_id": thread_id,
         "task_id": self.request.id,
         "output": result,
-        "status": status
+        "status": status,
     }
     # Reliable delivery with retries is crucial here
     requests.post(webhook_url, json=payload, timeout=5)
-    
-    return result
 
+    return result
 ```
 
 #### Step 3: Resuming via Command
@@ -330,26 +327,23 @@ inject the result back into the suspended node.
 # api_server.py
 from langgraph.types import Command
 
+
 @app.post("/internal/resume")
 async def resume_workflow(payload: WebhookPayload):
     thread_id = payload.thread_id
-    
-    # The Command object tells LangGraph: 
-    # "Resume the interrupted node, and provide THIS value 
+
+    # The Command object tells LangGraph:
+    # "Resume the interrupted node, and provide THIS value
     # as the return value of the interrupt() call."
     resume_command = Command(
-        resume={
-            "tool_output": payload.output,
-            "status": payload.status
-        }
+        resume={"tool_output": payload.output, "status": payload.status}
     )
-    
+
     # Rehydrate the graph from Redis and continue execution
     config = {"configurable": {"thread_id": thread_id}}
     async for event in graph.astream(resume_command, config=config):
         # Process events (log them, or push via WebSocket to user)
         pass
-
 ```
 
 In the Episodic system, the callback is mediated by `TaskResumePort`; see
@@ -397,19 +391,20 @@ diverse constellation of tools.
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 
+
 async def build_mcp_agent():
     # Define connections to various MCP servers
     client = MultiServerMCPClient({
         "database": {
             "transport": "http",
             "url": "http://internal-db-mcp:8080/mcp",
-            "headers": {"Authorization": "Bearer internal-token"}
+            "headers": {"Authorization": "Bearer internal-token"},
         },
         "filesystem": {
             "transport": "stdio",
             "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/var/data"]
-        }
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/var/data"],
+        },
     })
 
     # Dynamically load tools from all connected servers
@@ -417,13 +412,12 @@ async def build_mcp_agent():
     async with client.context() as session:
         # Get list of LangChain-compatible tool objects
         tools = await client.get_tools()
-        
+
         # Bind directly to the LLM
         llm = ChatOpenAI(model="gpt-4o")
         llm_with_tools = llm.bind_tools(tools)
-        
-        #... proceed to define LangGraph nodes...
 
+        # ... proceed to define LangGraph nodes...
 ```
 
 This pattern dramatically simplifies the codebase. The agent definition no
@@ -443,23 +437,25 @@ from fastmcp import FastMCP
 # Create a server
 mcp = FastMCP("CorporateDataService")
 
+
 @mcp.tool()
 def query_invoice(invoice_id: str) -> str:
     """
     Retrieve invoice details from the legacy SAP system.
     Use this tool when the user asks about billing status.
     """
-    #... logic to connect to SAP...
+    # ... logic to connect to SAP...
     return f"Invoice {invoice_id}: Paid"
+
 
 @mcp.resource("config://app-settings")
 def get_app_settings() -> str:
     """Read-only application configuration."""
     return '{"timeout": 30, "retry": true}'
 
-if __name__ == "__main__":
-    mcp.run() # Starts the stdio or http server
 
+if __name__ == "__main__":
+    mcp.run()  # Starts the stdio or http server
 ```
 
 Deploying this script as a microservice (via Docker) allows any agent in the
@@ -540,6 +536,7 @@ binding.
 import yaml
 import importlib
 
+
 class Skill:
     def __init__(self, path):
         self.path = path
@@ -549,7 +546,8 @@ class Skill:
     def _load_tools(self):
         # Dynamically import the tools module from the skill folder
         module = importlib.import_module(f"skills.{self.metadata['name']}.tools")
-        return module.get_tools() # Expected to return list of BaseTool
+        return module.get_tools()  # Expected to return list of BaseTool
+
 
 class SkillRegistry:
     def get_discovery_prompt(self):
@@ -561,9 +559,8 @@ class SkillRegistry:
         skill = self.skills[skill_name]
         return {
             "messages": agent_state.get("messages", []),
-            "active_tools": skill.tools
+            "active_tools": skill.tools,
         }
-
 ```
 
 This pattern ensures that the agent remains lightweight and focused. It “puts
@@ -604,7 +601,6 @@ class PIIMiddleware:
             clean_text = redact_sensitive_data(m.content)
             scrubbed.append(m.copy(content=clean_text))
         return scrubbed
-
 ```
 
 Dynamic Context Injection:
@@ -636,19 +632,19 @@ logs might be lost.
 ```python
 from langchain.callbacks.base import BaseCallbackHandler
 
+
 class DatadogCallbackHandler(BaseCallbackHandler):
     def on_llm_end(self, response, **kwargs):
         # Extract token usage and latency
         usage = response.llm_output.get("token_usage")
         latency = kwargs.get("latency")
-        
+
         # Push metric immediately
         datadog.stat.gauge("llm.tokens.total", usage["total_tokens"])
-        
+
     async def on_tool_error(self, error, **kwargs):
         # Log tool failures explicitly
         logger.error(f"Tool execution failed: {error}")
-
 ```
 
 Configuring the LLM with `callbacks=` ensures that every inference event is
@@ -693,19 +689,21 @@ used to force the model to produce a DAG (Directed Acyclic Graph) of tasks.
 from pydantic import BaseModel, Field
 from typing import List
 
+
 class Task(BaseModel):
     id: int
     description: str
     tool_category: str
     dependencies: List[int]
 
+
 class Plan(BaseModel):
     reasoning: str = Field(..., description="Explain the strategy first.")
     tasks: List
 
+
 # The Planner Node uses Structured Output
 planner_llm = ChatOpenAI(model="o1-preview").with_structured_output(Plan)
-
 ```
 
 By forcing the model to fill out `reasoning` and `dependencies` _before_
@@ -721,7 +719,6 @@ standard tools via bind_tools.
 ```python
 # The Executor Node uses Tool Calling
 executor_llm = ChatOpenAI(model="gpt-4o").bind_tools(available_tools)
-
 ```
 
 The Executor is restricted to solving _only_ the current task. This isolation

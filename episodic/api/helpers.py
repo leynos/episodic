@@ -186,7 +186,7 @@ def _build_update_kwargs[DataT](
 def _build_payload_dataclass[DataT](
     payload: JsonPayload,
     *,
-    dc_type: type[DataT],
+    dc_type: cabc.Callable[..., DataT],
     field_map: dict[str, tuple[str, bool]],
 ) -> DataT:
     """Construct a dataclass from mapped payload fields."""
@@ -198,7 +198,8 @@ def _build_payload_dataclass[DataT](
             else _require_field(payload, payload_key)
         )
         values[field_name] = raw
-    return typ.cast("DataT", dc_type(**values))
+    dataclass_instance: DataT = dc_type(**values)
+    return dataclass_instance
 
 
 def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:

@@ -554,6 +554,7 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
+
 # Assume event_loop fixture is session-scoped if db_pool is session-scoped.
 @pytest_asyncio.fixture(scope="session")
 async def db_pool():
@@ -753,9 +754,7 @@ from src.app_with_service import app_svc  # Falcon ASGI app
 
 @pytest.fixture
 def client_svc(event_loop):  # event_loop fixture from pytest-asyncio
-    return AsyncClient(
-        transport=ASGITransport(app=app_svc), base_url="http://test"
-    )
+    return AsyncClient(transport=ASGITransport(app=app_svc), base_url="http://test")
 
 
 @pytest.mark.asyncio
@@ -911,9 +910,7 @@ from src.app_with_hooks import app_hooks
 
 @pytest.fixture(scope="module")
 def hooked_app_client(event_loop):  # event_loop from pytest-asyncio
-    return AsyncClient(
-        transport=ASGITransport(app=app_hooks), base_url="http://test"
-    )
+    return AsyncClient(transport=ASGITransport(app=app_hooks), base_url="http://test")
 
 
 @pytest.mark.asyncio
@@ -1128,10 +1125,7 @@ async def test_database_middleware_lifespan(event_loop):
     async with falcon.testing.ASGIConductor(app_mw) as conductor:
         # After entering context, process_startup should have run
         assert db_middleware_instance.startup_complete
-        assert (
-            db_middleware_instance.db_connection_info
-            == "fake_db_pool_initialized"
-        )
+        assert db_middleware_instance.db_connection_info == "fake_db_pool_initialized"
         assert not db_middleware_instance.shutdown_complete  # Shutdown not yet run
 
         # Make a request to verify state is accessible via context
@@ -1200,6 +1194,7 @@ Example: If a resource expects a 'name' field in a POST request:
 import falcon
 import pytest
 
+
 # In the test file:
 @pytest.mark.asyncio
 async def test_post_item_missing_name(async_test_client):
@@ -1237,6 +1232,7 @@ import pytest
 #             raise falcon.HTTPInternalServerError(
 #                 description=f"Internal processing error: {e}",
 #             )
+
 
 @pytest.mark.asyncio
 async def test_operation_raises_specific_exception(mocker, async_test_client):
