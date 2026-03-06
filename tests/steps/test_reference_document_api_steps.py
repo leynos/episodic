@@ -68,15 +68,6 @@ def _simulate_request(
     return typ.cast("dict[str, object]", response.json)
 
 
-def _run_document_step(
-    client: testing.TestClient,
-    request: _SimulateRequest,
-    handler: typ.Callable[[dict[str, object]], None],
-) -> None:
-    """Dispatch *request* and forward the JSON payload to *handler*."""
-    handler(_simulate_request(client, request))
-
-
 @given("reusable-reference API fixtures exist", target_fixture="context")
 def reference_fixtures(
     canonical_api_client: testing.TestClient,
@@ -116,11 +107,7 @@ def create_host_document(
     context: ReferenceDocumentApiContext,
 ) -> None:
     """Create one host reference document for the primary profile."""
-
-    def _store_id(payload: dict[str, object]) -> None:
-        context["document_id"] = typ.cast("str", payload["id"])
-
-    _run_document_step(
+    payload = _simulate_request(
         canonical_api_client,
         _SimulateRequest(
             method="post",
@@ -132,8 +119,8 @@ def create_host_document(
             },
             expected_status=201,
         ),
-        _store_id,
     )
+    context["document_id"] = typ.cast("str", payload["id"])
 
 
 @when("the host reference document is updated with optimistic locking")
@@ -142,11 +129,7 @@ def update_host_document(
     context: ReferenceDocumentApiContext,
 ) -> None:
     """Update the host reference document with lock precondition."""
-
-    def _check_lock(payload: dict[str, object]) -> None:
-        assert payload["lock_version"] == 2
-
-    _run_document_step(
+    payload = _simulate_request(
         canonical_api_client,
         _SimulateRequest(
             method="patch",
@@ -161,8 +144,8 @@ def update_host_document(
             },
             expected_status=200,
         ),
-        _check_lock,
     )
+    assert payload["lock_version"] == 2
 
 
 @when("two revisions are added for the host reference document")
