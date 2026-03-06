@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import typing as typ
 
 from pytest_bdd import given, scenario, then, when
@@ -48,26 +47,6 @@ def _create_profile(client: testing.TestClient, slug: str) -> str:
     return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
 
 
-@dataclasses.dataclass(frozen=True)
-class _SimulateRequest:
-    method: str
-    path: str
-    json: dict[str, object]
-    expected_status: int
-
-
-def _simulate_request(
-    client: testing.TestClient,
-    request: _SimulateRequest,
-) -> dict[str, object]:
-    """Simulate an HTTP request, assert the status code, and return the JSON payload."""
-    response = getattr(client, f"simulate_{request.method}")(
-        request.path, json=request.json
-    )
-    assert response.status_code == request.expected_status
-    return typ.cast("dict[str, object]", response.json)
-
-
 @given("reusable-reference API fixtures exist", target_fixture="context")
 def reference_fixtures(
     canonical_api_client: testing.TestClient,
@@ -107,20 +86,18 @@ def create_host_document(
     context: ReferenceDocumentApiContext,
 ) -> None:
     """Create one host reference document for the primary profile."""
-    payload = _simulate_request(
-        canonical_api_client,
-        _SimulateRequest(
-            method="post",
-            path=f"/series-profiles/{context['primary_profile_id']}/reference-documents",
-            json={
-                "kind": "host_profile",
-                "lifecycle_state": "active",
-                "metadata": {"name": "BDD Host"},
-            },
-            expected_status=201,
-        ),
+    response = canonical_api_client.simulate_post(
+        f"/series-profiles/{context['primary_profile_id']}/reference-documents",
+        json={
+            "kind": "host_profile",
+            "lifecycle_state": "active",
+            "metadata": {"name": "BDD Host"},
+        },
     )
-    context["document_id"] = typ.cast("str", payload["id"])
+    assert response.status_code == 201
+    context["document_id"] = typ.cast(
+        "str", typ.cast("dict[str, object]", response.json)["id"]
+    )
 
 
 @when("the host reference document is updated with optimistic locking")
@@ -129,23 +106,17 @@ def update_host_document(
     context: ReferenceDocumentApiContext,
 ) -> None:
     """Update the host reference document with lock precondition."""
-    payload = _simulate_request(
-        canonical_api_client,
-        _SimulateRequest(
-            method="patch",
-            path=(
-                f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
-                f"{context['document_id']}"
-            ),
-            json={
-                "expected_lock_version": 1,
-                "lifecycle_state": "active",
-                "metadata": {"name": "BDD Host Updated"},
-            },
-            expected_status=200,
-        ),
+    response = canonical_api_client.simulate_patch(
+        f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
+        f"{context['document_id']}",
+        json={
+            "expected_lock_version": 1,
+            "lifecycle_state": "active",
+            "metadata": {"name": "BDD Host Updated"},
+        },
     )
-    assert payload["lock_version"] == 2
+    assert response.status_code == 200
+    assert typ.cast("dict[str, object]", response.json)["lock_version"] == 2
 
 
 @when("two revisions are added for the host reference document")
