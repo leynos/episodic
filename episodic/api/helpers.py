@@ -198,7 +198,7 @@ def _build_payload_dataclass[DataT](
             else _require_field(payload, payload_key)
         )
         values[field_name] = raw
-    return typ.cast("DataT", dc_type(**values))
+    return dc_type(**values)
 
 
 def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:

@@ -29,6 +29,8 @@ from episodic.canonical.profile_templates import AuditMetadata
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from episodic.api.types import JsonPayload
+
 
 @dc.dataclass(frozen=True, slots=True)
 class _ExampleFields:
@@ -54,7 +56,7 @@ class TestPayloadDataclass:
     @staticmethod
     def test_build_payload_dataclass_maps_required_and_optional_fields() -> None:
         """Build dataclass values from required and optional payload fields."""
-        payload = {
+        payload: JsonPayload = {
             "title": "Show title",
             "configuration": {"tone": "precise"},
         }
@@ -78,7 +80,7 @@ class TestPayloadDataclass:
     @staticmethod
     def test_build_payload_dataclass_supports_key_remapping() -> None:
         """Map payload keys with different names to dataclass fields."""
-        payload = {
+        payload: JsonPayload = {
             "profile_title": "Remapped title",
             "profile_description": "Remapped description",
             "template_structure": {"segments": ["intro", "outro"]},
@@ -103,7 +105,7 @@ class TestPayloadDataclass:
     @staticmethod
     def test_build_payload_dataclass_raises_when_required_field_is_missing() -> None:
         """Raise HTTP 400 when a required field is absent from the payload."""
-        payload = {
+        payload: JsonPayload = {
             "configuration": {"tone": "precise"},
         }
 
