@@ -40,6 +40,9 @@ def _parse_expected_lock_version(payload: JsonPayload) -> int:
     if raw_expected is None:
         msg = "Missing required field: expected_lock_version"
         raise falcon.HTTPBadRequest(description=msg)
+    if isinstance(raw_expected, bool):
+        msg = "expected_lock_version must be a positive integer."
+        raise falcon.HTTPBadRequest(description=msg)
     try:
         expected = int(typ.cast("int | str", raw_expected))
     except (TypeError, ValueError) as exc:

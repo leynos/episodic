@@ -411,6 +411,21 @@ async def _validate_binding_target_alignment(
     alignment: _BindingTargetAlignment,
 ) -> None:
     """Validate target context existence and owner-series alignment."""
+    target_ids = {
+        ReferenceBindingTargetKind.SERIES_PROFILE: alignment.series_profile_id,
+        ReferenceBindingTargetKind.EPISODE_TEMPLATE: alignment.episode_template_id,
+        ReferenceBindingTargetKind.INGESTION_JOB: alignment.ingestion_job_id,
+    }
+    populated_targets = [
+        kind for kind, value in target_ids.items() if value is not None
+    ]
+    if len(populated_targets) != 1:
+        msg = "Reference binding must set exactly one target identifier."
+        raise ReferenceValidationError(msg)
+    if populated_targets[0] is not alignment.target_kind:
+        msg = "Reference binding target_kind does not match populated target."
+        raise ReferenceValidationError(msg)
+
     match alignment.target_kind:
         case ReferenceBindingTargetKind.SERIES_PROFILE:
             await _validate_series_profile_binding_target(
@@ -430,6 +445,9 @@ async def _validate_binding_target_alignment(
                 ingestion_job_id=alignment.ingestion_job_id,
                 document_owner_series_id=alignment.document_owner_series_id,
             )
+        case _:
+            msg = f"Unsupported ReferenceBindingTargetKind: {alignment.target_kind!r}."
+            raise ReferenceValidationError(msg)
 
 
 async def create_reference_binding(

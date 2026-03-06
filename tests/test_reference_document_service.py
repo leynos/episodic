@@ -24,21 +24,16 @@ from episodic.canonical.reference_documents import (
     ReferenceDocumentUpdateRequest,
     ReferenceEntityNotFoundError,
     ReferenceRevisionConflictError,
+    ReferenceValidationError,
     create_reference_binding,
     create_reference_document,
     create_reference_document_revision,
     get_reference_document,
     get_reference_document_revision,
+    list_reference_bindings,
     list_reference_document_revisions,
     list_reference_documents,
     update_reference_document,
-)
-from episodic.canonical.reference_documents.services import (
-    _parse_lifecycle_state,
-    _parse_reference_kind,
-    _parse_target_kind,
-    _parse_uuid,
-    list_reference_bindings,
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
@@ -223,28 +218,64 @@ async def test_reference_document_revision_history_round_trip(
     assert fetched_second.id == second.id, "Expected to fetch revision by id."
 
 
-def test_parse_helpers_reject_invalid_uuid_and_enum_values() -> None:
-    """Parsing helpers should reject invalid UUID and enum values."""
-    with pytest.raises(ReferenceDocumentError, match="Invalid UUID for document_id"):
-        _parse_uuid("not-a-uuid", "document_id")
+@pytest.mark.asyncio
+async def test_public_services_reject_invalid_uuid_and_enum_values(
+    session_factory: typ.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Public service functions should reject invalid UUID and enum values."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(
+            ReferenceDocumentError,
+            match="Invalid UUID for document_id",
+        ):
+            await get_reference_document(
+                uow,
+                document_id="not-a-uuid",
+                owner_series_profile_id=service_fixture["primary_profile_id"],
+            )
 
-    with pytest.raises(
-        ReferenceDocumentError,
-        match="Unsupported reference document kind",
-    ):
-        _parse_reference_kind("not-a-valid-kind")
+        with pytest.raises(
+            ReferenceDocumentError,
+            match="Unsupported reference document kind",
+        ):
+            await create_reference_document(
+                uow,
+                data=ReferenceDocumentCreateData(
+                    owner_series_profile_id=service_fixture["primary_profile_id"],
+                    kind="not-a-valid-kind",
+                    lifecycle_state="active",
+                    metadata={"name": "invalid kind"},
+                ),
+            )
 
-    with pytest.raises(
-        ReferenceDocumentError,
-        match="Unsupported reference document lifecycle_state",
-    ):
-        _parse_lifecycle_state("not-a-valid-state")
+        with pytest.raises(
+            ReferenceDocumentError,
+            match="Unsupported reference document lifecycle_state",
+        ):
+            await create_reference_document(
+                uow,
+                data=ReferenceDocumentCreateData(
+                    owner_series_profile_id=service_fixture["primary_profile_id"],
+                    kind="host_profile",
+                    lifecycle_state="not-a-valid-state",
+                    metadata={"name": "invalid state"},
+                ),
+            )
 
-    with pytest.raises(
-        ReferenceDocumentError,
-        match="Unsupported reference binding target_kind",
-    ):
-        _parse_target_kind("not-a-valid-target-kind")
+        with pytest.raises(
+            ReferenceDocumentError,
+            match="Unsupported reference binding target_kind",
+        ):
+            await list_reference_bindings(
+                uow,
+                request=ReferenceBindingListRequest(
+                    target_kind="not-a-valid-target-kind",
+                    target_id=service_fixture["primary_profile_id"],
+                    limit=10,
+                    offset=0,
+                ),
+            )
 
 
 @pytest.mark.asyncio
@@ -404,6 +435,71 @@ async def test_create_reference_binding_duplicate_target_raises_conflict(
                     target_kind="episode_template",
                     series_profile_id=None,
                     episode_template_id=service_fixture["template_id"],
+                    ingestion_job_id=None,
+                    effective_from_episode_id=None,
+                ),
+            )
+
+
+@pytest.mark.asyncio
+async def test_create_reference_binding_rejects_invalid_target_identifier_shapes(
+    session_factory: typ.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Binding creation should require exactly one target id matching target_kind."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        created = await create_reference_document(
+            uow,
+            data=ReferenceDocumentCreateData(
+                owner_series_profile_id=service_fixture["primary_profile_id"],
+                kind="research_brief",
+                lifecycle_state="active",
+                metadata={"topic": "Invalid binding shape"},
+            ),
+        )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        revision = await create_reference_document_revision(
+            uow,
+            document_id=str(created.id),
+            owner_series_profile_id=service_fixture["primary_profile_id"],
+            data=ReferenceDocumentRevisionData(
+                content={"summary": "binding revision"},
+                content_hash="invalid-binding-shape-hash",
+                author="service@example.com",
+                change_note="binding revision",
+            ),
+        )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(
+            ReferenceValidationError,
+            match="Reference binding must set exactly one target identifier",
+        ):
+            await create_reference_binding(
+                uow,
+                data=ReferenceBindingData(
+                    reference_document_revision_id=str(revision.id),
+                    target_kind="episode_template",
+                    series_profile_id=service_fixture["primary_profile_id"],
+                    episode_template_id=service_fixture["template_id"],
+                    ingestion_job_id=None,
+                    effective_from_episode_id=None,
+                ),
+            )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(
+            ReferenceValidationError,
+            match="Reference binding target_kind does not match populated target",
+        ):
+            await create_reference_binding(
+                uow,
+                data=ReferenceBindingData(
+                    reference_document_revision_id=str(revision.id),
+                    target_kind="episode_template",
+                    series_profile_id=service_fixture["primary_profile_id"],
+                    episode_template_id=None,
                     ingestion_job_id=None,
                     effective_from_episode_id=None,
                 ),

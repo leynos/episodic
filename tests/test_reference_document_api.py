@@ -555,3 +555,29 @@ def test_reference_document_api_rejects_invalid_uuids(
         invalid_target_id,
         description="Invalid UUID for target_id: 'not-a-valid-uuid'.",
     )
+
+
+def test_reference_document_api_rejects_boolean_expected_lock_version(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Document updates should reject boolean lock versions."""
+    fixture = _build_api_fixture(canonical_api_client)
+    document_id = _create_reference_document(
+        canonical_api_client,
+        profile_id=fixture.primary_profile_id,
+        kind="host_profile",
+        name="Host API Bool Lock Version",
+    )
+
+    response = canonical_api_client.simulate_patch(
+        f"/series-profiles/{fixture.primary_profile_id}/reference-documents/{document_id}",
+        json={
+            "expected_lock_version": True,
+            "lifecycle_state": "active",
+            "metadata": {"name": "should fail"},
+        },
+    )
+    _assert_bad_request_error(
+        response,
+        description="expected_lock_version must be a positive integer.",
+    )
