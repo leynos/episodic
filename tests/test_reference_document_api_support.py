@@ -296,6 +296,20 @@ def _assert_revision_and_binding_workflow(
         f"Unexpected status for GET revision: {get_revision_response.status_code}"
     )
 
+    _assert_binding_list_workflow(
+        client,
+        second_revision_id=second_revision_id,
+        template_id=template_id,
+    )
+
+
+def _assert_binding_list_workflow(
+    client: testing.TestClient,
+    *,
+    second_revision_id: str,
+    template_id: str,
+) -> None:
+    """Create a binding, verify it via GET, and assert the binding list response."""
     binding_id = _create_reference_binding(
         client,
         revision_id=second_revision_id,
