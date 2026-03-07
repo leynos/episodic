@@ -745,6 +745,7 @@ app_svc.add_route("/items/{item_id}", ServiceResource())
 
 ```python
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from unittest.mock import AsyncMock, patch
 
@@ -752,9 +753,12 @@ from unittest.mock import AsyncMock, patch
 from src.app_with_service import app_svc  # Falcon ASGI app
 
 
-@pytest.fixture
-def client_svc(event_loop):  # event_loop fixture from pytest-asyncio
-    return AsyncClient(transport=ASGITransport(app=app_svc), base_url="http://test")
+@pytest_asyncio.fixture
+async def client_svc():
+    async with AsyncClient(
+        transport=ASGITransport(app=app_svc), base_url="http://test"
+    ) as client:
+        yield client
 
 
 @pytest.mark.asyncio
@@ -902,15 +906,19 @@ app_hooks.add_route("/protected-info", ProtectedResource())
 # tests/test_hooks.py
 import falcon  # For falcon.HTTP_OK, falcon.HTTP_UNAUTHORIZED
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 # Assuming app_hooks is available, e.g., from a fixture or direct import
 from src.app_with_hooks import app_hooks
 
 
-@pytest.fixture(scope="module")
-def hooked_app_client(event_loop):  # event_loop from pytest-asyncio
-    return AsyncClient(transport=ASGITransport(app=app_hooks), base_url="http://test")
+@pytest_asyncio.fixture(scope="module")
+async def hooked_app_client():
+    async with AsyncClient(
+        transport=ASGITransport(app=app_hooks), base_url="http://test"
+    ) as client:
+        yield client
 
 
 @pytest.mark.asyncio

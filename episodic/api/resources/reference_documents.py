@@ -34,6 +34,14 @@ if typ.TYPE_CHECKING:
     from episodic.api.types import JsonPayload, UowFactory
 
 
+def _require_fields(payload: JsonPayload, *fields: str) -> None:
+    """Raise HTTPBadRequest if any required field is absent from payload."""
+    missing = next((f for f in fields if f not in payload), None)
+    if missing is not None:
+        msg = f"Missing required field: {missing}"
+        raise falcon.HTTPBadRequest(description=msg)
+
+
 def _parse_expected_lock_version(payload: JsonPayload) -> int:
     """Parse expected lock version from payload."""
     raw_expected = payload.get("expected_lock_version")
@@ -68,14 +76,7 @@ class ReferenceDocumentsResource:
     ) -> None:
         """Create one reusable reference document for a series profile."""
         payload = require_payload_dict(await req.get_media())
-        missing = tuple(
-            field
-            for field in ("kind", "lifecycle_state", "metadata")
-            if field not in payload
-        )
-        if missing:
-            msg = f"Missing required field: {missing[0]}"
-            raise falcon.HTTPBadRequest(description=msg)
+        _require_fields(payload, "kind", "lifecycle_state", "metadata")
 
         data = ReferenceDocumentCreateData(
             owner_series_profile_id=str(parse_uuid(profile_id, "profile_id")),
@@ -164,12 +165,7 @@ class ReferenceDocumentResource:
     ) -> None:
         """Update one reusable reference document with optimistic locking."""
         payload = require_payload_dict(await req.get_media())
-        missing = tuple(
-            field for field in ("lifecycle_state", "metadata") if field not in payload
-        )
-        if missing:
-            msg = f"Missing required field: {missing[0]}"
-            raise falcon.HTTPBadRequest(description=msg)
+        _require_fields(payload, "lifecycle_state", "metadata")
 
         request = ReferenceDocumentUpdateRequest(
             document_id=str(parse_uuid(document_id, "document_id")),
@@ -207,12 +203,7 @@ class ReferenceDocumentRevisionsResource:
     ) -> None:
         """Create one immutable revision for a reusable reference document."""
         payload = require_payload_dict(await req.get_media())
-        missing = tuple(
-            field for field in ("content", "content_hash") if field not in payload
-        )
-        if missing:
-            msg = f"Missing required field: {missing[0]}"
-            raise falcon.HTTPBadRequest(description=msg)
+        _require_fields(payload, "content", "content_hash")
 
         data = ReferenceDocumentRevisionData(
             content=typ.cast("dict[str, object]", payload["content"]),

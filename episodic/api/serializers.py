@@ -1,6 +1,7 @@
 """Response serializers for Falcon profile and template endpoints."""
 
 import typing as typ
+import uuid  # noqa: TC003
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
@@ -79,6 +80,11 @@ def serialize_episode_template_history_entry(
     return _serialize_history_entry(entry, "episode_template_id")
 
 
+def _optional_uuid_str(value: uuid.UUID | None) -> str | None:
+    """Return the string form of a UUID, or None."""
+    return None if value is None else str(value)
+
+
 def serialize_reference_document(document: ReferenceDocument) -> dict[str, typ.Any]:
     """Serialize a reusable reference-document response payload."""
     return {
@@ -114,23 +120,11 @@ def serialize_reference_binding(binding: ReferenceBinding) -> dict[str, typ.Any]
         "id": str(binding.id),
         "reference_document_revision_id": str(binding.reference_document_revision_id),
         "target_kind": binding.target_kind.value,
-        "series_profile_id": (
-            None
-            if binding.series_profile_id is None
-            else str(binding.series_profile_id)
-        ),
-        "episode_template_id": (
-            None
-            if binding.episode_template_id is None
-            else str(binding.episode_template_id)
-        ),
-        "ingestion_job_id": (
-            None if binding.ingestion_job_id is None else str(binding.ingestion_job_id)
-        ),
-        "effective_from_episode_id": (
-            None
-            if binding.effective_from_episode_id is None
-            else str(binding.effective_from_episode_id)
+        "series_profile_id": _optional_uuid_str(binding.series_profile_id),
+        "episode_template_id": _optional_uuid_str(binding.episode_template_id),
+        "ingestion_job_id": _optional_uuid_str(binding.ingestion_job_id),
+        "effective_from_episode_id": _optional_uuid_str(
+            binding.effective_from_episode_id
         ),
         "created_at": binding.created_at.isoformat(),
     }

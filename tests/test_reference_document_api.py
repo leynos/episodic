@@ -122,7 +122,7 @@ def _assert_reference_document_list(
     return items
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _RevisionRequest:
     summary: str
     content_hash: str

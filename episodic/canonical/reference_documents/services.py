@@ -499,16 +499,28 @@ async def create_reference_binding(
         ),
     )
 
-    binding = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=revision.id,
-        target_kind=target_kind,
-        series_profile_id=parsed_series_profile_id,
-        episode_template_id=parsed_episode_template_id,
-        ingestion_job_id=parsed_ingestion_job_id,
-        effective_from_episode_id=parsed_effective_from_episode_id,
-        created_at=dt.datetime.now(dt.UTC),
-    )
+    try:
+        binding = ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=revision.id,
+            target_kind=target_kind,
+            series_profile_id=parsed_series_profile_id,
+            episode_template_id=parsed_episode_template_id,
+            ingestion_job_id=parsed_ingestion_job_id,
+            effective_from_episode_id=parsed_effective_from_episode_id,
+            created_at=dt.datetime.now(dt.UTC),
+        )
+    except ValueError as exc:
+        msg = (
+            "Invalid reference binding for "
+            f"revision_id={revision.id}, "
+            f"series_profile_id={parsed_series_profile_id}, "
+            f"episode_template_id={parsed_episode_template_id}, "
+            f"ingestion_job_id={parsed_ingestion_job_id}, "
+            f"effective_from_episode_id={parsed_effective_from_episode_id}: "
+            f"{exc}"
+        )
+        raise ReferenceValidationError(msg) from exc
     try:
         await uow.reference_bindings.add(binding)
         await uow.commit()

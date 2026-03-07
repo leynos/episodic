@@ -97,6 +97,13 @@ class ReferenceDocumentRecord(Base):
         onupdate=sa.func.now(),
     )
 
+    __table_args__ = (
+        sa.CheckConstraint(
+            "lock_version >= 1",
+            name="ck_reference_documents_lock_version_positive",
+        ),
+    )
+
 
 class ReferenceDocumentRevisionRecord(Base):
     """SQLAlchemy model for immutable reusable reference revisions.

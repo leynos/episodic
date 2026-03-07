@@ -17,7 +17,6 @@ from episodic.canonical.reference_documents import (
     ReferenceBindingListRequest,
     ReferenceConflictError,
     ReferenceDocumentCreateData,
-    ReferenceDocumentError,
     ReferenceDocumentListRequest,
     ReferenceDocumentRevisionData,
     ReferenceDocumentRevisionListRequest,
@@ -52,12 +51,6 @@ class ServiceFixture(typ.TypedDict):
     primary_profile_id: str
     secondary_profile_id: str
     template_id: str
-
-
-class _SupportsId(typ.Protocol):
-    """Structural protocol for objects exposing an identifier."""
-
-    id: object
 
 
 @pytest_asyncio.fixture
@@ -226,7 +219,7 @@ async def test_public_services_reject_invalid_uuid_and_enum_values(
     """Public service functions should reject invalid UUID and enum values."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(
-            ReferenceDocumentError,
+            ReferenceValidationError,
             match="Invalid UUID for document_id",
         ):
             await get_reference_document(
@@ -236,7 +229,7 @@ async def test_public_services_reject_invalid_uuid_and_enum_values(
             )
 
         with pytest.raises(
-            ReferenceDocumentError,
+            ReferenceValidationError,
             match="Unsupported reference document kind",
         ):
             await create_reference_document(
@@ -250,7 +243,7 @@ async def test_public_services_reject_invalid_uuid_and_enum_values(
             )
 
         with pytest.raises(
-            ReferenceDocumentError,
+            ReferenceValidationError,
             match="Unsupported reference document lifecycle_state",
         ):
             await create_reference_document(
@@ -264,7 +257,7 @@ async def test_public_services_reject_invalid_uuid_and_enum_values(
             )
 
         with pytest.raises(
-            ReferenceDocumentError,
+            ReferenceValidationError,
             match="Unsupported reference binding target_kind",
         ):
             await list_reference_bindings(
@@ -285,7 +278,7 @@ async def test_list_reference_documents_rejects_invalid_pagination(
 ) -> None:
     """Document listing should reject invalid pagination values."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ReferenceDocumentError, match="limit must be"):
+        with pytest.raises(ReferenceValidationError, match="limit must be"):
             await list_reference_documents(
                 uow,
                 request=ReferenceDocumentListRequest(
@@ -296,7 +289,7 @@ async def test_list_reference_documents_rejects_invalid_pagination(
                 ),
             )
 
-        with pytest.raises(ReferenceDocumentError, match="offset must be"):
+        with pytest.raises(ReferenceValidationError, match="offset must be"):
             await list_reference_documents(
                 uow,
                 request=ReferenceDocumentListRequest(
@@ -315,7 +308,7 @@ async def test_list_reference_bindings_rejects_invalid_pagination(
 ) -> None:
     """Binding listing should reject invalid pagination values."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ReferenceDocumentError, match="limit must be"):
+        with pytest.raises(ReferenceValidationError, match="limit must be"):
             await list_reference_bindings(
                 uow,
                 request=ReferenceBindingListRequest(
@@ -326,7 +319,7 @@ async def test_list_reference_bindings_rejects_invalid_pagination(
                 ),
             )
 
-        with pytest.raises(ReferenceDocumentError, match="offset must be"):
+        with pytest.raises(ReferenceValidationError, match="offset must be"):
             await list_reference_bindings(
                 uow,
                 request=ReferenceBindingListRequest(
@@ -506,6 +499,54 @@ async def test_create_reference_binding_rejects_invalid_target_identifier_shapes
             )
 
 
+@pytest.mark.asyncio
+async def test_create_reference_binding_translates_constructor_validation_errors(
+    session_factory: typ.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Binding constructor ValueError paths should surface as validation errors."""
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        created = await create_reference_document(
+            uow,
+            data=ReferenceDocumentCreateData(
+                owner_series_profile_id=service_fixture["primary_profile_id"],
+                kind="research_brief",
+                lifecycle_state="active",
+                metadata={"topic": "Binding constructor validation"},
+            ),
+        )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        revision = await create_reference_document_revision(
+            uow,
+            document_id=str(created.id),
+            owner_series_profile_id=service_fixture["primary_profile_id"],
+            data=ReferenceDocumentRevisionData(
+                content={"summary": "binding revision"},
+                content_hash="binding-constructor-validation-hash",
+                author="service@example.com",
+                change_note="binding revision",
+            ),
+        )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(
+            ReferenceValidationError,
+            match="Invalid reference binding for revision_id=",
+        ):
+            await create_reference_binding(
+                uow,
+                data=ReferenceBindingData(
+                    reference_document_revision_id=str(revision.id),
+                    target_kind="episode_template",
+                    series_profile_id=None,
+                    episode_template_id=service_fixture["template_id"],
+                    ingestion_job_id=None,
+                    effective_from_episode_id="00000000-0000-0000-0000-000000000001",
+                ),
+            )
+
+
 async def _create_host_and_guest_documents(
     session_factory: typ.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
@@ -538,12 +579,10 @@ async def _create_revisions_for_host_and_guest(
     host_document: ReferenceDocument,
     guest_document: ReferenceDocument,
 ) -> ReferenceDocumentRevision:
-    host_document_with_id = typ.cast("_SupportsId", host_document)
-    guest_document_with_id = typ.cast("_SupportsId", guest_document)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         host_revision = await create_reference_document_revision(
             uow,
-            document_id=str(host_document_with_id.id),
+            document_id=str(host_document.id),
             owner_series_profile_id=service_fixture["primary_profile_id"],
             data=ReferenceDocumentRevisionData(
                 content={"bio": "Host profile"},
@@ -554,7 +593,7 @@ async def _create_revisions_for_host_and_guest(
         )
         _ = await create_reference_document_revision(
             uow,
-            document_id=str(guest_document_with_id.id),
+            document_id=str(guest_document.id),
             owner_series_profile_id=service_fixture["primary_profile_id"],
             data=ReferenceDocumentRevisionData(
                 content={"bio": "Guest profile"},
@@ -571,7 +610,6 @@ async def _list_documents_and_bind(
     service_fixture: ServiceFixture,
     host_revision: ReferenceDocumentRevision,
 ) -> tuple[list[ReferenceDocument], list[ReferenceDocument]]:
-    host_revision_with_id = typ.cast("_SupportsId", host_revision)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         host_documents = await list_reference_documents(
             uow,
@@ -594,7 +632,7 @@ async def _list_documents_and_bind(
         await create_reference_binding(
             uow,
             data=ReferenceBindingData(
-                reference_document_revision_id=str(host_revision_with_id.id),
+                reference_document_revision_id=str(host_revision.id),
                 target_kind="episode_template",
                 series_profile_id=None,
                 episode_template_id=service_fixture["template_id"],
@@ -630,11 +668,10 @@ async def test_series_aligned_host_guest_access_and_binding_workflow(
     assert len(host_documents) == 1, "Expected one host document for the series."
     assert len(guest_documents) == 1, "Expected one guest document for the series."
 
-    host_document_with_id = typ.cast("_SupportsId", host_document)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(ReferenceEntityNotFoundError):
             await get_reference_document(
                 uow,
-                document_id=str(host_document_with_id.id),
+                document_id=str(host_document.id),
                 owner_series_profile_id=service_fixture["secondary_profile_id"],
             )
