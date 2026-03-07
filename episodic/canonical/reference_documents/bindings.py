@@ -253,15 +253,29 @@ async def create_reference_binding(
             document_owner_series_id=document.owner_series_profile_id,
         ),
     )
-    effective_from_episode_id = (
-        None
-        if ids.effective_from_episode_id is None
-        else await _require_episode_exists(
+    if (
+        ids.effective_from_episode_id is not None
+        and ids.target_kind is not ReferenceBindingTargetKind.SERIES_PROFILE
+    ):
+        msg = (
+            "ReferenceBinding effective_from_episode_id is only valid for "
+            "series_profile targets."
+        )
+        raise ReferenceValidationError(msg)
+    effective_from_episode_id = None
+    if ids.effective_from_episode_id is not None:
+        effective_from_episode = await _require_episode_exists(
             uow,
             ids.effective_from_episode_id,
             field_name="effective_from_episode_id",
         )
-    )
+        if effective_from_episode.series_profile_id != document.owner_series_profile_id:
+            msg = (
+                "Reference binding effective_from episode does not match "
+                "document owner series."
+            )
+            raise ReferenceValidationError(msg)
+        effective_from_episode_id = effective_from_episode.id
 
     try:
         binding = ReferenceBinding(

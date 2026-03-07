@@ -158,11 +158,11 @@ async def test_create_reference_binding_rejects_invalid_target_identifier_shapes
 
 
 @pytest.mark.asyncio
-async def test_create_reference_binding_translates_constructor_validation_errors(
+async def test_create_reference_binding_rejects_effective_from_for_non_series_target(
     session_factory: typ.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> None:
-    """Binding constructor ValueError paths should surface as validation errors."""
+    """Binding creation should reject effective_from on non-series targets."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         created = await create_reference_document(
             uow,
@@ -218,7 +218,10 @@ async def test_create_reference_binding_translates_constructor_validation_errors
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(
             ReferenceValidationError,
-            match="Invalid reference binding for revision_id=",
+            match=(
+                r"ReferenceBinding effective_from_episode_id is only valid for "
+                r"series_profile targets\."
+            ),
         ):
             await create_reference_binding(
                 uow,

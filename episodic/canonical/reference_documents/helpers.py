@@ -6,6 +6,7 @@ import typing as typ
 import uuid
 
 from episodic.canonical.domain import (
+    CanonicalEpisode,
     ReferenceBindingTargetKind,
     ReferenceDocument,
     ReferenceDocumentKind,
@@ -20,6 +21,9 @@ from .types import (
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.ports import CanonicalUnitOfWork
+
+
+_MAX_PAGE_LIMIT = 100
 
 
 def _parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
@@ -75,7 +79,10 @@ def _parse_target_kind(raw_value: str) -> ReferenceBindingTargetKind:
 def _validate_pagination(limit: int, offset: int) -> None:
     """Validate list pagination values."""
     if limit < 1:
-        msg = "limit must be a positive integer."
+        msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
+        raise ReferenceValidationError(msg)
+    if limit > _MAX_PAGE_LIMIT:
+        msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
         raise ReferenceValidationError(msg)
     if offset < 0:
         msg = "offset must be a non-negative integer."
@@ -98,13 +105,13 @@ async def _require_episode_exists(
     episode_id: uuid.UUID,
     *,
     field_name: str,
-) -> uuid.UUID:
+) -> CanonicalEpisode:
     """Raise not-found when an episode does not exist."""
     episode = await uow.episodes.get(episode_id)
     if episode is None:
         msg = f"Episode for {field_name} {episode_id} not found."
         raise ReferenceEntityNotFoundError(msg)
-    return episode_id
+    return episode
 
 
 async def _require_reference_document(

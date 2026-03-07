@@ -339,11 +339,18 @@ def _assert_bad_request_error(
 ) -> None:
     """Assert Falcon returned the stable HTTP 400 JSON error envelope."""
     http_response = typ.cast("testing.Result", response)
-    assert http_response.status_code == 400
+    assert http_response.status_code == 400, (
+        f"expected 400 but got {http_response.status_code} for response={http_response}"
+    )
     payload = typ.cast("dict[str, object]", http_response.json)
-    assert payload["title"] == "400 Bad Request"
+    assert payload["title"] == "400 Bad Request", (
+        f"unexpected title in payload: {payload}"
+    )
     if description is not None:
-        assert payload["description"] == description
+        assert payload["description"] == description, (
+            f"unexpected description {payload.get('description')!r} "
+            f"for expected {description!r} in payload: {payload}"
+        )
 
 
 def _binding_list_params(

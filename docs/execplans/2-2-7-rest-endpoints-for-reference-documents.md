@@ -220,11 +220,12 @@ Implemented outcomes:
   and internal API behaviour.
 - Marked roadmap item `2.2.7` done in `docs/roadmap.md`.
 - Passed required quality gates:
+  - `make fmt`
   - `make check-fmt`
   - `make typecheck`
   - `make lint`
   - `make test`
-  - `PATH=/root/.bun/bin:$PATH make markdownlint`
+  - `make markdownlint`
   - `make nixie`
 
 ## Context and orientation
@@ -270,10 +271,8 @@ spec section for these endpoints:
 - `GET /series-profiles/{profile_id}/reference-documents/{document_id}`
 - `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`
   (optimistic lock)
-- `POST /series-profiles/{profile_id}/reference-documents/`
-  `{document_id}/revisions`
-- `GET /series-profiles/{profile_id}/reference-documents/`
-  `{document_id}/revisions`
+- `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
 - `GET /reference-document-revisions/{revision_id}`
 - `POST /reference-bindings`
 - `GET /reference-bindings`
@@ -324,7 +323,7 @@ Planned additions:
 - New package for reusable reference services, for example
   `episodic/canonical/reference_documents/`.
 - Typed request/data objects for create/update/bind operations.
-- Conflict-safe update flow that validates `expected_revision` and raises typed
+- Conflict-safe update flow that validates `lock_version` and raises typed
   conflict errors mapped to HTTP `409`.
 - Domain-level checks for host/guest ownership and target-kind constraints.
 
@@ -438,7 +437,8 @@ Run all commands from the repository root.
 5. Markdown/documentation gates for doc updates:
 
    ```shell
-   set -o pipefail; PATH=/root/.bun/bin:$PATH make markdownlint 2>&1 | tee /tmp/impl-2-2-7-make-markdownlint.log
+   set -o pipefail; make fmt 2>&1 | tee /tmp/impl-2-2-7-make-fmt.log
+   set -o pipefail; make markdownlint 2>&1 | tee /tmp/impl-2-2-7-make-markdownlint.log
    set -o pipefail; make nixie 2>&1 | tee /tmp/impl-2-2-7-make-nixie.log
    ```
 
@@ -492,6 +492,7 @@ Expected evidence artifacts:
 - `/tmp/impl-2-2-7-storage-green.log`
 - `/tmp/impl-2-2-7-api-green.log`
 - `/tmp/impl-2-2-7-bdd-green.log`
+- `/tmp/impl-2-2-7-make-fmt.log`
 - `/tmp/impl-2-2-7-make-check-fmt.log`
 - `/tmp/impl-2-2-7-make-typecheck.log`
 - `/tmp/impl-2-2-7-make-lint.log`
