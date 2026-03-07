@@ -159,7 +159,7 @@ class ReferenceDocument:
 
     def __post_init__(self) -> None:
         """Validate optimistic-lock invariants."""
-        if type(self.lock_version) is not int or self.lock_version < 1:
+        if not isinstance(self.lock_version, int) or self.lock_version < 1:
             msg = "lock_version must be a positive integer."
             raise ValueError(msg)
 

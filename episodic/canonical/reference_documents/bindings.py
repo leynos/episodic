@@ -204,6 +204,85 @@ def _parse_binding_ids(data: ReferenceBindingData) -> _ParsedBindingIds:
     )
 
 
+def _assert_effective_from_series_profile_only(
+    target_kind: ReferenceBindingTargetKind,
+    effective_from_episode_id: uuid.UUID | None,
+) -> None:
+    if (
+        effective_from_episode_id is not None
+        and target_kind is not ReferenceBindingTargetKind.SERIES_PROFILE
+    ):
+        msg = (
+            "ReferenceBinding effective_from_episode_id is only valid for "
+            "series_profile targets."
+        )
+        raise ReferenceValidationError(msg)
+
+
+async def _validate_effective_from_episode(
+    uow: CanonicalUnitOfWork,
+    *,
+    effective_from_episode_id: uuid.UUID | None,
+    document_owner_series_id: uuid.UUID,
+) -> uuid.UUID | None:
+    if effective_from_episode_id is None:
+        return None
+    episode = await _require_episode_exists(
+        uow,
+        effective_from_episode_id,
+        field_name="effective_from_episode_id",
+    )
+    if episode.series_profile_id != document_owner_series_id:
+        msg = (
+            "Reference binding effective_from episode does not match "
+            "document owner series."
+        )
+        raise ReferenceValidationError(msg)
+    return episode.id
+
+
+def _new_binding(
+    *,
+    ids: _ParsedBindingIds,
+    revision_id: uuid.UUID,
+    effective_from_episode_id: uuid.UUID | None,
+) -> ReferenceBinding:
+    try:
+        return ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=revision_id,
+            target_kind=ids.target_kind,
+            series_profile_id=ids.series_profile_id,
+            episode_template_id=ids.episode_template_id,
+            ingestion_job_id=ids.ingestion_job_id,
+            effective_from_episode_id=effective_from_episode_id,
+            created_at=dt.datetime.now(dt.UTC),
+        )
+    except ValueError as exc:
+        msg = (
+            "Invalid reference binding for "
+            f"revision_id={revision_id}, "
+            f"series_profile_id={ids.series_profile_id}, "
+            f"episode_template_id={ids.episode_template_id}, "
+            f"ingestion_job_id={ids.ingestion_job_id}, "
+            f"effective_from_episode_id={effective_from_episode_id}: "
+            f"{exc}"
+        )
+        raise ReferenceValidationError(msg) from exc
+
+
+async def _persist_binding(uow: CanonicalUnitOfWork, binding: ReferenceBinding) -> None:
+    try:
+        await uow.reference_bindings.add(binding)
+        await uow.commit()
+    except IntegrityError as exc:
+        await uow.rollback()
+        if _constraint_name(exc) not in _BINDING_CONSTRAINT_NAMES:
+            raise
+        msg = "Reference binding conflict: duplicate target/revision binding."
+        raise ReferenceConflictError(msg) from exc
+
+
 async def create_reference_binding(
     uow: CanonicalUnitOfWork,
     *,
@@ -236,7 +315,6 @@ async def create_reference_binding(
         If an equivalent revision/target binding already exists.
     """
     ids = _parse_binding_ids(data)
-
     revision = await _require_reference_revision(uow, ids.revision_id)
     document = await _require_reference_document(
         uow,
@@ -253,62 +331,21 @@ async def create_reference_binding(
             document_owner_series_id=document.owner_series_profile_id,
         ),
     )
-    if (
-        ids.effective_from_episode_id is not None
-        and ids.target_kind is not ReferenceBindingTargetKind.SERIES_PROFILE
-    ):
-        msg = (
-            "ReferenceBinding effective_from_episode_id is only valid for "
-            "series_profile targets."
-        )
-        raise ReferenceValidationError(msg)
-    effective_from_episode_id = None
-    if ids.effective_from_episode_id is not None:
-        effective_from_episode = await _require_episode_exists(
-            uow,
-            ids.effective_from_episode_id,
-            field_name="effective_from_episode_id",
-        )
-        if effective_from_episode.series_profile_id != document.owner_series_profile_id:
-            msg = (
-                "Reference binding effective_from episode does not match "
-                "document owner series."
-            )
-            raise ReferenceValidationError(msg)
-        effective_from_episode_id = effective_from_episode.id
-
-    try:
-        binding = ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=revision.id,
-            target_kind=ids.target_kind,
-            series_profile_id=ids.series_profile_id,
-            episode_template_id=ids.episode_template_id,
-            ingestion_job_id=ids.ingestion_job_id,
-            effective_from_episode_id=effective_from_episode_id,
-            created_at=dt.datetime.now(dt.UTC),
-        )
-    except ValueError as exc:
-        msg = (
-            "Invalid reference binding for "
-            f"revision_id={revision.id}, "
-            f"series_profile_id={ids.series_profile_id}, "
-            f"episode_template_id={ids.episode_template_id}, "
-            f"ingestion_job_id={ids.ingestion_job_id}, "
-            f"effective_from_episode_id={effective_from_episode_id}: "
-            f"{exc}"
-        )
-        raise ReferenceValidationError(msg) from exc
-    try:
-        await uow.reference_bindings.add(binding)
-        await uow.commit()
-    except IntegrityError as exc:
-        await uow.rollback()
-        if _constraint_name(exc) not in _BINDING_CONSTRAINT_NAMES:
-            raise
-        msg = "Reference binding conflict: duplicate target/revision binding."
-        raise ReferenceConflictError(msg) from exc
-
+    _assert_effective_from_series_profile_only(
+        ids.target_kind,
+        ids.effective_from_episode_id,
+    )
+    effective_from_episode_id = await _validate_effective_from_episode(
+        uow,
+        effective_from_episode_id=ids.effective_from_episode_id,
+        document_owner_series_id=document.owner_series_profile_id,
+    )
+    binding = _new_binding(
+        ids=ids,
+        revision_id=revision.id,
+        effective_from_episode_id=effective_from_episode_id,
+    )
+    await _persist_binding(uow, binding)
     return binding
 
 
