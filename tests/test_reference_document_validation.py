@@ -8,13 +8,12 @@ if typ.TYPE_CHECKING:
     from falcon import testing
 
 
-def test_reference_document_api_rejects_invalid_query_params(
+def test_reference_document_api_rejects_invalid_pagination_params(
     canonical_api_client: testing.TestClient,
 ) -> None:
-    """Reference-document list endpoints should reject invalid query inputs."""
+    """Reference-document list endpoints should reject invalid pagination values."""
     fixture = support._build_api_fixture(canonical_api_client)
     support._seed_reference_binding(canonical_api_client, fixture)
-
     bad_pagination_requests = (
         (
             f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
@@ -70,6 +69,14 @@ def test_reference_document_api_rejects_invalid_query_params(
     for path, params, description in bad_pagination_requests:
         response = canonical_api_client.simulate_get(path, params=params)
         support._assert_bad_request_error(response, description=description)
+
+
+def test_reference_document_api_rejects_missing_required_binding_params(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Binding list endpoint should reject requests missing required query params."""
+    fixture = support._build_api_fixture(canonical_api_client)
+    support._seed_reference_binding(canonical_api_client, fixture)
 
     missing_target_kind = canonical_api_client.simulate_get(
         "/reference-bindings",

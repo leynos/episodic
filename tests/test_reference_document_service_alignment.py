@@ -45,7 +45,10 @@ async def test_series_aligned_host_guest_access_and_binding_workflow(
     assert len(guest_documents) == 1, "Expected one guest document for the series."
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ReferenceEntityNotFoundError):
+        with pytest.raises(
+            ReferenceEntityNotFoundError,
+            match=str(host_document.id),
+        ):
             await get_reference_document(
                 uow,
                 document_id=str(host_document.id),

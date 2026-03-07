@@ -56,7 +56,10 @@ async def test_create_reference_document_revision_duplicate_hash_raises_conflict
         )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ReferenceConflictError):
+        with pytest.raises(
+            ReferenceConflictError,
+            match="duplicate content hash",
+        ):
             await create_reference_document_revision(
                 uow,
                 document_id=str(created.id),
@@ -93,7 +96,10 @@ async def test_create_reference_binding_duplicate_target_raises_conflict(
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await create_reference_binding(uow, data=binding_data)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ReferenceConflictError):
+        with pytest.raises(
+            ReferenceConflictError,
+            match="duplicate target/revision binding",
+        ):
             await create_reference_binding(uow, data=binding_data)
 
 

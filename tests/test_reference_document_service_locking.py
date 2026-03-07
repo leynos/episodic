@@ -54,7 +54,10 @@ async def test_update_reference_document_rejects_stale_lock_version(
     assert updated.lock_version == 2, "Expected lock version increment on update."
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ReferenceRevisionConflictError):
+        with pytest.raises(
+            ReferenceRevisionConflictError,
+            match="concurrent update",
+        ):
             await update_reference_document(
                 uow,
                 request=ReferenceDocumentUpdateRequest(

@@ -93,9 +93,14 @@ def _create_reference_document(
             "metadata": {"name": name},
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, (
+        "expected 201 creating reference document, got "
+        f"{response.status_code}: {response.text}"
+    )
     payload = typ.cast("dict[str, object]", response.json)
-    assert payload["lock_version"] == 1
+    assert payload["lock_version"] == 1, (
+        f"unexpected lock_version in payload: {payload}"
+    )
     return typ.cast("str", payload["id"])
 
 
@@ -145,7 +150,10 @@ def _create_reference_document_revision(
             "change_note": revision.summary,
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, (
+        "expected 201 creating reference-document revision, got "
+        f"{response.status_code}: {response.text}"
+    )
     payload = typ.cast("dict[str, object]", response.json)
     return typ.cast("str", payload["id"])
 
@@ -164,8 +172,8 @@ def _assert_reference_revision_history(
     assert response.status_code == 200
     payload = typ.cast("dict[str, object]", response.json)
     items = typ.cast("list[dict[str, object]]", payload["items"])
-    assert payload["limit"] == 10
-    assert payload["offset"] == 0
+    assert payload["limit"] == 10, f"expected limit 10, got {payload['limit']}"
+    assert payload["offset"] == 0, f"expected offset 0, got {payload['offset']}"
     return items
 
 
@@ -184,7 +192,10 @@ def _create_reference_binding(
             "episode_template_id": template_id,
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, (
+        "expected 201 creating reference binding, got "
+        f"{response.status_code}: {response.text}"
+    )
     payload = typ.cast("dict[str, object]", response.json)
     return typ.cast("str", payload["id"])
 
@@ -199,7 +210,10 @@ def _assert_document_get_and_optimistic_lock(
     get_document_response = client.simulate_get(
         f"/series-profiles/{profile_id}/reference-documents/{document_id}"
     )
-    assert get_document_response.status_code == 200
+    assert get_document_response.status_code == 200, (
+        "unexpected status for GET reference document: "
+        f"{get_document_response.status_code}"
+    )
 
     update_document_response = client.simulate_patch(
         f"/series-profiles/{profile_id}/reference-documents/{document_id}",
@@ -209,9 +223,14 @@ def _assert_document_get_and_optimistic_lock(
             "metadata": {"name": "Host API One Updated"},
         },
     )
-    assert update_document_response.status_code == 200
+    assert update_document_response.status_code == 200, (
+        "unexpected status for PATCH reference document: "
+        f"{update_document_response.status_code}"
+    )
     updated_document = typ.cast("dict[str, object]", update_document_response.json)
-    assert updated_document["lock_version"] == 2
+    assert updated_document["lock_version"] == 2, (
+        f"expected updated lock_version 2, got {updated_document['lock_version']}"
+    )
 
     stale_update_response = client.simulate_patch(
         f"/series-profiles/{profile_id}/reference-documents/{document_id}",
@@ -221,7 +240,9 @@ def _assert_document_get_and_optimistic_lock(
             "metadata": {"name": "stale update"},
         },
     )
-    assert stale_update_response.status_code == 409
+    assert stale_update_response.status_code == 409, (
+        f"expected stale update to return 409, got {stale_update_response.status_code}"
+    )
 
 
 def _assert_revision_and_binding_workflow(
@@ -263,7 +284,9 @@ def _assert_revision_and_binding_workflow(
     get_revision_response = client.simulate_get(
         f"/reference-document-revisions/{second_revision_id}"
     )
-    assert get_revision_response.status_code == 200
+    assert get_revision_response.status_code == 200, (
+        f"Unexpected status for GET revision: {get_revision_response.status_code}"
+    )
 
     binding_id = _create_reference_binding(
         client,
@@ -271,7 +294,9 @@ def _assert_revision_and_binding_workflow(
         template_id=template_id,
     )
     get_binding_response = client.simulate_get(f"/reference-bindings/{binding_id}")
-    assert get_binding_response.status_code == 200
+    assert get_binding_response.status_code == 200, (
+        f"Unexpected status for GET binding: {get_binding_response.status_code}"
+    )
 
     list_bindings_response = client.simulate_get(
         "/reference-bindings",
@@ -287,7 +312,9 @@ def _assert_revision_and_binding_workflow(
     bindings_items = typ.cast("list[dict[str, object]]", bindings_payload["items"])
     assert bindings_payload["limit"] == 10
     assert bindings_payload["offset"] == 0
-    assert len(bindings_items) == 1, "Expected one binding in list response."
+    assert len(bindings_items) == 1, (
+        f"Expected one binding in list response, got {len(bindings_items)}"
+    )
 
 
 def _assert_bad_request_error(

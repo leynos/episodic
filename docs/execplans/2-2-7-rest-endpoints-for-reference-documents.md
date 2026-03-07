@@ -116,7 +116,7 @@ Success is observable when:
   use additive migration defaults, verify migration with fixture data, and
   document backfill expectations.
 
-- Risk: Client SDK updates are a dependency but SDK code is not in this repo.
+- Risk: Client SDK updates are a dependency, but SDK code is not in this repo.
   Severity: medium. Likelihood: high. Mitigation: publish explicit
   request/response contract in design docs and include payload examples to
   unblock downstream SDK teams.
@@ -270,8 +270,10 @@ spec section for these endpoints:
 - `GET /series-profiles/{profile_id}/reference-documents/{document_id}`
 - `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`
   (optimistic lock)
-- `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
-- `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `POST /series-profiles/{profile_id}/reference-documents/`
+  `{document_id}/revisions`
+- `GET /series-profiles/{profile_id}/reference-documents/`
+  `{document_id}/revisions`
 - `GET /reference-document-revisions/{revision_id}`
 - `POST /reference-bindings`
 - `GET /reference-bindings`
@@ -307,7 +309,7 @@ Files expected:
 - `episodic/canonical/storage/models.py` (if shared constants change)
 - `episodic/canonical/storage/reference_document_schema.py`
 - `alembic/versions/<new_revision>.py`
-- `tests/features/schema_migrations.feature` and/or migration-focused tests.
+- `tests/features/schema_migrations.feature` or migration-focused tests.
 
 Go/no-go: migration tests and reference repository integration tests pass after
 schema changes.

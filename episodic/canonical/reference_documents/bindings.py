@@ -45,6 +45,10 @@ _BINDING_CONSTRAINT_NAMES = {
 }
 
 
+class _SeriesOwnedEntity(typ.Protocol):
+    series_profile_id: uuid.UUID
+
+
 async def _validate_series_profile_binding_target(
     uow: CanonicalUnitOfWork,
     *,
@@ -64,47 +68,58 @@ async def _validate_series_profile_binding_target(
         raise ReferenceValidationError(msg)
 
 
-async def _validate_episode_template_binding_target(
-    uow: CanonicalUnitOfWork,
-    *,
-    episode_template_id: uuid.UUID | None,
-    document_owner_series_id: uuid.UUID,
-) -> None:
-    """Validate episode-template binding alignment."""
-    if episode_template_id is None:
-        msg = "episode_template_id is required for episode_template bindings."
-        raise ReferenceValidationError(msg)
-    template = await uow.episode_templates.get(episode_template_id)
-    if template is None:
-        msg = f"Episode template {episode_template_id} not found."
-        raise ReferenceEntityNotFoundError(msg)
-    if template.series_profile_id != document_owner_series_id:
-        msg = (
-            "Reference binding episode-template target does not match "
-            "document owner series."
-        )
-        raise ReferenceValidationError(msg)
+@dc.dataclass(frozen=True, slots=True)
+class _EntityAlignmentCheck:
+    required_msg: str
+    not_found_msg: str
+    mismatch_msg: str
 
 
-async def _validate_ingestion_job_binding_target(
-    uow: CanonicalUnitOfWork,
-    *,
-    ingestion_job_id: uuid.UUID | None,
+_EPISODE_TEMPLATE_CHECK = _EntityAlignmentCheck(
+    required_msg="episode_template_id is required for episode_template bindings.",
+    not_found_msg="Episode template {} not found.",
+    mismatch_msg=(
+        "Reference binding episode-template target does not match "
+        "document owner series."
+    ),
+)
+
+_INGESTION_JOB_CHECK = _EntityAlignmentCheck(
+    required_msg="ingestion_job_id is required for ingestion_job bindings.",
+    not_found_msg="Ingestion job {} not found.",
+    mismatch_msg=(
+        "Reference binding ingestion-job target does not match document owner series."
+    ),
+)
+
+
+async def _validate_entity_series_alignment(
+    entity_id: uuid.UUID | None,
+    fetcher: typ.Callable[[uuid.UUID], typ.Awaitable[_SeriesOwnedEntity | None]],
+    check: _EntityAlignmentCheck,
     document_owner_series_id: uuid.UUID,
 ) -> None:
-    """Validate ingestion-job binding alignment."""
-    if ingestion_job_id is None:
-        msg = "ingestion_job_id is required for ingestion_job bindings."
+    """Fetch the target entity, assert it exists, and verify owner-series alignment."""
+    if entity_id is None:
+        raise ReferenceValidationError(check.required_msg)
+    entity = await fetcher(entity_id)
+    if entity is None:
+        raise ReferenceEntityNotFoundError(check.not_found_msg.format(entity_id))
+    if entity.series_profile_id != document_owner_series_id:
+        raise ReferenceValidationError(check.mismatch_msg)
+
+
+def _assert_binding_target_shape(
+    target_kind: ReferenceBindingTargetKind,
+    target_ids: dict[ReferenceBindingTargetKind, uuid.UUID | None],
+) -> None:
+    """Assert that exactly one target identifier is populated and matches kind."""
+    populated = [kind for kind, value in target_ids.items() if value is not None]
+    if len(populated) != 1:
+        msg = "Reference binding must set exactly one target identifier."
         raise ReferenceValidationError(msg)
-    job = await uow.ingestion_jobs.get(ingestion_job_id)
-    if job is None:
-        msg = f"Ingestion job {ingestion_job_id} not found."
-        raise ReferenceEntityNotFoundError(msg)
-    if job.series_profile_id != document_owner_series_id:
-        msg = (
-            "Reference binding ingestion-job target does not match "
-            "document owner series."
-        )
+    if populated[0] is not target_kind:
+        msg = "Reference binding target_kind does not match populated target."
         raise ReferenceValidationError(msg)
 
 
@@ -114,21 +129,14 @@ async def _validate_binding_target_alignment(
     alignment: _BindingTargetAlignment,
 ) -> None:
     """Validate target context existence and owner-series alignment."""
-    target_ids = {
-        ReferenceBindingTargetKind.SERIES_PROFILE: alignment.series_profile_id,
-        ReferenceBindingTargetKind.EPISODE_TEMPLATE: alignment.episode_template_id,
-        ReferenceBindingTargetKind.INGESTION_JOB: alignment.ingestion_job_id,
-    }
-    populated_targets = [
-        kind for kind, value in target_ids.items() if value is not None
-    ]
-    if len(populated_targets) != 1:
-        msg = "Reference binding must set exactly one target identifier."
-        raise ReferenceValidationError(msg)
-    if populated_targets[0] is not alignment.target_kind:
-        msg = "Reference binding target_kind does not match populated target."
-        raise ReferenceValidationError(msg)
-
+    _assert_binding_target_shape(
+        alignment.target_kind,
+        {
+            ReferenceBindingTargetKind.SERIES_PROFILE: alignment.series_profile_id,
+            ReferenceBindingTargetKind.EPISODE_TEMPLATE: alignment.episode_template_id,
+            ReferenceBindingTargetKind.INGESTION_JOB: alignment.ingestion_job_id,
+        },
+    )
     match alignment.target_kind:
         case ReferenceBindingTargetKind.SERIES_PROFILE:
             await _validate_series_profile_binding_target(
@@ -137,20 +145,19 @@ async def _validate_binding_target_alignment(
                 document_owner_series_id=alignment.document_owner_series_id,
             )
         case ReferenceBindingTargetKind.EPISODE_TEMPLATE:
-            await _validate_episode_template_binding_target(
-                uow,
-                episode_template_id=alignment.episode_template_id,
-                document_owner_series_id=alignment.document_owner_series_id,
+            await _validate_entity_series_alignment(
+                alignment.episode_template_id,
+                uow.episode_templates.get,
+                _EPISODE_TEMPLATE_CHECK,
+                alignment.document_owner_series_id,
             )
         case ReferenceBindingTargetKind.INGESTION_JOB:
-            await _validate_ingestion_job_binding_target(
-                uow,
-                ingestion_job_id=alignment.ingestion_job_id,
-                document_owner_series_id=alignment.document_owner_series_id,
+            await _validate_entity_series_alignment(
+                alignment.ingestion_job_id,
+                uow.ingestion_jobs.get,
+                _INGESTION_JOB_CHECK,
+                alignment.document_owner_series_id,
             )
-        case _:
-            msg = f"Unsupported ReferenceBindingTargetKind: {alignment.target_kind!r}."
-            raise ReferenceValidationError(msg)
 
 
 @dc.dataclass(frozen=True)
