@@ -404,7 +404,8 @@ set -o pipefail; rg -n "2\.2\.7|reference document" docs/roadmap.md docs/episodi
 1. Test-first red phase (examples; extend with actual new test file names):
 
 ```shell
-set -o pipefail; uv run pytest -v tests/test_reference_document_api.py \
+set -o pipefail; uv run pytest -v tests/test_reference_document_roundtrip.py \
+  tests/test_reference_document_validation.py tests/test_reference_document_access.py \
   2>&1 | tee /tmp/impl-2-2-7-red-unit-integration.log
 set -o pipefail; uv run pytest -v tests/steps/test_reference_document_api_steps.py \
   2>&1 | tee /tmp/impl-2-2-7-red-bdd.log
@@ -415,7 +416,8 @@ set -o pipefail; uv run pytest -v tests/steps/test_reference_document_api_steps.
 ```shell
 set -o pipefail; uv run pytest -v tests/canonical_storage/test_reference_documents.py \
   2>&1 | tee /tmp/impl-2-2-7-storage-green.log
-set -o pipefail; uv run pytest -v tests/test_reference_document_api.py \
+set -o pipefail; uv run pytest -v tests/test_reference_document_roundtrip.py \
+  tests/test_reference_document_validation.py tests/test_reference_document_access.py \
   2>&1 | tee /tmp/impl-2-2-7-api-green.log
 set -o pipefail; uv run pytest -v tests/steps/test_reference_document_api_steps.py \
   2>&1 | tee /tmp/impl-2-2-7-bdd-green.log

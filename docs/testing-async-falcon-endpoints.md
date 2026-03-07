@@ -744,6 +744,7 @@ app_svc.add_route("/items/{item_id}", ServiceResource())
 **Test File (tests/test\_app\_with\_service.py):**
 
 ```python
+import falcon
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -913,7 +914,7 @@ from httpx import ASGITransport, AsyncClient
 from src.app_with_hooks import app_hooks
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def hooked_app_client():
     async with AsyncClient(
         transport=ASGITransport(app=app_hooks), base_url="http://test"

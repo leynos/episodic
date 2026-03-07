@@ -1,16 +1,20 @@
 """Public exports for reusable reference-document services."""
 
-from .services import (
+from .bindings import (
     create_reference_binding,
-    create_reference_document,
-    create_reference_document_revision,
     get_reference_binding,
-    get_reference_document,
-    get_reference_document_revision,
     list_reference_bindings,
-    list_reference_document_revisions,
+)
+from .documents import (
+    create_reference_document,
+    get_reference_document,
     list_reference_documents,
     update_reference_document,
+)
+from .revisions import (
+    create_reference_document_revision,
+    get_reference_document_revision,
+    list_reference_document_revisions,
 )
 from .types import (
     ReferenceBindingData,
