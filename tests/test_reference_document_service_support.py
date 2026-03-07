@@ -2,7 +2,6 @@
 
 import typing as typ
 
-import pytest
 import pytest_asyncio
 
 from episodic.canonical.profile_templates import (
@@ -17,7 +16,6 @@ from episodic.canonical.reference_documents import (
     ReferenceDocumentCreateData,
     ReferenceDocumentListRequest,
     ReferenceDocumentRevisionData,
-    ReferenceValidationError,
     create_reference_binding,
     create_reference_document,
     create_reference_document_revision,
@@ -90,18 +88,6 @@ async def service_fixture(
         "secondary_profile_id": str(secondary_profile.id),
         "template_id": str(template.id),
     }
-
-
-async def _assert_list_rejects_invalid_pagination(
-    uow: SqlAlchemyUnitOfWork,
-    invalid_limit: typ.Callable[[], typ.Coroutine[object, object, object]],
-    invalid_offset: typ.Callable[[], typ.Coroutine[object, object, object]],
-) -> None:
-    """Assert that invalid limit and offset values raise validation errors."""
-    with pytest.raises(ReferenceValidationError, match="limit must be"):
-        await invalid_limit()
-    with pytest.raises(ReferenceValidationError, match="offset must be"):
-        await invalid_offset()
 
 
 async def _create_binding_test_revision(

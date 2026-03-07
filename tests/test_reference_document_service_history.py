@@ -3,6 +3,7 @@
 import typing as typ
 
 import pytest
+import test_reference_document_service_support as support
 
 from episodic.canonical.reference_documents import (
     ReferenceDocumentCreateData,
@@ -14,7 +15,6 @@ from episodic.canonical.reference_documents import (
     list_reference_document_revisions,
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-import test_reference_document_service_support as support
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
