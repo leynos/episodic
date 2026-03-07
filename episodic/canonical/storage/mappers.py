@@ -349,6 +349,7 @@ def _reference_document_from_record(
         metadata=record.metadata_payload,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        lock_version=record.lock_version,
     )
 
 
@@ -364,6 +365,7 @@ def _reference_document_to_record(
         metadata_payload=document.metadata,
         created_at=document.created_at,
         updated_at=document.updated_at,
+        lock_version=document.lock_version,
     )
 
 

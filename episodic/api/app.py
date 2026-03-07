@@ -18,6 +18,12 @@ from .resources import (
     EpisodeTemplateHistoryResource,
     EpisodeTemplateResource,
     EpisodeTemplatesResource,
+    ReferenceBindingResource,
+    ReferenceBindingsResource,
+    ReferenceDocumentResource,
+    ReferenceDocumentRevisionResource,
+    ReferenceDocumentRevisionsResource,
+    ReferenceDocumentsResource,
     SeriesProfileBriefResource,
     SeriesProfileHistoryResource,
     SeriesProfileResource,
@@ -29,7 +35,7 @@ if typ.TYPE_CHECKING:
 
 
 def create_app(uow_factory: UowFactory) -> asgi.App:
-    """Build and return Falcon ASGI application for canonical profile/template APIs."""
+    """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
 
     app.add_route("/series-profiles", SeriesProfilesResource(uow_factory))
@@ -51,6 +57,28 @@ def create_app(uow_factory: UowFactory) -> asgi.App:
     app.add_route(
         "/episode-templates/{template_id}/history",
         EpisodeTemplateHistoryResource(uow_factory),
+    )
+
+    app.add_route(
+        "/series-profiles/{profile_id}/reference-documents",
+        ReferenceDocumentsResource(uow_factory),
+    )
+    app.add_route(
+        "/series-profiles/{profile_id}/reference-documents/{document_id}",
+        ReferenceDocumentResource(uow_factory),
+    )
+    app.add_route(
+        "/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
+        ReferenceDocumentRevisionsResource(uow_factory),
+    )
+    app.add_route(
+        "/reference-document-revisions/{revision_id}",
+        ReferenceDocumentRevisionResource(uow_factory),
+    )
+    app.add_route("/reference-bindings", ReferenceBindingsResource(uow_factory))
+    app.add_route(
+        "/reference-bindings/{binding_id}",
+        ReferenceBindingResource(uow_factory),
     )
 
     return app

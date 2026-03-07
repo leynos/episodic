@@ -8,6 +8,7 @@ from episodic.canonical.domain import (
     ReferenceBinding,
     ReferenceBindingTargetKind,
     ReferenceDocument,
+    ReferenceDocumentKind,
     ReferenceDocumentRevision,
 )
 from episodic.canonical.ports import (
@@ -56,14 +57,28 @@ class SqlAlchemyReferenceDocumentRepository(
     async def list_for_series(
         self,
         series_profile_id: uuid.UUID,
+        *,
+        kind: ReferenceDocumentKind | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[ReferenceDocument]:
         """List reusable reference documents for one series profile."""
-        return await self._list_where(
-            ReferenceDocumentRecord,
-            ReferenceDocumentRecord.owner_series_profile_id == series_profile_id,
-            ReferenceDocumentRecord.created_at,
-            _reference_document_from_record,
+        where_clause = (
+            ReferenceDocumentRecord.owner_series_profile_id == series_profile_id
         )
+        if kind is not None:
+            where_clause = sa.and_(where_clause, ReferenceDocumentRecord.kind == kind)
+        statement = (
+            sa
+            .select(ReferenceDocumentRecord)
+            .where(where_clause)
+            .order_by(ReferenceDocumentRecord.created_at)
+            .offset(offset)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        result = await self._session.execute(statement)
+        return [_reference_document_from_record(row) for row in result.scalars()]
 
     async def list_by_ids(
         self,
@@ -90,8 +105,37 @@ class SqlAlchemyReferenceDocumentRepository(
                 "lifecycle_state": document.lifecycle_state,
                 "metadata_payload": document.metadata,
                 "updated_at": document.updated_at,
+                "lock_version": document.lock_version,
             },
         )
+
+    async def update_with_optimistic_lock(
+        self,
+        document: ReferenceDocument,
+        *,
+        expected_lock_version: int,
+    ) -> bool:
+        """Persist updates when lock_version matches the expected value."""
+        result = await self._session.execute(
+            sa
+            .update(ReferenceDocumentRecord)
+            .where(
+                sa.and_(
+                    ReferenceDocumentRecord.id == document.id,
+                    ReferenceDocumentRecord.lock_version == expected_lock_version,
+                )
+            )
+            .values(
+                owner_series_profile_id=document.owner_series_profile_id,
+                kind=document.kind,
+                lifecycle_state=document.lifecycle_state,
+                metadata_payload=document.metadata,
+                updated_at=document.updated_at,
+                lock_version=document.lock_version,
+            )
+            .returning(ReferenceDocumentRecord.id)
+        )
+        return result.scalar_one_or_none() is not None
 
 
 class SqlAlchemyReferenceDocumentRevisionRepository(
@@ -114,14 +158,24 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
     async def list_for_document(
         self,
         document_id: uuid.UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[ReferenceDocumentRevision]:
         """List revisions for one reusable reference document."""
-        return await self._list_where(
-            ReferenceDocumentRevisionRecord,
-            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
-            ReferenceDocumentRevisionRecord.created_at,
-            _reference_document_revision_from_record,
+        statement = (
+            sa
+            .select(ReferenceDocumentRevisionRecord)
+            .where(ReferenceDocumentRevisionRecord.reference_document_id == document_id)
+            .order_by(ReferenceDocumentRevisionRecord.created_at)
+            .offset(offset)
         )
+        if limit is not None:
+            statement = statement.limit(limit)
+        result = await self._session.execute(statement)
+        return [
+            _reference_document_revision_from_record(row) for row in result.scalars()
+        ]
 
     async def list_by_ids(
         self,
@@ -171,23 +225,40 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
         """Add a reusable reference binding record."""
         await self._add_record(_reference_binding_to_record(binding))
 
+    async def get(self, binding_id: uuid.UUID) -> ReferenceBinding | None:
+        """Fetch a reusable reference binding by identifier."""
+        return await self._get_one_or_none(
+            ReferenceBindingRecord,
+            ReferenceBindingRecord.id == binding_id,
+            _reference_binding_from_record,
+        )
+
     async def list_for_target(
         self,
         *,
         target_kind: ReferenceBindingTargetKind,
         target_id: uuid.UUID,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[ReferenceBinding]:
         """List reusable reference bindings for one target context."""
         target_field = self._target_field(target_kind)
-        return await self._list_where(
-            ReferenceBindingRecord,
-            sa.and_(
-                ReferenceBindingRecord.target_kind == target_kind,
-                target_field == target_id,
-            ),
-            ReferenceBindingRecord.created_at,
-            _reference_binding_from_record,
+        statement = (
+            sa
+            .select(ReferenceBindingRecord)
+            .where(
+                sa.and_(
+                    ReferenceBindingRecord.target_kind == target_kind,
+                    target_field == target_id,
+                )
+            )
+            .order_by(ReferenceBindingRecord.created_at)
+            .offset(offset)
         )
+        if limit is not None:
+            statement = statement.limit(limit)
+        result = await self._session.execute(statement)
+        return [_reference_binding_from_record(row) for row in result.scalars()]
 
 
 __all__ = (

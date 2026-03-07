@@ -184,6 +184,42 @@ adapter (`episodic/api/app.py`) over domain services in
 - `reference_documents`: reusable reference bindings resolved for the selected
   series profile and template context.
 
+### Reusable reference-document APIs
+
+Reusable reference-document workflows are implemented as Falcon resources in:
+
+- `episodic/api/resources/reference_documents.py`
+- `episodic/api/resources/reference_bindings.py`
+
+Route wiring lives in `episodic/api/app.py`, and service orchestration is
+implemented in `episodic/canonical/reference_documents/services.py`.
+
+Supported endpoints:
+
+- `POST /series-profiles/{profile_id}/reference-documents`
+- `GET /series-profiles/{profile_id}/reference-documents`
+- `GET /series-profiles/{profile_id}/reference-documents/{document_id}`
+- `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`
+- `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `GET /reference-document-revisions/{revision_id}`
+- `POST /reference-bindings`
+- `GET /reference-bindings`
+- `GET /reference-bindings/{binding_id}`
+
+Implementation notes:
+
+- Mutable `ReferenceDocument` updates use optimistic locking via
+  `expected_lock_version`. Conflicts return `409 Conflict`.
+- List endpoints for documents, revisions, and bindings use a shared pagination
+  contract (`limit`, `offset`) with default `limit=20`, max `limit=100`, and
+  default `offset=0`.
+- Series alignment is enforced in service-layer ownership checks for host and
+  guest documents. Cross-series access is treated as `404 Not Found` for
+  profile-scoped routes.
+- Inbound adapters map typed reusable-reference service errors to Falcon HTTP
+  errors through local `_map_reference_error(...)` helpers.
+
 ### Reusable reference-document repositories
 
 The canonical unit of work now exposes reusable reference repositories
@@ -194,7 +230,8 @@ independent of ingestion-job scope:
 - `reference_bindings`
 
 These repositories are implemented in
-`episodic/canonical/storage/repositories.py` and enforce these invariants:
+`episodic/canonical/storage/reference_repositories.py` and enforce these
+invariants:
 
 - A binding targets exactly one context kind (`series_profile`,
   `episode_template`, or `ingestion_job`).
