@@ -271,6 +271,18 @@ async def test_public_services_reject_invalid_uuid_and_enum_values(
             )
 
 
+async def _assert_list_rejects_invalid_pagination(
+    uow: SqlAlchemyUnitOfWork,
+    invalid_limit: typ.Callable[[], typ.Coroutine[object, object, object]],
+    invalid_offset: typ.Callable[[], typ.Coroutine[object, object, object]],
+) -> None:
+    """Assert that invalid limit and offset values raise validation errors."""
+    with pytest.raises(ReferenceValidationError, match="limit must be"):
+        await invalid_limit()
+    with pytest.raises(ReferenceValidationError, match="offset must be"):
+        await invalid_offset()
+
+
 @pytest.mark.asyncio
 async def test_list_reference_documents_rejects_invalid_pagination(
     session_factory: typ.Callable[[], AsyncSession],
@@ -278,8 +290,9 @@ async def test_list_reference_documents_rejects_invalid_pagination(
 ) -> None:
     """Document listing should reject invalid pagination values."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ReferenceValidationError, match="limit must be"):
-            await list_reference_documents(
+        await _assert_list_rejects_invalid_pagination(
+            uow,
+            lambda: list_reference_documents(
                 uow,
                 request=ReferenceDocumentListRequest(
                     owner_series_profile_id=service_fixture["primary_profile_id"],
@@ -287,10 +300,8 @@ async def test_list_reference_documents_rejects_invalid_pagination(
                     limit=0,
                     offset=0,
                 ),
-            )
-
-        with pytest.raises(ReferenceValidationError, match="offset must be"):
-            await list_reference_documents(
+            ),
+            lambda: list_reference_documents(
                 uow,
                 request=ReferenceDocumentListRequest(
                     owner_series_profile_id=service_fixture["primary_profile_id"],
@@ -298,7 +309,8 @@ async def test_list_reference_documents_rejects_invalid_pagination(
                     limit=10,
                     offset=-1,
                 ),
-            )
+            ),
+        )
 
 
 @pytest.mark.asyncio
@@ -308,8 +320,9 @@ async def test_list_reference_bindings_rejects_invalid_pagination(
 ) -> None:
     """Binding listing should reject invalid pagination values."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(ReferenceValidationError, match="limit must be"):
-            await list_reference_bindings(
+        await _assert_list_rejects_invalid_pagination(
+            uow,
+            lambda: list_reference_bindings(
                 uow,
                 request=ReferenceBindingListRequest(
                     target_kind="series_profile",
@@ -317,10 +330,8 @@ async def test_list_reference_bindings_rejects_invalid_pagination(
                     limit=0,
                     offset=0,
                 ),
-            )
-
-        with pytest.raises(ReferenceValidationError, match="offset must be"):
-            await list_reference_bindings(
+            ),
+            lambda: list_reference_bindings(
                 uow,
                 request=ReferenceBindingListRequest(
                     target_kind="series_profile",
@@ -328,7 +339,8 @@ async def test_list_reference_bindings_rejects_invalid_pagination(
                     limit=10,
                     offset=-1,
                 ),
-            )
+            ),
+        )
 
 
 @pytest.mark.asyncio
@@ -376,12 +388,14 @@ async def test_create_reference_document_revision_duplicate_hash_raises_conflict
             )
 
 
-@pytest.mark.asyncio
-async def test_create_reference_binding_duplicate_target_raises_conflict(
+async def _create_binding_test_revision(
     session_factory: typ.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
-) -> None:
-    """Duplicate revision/target bindings should map to reference conflicts."""
+    *,
+    content_hash: str,
+    metadata_topic: str,
+) -> ReferenceDocumentRevision:
+    """Create a research-brief document and one revision; return the revision."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         created = await create_reference_document(
             uow,
@@ -389,49 +403,48 @@ async def test_create_reference_binding_duplicate_target_raises_conflict(
                 owner_series_profile_id=service_fixture["primary_profile_id"],
                 kind="research_brief",
                 lifecycle_state="active",
-                metadata={"topic": "Duplicate binding"},
+                metadata={"topic": metadata_topic},
             ),
         )
-
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        revision = await create_reference_document_revision(
+        return await create_reference_document_revision(
             uow,
             document_id=str(created.id),
             owner_series_profile_id=service_fixture["primary_profile_id"],
             data=ReferenceDocumentRevisionData(
                 content={"summary": "binding revision"},
-                content_hash="duplicate-binding-hash",
+                content_hash=content_hash,
                 author="service@example.com",
                 change_note="binding revision",
             ),
         )
 
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await create_reference_binding(
-            uow,
-            data=ReferenceBindingData(
-                reference_document_revision_id=str(revision.id),
-                target_kind="episode_template",
-                series_profile_id=None,
-                episode_template_id=service_fixture["template_id"],
-                ingestion_job_id=None,
-                effective_from_episode_id=None,
-            ),
-        )
 
+@pytest.mark.asyncio
+async def test_create_reference_binding_duplicate_target_raises_conflict(
+    session_factory: typ.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Duplicate revision/target bindings should map to reference conflicts."""
+    revision = await _create_binding_test_revision(
+        session_factory,
+        service_fixture,
+        content_hash="duplicate-binding-hash",
+        metadata_topic="Duplicate binding",
+    )
+    binding_data = ReferenceBindingData(
+        reference_document_revision_id=str(revision.id),
+        target_kind="episode_template",
+        series_profile_id=None,
+        episode_template_id=service_fixture["template_id"],
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await create_reference_binding(uow, data=binding_data)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(ReferenceConflictError):
-            await create_reference_binding(
-                uow,
-                data=ReferenceBindingData(
-                    reference_document_revision_id=str(revision.id),
-                    target_kind="episode_template",
-                    series_profile_id=None,
-                    episode_template_id=service_fixture["template_id"],
-                    ingestion_job_id=None,
-                    effective_from_episode_id=None,
-                ),
-            )
+            await create_reference_binding(uow, data=binding_data)
 
 
 @pytest.mark.asyncio
@@ -440,30 +453,12 @@ async def test_create_reference_binding_rejects_invalid_target_identifier_shapes
     service_fixture: ServiceFixture,
 ) -> None:
     """Binding creation should require exactly one target id matching target_kind."""
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        created = await create_reference_document(
-            uow,
-            data=ReferenceDocumentCreateData(
-                owner_series_profile_id=service_fixture["primary_profile_id"],
-                kind="research_brief",
-                lifecycle_state="active",
-                metadata={"topic": "Invalid binding shape"},
-            ),
-        )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        revision = await create_reference_document_revision(
-            uow,
-            document_id=str(created.id),
-            owner_series_profile_id=service_fixture["primary_profile_id"],
-            data=ReferenceDocumentRevisionData(
-                content={"summary": "binding revision"},
-                content_hash="invalid-binding-shape-hash",
-                author="service@example.com",
-                change_note="binding revision",
-            ),
-        )
-
+    revision = await _create_binding_test_revision(
+        session_factory,
+        service_fixture,
+        content_hash="invalid-binding-shape-hash",
+        metadata_topic="Invalid binding shape",
+    )
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(
             ReferenceValidationError,
@@ -480,8 +475,6 @@ async def test_create_reference_binding_rejects_invalid_target_identifier_shapes
                     effective_from_episode_id=None,
                 ),
             )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(
             ReferenceValidationError,
             match="Reference binding target_kind does not match populated target",
