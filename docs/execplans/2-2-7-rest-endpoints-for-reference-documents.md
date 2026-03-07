@@ -50,9 +50,9 @@ Success is observable when:
   - Domain and service layers remain framework-agnostic.
   - Ports are owned by the domain/application layer.
   - Falcon and SQLAlchemy details remain in adapters.
-  - Adapters do not call each other directly.
+- Adapters do not call each other directly.
 - Keep `2.2.7` scoped to API and repository behaviour only.
-  No production Service Level Agreement (SLA) tuning is in scope.
+  No production Service-Level Agreement (SLA) tuning is in scope.
 - Preserve `2.2.6` model intent and existing repository invariants.
 - Keep migrations additive and compatible with existing canonical data.
 - Treat optimistic locking as mandatory for update operations.
@@ -397,49 +397,50 @@ Run all commands from the repository root.
 
 1. Baseline and discovery:
 
-```shell
-set -o pipefail; git status --short 2>&1 | tee /tmp/impl-2-2-7-git-status.log
-set -o pipefail; rg -n "2\.2\.7|reference document" docs/roadmap.md docs/episodic-podcast-generation-system-design.md \
-  2>&1 | tee /tmp/impl-2-2-7-roadmap-spec-scan.log
-```
+   ```shell
+   set -o pipefail; git status --short 2>&1 | tee /tmp/impl-2-2-7-git-status.log
+   set -o pipefail; rg -n "2\.2\.7|reference document" \
+     docs/roadmap.md docs/episodic-podcast-generation-system-design.md \
+     2>&1 | tee /tmp/impl-2-2-7-roadmap-spec-scan.log
+   ```
 
-1. Test-first red phase (examples; extend with actual new test file names):
+2. Test-first red phase (examples; extend with actual new test file names):
 
-```shell
-set -o pipefail; uv run pytest -v tests/test_reference_document_roundtrip.py \
-  tests/test_reference_document_validation.py tests/test_reference_document_access.py \
-  2>&1 | tee /tmp/impl-2-2-7-red-unit-integration.log
-set -o pipefail; uv run pytest -v tests/steps/test_reference_document_api_steps.py \
-  2>&1 | tee /tmp/impl-2-2-7-red-bdd.log
-```
+   ```shell
+   set -o pipefail; uv run pytest -v tests/test_reference_document_roundtrip.py \
+     tests/test_reference_document_validation.py tests/test_reference_document_access.py \
+     2>&1 | tee /tmp/impl-2-2-7-red-unit-integration.log
+   set -o pipefail; uv run pytest -v tests/steps/test_reference_document_api_steps.py \
+     2>&1 | tee /tmp/impl-2-2-7-red-bdd.log
+   ```
 
-1. Stage-by-stage targeted green checks:
+3. Stage-by-stage targeted green checks:
 
-```shell
-set -o pipefail; uv run pytest -v tests/canonical_storage/test_reference_documents.py \
-  2>&1 | tee /tmp/impl-2-2-7-storage-green.log
-set -o pipefail; uv run pytest -v tests/test_reference_document_roundtrip.py \
-  tests/test_reference_document_validation.py tests/test_reference_document_access.py \
-  2>&1 | tee /tmp/impl-2-2-7-api-green.log
-set -o pipefail; uv run pytest -v tests/steps/test_reference_document_api_steps.py \
-  2>&1 | tee /tmp/impl-2-2-7-bdd-green.log
-```
+   ```shell
+   set -o pipefail; uv run pytest -v tests/canonical_storage/test_reference_documents.py \
+     2>&1 | tee /tmp/impl-2-2-7-storage-green.log
+   set -o pipefail; uv run pytest -v tests/test_reference_document_roundtrip.py \
+     tests/test_reference_document_validation.py tests/test_reference_document_access.py \
+     2>&1 | tee /tmp/impl-2-2-7-api-green.log
+   set -o pipefail; uv run pytest -v tests/steps/test_reference_document_api_steps.py \
+     2>&1 | tee /tmp/impl-2-2-7-bdd-green.log
+   ```
 
-1. Final required quality gates:
+4. Final required quality gates:
 
-```shell
-set -o pipefail; make check-fmt 2>&1 | tee /tmp/impl-2-2-7-make-check-fmt.log
-set -o pipefail; make typecheck 2>&1 | tee /tmp/impl-2-2-7-make-typecheck.log
-set -o pipefail; make lint 2>&1 | tee /tmp/impl-2-2-7-make-lint.log
-set -o pipefail; make test 2>&1 | tee /tmp/impl-2-2-7-make-test.log
-```
+   ```shell
+   set -o pipefail; make check-fmt 2>&1 | tee /tmp/impl-2-2-7-make-check-fmt.log
+   set -o pipefail; make typecheck 2>&1 | tee /tmp/impl-2-2-7-make-typecheck.log
+   set -o pipefail; make lint 2>&1 | tee /tmp/impl-2-2-7-make-lint.log
+   set -o pipefail; make test 2>&1 | tee /tmp/impl-2-2-7-make-test.log
+   ```
 
-1. Markdown/documentation gates for doc updates:
+5. Markdown/documentation gates for doc updates:
 
-```shell
-set -o pipefail; PATH=/root/.bun/bin:$PATH make markdownlint 2>&1 | tee /tmp/impl-2-2-7-make-markdownlint.log
-set -o pipefail; make nixie 2>&1 | tee /tmp/impl-2-2-7-make-nixie.log
-```
+   ```shell
+   set -o pipefail; PATH=/root/.bun/bin:$PATH make markdownlint 2>&1 | tee /tmp/impl-2-2-7-make-markdownlint.log
+   set -o pipefail; make nixie 2>&1 | tee /tmp/impl-2-2-7-make-nixie.log
+   ```
 
 Expected success indicators:
 

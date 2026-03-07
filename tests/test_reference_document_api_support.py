@@ -119,11 +119,16 @@ def _assert_reference_document_list(
         f"/series-profiles/{profile_id}/reference-documents",
         params=params,
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, (
+        f"unexpected status for GET reference documents: {response.status_code}: "
+        f"{response.text}"
+    )
     payload = typ.cast("dict[str, object]", response.json)
+    assert isinstance(payload, dict), f"expected list payload dict, got: {payload!r}"
     items = typ.cast("list[dict[str, object]]", payload["items"])
-    assert payload["limit"] == 10
-    assert payload["offset"] == 0
+    assert isinstance(items, list), f"expected items list in payload: {payload}"
+    assert payload["limit"] == 10, f"expected limit 10 in payload: {payload}"
+    assert payload["offset"] == 0, f"expected offset 0 in payload: {payload}"
     return items
 
 
@@ -169,7 +174,10 @@ def _assert_reference_revision_history(
         f"/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
         params={"limit": "10", "offset": "0"},
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, (
+        f"unexpected status for GET revision history: {response.status_code}: "
+        f"{response.text}"
+    )
     payload = typ.cast("dict[str, object]", response.json)
     items = typ.cast("list[dict[str, object]]", payload["items"])
     assert payload["limit"] == 10, f"expected limit 10, got {payload['limit']}"
@@ -307,11 +315,18 @@ def _assert_revision_and_binding_workflow(
             "offset": "0",
         },
     )
-    assert list_bindings_response.status_code == 200
+    assert list_bindings_response.status_code == 200, (
+        "unexpected status for GET bindings list: "
+        f"{list_bindings_response.status_code}: {list_bindings_response.text}"
+    )
     bindings_payload = typ.cast("dict[str, object]", list_bindings_response.json)
     bindings_items = typ.cast("list[dict[str, object]]", bindings_payload["items"])
-    assert bindings_payload["limit"] == 10
-    assert bindings_payload["offset"] == 0
+    assert bindings_payload["limit"] == 10, (
+        f"expected limit 10 in bindings payload: {bindings_payload}"
+    )
+    assert bindings_payload["offset"] == 0, (
+        f"expected offset 0 in bindings payload: {bindings_payload}"
+    )
     assert len(bindings_items) == 1, (
         f"Expected one binding in list response, got {len(bindings_items)}"
     )

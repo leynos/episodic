@@ -20,6 +20,7 @@ from .helpers import (
     _constraint_name,
     _parse_target_kind,
     _parse_uuid,
+    _require_episode_exists,
     _require_reference_document,
     _require_reference_revision,
     _require_series_exists,
@@ -160,7 +161,7 @@ async def _validate_binding_target_alignment(
             )
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _ParsedBindingIds:
     revision_id: uuid.UUID
     target_kind: ReferenceBindingTargetKind
@@ -208,7 +209,32 @@ async def create_reference_binding(
     *,
     data: ReferenceBindingData,
 ) -> ReferenceBinding:
-    """Create a target-scoped binding for a pinned revision."""
+    """Create one reusable reference binding.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit of work providing repository access and transaction control.
+    data : ReferenceBindingData
+        Binding payload containing the revision identifier, target selection,
+        and optional effective-from episode identifier.
+
+    Returns
+    -------
+    ReferenceBinding
+        The newly created reusable reference binding.
+
+    Raises
+    ------
+    ReferenceValidationError
+        If any identifier is malformed or the binding payload violates domain
+        validation rules.
+    ReferenceEntityNotFoundError
+        If the referenced revision, document, target entity, or effective-from
+        episode does not exist.
+    ReferenceConflictError
+        If an equivalent revision/target binding already exists.
+    """
     ids = _parse_binding_ids(data)
 
     revision = await _require_reference_revision(uow, ids.revision_id)
@@ -227,6 +253,15 @@ async def create_reference_binding(
             document_owner_series_id=document.owner_series_profile_id,
         ),
     )
+    effective_from_episode_id = (
+        None
+        if ids.effective_from_episode_id is None
+        else await _require_episode_exists(
+            uow,
+            ids.effective_from_episode_id,
+            field_name="effective_from_episode_id",
+        )
+    )
 
     try:
         binding = ReferenceBinding(
@@ -236,7 +271,7 @@ async def create_reference_binding(
             series_profile_id=ids.series_profile_id,
             episode_template_id=ids.episode_template_id,
             ingestion_job_id=ids.ingestion_job_id,
-            effective_from_episode_id=ids.effective_from_episode_id,
+            effective_from_episode_id=effective_from_episode_id,
             created_at=dt.datetime.now(dt.UTC),
         )
     except ValueError as exc:
@@ -246,7 +281,7 @@ async def create_reference_binding(
             f"series_profile_id={ids.series_profile_id}, "
             f"episode_template_id={ids.episode_template_id}, "
             f"ingestion_job_id={ids.ingestion_job_id}, "
-            f"effective_from_episode_id={ids.effective_from_episode_id}: "
+            f"effective_from_episode_id={effective_from_episode_id}: "
             f"{exc}"
         )
         raise ReferenceValidationError(msg) from exc
@@ -268,7 +303,27 @@ async def get_reference_binding(
     *,
     binding_id: str,
 ) -> ReferenceBinding:
-    """Fetch one reusable reference binding by identifier."""
+    """Fetch one reusable reference binding by identifier.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit of work providing repository access.
+    binding_id : str
+        String form of the reference binding UUID.
+
+    Returns
+    -------
+    ReferenceBinding
+        The persisted reusable reference binding matching ``binding_id``.
+
+    Raises
+    ------
+    ReferenceValidationError
+        If ``binding_id`` is not a valid UUID string.
+    ReferenceEntityNotFoundError
+        If no binding exists for the parsed identifier.
+    """
     parsed_binding_id = _parse_uuid(binding_id, "binding_id")
     binding = await uow.reference_bindings.get(parsed_binding_id)
     if binding is None:
@@ -282,7 +337,25 @@ async def list_reference_bindings(
     *,
     request: ReferenceBindingListRequest,
 ) -> list[ReferenceBinding]:
-    """List reusable reference bindings for one target context."""
+    """List reusable reference bindings for one target context.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit of work providing repository access.
+    request : ReferenceBindingListRequest
+        Typed list request containing target identifiers and pagination values.
+
+    Returns
+    -------
+    list[ReferenceBinding]
+        Bindings matching the requested target context and pagination window.
+
+    Raises
+    ------
+    ReferenceValidationError
+        If pagination values, target kind, or target identifier are invalid.
+    """
     _validate_pagination(request.limit, request.offset)
     parsed_target_kind = _parse_target_kind(request.target_kind)
     parsed_target_id = _parse_uuid(request.target_id, "target_id")

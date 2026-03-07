@@ -2,73 +2,86 @@
 
 import typing as typ
 
+import pytest
 import test_reference_document_api_support as support
 
 if typ.TYPE_CHECKING:
     from falcon import testing
 
 
+@pytest.mark.parametrize(
+    ("path_template", "params_builder", "description"),
+    [
+        (
+            "/series-profiles/{profile_id}/reference-documents",
+            lambda fixture: {"limit": "not-an-int"},
+            "Pagination parameters limit/offset must be integers.",
+        ),
+        (
+            "/series-profiles/{profile_id}/reference-documents",
+            lambda fixture: {"offset": "not-an-int"},
+            "Pagination parameters limit/offset must be integers.",
+        ),
+        (
+            "/series-profiles/{profile_id}/reference-documents",
+            lambda fixture: {"limit": "0"},
+            "limit must be between 1 and 100.",
+        ),
+        (
+            "/series-profiles/{profile_id}/reference-documents",
+            lambda fixture: {"limit": "101"},
+            "limit must be between 1 and 100.",
+        ),
+        (
+            "/series-profiles/{profile_id}/reference-documents",
+            lambda fixture: {"offset": "-1"},
+            "offset must be a non-negative integer.",
+        ),
+        (
+            "/reference-bindings",
+            lambda fixture: support._binding_list_params(
+                fixture,
+                limit="not-an-int",
+            ),
+            "Pagination parameters limit/offset must be integers.",
+        ),
+        (
+            "/reference-bindings",
+            lambda fixture: support._binding_list_params(
+                fixture,
+                offset="not-an-int",
+            ),
+            "Pagination parameters limit/offset must be integers.",
+        ),
+        (
+            "/reference-bindings",
+            lambda fixture: support._binding_list_params(fixture, limit="0"),
+            "limit must be between 1 and 100.",
+        ),
+        (
+            "/reference-bindings",
+            lambda fixture: support._binding_list_params(fixture, limit="101"),
+            "limit must be between 1 and 100.",
+        ),
+        (
+            "/reference-bindings",
+            lambda fixture: support._binding_list_params(fixture, offset="-1"),
+            "offset must be a non-negative integer.",
+        ),
+    ],
+)
 def test_reference_document_api_rejects_invalid_pagination_params(
     canonical_api_client: testing.TestClient,
+    path_template: str,
+    params_builder: typ.Callable[[support._ApiFixture], dict[str, str]],
+    description: str,
 ) -> None:
     """Reference-document list endpoints should reject invalid pagination values."""
     fixture = support._build_api_fixture(canonical_api_client)
     support._seed_reference_binding(canonical_api_client, fixture)
-    bad_pagination_requests = (
-        (
-            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
-            {"limit": "not-an-int"},
-            "Pagination parameters limit/offset must be integers.",
-        ),
-        (
-            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
-            {"offset": "not-an-int"},
-            "Pagination parameters limit/offset must be integers.",
-        ),
-        (
-            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
-            {"limit": "0"},
-            "limit must be between 1 and 100.",
-        ),
-        (
-            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
-            {"limit": "101"},
-            "limit must be between 1 and 100.",
-        ),
-        (
-            f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
-            {"offset": "-1"},
-            "offset must be a non-negative integer.",
-        ),
-        (
-            "/reference-bindings",
-            support._binding_list_params(fixture, limit="not-an-int"),
-            "Pagination parameters limit/offset must be integers.",
-        ),
-        (
-            "/reference-bindings",
-            support._binding_list_params(fixture, offset="not-an-int"),
-            "Pagination parameters limit/offset must be integers.",
-        ),
-        (
-            "/reference-bindings",
-            support._binding_list_params(fixture, limit="0"),
-            "limit must be between 1 and 100.",
-        ),
-        (
-            "/reference-bindings",
-            support._binding_list_params(fixture, limit="101"),
-            "limit must be between 1 and 100.",
-        ),
-        (
-            "/reference-bindings",
-            support._binding_list_params(fixture, offset="-1"),
-            "offset must be a non-negative integer.",
-        ),
-    )
-    for path, params, description in bad_pagination_requests:
-        response = canonical_api_client.simulate_get(path, params=params)
-        support._assert_bad_request_error(response, description=description)
+    path = path_template.format(profile_id=fixture.primary_profile_id)
+    response = canonical_api_client.simulate_get(path, params=params_builder(fixture))
+    support._assert_bad_request_error(response, description=description)
 
 
 def test_reference_document_api_rejects_missing_required_binding_params(

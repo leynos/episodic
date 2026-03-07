@@ -1,10 +1,18 @@
 """Conflict and binding service tests for reusable reference documents."""
 
+import datetime as dt
 import typing as typ
+import uuid
 
 import pytest
 import test_reference_document_service_support as support
 
+from episodic.canonical.domain import (
+    ApprovalState,
+    CanonicalEpisode,
+    EpisodeStatus,
+    TeiHeader,
+)
 from episodic.canonical.reference_documents import (
     ReferenceBindingData,
     ReferenceConflictError,
@@ -131,6 +139,7 @@ async def test_create_reference_binding_rejects_invalid_target_identifier_shapes
                     effective_from_episode_id=None,
                 ),
             )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(
             ReferenceValidationError,
             match="Reference binding target_kind does not match populated target",
@@ -178,6 +187,34 @@ async def test_create_reference_binding_translates_constructor_validation_errors
             ),
         )
 
+    now = dt.datetime.now(dt.UTC)
+    header = TeiHeader(
+        id=uuid.uuid4(),
+        title="Binding constructor validation episode",
+        payload={"file_desc": {"title": "Binding constructor validation"}},
+        raw_xml="<TEI/>",
+        created_at=now,
+        updated_at=now,
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.tei_headers.add(header)
+        await uow.commit()
+
+    episode = CanonicalEpisode(
+        id=uuid.uuid4(),
+        series_profile_id=uuid.UUID(service_fixture["primary_profile_id"]),
+        tei_header_id=header.id,
+        title="Binding constructor validation episode",
+        tei_xml="<TEI/>",
+        status=EpisodeStatus.DRAFT,
+        approval_state=ApprovalState.DRAFT,
+        created_at=now,
+        updated_at=now,
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.episodes.add(episode)
+        await uow.commit()
+
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(
             ReferenceValidationError,
@@ -191,6 +228,6 @@ async def test_create_reference_binding_translates_constructor_validation_errors
                     series_profile_id=None,
                     episode_template_id=service_fixture["template_id"],
                     ingestion_job_id=None,
-                    effective_from_episode_id="00000000-0000-0000-0000-000000000001",
+                    effective_from_episode_id=str(episode.id),
                 ),
             )

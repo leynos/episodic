@@ -93,6 +93,20 @@ async def _require_series_exists(
         raise ReferenceEntityNotFoundError(msg)
 
 
+async def _require_episode_exists(
+    uow: CanonicalUnitOfWork,
+    episode_id: uuid.UUID,
+    *,
+    field_name: str,
+) -> uuid.UUID:
+    """Raise not-found when an episode does not exist."""
+    episode = await uow.episodes.get(episode_id)
+    if episode is None:
+        msg = f"Episode for {field_name} {episode_id} not found."
+        raise ReferenceEntityNotFoundError(msg)
+    return episode_id
+
+
 async def _require_reference_document(
     uow: CanonicalUnitOfWork,
     *,
