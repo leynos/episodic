@@ -756,9 +756,7 @@ from src.app_with_service import app_svc  # Falcon ASGI app
 
 @pytest_asyncio.fixture
 async def client_svc():
-    async with AsyncClient(
-        transport=ASGITransport(app=app_svc), base_url="http://test"
-    ) as client:
+    async with  AsyncClient(transport=ASGITransport(app=app_svc), base_url="http://test") as client:
         yield client
 
 
@@ -916,9 +914,7 @@ from src.app_with_hooks import app_hooks
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def hooked_app_client():
-    async with AsyncClient(
-        transport=ASGITransport(app=app_hooks), base_url="http://test"
-    ) as client:
+    async with  AsyncClient(transport=ASGITransport(app=app_hooks), base_url="http://test") as client:
         yield client
 
 

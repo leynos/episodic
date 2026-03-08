@@ -230,6 +230,7 @@ def must_have_key(d: dict, key: str) -> None:
         raise KeyError(msg)
 
 
+
 order_id = "ord_123"
 shop_id = "shop_456"
 logger.info("Dispatching order_id=%s to shop_id=%s", order_id, shop_id)  # structured
