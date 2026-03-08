@@ -160,29 +160,27 @@ class _BindingTargetAlignment:
     document_owner_series_id: uuid.UUID
 
 
+def _exception_chain(exc: object) -> typ.Iterator[object]:
+    """Yield exc and its chained causes/contexts, then `orig`, de-duplicated."""
+    seen: set[int] = set()
+    roots = (exc, getattr(exc, "orig", exc))
+    for root in roots:
+        current: object | None = root
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            yield current
+            current = getattr(current, "__cause__", None) or getattr(
+                current, "__context__", None
+            )
+
+
 def _constraint_name(exc: object) -> str | None:
     """Return the Postgres constraint name when available."""
+    for node in _exception_chain(exc):
+        direct = getattr(node, "constraint_name", None)
+        if direct is not None:
+            return typ.cast("str", direct)
+
     orig_exc = getattr(exc, "orig", exc)
-    seen: set[int] = set()
-    current: object | None = exc
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        direct_constraint_name = getattr(current, "constraint_name", None)
-        if direct_constraint_name is not None:
-            return typ.cast("str", direct_constraint_name)
-        current = getattr(current, "__cause__", None) or getattr(
-            current, "__context__", None
-        )
-
-    current = orig_exc
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        direct_constraint_name = getattr(current, "constraint_name", None)
-        if direct_constraint_name is not None:
-            return typ.cast("str", direct_constraint_name)
-        current = getattr(current, "__cause__", None) or getattr(
-            current, "__context__", None
-        )
-
     diag = getattr(orig_exc, "diag", None)
     return typ.cast("str | None", getattr(diag, "constraint_name", None))
