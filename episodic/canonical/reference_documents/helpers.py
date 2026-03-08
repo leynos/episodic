@@ -78,10 +78,7 @@ def _parse_target_kind(raw_value: str) -> ReferenceBindingTargetKind:
 
 def _validate_pagination(limit: int, offset: int) -> None:
     """Validate list pagination values."""
-    if limit < 1:
-        msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
-        raise ReferenceValidationError(msg)
-    if limit > _MAX_PAGE_LIMIT:
+    if not (1 <= limit <= _MAX_PAGE_LIMIT):
         msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
         raise ReferenceValidationError(msg)
     if offset < 0:
