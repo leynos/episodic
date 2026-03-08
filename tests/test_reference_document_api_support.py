@@ -1,7 +1,5 @@
 """Shared helpers for reference-document API tests."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
@@ -349,16 +347,15 @@ def _assert_binding_list_workflow(
 
 
 def _assert_bad_request_error(
-    response: object,
+    response: testing.Result,
     *,
     description: str | None = None,
 ) -> None:
     """Assert Falcon returned the stable HTTP 400 JSON error envelope."""
-    http_response = typ.cast("testing.Result", response)
-    assert http_response.status_code == 400, (
-        f"expected 400 but got {http_response.status_code} for response={http_response}"
+    assert response.status_code == 400, (
+        f"expected 400 but got {response.status_code} for response={response}"
     )
-    payload = typ.cast("dict[str, object]", http_response.json)
+    payload = typ.cast("dict[str, object]", response.json)
     assert payload["title"] == "400 Bad Request", (
         f"unexpected title in payload: {payload}"
     )
