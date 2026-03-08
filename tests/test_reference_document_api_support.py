@@ -375,9 +375,9 @@ def _binding_list_params(
 ) -> dict[str, str]:
     """Build list-binding query params while preserving a valid target."""
     return {
+        **extra_params,
         "target_kind": "episode_template",
         "target_id": fixture.template_id,
-        **extra_params,
     }
 
 
