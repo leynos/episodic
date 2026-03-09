@@ -96,6 +96,10 @@ async def base_profile(
                 title="Service Profile",
                 description="Initial profile",
                 configuration={"tone": "neutral"},
+                guardrails={
+                    "instruction": "Keep the host voice calm and evidence-led.",
+                    "banned_phrases": ["smash that like button"],
+                },
             ),
             audit=AuditMetadata(
                 actor="author@example.com",
@@ -122,6 +126,10 @@ async def base_profile_with_template(
                 title="Weekly Template",
                 description="Template for weekly episodes",
                 structure={"segments": ["intro", "news", "outro"]},
+                guardrails={
+                    "instruction": "Open with the top story and close with a recap.",
+                    "required_sections": ["intro", "news", "outro"],
+                },
             ),
             audit=AuditMetadata(
                 actor="editor@example.com",
@@ -236,6 +244,7 @@ class TestSeriesProfileService:
                             title="Profile Conflict Updated",
                             description="Changed profile",
                             configuration={"tone": "assertive"},
+                            guardrails={"instruction": "Stay factual."},
                         ),
                         audit=AuditMetadata(
                             actor="editor@example.com",
@@ -260,6 +269,9 @@ class TestSeriesProfileService:
             title="Service Profile Updated",
             description="Updated profile description",
             configuration={"tone": "assertive"},
+            guardrails={
+                "instruction": "Stay precise and cite uncertainty explicitly.",
+            },
         )
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -282,6 +294,9 @@ class TestSeriesProfileService:
         )
         assert updated_profile.configuration == update_payload.configuration, (
             "Expected updated profile configuration."
+        )
+        assert updated_profile.guardrails == update_payload.guardrails, (
+            "Expected updated profile guardrails."
         )
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -325,6 +340,7 @@ class TestEpisodeTemplateService:
                             title="Stale Template Update",
                             description="Should fail",
                             structure={"segments": ["intro", "outro"]},
+                            guardrails={"instruction": "Keep it brief."},
                         ),
                         audit=AuditMetadata(
                             actor="editor@example.com",
@@ -398,8 +414,14 @@ class TestEpisodeTemplateService:
         assert series_profile["id"] == str(profile.id), (
             "Expected profile in structured brief."
         )
+        assert series_profile["guardrails"] == profile.guardrails, (
+            "Expected profile guardrails in structured brief."
+        )
         assert any(item["id"] == str(template.id) for item in templates), (
             "Expected template in structured brief."
+        )
+        assert templates[0]["guardrails"] == template.guardrails, (
+            "Expected template guardrails in structured brief."
         )
         assert "Series slug: service-profile" in rendered_prompt.text, (
             "Expected prompt to include series slug context."
@@ -434,6 +456,7 @@ class TestEpisodeTemplateService:
                     title="Foreign Profile",
                     description="Cross-series owner",
                     configuration={"tone": "direct"},
+                    guardrails={},
                 ),
                 audit=AuditMetadata(
                     actor="author@example.com",

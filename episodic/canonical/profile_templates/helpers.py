@@ -196,6 +196,7 @@ def _profile_payload_fields(profile: SeriesProfile) -> JsonMapping:
         "title": profile.title,
         "description": profile.description,
         "configuration": profile.configuration,
+        "guardrails": profile.guardrails,
     }
 
 
@@ -208,6 +209,7 @@ def _template_payload_fields(template: EpisodeTemplate) -> JsonMapping:
         "title": template.title,
         "description": template.description,
         "structure": template.structure,
+        "guardrails": template.guardrails,
     }
 
 

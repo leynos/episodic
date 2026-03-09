@@ -149,11 +149,15 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Provides change history and optimistic locking so editorial teams can iterate
   safely.
 - Supplies templated prompts and metadata to generation and audio pipelines.
+- Persists explicit `guardrails` on series profiles and episode templates so
+  generation adapters can derive stable system prompts from canonical state.
 
 ### Content Generation Orchestrator
 
 - Coordinates `LLMPort` adapters with retry discipline, token budgeting, and
   guardrails per template.
+- Uses canonical prompt composition to derive both the user prompt scaffold and
+  the system guardrail prompt before invoking provider adapters.
 - Employs LangGraph StateGraphs to manage generation state, enabling iterative
   refinement cycles driven by QA feedback.
 - Implements conditional edges that route content based on Bromide and Chiltern
@@ -365,10 +369,12 @@ adapter implementations.
   used by pricing logic when quotas and overages apply.
 - `CheckpointPort` saves and restores StateGraph checkpoints.
 - `TaskResumePort` accepts Celery callback payloads and resumes suspended runs.
-- `LLMPort` surfaces token usage metadata for cost accounting callbacks.
-  Provider adapters validate vendor payloads at the boundary and normalize
-  responses into provider-agnostic data transfer objects (DTOs) before the
-  orchestration layer consumes them.
+- `LLMPort` surfaces token usage metadata for cost accounting callbacks and
+  accepts provider-neutral request DTOs containing prompt text, optional system
+  guardrails, provider operation shape, and token budgets. Provider adapters
+  validate vendor payloads at the boundary and normalize responses into
+  provider-agnostic data transfer objects (DTOs) before the orchestration layer
+  consumes them.
 
 #### Inference strategy and tool integration
 

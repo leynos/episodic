@@ -191,6 +191,7 @@ async def series_profile_for_ingestion(
         title="Test Series",
         description=None,
         configuration={"tone": "neutral"},
+        guardrails={},
         created_at=now,
         updated_at=now,
     )

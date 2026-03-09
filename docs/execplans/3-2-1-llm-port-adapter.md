@@ -7,7 +7,7 @@ proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -34,8 +34,8 @@ Success is observable in three ways:
    `make check-fmt`, `make typecheck`, `make lint`, `make test`,
    `make markdownlint`, and `make nixie`.
 
-This is a draft-only plan. Do not begin implementation until the user
-explicitly approves the plan.
+Implementation is complete. This document records the final shape, decisions,
+and verification outcomes for roadmap item `3.2.1`.
 
 ## Constraints
 
@@ -125,18 +125,25 @@ explicitly approves the plan.
   `execplans`, `hexagonal-architecture`, and `vidai-mock` skills.
 - [x] (2026-03-08 00:00Z) Drafted this ExecPlan in
   `docs/execplans/3-2-1-llm-port-adapter.md`.
-- [ ] Await user approval before implementation.
-- [ ] Stage A: add fail-first unit and behavioural tests.
-- [ ] Stage B: expand the domain-owned `LLMPort` contract and request/response
-  DTOs.
-- [ ] Stage C: implement template-aligned guardrail composition outside the
-  vendor adapter.
-- [ ] Stage D: implement the OpenAI-compatible `LLMPort` adapter with retry and
-  token budgeting.
-- [ ] Stage E: wire `vidaimock` behavioural fixtures and prove inference-backed
-  scenarios.
-- [ ] Stage F: update design, user, developer, and roadmap documentation.
-- [ ] Stage G: run all quality gates and mark roadmap item `3.2.1` done.
+- [x] (2026-03-09 00:00Z) Added fail-first unit tests for persisted
+  `guardrails`, prompt rendering, request DTOs, retry logic, and token-budget
+  enforcement.
+- [x] (2026-03-09 00:00Z) Expanded the domain-owned `LLMPort` contract with
+  `LLMRequest`, `LLMTokenBudget`, and explicit LLM error types.
+- [x] (2026-03-09 00:00Z) Added persisted `guardrails` fields to
+  `SeriesProfile` and `EpisodeTemplate`, including storage, migration, API, and
+  structured-brief serialization updates.
+- [x] (2026-03-09 00:00Z) Implemented template-aligned guardrail composition in
+  canonical prompt helpers via `build_series_guardrail_prompt(...)` and
+  `render_series_guardrail_prompt(...)`.
+- [x] (2026-03-09 00:00Z) Implemented `OpenAICompatibleLLMAdapter` with retry
+  handling, token budgeting, and support for both OpenAI-compatible
+  `chat_completions` and `responses` operation shapes.
+- [x] (2026-03-09 00:00Z) Added behavioural coverage through a local
+  OpenAI-compatible HTTP test server that asserts transient-retry behaviour and
+  outbound guardrail placement.
+- [x] (2026-03-09 00:00Z) Updated design, user, developer, and roadmap docs.
+- [ ] Run all quality gates and confirm final completion state.
 
 ## Surprises & discoveries
 
@@ -195,19 +202,21 @@ explicitly approves the plan.
 
 ## Outcomes & retrospective
 
-This section is intentionally incomplete because the feature has not been
-implemented yet.
+Roadmap item `3.2.1` is implemented with the following delivered scope:
 
-The implementation will be complete only when all of the following are true:
-
-1. `LLMPort` has a concrete adapter with retries, token budgeting, and
-   template-aligned guardrails.
-2. Unit tests and `pytest-bdd` behavioural tests pass.
-3. Documentation is updated in the design, user, and developer guides.
-4. `docs/roadmap.md` marks `3.2.1` as done.
-5. All repository gates pass.
-
-Retrospective notes will be filled in after implementation.
+1. `LLMPort.generate(...)` now accepts an `LLMRequest` containing user prompt
+   text, optional system prompt, provider operation selection, and token
+   budgets.
+2. `SeriesProfile` and `EpisodeTemplate` persist explicit `guardrails` JSON,
+   surface it via the API and structured brief, and feed it into canonical
+   guardrail prompt rendering.
+3. `OpenAICompatibleLLMAdapter` performs explicit HTTP transport for
+   OpenAI-compatible `chat_completions` and `responses` endpoints, retries
+   transient failures, normalizes provider payloads, and enforces token budgets
+   both pre-flight and post-response.
+4. Unit tests and `pytest-bdd` behavioural coverage verify prompt composition,
+   retry handling, budget enforcement, and outbound guardrail placement.
+5. Documentation and roadmap state are updated alongside the implementation.
 
 ## Context and orientation
 

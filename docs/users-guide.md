@@ -62,6 +62,8 @@ This guide will cover:
 - Rendering deterministic prompt scaffolds from structured briefs for
   downstream Large Language Model (LLM) adapters, including interpolation audit
   metadata and optional escaping policies
+- Persisting `guardrails` on series profiles and episode templates so
+  generation requests carry stable editorial instructions as system prompts
 
 ### Reusable Reference Documents
 
@@ -104,6 +106,9 @@ Reusable reference-document workflows currently support:
 - OpenAI adapter payloads are validated with explicit type guards, and malformed
   responses fail with deterministic validation errors before orchestration
   consumes generated content or usage metadata
+- OpenAI-compatible generation requests now enforce token budgets before and
+  after provider calls, and persisted profile/template `guardrails` shape the
+  outbound system prompt used for generation
 - Setting budget limits per user or organization
 - Monitoring spend and usage dashboards
 - Optimizing costs with model tiering

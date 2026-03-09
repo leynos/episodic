@@ -113,6 +113,7 @@ def _make_profile(slug: str = "series-slug") -> SeriesProfile:
         title="Series",
         description=None,
         configuration={"tone": "neutral"},
+        guardrails={},
         created_at=now,
         updated_at=now,
     )

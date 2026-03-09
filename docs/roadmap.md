@@ -124,7 +124,7 @@ that align with the system design.
 
 ### 3.2. Key activities
 
-- [ ] 3.2.1. Implement the `LLMPort` adapter with retry, token budgeting, and
+- [x] 3.2.1. Implement the `LLMPort` adapter with retry, token budgeting, and
   guardrail prompts aligned to content templates.
 - [ ] 3.2.2. Extend Bromide and Chiltern services to score factuality, tone,
   and style, exposing OpenAPI + SLA4OAI (Service Level Agreements for OpenAPI)

@@ -61,11 +61,14 @@ class SeriesProfileData:
         Optional longer profile description.
     configuration : JsonMapping
         Profile configuration payload consumed by downstream workflows.
+    guardrails : JsonMapping
+        Persisted LLM guardrail configuration applied to generated content.
     """
 
     title: str
     description: str | None
     configuration: JsonMapping
+    guardrails: JsonMapping
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -111,11 +114,14 @@ class EpisodeTemplateUpdateFields:
         Updated template description.
     structure : JsonMapping
         Updated JSON template structure payload.
+    guardrails : JsonMapping
+        Updated LLM guardrail configuration payload.
     """
 
     title: str
     description: str | None
     structure: JsonMapping
+    guardrails: JsonMapping
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -132,12 +138,15 @@ class EpisodeTemplateData:
         Optional longer template description.
     structure : JsonMapping
         JSON structure that defines template segments.
+    guardrails : JsonMapping
+        Persisted LLM guardrail configuration for the template.
     """
 
     slug: str
     title: str
     description: str | None
     structure: JsonMapping
+    guardrails: JsonMapping
 
 
 @dc.dataclass(frozen=True, slots=True)

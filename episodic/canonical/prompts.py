@@ -48,6 +48,17 @@ def _coerce_mapping(
     return typ.cast("JsonMapping", value)
 
 
+def _coerce_optional_mapping(
+    value: object,
+    *,
+    field_name: str,
+) -> JsonMapping:
+    """Require a mapping value, normalizing ``None`` to an empty mapping."""
+    if value is None:
+        return {}
+    return _coerce_mapping(value, field_name=field_name)
+
+
 def _coerce_template_list(value: object) -> list[JsonMapping]:
     """Require a list of JSON-style mappings for template payload entries."""
     if not isinstance(value, list):
@@ -179,6 +190,60 @@ Episode templates JSON: {templates_payload}
 """
 
 
+def build_series_guardrail_template(brief: JsonMapping) -> Template:
+    """Build a deterministic guardrail prompt scaffold from a structured brief."""
+    series_profile = _coerce_mapping(
+        brief.get("series_profile"), field_name="series_profile"
+    )
+    episode_templates = _coerce_template_list(brief.get("episode_templates"))
+
+    series_title = _coerce_string(
+        series_profile.get("title"),
+        field_name="series_profile.title",
+    )
+    series_guardrails = json.dumps(
+        _coerce_mapping(
+            series_profile.get("guardrails"),
+            field_name="series_profile.guardrails",
+        ),
+        sort_keys=True,
+    )
+    template_guardrails = json.dumps(
+        [
+            {
+                "slug": _coerce_string(
+                    template.get("slug"),
+                    field_name="episode_templates[].slug",
+                ),
+                "guardrails": _coerce_optional_mapping(
+                    template.get("guardrails"),
+                    field_name="episode_templates[].guardrails",
+                ),
+            }
+            for template in episode_templates
+        ],
+        sort_keys=True,
+    )
+
+    return t"""You are generating content for the series "{series_title}".
+Apply the following persisted series guardrails JSON exactly: {series_guardrails}
+Apply the persisted episode-template guardrails JSON exactly:
+{template_guardrails}
+"""
+
+
+def render_series_guardrail_prompt(
+    brief: JsonMapping,
+    *,
+    escape_interpolation: typ.Callable[[str], str] | None = None,
+) -> RenderedPrompt:
+    """Render the standard guardrail prompt scaffold for a structured brief."""
+    return render_template(
+        build_series_guardrail_template(brief),
+        escape_interpolation=escape_interpolation,
+    )
+
+
 def render_series_brief_prompt(
     brief: JsonMapping,
     *,
@@ -215,6 +280,8 @@ __all__: list[str] = [
     "PromptInterpolation",
     "RenderedPrompt",
     "build_series_brief_template",
+    "build_series_guardrail_template",
     "render_series_brief_prompt",
+    "render_series_guardrail_prompt",
     "render_template",
 ]

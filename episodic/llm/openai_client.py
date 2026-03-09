@@ -29,6 +29,11 @@ _USAGE_TOKEN_FIELDS: tuple[str, ...] = (
     "completion_tokens",
     "total_tokens",
 )
+_RESPONSES_USAGE_TOKEN_FIELDS: tuple[str, ...] = (
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+)
 
 
 def _is_string_keyed_mapping(value: object) -> bool:
@@ -207,6 +212,26 @@ def _normalize_usage(usage_payload: cabc.Mapping[str, object] | None) -> LLMUsag
     )
 
 
+def _normalize_responses_usage(
+    usage_payload: cabc.Mapping[str, object] | None,
+) -> LLMUsage:
+    """Convert OpenAI Responses usage payload into provider-agnostic metadata."""
+    if usage_payload is None:
+        return LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0)
+
+    if not any(key in usage_payload for key in _RESPONSES_USAGE_TOKEN_FIELDS):
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+
+    input_tokens = _extract_token_count(usage_payload, "input_tokens")
+    output_tokens = _extract_token_count(usage_payload, "output_tokens")
+    total = _compute_total_tokens(usage_payload, input_tokens, output_tokens)
+    return LLMUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total,
+    )
+
+
 def _extract_message_content(payload_mapping: cabc.Mapping[str, object]) -> str:
     """Extract and validate stripped generated text from first choice message."""
     choices = typ.cast("list[object]", payload_mapping["choices"])
@@ -250,4 +275,61 @@ class OpenAIChatCompletionAdapter:
             provider_response_id=typ.cast("str", payload_mapping["id"]),
             finish_reason=finish_reason,
             usage=_normalize_usage(usage_payload),
+        )
+
+
+def _extract_responses_output_text(payload_mapping: cabc.Mapping[str, object]) -> str:
+    """Extract assistant output text from an OpenAI Responses payload."""
+    output = payload_mapping.get("output")
+    if not isinstance(output, list) or not output:
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+
+    first_output = output[0]
+    if not _is_string_keyed_mapping(first_output):
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+    output_mapping = typ.cast("cabc.Mapping[str, object]", first_output)
+
+    content = output_mapping.get("content")
+    if not isinstance(content, list) or not content:
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+
+    for item in content:
+        if not _is_string_keyed_mapping(item):
+            continue
+        item_mapping = typ.cast("cabc.Mapping[str, object]", item)
+        if item_mapping.get("type") != "output_text":
+            continue
+        text = item_mapping.get("text")
+        if _is_non_empty_string(text):
+            return typ.cast("str", text).strip()
+
+    raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
+
+
+class OpenAIResponsesAdapter:
+    """Adapter entrypoint for OpenAI Responses payload normalization."""
+
+    @staticmethod
+    def normalize_response(payload: object) -> LLMResponse:
+        """Validate and normalize a raw OpenAI Responses payload."""
+        if not _is_string_keyed_mapping(payload):
+            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+
+        payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
+        if not _has_valid_identity(payload_mapping):
+            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+
+        usage_value = payload_mapping.get("usage")
+        usage_payload = (
+            typ.cast("cabc.Mapping[str, object]", usage_value)
+            if _is_string_keyed_mapping(usage_value)
+            else None
+        )
+
+        return LLMResponse(
+            text=_extract_responses_output_text(payload_mapping),
+            model=typ.cast("str", payload_mapping["model"]),
+            provider_response_id=typ.cast("str", payload_mapping["id"]),
+            finish_reason=typ.cast("str | None", payload_mapping.get("status")),
+            usage=_normalize_responses_usage(usage_payload),
         )

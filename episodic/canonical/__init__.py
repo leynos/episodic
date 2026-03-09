@@ -63,7 +63,11 @@ from .profile_templates import (
 # isort: split
 # Intentional: avoids import cycle with .profile_templates.
 # Remove when circular dependency is resolved.
-from .briefs import build_series_brief, build_series_brief_prompt
+from .briefs import (
+    build_series_brief,
+    build_series_brief_prompt,
+    build_series_guardrail_prompt,
+)
 from .services import ingest_sources
 
 __all__: list[str] = [
@@ -98,6 +102,7 @@ __all__: list[str] = [
     "WeightingResult",
     "build_series_brief",
     "build_series_brief_prompt",
+    "build_series_guardrail_prompt",
     "create_episode_template",
     "create_series_profile",
     "get_entity_with_revision",

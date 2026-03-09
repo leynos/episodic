@@ -75,6 +75,7 @@ def _series_profile_from_record(record: SeriesProfileRecord) -> SeriesProfile:
         title=record.title,
         description=record.description,
         configuration=record.configuration,
+        guardrails=record.guardrails,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -88,6 +89,7 @@ def _series_profile_to_record(profile: SeriesProfile) -> SeriesProfileRecord:
         title=profile.title,
         description=profile.description,
         configuration=profile.configuration,
+        guardrails=profile.guardrails,
         created_at=profile.created_at,
         updated_at=profile.updated_at,
     )
@@ -260,6 +262,7 @@ def _episode_template_from_record(record: EpisodeTemplateRecord) -> EpisodeTempl
         title=record.title,
         description=record.description,
         structure=record.structure,
+        guardrails=record.guardrails,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -274,6 +277,7 @@ def _episode_template_to_record(template: EpisodeTemplate) -> EpisodeTemplateRec
         title=template.title,
         description=template.description,
         structure=template.structure,
+        guardrails=template.guardrails,
         created_at=template.created_at,
         updated_at=template.updated_at,
     )

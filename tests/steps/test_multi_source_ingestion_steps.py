@@ -132,6 +132,7 @@ def series_profile_exists_for_multi_source(
             title=slug.replace("-", " ").title(),
             description=None,
             configuration={"tone": "informative"},
+            guardrails={},
             created_at=now,
             updated_at=now,
         )

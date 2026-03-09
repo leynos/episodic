@@ -128,6 +128,11 @@ class SeriesProfileRecord(Base):
         default=dict,
         nullable=False,
     )
+    guardrails: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        postgresql.JSONB,
+        default=dict,
+        nullable=False,
+    )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
@@ -498,6 +503,11 @@ class EpisodeTemplateRecord(Base):
     title: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)
     description: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
     structure: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        postgresql.JSONB,
+        default=dict,
+        nullable=False,
+    )
+    guardrails: orm.Mapped[dict[str, object]] = orm.mapped_column(
         postgresql.JSONB,
         default=dict,
         nullable=False,

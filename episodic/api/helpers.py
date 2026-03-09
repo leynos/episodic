@@ -268,6 +268,7 @@ def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:
             "title": ("title", False),
             "description": ("description", True),
             "configuration": ("configuration", False),
+            "guardrails": ("guardrails", True),
         },
     )
 
@@ -283,6 +284,7 @@ def _build_template_fields(
             "title": ("title", False),
             "description": ("description", True),
             "structure": ("structure", False),
+            "guardrails": ("guardrails", True),
         },
     )
 
@@ -334,6 +336,7 @@ def build_profile_create_kwargs(payload: JsonPayload) -> dict[str, object]:
         title=typ.cast("str", title),
         description=typ.cast("str | None", payload.get("description")),
         configuration=typ.cast("dict[str, object]", configuration),
+        guardrails=typ.cast("dict[str, object]", payload.get("guardrails", {})),
     )
     return {
         "data": data,
@@ -371,6 +374,7 @@ def build_template_create_kwargs(payload: JsonPayload) -> dict[str, object]:
         title=typ.cast("str", title),
         description=typ.cast("str | None", payload.get("description")),
         structure=typ.cast("dict[str, object]", structure),
+        guardrails=typ.cast("dict[str, object]", payload.get("guardrails", {})),
     )
     return {
         "series_profile_id": parse_uuid(

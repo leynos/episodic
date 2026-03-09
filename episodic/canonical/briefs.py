@@ -15,7 +15,7 @@ Examples
 import typing as typ
 
 from .profile_templates.brief import build_series_brief
-from .prompts import render_series_brief_prompt
+from .prompts import render_series_brief_prompt, render_series_guardrail_prompt
 
 if typ.TYPE_CHECKING:
     import uuid
@@ -72,4 +72,27 @@ async def build_series_brief_prompt(
     )
 
 
-__all__: list[str] = ["build_series_brief", "build_series_brief_prompt"]
+async def build_series_guardrail_prompt(
+    uow: CanonicalUnitOfWork,
+    *,
+    profile_id: uuid.UUID,
+    template_id: uuid.UUID | None,
+    escape_interpolation: typ.Callable[[str], str] | None = None,
+) -> RenderedPrompt:
+    """Build and render a deterministic guardrail scaffold from series brief data."""
+    brief = await build_series_brief(
+        uow,
+        profile_id=profile_id,
+        template_id=template_id,
+    )
+    return render_series_guardrail_prompt(
+        brief,
+        escape_interpolation=escape_interpolation,
+    )
+
+
+__all__: list[str] = [
+    "build_series_brief",
+    "build_series_brief_prompt",
+    "build_series_guardrail_prompt",
+]
