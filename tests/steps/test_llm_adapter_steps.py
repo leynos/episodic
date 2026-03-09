@@ -95,7 +95,7 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
             }).encode("utf-8")
         )
 
-    def log_message(self, format: str, *args) -> None:  # noqa: A002
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         """Suppress stdlib HTTP server request logging in tests."""
         del format, args
 
