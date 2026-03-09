@@ -1233,6 +1233,51 @@ Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
 - `GET /episode-templates/{template_id}/history` returns append-only revision
   history (`revision`, `actor`, `note`, `snapshot`, `created_at`).
 
+### Reusable reference REST API specification
+
+The reusable reference API (Application Programming Interface) is exposed
+through Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
+`episodic/api/app.py` and `episodic/api/resources/`.
+
+- `POST /series-profiles/{profile_id}/reference-documents` creates one reusable
+  `ReferenceDocument` for the owning series profile.
+- `GET /series-profiles/{profile_id}/reference-documents` lists reusable
+  documents for that series profile. Optional `kind` filter supports
+  `style_guide`, `host_profile`, `guest_profile`, and `research_brief`.
+- `GET /series-profiles/{profile_id}/reference-documents/{document_id}` fetches
+  one reusable reference document when ownership is series-aligned.
+- `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`
+  updates lifecycle state and metadata with optimistic locking; requires
+  `expected_lock_version` and returns `409 Conflict` on stale versions.
+- `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+  creates one immutable `ReferenceDocumentRevision`.
+- `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+  returns immutable change history for one document.
+- `GET /reference-document-revisions/{revision_id}` fetches one immutable
+  revision. Optional query parameter `owner_series_profile_id` enforces
+  series-scoped access for clients that need explicit owner checks.
+- `POST /reference-bindings` creates one `ReferenceBinding` for a target
+  context (`series_profile`, `episode_template`, or `ingestion_job`).
+- `GET /reference-bindings` lists bindings for one target context using
+  required query parameters `target_kind` and `target_id`.
+- `GET /reference-bindings/{binding_id}` fetches one binding by identifier.
+
+Pagination contract for list endpoints:
+
+- Query parameters: `limit` and `offset`.
+- Defaults: `limit=20`, `offset=0`.
+- Bounds: `1 <= limit <= 100` and `offset >= 0`.
+- Response envelope: `{ "items": [...], "limit": <int>, "offset": <int> }`.
+
+Error contract:
+
+- `400 Bad Request` for malformed payloads, invalid UUID/query formats, or
+  invalid pagination bounds.
+- `404 Not Found` for unknown entities and cross-series access paths that fail
+  series-aligned ownership checks.
+- `409 Conflict` for optimistic-lock mismatches and duplicate revision/binding
+  writes that violate persistence constraints.
+
 Integration tests run against an in-process PostgreSQL instance provided by
 py-pglite, with Alembic migrations applied before each test function. The test
 suite validates round-trip persistence for every repository, unit-of-work

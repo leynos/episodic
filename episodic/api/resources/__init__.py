@@ -12,6 +12,11 @@ Utilities provided
 - Episode template resources:
   ``EpisodeTemplatesResource``, ``EpisodeTemplateResource``,
   ``EpisodeTemplateHistoryResource``
+- Reusable reference resources:
+  ``ReferenceDocumentsResource``, ``ReferenceDocumentResource``,
+  ``ReferenceDocumentRevisionsResource``,
+  ``ReferenceDocumentRevisionResource``, ``ReferenceBindingsResource``,
+  ``ReferenceBindingResource``
 
 Examples
 --------
@@ -26,6 +31,13 @@ from .episode_templates import (
     EpisodeTemplateResource,
     EpisodeTemplatesResource,
 )
+from .reference_bindings import ReferenceBindingResource, ReferenceBindingsResource
+from .reference_documents import (
+    ReferenceDocumentResource,
+    ReferenceDocumentRevisionResource,
+    ReferenceDocumentRevisionsResource,
+    ReferenceDocumentsResource,
+)
 from .series_profiles import (
     SeriesProfileBriefResource,
     SeriesProfileHistoryResource,
@@ -37,6 +49,12 @@ __all__ = [
     "EpisodeTemplateHistoryResource",
     "EpisodeTemplateResource",
     "EpisodeTemplatesResource",
+    "ReferenceBindingResource",
+    "ReferenceBindingsResource",
+    "ReferenceDocumentResource",
+    "ReferenceDocumentRevisionResource",
+    "ReferenceDocumentRevisionsResource",
+    "ReferenceDocumentsResource",
     "SeriesProfileBriefResource",
     "SeriesProfileHistoryResource",
     "SeriesProfileResource",

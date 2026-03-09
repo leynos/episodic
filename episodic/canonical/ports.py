@@ -34,6 +34,7 @@ if typ.TYPE_CHECKING:
         ReferenceBinding,
         ReferenceBindingTargetKind,
         ReferenceDocument,
+        ReferenceDocumentKind,
         ReferenceDocumentRevision,
         SeriesProfile,
         SeriesProfileHistoryEntry,
@@ -346,6 +347,10 @@ class ReferenceDocumentRepository(typ.Protocol):
     async def list_for_series(
         self,
         series_profile_id: uuid.UUID,
+        *,
+        kind: ReferenceDocumentKind | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[ReferenceDocument]:
         """List reusable reference documents owned by one series profile."""
         ...
@@ -359,6 +364,15 @@ class ReferenceDocumentRepository(typ.Protocol):
 
     async def update(self, document: ReferenceDocument) -> None:
         """Persist changes to an existing reusable reference document."""
+        ...
+
+    async def update_with_optimistic_lock(
+        self,
+        document: ReferenceDocument,
+        *,
+        expected_lock_version: int,
+    ) -> bool:
+        """Update with optimistic locking and return whether the row matched."""
         ...
 
 
@@ -379,6 +393,9 @@ class ReferenceDocumentRevisionRepository(typ.Protocol):
     async def list_for_document(
         self,
         document_id: uuid.UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[ReferenceDocumentRevision]:
         """List immutable revisions for one reusable reference document."""
         ...
@@ -405,11 +422,17 @@ class ReferenceBindingRepository(typ.Protocol):
         """Persist a reusable reference binding."""
         ...
 
+    async def get(self, binding_id: uuid.UUID) -> ReferenceBinding | None:
+        """Fetch a reusable reference binding by identifier."""
+        ...
+
     async def list_for_target(
         self,
         *,
         target_kind: ReferenceBindingTargetKind,
         target_id: uuid.UUID,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[ReferenceBinding]:
         """List bindings for one target context."""
         ...

@@ -63,6 +63,26 @@ This guide will cover:
   downstream Large Language Model (LLM) adapters, including interpolation audit
   metadata and optional escaping policies
 
+### Reusable Reference Documents
+
+Reusable reference-document workflows currently support:
+
+- Creating and listing reusable documents per series profile at
+  `POST /series-profiles/{profile_id}/reference-documents` and
+  `GET /series-profiles/{profile_id}/reference-documents`.
+- Updating reusable documents with optimistic locking using
+  `expected_lock_version` at
+  `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`.
+  Stale updates return `409 Conflict`.
+- Creating and listing immutable document revisions at
+  `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+   and
+  `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`.
+- Creating, listing, and fetching target bindings at `POST /reference-bindings`,
+  `GET /reference-bindings`, and `GET /reference-bindings/{binding_id}`.
+- Series-aligned access behaviour for host and guest profile documents:
+  cross-series profile paths do not expose documents owned by another series.
+
 ### Quality & Compliance
 
 - Setting up brand guidelines and compliance rules

@@ -329,9 +329,7 @@ this in practice might look like:
 def before_llm_call(user_id, prompt):
     used_today = usage_tracker.get_tokens_used(user_id, period="today")
     if used_today >= DAILY_TOKEN_LIMIT:
-        raise BudgetExceededError(
-            f"Daily budget reached for user {user_id}"
-        )
+        raise BudgetExceededError(f"Daily budget reached for user {user_id}")
 ```
 
 By tying this into the agent’s call chain (either via middleware or at the

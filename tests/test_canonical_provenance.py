@@ -11,6 +11,9 @@ from episodic.canonical.provenance import (
     merge_tei_header_provenance,
 )
 
+if typ.TYPE_CHECKING:
+    from episodic.canonical.domain import JsonMapping
+
 
 def _source(
     source_uri: str,
@@ -143,7 +146,7 @@ def test_build_tei_header_provenance_supports_script_generation_context() -> Non
 
 def test_merge_tei_header_provenance_adds_payload_without_mutating_input() -> None:
     """Merging provenance returns a new payload with extension metadata."""
-    payload = {"fileDesc": {"title": "Bridgewater"}}
+    payload: JsonMapping = {"fileDesc": {"title": "Bridgewater"}}
     provenance = build_tei_header_provenance(
         sources=[],
         captured_at=dt.datetime(2026, 2, 18, 12, 0, tzinfo=dt.UTC),
@@ -163,7 +166,7 @@ def test_merge_tei_header_provenance_adds_payload_without_mutating_input() -> No
 
 def test_merge_tei_header_provenance_preserves_unrelated_existing_keys() -> None:
     """Merging provenance preserves unknown keys from existing payload metadata."""
-    payload = {
+    payload: JsonMapping = {
         "fileDesc": {"title": "Bridgewater"},
         "episodic_provenance": {"legacy_key": "legacy-value"},
     }

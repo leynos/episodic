@@ -10,6 +10,8 @@ from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from episodic.canonical.domain import JsonMapping
+
 _InputT = typ.TypeVar("_InputT")
 _OutputT = typ.TypeVar("_OutputT")
 
@@ -71,7 +73,7 @@ async def test_weighting_strategy_respects_series_configuration(
         freshness=0.0,
         reliability=0.0,
     )
-    config = {
+    config: JsonMapping = {
         "weighting": {
             "quality_coefficient": 1.0,
             "freshness_coefficient": 0.0,

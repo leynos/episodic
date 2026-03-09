@@ -607,13 +607,12 @@ represented as dictionaries.[^24]
   ```python
   event_data = get_event()
   match event_data:
-      case {"type": "click", "position": (x, y)}: # Matches structure and extracts x, y
+      case {"type": "click", "position": (x, y)}:  # Matches structure and extracts x, y
           handle_click(x, y)
-      case {"type": "keypress", "key_name": key}: # Matches structure and extracts key
+      case {"type": "keypress", "key_name": key}:  # Matches structure and extracts key
           handle_keypress(key)
       case _:
           handle_unknown_event()
-
   ```
 
 The pattern matching version is more readable and directly expresses the

@@ -67,12 +67,12 @@ behaviour, and migrated code paths keep functional behaviour unchanged.
   `tests/test_async_task_factory.py`; initial run failed with
   `ModuleNotFoundError: episodic.asyncio_tasks`.
 - [x] (2026-02-26 10:34Z) Stage C: Implemented
-  `episodic/asyncio_tasks.py` and migrated ingestion fan-out to
-  metadata-aware `create_task` calls while preserving `asyncio.gather`
-  result ordering semantics.
+  `episodic/asyncio_tasks.py` and migrated ingestion fan-out to metadata-aware
+  `create_task` calls while preserving `asyncio.gather` result ordering
+  semantics.
 - [x] (2026-02-26 10:46Z) Stage D: Ran gates (`make check-fmt`, `make lint`,
-  `make typecheck`, `make test`, `make markdownlint`, `make nixie`) and
-  updated user/design docs with task metadata guidance.
+  `make typecheck`, `make test`, `make markdownlint`, `make nixie`) and updated
+  user/design docs with task metadata guidance.
 
 ## Surprises & discoveries
 
@@ -100,9 +100,8 @@ behaviour, and migrated code paths keep functional behaviour unchanged.
 
 - Decision: keep the ingestion normalization fan-out on `asyncio.gather`
   semantics while switching coroutine fan-out to explicit task creation.
-  Rationale: preserves existing completion and ordering behaviour while enabling
-  metadata-aware instrumentation.
-  Date/Author: 2026-02-26 / Codex.
+  Rationale: preserves existing completion and ordering behaviour while
+  enabling metadata-aware instrumentation. Date/Author: 2026-02-26 / Codex.
 
 ## Outcomes & retrospective
 
@@ -113,8 +112,8 @@ Delivered artefacts:
 - New utility module `episodic/asyncio_tasks.py` for metadata-aware task
   creation with explicit metadata schema validation.
 - Migrated ingestion normalization fan-out in
-  `episodic/canonical/ingestion_service.py` to explicit task creation with
-  task names and metadata payloads.
+  `episodic/canonical/ingestion_service.py` to explicit task creation with task
+  names and metadata payloads.
 - Added tests in `tests/test_async_task_factory.py` covering
   `asyncio.create_task`, `TaskGroup.create_task`, unsupported metadata keys,
   no-factory fallback, and ingestion-path task metadata emission.
