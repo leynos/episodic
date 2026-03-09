@@ -30,7 +30,7 @@ def _parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
     """Parse one UUID field from a request payload."""
     try:
         return uuid.UUID(raw_value)
-    except (ValueError, TypeError, AttributeError) as exc:
+    except (ValueError, TypeError) as exc:
         msg = f"Invalid UUID for {field_name}: {raw_value!r}."
         raise ReferenceValidationError(msg) from exc
 
