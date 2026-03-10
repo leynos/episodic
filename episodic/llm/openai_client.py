@@ -278,21 +278,31 @@ class OpenAIChatCompletionAdapter:
         )
 
 
-def _extract_responses_output_text(payload_mapping: cabc.Mapping[str, object]) -> str:
-    """Extract assistant output text from an OpenAI Responses payload."""
+def _extract_first_output_mapping(
+    payload_mapping: cabc.Mapping[str, object],
+) -> cabc.Mapping[str, object]:
+    """Validate and return the first output item from a Responses payload."""
     output = payload_mapping.get("output")
     if not isinstance(output, list) or not output:
         raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
-
     first_output = output[0]
     if not _is_string_keyed_mapping(first_output):
         raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
-    output_mapping = typ.cast("cabc.Mapping[str, object]", first_output)
+    return typ.cast("cabc.Mapping[str, object]", first_output)
 
+
+def _extract_output_content_list(
+    output_mapping: cabc.Mapping[str, object],
+) -> list[object]:
+    """Validate and return the content list from an output item mapping."""
     content = output_mapping.get("content")
     if not isinstance(content, list) or not content:
         raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+    return typ.cast("list[object]", content)
 
+
+def _find_output_text_in_content(content: list[object]) -> str:
+    """Return the stripped text of the first output_text item in content."""
     for item in content:
         if not _is_string_keyed_mapping(item):
             continue
@@ -302,8 +312,14 @@ def _extract_responses_output_text(payload_mapping: cabc.Mapping[str, object]) -
         text = item_mapping.get("text")
         if _is_non_empty_string(text):
             return typ.cast("str", text).strip()
-
     raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
+
+
+def _extract_responses_output_text(payload_mapping: cabc.Mapping[str, object]) -> str:
+    """Extract assistant output text from an OpenAI Responses payload."""
+    output_mapping = _extract_first_output_mapping(payload_mapping)
+    content = _extract_output_content_list(output_mapping)
+    return _find_output_text_in_content(content)
 
 
 class OpenAIResponsesAdapter:

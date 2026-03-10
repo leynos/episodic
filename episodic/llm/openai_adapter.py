@@ -146,6 +146,31 @@ def _normalize_payload(
         raise LLMProviderResponseError(msg) from exc
 
 
+def _check_http_status(response: httpx.Response) -> None:
+    """Raise appropriate errors for non-2xx HTTP responses."""
+    if response.status_code in _RETRYABLE_STATUS_CODES:
+        msg = f"Transient provider HTTP status {response.status_code}."
+        raise LLMTransientProviderError(msg)
+    if response.status_code >= _HTTP_BAD_REQUEST_THRESHOLD:
+        msg = (
+            f"Provider returned a non-retryable error response: {response.status_code}."
+        )
+        raise LLMProviderResponseError(msg)
+
+
+def _decode_json_response(response: httpx.Response) -> dict[str, object]:
+    """Decode and validate the JSON body of a provider response."""
+    try:
+        payload = response.json()
+    except json.JSONDecodeError as exc:
+        msg = "Provider returned malformed JSON."
+        raise LLMProviderResponseError(msg) from exc
+    if not isinstance(payload, dict):
+        msg = "Provider returned a non-object JSON payload."
+        raise LLMProviderResponseError(msg)
+    return typ.cast("dict[str, object]", payload)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class OpenAICompatibleLLMConfig:
     """Configuration for the OpenAI-compatible HTTP adapter."""
@@ -235,26 +260,8 @@ class OpenAICompatibleLLMAdapter(LLMPort):
                 },
                 timeout=self._timeout_seconds,
             )
-
-        if response.status_code in _RETRYABLE_STATUS_CODES:
-            msg = f"Transient provider HTTP status {response.status_code}."
-            raise LLMTransientProviderError(msg)
-        if response.status_code >= _HTTP_BAD_REQUEST_THRESHOLD:
-            msg = (
-                "Provider returned a non-retryable error response: "
-                f"{response.status_code}."
-            )
-            raise LLMProviderResponseError(msg)
-
-        try:
-            payload = response.json()
-        except json.JSONDecodeError as exc:
-            msg = "Provider returned malformed JSON."
-            raise LLMProviderResponseError(msg) from exc
-        if not isinstance(payload, dict):
-            msg = "Provider returned a non-object JSON payload."
-            raise LLMProviderResponseError(msg)
-        return typ.cast("dict[str, object]", payload)
+        _check_http_status(response)
+        return _decode_json_response(response)
 
     def _client_context(self) -> _BorrowedClientContext | _OwnedClientContext:
         """Return a usable client context for one request."""
