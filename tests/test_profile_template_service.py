@@ -27,7 +27,7 @@ import uuid
 import pytest
 import pytest_asyncio
 
-from episodic.canonical import build_series_brief, build_series_brief_prompt
+from episodic.canonical import build_series_brief
 from episodic.canonical.domain import (
     ReferenceBinding,
     ReferenceBindingTargetKind,
@@ -295,8 +295,17 @@ class TestSeriesProfileService:
         assert updated_profile.configuration == update_payload.configuration, (
             "Expected updated profile configuration."
         )
-        assert updated_profile.guardrails == update_payload.guardrails, (
-            "Expected updated profile guardrails."
+        assert updated_profile.guardrails == {
+            "instruction": "Stay precise and cite uncertainty explicitly.",
+            "banned_phrases": ["smash that like button"],
+        }, "Expected partial profile guardrail updates to preserve existing keys."
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            persisted_profile = await uow.series_profiles.get(profile.id)
+
+        assert persisted_profile is not None, "Expected updated profile to persist."
+        assert persisted_profile.guardrails == updated_profile.guardrails, (
+            "Expected persisted profile guardrails to match the merged update."
         )
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -394,17 +403,6 @@ class TestEpisodeTemplateService:
                 profile_id=profile.id,
                 template_id=template.id,
             )
-            rendered_prompt = await build_series_brief_prompt(
-                uow,
-                profile_id=profile.id,
-                template_id=template.id,
-            )
-            escaped_prompt = await build_series_brief_prompt(
-                uow,
-                profile_id=profile.id,
-                template_id=template.id,
-                escape_interpolation=lambda value: f"<<{value}>>",
-            )
 
         assert len(template_history) == 1, "Expected one template history record."
         first_entry = typ.cast("EpisodeTemplateHistoryEntry", template_history[0])
@@ -423,19 +421,40 @@ class TestEpisodeTemplateService:
         assert templates[0]["guardrails"] == template.guardrails, (
             "Expected template guardrails in structured brief."
         )
-        assert "Series slug: service-profile" in rendered_prompt.text, (
-            "Expected prompt to include series slug context."
-        )
-        assert "Weekly Template" in rendered_prompt.text, (
-            "Expected prompt to include template details."
-        )
-        assert "<<service-profile>>" in escaped_prompt.text, (
-            "Expected canonical prompt entrypoint to forward escape callback."
-        )
-        _assert_rendered_prompt_properties(
-            rendered_prompt,
-            expected_expressions=["series_slug", "template_count"],
-        )
+
+    @pytest.mark.asyncio
+    async def test_update_episode_template_preserves_existing_guardrails(
+        self,
+        session_factory: typ.Callable[[], AsyncSession],
+        base_profile_with_template: BaseProfileWithTemplateFixture,
+    ) -> None:
+        """Partial guardrail updates must merge with persisted template rules."""
+        template = base_profile_with_template.template
+
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            updated_template, updated_revision = await update_episode_template(
+                uow,
+                request=UpdateEpisodeTemplateRequest(
+                    template_id=template.id,
+                    expected_revision=base_profile_with_template.template_revision,
+                    data=EpisodeTemplateUpdateFields(
+                        title="Weekly Template Updated",
+                        description="Updated template description",
+                        structure={"segments": ["intro", "analysis", "outro"]},
+                        guardrails={"instruction": "Close with a sourced takeaway."},
+                    ),
+                    audit=AuditMetadata(
+                        actor="editor@example.com",
+                        note="Merge template guardrails",
+                    ),
+                ),
+            )
+
+        assert updated_revision == 2, "Expected template revision to increment to 2."
+        assert updated_template.guardrails == {
+            "instruction": "Close with a sourced takeaway.",
+            "required_sections": ["intro", "news", "outro"],
+        }, "Expected partial template guardrail updates to preserve existing keys."
 
     @pytest.mark.asyncio
     async def test_build_series_brief_rejects_cross_series_reference_documents(

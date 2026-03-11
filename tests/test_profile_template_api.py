@@ -261,12 +261,16 @@ def _verify_structured_brief(
     assert brief_response.json["series_profile"]["guardrails"]["instruction"] == (
         "Lead with verified facts."
     ), "Expected brief to include updated profile guardrails."
+    assert brief_response.json["series_profile"]["guardrails"]["banned_phrases"] == [
+        "viral sensation"
+    ], "Expected profile PATCH to preserve existing guardrail keys."
     assert brief_response.json["episode_templates"][0]["id"] == template_id, (
         "Expected structured brief to include template."
     )
     assert brief_response.json["episode_templates"][0]["guardrails"] == {
-        "instruction": "Close with open questions."
-    }, "Expected brief to include updated template guardrails."
+        "instruction": "Close with open questions.",
+        "required_sections": ["intro", "main", "outro"],
+    }, "Expected template PATCH to preserve existing guardrail keys."
     assert brief_response.json["reference_documents"] == [], (
         "Expected brief to expose reusable reference_documents list."
     )

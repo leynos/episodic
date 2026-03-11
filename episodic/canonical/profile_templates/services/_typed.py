@@ -145,7 +145,10 @@ async def update_series_profile(
             title=request.data.title,
             description=request.data.description,
             configuration=request.data.configuration,
-            guardrails=request.data.guardrails,
+            guardrails={
+                **entity.guardrails,
+                **request.data.guardrails,
+            },
             updated_at=now,
         ),
         create_snapshot=_profile_snapshot,
@@ -259,7 +262,10 @@ async def update_episode_template(
             title=request.data.title,
             description=request.data.description,
             structure=request.data.structure,
-            guardrails=request.data.guardrails,
+            guardrails={
+                **entity.guardrails,
+                **request.data.guardrails,
+            },
             updated_at=now,
         ),
         create_snapshot=_template_snapshot,
