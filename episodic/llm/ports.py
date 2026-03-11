@@ -1,4 +1,4 @@
-"""Port contracts for large language model interactions.
+"""Port contracts for Large Language Model (LLM) interactions.
 
 This module defines provider-agnostic data transfer objects and the outbound
 LLM protocol used by orchestration code.
@@ -25,6 +25,18 @@ class LLMTokenBudget:
     max_input_tokens: int
     max_output_tokens: int
     max_total_tokens: int | None = None
+
+    def __post_init__(self) -> None:
+        """Reject negative token budgets at construction time."""
+        if self.max_input_tokens < 0:
+            msg = "max_input_tokens must be non-negative."
+            raise ValueError(msg)
+        if self.max_output_tokens < 0:
+            msg = "max_output_tokens must be non-negative."
+            raise ValueError(msg)
+        if self.max_total_tokens is not None and self.max_total_tokens < 0:
+            msg = "max_total_tokens must be non-negative."
+            raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)

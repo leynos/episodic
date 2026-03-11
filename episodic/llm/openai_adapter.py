@@ -45,7 +45,11 @@ def _coerce_operation(value: LLMProviderOperation | str) -> LLMProviderOperation
     """Normalize a provider operation enum value."""
     if isinstance(value, LLMProviderOperation):
         return value
-    return LLMProviderOperation(value)
+    try:
+        return LLMProviderOperation(value)
+    except ValueError as exc:
+        msg = f"Unsupported provider operation: {value!r}."
+        raise LLMProviderResponseError(msg) from exc
 
 
 def _validate_preflight_budget(
@@ -95,6 +99,39 @@ def _validate_usage_budget(response: LLMResponse, token_budget: LLMTokenBudget) 
             f"{response.usage.total_tokens} > {token_budget.max_total_tokens}."
         )
         raise LLMTokenBudgetExceededError(msg)
+
+
+def _has_non_negative_int_mapping_value(
+    payload: dict[str, object],
+    field_name: str,
+) -> bool:
+    """Check whether a mapping field contains a non-negative integer."""
+    value = payload.get(field_name)
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _require_concrete_usage_counts(
+    payload: dict[str, object],
+    operation: LLMProviderOperation,
+) -> None:
+    """Require concrete input/output usage counts for budget enforcement."""
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        msg = "Provider response omitted concrete usage counts required for budgets."
+        raise LLMProviderResponseError(msg)
+    usage_mapping = typ.cast("dict[str, object]", usage)
+
+    required_fields = (
+        ("prompt_tokens", "completion_tokens")
+        if operation is LLMProviderOperation.CHAT_COMPLETIONS
+        else ("input_tokens", "output_tokens")
+    )
+    if not all(
+        _has_non_negative_int_mapping_value(usage_mapping, field)
+        for field in required_fields
+    ):
+        msg = "Provider response usage must include concrete input/output token counts."
+        raise LLMProviderResponseError(msg)
 
 
 def _path_for_operation(operation: LLMProviderOperation) -> str:
@@ -184,6 +221,18 @@ class OpenAICompatibleLLMConfig:
     retry_delay_seconds: float = 0.5
     timeout_seconds: float = 30.0
 
+    def __post_init__(self) -> None:
+        """Validate adapter configuration eagerly."""
+        if self.max_attempts <= 0:
+            msg = "max_attempts must be greater than zero."
+            raise ValueError(msg)
+        if self.retry_delay_seconds < 0:
+            msg = "retry_delay_seconds must be non-negative."
+            raise ValueError(msg)
+        if self.timeout_seconds <= 0:
+            msg = "timeout_seconds must be greater than zero."
+            raise ValueError(msg)
+
 
 class OpenAICompatibleLLMAdapter(LLMPort):
     """Call an OpenAI-compatible HTTP endpoint using chat or responses shapes."""
@@ -197,10 +246,30 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         self._base_url = config.base_url.rstrip("/")
         self._api_key = config.api_key
         self._provider_operation = _coerce_operation(config.provider_operation)
-        self._client = client
+        self._client = client if client is not None else httpx.AsyncClient()
+        self._owns_client = client is None
         self._max_attempts = config.max_attempts
         self._retry_delay_seconds = config.retry_delay_seconds
         self._timeout_seconds = config.timeout_seconds
+
+    async def __aenter__(self) -> OpenAICompatibleLLMAdapter:
+        """Return the adapter for use as an async context manager."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Close owned HTTP resources when leaving the adapter context."""
+        del exc_type, exc, traceback
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        """Close the adapter-owned HTTP client when present."""
+        if self._owns_client:
+            await self._client.aclose()
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """Generate text from an OpenAI-compatible provider."""
@@ -217,6 +286,8 @@ class OpenAICompatibleLLMAdapter(LLMPort):
             path=_path_for_operation(operation),
             payload=_build_payload(request, operation),
         )
+        if token_budget is not None:
+            _require_concrete_usage_counts(response_payload, operation)
         response = _normalize_payload(response_payload, operation)
 
         if token_budget is not None:
@@ -250,66 +321,14 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         payload: dict[str, object],
     ) -> dict[str, object]:
         """Send one provider request and return the decoded JSON payload."""
-        async with self._client_context() as client:
-            response = await client.post(
-                f"{self._base_url}{path}",
-                json=payload,
-                headers={
-                    "authorization": f"Bearer {self._api_key}",
-                    "content-type": "application/json",
-                },
-                timeout=self._timeout_seconds,
-            )
+        response = await self._client.post(
+            f"{self._base_url}{path}",
+            json=payload,
+            headers={
+                "authorization": f"Bearer {self._api_key}",
+                "content-type": "application/json",
+            },
+            timeout=self._timeout_seconds,
+        )
         _check_http_status(response)
         return _decode_json_response(response)
-
-    def _client_context(self) -> _BorrowedClientContext | _OwnedClientContext:
-        """Return a usable client context for one request."""
-        if self._client is not None:
-            return _BorrowedClientContext(self._client)
-        return _OwnedClientContext(
-            httpx.AsyncClient(
-                headers={"authorization": f"Bearer {self._api_key}"},
-            )
-        )
-
-
-class _BorrowedClientContext:
-    """Async context wrapper for injected HTTPX clients."""
-
-    def __init__(self, client: httpx.AsyncClient) -> None:
-        self._client = client
-
-    async def __aenter__(self) -> httpx.AsyncClient:
-        """Return the wrapped async client without taking ownership."""
-        return self._client
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Keep injected clients open after request completion."""
-        del exc_type, exc, traceback
-
-
-class _OwnedClientContext:
-    """Async context wrapper for adapter-owned HTTPX clients."""
-
-    def __init__(self, client: httpx.AsyncClient) -> None:
-        self._client = client
-
-    async def __aenter__(self) -> httpx.AsyncClient:
-        """Return the wrapped async client."""
-        return self._client
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Close the wrapped client after one request."""
-        del exc_type, exc, traceback
-        await self._client.aclose()

@@ -70,6 +70,28 @@ def _coerce_template_list(value: object) -> list[JsonMapping]:
     return typ.cast("list[JsonMapping]", value)
 
 
+def _select_template_guardrail_entries(
+    episode_templates: list[JsonMapping],
+    *,
+    active_template_id: str | None,
+) -> list[JsonMapping]:
+    """Return the template entries whose guardrails should be rendered."""
+    if active_template_id is None:
+        return episode_templates
+
+    selected_templates = [
+        template
+        for template in episode_templates
+        if _coerce_string(template.get("id"), field_name="episode_templates[].id")
+        == active_template_id
+    ]
+    if selected_templates:
+        return selected_templates
+
+    msg = f"episode_templates must include active template id {active_template_id!r}."
+    raise TypeError(msg)
+
+
 def _coerce_string(
     value: object,
     *,
@@ -190,12 +212,19 @@ Episode templates JSON: {templates_payload}
 """
 
 
-def build_series_guardrail_template(brief: JsonMapping) -> Template:
+def build_series_guardrail_template(
+    brief: JsonMapping,
+    *,
+    active_template_id: str | None = None,
+) -> Template:
     """Build a deterministic guardrail prompt scaffold from a structured brief."""
     series_profile = _coerce_mapping(
         brief.get("series_profile"), field_name="series_profile"
     )
-    episode_templates = _coerce_template_list(brief.get("episode_templates"))
+    episode_templates = _select_template_guardrail_entries(
+        _coerce_template_list(brief.get("episode_templates")),
+        active_template_id=active_template_id,
+    )
 
     series_title = _coerce_string(
         series_profile.get("title"),
@@ -235,11 +264,15 @@ Apply the persisted episode-template guardrails JSON exactly:
 def render_series_guardrail_prompt(
     brief: JsonMapping,
     *,
+    active_template_id: str | None = None,
     escape_interpolation: typ.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
     """Render the standard guardrail prompt scaffold for a structured brief."""
     return render_template(
-        build_series_guardrail_template(brief),
+        build_series_guardrail_template(
+            brief,
+            active_template_id=active_template_id,
+        ),
         escape_interpolation=escape_interpolation,
     )
 

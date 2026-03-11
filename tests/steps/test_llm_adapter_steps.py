@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses as dc
 import json
-import socket
 import threading
 import typing as typ
 from http import HTTPStatus
@@ -95,7 +94,9 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
             }).encode("utf-8")
         )
 
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+    # Required stdlib override signature for keyword-compatible dispatch
+    # (ref: PR49-log-message-override).
+    def log_message(self, format: str, *args: typ.Any) -> None:  # noqa: A002, ANN401
         """Suppress stdlib HTTP server request logging in tests."""
         del format, args
 
@@ -112,13 +113,6 @@ class _MockLLMServer(ThreadingHTTPServer):
     ) -> None:
         super().__init__(server_address, handler_class)
         self.state = state
-
-
-def _pick_unused_port() -> int:
-    """Return an available localhost TCP port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return typ.cast("int", sock.getsockname()[1])
 
 
 def _run_async_step(
@@ -152,9 +146,8 @@ def test_llm_adapter_behaviour() -> None:
 @given("an OpenAI-compatible mock LLM server is running")
 def mock_llm_server(context: LLMAdapterContext) -> None:
     """Start a localhost HTTP server with one transient failure."""
-    port = _pick_unused_port()
     server = _MockLLMServer(
-        ("127.0.0.1", port),
+        ("127.0.0.1", 0),
         _MockLLMHandler,
         state=context.server_state,
     )
@@ -163,6 +156,7 @@ def mock_llm_server(context: LLMAdapterContext) -> None:
 
     context.server = server
     context.server_thread = server_thread
+    port = server.server_address[1]
     context.base_url = f"http://127.0.0.1:{port}/v1"
 
 
@@ -243,9 +237,18 @@ def assert_generated_text(context: LLMAdapterContext) -> None:
 
 @then("the outbound request includes the persisted guardrail prompt")
 def assert_guardrail_prompt(context: LLMAdapterContext) -> None:
-    """Assert the outbound system message includes persisted guardrails."""
+    """Assert outbound system guardrails, user content, and token budgeting."""
     latest_request = context.server_state.requests[-1]
     messages = typ.cast("list[dict[str, str]]", latest_request["messages"])
+
     assert messages[0]["role"] == "system"
     assert "Avoid hype and keep claims attributable." in messages[0]["content"]
     assert "End with a recap." in messages[0]["content"]
+    assert len(messages) >= 2
+    assert messages[1]["role"] == "user"
+    assert (
+        messages[1]["content"]
+        == typ.cast("RenderedPrompt", context.rendered_prompt).text
+    )
+    assert "Series slug: signal-weekly" in messages[1]["content"]
+    assert latest_request["max_tokens"] == 200

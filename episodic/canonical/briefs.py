@@ -79,7 +79,37 @@ async def build_series_guardrail_prompt(
     template_id: uuid.UUID | None,
     escape_interpolation: typ.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
-    """Build and render a deterministic guardrail scaffold from series brief data."""
+    """Build and render a deterministic guardrail scaffold from series brief data.
+
+    Parameters
+    ----------
+    uow : CanonicalUnitOfWork
+        Unit-of-work instance used to load profile and template state.
+    profile_id : uuid.UUID
+        Identifier of the series profile that owns the rendered guardrails.
+    template_id : uuid.UUID | None
+        Optional episode-template identifier used to narrow rendered template
+        guardrails to one active template.
+    escape_interpolation : typing.Callable[[str], str] | None
+        Optional callback applied to each rendered interpolation string before
+        prompt assembly.
+
+    Returns
+    -------
+    RenderedPrompt
+        Rendered prompt text and interpolation metadata derived from the
+        structured brief payload.
+
+    Raises
+    ------
+    EntityNotFoundError
+        Raised when the requested series profile or template cannot be found.
+    ValueError
+        Raised when brief construction fails due to invalid canonical state.
+    TypeError
+        Raised when structured brief payload values fail prompt-rendering
+        coercion checks.
+    """
     brief = await build_series_brief(
         uow,
         profile_id=profile_id,
@@ -87,6 +117,7 @@ async def build_series_guardrail_prompt(
     )
     return render_series_guardrail_prompt(
         brief,
+        active_template_id=None if template_id is None else str(template_id),
         escape_interpolation=escape_interpolation,
     )
 

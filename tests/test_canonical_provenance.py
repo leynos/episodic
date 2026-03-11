@@ -14,9 +14,6 @@ from episodic.canonical.provenance import (
     merge_tei_header_provenance,
 )
 
-if typ.TYPE_CHECKING:
-    from episodic.canonical.domain import JsonMapping
-
 
 def _source(
     source_uri: str,

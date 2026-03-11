@@ -232,6 +232,15 @@ def _normalize_responses_usage(
     )
 
 
+def _has_output_text_in_content(content: list[object]) -> bool:
+    """Check whether content contains a non-empty ``output_text`` item."""
+    try:
+        _find_output_text_in_content(content)
+    except OpenAIResponseValidationError:
+        return False
+    return True
+
+
 def _extract_message_content(payload_mapping: cabc.Mapping[str, object]) -> str:
     """Extract and validate stripped generated text from first choice message."""
     choices = typ.cast("list[object]", payload_mapping["choices"])
@@ -281,14 +290,21 @@ class OpenAIChatCompletionAdapter:
 def _extract_first_output_mapping(
     payload_mapping: cabc.Mapping[str, object],
 ) -> cabc.Mapping[str, object]:
-    """Validate and return the first output item from a Responses payload."""
+    """Validate and return the first output item containing output text."""
     output = payload_mapping.get("output")
     if not isinstance(output, list) or not output:
         raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
-    first_output = output[0]
-    if not _is_string_keyed_mapping(first_output):
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
-    return typ.cast("cabc.Mapping[str, object]", first_output)
+    for item in output:
+        if not _is_string_keyed_mapping(item):
+            continue
+        item_mapping = typ.cast("cabc.Mapping[str, object]", item)
+        content = item_mapping.get("content")
+        if not isinstance(content, list) or not content:
+            continue
+        content_items = typ.cast("list[object]", content)
+        if _has_output_text_in_content(content_items):
+            return item_mapping
+    raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
 
 
 def _extract_output_content_list(
@@ -336,11 +352,12 @@ class OpenAIResponsesAdapter:
             raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
 
         usage_value = payload_mapping.get("usage")
-        usage_payload = (
-            typ.cast("cabc.Mapping[str, object]", usage_value)
-            if _is_string_keyed_mapping(usage_value)
-            else None
-        )
+        if usage_value is None:
+            usage_payload = None
+        elif _is_string_keyed_mapping(usage_value):
+            usage_payload = typ.cast("cabc.Mapping[str, object]", usage_value)
+        else:
+            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
 
         return LLMResponse(
             text=_extract_responses_output_text(payload_mapping),

@@ -892,12 +892,13 @@ Agentic workflow behaviour is configurable per series profile:
 
 ## Data Model and Storage
 
-- `series_profiles` captures show metadata, tone attributes, default voices, and
-  sponsor obligations.
+- `series_profiles` captures show metadata, tone attributes, default voices,
+  sponsor obligations, and persisted `guardrails` JSON used for generation
+  system prompts.
 - `tei_headers` stores parsed TEI header payloads, including provenance and
   human-readable titles.
-- `episode_templates` stores segment layouts, prompt scaffolds, and music bed
-  preferences linked to series profiles.
+- `episode_templates` stores segment layouts, prompt scaffolds, music bed
+  preferences, and persisted `guardrails` JSON linked to series profiles.
 - `reference_documents` stores reusable source materials independently of
   ingestion jobs, including document kind (for example, style guide,
   host_profile, and guest_profile) and ownership scope.
@@ -999,6 +1000,7 @@ erDiagram
         string title
         text description
         jsonb configuration
+        jsonb guardrails
         timestamptz created_at
         timestamptz updated_at
     }
@@ -1010,6 +1012,7 @@ erDiagram
         string title
         text description
         jsonb structure
+        jsonb guardrails
         timestamptz created_at
         timestamptz updated_at
     }

@@ -1,4 +1,4 @@
-# Implement the `LLMPort` adapter with retries, token budgeting, and template guardrails
+# Implement the Large Language Model (LLM) `LLMPort` adapter with retries, token budgeting, and template guardrails
 
 This ExecPlan (execution plan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
@@ -143,7 +143,9 @@ and verification outcomes for roadmap item `3.2.1`.
   OpenAI-compatible HTTP test server that asserts transient-retry behaviour and
   outbound guardrail placement.
 - [x] (2026-03-09 00:00Z) Updated design, user, developer, and roadmap docs.
-- [ ] Run all quality gates and confirm final completion state.
+- [x] (2026-03-09 00:00Z) Ran all quality gates and confirmed final completion
+  state: `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+  `make markdownlint`, `make nixie`, and `make check-migrations`.
 
 ## Surprises & discoveries
 
@@ -179,10 +181,11 @@ and verification outcomes for roadmap item `3.2.1`.
 
 ## Decision log
 
-- Decision: keep this plan in draft status and require explicit approval before
-  implementation. Rationale: the `execplans` skill requires a draft/approval
-  gate, and this change may introduce a new runtime dependency plus a richer
-  port contract. Date/Author: 2026-03-08 / Codex.
+- Decision: keep this plan in draft status until the implementation approach
+  and runtime dependency choice were approved, then mark it complete only after
+  all gates passed. Rationale: the `execplans` skill requires a draft/approval
+  gate, and this change introduced a new runtime dependency plus a richer port
+  contract. Date/Author: 2026-03-08 / Codex.
 
 - Decision: treat guardrail composition as a domain/application concern and
   transport delivery as an adapter concern. Rationale: this follows the
@@ -217,6 +220,16 @@ Roadmap item `3.2.1` is implemented with the following delivered scope:
 4. Unit tests and `pytest-bdd` behavioural coverage verify prompt composition,
    retry handling, budget enforcement, and outbound guardrail placement.
 5. Documentation and roadmap state are updated alongside the implementation.
+
+Final validation evidence:
+
+- `make check-fmt` passed.
+- `make typecheck` passed.
+- `make lint` passed.
+- `make test` passed.
+- `make markdownlint` passed.
+- `make nixie` passed.
+- `make check-migrations` passed.
 
 ## Context and orientation
 
@@ -503,16 +516,13 @@ implementation should stay close to this shape:
 - `docs/developers-guide.md`
 - `docs/roadmap.md`
 
-## Open questions for approval
+## Approval resolution
 
-These questions should be resolved before coding if the user wants to narrow
-the implementation further:
+The implementation questions raised during planning were resolved during
+delivery:
 
-1. Is one OpenAI-compatible runtime dependency acceptable if needed for a clean
-   async adapter?
-2. Is the intended guardrail scope limited to prompt composition from existing
-   series-profile and episode-template fields, or should the implementation
-   also include a new persisted guardrail configuration surface?
-3. Should the first adapter target only OpenAI-compatible chat completions, or
-   must the initial contract already abstract over multiple providers even if
-   only one adapter ships now?
+1. One OpenAI-compatible runtime dependency was accepted.
+2. Guardrail scope included a new persisted configuration surface on series
+   profiles and episode templates.
+3. The initial contract shipped with both OpenAI-compatible chat-completions
+   and Responses support behind the same provider-neutral request DTO.
