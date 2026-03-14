@@ -83,7 +83,7 @@ async def create_series_profile(
         title=data.title,
         description=data.description,
         configuration=data.configuration,
-        guardrails=data.guardrails,
+        guardrails=dict(data.guardrails),
         created_at=now,
         updated_at=now,
     )
@@ -200,7 +200,7 @@ async def create_episode_template(
         title=data.title,
         description=data.description,
         structure=data.structure,
-        guardrails=data.guardrails,
+        guardrails=dict(data.guardrails),
         created_at=now,
         updated_at=now,
     )

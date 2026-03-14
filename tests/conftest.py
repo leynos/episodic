@@ -11,11 +11,14 @@ Run database-backed tests with py-pglite:
 """
 
 import asyncio
+import collections.abc as cabc
 import contextlib
+import json
 import os
 import typing as typ
 import uuid
 
+import httpx
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
@@ -23,6 +26,13 @@ import sqlalchemy.exc as sa_exc
 
 from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
+from episodic.llm import (
+    LLMProviderOperation,
+    LLMRequest,
+    LLMTokenBudget,
+    OpenAICompatibleLLMAdapter,
+    OpenAICompatibleLLMConfig,
+)
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -39,6 +49,19 @@ try:
     _PGLITE_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     _PGLITE_AVAILABLE = False
+
+_OPENAI_TEST_BASE_URL = "https://example.test/v1"
+_OPENAI_TEST_API_KEY = "test-key"
+
+type _OpenAIRequestBuilder = cabc.Callable[..., LLMRequest]
+type _OpenAIJsonResponseBuilder = cabc.Callable[..., httpx.Response]
+type _OpenAIInvalidConfigBuilder = cabc.Callable[
+    [dict[str, object]], OpenAICompatibleLLMConfig
+]
+type _OpenAIAdapterFactory = cabc.Callable[
+    ...,
+    contextlib.AbstractAsyncContextManager[OpenAICompatibleLLMAdapter],
+]
 
 
 def _should_use_pglite() -> bool:
@@ -136,6 +159,113 @@ def _function_scoped_runner() -> typ.Iterator[asyncio.Runner]:
     """Provide a function-scoped asyncio.Runner for sync BDD steps."""
     with asyncio.Runner() as runner:
         yield runner
+
+
+@pytest.fixture
+def openai_request_builder() -> _OpenAIRequestBuilder:
+    """Build representative OpenAI-adapter requests for unit tests."""
+
+    def _build_request(
+        *,
+        operation: str | LLMProviderOperation = "chat_completions",
+        prompt: str = "Draft the episode opener.",
+    ) -> LLMRequest:
+        return LLMRequest(
+            model="gpt-4o-mini",
+            prompt=prompt,
+            system_prompt="Keep the output factual and concise.",
+            provider_operation=operation,
+            token_budget=LLMTokenBudget(
+                max_input_tokens=400,
+                max_output_tokens=200,
+                max_total_tokens=500,
+            ),
+        )
+
+    return _build_request
+
+
+@pytest.fixture
+def openai_json_response() -> _OpenAIJsonResponseBuilder:
+    """Build JSON HTTPX responses for OpenAI-adapter tests."""
+
+    def _json_response(
+        payload: dict[str, object],
+        status_code: int = 200,
+    ) -> httpx.Response:
+        return httpx.Response(
+            status_code=status_code,
+            headers={"content-type": "application/json"},
+            content=json.dumps(payload).encode("utf-8"),
+        )
+
+    return _json_response
+
+
+@pytest.fixture
+def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
+    """Build invalid OpenAI adapter configs for parametrized tests."""
+
+    def _build_invalid_config(
+        config_kwargs: dict[str, object],
+    ) -> OpenAICompatibleLLMConfig:
+        if "max_attempts" in config_kwargs:
+            return OpenAICompatibleLLMConfig(
+                base_url=_OPENAI_TEST_BASE_URL,
+                api_key=_OPENAI_TEST_API_KEY,
+                max_attempts=typ.cast("int", config_kwargs["max_attempts"]),
+            )
+        if "retry_delay_seconds" in config_kwargs:
+            return OpenAICompatibleLLMConfig(
+                base_url=_OPENAI_TEST_BASE_URL,
+                api_key=_OPENAI_TEST_API_KEY,
+                retry_delay_seconds=typ.cast(
+                    "float", config_kwargs["retry_delay_seconds"]
+                ),
+            )
+        return OpenAICompatibleLLMConfig(
+            base_url=typ.cast(
+                "str", config_kwargs.get("base_url", _OPENAI_TEST_BASE_URL)
+            ),
+            api_key=typ.cast("str", config_kwargs.get("api_key", _OPENAI_TEST_API_KEY)),
+            timeout_seconds=typ.cast(
+                "float", config_kwargs.get("timeout_seconds", 30.0)
+            ),
+        )
+
+    return _build_invalid_config
+
+
+@pytest.fixture
+def openai_adapter_factory() -> _OpenAIAdapterFactory:
+    """Build async context managers yielding configured OpenAI adapters."""
+
+    @contextlib.asynccontextmanager
+    async def _build_adapter(  # noqa: PLR0913
+        *,
+        transport: httpx.AsyncBaseTransport,
+        provider_operation: str | LLMProviderOperation = "chat_completions",
+        max_attempts: int = 3,
+        retry_delay_seconds: float = 0.5,
+        timeout_seconds: float = 30.0,
+    ) -> typ.AsyncIterator[OpenAICompatibleLLMAdapter]:
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url=_OPENAI_TEST_BASE_URL,
+        ) as client:
+            yield OpenAICompatibleLLMAdapter(
+                config=OpenAICompatibleLLMConfig(
+                    base_url=_OPENAI_TEST_BASE_URL,
+                    api_key=_OPENAI_TEST_API_KEY,
+                    provider_operation=provider_operation,
+                    max_attempts=max_attempts,
+                    retry_delay_seconds=retry_delay_seconds,
+                    timeout_seconds=timeout_seconds,
+                ),
+                client=client,
+            )
+
+    return _build_adapter
 
 
 @pytest_asyncio.fixture

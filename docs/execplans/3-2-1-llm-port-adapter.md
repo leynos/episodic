@@ -86,7 +86,7 @@ and verification outcomes for roadmap item `3.2.1`.
 - Ambiguity: stop and escalate if "guardrail prompts aligned to content
   templates" turns out to require unresolved product decisions about template
   taxonomy, approval rules, or model-specific prompt semantics.
-- Iterations: stop and escalate after 3 unsuccessful attempts to stabilise the
+- Iterations: stop and escalate after 3 unsuccessful attempts to stabilize the
   same failing test cluster.
 
 ## Risks

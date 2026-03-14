@@ -20,6 +20,10 @@ _INVALID_CHAT_COMPLETION_MESSAGE = (
     "Invalid OpenAI chat completion payload. Expected non-empty string id/model, "
     "a non-empty choices list, and choices with message.content strings."
 )
+_INVALID_RESPONSES_PAYLOAD_MESSAGE = (
+    "Invalid OpenAI Responses payload. Expected non-empty string id/model, "
+    "a non-empty output list, and output items with content text strings."
+)
 _EMPTY_CONTENT_MESSAGE = (
     "Invalid OpenAI chat completion payload. choices[0].message.content must be "
     "a non-empty string."
@@ -293,7 +297,7 @@ def _extract_first_output_mapping(
     """Validate and return the first output item containing output text."""
     output = payload_mapping.get("output")
     if not isinstance(output, list) or not output:
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+        raise OpenAIResponseValidationError(_INVALID_RESPONSES_PAYLOAD_MESSAGE)
     for item in output:
         if not _is_string_keyed_mapping(item):
             continue
@@ -313,7 +317,7 @@ def _extract_output_content_list(
     """Validate and return the content list from an output item mapping."""
     content = output_mapping.get("content")
     if not isinstance(content, list) or not content:
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+        raise OpenAIResponseValidationError(_INVALID_RESPONSES_PAYLOAD_MESSAGE)
     return typ.cast("list[object]", content)
 
 
@@ -345,11 +349,11 @@ class OpenAIResponsesAdapter:
     def normalize_response(payload: object) -> LLMResponse:
         """Validate and normalize a raw OpenAI Responses payload."""
         if not _is_string_keyed_mapping(payload):
-            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+            raise OpenAIResponseValidationError(_INVALID_RESPONSES_PAYLOAD_MESSAGE)
 
         payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
         if not _has_valid_identity(payload_mapping):
-            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+            raise OpenAIResponseValidationError(_INVALID_RESPONSES_PAYLOAD_MESSAGE)
 
         usage_value = payload_mapping.get("usage")
         if usage_value is None:
@@ -357,7 +361,7 @@ class OpenAIResponsesAdapter:
         elif _is_string_keyed_mapping(usage_value):
             usage_payload = typ.cast("cabc.Mapping[str, object]", usage_value)
         else:
-            raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+            raise OpenAIResponseValidationError(_INVALID_RESPONSES_PAYLOAD_MESSAGE)
 
         return LLMResponse(
             text=_extract_responses_output_text(payload_mapping),

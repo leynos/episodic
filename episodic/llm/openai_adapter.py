@@ -141,6 +141,9 @@ def _path_for_operation(operation: LLMProviderOperation) -> str:
             return "/chat/completions"
         case LLMProviderOperation.RESPONSES:
             return "/responses"
+        case _:
+            msg = f"Unsupported provider operation: {operation!r}."
+            raise LLMProviderResponseError(msg)
 
 
 def _build_payload(
@@ -231,6 +234,12 @@ class OpenAICompatibleLLMConfig:
             raise ValueError(msg)
         if self.timeout_seconds <= 0:
             msg = "timeout_seconds must be greater than zero."
+            raise ValueError(msg)
+        if self.base_url.strip() == "":
+            msg = "base_url must be a non-empty string."
+            raise ValueError(msg)
+        if self.api_key.strip() == "":
+            msg = "api_key must be a non-empty string."
             raise ValueError(msg)
 
 

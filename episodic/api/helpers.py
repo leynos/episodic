@@ -270,7 +270,7 @@ def _optional_json_object_field(
     if not isinstance(value, dict):
         msg = f"{field_name} must be a JSON object."
         raise falcon.HTTPBadRequest(description=msg)
-    return typ.cast("dict[str, object]", value)
+    return typ.cast("dict[str, object]", value.copy())
 
 
 def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:

@@ -236,6 +236,6 @@ def test_responses_adapter_rejects_non_mapping_usage_when_present() -> None:
 
     with pytest.raises(
         OpenAIResponseValidationError,
-        match=r"Invalid OpenAI chat completion payload\.",
+        match=r"Invalid OpenAI Responses payload\.",
     ):
         OpenAIResponsesAdapter.normalize_response(payload)

@@ -94,8 +94,7 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
             }).encode("utf-8")
         )
 
-    # Required stdlib override signature for keyword-compatible dispatch
-    # (ref: PR49-log-message-override).
+    # Required stdlib override signature for keyword-compatible dispatch.
     def log_message(self, format: str, *args: typ.Any) -> None:  # noqa: A002, ANN401
         """Suppress stdlib HTTP server request logging in tests."""
         del format, args
@@ -203,26 +202,28 @@ def adapter_generates(
     """Generate text through the adapter over real HTTP."""
 
     async def _generate() -> None:
-        adapter = OpenAICompatibleLLMAdapter(
+        async with OpenAICompatibleLLMAdapter(
             config=OpenAICompatibleLLMConfig(
                 base_url=context.base_url,
                 api_key="test-key",
                 max_attempts=2,
                 retry_delay_seconds=0,
             ),
-        )
-        response = await adapter.generate(
-            LLMRequest(
-                model="gpt-4o-mini",
-                prompt=typ.cast("RenderedPrompt", context.rendered_prompt).text,
-                system_prompt=typ.cast("RenderedPrompt", context.guardrail_prompt).text,
-                token_budget=LLMTokenBudget(
-                    max_input_tokens=500,
-                    max_output_tokens=200,
-                    max_total_tokens=700,
+        ) as adapter:
+            response = await adapter.generate(
+                LLMRequest(
+                    model="gpt-4o-mini",
+                    prompt=typ.cast("RenderedPrompt", context.rendered_prompt).text,
+                    system_prompt=typ.cast(
+                        "RenderedPrompt", context.guardrail_prompt
+                    ).text,
+                    token_budget=LLMTokenBudget(
+                        max_input_tokens=500,
+                        max_output_tokens=200,
+                        max_total_tokens=700,
+                    ),
                 ),
             )
-        )
         context.generated_text = response.text
 
     _run_async_step(_function_scoped_runner, _generate)
@@ -231,8 +232,12 @@ def adapter_generates(
 @then("the adapter retries once and returns the generated text")
 def assert_generated_text(context: LLMAdapterContext) -> None:
     """Assert retry behaviour and final generated content."""
-    assert context.server_state.call_count == 2
-    assert context.generated_text == "BDD generated episode draft."
+    assert context.server_state.call_count == 2, (
+        "adapter should retry once before succeeding"
+    )
+    assert context.generated_text == "BDD generated episode draft.", (
+        "adapter should return the generated draft text from the mock server"
+    )
 
 
 @then("the outbound request includes the persisted guardrail prompt")
@@ -241,14 +246,28 @@ def assert_guardrail_prompt(context: LLMAdapterContext) -> None:
     latest_request = context.server_state.requests[-1]
     messages = typ.cast("list[dict[str, str]]", latest_request["messages"])
 
-    assert messages[0]["role"] == "system"
-    assert "Avoid hype and keep claims attributable." in messages[0]["content"]
-    assert "End with a recap." in messages[0]["content"]
-    assert len(messages) >= 2
-    assert messages[1]["role"] == "user"
+    assert messages[0]["role"] == "system", (
+        "first outbound message should be the system guardrail prompt"
+    )
+    assert "Avoid hype and keep claims attributable." in messages[0]["content"], (
+        "system guardrail prompt should include persisted profile guardrails"
+    )
+    assert "End with a recap." in messages[0]["content"], (
+        "system guardrail prompt should include persisted template guardrails"
+    )
+    assert len(messages) >= 2, (
+        "outbound request should include both system and user messages"
+    )
+    assert messages[1]["role"] == "user", (
+        "second outbound message should be the rendered user prompt"
+    )
     assert (
         messages[1]["content"]
         == typ.cast("RenderedPrompt", context.rendered_prompt).text
+    ), "user message content should equal the rendered prompt text"
+    assert "Series slug: signal-weekly" in messages[1]["content"], (
+        "rendered user prompt should include the expected series slug"
     )
-    assert "Series slug: signal-weekly" in messages[1]["content"]
-    assert latest_request["max_tokens"] == 200
+    assert latest_request["max_tokens"] == 200, (
+        "request should cap output tokens at the configured budget"
+    )

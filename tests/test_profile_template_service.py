@@ -418,7 +418,10 @@ class TestEpisodeTemplateService:
         assert any(item["id"] == str(template.id) for item in templates), (
             "Expected template in structured brief."
         )
-        assert templates[0]["guardrails"] == template.guardrails, (
+        matched_template = next(
+            item for item in templates if item["id"] == str(template.id)
+        )
+        assert matched_template["guardrails"] == template.guardrails, (
             "Expected template guardrails in structured brief."
         )
 

@@ -1,7 +1,5 @@
 """Unit tests for canonical storage mapper copy boundaries."""
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 import uuid
@@ -42,7 +40,9 @@ def test_series_profile_mappers_deep_copy_guardrails() -> None:
 
     profile = _series_profile_from_record(record)
     profile_guardrails = profile.guardrails
-    profile_guardrails["banned_phrases"] = ["updated"]
+    banned_phrases = typ.cast("list[str]", profile_guardrails["banned_phrases"])
+    banned_phrases.clear()
+    banned_phrases.extend(["updated"])
 
     assert record.guardrails["banned_phrases"] == ["viral sensation"], (
         "Expected record-to-domain mapping to deep copy guardrails."
@@ -64,7 +64,9 @@ def test_series_profile_mappers_deep_copy_guardrails() -> None:
     )
 
     mapped_record = _series_profile_to_record(domain)
-    domain.guardrails["banned_phrases"] = ["mutated"]
+    mapped_banned_phrases = typ.cast("list[str]", domain.guardrails["banned_phrases"])
+    mapped_banned_phrases.clear()
+    mapped_banned_phrases.extend(["mutated"])
 
     assert mapped_record.guardrails["banned_phrases"] == ["citation needed"], (
         "Expected domain-to-record mapping to deep copy guardrails."
@@ -92,7 +94,9 @@ def test_episode_template_mappers_deep_copy_guardrails() -> None:
 
     template = _episode_template_from_record(record)
     template_guardrails = template.guardrails
-    template_guardrails["required_sections"] = ["intro"]
+    required_sections = typ.cast("list[str]", template_guardrails["required_sections"])
+    required_sections.clear()
+    required_sections.extend(["intro"])
 
     assert record.guardrails["required_sections"] == ["intro", "main", "outro"], (
         "Expected record-to-domain mapping to deep copy template guardrails."
@@ -115,7 +119,11 @@ def test_episode_template_mappers_deep_copy_guardrails() -> None:
     )
 
     mapped_record = _episode_template_to_record(domain)
-    domain.guardrails["required_sections"] = ["analysis"]
+    mapped_required_sections = typ.cast(
+        "list[str]", domain.guardrails["required_sections"]
+    )
+    mapped_required_sections.clear()
+    mapped_required_sections.extend(["analysis"])
 
     assert mapped_record.guardrails["required_sections"] == [
         "intro",
