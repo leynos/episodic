@@ -204,27 +204,32 @@ def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
     def _build_invalid_config(
         config_kwargs: dict[str, object],
     ) -> OpenAICompatibleLLMConfig:
-        if "max_attempts" in config_kwargs:
-            return OpenAICompatibleLLMConfig(
-                base_url=_OPENAI_TEST_BASE_URL,
-                api_key=_OPENAI_TEST_API_KEY,
-                max_attempts=typ.cast("int", config_kwargs["max_attempts"]),
+        allowed_keys = {
+            "api_key",
+            "base_url",
+            "max_attempts",
+            "retry_delay_seconds",
+            "timeout_seconds",
+        }
+        unexpected_keys = set(config_kwargs) - allowed_keys
+        if unexpected_keys:
+            msg = (
+                f"Unsupported OpenAI config override keys: {sorted(unexpected_keys)!r}"
             )
-        if "retry_delay_seconds" in config_kwargs:
-            return OpenAICompatibleLLMConfig(
-                base_url=_OPENAI_TEST_BASE_URL,
-                api_key=_OPENAI_TEST_API_KEY,
-                retry_delay_seconds=typ.cast(
-                    "float", config_kwargs["retry_delay_seconds"]
-                ),
-            )
+            raise ValueError(msg)
+        merged_config = {
+            "base_url": _OPENAI_TEST_BASE_URL,
+            "api_key": _OPENAI_TEST_API_KEY,
+            "timeout_seconds": 30.0,
+            **config_kwargs,
+        }
         return OpenAICompatibleLLMConfig(
-            base_url=typ.cast(
-                "str", config_kwargs.get("base_url", _OPENAI_TEST_BASE_URL)
-            ),
-            api_key=typ.cast("str", config_kwargs.get("api_key", _OPENAI_TEST_API_KEY)),
-            timeout_seconds=typ.cast(
-                "float", config_kwargs.get("timeout_seconds", 30.0)
+            base_url=typ.cast("str", merged_config["base_url"]),
+            api_key=typ.cast("str", merged_config["api_key"]),
+            timeout_seconds=typ.cast("float", merged_config["timeout_seconds"]),
+            max_attempts=typ.cast("int", merged_config.get("max_attempts", 3)),
+            retry_delay_seconds=typ.cast(
+                "float", merged_config.get("retry_delay_seconds", 0.5)
             ),
         )
 

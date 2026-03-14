@@ -381,7 +381,9 @@ class OpenAIResponsesAdapter:
             text=_extract_responses_output_text(payload_mapping),
             model=typ.cast("str", payload_mapping["model"]),
             provider_response_id=typ.cast("str", payload_mapping["id"]),
-            finish_reason=typ.cast("str | None", payload_mapping.get("status")),
+            finish_reason=typ.cast("str", payload_mapping["status"])
+            if isinstance(payload_mapping.get("status"), str)
+            else None,
             usage=_normalize_responses_usage(
                 _coerce_responses_usage_payload(payload_mapping)
             ),

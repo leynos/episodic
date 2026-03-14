@@ -85,6 +85,9 @@ def mapper_copy_boundary(
             record_expected=["viral sensation"],
             domain_expected=["citation needed"],
         )
+    if case_name != "episode_template":
+        msg = f"Unsupported mapper copy-boundary case: {case_name!r}"
+        raise ValueError(msg)
 
     record_guardrails = {
         "instruction": "Open with a headline.",

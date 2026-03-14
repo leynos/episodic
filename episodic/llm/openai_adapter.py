@@ -1,7 +1,5 @@
 """Concrete OpenAI-compatible async LLM adapter."""
 
-from __future__ import annotations
-
 import asyncio
 import dataclasses as dc
 import json
@@ -222,28 +220,21 @@ def _decode_json_response(response: httpx.Response) -> dict[str, object]:
     return typ.cast("dict[str, object]", payload)
 
 
-def _validate_llm_config(  # noqa: PLR0913
-    *,
-    max_attempts: int,
-    retry_delay_seconds: float,
-    timeout_seconds: float,
-    base_url: str,
-    api_key: str,
-) -> None:
+def _validate_llm_config(config: OpenAICompatibleLLMConfig) -> None:
     """Validate OpenAICompatibleLLMConfig field values."""
-    if max_attempts <= 0:
+    if config.max_attempts <= 0:
         msg = "max_attempts must be greater than zero."
         raise ValueError(msg)
-    if retry_delay_seconds < 0:
+    if config.retry_delay_seconds < 0:
         msg = "retry_delay_seconds must be non-negative."
         raise ValueError(msg)
-    if timeout_seconds <= 0:
+    if config.timeout_seconds <= 0:
         msg = "timeout_seconds must be greater than zero."
         raise ValueError(msg)
-    if not base_url.strip():
+    if not config.base_url.strip():
         msg = "base_url must be non-empty."
         raise ValueError(msg)
-    if not api_key.strip():
+    if not config.api_key.strip():
         msg = "api_key must be non-empty."
         raise ValueError(msg)
 
@@ -263,13 +254,7 @@ class OpenAICompatibleLLMConfig:
 
     def __post_init__(self) -> None:
         """Validate adapter configuration eagerly."""
-        _validate_llm_config(
-            max_attempts=self.max_attempts,
-            retry_delay_seconds=self.retry_delay_seconds,
-            timeout_seconds=self.timeout_seconds,
-            base_url=self.base_url,
-            api_key=self.api_key,
-        )
+        _validate_llm_config(self)
 
 
 class OpenAICompatibleLLMAdapter(LLMPort):
