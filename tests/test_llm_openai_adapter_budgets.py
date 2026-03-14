@@ -15,6 +15,21 @@ from episodic.llm import (
 )
 
 
+def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
+    """Build a representative budgeted LLMRequest for budget tests."""
+    return LLMRequest(
+        model="gpt-4o-mini",
+        prompt="Draft the episode opener.",
+        system_prompt="Keep the output factual and concise.",
+        provider_operation=operation,
+        token_budget=LLMTokenBudget(
+            max_input_tokens=400,
+            max_output_tokens=200,
+            max_total_tokens=500,
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_generate_rejects_prompt_that_exceeds_input_budget(
     openai_adapter_factory: typ.Any,
@@ -121,21 +136,16 @@ async def test_generate_rejects_budgeted_responses_without_concrete_usage_counts
     response_payload: dict[str, object],
     openai_adapter_factory: typ.Any,
     openai_json_response: typ.Any,
-    openai_request_builder: typ.Any,
 ) -> None:
     """Budget enforcement requires concrete input/output usage counts."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        del request
-        return openai_json_response(response_payload)
-
-    transport = httpx.MockTransport(handler)
     async with openai_adapter_factory(
-        transport=transport,
+        transport=httpx.MockTransport(
+            lambda _r: openai_json_response(response_payload)
+        ),
         provider_operation=operation,
     ) as adapter:
         with pytest.raises(
             LLMProviderResponseError,
             match="usage",
         ):
-            await adapter.generate(openai_request_builder(operation=operation))
+            await adapter.generate(_build_budget_request(operation=operation))

@@ -43,9 +43,8 @@ async def test_generate_retries_transient_failure_then_succeeds(
             },
         })
 
-    transport = httpx.MockTransport(handler)
     async with openai_adapter_factory(
-        transport=transport,
+        transport=httpx.MockTransport(handler),
         max_attempts=2,
         retry_delay_seconds=0,
     ) as adapter:
@@ -74,8 +73,9 @@ async def test_generate_rejects_non_retryable_http_status(
             status_code,
         )
 
-    transport = httpx.MockTransport(handler)
-    async with openai_adapter_factory(transport=transport) as adapter:
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler)
+    ) as adapter:
         with pytest.raises(LLMProviderResponseError, match="non-retryable"):
             await adapter.generate(openai_request_builder())
 
@@ -100,9 +100,8 @@ async def test_generate_retries_retryable_http_5xx_then_fails(
             status_code,
         )
 
-    transport = httpx.MockTransport(handler)
     async with openai_adapter_factory(
-        transport=transport,
+        transport=httpx.MockTransport(handler),
         max_attempts=2,
         retry_delay_seconds=0,
     ) as adapter:
@@ -137,9 +136,8 @@ async def test_generate_retries_transport_failures_then_succeeds(
             },
         })
 
-    transport = httpx.MockTransport(handler)
     async with openai_adapter_factory(
-        transport=transport,
+        transport=httpx.MockTransport(handler),
         max_attempts=2,
         retry_delay_seconds=0,
     ) as adapter:
@@ -164,9 +162,8 @@ async def test_generate_raises_after_exhausting_transport_retries(
         attempts += 1
         raise httpx.ConnectError(_OFFLINE_MESSAGE, request=request)
 
-    transport = httpx.MockTransport(handler)
     async with openai_adapter_factory(
-        transport=transport,
+        transport=httpx.MockTransport(handler),
         max_attempts=2,
         retry_delay_seconds=0,
     ) as adapter:
@@ -191,8 +188,9 @@ async def test_generate_rejects_malformed_json_response(
             content=b"not-json",
         )
 
-    transport = httpx.MockTransport(handler)
-    async with openai_adapter_factory(transport=transport) as adapter:
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler)
+    ) as adapter:
         with pytest.raises(LLMProviderResponseError, match="malformed JSON"):
             await adapter.generate(openai_request_builder())
 
@@ -214,7 +212,8 @@ async def test_generate_rejects_non_object_json_response(
             content=json.dumps(payload).encode("utf-8"),
         )
 
-    transport = httpx.MockTransport(handler)
-    async with openai_adapter_factory(transport=transport) as adapter:
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler)
+    ) as adapter:
         with pytest.raises(LLMProviderResponseError, match="non-object JSON"):
             await adapter.generate(openai_request_builder())

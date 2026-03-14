@@ -211,6 +211,32 @@ def _decode_json_response(response: httpx.Response) -> dict[str, object]:
     return typ.cast("dict[str, object]", payload)
 
 
+def _validate_llm_config(  # noqa: PLR0913
+    *,
+    max_attempts: int,
+    retry_delay_seconds: float,
+    timeout_seconds: float,
+    base_url: str,
+    api_key: str,
+) -> None:
+    """Validate OpenAICompatibleLLMConfig field values."""
+    if max_attempts <= 0:
+        msg = "max_attempts must be greater than zero."
+        raise ValueError(msg)
+    if retry_delay_seconds < 0:
+        msg = "retry_delay_seconds must be non-negative."
+        raise ValueError(msg)
+    if timeout_seconds <= 0:
+        msg = "timeout_seconds must be greater than zero."
+        raise ValueError(msg)
+    if not base_url.strip():
+        msg = "base_url must be non-empty."
+        raise ValueError(msg)
+    if not api_key.strip():
+        msg = "api_key must be non-empty."
+        raise ValueError(msg)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class OpenAICompatibleLLMConfig:
     """Configuration for the OpenAI-compatible HTTP adapter."""
@@ -226,21 +252,13 @@ class OpenAICompatibleLLMConfig:
 
     def __post_init__(self) -> None:
         """Validate adapter configuration eagerly."""
-        if self.max_attempts <= 0:
-            msg = "max_attempts must be greater than zero."
-            raise ValueError(msg)
-        if self.retry_delay_seconds < 0:
-            msg = "retry_delay_seconds must be non-negative."
-            raise ValueError(msg)
-        if self.timeout_seconds <= 0:
-            msg = "timeout_seconds must be greater than zero."
-            raise ValueError(msg)
-        if not self.base_url.strip():
-            msg = "base_url must be non-empty."
-            raise ValueError(msg)
-        if not self.api_key.strip():
-            msg = "api_key must be non-empty."
-            raise ValueError(msg)
+        _validate_llm_config(
+            max_attempts=self.max_attempts,
+            retry_delay_seconds=self.retry_delay_seconds,
+            timeout_seconds=self.timeout_seconds,
+            base_url=self.base_url,
+            api_key=self.api_key,
+        )
 
 
 class OpenAICompatibleLLMAdapter(LLMPort):
