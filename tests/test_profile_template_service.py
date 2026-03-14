@@ -419,8 +419,10 @@ class TestEpisodeTemplateService:
             "Expected template in structured brief."
         )
         matched_template = next(
-            item for item in templates if item["id"] == str(template.id)
+            (item for item in templates if item["id"] == str(template.id)),
+            None,
         )
+        assert matched_template is not None, "Expected template in structured brief."
         assert matched_template["guardrails"] == template.guardrails, (
             "Expected template guardrails in structured brief."
         )

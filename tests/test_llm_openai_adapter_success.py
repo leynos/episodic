@@ -1,25 +1,32 @@
 """Unit tests for successful OpenAI-compatible adapter requests."""
 
-# ruff: noqa: ANN401
-
 import json
 import typing as typ
 
 import httpx
 import pytest
 
+if typ.TYPE_CHECKING:
+    from openai_test_types import (
+        _OpenAIAdapterFactory,
+        _OpenAIJsonResponseBuilder,
+        _OpenAIRequestBuilder,
+    )
+
 
 @pytest.mark.asyncio
 async def test_generate_chat_completion_success(
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Send chat-completions payloads and normalize the provider response."""
+    attempts = 0
     captured_request: httpx.Request | None = None
 
     def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal captured_request
+        nonlocal attempts, captured_request
+        attempts += 1
         captured_request = request
         return openai_json_response({
             "id": "chatcmpl-123",
@@ -41,6 +48,7 @@ async def test_generate_chat_completion_success(
     async with openai_adapter_factory(transport=transport) as adapter:
         response = await adapter.generate(openai_request_builder())
 
+    assert attempts == 1, "chat-completions success path should make one request"
     assert response.text == "Draft intro copy.", (
         "response.text should equal the normalized chat-completion content"
     )
@@ -65,14 +73,17 @@ async def test_generate_chat_completion_success(
 
 @pytest.mark.asyncio
 async def test_generate_responses_success(
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Support OpenAI Responses API payload normalization."""
+    attempts = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
         del request
+        attempts += 1
         return openai_json_response({
             "id": "resp_123",
             "model": "gpt-4.1-mini",
@@ -101,6 +112,7 @@ async def test_generate_responses_success(
     ) as adapter:
         response = await adapter.generate(openai_request_builder(operation="responses"))
 
+    assert attempts == 1, "Responses success path should make one request"
     assert response.text == "Structured response output.", (
         "response.text should equal the normalized Responses output text"
     )

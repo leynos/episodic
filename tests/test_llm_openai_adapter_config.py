@@ -1,12 +1,13 @@
 """Unit tests for OpenAI adapter configuration invariants."""
 
-# ruff: noqa: ANN401
-
 import typing as typ
 
 import pytest
 
 from episodic.llm import LLMTokenBudget
+
+if typ.TYPE_CHECKING:
+    from openai_test_types import _OpenAIInvalidConfigBuilder
 
 
 @pytest.mark.parametrize(
@@ -24,7 +25,7 @@ from episodic.llm import LLMTokenBudget
 def test_openai_adapter_config_rejects_invalid_values(
     config_kwargs: dict[str, object],
     match: str,
-    openai_invalid_config_builder: typ.Any,
+    openai_invalid_config_builder: _OpenAIInvalidConfigBuilder,
 ) -> None:
     """Configuration invariants should fail eagerly at construction time."""
     with pytest.raises(ValueError, match=match):

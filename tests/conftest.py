@@ -11,7 +11,6 @@ Run database-backed tests with py-pglite:
 """
 
 import asyncio
-import collections.abc as cabc
 import contextlib
 import json
 import os
@@ -42,6 +41,12 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import SeriesProfile
     from episodic.canonical.ingestion_service import IngestionPipeline
+    from openai_test_types import (
+        _OpenAIAdapterFactory,
+        _OpenAIInvalidConfigBuilder,
+        _OpenAIJsonResponseBuilder,
+        _OpenAIRequestBuilder,
+    )
 
 try:
     from py_pglite import PGliteConfig, PGliteManager
@@ -52,16 +57,6 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 _OPENAI_TEST_BASE_URL = "https://example.test/v1"
 _OPENAI_TEST_API_KEY = "test-key"
-
-type _OpenAIRequestBuilder = cabc.Callable[..., LLMRequest]
-type _OpenAIJsonResponseBuilder = cabc.Callable[..., httpx.Response]
-type _OpenAIInvalidConfigBuilder = cabc.Callable[
-    [dict[str, object]], OpenAICompatibleLLMConfig
-]
-type _OpenAIAdapterFactory = cabc.Callable[
-    ...,
-    contextlib.AbstractAsyncContextManager[OpenAICompatibleLLMAdapter],
-]
 
 
 def _should_use_pglite() -> bool:
@@ -241,7 +236,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
     """Build async context managers yielding configured OpenAI adapters."""
 
     @contextlib.asynccontextmanager
-    async def _build_adapter(  # noqa: PLR0913
+    async def _build_adapter(  # noqa: PLR0913  # TODO(@codex): mirrors config overrides across tests; see https://github.com/leynos/episodic/pull/49
         *,
         transport: httpx.AsyncBaseTransport,
         provider_operation: str | LLMProviderOperation = "chat_completions",

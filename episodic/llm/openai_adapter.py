@@ -34,7 +34,15 @@ _HTTP_BAD_REQUEST_THRESHOLD = 400
 
 
 def _estimate_token_count(*parts: str | None) -> int:
-    """Estimate token count conservatively from prompt text length."""
+    """Estimate prompt tokens using a conservative ~4 chars/token heuristic.
+
+    This heuristic approximates OpenAI/tiktoken GPT-4-era tokenization by
+    returning ``ceil(len(text) / 4)`` for the combined non-``None`` prompt
+    parts. Actual token counts vary by text shape, language, and vocabulary,
+    so this remains a heuristic-only implementation. If other tokenizers need
+    support later, this function is the extension point for injecting a
+    tokenizer or configurable chars-per-token ratio.
+    """
     combined = "".join(part for part in parts if part is not None)
     if combined == "":
         return 0
@@ -181,6 +189,9 @@ def _normalize_payload(
                 return OpenAIChatCompletionAdapter.normalize_chat_completion(payload)
             case LLMProviderOperation.RESPONSES:
                 return OpenAIResponsesAdapter.normalize_response(payload)
+            case _:
+                msg = f"Unsupported provider operation: {operation!r}."
+                raise LLMProviderResponseError(msg)
     except OpenAIResponseValidationError as exc:
         msg = "Provider returned an invalid OpenAI-compatible response payload."
         raise LLMProviderResponseError(msg) from exc

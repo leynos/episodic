@@ -224,7 +224,7 @@ def _normalize_responses_usage(
         return LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0)
 
     if not any(key in usage_payload for key in _RESPONSES_USAGE_TOKEN_FIELDS):
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+        raise OpenAIResponseValidationError(_INVALID_RESPONSES_PAYLOAD_MESSAGE)
 
     input_tokens = _extract_token_count(usage_payload, "input_tokens")
     output_tokens = _extract_token_count(usage_payload, "output_tokens")

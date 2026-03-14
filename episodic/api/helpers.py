@@ -16,6 +16,7 @@ Build a typed update request from JSON payload:
 >>> request = build_profile_update_request(profile_id, payload)
 """
 
+import copy
 import dataclasses as dc
 import re
 import typing as typ
@@ -270,7 +271,7 @@ def _optional_json_object_field(
     if not isinstance(value, dict):
         msg = f"{field_name} must be a JSON object."
         raise falcon.HTTPBadRequest(description=msg)
-    return typ.cast("dict[str, object]", value.copy())
+    return typ.cast("dict[str, object]", copy.deepcopy(value))
 
 
 def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:

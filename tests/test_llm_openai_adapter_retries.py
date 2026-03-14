@@ -1,7 +1,5 @@
 """Unit tests for retry and transport behavior in the OpenAI adapter."""
 
-# ruff: noqa: ANN401
-
 import json
 import typing as typ
 
@@ -10,15 +8,22 @@ import pytest
 
 from episodic.llm import LLMProviderResponseError, LLMTransientProviderError
 
+if typ.TYPE_CHECKING:
+    from openai_test_types import (
+        _OpenAIAdapterFactory,
+        _OpenAIJsonResponseBuilder,
+        _OpenAIRequestBuilder,
+    )
+
 _CONNECT_FAILED_MESSAGE = "connect failed"
 _OFFLINE_MESSAGE = "still offline"
 
 
 @pytest.mark.asyncio
 async def test_generate_retries_transient_failure_then_succeeds(
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Retry retryable provider failures before succeeding."""
     attempts = 0
@@ -60,9 +65,9 @@ async def test_generate_retries_transient_failure_then_succeeds(
 @pytest.mark.parametrize("status_code", [400, 404])
 async def test_generate_rejects_non_retryable_http_status(
     status_code: int,
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Non-retryable provider HTTP responses surface as response errors."""
 
@@ -84,9 +89,9 @@ async def test_generate_rejects_non_retryable_http_status(
 @pytest.mark.parametrize("status_code", [500, 503])
 async def test_generate_retries_retryable_http_5xx_then_fails(
     status_code: int,
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Retryable 5xx provider responses exhaust retries as transient failures."""
     attempts = 0
@@ -113,9 +118,9 @@ async def test_generate_retries_retryable_http_5xx_then_fails(
 
 @pytest.mark.asyncio
 async def test_generate_retries_transport_failures_then_succeeds(
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Transport failures are retried using the same transient policy as 429s."""
     attempts = 0
@@ -151,8 +156,8 @@ async def test_generate_retries_transport_failures_then_succeeds(
 
 @pytest.mark.asyncio
 async def test_generate_raises_after_exhausting_transport_retries(
-    openai_adapter_factory: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Exhausted transport retries surface as transient provider failures."""
     attempts = 0
@@ -175,8 +180,8 @@ async def test_generate_raises_after_exhausting_transport_retries(
 
 @pytest.mark.asyncio
 async def test_generate_rejects_malformed_json_response(
-    openai_adapter_factory: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Malformed provider JSON surfaces as a non-retryable response error."""
 
@@ -199,8 +204,8 @@ async def test_generate_rejects_malformed_json_response(
 @pytest.mark.parametrize("payload", [["not an object"], "scalar", 123])
 async def test_generate_rejects_non_object_json_response(
     payload: object,
-    openai_adapter_factory: typ.Any,
-    openai_request_builder: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_request_builder: _OpenAIRequestBuilder,
 ) -> None:
     """Non-object provider JSON payloads surface as response errors."""
 

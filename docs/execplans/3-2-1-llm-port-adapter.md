@@ -426,7 +426,7 @@ Expected success indicators:
 
 Run from repository root.
 
-1. Inspect the current LLM boundary and prompt helpers.
+- Inspect the current LLM boundary and prompt helpers.
 
 ```shell
 rg -n "class LLMPort|LLMResponse|LLMUsage|OpenAIChatCompletionAdapter" episodic/llm
@@ -434,19 +434,19 @@ rg -n "build_series_brief_prompt|render_series_brief_prompt|episode template|gua
   episodic docs/developers-guide.md docs/episodic-podcast-generation-system-design.md
 ```
 
-1. Add fail-first tests before production edits.
+- Add fail-first tests before production edits.
 
 ```shell
 rg --files tests | rg "openai|llm|prompt|feature|steps"
 ```
 
-1. Implement the port expansion, guardrail helper, and concrete adapter.
+- Implement the port expansion, guardrail helper, and concrete adapter.
 
-2. Add `vidaimock` fixtures and `pytest-bdd` scenarios.
+- Add `vidaimock` fixtures and `pytest-bdd` scenarios.
 
-3. Update documentation and roadmap state.
+- Update documentation and roadmap state.
 
-4. Run validation with captured logs.
+- Run validation with captured logs.
 
 ```shell
 set -o pipefail; make fmt 2>&1 | tee /tmp/execplan-3-2-1-make-fmt.log
@@ -458,8 +458,8 @@ set -o pipefail; PATH=/root/.bun/bin:$PATH make markdownlint 2>&1 | tee /tmp/exe
 set -o pipefail; make nixie 2>&1 | tee /tmp/execplan-3-2-1-make-nixie.log
 ```
 
-1. For the behavioural harness, validate `vidaimock` explicitly while
-   developing or debugging the fixture.
+- For the behavioural harness, validate `vidaimock` explicitly while
+  developing or debugging the fixture.
 
 ```shell
 command -v vidaimock

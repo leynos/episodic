@@ -1,7 +1,5 @@
 """Unit tests for OpenAI adapter budget enforcement."""
 
-# ruff: noqa: ANN401
-
 import typing as typ
 
 import httpx
@@ -13,6 +11,9 @@ from episodic.llm import (
     LLMTokenBudget,
     LLMTokenBudgetExceededError,
 )
+
+if typ.TYPE_CHECKING:
+    from openai_test_types import _OpenAIAdapterFactory, _OpenAIJsonResponseBuilder
 
 
 def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
@@ -32,8 +33,8 @@ def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
 
 @pytest.mark.asyncio
 async def test_generate_rejects_prompt_that_exceeds_input_budget(
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
 ) -> None:
     """Reject clearly impossible requests before calling the provider."""
     transport = httpx.MockTransport(lambda request: openai_json_response({}))
@@ -55,8 +56,8 @@ async def test_generate_rejects_prompt_that_exceeds_input_budget(
 
 @pytest.mark.asyncio
 async def test_generate_rejects_response_usage_that_exceeds_total_budget(
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
 ) -> None:
     """Reject provider responses that break the configured budget."""
 
@@ -134,8 +135,8 @@ async def test_generate_rejects_response_usage_that_exceeds_total_budget(
 async def test_generate_rejects_budgeted_responses_without_concrete_usage_counts(
     operation: str,
     response_payload: dict[str, object],
-    openai_adapter_factory: typ.Any,
-    openai_json_response: typ.Any,
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
 ) -> None:
     """Budget enforcement requires concrete input/output usage counts."""
     async with openai_adapter_factory(
