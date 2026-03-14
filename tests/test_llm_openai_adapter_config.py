@@ -15,8 +15,10 @@ from episodic.llm import LLMTokenBudget
         ({"max_attempts": 0}, "max_attempts"),
         ({"retry_delay_seconds": -1}, "retry_delay_seconds"),
         ({"timeout_seconds": 0}, "timeout_seconds"),
-        ({"base_url": "   "}, "base_url"),
-        ({"api_key": "   "}, "api_key"),
+        ({"base_url": "   "}, "base_url must be non-empty."),
+        ({"api_key": "   "}, "api_key must be non-empty."),
+        ({"base_url": "", "api_key": "k"}, "base_url must be non-empty."),
+        ({"base_url": "http://x", "api_key": ""}, "api_key must be non-empty."),
     ],
 )
 def test_openai_adapter_config_rejects_invalid_values(

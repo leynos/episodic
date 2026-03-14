@@ -235,11 +235,11 @@ class OpenAICompatibleLLMConfig:
         if self.timeout_seconds <= 0:
             msg = "timeout_seconds must be greater than zero."
             raise ValueError(msg)
-        if self.base_url.strip() == "":
-            msg = "base_url must be a non-empty string."
+        if not self.base_url.strip():
+            msg = "base_url must be non-empty."
             raise ValueError(msg)
-        if self.api_key.strip() == "":
-            msg = "api_key must be a non-empty string."
+        if not self.api_key.strip():
+            msg = "api_key must be non-empty."
             raise ValueError(msg)
 
 
