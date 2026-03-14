@@ -33,6 +33,7 @@ async def test_series_profile_slug_unique(session_factory: object) -> None:
         title="Science Hour",
         description=None,
         configuration={},
+        guardrails={},
         created_at=dt.datetime.now(dt.UTC),
         updated_at=dt.datetime.now(dt.UTC),
     )
@@ -42,6 +43,7 @@ async def test_series_profile_slug_unique(session_factory: object) -> None:
         title="Science Hour Replay",
         description=None,
         configuration={},
+        guardrails={},
         created_at=dt.datetime.now(dt.UTC),
         updated_at=dt.datetime.now(dt.UTC),
     )

@@ -29,6 +29,10 @@ def _create_profile(
             "title": "API Profile",
             "description": "Created through API",
             "configuration": {"tone": "precise"},
+            "guardrails": {
+                "instruction": "Keep claims attributable.",
+                "banned_phrases": ["viral sensation"],
+            },
             "actor": "api-user@example.com",
             "note": "Initial profile",
         },
@@ -39,6 +43,7 @@ def _create_profile(
     profile_payload = create_profile_response.json
     profile_id = profile_payload["id"]
     assert profile_payload["revision"] == 1, "Expected revision 1 on create."
+    assert profile_payload["guardrails"]["instruction"] == "Keep claims attributable."
     return profile_id, profile_payload
 
 
@@ -55,6 +60,10 @@ def _create_template(
             "title": "API Template",
             "description": "Template through API",
             "structure": {"segments": ["intro", "main", "outro"]},
+            "guardrails": {
+                "instruction": "End with a recap.",
+                "required_sections": ["intro", "main", "outro"],
+            },
             "actor": "api-user@example.com",
             "note": "Initial template",
         },
@@ -65,6 +74,7 @@ def _create_template(
     template_payload = create_template_response.json
     template_id = template_payload["id"]
     assert template_payload["revision"] == 1, "Expected template revision 1."
+    assert template_payload["guardrails"]["instruction"] == "End with a recap."
     return template_id, template_payload
 
 
@@ -136,6 +146,7 @@ def _update_profile(client: testing.TestClient, profile_id: str) -> None:
                 "title": "API Profile Updated",
                 "description": "Updated through API",
                 "configuration": {"tone": "decisive"},
+                "guardrails": {"instruction": "Lead with verified facts."},
                 "actor": "editor@example.com",
                 "note": "Profile update",
             },
@@ -155,6 +166,7 @@ def _update_template(client: testing.TestClient, template_id: str) -> None:
                 "title": "API Template Updated",
                 "description": "Updated template through API",
                 "structure": {"segments": ["intro", "deep-dive", "outro"]},
+                "guardrails": {"instruction": "Close with open questions."},
                 "actor": "editor@example.com",
                 "note": "Template update",
             },
@@ -177,6 +189,7 @@ def _verify_stale_update_rejected(
                 "title": "Stale update",
                 "description": "Should fail",
                 "configuration": {"tone": "stale"},
+                "guardrails": {"instruction": "Should fail."},
                 "actor": "editor@example.com",
                 "note": "Stale attempt",
             },
@@ -199,6 +212,7 @@ def _verify_episode_template_stale_update_rejected(
                 "title": "Stale template update",
                 "description": "Should fail",
                 "structure": {"segments": ["stale"]},
+                "guardrails": {"instruction": "Should fail."},
                 "actor": "editor@example.com",
                 "note": "Stale attempt",
             },
@@ -244,9 +258,19 @@ def _verify_structured_brief(
     assert brief_response.json["series_profile"]["id"] == profile_id, (
         "Expected structured brief to include profile."
     )
+    assert brief_response.json["series_profile"]["guardrails"]["instruction"] == (
+        "Lead with verified facts."
+    ), "Expected brief to include updated profile guardrails."
+    assert brief_response.json["series_profile"]["guardrails"]["banned_phrases"] == [
+        "viral sensation"
+    ], "Expected profile PATCH to preserve existing guardrail keys."
     assert brief_response.json["episode_templates"][0]["id"] == template_id, (
         "Expected structured brief to include template."
     )
+    assert brief_response.json["episode_templates"][0]["guardrails"] == {
+        "instruction": "Close with open questions.",
+        "required_sections": ["intro", "main", "outro"],
+    }, "Expected template PATCH to preserve existing guardrail keys."
     assert brief_response.json["reference_documents"] == [], (
         "Expected brief to expose reusable reference_documents list."
     )

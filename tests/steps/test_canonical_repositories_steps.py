@@ -69,6 +69,7 @@ async def _persist_series_profile(
         title=profile_data["title"],
         description=None,
         configuration=profile_data.get("configuration", {}),
+        guardrails={},
         created_at=now,
         updated_at=now,
     )
@@ -198,6 +199,7 @@ def episode_with_dependencies(
             title="BDD Weight Check",
             description=None,
             configuration={},
+            guardrails={},
             created_at=now,
             updated_at=now,
         )

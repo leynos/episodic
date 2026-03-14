@@ -34,6 +34,7 @@ async def test_uow_rollback_discards_uncommitted_changes(
         title="Rollback Test",
         description=None,
         configuration={},
+        guardrails={},
         created_at=now,
         updated_at=now,
     )
@@ -59,6 +60,7 @@ async def test_uow_rolls_back_on_exception(session_factory: object) -> None:
         title="Exception Test",
         description=None,
         configuration={},
+        guardrails={},
         created_at=now,
         updated_at=now,
     )

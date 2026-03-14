@@ -16,6 +16,7 @@ Build a typed update request from JSON payload:
 >>> request = build_profile_update_request(profile_id, payload)
 """
 
+import copy
 import dataclasses as dc
 import re
 import typing as typ
@@ -259,16 +260,30 @@ def _build_payload_dataclass[DataT](
     return dc_type(**values)
 
 
+def _optional_json_object_field(
+    payload: JsonPayload,
+    field_name: str,
+) -> dict[str, object] | None:
+    """Return an optional JSON-object field or raise HTTP 400."""
+    if field_name not in payload:
+        return None
+    value = payload[field_name]
+    if not isinstance(value, dict):
+        msg = f"{field_name} must be a JSON object."
+        raise falcon.HTTPBadRequest(description=msg)
+    return typ.cast("dict[str, object]", copy.deepcopy(value))
+
+
 def _build_profile_data(payload: JsonPayload) -> SeriesProfileUpdateFields:
     """Build ``SeriesProfileUpdateFields`` from payload fields."""
-    return _build_payload_dataclass(
-        payload,
-        dc_type=SeriesProfileUpdateFields,
-        field_map={
-            "title": ("title", False),
-            "description": ("description", True),
-            "configuration": ("configuration", False),
-        },
+    return SeriesProfileUpdateFields(
+        title=typ.cast("str", _require_field(payload, "title")),
+        description=typ.cast("str | None", payload.get("description")),
+        configuration=typ.cast(
+            "dict[str, object]",
+            _require_field(payload, "configuration"),
+        ),
+        guardrails=_optional_json_object_field(payload, "guardrails") or {},
     )
 
 
@@ -276,14 +291,14 @@ def _build_template_fields(
     payload: JsonPayload,
 ) -> EpisodeTemplateUpdateFields:
     """Build ``EpisodeTemplateUpdateFields`` from payload fields."""
-    return _build_payload_dataclass(
-        payload,
-        dc_type=EpisodeTemplateUpdateFields,
-        field_map={
-            "title": ("title", False),
-            "description": ("description", True),
-            "structure": ("structure", False),
-        },
+    return EpisodeTemplateUpdateFields(
+        title=typ.cast("str", _require_field(payload, "title")),
+        description=typ.cast("str | None", payload.get("description")),
+        structure=typ.cast(
+            "dict[str, object]",
+            _require_field(payload, "structure"),
+        ),
+        guardrails=_optional_json_object_field(payload, "guardrails") or {},
     )
 
 
@@ -334,6 +349,7 @@ def build_profile_create_kwargs(payload: JsonPayload) -> dict[str, object]:
         title=typ.cast("str", title),
         description=typ.cast("str | None", payload.get("description")),
         configuration=typ.cast("dict[str, object]", configuration),
+        guardrails=_optional_json_object_field(payload, "guardrails") or {},
     )
     return {
         "data": data,
@@ -371,6 +387,7 @@ def build_template_create_kwargs(payload: JsonPayload) -> dict[str, object]:
         title=typ.cast("str", title),
         description=typ.cast("str | None", payload.get("description")),
         structure=typ.cast("dict[str, object]", structure),
+        guardrails=_optional_json_object_field(payload, "guardrails") or {},
     )
     return {
         "series_profile_id": parse_uuid(
