@@ -139,7 +139,10 @@ def mapper_copy_boundary(
     case_name = typ.cast("str", request.param)
     if case_name == "series_profile":
         return _build_series_profile_copy_boundary(now)
-    return _build_episode_template_copy_boundary(now)
+    if case_name == "episode_template":
+        return _build_episode_template_copy_boundary(now)
+    msg = f"Unsupported mapper_copy_boundary case: {case_name!r}"
+    raise ValueError(msg)
 
 
 @pytest.mark.parametrize(

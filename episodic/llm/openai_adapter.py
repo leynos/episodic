@@ -352,8 +352,10 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         except RetryError as exc:
             msg = "Transient provider failure after exhausting retries."
             raise LLMTransientProviderError(msg) from exc
-        msg = "Transient provider failure after exhausting retries."
-        raise LLMTransientProviderError(msg)
+        # Unreachable: AsyncRetrying always raises RetryError on exhaustion
+        # when reraise=False. Guard satisfies ty's return-type analysis.
+        msg = "unreachable: tenacity retry loop exhausted"
+        raise AssertionError(msg)
 
     async def _send_once(
         self,

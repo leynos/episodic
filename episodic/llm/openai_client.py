@@ -220,7 +220,7 @@ def _normalize_usage(usage_payload: cabc.Mapping[str, object] | None) -> LLMUsag
         usage_payload,
         input_tokens,
         output_tokens,
-        _INVALID_RESPONSES_PAYLOAD_MESSAGE,
+        _INVALID_CHAT_COMPLETION_MESSAGE,
     )
 
     return LLMUsage(

@@ -95,9 +95,9 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
         )
 
     # Required stdlib override signature for keyword-compatible dispatch.
-    def log_message(self, format: str, *args: typ.Any) -> None:  # noqa: A002, ANN401
+    def log_message(self, message_format: str, *args: object) -> None:  # ty: ignore[invalid-method-override]
         """Suppress stdlib HTTP server request logging in tests."""
-        del format, args
+        del message_format, args
 
 
 class _MockLLMServer(ThreadingHTTPServer):
