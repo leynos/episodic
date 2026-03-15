@@ -1,12 +1,18 @@
 """Concrete OpenAI-compatible async LLM adapter."""
 
-import asyncio
 import dataclasses as dc
 import json
 import math
 import typing as typ
 
 import httpx
+from tenacity import (
+    AsyncRetrying,
+    RetryError,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
 from episodic.llm.openai_client import (
     OpenAIChatCompletionAdapter,
@@ -158,22 +164,26 @@ def _build_payload(
 ) -> dict[str, object]:
     """Build a provider request payload from a provider-neutral request."""
     payload: dict[str, object] = {"model": request.model}
-    if operation is LLMProviderOperation.CHAT_COMPLETIONS:
-        messages: list[dict[str, str]] = []
-        if request.system_prompt is not None:
-            messages.append({"role": "system", "content": request.system_prompt})
-        messages.append({"role": "user", "content": request.prompt})
-        payload["messages"] = messages
-        if request.token_budget is not None:
-            payload["max_tokens"] = request.token_budget.max_output_tokens
-        return payload
-
-    payload["input"] = request.prompt
-    if request.system_prompt is not None:
-        payload["instructions"] = request.system_prompt
-    if request.token_budget is not None:
-        payload["max_output_tokens"] = request.token_budget.max_output_tokens
-    return payload
+    match operation:
+        case LLMProviderOperation.CHAT_COMPLETIONS:
+            messages: list[dict[str, str]] = []
+            if request.system_prompt is not None:
+                messages.append({"role": "system", "content": request.system_prompt})
+            messages.append({"role": "user", "content": request.prompt})
+            payload["messages"] = messages
+            if request.token_budget is not None:
+                payload["max_tokens"] = request.token_budget.max_output_tokens
+            return payload
+        case LLMProviderOperation.RESPONSES:
+            payload["input"] = request.prompt
+            if request.system_prompt is not None:
+                payload["instructions"] = request.system_prompt
+            if request.token_budget is not None:
+                payload["max_output_tokens"] = request.token_budget.max_output_tokens
+            return payload
+        case _:
+            msg = f"Unsupported provider operation: {operation!r}."
+            raise LLMProviderResponseError(msg)
 
 
 def _normalize_payload(
@@ -324,18 +334,26 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         payload: dict[str, object],
     ) -> dict[str, object]:
         """Send a provider request with retry handling for transient failures."""
-        last_exception: Exception | None = None
-        for attempt in range(1, self._max_attempts + 1):
-            try:
-                return await self._send_once(path=path, payload=payload)
-            except (httpx.TransportError, LLMTransientProviderError) as exc:
-                last_exception = exc
-                if attempt >= self._max_attempts:
-                    break
-                await asyncio.sleep(self._retry_delay_seconds)
-
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(self._max_attempts),
+                wait=wait_random_exponential(
+                    multiplier=self._retry_delay_seconds,
+                    max=self._retry_delay_seconds * 16,
+                ),
+                retry=retry_if_exception_type((
+                    httpx.TransportError,
+                    LLMTransientProviderError,
+                )),
+                reraise=False,
+            ):
+                with attempt:
+                    return await self._send_once(path=path, payload=payload)
+        except RetryError as exc:
+            msg = "Transient provider failure after exhausting retries."
+            raise LLMTransientProviderError(msg) from exc
         msg = "Transient provider failure after exhausting retries."
-        raise LLMTransientProviderError(msg) from last_exception
+        raise LLMTransientProviderError(msg)
 
     async def _send_once(
         self,

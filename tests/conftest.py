@@ -208,6 +208,7 @@ def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
             "api_key",
             "base_url",
             "max_attempts",
+            "provider_operation",
             "retry_delay_seconds",
             "timeout_seconds",
         }
@@ -226,6 +227,10 @@ def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
         return OpenAICompatibleLLMConfig(
             base_url=typ.cast("str", merged_config["base_url"]),
             api_key=typ.cast("str", merged_config["api_key"]),
+            provider_operation=typ.cast(
+                "str | LLMProviderOperation",
+                merged_config.get("provider_operation", "chat_completions"),
+            ),
             timeout_seconds=typ.cast("float", merged_config["timeout_seconds"]),
             max_attempts=typ.cast("int", merged_config.get("max_attempts", 3)),
             retry_delay_seconds=typ.cast(

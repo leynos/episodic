@@ -172,13 +172,16 @@ def _validate_and_extract_token_count(value: object, field_name: str) -> int:
 
 
 def _resolve_total_tokens(
-    input_tokens: int, output_tokens: int, total_tokens_value: object
+    input_tokens: int,
+    output_tokens: int,
+    total_tokens_value: object,
+    error_message: str = _INVALID_CHAT_COMPLETION_MESSAGE,
 ) -> int:
     """Resolve total tokens from explicit value or computed sum."""
     if total_tokens_value is None:
         return input_tokens + output_tokens
     if not _is_non_negative_int(total_tokens_value):
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+        raise OpenAIResponseValidationError(error_message)
     return typ.cast("int", total_tokens_value)
 
 
@@ -192,11 +195,17 @@ def _extract_token_count(
 
 
 def _compute_total_tokens(
-    usage_payload: cabc.Mapping[str, object], input_tokens: int, output_tokens: int
+    usage_payload: cabc.Mapping[str, object],
+    input_tokens: int,
+    output_tokens: int,
+    error_message: str = _INVALID_CHAT_COMPLETION_MESSAGE,
 ) -> int:
     """Compute total tokens from usage payload and component counts."""
     return _resolve_total_tokens(
-        input_tokens, output_tokens, usage_payload.get("total_tokens")
+        input_tokens,
+        output_tokens,
+        usage_payload.get("total_tokens"),
+        error_message,
     )
 
 
@@ -207,7 +216,12 @@ def _normalize_usage(usage_payload: cabc.Mapping[str, object] | None) -> LLMUsag
 
     input_tokens = _extract_token_count(usage_payload, "prompt_tokens")
     output_tokens = _extract_token_count(usage_payload, "completion_tokens")
-    total = _compute_total_tokens(usage_payload, input_tokens, output_tokens)
+    total = _compute_total_tokens(
+        usage_payload,
+        input_tokens,
+        output_tokens,
+        _INVALID_RESPONSES_PAYLOAD_MESSAGE,
+    )
 
     return LLMUsage(
         input_tokens=input_tokens,
@@ -228,7 +242,12 @@ def _normalize_responses_usage(
 
     input_tokens = _extract_token_count(usage_payload, "input_tokens")
     output_tokens = _extract_token_count(usage_payload, "output_tokens")
-    total = _compute_total_tokens(usage_payload, input_tokens, output_tokens)
+    total = _compute_total_tokens(
+        usage_payload,
+        input_tokens,
+        output_tokens,
+        _INVALID_RESPONSES_PAYLOAD_MESSAGE,
+    )
     return LLMUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,

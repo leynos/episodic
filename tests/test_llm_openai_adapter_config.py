@@ -32,6 +32,17 @@ def test_openai_adapter_config_rejects_invalid_values(
         _ = openai_invalid_config_builder(config_kwargs)
 
 
+def test_openai_invalid_config_builder_accepts_provider_operation_override(
+    openai_invalid_config_builder: _OpenAIInvalidConfigBuilder,
+) -> None:
+    """Config-builder helper should pass through provider operation overrides."""
+    config = openai_invalid_config_builder({"provider_operation": "responses"})
+
+    assert config.provider_operation == "responses", (
+        "Expected provider_operation override to be preserved by the test helper."
+    )
+
+
 @pytest.mark.parametrize(
     ("budget_kwargs", "match"),
     [

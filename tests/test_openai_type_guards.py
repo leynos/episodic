@@ -239,3 +239,30 @@ def test_responses_adapter_rejects_non_mapping_usage_when_present() -> None:
         match=r"Invalid OpenAI Responses payload\.",
     ):
         OpenAIResponsesAdapter.normalize_response(payload)
+
+
+def test_responses_adapter_rejects_invalid_total_tokens_with_responses_message() -> (
+    None
+):
+    """Responses usage validation should keep Responses-specific diagnostics."""
+    payload: object = {
+        "id": "resp_123",
+        "model": "gpt-4.1-mini",
+        "output": [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": "Final answer."}],
+            }
+        ],
+        "usage": {
+            "input_tokens": 12,
+            "output_tokens": 7,
+            "total_tokens": "invalid",
+        },
+    }
+
+    with pytest.raises(
+        OpenAIResponseValidationError,
+        match=r"Invalid OpenAI Responses payload\.",
+    ):
+        OpenAIResponsesAdapter.normalize_response(payload)

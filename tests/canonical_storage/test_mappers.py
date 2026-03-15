@@ -23,6 +23,21 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import JsonMapping
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _MapperCopyBoundaryFixture:
+    """Bundle one mapper copy-boundary scenario."""
+
+    mapped_domain: SeriesProfile | EpisodeTemplate
+    domain: SeriesProfile | EpisodeTemplate
+    original_record_guardrails: dict[str, object]
+    mapped_record_guardrails: dict[str, object]
+    guardrail_key: str
+    record_mutation: list[str]
+    domain_mutation: list[str]
+    record_expected: list[str]
+    domain_expected: list[str]
+
+
 def _build_series_profile_copy_boundary(
     now: dt.datetime,
 ) -> _MapperCopyBoundaryFixture:
@@ -113,21 +128,6 @@ def _build_episode_template_copy_boundary(
         record_expected=["intro", "main", "outro"],
         domain_expected=["intro", "analysis", "outro"],
     )
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _MapperCopyBoundaryFixture:
-    """Bundle one mapper copy-boundary scenario."""
-
-    mapped_domain: SeriesProfile | EpisodeTemplate
-    domain: SeriesProfile | EpisodeTemplate
-    original_record_guardrails: dict[str, object]
-    mapped_record_guardrails: dict[str, object]
-    guardrail_key: str
-    record_mutation: list[str]
-    domain_mutation: list[str]
-    record_expected: list[str]
-    domain_expected: list[str]
 
 
 @pytest.fixture
