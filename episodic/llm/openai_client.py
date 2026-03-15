@@ -257,11 +257,16 @@ def _normalize_responses_usage(
 
 def _has_output_text_in_content(content: list[object]) -> bool:
     """Check whether content contains a non-empty ``output_text`` item."""
-    try:
-        _find_output_text_in_content(content)
-    except OpenAIResponseValidationError:
-        return False
-    return True
+    for item in content:
+        if not _is_string_keyed_mapping(item):
+            continue
+        item_mapping = typ.cast("cabc.Mapping[str, object]", item)
+        if item_mapping.get("type") != "output_text":
+            continue
+        text = item_mapping.get("text")
+        if _is_non_empty_string(text):
+            return True
+    return False
 
 
 def _extract_message_content(payload_mapping: cabc.Mapping[str, object]) -> str:
