@@ -232,21 +232,16 @@ def _decode_json_response(response: httpx.Response) -> dict[str, object]:
 
 def _validate_llm_config(config: OpenAICompatibleLLMConfig) -> None:
     """Validate OpenAICompatibleLLMConfig field values."""
-    if config.max_attempts <= 0:
-        msg = "max_attempts must be greater than zero."
-        raise ValueError(msg)
-    if config.retry_delay_seconds < 0:
-        msg = "retry_delay_seconds must be non-negative."
-        raise ValueError(msg)
-    if config.timeout_seconds <= 0:
-        msg = "timeout_seconds must be greater than zero."
-        raise ValueError(msg)
-    if not config.base_url.strip():
-        msg = "base_url must be non-empty."
-        raise ValueError(msg)
-    if not config.api_key.strip():
-        msg = "api_key must be non-empty."
-        raise ValueError(msg)
+    checks: list[tuple[bool, str]] = [
+        (config.max_attempts <= 0, "max_attempts must be greater than zero."),
+        (config.retry_delay_seconds < 0, "retry_delay_seconds must be non-negative."),
+        (config.timeout_seconds <= 0, "timeout_seconds must be greater than zero."),
+        (not config.base_url.strip(), "base_url must be non-empty."),
+        (not config.api_key.strip(), "api_key must be non-empty."),
+    ]
+    for violated, msg in checks:
+        if violated:
+            raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
