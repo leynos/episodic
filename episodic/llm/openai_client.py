@@ -165,9 +165,12 @@ def is_openai_chat_completion_payload(payload: object) -> bool:
 
 def _validate_and_extract_token_count(value: object, field_name: str) -> int:
     """Validate a token count value and return it as an integer."""
-    _ = field_name
     if not _is_non_negative_int(value):
-        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+        msg = (
+            f"Invalid token count for field '{field_name}': "
+            f"{_INVALID_CHAT_COMPLETION_MESSAGE}"
+        )
+        raise OpenAIResponseValidationError(msg)
     return typ.cast("int", value)
 
 
