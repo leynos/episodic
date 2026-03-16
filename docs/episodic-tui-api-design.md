@@ -290,7 +290,8 @@ bundles.
 
 ```plaintext
 POST   /v1/episodes/{episode_id}/exports
-       Body: export_type (master_audio | stems_bundle | tei_bundle),
+       Body: export_type (master_audio | stems_bundle | tei_bundle
+             | stems_tei_bundle),
        format_options
        Header: Idempotency-Key
 GET    /v1/episodes/{episode_id}/exports
@@ -322,7 +323,7 @@ WebSocket connections authenticate via an initial `client.hello` message
 carrying a bearer token. This avoids exposing tokens in query strings. The
 server must receive a valid `client.hello` within a configurable timeout
 (default: 5 seconds) after accepting the connection; otherwise it closes the
-connection with a policy violation close code.
+connection with close code `4001` (authentication timeout).
 
 ## Error contract
 
@@ -392,6 +393,16 @@ The WebSocket endpoint is mounted at:
 This route is served by a Falcon-Pachinko `WebSocketRouter` with per-connection
 `WebSocketResource` instances. Room-based broadcast keyed by `run_id` enables
 multiple TUI clients to observe the same run.
+
+The `run_id` namespace initially covers generation runs only. Audio runs use a
+separate event model (preview-feedback-regeneration cycles) that does not
+require realtime token streaming, so audio run status is polled via REST. If
+future audio synthesis workflows produce high-frequency events that benefit
+from streaming, the same WebSocket route and message schema can be extended by
+accepting audio run identifiers; at that point a `run_kind` field (`generation`
+or `audio`) should be added to `run.subscribe` and `run.event` messages to
+disambiguate. Until then, clients should treat `/ws/runs/{run_id}` as accepting
+generation run identifiers exclusively.
 
 ### Message envelope
 
@@ -548,18 +559,27 @@ kinds are defined:
 
 ### Backpressure
 
-Three mechanisms control backpressure:
+Three mechanisms control backpressure, applied in escalating order:
 
 1. **Inbound queue limit.** Falcon's `ws_options.max_receive_queue` is
    set to a small value to prevent client message spam.
-2. **Acknowledgement-gated outbound.** The server maintains a bounded
+2. **Event compaction.** When the gap between the most recent event
+   `seq` and the last acknowledged `seq` exceeds a configurable soft threshold
+   (for example, 500 events), the server begins compacting high-frequency
+   events (`token.delta`, `node.progress`) into periodic aggregates before
+   sending them. The server does not notify the client when compaction
+   activates; compacted events are indistinguishable from normal events apart
+   from coarser granularity.
+3. **Acknowledgement-gated disconnect.** The server maintains a bounded
    ring buffer per run subscription (for example, the last 2000 events). If the
-   client falls behind acknowledged sequence numbers, the server sends
-   `server.error` with `code="backpressure"` and switches to summary mode,
-   compacting high-frequency events into periodic aggregates.
-3. **Event compaction.** Token deltas and fine-grained progress events
-   are collapsed into periodic aggregates when acknowledgement lag exceeds a
-   configurable threshold.
+   acknowledgement lag exceeds a hard threshold (for example, 1500 events)
+   despite compaction, the server executes the following sequence:
+   1. Sends `server.error` with `code="backpressure"` containing the
+      current buffer head `seq` and the last acknowledged `seq`.
+   2. Closes the connection with close code `4000`.
+   3. The client must reconnect and use `resume_from` in `client.hello`
+      to replay from its last acknowledged position, or fall back to
+      the REST event log if the buffer has been exhausted.
 
 ### Reconnection
 
@@ -574,13 +594,13 @@ re-subscribing.
 
 ### WebSocket close codes
 
-| Close code | Meaning                                              |
-| ---------- | ---------------------------------------------------- |
-| 1000       | Normal closure                                       |
-| 1008       | Policy violation (authentication failure or timeout) |
-| 1011       | Internal server error                                |
-| 4000       | Backpressure exceeded; client must reconnect         |
-| 4001       | Authentication timeout; `client.hello` not received  |
+| Close code | Meaning                                                           |
+| ---------- | ----------------------------------------------------------------- |
+| 1000       | Normal closure                                                    |
+| 1008       | Policy violation (invalid token in `client.hello`)                |
+| 1011       | Internal server error                                             |
+| 4000       | Backpressure exceeded; client must reconnect                      |
+| 4001       | Authentication timeout; valid `client.hello` not received in time |
 
 ## Sequence diagrams
 
@@ -834,7 +854,8 @@ created_at: datetime
 ```plaintext
 id: UUID
 episode_id: UUID
-export_type: str (master_audio | stems_bundle | tei_bundle)
+export_type: str (master_audio | stems_bundle | tei_bundle
+             | stems_tei_bundle)
 status: ExportStatus (pending | running | succeeded | failed)
 format_options: JsonMapping
 download_urls: list[str]

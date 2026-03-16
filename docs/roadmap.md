@@ -254,12 +254,13 @@ that align with the system design.
   adapter, and endpoint implementation.
 - [ ] 4.2.10. Define `ExportJobPort` and implement export job endpoints
   (`/v1/episodes/{episode_id}/exports`, `/v1/exports/{export_id}`) supporting
-  master audio, stems bundle, and TEI bundle export types. Acceptance criteria:
-  POST creates export job with format options and idempotency key; GET returns
-  job status with download URLs and manifest hash; export artefacts stored in
-  object storage with signed URLs; hexagonal boundary tests passing.
-  Dependencies: 4.2.3 mixing engine; 4.2.4 loudness normalization. Scope:
-  domain model, port, adapter, and endpoint implementation.
+  master audio, stems bundle, TEI bundle, and combined stems-plus-TEI bundle
+  export types. Acceptance criteria: POST creates export job with format
+  options and idempotency key; GET returns job status with download URLs and
+  manifest hash; export artefacts stored in object storage with signed URLs;
+  hexagonal boundary tests passing. Dependencies: 4.2.3 mixing engine; 4.2.4
+  loudness normalization. Scope: domain model, port, adapter, and endpoint
+  implementation.
 
 ### 4.3. Exit criteria
 
