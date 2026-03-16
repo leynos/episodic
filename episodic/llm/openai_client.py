@@ -163,13 +163,14 @@ def is_openai_chat_completion_payload(payload: object) -> bool:
     )
 
 
-def _validate_and_extract_token_count(value: object, field_name: str) -> int:
+def _validate_and_extract_token_count(
+    value: object,
+    field_name: str,
+    error_message: str = _INVALID_CHAT_COMPLETION_MESSAGE,
+) -> int:
     """Validate a token count value and return it as an integer."""
     if not _is_non_negative_int(value):
-        msg = (
-            f"Invalid token count for field '{field_name}': "
-            f"{_INVALID_CHAT_COMPLETION_MESSAGE}"
-        )
+        msg = f"Invalid token count for field '{field_name}': {error_message}"
         raise OpenAIResponseValidationError(msg)
     return typ.cast("int", value)
 
@@ -189,11 +190,14 @@ def _resolve_total_tokens(
 
 
 def _extract_token_count(
-    usage_payload: cabc.Mapping[str, object], field_name: str, default: int = 0
+    usage_payload: cabc.Mapping[str, object],
+    field_name: str,
+    default: int = 0,
+    error_message: str = _INVALID_CHAT_COMPLETION_MESSAGE,
 ) -> int:
     """Extract and validate a token count field from usage payload."""
     return _validate_and_extract_token_count(
-        usage_payload.get(field_name, default), field_name
+        usage_payload.get(field_name, default), field_name, error_message
     )
 
 
@@ -243,8 +247,12 @@ def _normalize_responses_usage(
     if not any(key in usage_payload for key in _RESPONSES_USAGE_TOKEN_FIELDS):
         raise OpenAIResponseValidationError(_INVALID_RESPONSES_PAYLOAD_MESSAGE)
 
-    input_tokens = _extract_token_count(usage_payload, "input_tokens")
-    output_tokens = _extract_token_count(usage_payload, "output_tokens")
+    input_tokens = _extract_token_count(
+        usage_payload, "input_tokens", error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE
+    )
+    output_tokens = _extract_token_count(
+        usage_payload, "output_tokens", error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE
+    )
     total = _compute_total_tokens(
         usage_payload,
         input_tokens,
