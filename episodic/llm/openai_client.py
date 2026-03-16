@@ -28,6 +28,10 @@ _EMPTY_CONTENT_MESSAGE = (
     "Invalid OpenAI chat completion payload. choices[0].message.content must be "
     "a non-empty string."
 )
+_EMPTY_RESPONSES_CONTENT_MESSAGE = (
+    "Invalid OpenAI Responses payload. No output_text item with non-empty text "
+    "found in output content."
+)
 _USAGE_TOKEN_FIELDS: tuple[str, ...] = (
     "prompt_tokens",
     "completion_tokens",
@@ -353,7 +357,7 @@ def _extract_first_output_mapping(
         candidate = _find_output_item_with_text(item)
         if candidate is not None:
             return candidate
-    raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
+    raise OpenAIResponseValidationError(_EMPTY_RESPONSES_CONTENT_MESSAGE)
 
 
 def _extract_output_content_list(
@@ -377,7 +381,7 @@ def _find_output_text_in_content(content: list[object]) -> str:
         text = item_mapping.get("text")
         if _is_non_empty_string(text):
             return typ.cast("str", text).strip()
-    raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
+    raise OpenAIResponseValidationError(_EMPTY_RESPONSES_CONTENT_MESSAGE)
 
 
 def _extract_responses_output_text(payload_mapping: cabc.Mapping[str, object]) -> str:
