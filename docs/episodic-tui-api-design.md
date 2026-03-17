@@ -487,8 +487,12 @@ Sent after successful `client.hello` authentication.
 
 #### `run.event`
 
-Streamed event from the generation or audio run. Each event carries a
-monotonically increasing `seq` number for ordering and replay.
+Streamed event from a generation run. Each event carries a monotonically
+increasing `seq` number for ordering and replay.
+
+> **Note:** When audio run streaming is introduced, a `run_kind` field
+> (`generation` or `audio`) will be added to disambiguate event sources. See
+> the route contract above for details.
 
 ```json
 {
