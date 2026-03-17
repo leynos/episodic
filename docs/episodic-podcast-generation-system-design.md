@@ -203,6 +203,10 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Evaluator schemas are versioned alongside prompts and orchestration code, and
   cost accounting relies on normalized `LLMPort` usage plus pinned provider
   pricing snapshots rather than evaluator-specific OpenAPI contracts.
+- The service-oriented path remains intentional: evaluators may later expose
+  OpenAPI descriptions with `info.x-sla` links to SLA4OAI (Service Level
+  Agreements for OpenAPI) pricing documents when scale or cost management
+  warrants externalization.
 - QA evaluators operate as LangGraph nodes, enabling parallel execution within
   the generation StateGraph.
 - Evaluation results drive conditional routing: passing scores advance content
@@ -375,6 +379,10 @@ adapter implementations.
   budgets before costly steps execute.
 - `CostLedgerPort` persists hierarchical cost entries (task roll-ups plus
   call-level line items) and aggregated run totals.
+- `PricingCataloguePort` resolves pricing inputs for billing. The initial path
+  loads pinned provider rate cards for internal LangGraph nodes, whilst the
+  same port can later discover evaluator OpenAPI and SLA4OAI documents if those
+  evaluators are externalized.
 - `MeteringPort` provides atomic, concurrency-safe metric consumption counters
   used by pricing logic when quotas, allowances, or overages apply.
 - `CheckpointPort` saves and restores StateGraph checkpoints.
@@ -778,6 +786,10 @@ evaluator is later replaced with a cheaper implementation.
 
 #### Internal evaluator metering and deterministic pricing
 
+- `PricingCataloguePort` abstracts where pricing inputs come from. Today it can
+  read pinned provider rate cards for internal evaluator and generation calls;
+  later it can ingest helper-service pricing documents without changing the
+  ledger model.
 - Evaluator nodes return typed findings plus normalized usage metadata from the
   underlying `LLMPort` call.
 - Chrono records estimator version, input size, and predicted runtime so its
@@ -796,6 +808,20 @@ evaluator is later replaced with a cheaper implementation.
 - If evaluators are later externalized into dedicated services, the same
   findings and usage DTOs can be retained whilst adding service-specific
   discovery or billing contracts at the adapter edge.
+
+#### Future service-oriented pricing contracts
+
+If Pedante, Bromide, Chiltern, Anthem, Caesura, Chrono, or successor services
+move behind their own network boundary, the preferred contract remains:
+
+- `GET /openapi.json` (or `/openapi.yaml`)
+- `info.x-sla: <URI to SLA document>` (relative URIs permitted)
+- `GET /sla/plans.yaml` (or similar), serving an SLA4OAI plan document
+
+In that model, `PricingCataloguePort` fetches and pins immutable pricing
+snapshots from those documents exactly as it pins provider rate cards today.
+The current internal LangGraph implementation simply uses the same abstraction
+with a local pricing source instead of a remote service hop.
 
 #### Hierarchical cost ledger entries
 
@@ -926,7 +952,7 @@ Agentic workflow behaviour is configurable per series profile:
   idempotency keys.
 - `pricing_snapshots` stores immutable provider rate cards (snapshot ID,
   content hash, source identifier, retrieval timestamp) used to price LLM and
-  TTS calls, with room for future external evaluator pricing if the
+  TTS calls, with room for future helper-service SLA documents if evaluator
   architecture changes.
 - `metering_counters` stores per-organization metric consumption keyed by
   service, billing period, and metric name to support quota and overage pricing.

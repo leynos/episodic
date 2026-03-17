@@ -183,8 +183,8 @@ editorial approval. The initial implementation keeps Pedante, Bromide,
 Chiltern, Anthem, and Caesura inside LangGraph as structured Large Language
 Model (LLM) calls that return typed findings and normalized usage metrics per
 invocation; Chrono is a non-LLM runtime estimator. Later iterations may replace
-individual evaluators with more cost-effective approaches without changing the
-orchestration contract.
+individual evaluators with more cost-effective or service-oriented approaches
+without changing the orchestration contract.
 
 - [ ] 2.2.1. Implement Pedante for factuality and accuracy checks.
   - Return structured findings for unsupported claims and likely inaccuracies.
@@ -254,7 +254,8 @@ metering. Completion enables reliable, auditable generation workflows.
   - Record token counts and model identifiers per LLM call.
   - Attribute evaluator-node usage to underlying provider calls inside
     LangGraph.
-  - Pin provider pricing snapshots used to price each call.
+  - Pin provider pricing snapshots used to price each call, with room for
+    future SLA4OAI based helper-service pricing snapshots.
   - Aggregate run totals with hierarchical ledger entries.
   - See
     [Cost accounting and budget enforcement](episodic-podcast-generation-system-design.md#cost-accounting-and-budget-enforcement).
@@ -263,23 +264,31 @@ metering. Completion enables reliable, auditable generation workflows.
   - Validate Celery tasks depend on ports only.
   - Audit checkpoint payload boundaries.
 
-### 2.5. Internal pricing and budget enforcement
+### 2.5. Pricing catalogue and budget enforcement
 
-Implement price snapshots, metering, and budget reservation for LangGraph
-nodes. Completion enables cost control and budget breach prevention without
-requiring evaluator-specific external service contracts.
+Implement price snapshots, discovery, metering, and budget reservation for
+LangGraph nodes. Completion enables current internal metering and preserves the
+future path to standalone evaluator services with explicit pricing contracts.
 
-- [ ] 2.5.1. Add immutable pricing snapshots for provider rate cards.
-  - Persist model pricing inputs used for LLM and Text-to-Speech (TTS) billing.
+- [ ] 2.5.1. Add immutable pricing snapshots for provider and helper pricing
+  inputs.
+  - Persist model pricing inputs used for LLM and Text-to-Speech (TTS)
+    billing.
+  - Preserve room for future helper-service pricing documents.
   - Version snapshots so historical run costs remain reproducible.
-- [ ] 2.5.2. Add `PricingEngine` with concurrency-safe metering.
+- [ ] 2.5.2. Add `PricingCataloguePort` for pricing-source discovery.
+  - Load pinned provider rate cards for internal LangGraph billing.
+  - Support future OpenAPI `info.x-sla` discovery and SLA4OAI plan ingestion
+    for standalone evaluator services.
+  - Persist pricing snapshots for historical reference.
+- [ ] 2.5.3. Add `PricingEngine` with concurrency-safe metering.
   - Implement `MeteringPort` for usage recording.
   - Price individual calls deterministically with quota and overage handling.
-- [ ] 2.5.3. Extend `CostLedgerPort` storage for evaluator-node and provider
+- [ ] 2.5.4. Extend `CostLedgerPort` storage for evaluator-node and provider
   calls.
   - Record workflow node names, operation identifiers, and usage metrics.
   - Record pricing snapshot identifiers and model metadata.
-- [ ] 2.5.4. Extend `BudgetPort` APIs for reservation workflow.
+- [ ] 2.5.5. Extend `BudgetPort` APIs for reservation workflow.
   - Reserve estimated spend for generation and evaluator calls before
     invocation.
   - Commit actual spend on success.
