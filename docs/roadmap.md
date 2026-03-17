@@ -14,8 +14,10 @@ is observable when canonical TEI documents persist with full provenance after
 ingesting heterogeneous sources, and series profiles, episode templates, and
 reference documents are retrievable via the public Application Programming
 Interface (API) with optimistic locking and change history. See
-`docs/episodic-podcast-generation-system-design.md` §Component Responsibilities
-and §Data Model and Storage for design context.
+[Episodic Podcast System Design](episodic-podcast-generation-system-design.md)
+§[Component Responsibilities](episodic-podcast-generation-system-design.md#component-responsibilities)
+and §[Data Model and Storage](episodic-podcast-generation-system-design.md#data-model-and-storage)
+for design context.
 
 ### 1.1. Relational schema and persistence layer
 
@@ -470,11 +472,11 @@ enables programmatic content submission.
 
 ### 4.4. WebSocket event streaming
 
-Implement real-time event streaming for generation and audio runs. Completion
-enables live workflow observation and checkpoint intervention.
+Implement real-time event streaming for generation runs. Completion enables live
+workflow observation and checkpoint intervention.
 
-- [ ] 4.4.1. Define `RunEventBusPort` and implement WebSocket streaming.
-  Requires 2.6.1.
+- [ ] 4.4.1. Define `RunEventBusPort` and implement WebSocket streaming for
+  generation runs. Requires 2.6.1.
   - Implement `/ws/runs/{run_id}` via Falcon-Pachinko.
   - Use `msgspec` tagged-union message dispatch.
   - Implement room-based broadcast keyed by `run_id`.
@@ -484,6 +486,7 @@ enables live workflow observation and checkpoint intervention.
     `server.error` server messages.
   - Enforce authentication timeout.
   - Publish AsyncAPI specification.
+  - Note: Scope covers generation runs only; audio runs use REST polling.
   - See `docs/episodic-tui-api-design.md` §WebSocket API for real-time
     generation events.
 - [ ] 4.4.2. Implement WebSocket backpressure and reconnection. Requires 4.4.1.
@@ -536,7 +539,7 @@ dashboards report green for deployments and latency Service Level Objectives
 alerts. See `docs/infrastructure-design.md` for operational infrastructure
 context.
 
-### 5.1. RBAC, tenancy isolation, and secrets rotation
+### 5.1. Role-Based Access Control (RBAC), tenancy isolation, and secrets rotation
 
 Implement fine-grained access control, tenant boundaries, and credential
 lifecycle management. Completion enables secure multi-tenant operation.
