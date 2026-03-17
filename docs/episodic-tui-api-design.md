@@ -68,7 +68,7 @@ expose.
 4. **Idempotency for side-effecting operations.** Introduce an
    `Idempotency-Key` request header for run triggers, uploads, and export jobs.
    This aligns with the system design emphasis on idempotency in orchestration.
-5. **Pagination consistency.** Use `{items, limit, offset}` for list
+5. **Pagination consistency.** Use `{items, limit, offset, total}` for list
    endpoints, consistent with the existing implementation where
    `1 <= limit <= 100` and `offset >= 0`.
 6. **Separation of concerns.** Keep voice preview synthesis separate
