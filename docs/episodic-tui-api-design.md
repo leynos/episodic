@@ -1,10 +1,10 @@
 # Episodic TUI API design
 
-This document specifies the REST and WebSocket API contract required to
-support a terminal user interface (TUI) for the Episodic podcast generation
-platform. It covers new endpoints, message schemas, and integration patterns
-while preserving hexagonal architecture boundaries and building on the
-existing canonical API surface.
+This document specifies the REST and WebSocket API contract required to support
+a terminal user interface (TUI) for the Episodic podcast generation platform.
+It covers new endpoints, message schemas, and integration patterns while
+preserving hexagonal architecture boundaries and building on the existing
+canonical API surface.
 
 The TUI itself is implemented in a separate repository. This document focuses
 on the server-side API that the TUI consumes, including abstract TUI
@@ -17,9 +17,9 @@ source of truth for series and episode content, with ingestion provenance
 captured in TEI headers and workflow state represented as explicit lifecycle
 enums and event histories. A TUI for this system should behave as a workflow
 cockpit: surfacing canonical artefacts (profiles, templates, reference
-documents, TEI, drafts, stems) and
-workflow runs (ingestion, generation, audio synthesis) as first-class resources
-rather than hiding them behind monolithic commands.
+documents, TEI, drafts, stems) and workflow runs (ingestion, generation, audio
+synthesis) as first-class resources rather than hiding them behind monolithic
+commands.
 
 ### TUI user journeys that drive API requirements
 
@@ -1011,8 +1011,7 @@ generation parameters through the TUI, which creates a run via REST and
 establishes a WebSocket connection to subscribe to events. The orchestrator
 publishes events as the run progresses, including checkpoints that require
 human approval. The TUI acknowledges each event and submits checkpoint
-responses via REST. The sequence concludes when the run completes
-successfully._
+responses via REST. The sequence concludes when the run completes successfully._
 
 ```mermaid
 sequenceDiagram
