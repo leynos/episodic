@@ -259,7 +259,7 @@ that align with the system design.
   options and idempotency key; GET returns job status with download URLs and
   manifest hash; export artefacts stored in object storage with signed URLs;
   hexagonal boundary tests passing. Dependencies: 4.2.3 mixing engine; 4.2.4
-  loudness normalization. Scope: domain model, port, adapter, and endpoint
+  loudness normalisation. Scope: domain model, port, adapter, and endpoint
   implementation.
 
 ### 4.3. Exit criteria
@@ -283,7 +283,7 @@ that align with the system design.
 - [ ] 5.1.1. Deliver API-first access backed by approval workflows and client
   tooling.
 - [ ] 5.1.2. Enable editorial collaboration and notifications.
-- [ ] 5.1.3. Provide realtime event streaming for agentic generation and audio
+- [ ] 5.1.3. Provide real-time event streaming for agentic generation and audio
   synthesis workflows.
 
 ### 5.2. Key activities
@@ -371,7 +371,7 @@ that align with the system design.
 - [ ] 5.3.3. All TUI-facing REST endpoints are accessible under the `/v1`
   prefix with consistent pagination, error contracts, optimistic concurrency,
   and idempotency-key support.
-- [ ] 5.3.4. WebSocket event streaming delivers realtime generation and audio
+- [ ] 5.3.4. WebSocket event streaming delivers real-time generation and audio
   run events with backpressure control, sequence-based reconnection, and REST
   fallback for event log retrieval.
 - [ ] 5.3.5. OpenAPI and AsyncAPI specifications are published and validated

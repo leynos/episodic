@@ -1,10 +1,10 @@
 # Episodic TUI API design
 
-This document specifies the REST and WebSocket API contract required to support
-a terminal user interface (TUI) for the Episodic podcast generation platform.
-It covers new endpoints, message schemas, and integration patterns while
-preserving hexagonal architecture boundaries and building on the existing
-canonical API surface.
+This document specifies the REST and WebSocket API contract required to
+support a terminal user interface (TUI) for the Episodic podcast generation
+platform. It covers new endpoints, message schemas, and integration patterns
+while preserving hexagonal architecture boundaries and building on the
+existing canonical API surface.
 
 The TUI itself is implemented in a separate repository. This document focuses
 on the server-side API that the TUI consumes, including abstract TUI
@@ -12,11 +12,12 @@ requirements as motivation and context for the design decisions.
 
 ## Motivation
 
-Episodic positions canonical TEI P5 as the auditable source of truth for series
-and episode content, with ingestion provenance captured in TEI headers and
-workflow state represented as explicit lifecycle enums and event histories. A
-TUI for this system should behave as a workflow cockpit: surfacing canonical
-artefacts (profiles, templates, reference documents, TEI, drafts, stems) and
+Episodic positions canonical Text Encoding Initiative (TEI) P5 as the auditable
+source of truth for series and episode content, with ingestion provenance
+captured in TEI headers and workflow state represented as explicit lifecycle
+enums and event histories. A TUI for this system should behave as a workflow
+cockpit: surfacing canonical artefacts (profiles, templates, reference
+documents, TEI, drafts, stems) and
 workflow runs (ingestion, generation, audio synthesis) as first-class resources
 rather than hiding them behind monolithic commands.
 
@@ -34,10 +35,10 @@ expose.
   `host_profile` and `guest_profile` with revision workflows and series-aligned
   access.
 - **Source upload and ingestion** — upload source files, create ingestion
-  jobs, and monitor normalisation and conflict-resolution progress.
+  jobs, and monitor normalization and conflict-resolution progress.
 - **Episode prompting and generation** — configure generation runs with
   template bindings and prompt overrides, then launch and observe agentic
-  generation in real time.
+  generation in real-time.
 - **Script review and editing** — fetch, edit, and patch structured
   script projections derived from canonical TEI without forcing direct XML
   manipulation.
@@ -48,7 +49,7 @@ expose.
   preview synthesis, separate from episode renders.
 - **Render and export** — produce final mastered audio or stems-plus-TEI
   bundles as downloadable export jobs.
-- **Realtime agentic generation view** — subscribe to live run events
+- **Real-time agentic generation view** — subscribe to live run events
   over WebSocket, observe graph node progress, and submit human-in-the-loop
   checkpoint responses.
 
@@ -145,7 +146,7 @@ POST   /v1/episodes/{episode_id}/approval-events
 
 ### Ingestion jobs and sources
 
-Ingestion jobs orchestrate multi-source normalisation into canonical TEI. The
+Ingestion jobs orchestrate multi-source normalization into canonical TEI. The
 TUI needs endpoints to create jobs, attach sources, and observe progress.
 
 ```plaintext
@@ -343,6 +344,9 @@ All error responses follow a consistent JSON structure with a machine-readable
 
 ### Standard error codes
 
+_Table: Standard HTTP error codes and their corresponding machine-readable
+codes._
+
 | HTTP status | Code                   | Description                                                               |
 | ----------- | ---------------------- | ------------------------------------------------------------------------- |
 | 400         | `validation_error`     | Request payload fails validation                                          |
@@ -374,13 +378,13 @@ Constraints: `1 <= limit <= 100`, `offset >= 0`. Invalid values return
 ## Rate limiting
 
 REST endpoints enforce a token-bucket rate limit per authenticated user or
-organisation (proposed baseline: 60 requests per minute). Exceeding the limit
+organization (proposed baseline: 60 requests per minute). Exceeding the limit
 returns `429` with a `Retry-After` header.
 
 WebSocket connections cap subscriptions per connection and event throughput per
 run subscription.
 
-## WebSocket API for realtime generation events
+## WebSocket API for real-time generation events
 
 ### Route structure
 
@@ -396,7 +400,7 @@ multiple TUI clients to observe the same run.
 
 The `run_id` namespace initially covers generation runs only. Audio runs use a
 separate event model (preview-feedback-regeneration cycles) that does not
-require realtime token streaming, so audio run status is polled via REST. If
+require real-time token streaming, so audio run status is polled via REST. If
 future audio synthesis workflows produce high-frequency events that benefit
 from streaming, the same WebSocket route and message schema can be extended by
 accepting audio run identifiers; at that point a `run_kind` field (`generation`
@@ -544,6 +548,8 @@ Error notification from the server.
 The `run.event` message carries an `event.kind` field. The following event
 kinds are defined:
 
+_Table: Run event kinds streamed via WebSocket with their descriptions._
+
 | Kind                 | Description                                                |
 | -------------------- | ---------------------------------------------------------- |
 | `node.started`       | Graph node execution has begun                             |
@@ -593,6 +599,8 @@ the REST endpoint `GET /v1/generation-runs/{run_id}/events` to catch up before
 re-subscribing.
 
 ### WebSocket close codes
+
+_Table: WebSocket close codes and their meanings._
 
 | Close code | Meaning                                                           |
 | ---------- | ----------------------------------------------------------------- |
@@ -728,6 +736,11 @@ definitions owned by the domain layer:
   run events to WebSocket connections.
 
 ### Adapter boundaries
+
+The outbound adapters integrate with large language model (LLM) and text-to-speech
+(TTS) vendor services, as well as Postgres, object storage, and message brokers.
+
+_Table: Hexagonal architecture layer responsibilities._
 
 | Layer                               | Responsibility                                                                                     |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -890,12 +903,371 @@ created_at: datetime
 - **Event logs** are append-only and partitioned by `generation_run_id`
   for efficient range queries.
 - **Loudness targets** are stored per audio run as
-  `target_loudness_lufs` (default: -16 LUFS for podcast distribution, -23 LUFS
-  for broadcast contexts per EBU R128).
+  `target_loudness_lufs` (default: -16 Loudness Units relative to Full Scale
+  (LUFS) for podcast distribution, -23 LUFS for broadcast contexts per European
+  Broadcasting Union (EBU) R128).
+
+### Entity-relationship diagram
+
+_Figure: Entity-relationship diagram showing the domain entities and their
+relationships for the TUI API surface. Each entity is represented with its
+primary key (uuid id) and selected attributes. Cardinalities show one-to-many
+relationships between episodes, generation runs, audio runs, and their derived
+artefacts (events, checkpoints, previews, stems, and export jobs). Series
+profiles relate to voice previews for testing voice persona configurations._
+
+```mermaid
+erDiagram
+    EPISODE {
+        uuid id
+    }
+
+    SERIES_PROFILE {
+        uuid id
+    }
+
+    GENERATION_RUN {
+        uuid id
+        uuid episode_id
+        uuid template_id
+        string status
+    }
+
+    GENERATION_EVENT {
+        uuid id
+        uuid generation_run_id
+        int seq
+        string kind
+    }
+
+    CHECKPOINT {
+        uuid id
+        uuid generation_run_id
+    }
+
+    AUDIO_RUN {
+        uuid id
+        uuid episode_id
+        string status
+    }
+
+    PREVIEW_ASSET {
+        uuid id
+        uuid audio_run_id
+        string storage_uri
+    }
+
+    STEM_ASSET {
+        uuid id
+        uuid episode_id
+        string stem_type
+        string storage_uri
+    }
+
+    AUDIO_FEEDBACK {
+        uuid id
+        uuid audio_run_id
+        string segment_id
+        string action
+    }
+
+    EXPORT_JOB {
+        uuid id
+        uuid episode_id
+        string export_type
+        string status
+    }
+
+    VOICE_PREVIEW {
+        uuid id
+        uuid series_profile_id
+        string status
+    }
+
+    EPISODE ||--o{ GENERATION_RUN : has
+    GENERATION_RUN ||--o{ GENERATION_EVENT : logs
+    GENERATION_RUN ||--o{ CHECKPOINT : yields
+
+    EPISODE ||--o{ AUDIO_RUN : has
+    AUDIO_RUN ||--o{ PREVIEW_ASSET : produces
+    AUDIO_RUN ||--o{ AUDIO_FEEDBACK : receives
+
+    EPISODE ||--o{ STEM_ASSET : owns
+    EPISODE ||--o{ EXPORT_JOB : exports
+
+    SERIES_PROFILE ||--o{ VOICE_PREVIEW : scopes
+```
+
+### Workflow sequence diagram
+
+_Figure: Sequence diagram illustrating the end-to-end flow for starting a
+generation run and observing events via WebSocket. The user configures
+generation parameters through the TUI, which creates a run via REST and
+establishes a WebSocket connection to subscribe to events. The orchestrator
+publishes events as the run progresses, including checkpoints that require
+human approval. The TUI acknowledges each event and submits checkpoint
+responses via REST. The sequence concludes when the run completes
+successfully._
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant TUI
+    participant REST_v1 as REST_v1_API
+    participant WS_runs as WS_ws_runs_run_id
+    participant Orchestrator
+
+    User->>TUI: Configure generation parameters
+    TUI->>REST_v1: POST /v1/episodes/{episode_id}/generation-runs
+    REST_v1-->>TUI: 201 Created {run_id}
+
+    TUI->>WS_runs: WebSocket connect /ws/runs/{run_id}
+    TUI->>WS_runs: client.hello(token, resume_from=0)
+    WS_runs-->>TUI: server.welcome(connection_id, heartbeat_sec)
+    TUI->>WS_runs: run.subscribe(run_id)
+
+    Orchestrator-->>REST_v1: status updates, artefact changes
+    Orchestrator-->>WS_runs: publish GenerationEvent(seq, kind, payload)
+    WS_runs-->>TUI: run.event(seq=1)
+    TUI-->>WS_runs: run.ack(seq=1)
+
+    Orchestrator-->>WS_runs: publish checkpoint event
+    WS_runs-->>TUI: run.checkpoint(checkpoint_id, prompt, options)
+
+    User->>TUI: Approve or request changes
+    TUI->>REST_v1: POST /v1/generation-runs/{run_id}/checkpoint
+    REST_v1-->>TUI: 202 Accepted
+
+    Orchestrator-->>WS_runs: publish resumed events
+    WS_runs-->>TUI: run.event(...)
+
+    Orchestrator-->>WS_runs: publish completion
+    WS_runs-->>TUI: run.complete(status=succeeded)
+```
+
+### Domain model class diagram
+
+_Figure: Class diagram showing the domain entities, their attributes, and port
+interfaces defined for the TUI API. Domain entities (GenerationRun, AudioRun,
+Checkpoint, etc.) are modelled as frozen dataclasses with UUIDv7 identifiers
+and timestamp fields. Port interfaces define the contract between domain
+services and outbound adapters, specifying operations for persistence, event
+streaming, and lifecycle management. The diagram illustrates the one-to-many
+relationships between runs and their derived artefacts, and the dependency
+relationships between ports and domain entities._
+
+```mermaid
+classDiagram
+    class GenerationRun {
+        +UUID id
+        +UUID episode_id
+        +UUID template_id
+        +GenerationRunStatus status
+        +str current_node
+        +datetime started_at
+        +datetime ended_at
+        +JsonMapping budget_snapshot
+        +JsonMapping configuration
+        +datetime created_at
+        +datetime updated_at
+    }
+
+    class GenerationEvent {
+        +UUID id
+        +UUID generation_run_id
+        +int seq
+        +str kind
+        +JsonMapping payload
+        +datetime created_at
+    }
+
+    class Checkpoint {
+        +UUID id
+        +UUID generation_run_id
+        +str prompt
+        +list~str~ options
+        +str response_action
+        +JsonMapping response_payload
+        +datetime responded_at
+        +datetime created_at
+    }
+
+    class AudioRun {
+        +UUID id
+        +UUID episode_id
+        +AudioRunStatus status
+        +JsonMapping voice_personas
+        +JsonMapping music_beds
+        +float target_loudness_lufs
+        +datetime started_at
+        +datetime ended_at
+        +datetime created_at
+        +datetime updated_at
+    }
+
+    class PreviewAsset {
+        +UUID id
+        +UUID audio_run_id
+        +str segment_id
+        +str storage_uri
+        +str content_hash
+        +int duration_ms
+        +str format
+        +datetime created_at
+    }
+
+    class StemAsset {
+        +UUID id
+        +UUID episode_id
+        +str stem_type
+        +str storage_uri
+        +str content_hash
+        +int duration_ms
+        +str format
+        +JsonMapping metadata
+        +datetime created_at
+    }
+
+    class AudioFeedback {
+        +UUID id
+        +UUID audio_run_id
+        +str segment_id
+        +str action
+        +str notes
+        +str actor
+        +datetime created_at
+    }
+
+    class ExportJob {
+        +UUID id
+        +UUID episode_id
+        +str export_type
+        +ExportStatus status
+        +JsonMapping format_options
+        +list~str~ download_urls
+        +str manifest_hash
+        +datetime started_at
+        +datetime ended_at
+        +datetime created_at
+        +datetime updated_at
+    }
+
+    class VoicePreview {
+        +UUID id
+        +UUID series_profile_id
+        +str text
+        +JsonMapping voice_persona_config
+        +str status
+        +str audio_url
+        +int duration_ms
+        +datetime created_at
+    }
+
+    class ScriptProjection {
+        +UUID episode_id
+        +int version
+        +list~ScriptSegment~ segments
+        +datetime updated_at
+    }
+
+    class ScriptSegment {
+        +str id
+        +str speaker
+        +str type
+        +str text
+        +str start_marker
+        +str notes
+    }
+
+    class GenerationRunPort {
+        <<interface>>
+        +create_run(GenerationRun run)
+        +get_run(UUID id)
+        +list_runs(UUID episode_id, int limit, int offset)
+        +append_event(UUID run_id, GenerationEvent event)
+        +list_events(UUID run_id, int limit, int offset, int after_seq)
+        +create_checkpoint(Checkpoint checkpoint)
+        +submit_checkpoint_response(UUID checkpoint_id, str action, JsonMapping payload)
+    }
+
+    class AudioRunPort {
+        <<interface>>
+        +create_audio_run(AudioRun run)
+        +get_audio_run(UUID id)
+        +list_audio_runs(UUID episode_id, int limit, int offset)
+        +add_preview_asset(PreviewAsset asset)
+        +list_preview_assets(UUID audio_run_id)
+        +record_feedback(AudioFeedback feedback)
+        +list_stems(UUID episode_id)
+        +add_stem(StemAsset stem)
+    }
+
+    class ScriptProjectionPort {
+        <<interface>>
+        +get_projection(UUID episode_id)
+        +apply_patch(UUID episode_id, JsonMapping patch, int expected_version)
+    }
+
+    class ExportJobPort {
+        <<interface>>
+        +create_export_job(ExportJob job)
+        +get_export_job(UUID id)
+        +list_export_jobs(UUID episode_id, int limit, int offset)
+        +mark_export_started(UUID id)
+        +mark_export_completed(UUID id, list~str~ download_urls, str manifest_hash)
+    }
+
+    class VoicePreviewPort {
+        <<interface>>
+        +create_voice_preview(VoicePreview preview)
+        +get_voice_preview(UUID id)
+    }
+
+    class UploadPort {
+        <<interface>>
+        +create_multipart_upload(str filename, str content_type, int size_bytes)
+        +init_presigned_upload(str filename, str content_type, int size_bytes)
+    }
+
+    class RunEventBusPort {
+        <<interface>>
+        +publish_event(UUID run_id, GenerationEvent event)
+        +subscribe_run(UUID run_id, str connection_id)
+        +ack_events(UUID run_id, str connection_id, int seq)
+    }
+
+    GenerationRun "1" -- "*" GenerationEvent : has_events
+    GenerationRun "1" -- "*" Checkpoint : has_checkpoints
+
+    AudioRun "1" -- "*" PreviewAsset : has_previews
+    AudioRun "1" -- "*" AudioFeedback : has_feedback
+
+    StemAsset "*" -- "1" AudioRun : derived_from_run
+
+    ScriptProjection "1" -- "*" ScriptSegment : has_segments
+
+    GenerationRunPort ..> GenerationRun
+    GenerationRunPort ..> GenerationEvent
+    GenerationRunPort ..> Checkpoint
+
+    AudioRunPort ..> AudioRun
+    AudioRunPort ..> PreviewAsset
+    AudioRunPort ..> AudioFeedback
+    AudioRunPort ..> StemAsset
+
+    ScriptProjectionPort ..> ScriptProjection
+    ScriptProjectionPort ..> ScriptSegment
+
+    ExportJobPort ..> ExportJob
+
+    VoicePreviewPort ..> VoicePreview
+
+    RunEventBusPort ..> GenerationEvent
+```
 
 ## Security considerations
 
-- **Least-privilege tokens.** Scope tokens to series or organisation
+- **Least-privilege tokens.** Scope tokens to series or organization
   level; enforce RBAC consistently across REST and WebSocket surfaces.
 - **Audit trails.** Preserve approval events, run events, and user
   edits as immutable history.
