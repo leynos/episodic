@@ -123,7 +123,7 @@ PATCH  /v1/episodes/{episode_id}
 GET    /v1/episodes/{episode_id}/tei
        Returns canonical TEI XML in a JSON envelope
 PUT    /v1/episodes/{episode_id}/tei
-       Body: tei_xml, expected_version
+       Body: tei_xml, expected_revision
 
 GET    /v1/episodes/{episode_id}/approval-events
        Query: limit, offset
@@ -215,7 +215,7 @@ GET    /v1/episodes/{episode_id}/script
        version)
 
 PATCH  /v1/episodes/{episode_id}/script
-       Body: patch operations, expected_version
+       Body: patch operations, expected_revision
        Internally translates projection patches back to canonical TEI
 ```
 
@@ -1209,7 +1209,7 @@ classDiagram
     class ScriptProjectionPort {
         <<interface>>
         +get_projection(UUID episode_id)
-        +apply_patch(UUID episode_id, JsonMapping patch, int expected_version)
+        +apply_patch(UUID episode_id, JsonMapping patch, int expected_revision)
     }
 
     class ExportJobPort {

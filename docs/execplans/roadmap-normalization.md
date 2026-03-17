@@ -37,7 +37,7 @@ Success is observable when:
 - Design document sections are cited where applicable (e.g., "See
   `docs/episodic-podcast-generation-system-design.md` §Component
   Responsibilities").
-- The roadmap remains ambitious but every task is realistically achievable in
+- The roadmap remains ambitious, but every task is realistically achievable in
   isolation.
 
 ## Constraints
