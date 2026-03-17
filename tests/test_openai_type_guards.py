@@ -10,6 +10,7 @@ import pytest
 
 from episodic.llm.openai_client import (
     OpenAIChatCompletionAdapter,
+    OpenAIResponsesAdapter,
     OpenAIResponseValidationError,
     is_openai_chat_completion_payload,
     is_openai_choice_payload,
@@ -188,3 +189,80 @@ def test_adapter_rejects_blank_choice_message_content() -> None:
         match=r"choices\[0\]\.message\.content must be a non-empty string\.",
     ):
         adapter.normalize_chat_completion(payload)
+
+
+def test_responses_adapter_accepts_output_text_after_reasoning_item() -> None:
+    """Responses payloads may emit reasoning items before message output."""
+    payload: object = {
+        "id": "resp_123",
+        "model": "gpt-4.1-mini",
+        "output": [
+            {
+                "type": "reasoning",
+                "content": [{"type": "summary_text", "text": "Thinking..."}],
+            },
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": "Final answer."}],
+            },
+        ],
+        "usage": {
+            "input_tokens": 12,
+            "output_tokens": 7,
+            "total_tokens": 19,
+        },
+    }
+
+    result = OpenAIResponsesAdapter.normalize_response(payload)
+
+    assert result.text == "Final answer.", (
+        "Expected adapter to scan the full output list for output_text."
+    )
+
+
+def test_responses_adapter_rejects_non_mapping_usage_when_present() -> None:
+    """Responses payloads should reject malformed usage metadata eagerly."""
+    payload: object = {
+        "id": "resp_123",
+        "model": "gpt-4.1-mini",
+        "output": [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": "Final answer."}],
+            }
+        ],
+        "usage": "invalid",
+    }
+
+    with pytest.raises(
+        OpenAIResponseValidationError,
+        match=r"Invalid OpenAI Responses payload\.",
+    ):
+        OpenAIResponsesAdapter.normalize_response(payload)
+
+
+def test_responses_adapter_rejects_invalid_total_tokens_with_responses_message() -> (
+    None
+):
+    """Responses usage validation should keep Responses-specific diagnostics."""
+    payload: object = {
+        "id": "resp_123",
+        "model": "gpt-4.1-mini",
+        "output": [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": "Final answer."}],
+            }
+        ],
+        "usage": {
+            "input_tokens": 12,
+            "output_tokens": 7,
+            "total_tokens": "invalid",
+        },
+    }
+
+    with pytest.raises(
+        OpenAIResponseValidationError,
+        match=r"Invalid OpenAI Responses payload\.",
+    ):
+        OpenAIResponsesAdapter.normalize_response(payload)

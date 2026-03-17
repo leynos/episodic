@@ -122,7 +122,14 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
         await self._update_entity_fields(
             SeriesProfileRecord,
             profile,
-            ["slug", "title", "description", "configuration", "updated_at"],
+            [
+                "slug",
+                "title",
+                "description",
+                "configuration",
+                "guardrails",
+                "updated_at",
+            ],
         )
 
 
@@ -318,7 +325,7 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
         await self._update_entity_fields(
             EpisodeTemplateRecord,
             template,
-            ["slug", "title", "description", "structure", "updated_at"],
+            ["slug", "title", "description", "structure", "guardrails", "updated_at"],
         )
 
 

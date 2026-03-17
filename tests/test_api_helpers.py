@@ -32,6 +32,19 @@ if typ.TYPE_CHECKING:
     from episodic.api.types import JsonPayload
 
 
+def _call_builder_with_payload(
+    builder: typ.Callable[..., object],
+    payload: JsonPayload,
+) -> object:
+    """Invoke a helper builder with the right argument shape for the test."""
+    if builder in {
+        helpers.build_profile_update_request,
+        helpers.build_template_update_request,
+    }:
+        return builder(uuid.uuid4(), payload)
+    return builder(payload)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class _ExampleFields:
     """Example dataclass used to test generic payload mapping."""
@@ -185,3 +198,66 @@ class TestTypedUpdateRequest:
             "fields": "payload-fields",
             "audit": AuditMetadata(actor="editor@example.com", note="update"),
         }, "Expected request builder output to use parsed update components."
+
+
+class TestGuardrailValidation:
+    """Tests for guardrail object validation in API helper builders."""
+
+    @staticmethod
+    @pytest.mark.parametrize(
+        ("builder", "payload"),
+        [
+            pytest.param(
+                helpers.build_profile_create_kwargs,
+                {
+                    "slug": "profile",
+                    "title": "Profile",
+                    "configuration": {"tone": "neutral"},
+                    "guardrails": None,
+                },
+                id="profile-create-null",
+            ),
+            pytest.param(
+                helpers.build_profile_update_request,
+                {
+                    "expected_revision": 1,
+                    "title": "Profile",
+                    "configuration": {"tone": "neutral"},
+                    "guardrails": [],
+                },
+                id="profile-update-list",
+            ),
+            pytest.param(
+                helpers.build_template_create_kwargs,
+                {
+                    "series_profile_id": str(uuid.uuid4()),
+                    "slug": "template",
+                    "title": "Template",
+                    "structure": {"segments": ["intro"]},
+                    "guardrails": "invalid",
+                },
+                id="template-create-string",
+            ),
+            pytest.param(
+                helpers.build_template_update_request,
+                {
+                    "expected_revision": 1,
+                    "title": "Template",
+                    "structure": {"segments": ["intro"]},
+                    "guardrails": None,
+                },
+                id="template-update-null",
+            ),
+        ],
+    )
+    def test_builders_reject_non_object_guardrails(
+        builder: typ.Callable[..., object],
+        payload: JsonPayload,
+    ) -> None:
+        """Reject null and other non-object guardrail payloads."""
+        with pytest.raises(falcon.HTTPBadRequest, match=r"400 Bad Request") as exc_info:
+            _ = _call_builder_with_payload(builder, payload)
+
+        assert exc_info.value.description == "guardrails must be a JSON object.", (
+            "Expected helper builders to reject non-object guardrails consistently."
+        )

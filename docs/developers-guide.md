@@ -178,7 +178,8 @@ adapter (`episodic/api/app.py`) over domain services in
 
 `GET /series-profiles/{profile_id}/brief` returns a stable payload containing:
 
-- `series_profile`: profile metadata, configuration, and current revision.
+- `series_profile`: profile metadata, configuration, persisted `guardrails`,
+  and current revision.
 - `episode_templates`: one template when `template_id` is provided, or all
   templates for the series profile when omitted.
 - `reference_documents`: reusable reference bindings resolved for the selected
@@ -251,17 +252,39 @@ from structured briefs:
 
 - `build_series_brief_prompt(...)` in `episodic.canonical` loads a structured
   brief and returns a rendered prompt payload.
+- `build_series_guardrail_prompt(...)` in `episodic.canonical` loads the same
+  structured brief and renders persisted profile/template `guardrails` into a
+  provider-neutral system prompt.
 - `episodic.canonical.prompts` exposes:
   - `build_series_brief_template(...)` to construct a Python 3.14 template
     string (`t"..."`) representation.
+  - `build_series_guardrail_template(...)` to construct the persisted
+    guardrail scaffold from the same brief payload.
   - `render_template(...)` to render prompt text while preserving static and
     interpolation metadata for audit trails.
   - `render_series_brief_prompt(...)` as the standard convenience renderer for
     brief payloads.
+  - `render_series_guardrail_prompt(...)` as the standard convenience renderer
+    for guardrail/system prompt payloads.
 
 The renderer accepts an optional interpolation escape callback, so adapters can
 apply policy-specific sanitization (for example, XML/HTML escaping) without
 changing canonical prompt assembly rules.
+
+## LLM adapter boundary
+
+`episodic.llm` now owns a richer outbound contract:
+
+- `LLMRequest` carries the prompt text, optional system prompt, target model,
+  provider operation (`chat_completions` or `responses`), and token budget.
+- `OpenAICompatibleLLMAdapter` implements `LLMPort` over explicit
+  OpenAI-compatible HTTP calls, so OpenRouter-style chat completions and OpenAI
+  Responses stay behind the same port.
+- Token budgets are enforced twice: a pre-flight estimate rejects obviously
+  impossible requests, and normalized provider usage is checked again after the
+  response returns.
+- Persisted `guardrails` belong to canonical profile/template state and are
+  composed before the adapter call, not inside the vendor transport layer.
 
 ## Multi-source ingestion
 

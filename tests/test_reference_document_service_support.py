@@ -53,6 +53,7 @@ async def service_fixture(
                 title="Primary Service Profile",
                 description="Primary profile",
                 configuration={"tone": "direct"},
+                guardrails={},
             ),
             audit=AuditMetadata(actor="service@example.com", note="Create primary"),
         )
@@ -63,6 +64,7 @@ async def service_fixture(
                 title="Secondary Service Profile",
                 description="Secondary profile",
                 configuration={"tone": "formal"},
+                guardrails={},
             ),
             audit=AuditMetadata(
                 actor="service@example.com",
@@ -77,6 +79,7 @@ async def service_fixture(
                 title="Service Template",
                 description="Template for reference docs",
                 structure={"segments": ["intro", "analysis", "outro"]},
+                guardrails={},
             ),
             audit=AuditMetadata(
                 actor="service@example.com",

@@ -127,6 +127,7 @@ def series_profile_exists(
             title="Science Hour",
             description=None,
             configuration={"tone": "bright"},
+            guardrails={},
             created_at=now,
             updated_at=now,
         )

@@ -5,14 +5,14 @@ import typing as typ
 
 import pytest
 
+if typ.TYPE_CHECKING:
+    from episodic.canonical.domain import JsonMapping
+
 from episodic.canonical.domain import SourceDocumentInput
 from episodic.canonical.provenance import (
     build_tei_header_provenance,
     merge_tei_header_provenance,
 )
-
-if typ.TYPE_CHECKING:
-    from episodic.canonical.domain import JsonMapping
 
 
 def _source(

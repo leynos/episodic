@@ -44,6 +44,7 @@ def episode_fixture() -> tuple[
         title="Nightshift",
         description="After-dark science news.",
         configuration={"tone": "calm"},
+        guardrails={},
         created_at=now,
         updated_at=now,
     )

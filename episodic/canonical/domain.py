@@ -82,6 +82,7 @@ class SeriesProfile:
     title: str
     description: str | None
     configuration: JsonMapping
+    guardrails: JsonMapping
     created_at: dt.datetime
     updated_at: dt.datetime
 
@@ -297,6 +298,8 @@ class EpisodeTemplate:
         Optional longer template description.
     structure : JsonMapping
         JSON structure describing template sections.
+    guardrails : JsonMapping
+        Persisted LLM guardrail configuration for this template.
     created_at : dt.datetime
         Timestamp when the template was created.
     updated_at : dt.datetime
@@ -309,6 +312,7 @@ class EpisodeTemplate:
     title: str
     description: str | None
     structure: JsonMapping
+    guardrails: JsonMapping
     created_at: dt.datetime
     updated_at: dt.datetime
 
