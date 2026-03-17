@@ -139,6 +139,25 @@ that align with the system design.
   and compliance results, linked to the canonical episode.
 - [ ] 3.2.6. Expose generation and QA state via the API and CLI, including
   filtering by brand compliance status.
+- [ ] 3.2.7. Implement structured-output planning and tool-calling execution
+  with model tiering for cost control.
+- [ ] 3.2.8. Add LangGraph suspend-and-resume orchestration, idempotency keys,
+  and Celery queue routing for I/O-bound and CPU-bound workloads.
+- [ ] 3.2.9. Instrument cost accounting with per-call usage metering, pinned
+  SLA4OAI pricing snapshots for helper services, hierarchical ledger entries,
+  and aggregated run totals.
+- [ ] 3.2.10. Extend architecture enforcement to LangGraph nodes and Celery
+  tasks, ensuring port-only dependencies and checkpoint payload boundaries.
+- [ ] 3.2.11. Add `PricingCataloguePort` adapter with SLA discovery via OpenAPI,
+  schema validation, caching (TTL/ETag), and snapshot persistence.
+- [ ] 3.2.12. Add `PricingEngine` with a concurrency-safe `MeteringPort` to
+  price individual calls deterministically when quotas and overages apply.
+- [ ] 3.2.13. Extend `CostLedgerPort` storage to record helper service call line
+  items, including operation identifiers, usage metrics, plan IDs, and SLA
+  snapshot IDs.
+- [ ] 3.2.14. Extend `BudgetPort` APIs to reserve estimated spend for helper
+  calls and then commit/release against actuals (reserve → commit → release)
+  keyed by idempotency key.
 - [ ] 3.2.15. Define `GenerationRunPort` and implement the generation-run
   domain model (`GenerationRun`, `GenerationEvent`, `Checkpoint`) with
   repository contracts and Alembic migrations. Acceptance criteria: frozen
@@ -166,25 +185,6 @@ that align with the system design.
   enforcement; round-trip projection-to-TEI fidelity validated. Dependencies:
   2.2.1 TEI schema; TEI serialization library. Scope: domain model, port,
   adapter, and endpoint implementation.
-- [ ] 3.2.7. Implement structured-output planning and tool-calling execution
-  with model tiering for cost control.
-- [ ] 3.2.8. Add LangGraph suspend-and-resume orchestration, idempotency keys,
-  and Celery queue routing for I/O-bound and CPU-bound workloads.
-- [ ] 3.2.9. Instrument cost accounting with per-call usage metering, pinned
-  SLA4OAI pricing snapshots for helper services, hierarchical ledger entries,
-  and aggregated run totals.
-- [ ] 3.2.10. Extend architecture enforcement to LangGraph nodes and Celery
-  tasks, ensuring port-only dependencies and checkpoint payload boundaries.
-- [ ] 3.2.11. Add `PricingCataloguePort` adapter with SLA discovery via OpenAPI,
-  schema validation, caching (TTL/ETag), and snapshot persistence.
-- [ ] 3.2.12. Add `PricingEngine` with a concurrency-safe `MeteringPort` to
-  price individual calls deterministically when quotas and overages apply.
-- [ ] 3.2.13. Extend `CostLedgerPort` storage to record helper service call line
-  items, including operation identifiers, usage metrics, plan IDs, and SLA
-  snapshot IDs.
-- [ ] 3.2.14. Extend `BudgetPort` APIs to reserve estimated spend for helper
-  calls and then commit/release against actuals (reserve → commit → release)
-  keyed by idempotency key.
 
 ### 3.3. Exit criteria
 
@@ -371,9 +371,10 @@ that align with the system design.
 - [ ] 5.3.3. All TUI-facing REST endpoints are accessible under the `/v1`
   prefix with consistent pagination, error contracts, optimistic concurrency,
   and idempotency-key support.
-- [ ] 5.3.4. WebSocket event streaming delivers real-time generation and audio
-  run events with backpressure control, sequence-based reconnection, and REST
-  fallback for event log retrieval.
+- [ ] 5.3.4. WebSocket event streaming delivers real-time generation run events
+  with backpressure control, sequence-based reconnection, and REST fallback for
+  event log retrieval. Audio run event streaming deferred until `run_kind`
+  discriminator is introduced (see TUI API design document).
 - [ ] 5.3.5. OpenAPI and AsyncAPI specifications are published and validated
   against the implemented endpoints and message schemas.
 
