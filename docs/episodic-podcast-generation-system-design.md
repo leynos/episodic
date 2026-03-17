@@ -160,17 +160,19 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   the system guardrail prompt before invoking provider adapters.
 - Employs LangGraph StateGraphs to manage generation state, enabling iterative
   refinement cycles driven by QA feedback.
-- Implements conditional edges that route content based on Bromide and Chiltern
-  evaluation scores: drafts exceeding thresholds proceed to approval, whilst
-  those below threshold re-enter generation with targeted remediation prompts.
-- Supports parallel branches for multi-evaluator QA, allowing factual accuracy,
-  narrative flow, and brand compliance checks to execute concurrently before
-  aggregating results.
+- Implements conditional edges that route content based on Pedante, Bromide,
+  Chiltern, Anthem, and Caesura findings plus Chrono runtime estimates: drafts
+  exceeding thresholds proceed to approval, whilst those below threshold
+  re-enter generation with targeted remediation prompts.
+- Supports parallel branches for multi-evaluator QA, allowing factuality,
+  trope detection, pronunciation checks, brand compliance, false-ending
+  detection, and runtime estimation to execute concurrently before aggregating
+  results.
 - Produces structured drafts, show notes, chapter markers, and sponsorship copy.
 - Persists generation runs alongside prompts, responses, iteration counts, and
   cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
-  pinning pricing snapshots for helper services and vendors to support
+  pinning provider pricing snapshots and evaluator-node metadata to support
   auditability and dispute resolution.
 - Enforces per-episode budgets through `BudgetPort` using reservation semantics
   (reserve → commit → release) around billable calls.
@@ -182,14 +184,25 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 
 ### Quality Assurance Stack
 
-- Bromide evaluates factual accuracy, voice consistency, and bias mitigation,
-  returning structured findings with severity levels and remediation guidance.
-- Chiltern rates narrative flow, pacing, and call-to-action placement, producing
-  quantitative scores and qualitative suggestions.
-- Brand guideline checks enforce vocabulary, tone, and forbidden topic rules.
-- Evaluator services publish machine-discoverable pricing contracts via OpenAPI
-  `info.x-sla`, pointing to an SLA4OAI (Service Level Agreements for OpenAPI)
-  plan document that defines metrics and pricing rules.
+- Pedante evaluates factual accuracy and claim support, returning structured
+  findings with severity levels and remediation guidance.
+- Bromide detects overused tropes, cliches, and snowclones in draft scripts.
+- Chiltern flags frequently mispronounced words or terminology that do not yet
+  have pronunciation guidance attached, including domain-specific and internal
+  vocabulary.
+- Anthem enforces vocabulary, tone, and forbidden topic rules as the brand
+  guideline checker.
+- Caesura detects false endings where a script appears to wrap up but continues
+  for another four minutes or more.
+- Chrono estimates spoken runtime for written dialogue. The initial
+  implementation is a naive local heuristic, with room to adopt more
+  sophisticated estimation later.
+- Pedante, Bromide, Chiltern, Anthem, and Caesura initially execute as
+  internal LangGraph evaluator nodes backed by structured `LLMPort` calls
+  rather than separate network services.
+- Evaluator schemas are versioned alongside prompts and orchestration code, and
+  cost accounting relies on normalized `LLMPort` usage plus pinned provider
+  pricing snapshots rather than evaluator-specific OpenAPI contracts.
 - QA evaluators operate as LangGraph nodes, enabling parallel execution within
   the generation StateGraph.
 - Evaluation results drive conditional routing: passing scores advance content
@@ -271,8 +284,8 @@ hexagonal architecture but rather provides structured control flow for
 iterative, feedback-driven processes. Key principles include:
 
 - **Ports remain the integration boundary.** LangGraph graphs invoke `LLMPort`,
-  `TTSPort`, and evaluator ports; the graph itself does not expose external
-  integration points.
+  `TTSPort`, and internal evaluator or runtime-estimator ports; the graph
+  itself does not expose external integration points.
 - **StateGraphs encapsulate workflow state.** Each generation or synthesis run
   maintains a StateGraph instance holding draft content, evaluation scores,
   iteration counts, and routing decisions.
@@ -362,11 +375,8 @@ adapter implementations.
   budgets before costly steps execute.
 - `CostLedgerPort` persists hierarchical cost entries (task roll-ups plus
   call-level line items) and aggregated run totals.
-- `PricingCataloguePort` discovers helper OpenAPI documents, fetches and
-  validates SLA4OAI pricing plans, and returns immutable snapshots plus plan
-  bindings for the calling tenant.
 - `MeteringPort` provides atomic, concurrency-safe metric consumption counters
-  used by pricing logic when quotas and overages apply.
+  used by pricing logic when quotas, allowances, or overages apply.
 - `CheckpointPort` saves and restores StateGraph checkpoints.
 - `TaskResumePort` accepts Celery callback payloads and resumes suspended runs.
 - `LLMPort` surfaces token usage metadata for cost accounting callbacks and
@@ -396,8 +406,9 @@ following node structure:
    sources; construct the initial prompt scaffold.
 2. **Generate:** Invoke `LLMPort` to produce draft content, show notes, and
    enrichments.
-3. **Evaluate (parallel branch):** Execute Bromide, Chiltern, and brand
-   compliance checks concurrently; aggregate results.
+3. **Evaluate (parallel branch):** Execute Pedante, Bromide, Chiltern, Anthem,
+   and Caesura checks, plus Chrono runtime estimation, concurrently; aggregate
+   results.
 4. **Route:** Conditional edge based on evaluation outcome:
    - If all evaluators pass thresholds, proceed to **Prepare for Approval**.
    - If evaluators fail but iteration count is below limit, proceed to
@@ -415,12 +426,18 @@ The following diagram illustrates the content generation graph:
 flowchart TD
     A[Initialize] --> B[Generate]
     B --> C{Evaluate}
-    C -->|Parallel| D1[Bromide]
-    C -->|Parallel| D2[Chiltern]
-    C -->|Parallel| D3[Brand Check]
+    C -->|Parallel| D1[Pedante]
+    C -->|Parallel| D2[Bromide]
+    C -->|Parallel| D3[Chiltern]
+    C -->|Parallel| D4[Anthem]
+    C -->|Parallel| D5[Caesura]
+    C -->|Parallel| D6[Chrono]
+    D6 --> D5
     D1 --> E[Aggregate]
     D2 --> E
     D3 --> E
+    D4 --> E
+    D5 --> E
     E --> F{Route}
     F -->|Pass| G[Prepare for Approval]
     F -->|Fail, retries remain| H[Refine]
@@ -442,7 +459,7 @@ flowchart TD
     B["Content Type"]
     C["Full Generation Pipeline"]
     D["Incremental Update"]
-    E["Bromide Analysis"]
+    E["QA Evaluation"]
     F["Source Documents"]
     G["Priority-Based Processing"]
     H["Direct Processing"]
@@ -496,10 +513,9 @@ sequenceDiagram
     participant API as "API Service"
     participant Orchestrator as "Content Generation Orchestrator"
     participant Postgres
-    participant PricingCatalogue as "PricingCataloguePort"
     participant Budget as "BudgetPort"
     participant LLMPort
-    participant Bromide
+    participant Chrono
     participant PricingEngine
     participant CostLedger as "CostLedgerPort"
     participant TTSPort
@@ -507,12 +523,13 @@ sequenceDiagram
     API ->> Postgres : Persist episode and source metadata
     API ->> Orchestrator : Initialize StateGraph run
     Orchestrator ->> LLMPort : Generate draft content
-    LLMPort -->> Orchestrator : Draft content
-    Orchestrator ->> PricingCatalogue : Get SLA snapshot + plan binding (Bromide)
+    LLMPort -->> Orchestrator : Draft content + usage metrics
     Orchestrator ->> Budget : Reserve estimated cost (idempotency key)
-    Orchestrator ->> Bromide : Evaluate draft quality (Idempotency-Key)
-    Bromide -->> Orchestrator : QA report + usage metrics
-    Orchestrator ->> PricingEngine : Price call (usage, plan, snapshot)
+    Orchestrator ->> LLMPort : Run Pedante, Bromide, Chiltern, Anthem, and Caesura schemas
+    LLMPort -->> Orchestrator : Structured findings + usage metrics
+    Orchestrator ->> Chrono : Estimate runtime for pacing and ending checks
+    Chrono -->> Orchestrator : Runtime estimate + estimator metadata
+    Orchestrator ->> PricingEngine : Price calls from usage + pinned rate card
     PricingEngine -->> Orchestrator : Cost breakdown (minor units)
     Orchestrator ->> CostLedger : Write cost line item + task roll-up
     Orchestrator ->> Budget : Commit actual cost + release unused reservation
@@ -751,56 +768,34 @@ LangGraph checkpointing integrates with the platform's Postgres storage:
 
 ### Cost accounting and budget enforcement
 
-Cost accounting treats each LangGraph node and Celery task as a billable unit,
-but pricing is computed from per-call usage metrics and pinned pricing
-snapshots. The intent is determinism and auditability: historical bills must
-remain explainable even if helper pricing plans change later.
+Cost accounting treats each LangGraph node and Celery task as an auditable
+unit, but the initial implementation prices work from provider usage metrics
+captured inside the workflow. Pedante, Bromide, Chiltern, Anthem, and Caesura
+run as internal evaluator nodes backed by structured `LLMPort` calls, whilst
+Chrono is a local estimator. The intent is determinism and auditability:
+historical bills must remain explainable even if provider pricing changes or an
+evaluator is later replaced with a cheaper implementation.
 
-#### Helper pricing contracts (SLA4OAI)
+#### Internal evaluator metering and deterministic pricing
 
-Each helper service MUST expose:
-
-- `GET /openapi.json` (or `/openapi.yaml`)
-- `info.x-sla: <URI to SLA document>` (relative URIs are permitted)
-- `GET /sla/plans.yaml` (or similar), serving an SLA4OAI plan document
-
-The orchestrator MUST treat helper SLA documents as versioned billing inputs,
-not live truth that can silently rewrite historical cost. When pricing a call,
-the orchestrator persists and references an immutable snapshot (including a
-content hash) from cost ledger entries.
-
-#### Pricing catalogue, usage metering, and deterministic pricing
-
-- A `PricingCataloguePort` adapter discovers `info.x-sla`, fetches the SLA4OAI
-  document, validates it, and persists an immutable snapshot (`snapshot_id` +
-  hash). The adapter may cache by TTL and ETag to reduce traffic, but the
-  orchestrator always prices using a specific snapshot.
-- Helper responses MUST include a usage payload keyed by SLA4OAI metric names,
-  allowing the orchestrator to compute cost without guessing. This can be
-  provided via response headers (for low-friction retrofits) or a structured
-  response envelope.
-- Evaluator/helper ports should mirror `LLMPort` shape by returning usage
-  metadata alongside the primary payload (for example,
-  `BromidePort.evaluate(…) -> (result, usage)`).
-
-Header-based usage example:
-
-| Header               | Example value                                           | Required | Meaning                                                                          |
-| -------------------- | ------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
-| `X-SLA4OAI-Usage`    | `{"requests":1,"input_tokens":842,"output_tokens":211}` | Yes      | JSON mapping SLA4OAI metric names to values.                                     |
-| `X-SLA4OAI-Plan`     | `bromide-payg`                                          | Optional | Plan identifier used for pricing.                                                |
-| `X-SLA4OAI-Snapshot` | `<hash or version>`                                     | Optional | Helper-advertised snapshot/version; the orchestrator pins a snapshot regardless. |
-
-The domain service responsible for pricing is `PricingEngine`, which computes
-the cost of an individual call deterministically from:
-
-- `(service, operation, plan_id, usage_metrics, billing_period, snapshot_id,
-  org_id)`
-
-When quotas and overage pricing apply, `PricingEngine` relies on a
-concurrency-safe `MeteringPort` to atomically consume per-metric usage within
-the relevant billing period. This avoids parallel tasks randomly misattributing
-which calls landed "over quota".
+- Evaluator nodes return typed findings plus normalized usage metadata from the
+  underlying `LLMPort` call.
+- Chrono records estimator version, input size, and predicted runtime so its
+  decisions remain explainable even though it does not create an external-call
+  charge in the initial design.
+- Immutable `pricing_snapshots` capture the provider rate cards used to compute
+  LLM and TTS cost for a run. These snapshots are pinned from cost ledger
+  entries so historical pricing stays reproducible.
+- `PricingEngine` computes the cost of an individual call deterministically
+  from provider, model, operation, usage metrics, billing period,
+  `pricing_snapshot_id`, and organization identifier.
+- When quotas and overage pricing apply, `PricingEngine` relies on a
+  concurrency-safe `MeteringPort` to atomically consume per-metric usage within
+  the relevant billing period. This avoids parallel tasks randomly
+  misattributing which calls landed "over quota".
+- If evaluators are later externalized into dedicated services, the same
+  findings and usage DTOs can be retained whilst adding service-specific
+  discovery or billing contracts at the adapter edge.
 
 #### Hierarchical cost ledger entries
 
@@ -808,24 +803,26 @@ To support per-task cost recovery end-to-end, cost accounting records two
 levels:
 
 1. Task-level roll-ups.
-2. Call-level line items for each billable external interaction (LLM vendors,
-   TTS vendors, and helper services such as Bromide and Chiltern).
+2. Call-level line items for each billable provider interaction (LLM vendors
+   and TTS vendors), including LLM-backed evaluator nodes such as Pedante,
+   Bromide, Chiltern, Anthem, and Caesura.
 
 `CostLedgerPort` persists hierarchical entries (or a companion table) with
 fields including:
 
 - `parent_cost_entry_id` (nullable)
-- `scope`: `task | external_call | fixed_allocation`
-- `provider_type`: `llm | tts | helper`
+- `scope`: `task | provider_call | internal_estimate | fixed_allocation`
+- `provider_type`: `llm | tts | internal`
 - `provider_name`
-- `operation`: OpenAPI `operationId` or `(method, path)`
-- `sla_snapshot_id` + `plan_id`
+- `workflow_node` (for example, `pedante`, `bromide`, `chrono`)
+- `operation`: provider operation or evaluator schema name
+- `pricing_snapshot_id` + optional `plan_id`
 - `usage`: JSON `{metric_name: value, ...}`
 - `computed_cost_minor` + `currency`
 - `pricing_model`: `payg | quota_overage | subscription_allocated`
 - `idempotency_key` + `retry_attempt`
 - `billing_period_key` (for example, `2026-01`), required for `fixed_allocation`
-  entries and recommended for all external call scopes
+  entries and recommended for all provider-call scopes
 
 Budget enforcement operates at multiple scopes:
 
@@ -835,19 +832,20 @@ Budget enforcement operates at multiple scopes:
 - **Per-organization limits:** Service-wide caps that block further execution
   once aggregate spend reaches agreed thresholds.
 
-For billable helper calls, budget enforcement uses a reserve → commit → release
-flow:
+For billable provider calls, budget enforcement uses a reserve → commit →
+release flow:
 
-- Before calling a helper, compute a conservative estimate (for example, from
-  request size), then reserve budget using an idempotency key.
-- After the helper returns, price using actual usage metrics, write the cost
+- Before calling a billable provider, compute a conservative estimate (for
+  example, from prompt size), then reserve budget using an idempotency key.
+- After the provider returns, price using actual usage metrics, write the cost
   ledger entry, then commit actual spend and release any unused reservation.
 
 Idempotency keys must cover billing as well as side effects: the same
-`Idempotency-Key` used for outbound helper calls is reused for metering counter
-consumption and cost ledger insertion, preventing double-charging on retries.
+workflow-scoped idempotency key used for outbound provider calls is reused for
+metering counter consumption and cost ledger insertion, preventing
+double-charging on retries.
 
-Budget checks run before LLM calls, helper calls, and expensive Celery tasks,
+Budget checks run before LLM calls, TTS calls, and expensive Celery tasks,
 routing to a budget-exceeded node that records partial results and notifies
 operators. Anomaly controls include iteration caps, `max_concurrency` limits
 for parallel branches, retry budgets for unstable tools, and dead-letter queues
@@ -855,16 +853,17 @@ for tasks halted on budget overruns.
 
 #### Subscription plan pricing
 
-SLA4OAI supports plan-level pricing with a billing cadence (for example,
-monthly). For per-task recovery, the preferred approach is to model internal
-helpers as pure usage-based services (plan cost = 0) and express all chargeback
-through metric pricing. If subscription costs are unavoidable, the platform
-needs a scheduled settlement job that amortizes fixed plan cost across tasks as
-synthetic `scope=fixed_allocation` entries. Each `fixed_allocation` entry is
-linked to:
+Provider pricing may still include subscription or committed-spend elements
+with a billing cadence (for example, monthly). For per-task recovery, the
+preferred approach is to express internal evaluator chargeback entirely through
+the underlying provider usage. If subscription costs are unavoidable, the
+platform needs a scheduled settlement job that amortizes fixed plan cost across
+tasks as synthetic `scope=fixed_allocation` entries. Each `fixed_allocation`
+entry is linked to:
 
 - `billing_period_key` (so reconciliation is repeatable and queryable)
-- `plan_id` + `sla_snapshot_id` (so allocation is explainable and immutable)
+- `plan_id` + `pricing_snapshot_id` (so allocation is explainable and
+  immutable)
 - A task-level parent (`parent_cost_entry_id`) for per-task chargeback, with
   idempotency keyed by `(billing_period_key, plan_id, task_id)`
 
@@ -874,8 +873,8 @@ Agentic workflow behaviour is configurable per series profile:
 
 - **Maximum iteration count:** Limits regeneration cycles before escalation
   (default: 3).
-- **Evaluation thresholds:** Per-evaluator pass/fail scores (e.g., Bromide
-  accuracy >= 0.85).
+- **Evaluation thresholds:** Per-evaluator pass/fail scores (for example,
+  Pedante accuracy >= 0.85).
 - **Aggregation policy:** How multi-evaluator results combine (all-pass,
   weighted, majority).
 - **Checkpoint TTL:** Duration before abandoned workflows expire.
@@ -913,18 +912,22 @@ Agentic workflow behaviour is configurable per series profile:
   factors, and original files in object storage.
 - `episodes` holds canonical TEI, generation status, QA verdicts, and approval
   pointers.
-- `qa_findings` and `brand_compliance_results` record scores, rule breaches, and
-  remediation guidance.
+- `qa_findings` and `brand_compliance_results` record evaluator scores,
+  pronunciation gaps, rule breaches, runtime estimates, and remediation
+  guidance.
 - `approval_events` maintains the approval state machine history with actor and
   timestamp.
 - `generation_iterations` records each generation cycle within a StateGraph run,
   including prompts, responses, evaluator scores, routing decisions, and
   timestamps.
 - `cost_ledger_entries` captures per-task roll-ups plus per-call line items for
-  billable external interactions, including pinned pricing snapshot IDs, plan
-  bindings, usage metrics, computed cost in minor units, and idempotency keys.
-- `sla_snapshots` stores immutable SLA4OAI plan documents (snapshot ID, content
-  hash, source URI, retrieval timestamp) used to price helper service calls.
+  billable provider interactions, including pinned pricing snapshot IDs,
+  workflow node metadata, usage metrics, computed cost in minor units, and
+  idempotency keys.
+- `pricing_snapshots` stores immutable provider rate cards (snapshot ID,
+  content hash, source identifier, retrieval timestamp) used to price LLM and
+  TTS calls, with room for future external evaluator pricing if the
+  architecture changes.
 - `metering_counters` stores per-organization metric consumption keyed by
   service, billing period, and metric name to support quota and overage pricing.
 - `budget_limits` defines per-user, per-organization, and per-series spend
@@ -1554,8 +1557,9 @@ stateDiagram-v2
    profile and episode template to derive prompt scaffolds.
 2. `LLMPort` adapters invoke selected models, respecting token budgets and retry
    policies; the graph captures generated content in state.
-3. Bromide, Chiltern, and brand compliance evaluators execute in parallel as
-   graph nodes, producing structured findings.
+3. Pedante, Bromide, Chiltern, Anthem, and Caesura execute in parallel as
+   graph nodes, with Chrono supplying runtime estimates, producing structured
+   findings.
 4. Conditional edges route based on aggregated evaluation scores:
    - Passing scores advance content to the approval checkpoint.
    - Failing scores trigger refinement: the graph constructs targeted prompts
@@ -1572,10 +1576,12 @@ stateDiagram-v2
 
 1. QA evaluation occurs as an integrated phase of the generation StateGraph
    rather than a separate downstream step.
-2. Bromide and Chiltern analyse drafts within the graph, producing structured
-   findings with severity levels and remediation suggestions.
-3. Brand guideline checks run lexicon scans, sentiment analysis, and sponsor
-   requirement validation as concurrent graph nodes.
+2. Pedante, Bromide, Chiltern, Anthem, and Caesura analyse drafts within the
+   graph, producing structured findings with severity levels and remediation
+   suggestions.
+3. Anthem runs vocabulary, forbidden-topic, tone, and sponsor-requirement
+   checks as a concurrent graph node, whilst Chrono contributes runtime
+   estimates used by pacing-sensitive checks.
 4. Aggregated results drive conditional routing: passing content proceeds to
    approval checkpoints, failing content re-enters generation with targeted
    remediation prompts.
@@ -1589,12 +1595,13 @@ stateDiagram-v2
    - **Node transition events:** Each graph state transition (e.g., Generate →
      Evaluate, Route → Refine) records node name, timestamp, actor (system or
      user), and outcome.
-   - **Evaluation payloads:** Bromide accuracy scores, Chiltern narrative
-     ratings, and brand check findings persist as structured JSON alongside the
-     event.
+   - **Evaluation payloads:** Pedante factuality scores, Bromide trope
+     findings, Chiltern pronunciation warnings, Anthem brand results, Caesura
+     false-ending findings, and Chrono runtime estimates persist as structured
+     JSON alongside the event.
    - **Routing decision rationale:** The applied decision logic (e.g., "Pass:
-     all evaluators ≥ threshold" or "Fail: Bromide 0.72 < 0.85, iteration 2/3")
-     accompanies each routing event for transparency.
+     all evaluators >= threshold" or "Fail: Pedante 0.72 < 0.85, iteration
+     2/3") accompanies each routing event for transparency.
    Audit events persist to `approval_events` and link to
    `generation_iterations` for unified query access.
 

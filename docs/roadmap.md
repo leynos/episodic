@@ -13,11 +13,12 @@ multi-source ingestion stack, and reusable reference-document system. Success
 is observable when canonical TEI documents persist with full provenance after
 ingesting heterogeneous sources, and series profiles, episode templates, and
 reference documents are retrievable via the public Application Programming
-Interface (API) with optimistic locking and change history. See
-[Episodic Podcast System Design](episodic-podcast-generation-system-design.md)
-[Component Responsibilities](episodic-podcast-generation-system-design.md#component-responsibilities)
-and [Data Model and Storage](episodic-podcast-generation-system-design.md#data-model-and-storage)
-for design context.
+Interface (API) with optimistic locking and change history. See the following
+design sections for context:
+
+- [Episodic Podcast System Design](episodic-podcast-generation-system-design.md)
+- [Component Responsibilities](episodic-podcast-generation-system-design.md#component-responsibilities)
+- [Data Model and Storage](episodic-podcast-generation-system-design.md#data-model-and-storage)
 
 ### 1.1. Relational schema and persistence layer
 
@@ -28,7 +29,8 @@ enables persistent storage of all canonical entities.
   - Define TEI headers, canonical episodes, and approval states.
   - Define ingestion jobs and source documents.
   - Define series profiles and episode templates.
-  - See [Canonical content schema decisions](episodic-podcast-generation-system-design.md#canonical-content-schema-decisions).
+  - See
+    [Canonical content schema decisions](episodic-podcast-generation-system-design.md#canonical-content-schema-decisions).
 - [x] 1.1.2. Introduce migration tooling with Alembic.
   - Configure Alembic for version-controlled schema migrations.
   - Wire migration checks into CI to block divergent schemas.
@@ -36,7 +38,8 @@ enables persistent storage of all canonical entities.
   - Define repository interfaces for each aggregate root.
   - Implement Postgres-backed repositories with SQLAlchemy.
   - Add integration tests validating transactional boundaries.
-  - See [Repository and unit-of-work implementation](episodic-podcast-generation-system-design.md#repository-and-unit-of-work-implementation).
+  - See
+    [Repository and unit-of-work implementation](episodic-podcast-generation-system-design.md#repository-and-unit-of-work-implementation).
 
 ### 1.2. Multi-source ingestion service
 
@@ -47,14 +50,16 @@ canonical TEI. Completion enables content acquisition from diverse sources.
   - Accept Really Simple Syndication (RSS) feeds, briefs, transcripts, press
     releases, and research notes.
   - Apply document classifiers and quality scores.
-  - See [Multi-source Ingestion Service](episodic-podcast-generation-system-design.md#multi-source-ingestion-service).
+  - See
+    [Multi-source Ingestion Service](episodic-podcast-generation-system-design.md#multi-source-ingestion-service).
 - [x] 1.2.2. Implement source weighting heuristics and conflict resolution.
   - Define priority rules when sources conflict.
   - Normalize inputs into TEI fragments and merge into canonical episodes.
 - [x] 1.2.3. Capture provenance metadata automatically in TEI headers.
   - Record source priorities, ingestion timestamps, and reviewer identities.
   - Validate with integration and Behaviour-Driven Development (BDD) tests.
-  - See [Multi-source ingestion service implementation](episodic-podcast-generation-system-design.md#multi-source-ingestion-service-implementation).
+  - See
+    [Multi-source ingestion service implementation](episodic-podcast-generation-system-design.md#multi-source-ingestion-service-implementation).
 
 ### 1.3. Reusable reference documents
 
@@ -67,22 +72,26 @@ profiles, and research briefs.
     `ReferenceBinding` entities.
   - Define repository contracts independent of ingestion-job scope.
   - Include series-aligned host and guest profile documents.
-  - See [Reusable reference-document model](episodic-podcast-generation-system-design.md#reusable-reference-document-model).
+  - See
+    [Reusable reference-document model](episodic-podcast-generation-system-design.md#reusable-reference-document-model).
 - [x] 1.3.2. Publish approved Entity-Relationship (ER) diagram and glossary.
   - Document all three entities with field definitions.
   - Obtain stakeholder approval for model definitions.
-  - See [Reference-document glossary](episodic-podcast-generation-system-design.md#reference-document-glossary).
+  - See
+    [Reference-document glossary](episodic-podcast-generation-system-design.md#reference-document-glossary).
 - [x] 1.3.3. Document repository and API contract acceptance criteria.
   - Define repository method signatures and behaviours.
   - Define API endpoint contracts for reference operations.
-  - See [Reusable reference repository contract acceptance criteria](episodic-podcast-generation-system-design.md#reusable-reference-repository-contract-acceptance-criteria).
+  - See
+    [Reusable reference repository contract acceptance criteria](episodic-podcast-generation-system-design.md#reusable-reference-repository-contract-acceptance-criteria).
 - [x] 1.3.4. Implement Representational State Transfer (REST) endpoints for
   reusable reference documents. Requires 1.3.1.
   - Implement create, get, list, and update for `ReferenceDocument`.
   - Implement revision and binding workflows.
   - Implement optimistic locking and change history retrieval.
   - Implement series-aligned host and guest profile access.
-  - See [Reusable reference REST API specification](episodic-podcast-generation-system-design.md#reusable-reference-rest-api-specification).
+  - See
+    [Reusable reference REST API specification](episodic-podcast-generation-system-design.md#reusable-reference-rest-api-specification).
 
 ### 1.4. Series profiles, episode templates, and binding resolution
 
@@ -93,13 +102,15 @@ content. Completion enables downstream generators to retrieve structured briefs.
   - Define fields for tone descriptors, segment ordering, and audio
     preferences.
   - Define change history and versioning semantics.
-  - See [Series Profile and Template Service](episodic-podcast-generation-system-design.md#series-profile-and-template-service).
+  - See
+    [Series Profile and Template Service](episodic-podcast-generation-system-design.md#series-profile-and-template-service).
 - [x] 1.4.2. Implement REST endpoints for series profiles and episode
   templates.
   - Implement create, get, list, and update operations.
   - Implement change history retrieval.
   - Publish REST API specification.
-  - See [Profile/template REST API specification](episodic-podcast-generation-system-design.md#profiletemplate-rest-api-specification).
+  - See
+    [Profile/template REST API specification](episodic-podcast-generation-system-design.md#profiletemplate-rest-api-specification).
 - [ ] 1.4.3. Implement reference-binding resolution. Requires 1.3.1.
   - Enable ingestion runs, profiles, and templates to reuse pinned revisions.
   - Preserve provenance snapshots in ingestion records.
@@ -116,15 +127,18 @@ Completion enables feature development within enforced boundaries.
   - Configure baseline routing and health check endpoints.
   - Wire dependency injection hooks for port adapters.
   - Note: Falcon 4.2.x is operational; Granian runtime integration pending.
-  - See [Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary).
+  - See
+    [Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary).
 - [ ] 1.5.2. Scaffold Celery workers with RabbitMQ integration.
   - Define queue bindings and routing keys for task dispatch.
   - Configure concurrency pools for I/O-bound and CPU-bound workloads.
-  - See [Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary).
+  - See
+    [Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary).
 - [x] 1.5.3. Define hexagonal architecture boundaries and port contracts.
   - Document domain, port, and adapter responsibilities.
   - Define allowed dependency directions between layers.
-  - See [Hexagonal architecture enforcement](episodic-podcast-generation-system-design.md#hexagonal-architecture-enforcement).
+  - See
+    [Hexagonal architecture enforcement](episodic-podcast-generation-system-design.md#hexagonal-architecture-enforcement).
 - [ ] 1.5.4. Implement architectural enforcement checks for hexagonal
   boundaries.
   - Add lint rules to flag forbidden import directions.
@@ -140,7 +154,10 @@ brand and regulatory guidance, instruments cost accounting, and exposes
 generation runs via the API. Success is observable when generated scripts
 achieve defined quality thresholds, pass brand guideline checks, and cost
 ledgers report per-episode spend with budget breach alerts. See
-[Content Generation Orchestrator](episodic-podcast-generation-system-design.md#content-generation-orchestrator) and [Quality Assurance Stack](episodic-podcast-generation-system-design.md#quality-assurance-stack) for design context.
+[Content Generation Orchestrator](episodic-podcast-generation-system-design.md#content-generation-orchestrator)
+ and
+[Quality Assurance Stack](episodic-podcast-generation-system-design.md#quality-assurance-stack)
+ for design context.
 
 ### 2.1. LLM adapter and guardrails
 
@@ -152,32 +169,52 @@ orchestration code.
   - Define retry policy for transient provider failures.
   - Enforce token budgets pre-flight and post-call.
   - Return provider-agnostic usage metadata.
-  - See [Content Generation Orchestrator](episodic-podcast-generation-system-design.md#content-generation-orchestrator).
+  - See
+    [Content Generation Orchestrator](episodic-podcast-generation-system-design.md#content-generation-orchestrator).
 - [x] 2.1.2. Implement guardrail prompts aligned to content templates.
   - Derive guardrail text from series profile and episode template inputs.
   - Include guardrails in outbound LLM requests.
   - Validate guardrail placement with behavioural tests.
 
-### 2.2. QA services
+### 2.2. QA evaluators and script checks
 
-Extend quality evaluation services to score content and enforce brand
-compliance. Completion enables automated quality gating before editorial
-approval.
+Implement internal quality evaluators that score generated scripts before
+editorial approval. The initial implementation keeps Pedante, Bromide,
+Chiltern, Anthem, and Caesura inside LangGraph as structured Large Language
+Model (LLM) calls that return typed findings and normalized usage metrics per
+invocation; Chrono is a non-LLM runtime estimator. Later iterations may replace
+individual evaluators with more cost-effective approaches without changing the
+orchestration contract.
 
-- [ ] 2.2.1. Extend Bromide service to score factuality and accuracy.
-  - Expose OpenAPI specification with SLA4OAI (Service Level Agreements for
-    OpenAPI) pricing plans.
-  - Return structured findings and usage metrics per call.
-- [ ] 2.2.2. Extend Chiltern service to score tone and style.
-  - Expose OpenAPI specification with SLA4OAI pricing plans.
-  - Return structured findings and usage metrics per call.
-- [ ] 2.2.3. Add automated brand-guideline evaluation.
+- [ ] 2.2.1. Implement Pedante for factuality and accuracy checks.
+  - Return structured findings for unsupported claims and likely inaccuracies.
+  - Return normalized usage metrics for LangGraph cost accounting.
+- [ ] 2.2.2. Implement Bromide to detect overused tropes, cliches, and
+  snowclones.
+  - Identify formulaic phrasing and repeated narrative patterns in draft
+    scripts.
+  - Return structured findings with suggested rewrites.
+- [ ] 2.2.3. Implement Chiltern to flag pronunciation gaps.
+  - Detect frequently mispronounced words and terminology lacking attached
+    pronunciation guidance.
+  - Cover domain-specific and internal terminology as well as public names.
+- [ ] 2.2.4. Implement Anthem for brand-guideline evaluation.
   - Lint textual output for vocabulary and forbidden topics.
   - Validate tone against brand tone descriptors.
   - Record pass/fail outcomes linked to the canonical episode.
-- [ ] 2.2.4. Persist QA artefacts linked to canonical episodes.
-  - Store review comments, rubric scores, and compliance results.
-  - Enable retrieval via API and CLI filtered by compliance status.
+- [ ] 2.2.5. Implement Caesura to detect false endings in scripts.
+  - Flag cases where the episode appears to wrap up but continues for another
+    four minutes or more.
+  - Return structured findings identifying the suspected false-ending boundary.
+- [ ] 2.2.6. Implement Chrono for runtime estimation.
+  - Estimate anticipated runtime for written dialogue using an initial naive
+    local heuristic.
+  - Record estimator metadata so later implementations remain comparable.
+- [ ] 2.2.7. Persist QA artefacts linked to canonical episodes.
+  - Store evaluator findings, runtime estimates, rubric scores, and compliance
+    results.
+  - Enable retrieval via API and CLI filtered by evaluator and compliance
+    status.
 
 ### 2.3. Content enrichment and TEI body generation
 
@@ -208,37 +245,43 @@ metering. Completion enables reliable, auditable generation workflows.
 - [ ] 2.4.2. Add LangGraph suspend-and-resume orchestration. Requires 2.1.1.
   - Implement checkpoint persistence for resumable workflows.
   - Define idempotency keys for each workflow step.
-  - See [LangGraph Integration Principles](episodic-podcast-generation-system-design.md#langgraph-integration-principles).
+  - See
+    [LangGraph Integration Principles](episodic-podcast-generation-system-design.md#langgraph-integration-principles).
 - [ ] 2.4.3. Configure Celery queue routing for workload isolation.
   - Route I/O-bound tasks to high-concurrency pools.
   - Route CPU-bound tasks to prefork pools.
 - [ ] 2.4.4. Instrument cost accounting with per-call usage metering.
   - Record token counts and model identifiers per LLM call.
-  - Pin SLA4OAI pricing snapshots for helper services.
+  - Attribute evaluator-node usage to underlying provider calls inside
+    LangGraph.
+  - Pin provider pricing snapshots used to price each call.
   - Aggregate run totals with hierarchical ledger entries.
-  - See [Cost accounting and budget enforcement](episodic-podcast-generation-system-design.md#cost-accounting-and-budget-enforcement).
+  - See
+    [Cost accounting and budget enforcement](episodic-podcast-generation-system-design.md#cost-accounting-and-budget-enforcement).
 - [ ] 2.4.5. Extend architecture enforcement to orchestration code.
   - Validate LangGraph nodes depend on ports only.
   - Validate Celery tasks depend on ports only.
   - Audit checkpoint payload boundaries.
 
-### 2.5. Pricing catalogue and budget enforcement
+### 2.5. Internal pricing and budget enforcement
 
-Implement pricing discovery, metering, and budget reservation. Completion
-enables cost control and budget breach prevention.
+Implement price snapshots, metering, and budget reservation for LangGraph
+nodes. Completion enables cost control and budget breach prevention without
+requiring evaluator-specific external service contracts.
 
-- [ ] 2.5.1. Add `PricingCataloguePort` adapter with SLA discovery.
-  - Fetch pricing plans via OpenAPI SLA4OAI extensions.
-  - Validate schema and cache with Time-to-Live (TTL) and ETag support.
-  - Persist pricing snapshots for historical reference.
+- [ ] 2.5.1. Add immutable pricing snapshots for provider rate cards.
+  - Persist model pricing inputs used for LLM and Text-to-Speech (TTS) billing.
+  - Version snapshots so historical run costs remain reproducible.
 - [ ] 2.5.2. Add `PricingEngine` with concurrency-safe metering.
   - Implement `MeteringPort` for usage recording.
   - Price individual calls deterministically with quota and overage handling.
-- [ ] 2.5.3. Extend `CostLedgerPort` storage for helper service calls.
-  - Record operation identifiers and usage metrics.
-  - Record plan identifiers and SLA snapshot identifiers.
+- [ ] 2.5.3. Extend `CostLedgerPort` storage for evaluator-node and provider
+  calls.
+  - Record workflow node names, operation identifiers, and usage metrics.
+  - Record pricing snapshot identifiers and model metadata.
 - [ ] 2.5.4. Extend `BudgetPort` APIs for reservation workflow.
-  - Reserve estimated spend for helper calls before invocation.
+  - Reserve estimated spend for generation and evaluator calls before
+    invocation.
   - Commit actual spend on success.
   - Release reservation on failure or timeout.
   - Key reservations by idempotency key.
@@ -279,7 +322,8 @@ manipulation. Completion enables user-friendly script review and patching.
 - [ ] 2.7.2. Implement script projection read endpoint.
   - Implement `/v1/episodes/{episode_id}/script` (GET).
   - Return versioned projection with segment and turn structure.
-  - See [Script projection and editing](episodic-tui-api-design.md#script-projection-and-editing).
+  - See
+    [Script projection and editing](episodic-tui-api-design.md#script-projection-and-editing).
 - [ ] 2.7.3. Implement script projection patch endpoint. Requires 2.7.2.
   - Implement `/v1/episodes/{episode_id}/script` (PATCH).
   - Apply domain patches with `expected_version` enforcement.
@@ -292,7 +336,9 @@ compliance-checked levels, and provides reliable preview and delivery
 workflows. Success is observable when end-to-end renders produce master files
 with embedded chapter markers, quality automation rejects mixes violating
 loudness thresholds, and audio runs are accessible via REST endpoints with
-signed download URLs. See [Audio Synthesis Pipeline](episodic-podcast-generation-system-design.md#audio-synthesis-pipeline) for design context.
+signed download URLs. See
+[Audio Synthesis Pipeline](episodic-podcast-generation-system-design.md#audio-synthesis-pipeline)
+ for design context.
 
 ### 3.1. Text-to-speech (TTS) adapter
 
@@ -341,7 +387,8 @@ Completion enables audio workflow tracking and iterative refinement.
   - Classify stem assets by type (narration, music, sound effects (SFX),
     ambience).
   - Define feedback actions (approve, reject, regenerate segment).
-  - See [Audio runs, previews, stems, and feedback](episodic-tui-api-design.md#audio-runs-previews-stems-and-feedback).
+  - See
+    [Audio runs, previews, stems, and feedback](episodic-tui-api-design.md#audio-runs-previews-stems-and-feedback).
 - [ ] 3.3.2. Implement repository contracts and Alembic migrations.
   - Define repository interfaces for audio-run aggregates.
   - Add integration tests validating asset linking.
@@ -395,7 +442,8 @@ real-time event streaming for agentic workflows. Success is observable when
 editorial teams complete end-to-end approvals via API, Command-Line Interface
 (CLI), and web console, audit trails capture every transition, and WebSocket
 streaming delivers real-time events with backpressure control. See
-[episodic-tui-api-design.md](episodic-tui-api-design.md) for TUI API design context.
+[episodic-tui-api-design.md](episodic-tui-api-design.md) for TUI API design
+context.
 
 ### 4.1. REST API surfaces and version prefix
 
@@ -406,7 +454,8 @@ Completion enables stable API consumption by clients.
   - Route all new TUI-facing endpoints under `/v1`.
   - Preserve existing unversioned routes during transition.
   - Document version routing in the developers' guide.
-  - See [Proposed REST endpoints](episodic-tui-api-design.md#proposed-rest-endpoints).
+  - See
+    [Proposed REST endpoints](episodic-tui-api-design.md#proposed-rest-endpoints).
 - [ ] 4.1.2. Finalize REST and GraphQL surfaces for previous phase artefacts.
   - Implement pagination, filtering, and role enforcement.
   - Ensure consistent error contracts across all endpoints.
@@ -449,12 +498,13 @@ enables programmatic content submission.
   - Implement `/v1/ingestion-jobs/{job_id}` (GET) with status reflection.
   - Implement `/v1/ingestion-jobs/{job_id}/sources` (POST) with upload
     reference or URI attachment.
-  - See [Ingestion jobs and sources](episodic-tui-api-design.md#ingestion-jobs-and-sources).
+  - See
+    [Ingestion jobs and sources](episodic-tui-api-design.md#ingestion-jobs-and-sources).
 
 ### 4.4. WebSocket event streaming
 
-Implement real-time event streaming for generation runs. Completion enables live
-workflow observation and checkpoint intervention.
+Implement real-time event streaming for generation runs. Completion enables
+live workflow observation and checkpoint intervention.
 
 - [ ] 4.4.1. Define `RunEventBusPort` and implement WebSocket streaming for
   generation runs. Requires 2.6.1.
@@ -468,7 +518,8 @@ workflow observation and checkpoint intervention.
   - Enforce authentication timeout.
   - Publish AsyncAPI specification.
   - Note: Scope covers generation runs only; audio runs use REST polling.
-  - See [WebSocket API for real-time generation events](episodic-tui-api-design.md#websocket-api-for-real-time-generation-events).
+  - See
+    [WebSocket API for real-time generation events](episodic-tui-api-design.md#websocket-api-for-real-time-generation-events).
 - [ ] 4.4.2. Implement WebSocket backpressure and reconnection. Requires 4.4.1.
   - Implement acknowledgement-gated outbound buffering with bounded ring
     buffer.
@@ -516,8 +567,8 @@ budget enforcement with cost visibility. Success is observable when the
 security posture is reviewed quarterly with no critical findings, automated
 dashboards report green for deployments and latency Service Level Objectives
 (SLOs), and cost dashboards report per-organization spend with budget breach
-alerts. See [infrastructure-design.md](infrastructure-design.md) for operational infrastructure
-context.
+alerts. See [infrastructure-design.md](infrastructure-design.md) for
+operational infrastructure context.
 
 ### 5.1. Role-Based Access Control (RBAC), tenancy isolation, and secrets rotation
 
@@ -615,8 +666,8 @@ when services deploy reliably across environments via GitOps, hexagonal
 boundaries enforce clean architecture, and observability instruments all layers
 with logging, metrics, and distributed tracing. See
 [infrastructure-design.md](infrastructure-design.md) and
-[Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary) for
-design context.
+[Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary)
+ for design context.
 
 ### 6.1. Infrastructure provisioning
 
@@ -656,7 +707,8 @@ Completion enables repeatable, auditable deployments across environments.
 - [ ] 6.2.1. Create the GitOps repository via the bootstrap script.
   - Generate repository structure with FluxCD sources.
   - Define deployment templates for core services.
-  - See [GitOps repository model](infrastructure-design.md#gitops-repository-model).
+  - See
+    [GitOps repository model](infrastructure-design.md#gitops-repository-model).
 - [ ] 6.2.2. Configure FluxCD with Kustomization overlays for environment
   promotion.
   - Define sandbox → staging → production promotion gates.
