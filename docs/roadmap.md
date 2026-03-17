@@ -115,6 +115,34 @@ content. Completion enables downstream generators to retrieve structured briefs.
     episodes onwards.
   - Scope: repository and API behaviour only.
 
+### 1.5. Service scaffolding and hexagonal boundaries
+
+Scaffold the application services with consistent architecture patterns.
+Completion enables feature development within enforced boundaries.
+
+- [x] 1.5.1. Scaffold Falcon 4.2.x HTTP services running on Granian.
+  - Configure baseline routing and health check endpoints.
+  - Wire dependency injection hooks for port adapters.
+  - Note: Falcon 4.2.x is operational; Granian runtime integration pending.
+  - See `docs/episodic-podcast-generation-system-design.md` §Architectural
+    Summary.
+- [ ] 1.5.2. Scaffold Celery workers with RabbitMQ integration.
+  - Define queue bindings and routing keys for task dispatch.
+  - Configure concurrency pools for I/O-bound and CPU-bound workloads.
+  - See `docs/episodic-podcast-generation-system-design.md` §Architectural
+    Summary.
+- [x] 1.5.3. Define hexagonal architecture boundaries and port contracts.
+  - Document domain, port, and adapter responsibilities.
+  - Define allowed dependency directions between layers.
+  - See `docs/episodic-podcast-generation-system-design.md` §Hexagonal
+    architecture enforcement.
+- [ ] 1.5.4. Implement architectural enforcement checks for hexagonal
+  boundaries.
+  - Add lint rules to flag forbidden import directions.
+  - Add architecture tests to validate port contract adherence.
+  - Gate CI pipelines on enforcement check pass.
+  - Note: Ruff linting configured; dedicated architecture tests pending.
+
 ## 2. Intelligent content generation and quality assurance (QA)
 
 This phase orchestrates Large Language Model (LLM) based draft generation,
@@ -656,58 +684,32 @@ Completion enables repeatable, auditable deployments across environments.
   - Document emergency access and recovery steps.
   - See `docs/infrastructure-design.md` §Secrets and identity.
 
-### 6.3. Service scaffolding and hexagonal boundaries
-
-Scaffold the application services with consistent architecture patterns.
-Completion enables feature development within enforced boundaries.
-
-- [ ] 6.3.1. Scaffold Falcon 4.2.x HTTP services running on Granian.
-  - Configure baseline routing and health check endpoints.
-  - Wire dependency injection hooks for port adapters.
-  - See `docs/episodic-podcast-generation-system-design.md` §Architectural
-    Summary.
-- [ ] 6.3.2. Scaffold Celery workers with RabbitMQ integration.
-  - Define queue bindings and routing keys for task dispatch.
-  - Configure concurrency pools for I/O-bound and CPU-bound workloads.
-  - See `docs/episodic-podcast-generation-system-design.md` §Architectural
-    Summary.
-- [ ] 6.3.3. Define hexagonal architecture boundaries and port contracts.
-  - Document domain, port, and adapter responsibilities.
-  - Define allowed dependency directions between layers.
-  - See `docs/episodic-podcast-generation-system-design.md` §Hexagonal
-    architecture enforcement.
-- [ ] 6.3.4. Implement architectural enforcement checks for hexagonal
-  boundaries.
-  - Add lint rules to flag forbidden import directions.
-  - Add architecture tests to validate port contract adherence.
-  - Gate CI pipelines on enforcement check pass.
-
-### 6.4. Observability and documentation
+### 6.3. Observability and documentation
 
 Instrument monitoring, logging, and tracing; publish operational documentation.
 Completion enables incident response and onboarding.
 
-- [ ] 6.4.1. Instrument clusterwide logging with Loki.
+- [ ] 6.3.1. Instrument clusterwide logging with Loki.
   - Configure log aggregation from all service pods.
   - Define log retention and archival policies.
   - See `docs/infrastructure-design.md` §Observability.
-- [ ] 6.4.2. Instrument clusterwide metrics with Prometheus.
+- [ ] 6.3.2. Instrument clusterwide metrics with Prometheus.
   - Configure service discovery for metric scraping.
   - Define alert rules for resource exhaustion and error rates.
-- [ ] 6.4.3. Instrument distributed tracing with Tempo.
+- [ ] 6.3.3. Instrument distributed tracing with Tempo.
   - Configure trace propagation across HTTP and message boundaries.
   - Define trace sampling rate and retention policy.
-- [ ] 6.4.4. Define alert routing rules for on-call responders.
+- [ ] 6.3.4. Define alert routing rules for on-call responders.
   - Configure escalation paths and notification channels.
   - Document alert triage procedures.
-- [ ] 6.4.5. Document access controls and networking policies.
+- [ ] 6.3.5. Document access controls and networking policies.
   - Define network policy rules for pod-to-pod communication.
   - Document role-based access control (RBAC) for cluster operators.
-- [ ] 6.4.6. Document disaster recovery expectations and restore procedures.
+- [ ] 6.3.6. Document disaster recovery expectations and restore procedures.
   - Define Recovery Point Objective (RPO) and Recovery Time Objective (RTO)
     targets.
   - Document backup verification and restore runbook.
-- [ ] 6.4.7. Publish the infrastructure design document.
+- [ ] 6.3.7. Publish the infrastructure design document.
   - Cover DOKS, GitOps, secrets, and observability baselines.
   - Obtain stakeholder approval for infrastructure baseline.
   - See `docs/infrastructure-design.md`.
