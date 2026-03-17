@@ -241,7 +241,7 @@ PATCH  /v1/episodes/{episode_id}/script
 
 ### Audio runs, previews, stems, and feedback
 
-Audio synthesis runs are iterative, supporting preview-feedback- regeneration
+Audio synthesis runs are iterative, supporting preview-feedback-regeneration
 cycles and partial segment regeneration.
 
 ```plaintext
@@ -737,8 +737,9 @@ definitions owned by the domain layer:
 
 ### Adapter boundaries
 
-The outbound adapters integrate with large language model (LLM) and text-to-speech
-(TTS) vendor services, as well as Postgres, object storage, and message brokers.
+The outbound adapters integrate with large language model (LLM) and
+text-to-speech (TTS) vendor services, as well as Postgres, object storage, and
+message brokers.
 
 _Table: Hexagonal architecture layer responsibilities._
 

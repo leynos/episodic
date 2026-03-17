@@ -259,7 +259,7 @@ that align with the system design.
   options and idempotency key; GET returns job status with download URLs and
   manifest hash; export artefacts stored in object storage with signed URLs;
   hexagonal boundary tests passing. Dependencies: 4.2.3 mixing engine; 4.2.4
-  loudness normalisation. Scope: domain model, port, adapter, and endpoint
+  loudness normalization. Scope: domain model, port, adapter, and endpoint
   implementation.
 
 ### 4.3. Exit criteria
