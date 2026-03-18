@@ -123,10 +123,12 @@ content. Completion enables downstream generators to retrieve structured briefs.
 Scaffold the application services with consistent architecture patterns.
 Completion enables feature development within enforced boundaries.
 
-- [x] 1.5.1. Scaffold Falcon 4.2.x HTTP services running on Granian.
+- [ ] 1.5.1. Scaffold Falcon 4.2.x HTTP services running on Granian.
   - Configure baseline routing and health check endpoints.
   - Wire dependency injection hooks for port adapters.
-  - Note: Falcon 4.2.x is operational; Granian runtime integration pending.
+  - [ ] Integrate the Granian runtime for Falcon deployment.
+  - Note: Falcon 4.2.x is operational; Granian runtime integration remains
+    pending.
   - See
     [Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary).
 - [ ] 1.5.2. Scaffold Celery workers with RabbitMQ integration.
@@ -465,7 +467,7 @@ Completion enables stable API consumption by clients.
   - Document version routing in the developers' guide.
   - See
     [Proposed REST endpoints](episodic-tui-api-design.md#proposed-rest-endpoints).
-- [ ] 4.1.2. Finalize REST and GraphQL surfaces for previous phase artefacts.
+- [ ] 4.1.2. Finalize REST surfaces for previous phase artefacts.
   - Implement pagination, filtering, and role enforcement.
   - Ensure consistent error contracts across all endpoints.
   - See [Error contract](episodic-tui-api-design.md#error-contract).
@@ -557,7 +559,7 @@ enables operator and editorial self-service.
 Publish OpenAPI and AsyncAPI specifications for all API surfaces. Completion
 enables client SDK generation and contract validation.
 
-- [ ] 4.6.1. Publish TUI API design document.
+- [x] 4.6.1. Publish TUI API design document.
   - Document REST endpoint specifications.
   - Document WebSocket message schemas.
   - Document authentication, error, and pagination conventions.

@@ -440,12 +440,12 @@ flowchart TD
     C -->|Parallel| D4[Anthem]
     C -->|Parallel| D5[Caesura]
     C -->|Parallel| D6[Chrono]
-    D6 --> D5
     D1 --> E[Aggregate]
     D2 --> E
     D3 --> E
     D4 --> E
     D5 --> E
+    D6 --> E
     E --> F{Route}
     F -->|Pass| G[Prepare for Approval]
     F -->|Fail, retries remain| H[Refine]
