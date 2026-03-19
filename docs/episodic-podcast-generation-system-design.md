@@ -1,5 +1,14 @@
 # Episodic Podcast Generation System Design
 
+Status: living design
+
+Primary audience: developers, operators, and reviewers of the Episodic
+architecture
+
+Accepted decision records:
+
+- [ADR 001: Pedante evaluator contract](adr-001-pedante-evaluator-contract.md)
+
 ## Overview
 
 The episodic podcast generation platform automates the production of scripted,
@@ -186,6 +195,10 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 
 - Pedante evaluates factual accuracy and claim support, returning structured
   findings with severity levels and remediation guidance.
+- Pedante consumes the canonical TEI P5 script plus cited source packets. If
+  prompt construction uses JSON, that JSON is a projection of the same
+  TEI-backed content model rather than a competing canonical schema; see
+  [ADR 001: Pedante evaluator contract](adr-001-pedante-evaluator-contract.md).
 - Bromide detects overused tropes, cliches, and snowclones in draft scripts.
 - Chiltern flags frequently mispronounced words or terminology that do not yet
   have pronunciation guidance attached, including domain-specific and internal
@@ -200,6 +213,10 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Pedante, Bromide, Chiltern, Anthem, and Caesura initially execute as
   internal LangGraph evaluator nodes backed by structured `LLMPort` calls
   rather than separate network services.
+- Pedante's first stable contract is claim-centric: each finding records a
+  claim identifier, claim kind, cited source identifiers, support level,
+  severity, and remediation guidance, while normalized `LLMUsage` metadata is
+  preserved for cost accounting.
 - Evaluator schemas are versioned alongside prompts and orchestration code, and
   cost accounting relies on normalized `LLMPort` usage plus pinned provider
   pricing snapshots rather than evaluator-specific OpenAPI contracts.

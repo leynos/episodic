@@ -7,7 +7,7 @@ proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -151,13 +151,23 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
   `docs/execplans/2-2-1-pedante-factuality-and-accuracy-evaluator.md`.
 - [ ] Stage A: add fail-first contract and corpus tests for Pedante DTOs and
   parsing.
-- [ ] Stage B: implement the Pedante domain contract and request/result types.
-- [ ] Stage C: implement the LLM-backed Pedante evaluator adapter and strict
-  JSON parsing.
-- [ ] Stage D: add the minimal LangGraph node seam and route-contract tests.
-- [ ] Stage E: add Vidai Mock behavioural coverage for the inference path.
-- [ ] Stage F: update design, ADR, user, developer, and roadmap documents.
-- [ ] Stage G: run all repository gates sequentially and confirm completion.
+- [x] (2026-03-19 00:55Z) Stage A: added fail-first Pedante unit tests,
+  LangGraph seam tests, and BDD coverage; confirmed the initial failure mode
+  was missing `episodic.qa` modules.
+- [x] (2026-03-19 00:57Z) Stage B: implemented the Pedante domain contract and
+  request/result types in `episodic/qa/pedante.py`.
+- [x] (2026-03-19 00:57Z) Stage C: implemented the LLM-backed Pedante
+  evaluator adapter and strict JSON parsing on top of `LLMPort`.
+- [x] (2026-03-19 00:57Z) Stage D: added the minimal LangGraph node seam and
+  route-contract tests in `episodic/qa/langgraph.py`.
+- [x] (2026-03-19 00:59Z) Stage E: added Vidai Mock behavioural coverage for
+  the inference path.
+- [x] (2026-03-19 01:00Z) Stage F: updated design, ADR, user, developer, and
+  roadmap documents.
+- [x] (2026-03-19 01:43Z) Stage G: ran `make check-fmt`,
+  `make typecheck`, `make lint`, `make test`,
+  `PATH=/root/.bun/bin:$PATH make markdownlint`, and `make nixie` successfully
+  after formatter and targeted regression fixes.
 
 ## Surprises & Discoveries
 
@@ -186,6 +196,19 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
 - Observation: `vidaimock` is installed at `/root/.local/bin/vidaimock`.
   Impact: behavioural tests can use the real local simulator instead of an
   ad-hoc HTTP stub.
+
+- Observation: Vidai Mock resolves `response_template` paths relative to the
+  template root, not with a leading `templates/` prefix. Evidence: a local
+  probe returned
+  `Template Error: Template 'templates/pedante/response.json.j2' not found`
+  until the path was changed to `pedante/response.json.j2`. Impact: Pedante
+  behavioural fixtures and the developer's guide now document the correct
+  relative template path convention.
+
+- Observation: `langgraph` 1.1.3 currently emits a warning through
+  `langchain-core` about Pydantic v1 compatibility on Python 3.14, even though
+  the Pedante tests pass. Impact: this is a non-blocking dependency risk worth
+  tracking if LangGraph usage expands.
 
 - Observation: the repo guidance warns not to run `make typecheck` and
   `make test` in parallel because shared `.venv` creation can race. Impact: all
@@ -228,6 +251,20 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
   node-shaped contract to avoid painting the future graph into a corner.
   Date/Author: 2026-03-18 / Codex.
 
+- Decision: keep the canonical Pedante request as TEI XML plus cited source
+  packets rather than introducing a richer parsed TEI object in `2.2.1`.
+  Rationale: this preserves the TEI P5 data spine while keeping the first
+  evaluator contract small, typed, and easy to reuse across prompt rendering,
+  LangGraph state, and future service boundaries. Date/Author: 2026-03-19 /
+  Codex.
+
+- Decision: record the Pedante request/result boundary in one ADR,
+  `docs/adr-001-pedante-evaluator-contract.md`. Rationale: this turn pinned
+  down both the durable representation boundary and the relationship between
+  TEI input, JSON prompt projection, and claim-centric findings, so burying
+  those choices in code or tests would create avoidable future ambiguity.
+  Date/Author: 2026-03-19 / Codex.
+
 - Decision: use Vidai Mock for Pedante behavioural tests even though older LLM
   adapter BDD coverage uses a custom server. Rationale: this task explicitly
   requires Vidai Mock, and the evaluator layer is the right point to introduce
@@ -236,18 +273,42 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
 
 ## Outcomes & Retrospective
 
-Implementation has not started yet. The intended completed state is:
+Implementation is in progress. The current state is:
 
-- `episodic/qa/` owns a stable Pedante request and result contract.
+- `episodic/qa/` now owns a stable Pedante request and result contract.
 - Pedante returns structured factuality findings and normalized usage metrics.
 - A minimal LangGraph node produces a deterministic state delta that later
   orchestration work can consume unchanged.
-- Behavioural tests use Vidai Mock to validate the live inference path.
-- The design document references an accepted ADR for the Pedante contract.
-- `docs/roadmap.md` marks `2.2.1` done only after all required gates pass.
+- Behavioural tests now use Vidai Mock to validate the live inference path.
+- The design document now references an accepted ADR for the Pedante contract.
+- `docs/roadmap.md` is updated, but the item is only complete once Stage G
+  finishes and all repository gates are green.
 
-Retrospective notes will be added after implementation, including any prompt
-stability issues, corpus gaps, or LangGraph integration friction encountered.
+Retrospective notes after Stage G:
+
+- The claim-centric Pedante contract landed cleanly on top of the existing
+  `LLMPort` without requiring persistence or generation-run schema work.
+- LangGraph integration was easiest once the state was treated as a small
+  dataclass and the Pedante types remained importable at runtime for
+  `get_type_hints(...)`.
+- Vidai Mock was sufficient for deterministic evaluator BDD coverage, but its
+  template path semantics and JSON-string embedding rules were both easy places
+  to make avoidable mistakes; those are now documented.
+- Final validation state: `235 passed`, `2 skipped` under `make test`, with one
+  non-blocking warning from `langchain-core` about Pydantic v1 compatibility on
+  Python 3.14.
+
+## Revision note
+
+Updated on 2026-03-19 to reflect active implementation progress, the accepted
+Pedante ADR, the working Vidai Mock behavioural harness, and the newly
+discovered template-path convention for Vidai Mock. The remaining work is now
+primarily repository-wide validation and any fixes needed to satisfy the full
+quality gates.
+
+Updated again on 2026-03-19 after Stage G completed successfully. The plan now
+records the final validation result and the main implementation lessons so it
+can serve as a complete delivery record for `2.2.1`.
 
 ## Context and orientation
 
@@ -738,9 +799,3 @@ make test
 ...
 passed
 ```
-
-## Revision note
-
-Initial draft created on 2026-03-18 for roadmap item `2.2.1` before any
-implementation work begins. This plan requires explicit approval before
-execution.

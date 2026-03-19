@@ -4,6 +4,11 @@ This guide documents internal development practices for Episodic. Follow the
 documentation style guide in `docs/documentation-style-guide.md` when updating
 this file.
 
+Accepted design decisions relevant to current implementation work:
+
+- [`adr-001-pedante-evaluator-contract.md`](adr-001-pedante-evaluator-contract.md)
+- [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
+
 ## Local development
 
 - Use `uv` to manage the virtual environment and dependencies.
@@ -258,6 +263,40 @@ from structured briefs:
 - `episodic.canonical.prompts` exposes:
   - `build_series_brief_template(...)` to construct a Python 3.14 template
     string (`t"..."`) representation.
+
+## Quality-assurance evaluators
+
+Pedante is implemented in the `episodic/qa/` package.
+
+### Package structure
+
+- `episodic/qa/pedante.py` defines the Pedante request and result contract, the
+  support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
+  calls the existing `LLMPort`.
+- `episodic/qa/langgraph.py` provides the minimal LangGraph seam for Pedante.
+  This graph is intentionally narrow: it runs the evaluator and routes to
+  `pass` or `refine` based on typed findings.
+
+### Contract rules
+
+- Treat `PedanteEvaluationRequest.script_tei_xml` as the canonical script input
+  and keep TEI P5 as the authoring-loop data spine.
+- Use JSON only as a prompt-facing or transport-facing projection of that
+  TEI-backed content, not as a second canonical document model.
+- Keep orchestration code dependent on ports and domain contracts only.
+  LangGraph state should hold orchestration metadata and evaluator results, not
+  the sole canonical copy of editorial data.
+
+### Testing the evaluator
+
+- Unit tests live in `tests/test_pedante.py`.
+- LangGraph seam tests live in `tests/test_pedante_langgraph.py`.
+- Behavioural coverage lives in `tests/features/pedante.feature` and
+  `tests/steps/test_pedante_steps.py`.
+- Pedante behavioural tests use Vidai Mock. When configuring custom templates,
+  `response_template` paths are resolved relative to the template root. For
+  example, use `pedante/response.json.j2`, not
+  `templates/pedante/response.json.j2`.
   - `build_series_guardrail_template(...)` to construct the persisted
     guardrail scaffold from the same brief payload.
   - `render_template(...)` to render prompt text while preserving static and
