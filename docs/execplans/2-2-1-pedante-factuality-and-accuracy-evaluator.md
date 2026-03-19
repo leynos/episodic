@@ -13,9 +13,13 @@ Status: DRAFT
 
 Roadmap item `2.2.1` introduces the first quality assurance evaluator for
 generated scripts. After this change, orchestration code will be able to call a
-domain-owned Pedante contract that inspects a draft script plus cited source
-packets, returns typed findings for unsupported claims and likely inaccuracies,
-and passes through normalized `LLMUsage` for later LangGraph cost accounting.
+domain-owned Pedante contract that inspects a canonical Text Encoding
+Initiative (TEI) P5 script plus cited source packets, returns typed findings
+for unsupported claims and likely inaccuracies, and passes through normalized
+`LLMUsage` for later LangGraph cost accounting. The authoring loop should treat
+TEI P5 as the canonical data spine throughout. If prompt construction is more
+ergonomic in JSON, that JSON must be a serialization of the same TEI-backed
+`msgspec` structures rather than a separate ad hoc content model.
 
 Success is observable in six ways:
 
@@ -50,6 +54,10 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
 - Keep `2.2.1` scoped to factuality and accuracy evaluation only.
   Do not pull in persistence from `2.2.7`, budget reservation from `2.5.x`, or
   generation-run storage from `2.6.x`.
+- Use TEI P5 as the canonical script and source representation for the
+  evaluator boundary. Pedante may consume a JSON or builtins projection derived
+  from the TEI `msgspec` objects if that is easier for prompt construction, but
+  it must not define a competing canonical document shape.
 - Use the existing `LLMPort` boundary from `episodic/llm/ports.py`.
   Do not bypass it with direct HTTP calls from Pedante code.
 - Keep the initial structured-output path provider-neutral by emitting strict
@@ -64,6 +72,9 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
 - Preserve future service-oriented replacement.
   The Pedante orchestration contract must not depend on a specific prompt
   shape, provider transport detail, or LangGraph-only type.
+- Keep LangGraph and Celery concerns in the application layer only.
+  Pedante domain types and services must not import graph classes, checkpoint
+  stores, queue adapters, or other infrastructure details.
 - Update these documents as part of the implementation:
   `docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`,
   `docs/developers-guide.md`, `docs/roadmap.md`, and a new ADR in `docs/`.
@@ -104,8 +115,10 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
 
 - Risk: the current canonical model does not expose a ready-made TEI citation
   packet specifically for generation QA. Severity: medium. Likelihood: high.
-  Mitigation: define a bounded Pedante request DTO that accepts draft text plus
-  source packets carrying citation labels, locators, and source excerpts.
+  Mitigation: define a bounded Pedante request DTO around the canonical TEI P5
+  document plus source packets carrying citation labels, locators, and source
+  excerpts, with an optional JSON projection derived from those TEI-backed
+  `msgspec` objects for prompt construction.
 
 - Risk: structured-output parsing can be brittle if the model returns malformed
   JSON or partial fields. Severity: medium. Likelihood: medium. Mitigation:
@@ -157,6 +170,14 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
   in `pyproject.toml`. Impact: the implementation likely needs one new runtime
   dependency and must keep it tightly scoped.
 
+- Observation: `docs/tei-rapporteur-users-guide.md` makes TEI P5 the formal
+  document model and already exposes both XML and Python builtins exchange via
+  `parse_xml`, `emit_xml`, `to_dict`, `from_dict`, `to_msgpack`, and
+  `from_msgpack`, with `msgspec.Struct` projections under
+  `tei_rapporteur.structs`. Impact: Pedante should consume TEI-native data and
+  reuse the JSON projection only as a convenience view over the canonical TEI
+  document.
+
 - Observation: `vidaimock` is installed at `/root/.local/bin/vidaimock`.
   Impact: behavioural tests can use the real local simulator instead of an
   ad-hoc HTTP stub.
@@ -183,6 +204,13 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
   this matches the roadmap requirement and the supplied benchmarking guidance,
   which emphasizes claim-level precision and recall over whole-document labels.
   Date/Author: 2026-03-18 / Codex.
+
+- Decision: treat TEI P5 as the canonical Pedante input shape and use a JSON
+  projection only as a prompt-facing convenience. Rationale: the TEI guide
+  already establishes the TEI document, Python builtins exchange, and
+  `msgspec.Struct` projections as the supported interchange surfaces, so the
+  evaluator should stay on that spine instead of inventing a parallel script
+  schema. Date/Author: 2026-03-19 / Codex.
 
 - Decision: use strict JSON-over-`LLMPort` for structured findings rather than
   changing `LLMPort` again immediately. Rationale: the current port already
@@ -224,6 +252,10 @@ Current implementation baseline:
   `LLMTokenBudget`, and `LLMUsage`.
 - `episodic/llm/openai_adapter.py` provides a working OpenAI-compatible async
   adapter with retries and token-budget enforcement.
+- `docs/tei-rapporteur-users-guide.md` establishes the canonical TEI P5 model,
+  including XML parsing and emission plus builtins and MessagePack exchange for
+  the same `msgspec`-backed structures. That document is the relevant
+  data-model reference for keeping the authoring loop TEI-first.
 - `tests/test_llm_openai_adapter_*.py` already cover the transport boundary
   thoroughly.
 - `tests/features/llm_adapter.feature` and
@@ -234,8 +266,10 @@ Current implementation baseline:
   LangGraph integration principles, and the rule that orchestration code
   depends on ports only.
 - `docs/langgraph-and-celery-in-hexagonal-architecture.md` warns against graph
-  nodes or Celery tasks importing adapters directly or storing domain truth in
-  graph state blobs.
+  nodes or Celery tasks importing adapters directly, leaking orchestration
+  concerns into domain services, or storing canonical domain truth in graph
+  state blobs. It also makes the aggregator pattern for parallel evaluator
+  results explicit.
 - `docs/cost-management-in-langgraph-agentic-systems.md` makes normalized
   usage metrics and state-level cost accumulation explicit design inputs.
 
@@ -263,8 +297,12 @@ Terms used in this plan:
 
 - Claim: one factual assertion made in the draft script that Pedante can test
   against cited sources.
+- TEI P5 data spine: the canonical representation for the authoring loop,
+  carried either as TEI XML or as a JSON or builtins projection derived from
+  the same `msgspec`-backed TEI objects.
 - Source packet: the bounded input Pedante receives for one cited source,
-  including at least a citation label, locator, and source excerpt or summary.
+  including at least a citation label, locator, and source excerpt or summary,
+  derived from the TEI-backed source corpus rather than a parallel schema.
 - Support level: Pedante's classification of how well a cited source supports
   a claim, such as accurate quotation, citation absent, or unsupported
   inference.
@@ -297,6 +335,15 @@ The finding schema should carry, at minimum:
 - severity,
 - rationale text, and
 - remediation guidance.
+
+The request DTO should be TEI-first. Prefer one of these two equivalent
+surfaces:
+
+- a canonical TEI XML document plus typed source packets, or
+- a JSON or builtins projection serialized from the TEI `msgspec` objects.
+
+Do not let the tests bless an ad hoc script-only payload that cannot be traced
+back to the TEI P5 spine.
 
 Also add a small labelled corpus under `tests/fixtures/pedante_cases/`. Keep
 the first slice intentionally small but adversarial:
@@ -343,6 +390,16 @@ generic "all evaluators" abstraction too early. The shared concepts such as
 severity can still live in `types.py` and be reused later by Bromide, Chiltern,
 Anthem, and Caesura.
 
+The request type should preserve the TEI spine explicitly, for example by
+accepting either:
+
+- a TEI XML string that Pedante converts into a typed or builtins projection
+  before prompt assembly, or
+- a pre-serialized builtins payload produced from the `msgspec` TEI structs.
+
+Either choice is acceptable as long as the contract states clearly that the
+JSON payload is derived from the TEI document rather than replacing it.
+
 Acceptance for Stage B:
 
 - Stage A contract tests pass.
@@ -361,6 +418,12 @@ service should:
 4. validate the JSON into `PedanteFinding` instances, and
 5. return `PedanteEvaluation` with the unmodified `LLMUsage` from the
    `LLMResponse`.
+
+Prompt assembly should use the TEI-backed request as the source of truth. If
+JSON is fed to the model, it should come from the same TEI document via the
+documented builtins or `msgspec` serialization path so that citations,
+locators, speaker references, and other structure remain aligned with the
+canonical authoring loop.
 
 Do not change the `LLMPort` contract again for this step. The prompt should
 instruct the model to emit only the agreed JSON envelope. The parser should
@@ -403,6 +466,15 @@ Keep production routing logic out of scope. The only orchestration helper worth
 adding now is a tiny pure function such as
 `should_request_refinement(evaluation: PedanteEvaluation) -> bool`, if a
 separate predicate simplifies testing and future graph integration.
+
+The LangGraph seam must follow the hexagonal guidance explicitly:
+
+- the node depends on Pedante and other ports only,
+- the node must not import concrete HTTP, storage, or queue adapters,
+- graph state should carry orchestration metadata and evaluator output only,
+  not canonical TEI truth, and
+- any future parallel evaluator merge should happen in a dedicated aggregate
+  step rather than by letting multiple branches overwrite shared state.
 
 Add tests that prove:
 
