@@ -75,6 +75,11 @@ storage, or the complete multi-evaluator routing graph from `2.4.x` and `2.6.x`.
 - Keep LangGraph and Celery concerns in the application layer only.
   Pedante domain types and services must not import graph classes, checkpoint
   stores, queue adapters, or other infrastructure details.
+- Record data-shape decisions in Architecture Decision Records (ADRs) whenever
+  the implementation pins down a durable representation boundary. This includes
+  the canonical Pedante request shape, the TEI XML versus builtins or JSON
+  projection choice, and any stable relationship between the TEI source
+  document, source packets, and evaluator findings.
 - Update these documents as part of the implementation:
   `docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`,
   `docs/developers-guide.md`, `docs/roadmap.md`, and a new ADR in `docs/`.
@@ -345,6 +350,10 @@ surfaces:
 Do not let the tests bless an ad hoc script-only payload that cannot be traced
 back to the TEI P5 spine.
 
+If Stage A or Stage B fixes a durable data shape or a conversion boundary that
+is likely to outlive this feature, plan a dedicated ADR rather than burying the
+decision in test fixtures or prompt helpers.
+
 Also add a small labelled corpus under `tests/fixtures/pedante_cases/`. Keep
 the first slice intentionally small but adversarial:
 
@@ -535,6 +544,15 @@ ADR number is consumed first. The ADR should record:
 - why the evaluator lives in `episodic/qa/`,
 - why the initial orchestration surface is a minimal LangGraph node, and
 - what remains intentionally deferred.
+
+If the implementation settles additional durable representation decisions, add
+follow-on ADRs rather than overloading one record. Examples include:
+
+- the canonical Pedante request payload and its TEI-to-builtins projection,
+- how source packets relate to TEI headers, body nodes, and citation locators,
+  and
+- any stable mapping between evaluator findings and future aggregate QA
+  structures.
 
 Update `docs/episodic-podcast-generation-system-design.md` in the Quality
 Assurance Stack section to reference the ADR and describe the concrete Pedante
