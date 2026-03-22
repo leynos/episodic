@@ -148,14 +148,12 @@ socket_handler = (
     .with_write_timeout_ms(1000)
     .with_tls("logs.example.com", insecure=False)
     .with_backoff(
-        BackoffConfig(
-            {
-                "base_ms": 100,
-                "cap_ms": 5000,
-                "reset_after_ms": 30000,
-                "deadline_ms": 120000,
-            }
-        )
+        BackoffConfig({
+            "base_ms": 100,
+            "cap_ms": 5000,
+            "reset_after_ms": 30000,
+            "deadline_ms": 120000,
+        })
     )
     .build()
 )
@@ -183,6 +181,7 @@ class Collector:
     def handle(self, logger: str, level: str, message: str) -> None:
         # Runs inside the FemtoLogger worker thread
         self.records.append((logger, level, message))
+
 
 collector = Collector()
 logger.add_handler(collector)
@@ -314,7 +313,9 @@ builder = (
         .with_filters(["info_only"])
         .with_propagate(False),
     )
-    .with_root_logger(LoggerConfigBuilder().with_level("WARNING").with_handlers(["console"]))
+    .with_root_logger(
+        LoggerConfigBuilder().with_level("WARNING").with_handlers(["console"])
+    )
 )
 
 builder.build_and_init()
@@ -371,6 +372,7 @@ builder.build_and_init()
 ```python
 def json_formatter(record: dict[str, object]) -> str:
     import json
+
     return json.dumps(
         {
             "logger": record["logger"],
@@ -379,6 +381,7 @@ def json_formatter(record: dict[str, object]) -> str:
         },
         separators=(",", ":"),
     )
+
 
 stream = StreamHandlerBuilder.stdout().with_formatter(json_formatter).build()
 ```
