@@ -5,14 +5,18 @@ reference document bindings. See ADR-001 for the algorithm design decision.
 """
 
 import dataclasses as dc
-import uuid
+import operator
+import typing as typ
 
-from episodic.canonical.domain import (
-    ReferenceBinding,
-    ReferenceDocument,
-    ReferenceDocumentRevision,
-)
-from episodic.canonical.ports import CanonicalUnitOfWork
+if typ.TYPE_CHECKING:
+    import uuid
+
+    from episodic.canonical.domain import (
+        ReferenceBinding,
+        ReferenceDocument,
+        ReferenceDocumentRevision,
+    )
+    from episodic.canonical.ports import CanonicalUnitOfWork
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -24,7 +28,7 @@ class ResolvedBinding:
     document: ReferenceDocument
 
 
-async def resolve_bindings(
+async def resolve_bindings(  # noqa: C901, PLR0912, PLR0915, PLR0914
     uow: CanonicalUnitOfWork,
     *,
     series_profile_id: uuid.UUID,
@@ -63,8 +67,10 @@ async def resolve_bindings(
         The resolved bindings with their revisions and documents.
     """
     # Collect series profile bindings
+    from episodic.canonical.domain import ReferenceBindingTargetKind
+
     series_bindings = await uow.reference_bindings.list_for_target(
-        kind="series_profile",
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         target_id=series_profile_id,
     )
 
@@ -123,7 +129,8 @@ async def resolve_bindings(
         if document is None:
             continue
 
-        # Separate default bindings (None effective_from_episode_id) from episode-specific
+        # Separate default bindings (None effective_from_episode_id) from
+        # episode-specific
         default_bindings = [
             b for b in doc_bindings if b.effective_from_episode_id is None
         ]
@@ -133,7 +140,11 @@ async def resolve_bindings(
 
         # Fetch episode created_at timestamps for episode-specific bindings
         if episode_bindings:
-            episode_ids = {b.effective_from_episode_id for b in episode_bindings}
+            episode_ids = {
+                b.effective_from_episode_id
+                for b in episode_bindings
+                if b.effective_from_episode_id is not None
+            }
             episodes = {
                 ep.id: ep
                 for ep in await uow.episodes.list_by_ids(list(episode_ids))
@@ -143,13 +154,15 @@ async def resolve_bindings(
             # Find the binding with the latest effective_from_episode_id <= target
             applicable_bindings = []
             for binding in episode_bindings:
+                if binding.effective_from_episode_id is None:
+                    continue
                 effective_episode = episodes.get(binding.effective_from_episode_id)
                 if effective_episode is not None:
                     applicable_bindings.append((binding, effective_episode.created_at))
 
             if applicable_bindings:
                 # Sort by created_at descending and take the latest
-                applicable_bindings.sort(key=lambda x: x[1], reverse=True)
+                applicable_bindings.sort(key=operator.itemgetter(1), reverse=True)
                 chosen_binding = applicable_bindings[0][0]
                 revision = revision_map[chosen_binding.reference_document_revision_id]
                 resolved.append(
@@ -163,7 +176,8 @@ async def resolve_bindings(
 
         # No applicable episode-specific binding; fall back to default
         if default_bindings:
-            # If multiple defaults exist, pick the first (should be unique per target+doc)
+            # If multiple defaults exist, pick the first (should be unique per
+            # target+doc)
             chosen_binding = default_bindings[0]
             revision = revision_map[chosen_binding.reference_document_revision_id]
             resolved.append(

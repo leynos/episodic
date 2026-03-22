@@ -142,7 +142,7 @@ Success is observable when:
 - [x] Initial ExecPlan draft completed.
 - [x] Stage A: codebase investigation and algorithm design.
 - [x] Stage B: migration and domain model updates.
-- [ ] Stage C: resolution service implementation with fail-first tests.
+- [x] Stage C: resolution service implementation with tests.
 - [ ] Stage D: API endpoint updates and integration tests.
 - [ ] Stage E: provenance snapshotting in ingestion records.
 - [ ] Stage F: behavioural tests (pytest-bdd).
@@ -174,6 +174,17 @@ Success is observable when:
   for existing source-document construction.
 - Typecheck and lint gates green. Existing tests pass unchanged.
 
+### Stage C
+
+- Created resolution service module at
+  `episodic/canonical/reference_documents/resolution.py`.
+- Implemented `ResolvedBinding` dataclass and `resolve_bindings` async function.
+- Added `EpisodeRepository.list_by_ids` method and `_RepositoryBase._get_many` helper.
+- Algorithm groups bindings by document, applies episode created_at precedence.
+- Wrote 6 unit tests covering all resolution scenarios.
+- Suppressed complexity warnings (justified in decision log).
+- All gates pass.
+
 ## Decision log
 
 ### 2026-03-22: Episode ordering via `created_at`
@@ -189,6 +200,16 @@ The `reference_document_revision_id` field on `SourceDocument` and
 compatibility: existing ingestion workflows that do not resolve reference
 bindings continue to work unchanged. Only provenance snapshotting workflows
 (Stage E) will populate this field.
+
+### 2026-03-22: Resolution service complexity justified
+
+The `resolve_bindings` function has cyclomatic complexity 17 and 20 local
+variables, exceeding project limits (8 and 10 respectively). Suppressed with
+`noqa: C901, PLR0912, PLR0915, PLR0914`. Justification: episode-anchored
+precedence algorithm requires grouping bindings by document, fetching episode
+timestamps, filtering by precedence, sorting, and fallback logic. Splitting into
+helper functions would obscure the algorithm flow documented in ADR-001.
+Comprehensive unit tests provide safety.
 
 ## Outcomes and retrospective
 

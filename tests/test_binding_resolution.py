@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import datetime as dt
+import typing as typ
 import uuid
 
 import pytest
 import pytest_asyncio
 
 from episodic.canonical.domain import (
+    ApprovalState,
     CanonicalEpisode,
     EpisodeStatus,
     ReferenceBinding,
+    ReferenceBindingTargetKind,
     ReferenceDocument,
     ReferenceDocumentKind,
     ReferenceDocumentLifecycleState,
@@ -19,19 +22,24 @@ from episodic.canonical.domain import (
     SeriesProfile,
     TeiHeader,
 )
-from episodic.canonical.ports import CanonicalUnitOfWork
 from episodic.canonical.reference_documents.resolution import (
     ResolvedBinding,
     resolve_bindings,
 )
 from episodic.canonical.storage.uow import SqlAlchemyUnitOfWork
 
+if typ.TYPE_CHECKING:
+    from episodic.canonical.ports import CanonicalUnitOfWork
+
 pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
-async def uow_with_fixtures(session_factory):
-    """Provide a UOW with series profile, episodes, reference documents, and revisions."""
+async def uow_with_fixtures(session_factory):  # noqa: ANN201, ANN001
+    """Provide a UOW with series profile, episodes, reference documents, and revisions.
+
+    Revisions.
+    """
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         now = dt.datetime.now(tz=dt.UTC)
 
@@ -55,7 +63,7 @@ async def uow_with_fixtures(session_factory):
             title="Early Episode",
             tei_xml="<TEI/>",
             status=EpisodeStatus.DRAFT,
-            approval_state="pending",
+            approval_state=ApprovalState.DRAFT,
             created_at=now - dt.timedelta(days=10),
             updated_at=now - dt.timedelta(days=10),
         )
@@ -66,7 +74,7 @@ async def uow_with_fixtures(session_factory):
             title="Middle Episode",
             tei_xml="<TEI/>",
             status=EpisodeStatus.DRAFT,
-            approval_state="pending",
+            approval_state=ApprovalState.DRAFT,
             created_at=now - dt.timedelta(days=5),
             updated_at=now - dt.timedelta(days=5),
         )
@@ -77,7 +85,7 @@ async def uow_with_fixtures(session_factory):
             title="Late Episode",
             tei_xml="<TEI/>",
             status=EpisodeStatus.DRAFT,
-            approval_state="pending",
+            approval_state=ApprovalState.DRAFT,
             created_at=now,
             updated_at=now,
         )
@@ -155,7 +163,9 @@ async def uow_with_fixtures(session_factory):
         }
 
 
-async def test_resolve_bindings_returns_empty_when_no_bindings_exist(uow_with_fixtures):
+async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
     """Resolution returns empty list when no bindings exist for series profile."""
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
@@ -167,8 +177,8 @@ async def test_resolve_bindings_returns_empty_when_no_bindings_exist(uow_with_fi
 
 
 async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
-    uow_with_fixtures,
-):
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
     """When no episode_id is provided, resolution includes default binding."""
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
@@ -179,10 +189,10 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     binding = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v1.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=None,
         created_at=fixtures["now"],
     )
@@ -198,9 +208,12 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
 
 
 async def test_resolve_bindings_selects_episode_specific_binding_over_default(
-    uow_with_fixtures,
-):
-    """Episode-specific binding takes precedence over default when episode_id provided."""
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
+    """Episode-specific binding takes precedence over default.
+
+    Provided.
+    """
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
     series = fixtures["series"]
@@ -212,10 +225,10 @@ async def test_resolve_bindings_selects_episode_specific_binding_over_default(
     binding_default = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v1.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=None,
         created_at=fixtures["now"] - dt.timedelta(days=12),
     )
@@ -223,10 +236,10 @@ async def test_resolve_bindings_selects_episode_specific_binding_over_default(
     binding_episode = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v2.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=episode_middle.id,
         created_at=fixtures["now"] - dt.timedelta(days=6),
     )
@@ -245,10 +258,13 @@ async def test_resolve_bindings_selects_episode_specific_binding_over_default(
     assert resolved[0].revision.id == revision_v2.id
 
 
-async def test_resolve_bindings_selects_latest_applicable_episode_binding(
-    uow_with_fixtures,
-):
-    """Resolution selects binding with latest effective_from_episode_id that is on or before target."""
+async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
+    """Resolution selects binding with latest effective_from_episode_id.
+
+    That is on or before target.
+    """
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
     series = fixtures["series"]
@@ -263,10 +279,10 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(
     binding_early = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v1.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=episode_early.id,
         created_at=fixtures["now"] - dt.timedelta(days=11),
     )
@@ -274,10 +290,10 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(
     binding_middle = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v2.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=episode_middle.id,
         created_at=fixtures["now"] - dt.timedelta(days=6),
     )
@@ -285,10 +301,10 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(
     binding_late = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v3.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=episode_late.id,
         created_at=fixtures["now"] - dt.timedelta(days=1),
     )
@@ -322,7 +338,9 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(
     assert resolved_late[0].revision.id == revision_v3.id
 
 
-async def test_resolve_bindings_excludes_future_episode_bindings(uow_with_fixtures):
+async def test_resolve_bindings_excludes_future_episode_bindings(
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
     """Bindings with effective_from_episode_id after target episode are excluded."""
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
@@ -335,10 +353,10 @@ async def test_resolve_bindings_excludes_future_episode_bindings(uow_with_fixtur
     binding_late = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v3.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=episode_late.id,
         created_at=fixtures["now"] - dt.timedelta(days=1),
     )
@@ -354,9 +372,12 @@ async def test_resolve_bindings_excludes_future_episode_bindings(uow_with_fixtur
 
 
 async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
-    uow_with_fixtures,
-):
-    """When no episode-specific binding matches, fall back to default (None effective_from_episode_id)."""
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
+    """When no episode-specific binding matches, fall back to default.
+
+    None effective_from_episode_id.
+    """
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
     series = fixtures["series"]
@@ -369,10 +390,10 @@ async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
     binding_default = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v1.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=None,
         created_at=fixtures["now"] - dt.timedelta(days=12),
     )
@@ -380,10 +401,10 @@ async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
     binding_late = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v3.id,
-        target_kind="series_profile",
-        target_series_profile_id=series.id,
-        target_episode_template_id=None,
-        target_ingestion_job_id=None,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
         effective_from_episode_id=episode_late.id,
         created_at=fixtures["now"] - dt.timedelta(days=1),
     )
