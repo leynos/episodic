@@ -34,116 +34,151 @@ if typ.TYPE_CHECKING:
 pytestmark = pytest.mark.asyncio
 
 
+def _create_series(now: dt.datetime) -> SeriesProfile:
+    """Create and return a series profile for testing."""
+    return SeriesProfile(
+        id=uuid.uuid4(),
+        title="Resolution Test Series",
+        slug="resolution-test",
+        description="Series for resolution tests",
+        configuration={},
+        guardrails={},
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _create_episodes_with_headers(
+    series_id: uuid.UUID, now: dt.datetime
+) -> tuple[CanonicalEpisode, CanonicalEpisode, CanonicalEpisode, list[TeiHeader]]:
+    """Create three episodes with staggered timestamps and their TEI headers."""
+    episode_early = CanonicalEpisode(
+        id=uuid.uuid4(),
+        series_profile_id=series_id,
+        tei_header_id=uuid.uuid4(),
+        title="Early Episode",
+        tei_xml="<TEI/>",
+        status=EpisodeStatus.DRAFT,
+        approval_state=ApprovalState.DRAFT,
+        created_at=now - dt.timedelta(days=10),
+        updated_at=now - dt.timedelta(days=10),
+    )
+    episode_middle = CanonicalEpisode(
+        id=uuid.uuid4(),
+        series_profile_id=series_id,
+        tei_header_id=uuid.uuid4(),
+        title="Middle Episode",
+        tei_xml="<TEI/>",
+        status=EpisodeStatus.DRAFT,
+        approval_state=ApprovalState.DRAFT,
+        created_at=now - dt.timedelta(days=5),
+        updated_at=now - dt.timedelta(days=5),
+    )
+    episode_late = CanonicalEpisode(
+        id=uuid.uuid4(),
+        series_profile_id=series_id,
+        tei_header_id=uuid.uuid4(),
+        title="Late Episode",
+        tei_xml="<TEI/>",
+        status=EpisodeStatus.DRAFT,
+        approval_state=ApprovalState.DRAFT,
+        created_at=now,
+        updated_at=now,
+    )
+
+    headers = [
+        TeiHeader(
+            id=ep.tei_header_id,
+            title=ep.title,
+            payload={"file_desc": {"title": ep.title}},
+            raw_xml="<teiHeader/>",
+            created_at=ep.created_at,
+            updated_at=ep.updated_at,
+        )
+        for ep in [episode_early, episode_middle, episode_late]
+    ]
+
+    return episode_early, episode_middle, episode_late, headers
+
+
+def _create_reference_document(
+    series_id: uuid.UUID, now: dt.datetime
+) -> ReferenceDocument:
+    """Create and return a reference document for testing."""
+    return ReferenceDocument(
+        id=uuid.uuid4(),
+        owner_series_profile_id=series_id,
+        kind=ReferenceDocumentKind.STYLE_GUIDE,
+        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+        metadata={},
+        created_at=now,
+        updated_at=now,
+        lock_version=1,
+    )
+
+
+def _create_revisions(
+    doc_id: uuid.UUID, now: dt.datetime
+) -> tuple[
+    ReferenceDocumentRevision, ReferenceDocumentRevision, ReferenceDocumentRevision
+]:
+    """Create and return three revisions with staggered timestamps."""
+    revision_v1 = ReferenceDocumentRevision(
+        id=uuid.uuid4(),
+        reference_document_id=doc_id,
+        content={"version": "1", "rules": ["rule1"]},
+        content_hash="hash-v1",
+        author="editor",
+        change_note="Initial version",
+        created_at=now - dt.timedelta(days=15),
+    )
+    revision_v2 = ReferenceDocumentRevision(
+        id=uuid.uuid4(),
+        reference_document_id=doc_id,
+        content={"version": "2", "rules": ["rule1", "rule2"]},
+        content_hash="hash-v2",
+        author="editor",
+        change_note="Added rule2",
+        created_at=now - dt.timedelta(days=8),
+    )
+    revision_v3 = ReferenceDocumentRevision(
+        id=uuid.uuid4(),
+        reference_document_id=doc_id,
+        content={"version": "3", "rules": ["rule1", "rule2", "rule3"]},
+        content_hash="hash-v3",
+        author="editor",
+        change_note="Added rule3",
+        created_at=now - dt.timedelta(days=2),
+    )
+    return revision_v1, revision_v2, revision_v3
+
+
 @pytest_asyncio.fixture
 async def uow_with_fixtures(session_factory):  # noqa: ANN201, ANN001
-    """Provide a UOW with series profile, episodes, reference documents, and revisions.
-
-    Revisions.
-    """
+    """Provide UOW with series, episodes, reference documents, and revisions."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         now = dt.datetime.now(tz=dt.UTC)
 
-        series = SeriesProfile(
-            id=uuid.uuid4(),
-            title="Resolution Test Series",
-            slug="resolution-test",
-            description="Series for resolution tests",
-            configuration={},
-            guardrails={},
-            created_at=now,
-            updated_at=now,
-        )
+        # Create entities using helper functions
+        series = _create_series(now)
         await uow.series_profiles.add(series)
+        await uow.flush()  # Ensure series exists before adding episodes
 
-        # Create episodes with predictable ordering via created_at
-        episode_early = CanonicalEpisode(
-            id=uuid.uuid4(),
-            series_profile_id=series.id,
-            tei_header_id=uuid.uuid4(),
-            title="Early Episode",
-            tei_xml="<TEI/>",
-            status=EpisodeStatus.DRAFT,
-            approval_state=ApprovalState.DRAFT,
-            created_at=now - dt.timedelta(days=10),
-            updated_at=now - dt.timedelta(days=10),
+        episode_early, episode_middle, episode_late, headers = (
+            _create_episodes_with_headers(series.id, now)
         )
-        episode_middle = CanonicalEpisode(
-            id=uuid.uuid4(),
-            series_profile_id=series.id,
-            tei_header_id=uuid.uuid4(),
-            title="Middle Episode",
-            tei_xml="<TEI/>",
-            status=EpisodeStatus.DRAFT,
-            approval_state=ApprovalState.DRAFT,
-            created_at=now - dt.timedelta(days=5),
-            updated_at=now - dt.timedelta(days=5),
-        )
-        episode_late = CanonicalEpisode(
-            id=uuid.uuid4(),
-            series_profile_id=series.id,
-            tei_header_id=uuid.uuid4(),
-            title="Late Episode",
-            tei_xml="<TEI/>",
-            status=EpisodeStatus.DRAFT,
-            approval_state=ApprovalState.DRAFT,
-            created_at=now,
-            updated_at=now,
-        )
-
-        for ep in [episode_early, episode_middle, episode_late]:
-            header = TeiHeader(
-                id=ep.tei_header_id,
-                title=ep.title,
-                payload={"file_desc": {"title": ep.title}},
-                raw_xml="<teiHeader/>",
-                created_at=ep.created_at,
-                updated_at=ep.updated_at,
-            )
+        # Add headers and episodes one-by-one to maintain referential integrity
+        for ep, header in zip(
+            [episode_early, episode_middle, episode_late], headers, strict=True
+        ):
             await uow.tei_headers.add(header)
+            await uow.flush()  # Ensure header exists before adding episode
             await uow.episodes.add(ep)
 
-        # Create a reference document (style guide)
-        doc = ReferenceDocument(
-            id=uuid.uuid4(),
-            owner_series_profile_id=series.id,
-            kind=ReferenceDocumentKind.STYLE_GUIDE,
-            lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
-            metadata={},
-            created_at=now,
-            updated_at=now,
-            lock_version=1,
-        )
+        doc = _create_reference_document(series.id, now)
         await uow.reference_documents.add(doc)
 
-        # Create revisions
-        revision_v1 = ReferenceDocumentRevision(
-            id=uuid.uuid4(),
-            reference_document_id=doc.id,
-            content={"version": "1", "rules": ["rule1"]},
-            content_hash="hash-v1",
-            author="editor",
-            change_note="Initial version",
-            created_at=now - dt.timedelta(days=15),
-        )
-        revision_v2 = ReferenceDocumentRevision(
-            id=uuid.uuid4(),
-            reference_document_id=doc.id,
-            content={"version": "2", "rules": ["rule1", "rule2"]},
-            content_hash="hash-v2",
-            author="editor",
-            change_note="Added rule2",
-            created_at=now - dt.timedelta(days=8),
-        )
-        revision_v3 = ReferenceDocumentRevision(
-            id=uuid.uuid4(),
-            reference_document_id=doc.id,
-            content={"version": "3", "rules": ["rule1", "rule2", "rule3"]},
-            content_hash="hash-v3",
-            author="editor",
-            change_note="Added rule3",
-            created_at=now - dt.timedelta(days=2),
-        )
-
+        revision_v1, revision_v2, revision_v3 = _create_revisions(doc.id, now)
         for rev in [revision_v1, revision_v2, revision_v3]:
             await uow.reference_document_revisions.add(rev)
 

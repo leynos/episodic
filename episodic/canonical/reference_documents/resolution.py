@@ -9,6 +9,7 @@ import operator
 import typing as typ
 
 if typ.TYPE_CHECKING:
+    import datetime as dt
     import uuid
 
     from episodic.canonical.domain import (
@@ -28,7 +29,162 @@ class ResolvedBinding:
     document: ReferenceDocument
 
 
-async def resolve_bindings(  # noqa: C901, PLR0912, PLR0915, PLR0914
+async def _load_revision_and_document_maps(
+    uow: CanonicalUnitOfWork,
+    series_bindings: list[ReferenceBinding],
+) -> tuple[
+    dict[uuid.UUID, ReferenceDocumentRevision], dict[uuid.UUID, ReferenceDocument]
+]:
+    """Load revisions and documents for bindings, returning lookup maps."""
+    revision_ids = {b.reference_document_revision_id for b in series_bindings}
+    revisions = await uow.reference_document_revisions.list_by_ids(list(revision_ids))
+    revision_map = {r.id: r for r in revisions}
+
+    document_ids = {r.reference_document_id for r in revisions}
+    documents = await uow.reference_documents.list_by_ids(list(document_ids))
+    document_map = {d.id: d for d in documents}
+
+    return revision_map, document_map
+
+
+def _create_resolved_binding(
+    binding: ReferenceBinding,
+    revision_map: dict[uuid.UUID, ReferenceDocumentRevision],
+    document_map: dict[uuid.UUID, ReferenceDocument],
+) -> ResolvedBinding | None:
+    """Create a ResolvedBinding if revision and document exist, else None."""
+    revision = revision_map.get(binding.reference_document_revision_id)
+    if revision is None:
+        return None
+    document = document_map.get(revision.reference_document_id)
+    if document is None:
+        return None
+    return ResolvedBinding(binding=binding, revision=revision, document=document)
+
+
+def _resolve_without_episode_context(
+    series_bindings: list[ReferenceBinding],
+    revision_map: dict[uuid.UUID, ReferenceDocumentRevision],
+    document_map: dict[uuid.UUID, ReferenceDocument],
+) -> list[ResolvedBinding]:
+    """Resolve all bindings without episode precedence filtering."""
+    resolved = []
+    for binding in series_bindings:
+        resolved_binding = _create_resolved_binding(binding, revision_map, document_map)
+        if resolved_binding is not None:
+            resolved.append(resolved_binding)
+    return resolved
+
+
+def _group_bindings_by_document(
+    series_bindings: list[ReferenceBinding],
+    revision_map: dict[uuid.UUID, ReferenceDocumentRevision],
+) -> dict[uuid.UUID, list[ReferenceBinding]]:
+    """Group bindings by their reference document ID."""
+    bindings_by_document: dict[uuid.UUID, list[ReferenceBinding]] = {}
+    for binding in series_bindings:
+        revision = revision_map.get(binding.reference_document_revision_id)
+        if revision is None:
+            continue
+        doc_id = revision.reference_document_id
+        bindings_by_document.setdefault(doc_id, []).append(binding)
+    return bindings_by_document
+
+
+async def _find_applicable_episode_bindings(
+    uow: CanonicalUnitOfWork,
+    episode_bindings: list[ReferenceBinding],
+    target_created_at: dt.datetime,
+) -> list[tuple[ReferenceBinding, dt.datetime]]:
+    """Find episode bindings with created_at <= target, return with timestamps."""
+    episode_ids = {
+        b.effective_from_episode_id
+        for b in episode_bindings
+        if b.effective_from_episode_id is not None
+    }
+    episodes = {
+        ep.id: ep
+        for ep in await uow.episodes.list_by_ids(list(episode_ids))
+        if ep.created_at <= target_created_at
+    }
+
+    applicable_bindings = []
+    for binding in episode_bindings:
+        if binding.effective_from_episode_id is None:
+            continue
+        effective_episode = episodes.get(binding.effective_from_episode_id)
+        if effective_episode is not None:
+            applicable_bindings.append((binding, effective_episode.created_at))
+
+    return applicable_bindings
+
+
+def _select_best_binding_for_document(
+    doc_bindings: list[ReferenceBinding],
+    applicable_episode_bindings: list[tuple[ReferenceBinding, dt.datetime]],
+) -> ReferenceBinding | None:
+    """Select the best binding: latest applicable episode binding or default."""
+    if applicable_episode_bindings:
+        # Sort by created_at descending and take the latest
+        applicable_episode_bindings.sort(key=operator.itemgetter(1), reverse=True)
+        return applicable_episode_bindings[0][0]
+
+    # Fall back to default binding
+    default_bindings = [b for b in doc_bindings if b.effective_from_episode_id is None]
+    if default_bindings:
+        return default_bindings[0]
+
+    return None
+
+
+async def _resolve_with_episode_context(
+    uow: CanonicalUnitOfWork,
+    series_bindings: list[ReferenceBinding],
+    maps: tuple[
+        dict[uuid.UUID, ReferenceDocumentRevision], dict[uuid.UUID, ReferenceDocument]
+    ],
+    *,
+    episode_id: uuid.UUID,
+) -> list[ResolvedBinding]:
+    """Resolve bindings with episode-aware precedence logic."""
+    revision_map, document_map = maps
+    target_episode = await uow.episodes.get(episode_id)
+    if target_episode is None:
+        return []
+
+    bindings_by_document = _group_bindings_by_document(series_bindings, revision_map)
+
+    resolved = []
+    for doc_id, doc_bindings in bindings_by_document.items():
+        document = document_map.get(doc_id)
+        if document is None:
+            continue
+
+        episode_bindings = [
+            b for b in doc_bindings if b.effective_from_episode_id is not None
+        ]
+
+        applicable_episode_bindings = []
+        if episode_bindings:
+            applicable_episode_bindings = await _find_applicable_episode_bindings(
+                uow, episode_bindings, target_episode.created_at
+            )
+
+        chosen_binding = _select_best_binding_for_document(
+            doc_bindings, applicable_episode_bindings
+        )
+
+        if chosen_binding is not None:
+            resolved_binding = _create_resolved_binding(
+                chosen_binding, revision_map, document_map
+            )
+            if resolved_binding is not None:
+                resolved.append(resolved_binding)
+
+    return resolved
+
+
+async def resolve_bindings(
     uow: CanonicalUnitOfWork,
     *,
     series_profile_id: uuid.UUID,
@@ -66,7 +222,6 @@ async def resolve_bindings(  # noqa: C901, PLR0912, PLR0915, PLR0914
     list[ResolvedBinding]
         The resolved bindings with their revisions and documents.
     """
-    # Collect series profile bindings
     from episodic.canonical.domain import ReferenceBindingTargetKind
 
     series_bindings = await uow.reference_bindings.list_for_target(
@@ -77,115 +232,15 @@ async def resolve_bindings(  # noqa: C901, PLR0912, PLR0915, PLR0914
     if not series_bindings:
         return []
 
-    # Load all revisions and documents for the bindings
-    revision_ids = {b.reference_document_revision_id for b in series_bindings}
-    revisions = await uow.reference_document_revisions.list_by_ids(list(revision_ids))
-    revision_map = {r.id: r for r in revisions}
+    revision_map, document_map = await _load_revision_and_document_maps(
+        uow, series_bindings
+    )
 
-    document_ids = {r.reference_document_id for r in revisions}
-    documents = await uow.reference_documents.list_by_ids(list(document_ids))
-    document_map = {d.id: d for d in documents}
-
-    # If no episode context, return all bindings (backward compatible)
     if episode_id is None:
-        resolved = []
-        for binding in series_bindings:
-            revision = revision_map.get(binding.reference_document_revision_id)
-            if revision is None:
-                continue
-            document = document_map.get(revision.reference_document_id)
-            if document is None:
-                continue
-            resolved.append(
-                ResolvedBinding(
-                    binding=binding,
-                    revision=revision,
-                    document=document,
-                )
-            )
-        return resolved
+        return _resolve_without_episode_context(
+            series_bindings, revision_map, document_map
+        )
 
-    # Episode-aware resolution: group bindings by document and apply precedence
-    target_episode = await uow.episodes.get(episode_id)
-    if target_episode is None:
-        # Episode not found; return empty
-        return []
-
-    target_created_at = target_episode.created_at
-
-    # Group bindings by document
-    bindings_by_document: dict[uuid.UUID, list[ReferenceBinding]] = {}
-    for binding in series_bindings:
-        revision = revision_map.get(binding.reference_document_revision_id)
-        if revision is None:
-            continue
-        doc_id = revision.reference_document_id
-        bindings_by_document.setdefault(doc_id, []).append(binding)
-
-    # Resolve one binding per document
-    resolved = []
-    for doc_id, doc_bindings in bindings_by_document.items():
-        document = document_map.get(doc_id)
-        if document is None:
-            continue
-
-        # Separate default bindings (None effective_from_episode_id) from
-        # episode-specific
-        default_bindings = [
-            b for b in doc_bindings if b.effective_from_episode_id is None
-        ]
-        episode_bindings = [
-            b for b in doc_bindings if b.effective_from_episode_id is not None
-        ]
-
-        # Fetch episode created_at timestamps for episode-specific bindings
-        if episode_bindings:
-            episode_ids = {
-                b.effective_from_episode_id
-                for b in episode_bindings
-                if b.effective_from_episode_id is not None
-            }
-            episodes = {
-                ep.id: ep
-                for ep in await uow.episodes.list_by_ids(list(episode_ids))
-                if ep.created_at <= target_created_at
-            }
-
-            # Find the binding with the latest effective_from_episode_id <= target
-            applicable_bindings = []
-            for binding in episode_bindings:
-                if binding.effective_from_episode_id is None:
-                    continue
-                effective_episode = episodes.get(binding.effective_from_episode_id)
-                if effective_episode is not None:
-                    applicable_bindings.append((binding, effective_episode.created_at))
-
-            if applicable_bindings:
-                # Sort by created_at descending and take the latest
-                applicable_bindings.sort(key=operator.itemgetter(1), reverse=True)
-                chosen_binding = applicable_bindings[0][0]
-                revision = revision_map[chosen_binding.reference_document_revision_id]
-                resolved.append(
-                    ResolvedBinding(
-                        binding=chosen_binding,
-                        revision=revision,
-                        document=document,
-                    )
-                )
-                continue
-
-        # No applicable episode-specific binding; fall back to default
-        if default_bindings:
-            # If multiple defaults exist, pick the first (should be unique per
-            # target+doc)
-            chosen_binding = default_bindings[0]
-            revision = revision_map[chosen_binding.reference_document_revision_id]
-            resolved.append(
-                ResolvedBinding(
-                    binding=chosen_binding,
-                    revision=revision,
-                    document=document,
-                )
-            )
-
-    return resolved
+    return await _resolve_with_episode_context(
+        uow, series_bindings, (revision_map, document_map), episode_id=episode_id
+    )

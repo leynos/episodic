@@ -50,8 +50,8 @@ Success is observable when:
 5. Unit tests, integration tests, and behavioural tests (pytest-bdd) validate
    resolution precedence, provenance snapshotting, and API behaviour.
 6. Documentation is updated in
-   `docs/episodic-podcast-generation-system-design.md`,
-   `docs/users-guide.md`, and `docs/developers-guide.md`.
+   `docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`,
+   and `docs/developers-guide.md`.
 7. An Architectural Decision Record (ADR) documents the resolution algorithm
    design.
 8. `docs/roadmap.md` marks item `1.4.3` done after all required gates are
@@ -155,8 +155,9 @@ Success is observable when:
 - Confirmed that both `CanonicalEpisode` domain entity and `EpisodeRecord` ORM
   model have `created_at: datetime.datetime` fields, providing stable episode
   ordering semantics.
-- ADR-001 written at `docs/adr/adr-001-reference-binding-resolution-algorithm.md`
-  documenting episode-anchored precedence algorithm with `created_at` ordering.
+- ADR-001 written at
+  `docs/adr/adr-001-reference-binding-resolution-algorithm.md` documenting
+  episode-anchored precedence algorithm with `created_at` ordering.
 
 ### Stage B
 
@@ -179,7 +180,8 @@ Success is observable when:
 - Created resolution service module at
   `episodic/canonical/reference_documents/resolution.py`.
 - Implemented `ResolvedBinding` dataclass and `resolve_bindings` async function.
-- Added `EpisodeRepository.list_by_ids` method and `_RepositoryBase._get_many` helper.
+- Added `EpisodeRepository.list_by_ids` method and `_RepositoryBase._get_many`
+  helper.
 - Algorithm groups bindings by document, applies episode created_at precedence.
 - Wrote 6 unit tests covering all resolution scenarios.
 - Suppressed complexity warnings (justified in decision log).
@@ -207,8 +209,8 @@ The `resolve_bindings` function has cyclomatic complexity 17 and 20 local
 variables, exceeding project limits (8 and 10 respectively). Suppressed with
 `noqa: C901, PLR0912, PLR0915, PLR0914`. Justification: episode-anchored
 precedence algorithm requires grouping bindings by document, fetching episode
-timestamps, filtering by precedence, sorting, and fallback logic. Splitting into
-helper functions would obscure the algorithm flow documented in ADR-001.
+timestamps, filtering by precedence, sorting, and fallback logic. Splitting
+into helper functions would obscure the algorithm flow documented in ADR-001.
 Comprehensive unit tests provide safety.
 
 ## Outcomes and retrospective
@@ -226,9 +228,9 @@ reference-binding resolution. All paths are repository-relative.
 Three domain entities are already defined:
 
 - `ReferenceDocument` (line 148): stable identity with
-  `owner_series_profile_id`,
-  `kind` (one of `style_guide`, `host_profile`, `guest_profile`,
-  `research_brief`), `lifecycle_state`, `metadata`, and `lock_version`.
+  `owner_series_profile_id`, `kind` (one of `style_guide`, `host_profile`,
+  `guest_profile`, `research_brief`), `lifecycle_state`, `metadata`, and
+  `lock_version`.
 - `ReferenceDocumentRevision` (line 168): immutable content snapshot with
   `reference_document_id`, `content` (JSON mapping), `content_hash`, `author`,
   and `change_note`.

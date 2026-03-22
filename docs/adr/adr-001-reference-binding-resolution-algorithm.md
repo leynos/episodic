@@ -58,8 +58,8 @@ The algorithm proceeds as follows:
    episode template.
 
 2. **Group bindings by reference document**. Each binding points to a
-   `ReferenceDocumentRevision`, which in turn belongs to a
-   `ReferenceDocument`. Group bindings by their parent document identifier.
+   `ReferenceDocumentRevision`, which in turn belongs to a `ReferenceDocument`.
+   Group bindings by their parent document identifier.
 
 3. **For each reference document group**, resolve which binding applies:
 
