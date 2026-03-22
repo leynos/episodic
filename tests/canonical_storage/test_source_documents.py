@@ -58,6 +58,7 @@ async def test_source_document_weight_check_constraint(
             id=uuid.uuid4(),
             ingestion_job_id=job.id,
             canonical_episode_id=episode.id,
+            reference_document_revision_id=None,
             source_type="web",
             source_uri="https://example.com/invalid",
             weight=1.5,

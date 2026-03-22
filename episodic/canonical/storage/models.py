@@ -352,6 +352,9 @@ class SourceDocumentRecord(Base):
         Foreign key to the ingestion job.
     canonical_episode_id : uuid.UUID | None
         Foreign key to the canonical episode, set on creation for immutable records.
+    reference_document_revision_id : uuid.UUID | None
+        Foreign key to the reference document revision, populated when snapshotting
+        resolved bindings as provenance.
     source_type : str
         Source type label (for example, transcript or web).
     source_uri : str
@@ -382,6 +385,12 @@ class SourceDocumentRecord(Base):
         postgresql.UUID(as_uuid=True),
         sa.ForeignKey("episodes.id"),
         nullable=True,
+    )
+    reference_document_revision_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("reference_document_revisions.id"),
+        nullable=True,
+        index=True,
     )
     source_type: orm.Mapped[str] = orm.mapped_column(sa.String(120), nullable=False)
     source_uri: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)

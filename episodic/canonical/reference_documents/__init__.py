@@ -11,6 +11,10 @@ from .documents import (
     list_reference_documents,
     update_reference_document,
 )
+from .resolution import (
+    ResolvedBinding,
+    resolve_bindings,
+)
 from .revisions import (
     create_reference_document_revision,
     get_reference_document_revision,
@@ -44,6 +48,7 @@ __all__: tuple[str, ...] = (
     "ReferenceEntityNotFoundError",
     "ReferenceRevisionConflictError",
     "ReferenceValidationError",
+    "ResolvedBinding",
     "create_reference_binding",
     "create_reference_document",
     "create_reference_document_revision",
@@ -53,5 +58,6 @@ __all__: tuple[str, ...] = (
     "list_reference_bindings",
     "list_reference_document_revisions",
     "list_reference_documents",
+    "resolve_bindings",
     "update_reference_document",
 )

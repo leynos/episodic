@@ -139,9 +139,9 @@ Success is observable when:
 
 ## Progress
 
-- [ ] Initial ExecPlan draft completed.
-- [ ] Stage A: codebase investigation and algorithm design.
-- [ ] Stage B: migration and domain model updates.
+- [x] Initial ExecPlan draft completed.
+- [x] Stage A: codebase investigation and algorithm design.
+- [x] Stage B: migration and domain model updates.
 - [ ] Stage C: resolution service implementation with fail-first tests.
 - [ ] Stage D: API endpoint updates and integration tests.
 - [ ] Stage E: provenance snapshotting in ingestion records.
@@ -150,12 +150,45 @@ Success is observable when:
 
 ## Surprises and discoveries
 
-(None yet. This section will be updated as implementation proceeds.)
+### Stage A
+
+- Confirmed that both `CanonicalEpisode` domain entity and `EpisodeRecord` ORM
+  model have `created_at: datetime.datetime` fields, providing stable episode
+  ordering semantics.
+- ADR-001 written at `docs/adr/adr-001-reference-binding-resolution-algorithm.md`
+  documenting episode-anchored precedence algorithm with `created_at` ordering.
+
+### Stage B
+
+- Migration `20260322_000007` adds nullable
+  `reference_document_revision_id` foreign key column to `source_documents`
+  table with index.
+- Domain entities `SourceDocument` and `SourceDocumentInput` updated with
+  nullable `reference_document_revision_id` field.
+- ORM model `SourceDocumentRecord` updated with mapped column.
+- Mappers `_source_document_to_record` and `_source_document_from_record`
+  updated to carry the new field.
+- Service layer `_create_source_documents` updated to pass
+  `reference_document_revision_id` from `SourceDocumentInput`.
+- All test fixtures updated to provide `reference_document_revision_id=None`
+  for existing source-document construction.
+- Typecheck and lint gates green. Existing tests pass unchanged.
 
 ## Decision log
 
-(No decisions recorded yet. This section will be updated as implementation
-proceeds.)
+### 2026-03-22: Episode ordering via `created_at`
+
+Use episode `created_at` timestamp as the ordering dimension for
+`effective_from_episode_id` precedence resolution. This field is present,
+immutable, and monotonic. No new schema columns required.
+
+### 2026-03-22: Nullable `reference_document_revision_id` with default None
+
+The `reference_document_revision_id` field on `SourceDocument` and
+`SourceDocumentInput` is nullable with default `None`. This preserves backward
+compatibility: existing ingestion workflows that do not resolve reference
+bindings continue to work unchanged. Only provenance snapshotting workflows
+(Stage E) will populate this field.
 
 ## Outcomes and retrospective
 

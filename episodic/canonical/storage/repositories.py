@@ -178,6 +178,14 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
             _episode_from_record,
         )
 
+    async def list_by_ids(self, episode_ids: list[uuid.UUID]) -> list[CanonicalEpisode]:
+        """Fetch canonical episodes by identifiers."""
+        return await self._get_many(
+            EpisodeRecord,
+            EpisodeRecord.id.in_(episode_ids),
+            _episode_from_record,
+        )
+
 
 class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
     """Persist ingestion jobs using SQLAlchemy."""
