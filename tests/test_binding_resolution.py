@@ -242,6 +242,44 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     assert resolved[0].revision.id == revision_v1.id
 
 
+async def _add_default_and_episode_specific_binding(
+    uow: CanonicalUnitOfWork,
+    fixtures: dict,
+    *,
+    episode_specific_episode_id: uuid.UUID,
+    episode_specific_revision_id: uuid.UUID,
+) -> tuple[ReferenceBinding, ReferenceBinding]:
+    """Add default binding (v1) and episode-specific binding, then commit."""
+    series = fixtures["series"]
+    now = fixtures["now"]
+    revision_v1 = fixtures["revision_v1"]
+
+    binding_default = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=revision_v1.id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=now - dt.timedelta(days=12),
+    )
+    binding_episode = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=episode_specific_revision_id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=episode_specific_episode_id,
+        created_at=now - dt.timedelta(days=6),
+    )
+    await uow.reference_bindings.add(binding_default)
+    await uow.reference_bindings.add(binding_episode)
+    await uow.commit()
+    return binding_default, binding_episode
+
+
 async def test_resolve_bindings_selects_episode_specific_binding_over_default(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
@@ -253,37 +291,15 @@ async def test_resolve_bindings_selects_episode_specific_binding_over_default(
     uow: CanonicalUnitOfWork = fixtures["uow"]
     series = fixtures["series"]
     episode_middle = fixtures["episode_middle"]
-    revision_v1 = fixtures["revision_v1"]
     revision_v2 = fixtures["revision_v2"]
 
-    # Default binding with v1
-    binding_default = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=revision_v1.id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=None,
-        created_at=fixtures["now"] - dt.timedelta(days=12),
-    )
-    # Episode-specific binding with v2, effective from middle episode
-    binding_episode = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=revision_v2.id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=episode_middle.id,
-        created_at=fixtures["now"] - dt.timedelta(days=6),
+    _, binding_episode = await _add_default_and_episode_specific_binding(
+        uow,
+        fixtures,
+        episode_specific_episode_id=episode_middle.id,
+        episode_specific_revision_id=revision_v2.id,
     )
 
-    await uow.reference_bindings.add(binding_default)
-    await uow.reference_bindings.add(binding_episode)
-    await uow.commit()
-
-    # Resolve for middle episode
     resolved = await resolve_bindings(
         uow, series_profile_id=series.id, episode_id=episode_middle.id
     )
@@ -421,34 +437,13 @@ async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
     revision_v1 = fixtures["revision_v1"]
     revision_v3 = fixtures["revision_v3"]
 
-    # Default binding with v1
-    binding_default = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=revision_v1.id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=None,
-        created_at=fixtures["now"] - dt.timedelta(days=12),
-    )
-    # Episode-specific binding effective from late episode only
-    binding_late = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=revision_v3.id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=episode_late.id,
-        created_at=fixtures["now"] - dt.timedelta(days=1),
+    binding_default, _ = await _add_default_and_episode_specific_binding(
+        uow,
+        fixtures,
+        episode_specific_episode_id=episode_late.id,
+        episode_specific_revision_id=revision_v3.id,
     )
 
-    await uow.reference_bindings.add(binding_default)
-    await uow.reference_bindings.add(binding_late)
-    await uow.commit()
-
-    # Resolve for early episode -> should fall back to default
     resolved = await resolve_bindings(
         uow, series_profile_id=series.id, episode_id=episode_early.id
     )
