@@ -137,6 +137,40 @@ def _select_best_binding_for_document(
     return None
 
 
+async def _resolve_document_binding(
+    uow: CanonicalUnitOfWork,
+    doc_entry: tuple[uuid.UUID, list[ReferenceBinding]],
+    maps: tuple[
+        dict[uuid.UUID, ReferenceDocumentRevision], dict[uuid.UUID, ReferenceDocument]
+    ],
+    *,
+    target_created_at: dt.datetime,
+) -> ResolvedBinding | None:
+    """Resolve the best binding for a single document with episode context."""
+    doc_id, doc_bindings = doc_entry
+    revision_map, document_map = maps
+    if document_map.get(doc_id) is None:
+        return None
+
+    episode_bindings = [
+        b for b in doc_bindings if b.effective_from_episode_id is not None
+    ]
+
+    applicable_episode_bindings: list[tuple[ReferenceBinding, dt.datetime]] = []
+    if episode_bindings:
+        applicable_episode_bindings = await _find_applicable_episode_bindings(
+            uow, episode_bindings, target_created_at
+        )
+
+    chosen_binding = _select_best_binding_for_document(
+        doc_bindings, applicable_episode_bindings
+    )
+    if chosen_binding is None:
+        return None
+
+    return _create_resolved_binding(chosen_binding, revision_map, document_map)
+
+
 async def _resolve_with_episode_context(
     uow: CanonicalUnitOfWork,
     series_bindings: list[ReferenceBinding],
@@ -155,31 +189,15 @@ async def _resolve_with_episode_context(
     bindings_by_document = _group_bindings_by_document(series_bindings, revision_map)
 
     resolved = []
-    for doc_id, doc_bindings in bindings_by_document.items():
-        document = document_map.get(doc_id)
-        if document is None:
-            continue
-
-        episode_bindings = [
-            b for b in doc_bindings if b.effective_from_episode_id is not None
-        ]
-
-        applicable_episode_bindings = []
-        if episode_bindings:
-            applicable_episode_bindings = await _find_applicable_episode_bindings(
-                uow, episode_bindings, target_episode.created_at
-            )
-
-        chosen_binding = _select_best_binding_for_document(
-            doc_bindings, applicable_episode_bindings
+    for doc_entry in bindings_by_document.items():
+        resolved_binding = await _resolve_document_binding(
+            uow,
+            doc_entry,
+            (revision_map, document_map),
+            target_created_at=target_episode.created_at,
         )
-
-        if chosen_binding is not None:
-            resolved_binding = _create_resolved_binding(
-                chosen_binding, revision_map, document_map
-            )
-            if resolved_binding is not None:
-                resolved.append(resolved_binding)
+        if resolved_binding is not None:
+            resolved.append(resolved_binding)
 
     return resolved
 
