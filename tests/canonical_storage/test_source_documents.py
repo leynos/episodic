@@ -81,7 +81,7 @@ async def test_source_document_weight_check_constraint(
 
 
 @pytest.mark.asyncio
-async def test_reference_document_revision_id_round_trip(  # noqa: PLR0914
+async def test_reference_document_revision_id_round_trip(  # noqa: PLR0914 - test requires fixtures for reference doc, revision, series, header, episode, job, source doc, and uow
     session_factory: object,
     episode_fixture: tuple[
         SeriesProfile,
@@ -145,5 +145,11 @@ async def test_reference_document_revision_id_round_trip(  # noqa: PLR0914
     # Reload and verify the reference_document_revision_id round-trips correctly
     async with SqlAlchemyUnitOfWork(factory) as uow:
         reloaded = await uow.source_documents.list_for_job(job.id)
-        assert len(reloaded) == 1
-        assert reloaded[0].reference_document_revision_id == reference_revision.id
+        assert len(reloaded) == 1, (
+            f"expected one reloaded document, got {len(reloaded)}"
+        )
+        assert reloaded[0].reference_document_revision_id == reference_revision.id, (
+            f"unexpected reference_document_revision_id: "
+            f"expected {reference_revision.id}, "
+            f"got {reloaded[0].reference_document_revision_id}"
+        )
