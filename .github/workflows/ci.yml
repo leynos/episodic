@@ -28,6 +28,15 @@ jobs:
           for tool in mbake ty ruff; do uv tool install ${tool}; done
           npm install -g markdownlint-cli2
 
+      - name: Install VidaiMock
+        run: |
+          curl -LO https://github.com/vidaiUK/VidaiMock/releases/latest/download/vidaimock-linux-x64.tar.gz
+          tar -xzf vidaimock-linux-x64.tar.gz
+          chmod +x vidaimock
+          mkdir -p /root/.local/bin
+          mv vidaimock /root/.local/bin/
+          echo "/root/.local/bin" >> $GITHUB_PATH
+
       - name: Validate Makefile
         run: mbake validate Makefile
 
