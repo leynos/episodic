@@ -33,9 +33,9 @@ jobs:
           curl -LO https://github.com/vidaiUK/VidaiMock/releases/latest/download/vidaimock-linux-x64.tar.gz
           tar -xzf vidaimock-linux-x64.tar.gz
           chmod +x vidaimock
-          mkdir -p /root/.local/bin
-          mv vidaimock /root/.local/bin/
-          echo "/root/.local/bin" >> $GITHUB_PATH
+          mkdir -p "$HOME/.local/bin"
+          mv vidaimock "$HOME/.local/bin/"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Validate Makefile
         run: mbake validate Makefile

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses as dc
 import json
+import shutil
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
 import time
 import typing as typ
@@ -147,10 +148,15 @@ def _start_vidaimock_process(
     port: int,
 ) -> None:
     """Start the Vidai Mock server and verify it started successfully."""
+    vidaimock_path = shutil.which("vidaimock")
+    if vidaimock_path is None:
+        msg = "vidaimock executable not found in PATH"
+        raise RuntimeError(msg)
+
     pedante_context.base_url = f"http://127.0.0.1:{port}/v1"
     pedante_context.process = subprocess.Popen(  # noqa: S603
         [
-            "/root/.local/bin/vidaimock",
+            vidaimock_path,
             "--host",
             "127.0.0.1",
             "--port",
