@@ -280,13 +280,16 @@ async def _add_default_and_episode_specific_binding(
     return binding_default, binding_episode
 
 
+class _ResolutionScenario(typ.NamedTuple):
+    episode_specific_episode_key: str
+    episode_specific_revision_key: str
+    resolve_for_episode_key: str
+    expect_default: bool
+
+
 async def _run_binding_resolution_scenario(
     fixtures: dict,
-    *,
-    episode_specific_episode_key: str,
-    episode_specific_revision_key: str,
-    resolve_for_episode_key: str,
-    expect_default: bool,
+    scenario: _ResolutionScenario,
 ) -> None:
     """Drive the add-bindings → resolve → assert lifecycle for a single scenario."""
     uow: CanonicalUnitOfWork = fixtures["uow"]
@@ -295,17 +298,19 @@ async def _run_binding_resolution_scenario(
     binding_default, binding_episode = await _add_default_and_episode_specific_binding(
         uow,
         fixtures,
-        episode_specific_episode_id=fixtures[episode_specific_episode_key].id,
-        episode_specific_revision_id=fixtures[episode_specific_revision_key].id,
+        episode_specific_episode_id=fixtures[scenario.episode_specific_episode_key].id,
+        episode_specific_revision_id=fixtures[
+            scenario.episode_specific_revision_key
+        ].id,
     )
 
     resolved = await resolve_bindings(
         uow,
         series_profile_id=series.id,
-        episode_id=fixtures[resolve_for_episode_key].id,
+        episode_id=fixtures[scenario.resolve_for_episode_key].id,
     )
 
-    expected_binding = binding_default if expect_default else binding_episode
+    expected_binding = binding_default if scenario.expect_default else binding_episode
     assert len(resolved) == 1
     assert resolved[0].binding.id == expected_binding.id
     assert resolved[0].revision.id == expected_binding.reference_document_revision_id
@@ -320,10 +325,12 @@ async def test_resolve_bindings_selects_episode_specific_binding_over_default(
     """
     await _run_binding_resolution_scenario(
         uow_with_fixtures,
-        episode_specific_episode_key="episode_middle",
-        episode_specific_revision_key="revision_v2",
-        resolve_for_episode_key="episode_middle",
-        expect_default=False,
+        _ResolutionScenario(
+            episode_specific_episode_key="episode_middle",
+            episode_specific_revision_key="revision_v2",
+            resolve_for_episode_key="episode_middle",
+            expect_default=False,
+        ),
     )
 
 
@@ -449,8 +456,10 @@ async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
     """
     await _run_binding_resolution_scenario(
         uow_with_fixtures,
-        episode_specific_episode_key="episode_late",
-        episode_specific_revision_key="revision_v3",
-        resolve_for_episode_key="episode_early",
-        expect_default=True,
+        _ResolutionScenario(
+            episode_specific_episode_key="episode_late",
+            episode_specific_revision_key="revision_v3",
+            resolve_for_episode_key="episode_early",
+            expect_default=True,
+        ),
     )
