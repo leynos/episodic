@@ -105,7 +105,7 @@ tested with py-pglite as well. Py-pglite does not yet provide a ready-made
 The key steps are:
 
 - **Enable async driver:** Install py-pglite with the async extra
-  (`pip install py-pglite[asyncpg]`) so that the asyncpg driver is available.
+  (`pip install py-pglite[async]`) so that the asyncpg driver is available.
   Py-pglite’s default engine uses the Psycopg driver via a Unix socket, which
   doesn’t directly work with SQLAlchemy’s `AsyncEngine`. Instead, run the
   Postgres in TCP mode and use `asyncpg`.

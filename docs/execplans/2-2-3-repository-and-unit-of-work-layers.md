@@ -493,7 +493,7 @@ documentation for the existing interfaces:
 Existing dependencies used (no new additions):
 
 - `sqlalchemy` (`>=2.0.34,<3.0.0`) -- ORM and async engine.
-- `py-pglite[asyncpg]` -- In-process Postgres for tests.
+- `py-pglite[async]` -- In-process Postgres for tests.
 - `pytest`, `pytest-asyncio`, `pytest-bdd` -- Test framework.
 
 ## Revision note

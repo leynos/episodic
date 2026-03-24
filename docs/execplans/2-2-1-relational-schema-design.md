@@ -295,7 +295,7 @@ Document or introduce the following interfaces and dependencies:
 - `tei-rapporteur` for TEI header parsing and validation.
 - `femtologging` for structured logging in adapters.
 - SQLAlchemy 2.x async engine, Alembic migrations, and Postgres driver.
-- py-pglite (`py-pglite[asyncpg]`) for Postgres-backed tests, plus Node.js
+- py-pglite (`py-pglite[async]`) for Postgres-backed tests, plus Node.js
   18+ for the WASM runtime as documented.
 - `pytest`, `pytest-asyncio`, and `pytest-bdd` for unit and behavioural tests.
 

@@ -87,7 +87,8 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "py-pglite" },
+    { name = "psycopg" },
+    { name = "py-pglite", extra = ["async"] },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -112,7 +113,8 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "py-pglite", extras = ["asyncpg"], specifier = ">=0.1.0,<0.2.0" },
+    { name = "psycopg", specifier = ">=3.0.0,<4.0" },
+    { name = "py-pglite", extras = ["async"], specifier = ">=0.5.3,<0.6.0" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -377,16 +379,20 @@ wheels = [
 
 [[package]]
 name = "py-pglite"
-version = "0.1.0"
+version = "0.5.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "psutil" },
-    { name = "psycopg" },
-    { name = "sqlalchemy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/df/34/ba84b311eb72bc776c3d05df8b944fa5cdf30944a8bc2b250ce4fa47ee26/py_pglite-0.1.0.tar.gz", hash = "sha256:6f604cefab22f2802c177c6b90cdbbcbc5933e26a844b7cf0c21802ea588248f", size = 28710, upload-time = "2025-06-05T16:11:35.244Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2a/12/fb2a0b898f0f34b4e98ea2a2158c1e91afbdfb2b4717a77d7840ae44fb9d/py_pglite-0.5.3.tar.gz", hash = "sha256:58c694602b48fa0562588d7d7c70dd05cc75d048b365ddf3e34d76833598194d", size = 32903, upload-time = "2025-09-17T04:03:51.561Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e2/26/fa8b0007078377355915db335cbca59571caadbab39b1511cd5022eb9003/py_pglite-0.1.0-py3-none-any.whl", hash = "sha256:2504045a12175ce26d712e2059c226df13569ae3f68f729184abbc78126603c9", size = 17165, upload-time = "2025-06-05T16:11:33.969Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/e8/9265f8ffced326468dac06919a1ca1cc7cbf8c4267a4547cddf7ef887602/py_pglite-0.5.3-py3-none-any.whl", hash = "sha256:c0526d3f69de34bfab2073be43f83b5f023b1856af9623d491bda0de5bef3475", size = 42375, upload-time = "2025-09-17T04:03:49.892Z" },
+]
+
+[package.optional-dependencies]
+async = [
+    { name = "asyncpg" },
+    { name = "pytest-asyncio" },
 ]
 
 [[package]]
