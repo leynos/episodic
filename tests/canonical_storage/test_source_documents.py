@@ -16,7 +16,13 @@ import uuid
 import pytest
 from sqlalchemy import exc as sa_exc
 
-from episodic.canonical.domain import SourceDocument
+from episodic.canonical.domain import (
+    ReferenceDocument,
+    ReferenceDocumentKind,
+    ReferenceDocumentLifecycleState,
+    ReferenceDocumentRevision,
+    SourceDocument,
+)
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
@@ -72,3 +78,50 @@ async def test_source_document_weight_check_constraint(
             match=r"ck_source_documents_weight|check|CHECK",
         ):
             await uow.commit()
+
+
+@pytest.mark.asyncio
+async def test_reference_document_revision_id_round_trip(  # noqa: PLR0914
+    session_factory: object,
+    episode_fixture: tuple[
+        SeriesProfile,
+        TeiHeader,
+        CanonicalEpisode,
+        IngestionJob,
+        SourceDocument,
+    ],
+) -> None:
+    """Verify that reference_document_revision_id is persisted and loaded correctly."""
+    now = dt.datetime.now(dt.UTC)
+    series, header, episode, job, _ = episode_fixture
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    reference_revision_id = uuid.uuid4()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.tei_headers.add(header)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.episodes.add(episode)
+        await uow.ingestion_jobs.add(job)
+        source_document = SourceDocument(
+            id=uuid.uuid4(),
+            ingestion_job_id=job.id,
+            canonical_episode_id=episode.id,
+            reference_document_revision_id=reference_revision_id,
+            source_type="web",
+            source_uri="https://example.com/test",
+            weight=0.5,
+            content_hash="hash-test",
+            metadata={},
+            created_at=now,
+        )
+        await uow.source_documents.add(source_document)
+        await uow.commit()
+
+    # Reload and verify the reference_document_revision_id round-trips correctly
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        reloaded = await uow.source_documents.list_for_job(job.id)
+        assert len(reloaded) == 1
+        assert reloaded[0].reference_document_revision_id == reference_revision_id

@@ -4,6 +4,8 @@ This module implements the episode-anchored precedence algorithm for resolving
 reference document bindings. See ADR-001 for the algorithm design decision.
 """
 
+from __future__ import annotations
+
 import dataclasses as dc
 import operator
 import typing as typ
@@ -91,34 +93,6 @@ def _group_bindings_by_document(
     return bindings_by_document
 
 
-async def _find_applicable_episode_bindings(
-    uow: CanonicalUnitOfWork,
-    episode_bindings: list[ReferenceBinding],
-    target_created_at: dt.datetime,
-) -> list[tuple[ReferenceBinding, dt.datetime]]:
-    """Find episode bindings with created_at <= target, return with timestamps."""
-    episode_ids = {
-        b.effective_from_episode_id
-        for b in episode_bindings
-        if b.effective_from_episode_id is not None
-    }
-    episodes = {
-        ep.id: ep
-        for ep in await uow.episodes.list_by_ids(list(episode_ids))
-        if ep.created_at <= target_created_at
-    }
-
-    applicable_bindings = []
-    for binding in episode_bindings:
-        if binding.effective_from_episode_id is None:
-            continue
-        effective_episode = episodes.get(binding.effective_from_episode_id)
-        if effective_episode is not None:
-            applicable_bindings.append((binding, effective_episode.created_at))
-
-    return applicable_bindings
-
-
 def _select_best_binding_for_document(
     doc_bindings: list[ReferenceBinding],
     applicable_episode_bindings: list[tuple[ReferenceBinding, dt.datetime]],
@@ -137,38 +111,20 @@ def _select_best_binding_for_document(
     return None
 
 
-async def _resolve_document_binding(
-    uow: CanonicalUnitOfWork,
-    doc_entry: tuple[uuid.UUID, list[ReferenceBinding]],
-    maps: tuple[
-        dict[uuid.UUID, ReferenceDocumentRevision], dict[uuid.UUID, ReferenceDocument]
-    ],
-    *,
-    target_created_at: dt.datetime,
-) -> ResolvedBinding | None:
-    """Resolve the best binding for a single document with episode context."""
-    doc_id, doc_bindings = doc_entry
-    revision_map, document_map = maps
-    if document_map.get(doc_id) is None:
-        return None
-
-    episode_bindings = [
-        b for b in doc_bindings if b.effective_from_episode_id is not None
-    ]
-
-    applicable_episode_bindings: list[tuple[ReferenceBinding, dt.datetime]] = []
-    if episode_bindings:
-        applicable_episode_bindings = await _find_applicable_episode_bindings(
-            uow, episode_bindings, target_created_at
-        )
-
-    chosen_binding = _select_best_binding_for_document(
-        doc_bindings, applicable_episode_bindings
-    )
-    if chosen_binding is None:
-        return None
-
-    return _create_resolved_binding(chosen_binding, revision_map, document_map)
+def _collect_applicable_episode_bindings(
+    doc_bindings: list[ReferenceBinding],
+    episodes_by_id: dict[uuid.UUID, typ.Any],
+) -> list[tuple[ReferenceBinding, dt.datetime]]:
+    """Collect episode bindings that are applicable for this document."""
+    applicable = []
+    for binding in doc_bindings:
+        eid = binding.effective_from_episode_id
+        if eid is None:
+            continue
+        episode = episodes_by_id.get(eid)
+        if episode is not None:
+            applicable.append((binding, episode.created_at))
+    return applicable
 
 
 async def _resolve_with_episode_context(
@@ -188,16 +144,31 @@ async def _resolve_with_episode_context(
 
     bindings_by_document = _group_bindings_by_document(series_bindings, revision_map)
 
-    resolved = []
-    for doc_entry in bindings_by_document.items():
-        resolved_binding = await _resolve_document_binding(
-            uow,
-            doc_entry,
-            (revision_map, document_map),
-            target_created_at=target_episode.created_at,
+    # Collect and prefetch all episode IDs once
+    episodes_by_id = {
+        ep.id: ep
+        for ep in await uow.episodes.list_by_ids(
+            list({
+                b.effective_from_episode_id
+                for bindings in bindings_by_document.values()
+                for b in bindings
+                if b.effective_from_episode_id is not None
+            })
         )
-        if resolved_binding is not None:
-            resolved.append(resolved_binding)
+        if ep.created_at <= target_episode.created_at
+    }
+
+    resolved = []
+    for doc_id, doc_bindings in bindings_by_document.items():
+        if doc_id not in document_map:
+            continue
+
+        applicable = _collect_applicable_episode_bindings(doc_bindings, episodes_by_id)
+        chosen = _select_best_binding_for_document(doc_bindings, applicable)
+        if chosen is not None:
+            binding = _create_resolved_binding(chosen, revision_map, document_map)
+            if binding is not None:
+                resolved.append(binding)
 
     return resolved
 
@@ -222,7 +193,6 @@ async def resolve_bindings(
        effective_from_episode_id that is on or before the target episode's
        created_at timestamp. If no episode-specific binding matches, fall back
        to bindings with effective_from_episode_id = None (default).
-    4. If template_id is provided, collect template bindings and merge.
 
     Parameters
     ----------
@@ -231,7 +201,8 @@ async def resolve_bindings(
     series_profile_id : uuid.UUID
         The series profile identifier.
     template_id : uuid.UUID | None, optional
-        The episode template identifier, by default None.
+        The episode template identifier. Currently ignored; template binding
+        merging is deferred to a future implementation, by default None.
     episode_id : uuid.UUID | None, optional
         The episode identifier for resolution context, by default None.
 
@@ -239,8 +210,18 @@ async def resolve_bindings(
     -------
     list[ResolvedBinding]
         The resolved bindings with their revisions and documents.
+
+    Notes
+    -----
+    The template_id parameter is reserved for future template-binding support
+    but is not currently used in the resolution algorithm. Template binding
+    merging will be implemented in a subsequent iteration.
     """
     from episodic.canonical.domain import ReferenceBindingTargetKind
+
+    # NOTE: Template binding merging deferred to future implementation.
+    # For now, only series-profile bindings are resolved.
+    _ = template_id  # Mark as intentionally unused
 
     series_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,

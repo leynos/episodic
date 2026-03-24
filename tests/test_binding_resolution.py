@@ -211,6 +211,25 @@ async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
     assert resolved == []
 
 
+async def test_resolve_bindings_returns_empty_for_nonexistent_episode_id(
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
+    """Resolution returns empty list when episode_id does not exist in the DB."""
+    fixtures = uow_with_fixtures
+    uow: CanonicalUnitOfWork = fixtures["uow"]
+    series = fixtures["series"]
+
+    nonexistent_episode_id = uuid.uuid4()
+
+    resolved = await resolve_bindings(
+        uow,
+        series_profile_id=series.id,
+        episode_id=nonexistent_episode_id,
+    )
+
+    assert resolved == []
+
+
 async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:

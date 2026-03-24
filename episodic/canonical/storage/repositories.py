@@ -180,6 +180,9 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
 
     async def list_by_ids(self, episode_ids: list[uuid.UUID]) -> list[CanonicalEpisode]:
         """Fetch canonical episodes by identifiers."""
+        if not episode_ids:
+            return []
+
         return await self._get_many(
             EpisodeRecord,
             EpisodeRecord.id.in_(episode_ids),

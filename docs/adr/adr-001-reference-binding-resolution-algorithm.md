@@ -6,6 +6,9 @@ Accepted
 
 ## Context
 
+This Architectural Decision Record (ADR) describes the reference binding
+resolution algorithm for the episodic podcast generation system.
+
 The episodic podcast generation system allows editorial teams to bind reference
 documents (style guides, host profiles, guest profiles, research briefs) to
 series profiles and episode templates. Each binding associates a specific
@@ -21,8 +24,8 @@ When multiple bindings exist for the same reference document on a series
 profile, the system must resolve which binding applies to a given episode
 context. This resolution is required for:
 
-1. Assembling the structured brief for LLM workflows (the brief must include
-   exactly one revision per reference-document kind).
+1. Assembling the structured brief for Large Language Model (LLM) workflows
+   (the brief must include exactly one revision per reference-document kind).
 2. Snapshotting provenance records during ingestion (each ingestion job must
    preserve which revisions it consumed).
 3. Exposing resolved bindings via API endpoints for editorial teams and
@@ -41,8 +44,8 @@ determine episode precedence when comparing `effective_from_episode_id` values.
 
 ## Decision
 
-We implement **episode-anchored precedence resolution** with the following
-algorithm:
+This document specifies **episode-anchored precedence resolution** with the
+following algorithm:
 
 ### Resolution algorithm
 
@@ -64,7 +67,7 @@ The algorithm proceeds as follows:
 3. **For each reference document group**, resolve which binding applies:
 
    a. If **no episode context** is provided, include all bindings in the group
-      (backward-compatible behavior: the caller sees all bindings without
+      (backward-compatible behaviour: the caller sees all bindings without
       filtering).
 
    b. If an **episode context** is provided:
@@ -138,9 +141,9 @@ existing temporal semantics of the domain model.
 ### Why return all bindings when episode context is omitted?
 
 The brief endpoint currently returns all bindings without filtering. Changing
-this default behavior would break existing consumers. By making resolution
+this default behaviour would break existing consumers. By making resolution
 filtering **opt-in** (only applied when `episode_id` is explicitly provided),
-we preserve backward compatibility while enabling new resolution workflows.
+we preserve backward compatibility whilst enabling new resolution workflows.
 
 ### Why include template bindings without filtering?
 

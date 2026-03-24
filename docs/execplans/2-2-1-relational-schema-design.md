@@ -221,6 +221,60 @@ revert or adjust the migration and rerun the failing `make` targets using the
 same `set -o pipefail` and `tee` pattern. The log files in `/tmp` capture the
 latest failure context and may be overwritten safely.
 
+## Schema relationships
+
+The following entity-relationship diagram illustrates how source documents
+reference both reference document revisions and canonical episodes, enabling
+provenance tracking and content weighting during multi-source ingestion.
+
+```mermaid
+erDiagram
+
+SOURCE_DOCUMENTS {
+  uuid id
+  uuid ingestion_job_id
+  uuid canonical_episode_id
+  uuid reference_document_revision_id
+  string source_type
+  string source_uri
+  float weight
+  string content_hash
+}
+
+REFERENCE_DOCUMENT_REVISIONS {
+  uuid id
+  uuid reference_document_id
+  string content_hash
+}
+
+REFERENCE_DOCUMENTS {
+  uuid id
+  uuid owner_series_profile_id
+  string kind
+}
+
+EPISODES {
+  uuid id
+  datetime created_at
+}
+
+INGESTION_JOBS {
+  uuid id
+}
+
+SOURCE_DOCUMENTS }o--|| REFERENCE_DOCUMENT_REVISIONS : references_revision
+REFERENCE_DOCUMENT_REVISIONS }o--|| REFERENCE_DOCUMENTS : belongs_to_document
+SOURCE_DOCUMENTS }o--|| EPISODES : canonical_episode
+SOURCE_DOCUMENTS }o--|| INGESTION_JOBS : created_by_job
+```
+
+**Figure: Source document relationships.** Each source document references a
+specific revision of a reference document (such as a style guide or host
+profile), links to the canonical episode it contributes to, and records the
+ingestion job that created it. Reference document revisions belong to a parent
+reference document owned by a series profile. This design supports versioned
+reference content, multi-source episode assembly, and full ingestion provenance.
+
 ## Artifacts and notes
 
 - `/tmp/make-fmt.log` records formatting output.
