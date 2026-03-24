@@ -95,11 +95,33 @@ async def test_reference_document_revision_id_round_trip(  # noqa: PLR0914
     now = dt.datetime.now(dt.UTC)
     series, header, episode, job, _ = episode_fixture
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    reference_revision_id = uuid.uuid4()
+
+    # Create a reference document and revision to use
+    reference_doc = ReferenceDocument(
+        id=uuid.uuid4(),
+        owner_series_profile_id=series.id,
+        kind=ReferenceDocumentKind.STYLE_GUIDE,
+        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+        metadata={},
+        created_at=now,
+        updated_at=now,
+        lock_version=1,
+    )
+    reference_revision = ReferenceDocumentRevision(
+        id=uuid.uuid4(),
+        reference_document_id=reference_doc.id,
+        content={"text": "Test style guide"},
+        content_hash="hash-ref-1",
+        author="test-author",
+        change_note="Initial version",
+        created_at=now,
+    )
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         await uow.series_profiles.add(series)
         await uow.tei_headers.add(header)
+        await uow.reference_documents.add(reference_doc)
+        await uow.reference_document_revisions.add(reference_revision)
         await uow.commit()
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
@@ -109,7 +131,7 @@ async def test_reference_document_revision_id_round_trip(  # noqa: PLR0914
             id=uuid.uuid4(),
             ingestion_job_id=job.id,
             canonical_episode_id=episode.id,
-            reference_document_revision_id=reference_revision_id,
+            reference_document_revision_id=reference_revision.id,
             source_type="web",
             source_uri="https://example.com/test",
             weight=0.5,
@@ -124,4 +146,4 @@ async def test_reference_document_revision_id_round_trip(  # noqa: PLR0914
     async with SqlAlchemyUnitOfWork(factory) as uow:
         reloaded = await uow.source_documents.list_for_job(job.id)
         assert len(reloaded) == 1
-        assert reloaded[0].reference_document_revision_id == reference_revision_id
+        assert reloaded[0].reference_document_revision_id == reference_revision.id
