@@ -36,6 +36,7 @@ jobs:
           mkdir -p "$HOME/.local/bin"
           mv vidaimock "$HOME/.local/bin/"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          "$HOME/.local/bin/vidaimock" --version
 
       - name: Validate Makefile
         run: mbake validate Makefile
@@ -57,6 +58,8 @@ jobs:
 
       - name: Run tests with coverage
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          which vidaimock || echo "WARNING: vidaimock not in PATH"
           uv pip install slipcover pytest-forked
           uv run python -m slipcover \
             --source=./episodic \
