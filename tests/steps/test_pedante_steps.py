@@ -72,16 +72,8 @@ def test_pedante_behaviour() -> None:
     """Run the Pedante behaviour scenario."""
 
 
-@given("a Vidai Mock Pedante server is running")
-def vidaimock_server(
-    pedante_context: PedanteBDDContext,
-    tmp_path: Path,
-) -> None:
-    """Start a local Vidai Mock instance with a Pedante-specific template."""
-    provider_dir = tmp_path / "providers"
-    template_dir = tmp_path / "templates" / "pedante"
-    provider_dir.mkdir(parents=True)
-    template_dir.mkdir(parents=True)
+def _build_assistant_content_literal() -> str:
+    """Build the double-encoded assistant content JSON literal."""
     assistant_content = json.dumps({
         "summary": "One likely inaccuracy requires revision.",
         "findings": [
@@ -97,8 +89,11 @@ def vidaimock_server(
             }
         ],
     })
-    assistant_content_literal = json.dumps(assistant_content)
+    return json.dumps(assistant_content)
 
+
+def _write_provider_config(provider_dir: Path) -> None:
+    """Write the Pedante provider configuration to Vidai Mock."""
     provider_file = provider_dir / "pedante.yaml"
     provider_file.write_text(
         "\n".join((
@@ -111,6 +106,13 @@ def vidaimock_server(
         + "\n",
         encoding="utf-8",
     )
+
+
+def _write_response_template(
+    template_dir: Path,
+    assistant_content_literal: str,
+) -> None:
+    """Write the Pedante response template to Vidai Mock."""
     template_file = template_dir / "response.json.j2"
     template_file.write_text(
         f"""{{
@@ -138,7 +140,13 @@ def vidaimock_server(
         encoding="utf-8",
     )
 
-    port = 18110
+
+def _start_vidaimock_process(
+    pedante_context: PedanteBDDContext,
+    config_dir: Path,
+    port: int,
+) -> None:
+    """Start the Vidai Mock server and verify it started successfully."""
     pedante_context.base_url = f"http://127.0.0.1:{port}/v1"
     pedante_context.process = subprocess.Popen(  # noqa: S603
         [
@@ -148,7 +156,7 @@ def vidaimock_server(
             "--port",
             str(port),
             "--config-dir",
-            str(tmp_path),
+            str(config_dir),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -158,6 +166,26 @@ def vidaimock_server(
     if pedante_context.process.poll() is not None:
         msg = "Vidai Mock failed to start for the Pedante behavioural test."
         raise RuntimeError(msg)
+
+
+# ── BDD step ──
+
+
+@given("a Vidai Mock Pedante server is running")
+def vidaimock_server(
+    pedante_context: PedanteBDDContext,
+    tmp_path: Path,
+) -> None:
+    """Start a local Vidai Mock instance with a Pedante-specific template."""
+    provider_dir = tmp_path / "providers"
+    template_dir = tmp_path / "templates" / "pedante"
+    provider_dir.mkdir(parents=True)
+    template_dir.mkdir(parents=True)
+
+    assistant_content_literal = _build_assistant_content_literal()
+    _write_provider_config(provider_dir)
+    _write_response_template(template_dir, assistant_content_literal)
+    _start_vidaimock_process(pedante_context, tmp_path, port=18110)
 
 
 @given("a TEI-backed Pedante evaluation request is prepared")
