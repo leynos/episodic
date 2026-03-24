@@ -280,6 +280,37 @@ async def _add_default_and_episode_specific_binding(
     return binding_default, binding_episode
 
 
+async def _run_binding_resolution_scenario(
+    fixtures: dict,
+    *,
+    episode_specific_episode_key: str,
+    episode_specific_revision_key: str,
+    resolve_for_episode_key: str,
+    expect_default: bool,
+) -> None:
+    """Drive the add-bindings → resolve → assert lifecycle for a single scenario."""
+    uow: CanonicalUnitOfWork = fixtures["uow"]
+    series = fixtures["series"]
+
+    binding_default, binding_episode = await _add_default_and_episode_specific_binding(
+        uow,
+        fixtures,
+        episode_specific_episode_id=fixtures[episode_specific_episode_key].id,
+        episode_specific_revision_id=fixtures[episode_specific_revision_key].id,
+    )
+
+    resolved = await resolve_bindings(
+        uow,
+        series_profile_id=series.id,
+        episode_id=fixtures[resolve_for_episode_key].id,
+    )
+
+    expected_binding = binding_default if expect_default else binding_episode
+    assert len(resolved) == 1
+    assert resolved[0].binding.id == expected_binding.id
+    assert resolved[0].revision.id == expected_binding.reference_document_revision_id
+
+
 async def test_resolve_bindings_selects_episode_specific_binding_over_default(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
@@ -287,26 +318,13 @@ async def test_resolve_bindings_selects_episode_specific_binding_over_default(
 
     Provided.
     """
-    fixtures = uow_with_fixtures
-    uow: CanonicalUnitOfWork = fixtures["uow"]
-    series = fixtures["series"]
-    episode_middle = fixtures["episode_middle"]
-    revision_v2 = fixtures["revision_v2"]
-
-    _, binding_episode = await _add_default_and_episode_specific_binding(
-        uow,
-        fixtures,
-        episode_specific_episode_id=episode_middle.id,
-        episode_specific_revision_id=revision_v2.id,
+    await _run_binding_resolution_scenario(
+        uow_with_fixtures,
+        episode_specific_episode_key="episode_middle",
+        episode_specific_revision_key="revision_v2",
+        resolve_for_episode_key="episode_middle",
+        expect_default=False,
     )
-
-    resolved = await resolve_bindings(
-        uow, series_profile_id=series.id, episode_id=episode_middle.id
-    )
-
-    assert len(resolved) == 1
-    assert resolved[0].binding.id == binding_episode.id
-    assert resolved[0].revision.id == revision_v2.id
 
 
 async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914
@@ -429,25 +447,10 @@ async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
 
     None effective_from_episode_id.
     """
-    fixtures = uow_with_fixtures
-    uow: CanonicalUnitOfWork = fixtures["uow"]
-    series = fixtures["series"]
-    episode_early = fixtures["episode_early"]
-    episode_late = fixtures["episode_late"]
-    revision_v1 = fixtures["revision_v1"]
-    revision_v3 = fixtures["revision_v3"]
-
-    binding_default, _ = await _add_default_and_episode_specific_binding(
-        uow,
-        fixtures,
-        episode_specific_episode_id=episode_late.id,
-        episode_specific_revision_id=revision_v3.id,
+    await _run_binding_resolution_scenario(
+        uow_with_fixtures,
+        episode_specific_episode_key="episode_late",
+        episode_specific_revision_key="revision_v3",
+        resolve_for_episode_key="episode_early",
+        expect_default=True,
     )
-
-    resolved = await resolve_bindings(
-        uow, series_profile_id=series.id, episode_id=episode_early.id
-    )
-
-    assert len(resolved) == 1
-    assert resolved[0].binding.id == binding_default.id
-    assert resolved[0].revision.id == revision_v1.id
