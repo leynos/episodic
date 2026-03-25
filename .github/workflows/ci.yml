@@ -34,7 +34,8 @@ jobs:
           tar -xzf vidaimock-linux-x64.tar.gz
           chmod +x vidaimock
           mkdir -p "$HOME/.local/bin"
-          mv vidaimock "$HOME/.local/bin/"
+          mv vidaimock/vidaimock  "$HOME/.local/bin/"
+          rm -rf vidaimock
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           "$HOME/.local/bin/vidaimock" --version
 
