@@ -65,6 +65,7 @@ from .reference_repositories import (
 from .repository_base import _RepositoryBase
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from episodic.canonical.domain import (
@@ -178,7 +179,9 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
             _episode_from_record,
         )
 
-    async def list_by_ids(self, episode_ids: list[uuid.UUID]) -> list[CanonicalEpisode]:
+    async def list_by_ids(
+        self, episode_ids: cabc.Collection[uuid.UUID]
+    ) -> list[CanonicalEpisode]:
         """Fetch canonical episodes by identifiers."""
         if not episode_ids:
             return []

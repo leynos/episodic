@@ -1,7 +1,5 @@
 """Unit tests for reference binding resolution algorithm."""
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 import uuid
@@ -338,10 +336,7 @@ async def _run_binding_resolution_scenario(
 async def test_resolve_bindings_selects_episode_specific_binding_over_default(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
-    """Episode-specific binding takes precedence over default.
-
-    Provided.
-    """
+    """Episode-specific binding takes precedence over default when provided."""
     await _run_binding_resolution_scenario(
         uow_with_fixtures,
         _ResolutionScenario(
@@ -469,10 +464,7 @@ async def test_resolve_bindings_excludes_future_episode_bindings(
 async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
-    """When no episode-specific binding matches, fall back to default.
-
-    None effective_from_episode_id.
-    """
+    """Fall back to default (effective_from_episode_id=None) when no match."""
     await _run_binding_resolution_scenario(
         uow_with_fixtures,
         _ResolutionScenario(
@@ -482,3 +474,17 @@ async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
             expect_default=True,
         ),
     )
+
+
+async def test_resolve_bindings_raises_not_implemented_for_template_id(
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
+    """resolve_bindings raises NotImplementedError when template_id is provided."""
+    fixtures = uow_with_fixtures
+    uow: CanonicalUnitOfWork = fixtures["uow"]
+    series = fixtures["series"]
+
+    with pytest.raises(NotImplementedError, match="Template binding resolution"):
+        await resolve_bindings(
+            uow, series_profile_id=series.id, template_id=uuid.uuid4()
+        )

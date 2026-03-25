@@ -206,13 +206,15 @@ class EpisodeRepository(typ.Protocol):
         """
         ...
 
-    async def list_by_ids(self, episode_ids: list[uuid.UUID]) -> list[CanonicalEpisode]:
+    async def list_by_ids(
+        self, episode_ids: cabc.Collection[uuid.UUID]
+    ) -> list[CanonicalEpisode]:
         """Fetch canonical episodes by identifiers.
 
         Parameters
         ----------
-        episode_ids : list[uuid.UUID]
-            List of episode identifiers.
+        episode_ids : cabc.Collection[uuid.UUID]
+            Collection of episode identifiers.
 
         Returns
         -------

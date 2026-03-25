@@ -4,8 +4,6 @@ This module implements the episode-anchored precedence algorithm for resolving
 reference document bindings. See ADR-001 for the algorithm design decision.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import operator
 import typing as typ
@@ -201,8 +199,9 @@ async def resolve_bindings(
     series_profile_id : uuid.UUID
         The series profile identifier.
     template_id : uuid.UUID | None, optional
-        The episode template identifier. Currently ignored; template binding
-        merging is deferred to a future implementation, by default None.
+        The episode template identifier. Currently raises NotImplementedError;
+        template binding merging is deferred to a future implementation,
+        by default None.
     episode_id : uuid.UUID | None, optional
         The episode identifier for resolution context, by default None.
 
@@ -211,17 +210,17 @@ async def resolve_bindings(
     list[ResolvedBinding]
         The resolved bindings with their revisions and documents.
 
-    Notes
-    -----
-    The template_id parameter is reserved for future template-binding support
-    but is not currently used in the resolution algorithm. Template binding
-    merging will be implemented in a subsequent iteration.
+    Raises
+    ------
+    NotImplementedError
+        If template_id is provided (not yet implemented).
     """
     from episodic.canonical.domain import ReferenceBindingTargetKind
 
-    # NOTE: Template binding merging deferred to future implementation.
-    # For now, only series-profile bindings are resolved.
-    _ = template_id  # Mark as intentionally unused
+    # Stage D will implement template binding resolution (see execplan 1-4-3).
+    if template_id is not None:
+        msg = "Template binding resolution is not yet implemented"
+        raise NotImplementedError(msg)
 
     series_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
