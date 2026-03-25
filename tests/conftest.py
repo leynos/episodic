@@ -109,12 +109,13 @@ async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
             await _wait_for_engine_ready(engine)
             yield engine
         finally:
-            mgr.stop()
-            await engine.dispose(close=False)
-    except BaseException:
+            try:
+                mgr.stop()
+            finally:
+                await engine.dispose(close=False)
+    finally:
         if mgr.is_running():
             mgr.stop()
-        raise
 
 
 async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
