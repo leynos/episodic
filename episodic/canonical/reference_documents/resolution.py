@@ -95,16 +95,23 @@ def _select_best_binding_for_document(
     doc_bindings: list[ReferenceBinding],
     applicable_episode_bindings: list[tuple[ReferenceBinding, dt.datetime]],
 ) -> ReferenceBinding | None:
-    """Select the best binding: latest applicable episode binding or default."""
-    if applicable_episode_bindings:
-        # Sort by created_at descending and take the latest
-        applicable_episode_bindings.sort(key=operator.itemgetter(1), reverse=True)
-        return applicable_episode_bindings[0][0]
+    """Select the best binding: latest applicable episode binding or default.
 
-    # Fall back to default binding
+    Selection is deterministic: for applicable episode bindings, ties on episode
+    timestamp are broken by binding.created_at; for default bindings, the latest
+    by created_at is chosen.
+    """
+    if applicable_episode_bindings:
+        # Select max by episode timestamp, then by binding created_at for ties
+        return max(
+            applicable_episode_bindings,
+            key=lambda item: (item[1], item[0].created_at),
+        )[0]
+
+    # Fall back to default binding (latest by created_at)
     default_bindings = [b for b in doc_bindings if b.effective_from_episode_id is None]
     if default_bindings:
-        return default_bindings[0]
+        return max(default_bindings, key=operator.attrgetter("created_at"))
 
     return None
 
@@ -125,6 +132,49 @@ def _collect_applicable_episode_bindings(
     return applicable
 
 
+async def _build_applicable_episodes_map(
+    uow: CanonicalUnitOfWork,
+    bindings_by_document: dict[uuid.UUID, list[ReferenceBinding]],
+    target_created_at: dt.datetime,
+) -> dict[uuid.UUID, typ.Any]:
+    """Fetch episodes whose created_at is on or before the target timestamp.
+
+    Returns a mapping of episode id → episode for use in per-document
+    binding selection.
+    """
+    episode_ids = {
+        b.effective_from_episode_id
+        for bindings in bindings_by_document.values()
+        for b in bindings
+        if b.effective_from_episode_id is not None
+    }
+    episodes = await uow.episodes.list_by_ids(list(episode_ids))
+    return {ep.id: ep for ep in episodes if ep.created_at <= target_created_at}
+
+
+def _resolve_single_document(
+    doc_id: uuid.UUID,
+    doc_bindings: list[ReferenceBinding],
+    episodes_by_id: dict[uuid.UUID, typ.Any],
+    maps: tuple[
+        dict[uuid.UUID, ReferenceDocumentRevision],
+        dict[uuid.UUID, ReferenceDocument],
+    ],
+) -> ResolvedBinding | None:
+    """Resolve the best binding for a single document with episode context.
+
+    Returns the resolved binding if one exists, else None.
+    """
+    revision_map, document_map = maps
+    if doc_id not in document_map:
+        return None
+    applicable = _collect_applicable_episode_bindings(doc_bindings, episodes_by_id)
+    chosen = _select_best_binding_for_document(doc_bindings, applicable)
+    if chosen is None:
+        return None
+    return _create_resolved_binding(chosen, revision_map, document_map)
+
+
 async def _resolve_with_episode_context(
     uow: CanonicalUnitOfWork,
     series_bindings: list[ReferenceBinding],
@@ -135,39 +185,21 @@ async def _resolve_with_episode_context(
     episode_id: uuid.UUID,
 ) -> list[ResolvedBinding]:
     """Resolve bindings with episode-aware precedence logic."""
-    revision_map, document_map = maps
+    revision_map, _ = maps
     target_episode = await uow.episodes.get(episode_id)
     if target_episode is None:
         return []
 
     bindings_by_document = _group_bindings_by_document(series_bindings, revision_map)
-
-    # Collect and prefetch all episode IDs once
-    episodes_by_id = {
-        ep.id: ep
-        for ep in await uow.episodes.list_by_ids(
-            list({
-                b.effective_from_episode_id
-                for bindings in bindings_by_document.values()
-                for b in bindings
-                if b.effective_from_episode_id is not None
-            })
-        )
-        if ep.created_at <= target_episode.created_at
-    }
+    episodes_by_id = await _build_applicable_episodes_map(
+        uow, bindings_by_document, target_episode.created_at
+    )
 
     resolved = []
     for doc_id, doc_bindings in bindings_by_document.items():
-        if doc_id not in document_map:
-            continue
-
-        applicable = _collect_applicable_episode_bindings(doc_bindings, episodes_by_id)
-        chosen = _select_best_binding_for_document(doc_bindings, applicable)
-        if chosen is not None:
-            binding = _create_resolved_binding(chosen, revision_map, document_map)
-            if binding is not None:
-                resolved.append(binding)
-
+        result = _resolve_single_document(doc_id, doc_bindings, episodes_by_id, maps)
+        if result is not None:
+            resolved.append(result)
     return resolved
 
 

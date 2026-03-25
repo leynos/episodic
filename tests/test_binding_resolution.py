@@ -212,10 +212,31 @@ async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
 async def test_resolve_bindings_returns_empty_for_nonexistent_episode_id(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
-    """Resolution returns empty list when episode_id does not exist in the DB."""
+    """Resolution returns empty list when episode_id does not exist in the DB.
+
+    This test exercises the target_episode is None code path in
+    _resolve_with_episode_context by creating a binding (so the fast path
+    is bypassed) then passing a non-existent episode_id.
+    """
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
     series = fixtures["series"]
+    revision_v1 = fixtures["revision_v1"]
+    now = fixtures["now"]
+
+    # Create a binding so resolve_bindings doesn't take the empty fast path
+    binding = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=revision_v1.id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=now,
+    )
+    await uow.reference_bindings.add(binding)
+    await uow.commit()
 
     nonexistent_episode_id = uuid.uuid4()
 
