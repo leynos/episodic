@@ -206,6 +206,17 @@ async def _resolve_with_episode_context(
     return resolved
 
 
+async def _load_template_bindings(
+    uow: CanonicalUnitOfWork,
+    template_id: uuid.UUID,
+) -> list[ReferenceBinding]:
+    """Load all bindings for the given episode template target."""
+    return await uow.reference_bindings.list_for_target(
+        target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+        target_id=template_id,
+    )
+
+
 async def resolve_bindings(
     uow: CanonicalUnitOfWork,
     *,
@@ -216,16 +227,20 @@ async def resolve_bindings(
     """Resolve reference bindings for a series profile context.
 
     When episode_id is provided, series-profile bindings are filtered by
-    effective_from_episode_id precedence. When omitted, all bindings are
+    effective_from_episode_id precedence. Template bindings are always included
+    without episode filtering (domain invariant: template bindings have no
+    effective_from_episode_id). When episode_id is omitted, all bindings are
     returned (backward compatible).
 
     Algorithm:
     1. Collect all bindings for the series profile target.
-    2. Group bindings by their parent reference document.
-    3. For each document group, select the binding with the latest
+    2. If template_id is provided, collect all bindings for that template.
+    3. Group bindings by their parent reference document.
+    4. For each document group, select the binding with the latest
        effective_from_episode_id that is on or before the target episode's
        created_at timestamp. If no episode-specific binding matches, fall back
-       to bindings with effective_from_episode_id = None (default).
+       to bindings with effective_from_episode_id = None (default). Template
+       bindings are merged into results without episode filtering.
 
     Parameters
     ----------
@@ -234,8 +249,7 @@ async def resolve_bindings(
     series_profile_id : uuid.UUID
         The series profile identifier.
     template_id : uuid.UUID | None, optional
-        The episode template identifier. Currently raises NotImplementedError;
-        template binding merging is deferred to a future implementation,
+        The episode template identifier for merging template bindings,
         by default None.
     episode_id : uuid.UUID | None, optional
         The episode identifier for resolution context, by default None.
@@ -245,33 +259,34 @@ async def resolve_bindings(
     list[ResolvedBinding]
         The resolved bindings with their revisions and documents.
 
-    Raises
-    ------
-    NotImplementedError
-        If template_id is provided (not yet implemented).
     """
-    # Stage D will implement template binding resolution (see execplan 1-4-3).
-    if template_id is not None:
-        msg = "Template binding resolution is not yet implemented"
-        raise NotImplementedError(msg)
-
     series_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         target_id=series_profile_id,
     )
 
-    if not series_bindings:
+    template_bindings: list[ReferenceBinding] = []
+    if template_id is not None:
+        template_bindings = await _load_template_bindings(uow, template_id)
+
+    all_bindings = series_bindings + template_bindings
+    if not all_bindings:
         return []
 
     revision_map, document_map = await _load_revision_and_document_maps(
-        uow, series_bindings
+        uow, all_bindings
     )
 
     if episode_id is None:
         return _resolve_without_episode_context(
-            series_bindings, revision_map, document_map
+            all_bindings, revision_map, document_map
         )
 
-    return await _resolve_with_episode_context(
+    # Template bindings are always included without episode filtering
+    template_resolved = _resolve_without_episode_context(
+        template_bindings, revision_map, document_map
+    )
+    series_resolved = await _resolve_with_episode_context(
         uow, series_bindings, (revision_map, document_map), episode_id=episode_id
     )
+    return series_resolved + template_resolved

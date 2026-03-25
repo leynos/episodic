@@ -497,15 +497,208 @@ async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
     )
 
 
-async def test_resolve_bindings_raises_not_implemented_for_template_id(
+async def test_resolve_bindings_includes_template_bindings(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
-    """resolve_bindings raises NotImplementedError when template_id is provided."""
+    """Template bindings are included when template_id is provided.
+
+    Without episode_id context, both series and template bindings are returned.
+    """
+    from episodic.canonical.domain import EpisodeTemplate
+
+    uow: CanonicalUnitOfWork = uow_with_fixtures["uow"]
+    series = uow_with_fixtures["series"]
+    now = uow_with_fixtures["now"]
+
+    # Create an episode template
+    template = EpisodeTemplate(
+        id=uuid.uuid4(),
+        series_profile_id=series.id,
+        slug="test-template",
+        title="Test Template",
+        description=None,
+        structure={},
+        guardrails={},
+        created_at=now,
+        updated_at=now,
+    )
+    await uow.episode_templates.add(template)
+    await uow.commit()
+
+    # Create series-profile binding
+    await uow.reference_bindings.add(
+        ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=uow_with_fixtures["revision_v1"].id,
+            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+            series_profile_id=series.id,
+            episode_template_id=None,
+            ingestion_job_id=None,
+            effective_from_episode_id=None,
+            created_at=now,
+        )
+    )
+
+    # Create template binding
+    await uow.reference_bindings.add(
+        ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=uow_with_fixtures["revision_v2"].id,
+            target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+            series_profile_id=None,
+            episode_template_id=template.id,
+            ingestion_job_id=None,
+            effective_from_episode_id=None,
+            created_at=now,
+        )
+    )
+    await uow.commit()
+
+    # Resolve with template_id, no episode_id
+    resolved = await resolve_bindings(
+        uow, series_profile_id=series.id, template_id=template.id
+    )
+
+    assert len(resolved) == 2
+    resolved_revision_ids = {r.revision.id for r in resolved}
+    assert resolved_revision_ids == {
+        uow_with_fixtures["revision_v1"].id,
+        uow_with_fixtures["revision_v2"].id,
+    }
+
+
+async def test_resolve_bindings_merges_template_with_episode(
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
+    """Template bindings are always included, series bindings filtered by episode."""
+    from episodic.canonical.domain import EpisodeTemplate
+
+    uow: CanonicalUnitOfWork = uow_with_fixtures["uow"]
+    series = uow_with_fixtures["series"]
+    now = uow_with_fixtures["now"]
+
+    # Create an episode template
+    template = EpisodeTemplate(
+        id=uuid.uuid4(),
+        series_profile_id=series.id,
+        slug="test-template",
+        title="Test Template",
+        description=None,
+        structure={},
+        guardrails={},
+        created_at=now,
+        updated_at=now,
+    )
+    await uow.episode_templates.add(template)
+    await uow.commit()
+
+    # Series binding effective from early episode
+    await uow.reference_bindings.add(
+        ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=uow_with_fixtures["revision_v1"].id,
+            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+            series_profile_id=series.id,
+            episode_template_id=None,
+            ingestion_job_id=None,
+            effective_from_episode_id=uow_with_fixtures["episode_early"].id,
+            created_at=now,
+        )
+    )
+
+    # Series binding effective from late episode (should be excluded for early)
+    await uow.reference_bindings.add(
+        ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=uow_with_fixtures["revision_v3"].id,
+            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+            series_profile_id=series.id,
+            episode_template_id=None,
+            ingestion_job_id=None,
+            effective_from_episode_id=uow_with_fixtures["episode_late"].id,
+            created_at=now,
+        )
+    )
+
+    # Template binding (always included)
+    await uow.reference_bindings.add(
+        ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=uow_with_fixtures["revision_v2"].id,
+            target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+            series_profile_id=None,
+            episode_template_id=template.id,
+            ingestion_job_id=None,
+            effective_from_episode_id=None,
+            created_at=now,
+        )
+    )
+    await uow.commit()
+
+    # Resolve for early episode with template
+    resolved = await resolve_bindings(
+        uow,
+        series_profile_id=series.id,
+        template_id=template.id,
+        episode_id=uow_with_fixtures["episode_early"].id,
+    )
+
+    # Should have: series binding from early + template binding
+    # Should NOT have: series binding from late (future episode)
+    assert len(resolved) == 2
+    resolved_revision_ids = {r.revision.id for r in resolved}
+    assert resolved_revision_ids == {
+        uow_with_fixtures["revision_v1"].id,
+        uow_with_fixtures["revision_v2"].id,
+    }
+
+
+async def test_resolve_bindings_template_only(
+    uow_with_fixtures,  # noqa: ANN001
+) -> None:
+    """Template bindings are returned when only template_id is provided."""
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
     series = fixtures["series"]
+    revision_v2 = fixtures["revision_v2"]
+    now = fixtures["now"]
 
-    with pytest.raises(NotImplementedError, match="Template binding resolution"):
-        await resolve_bindings(
-            uow, series_profile_id=series.id, template_id=uuid.uuid4()
-        )
+    # Create an episode template
+    from episodic.canonical.domain import EpisodeTemplate
+
+    template = EpisodeTemplate(
+        id=uuid.uuid4(),
+        series_profile_id=series.id,
+        slug="test-template",
+        title="Test Template",
+        description=None,
+        structure={},
+        guardrails={},
+        created_at=now,
+        updated_at=now,
+    )
+    await uow.episode_templates.add(template)
+    await uow.commit()
+
+    # Create only template binding, no series bindings
+    template_binding = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=revision_v2.id,
+        target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+        series_profile_id=None,
+        episode_template_id=template.id,
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=now,
+    )
+    await uow.reference_bindings.add(template_binding)
+    await uow.commit()
+
+    # Resolve with template_id only
+    resolved = await resolve_bindings(
+        uow, series_profile_id=series.id, template_id=template.id
+    )
+
+    assert len(resolved) == 1
+    assert resolved[0].revision.id == revision_v2.id
+    assert resolved[0].binding.id == template_binding.id
