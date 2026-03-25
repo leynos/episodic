@@ -13,11 +13,14 @@ if typ.TYPE_CHECKING:
     import uuid
 
     from episodic.canonical.domain import (
+        CanonicalEpisode,
         ReferenceBinding,
         ReferenceDocument,
         ReferenceDocumentRevision,
     )
     from episodic.canonical.ports import CanonicalUnitOfWork
+
+from episodic.canonical.domain import ReferenceBindingTargetKind
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -118,7 +121,7 @@ def _select_best_binding_for_document(
 
 def _collect_applicable_episode_bindings(
     doc_bindings: list[ReferenceBinding],
-    episodes_by_id: dict[uuid.UUID, typ.Any],
+    episodes_by_id: dict[uuid.UUID, CanonicalEpisode],
 ) -> list[tuple[ReferenceBinding, dt.datetime]]:
     """Collect episode bindings that are applicable for this document."""
     applicable = []
@@ -136,7 +139,7 @@ async def _build_applicable_episodes_map(
     uow: CanonicalUnitOfWork,
     bindings_by_document: dict[uuid.UUID, list[ReferenceBinding]],
     target_created_at: dt.datetime,
-) -> dict[uuid.UUID, typ.Any]:
+) -> dict[uuid.UUID, CanonicalEpisode]:
     """Fetch episodes whose created_at is on or before the target timestamp.
 
     Returns a mapping of episode id → episode for use in per-document
@@ -155,7 +158,7 @@ async def _build_applicable_episodes_map(
 def _resolve_single_document(
     doc_id: uuid.UUID,
     doc_bindings: list[ReferenceBinding],
-    episodes_by_id: dict[uuid.UUID, typ.Any],
+    episodes_by_id: dict[uuid.UUID, CanonicalEpisode],
     maps: tuple[
         dict[uuid.UUID, ReferenceDocumentRevision],
         dict[uuid.UUID, ReferenceDocument],
@@ -247,8 +250,6 @@ async def resolve_bindings(
     NotImplementedError
         If template_id is provided (not yet implemented).
     """
-    from episodic.canonical.domain import ReferenceBindingTargetKind
-
     # Stage D will implement template binding resolution (see execplan 1-4-3).
     if template_id is not None:
         msg = "Template binding resolution is not yet implemented"

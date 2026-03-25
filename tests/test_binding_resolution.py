@@ -372,9 +372,9 @@ async def test_resolve_bindings_selects_episode_specific_binding_over_default(
 async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
-    """Resolution selects binding with latest effective_from_episode_id.
+    """Resolution selects the binding with the latest effective_from_episode_id.
 
-    That is on or before target.
+    The selected binding must be on or before the target episode.
     """
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
