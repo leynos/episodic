@@ -147,6 +147,20 @@ _VIDAIMOCK_STARTUP_TIMEOUT = 5.0
 _VIDAIMOCK_PROBE_INTERVAL = 0.2
 
 
+def _handle_connect_failure(
+    process: subprocess.Popen[str],
+    deadline: float,
+) -> None:
+    """Raise if the deadline has passed; otherwise sleep before the next probe."""
+    if time.monotonic() < deadline:
+        time.sleep(_VIDAIMOCK_PROBE_INTERVAL)
+        return
+    if process.poll() is None:
+        process.terminate()
+    msg = "Vidai Mock did not become ready within the timeout."
+    raise RuntimeError(msg) from None
+
+
 def _await_port_ready(
     process: subprocess.Popen[str],
     host: str,
@@ -161,14 +175,9 @@ def _await_port_ready(
             raise RuntimeError(msg)
         try:
             with socket.create_connection((host, port), timeout=0.5):
-                break
+                return
         except OSError:
-            if time.monotonic() >= deadline:
-                if process.poll() is None:
-                    process.terminate()
-                msg = "Vidai Mock did not become ready within the timeout."
-                raise RuntimeError(msg) from None
-            time.sleep(_VIDAIMOCK_PROBE_INTERVAL)
+            _handle_connect_failure(process, deadline)
 
 
 def _start_vidaimock_process(
