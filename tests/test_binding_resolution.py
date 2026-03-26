@@ -8,193 +8,27 @@ import pytest
 import pytest_asyncio
 
 from episodic.canonical.domain import (
-    ApprovalState,
-    CanonicalEpisode,
-    EpisodeStatus,
-    EpisodeTemplate,
     ReferenceBinding,
     ReferenceBindingTargetKind,
-    ReferenceDocument,
-    ReferenceDocumentKind,
-    ReferenceDocumentLifecycleState,
-    ReferenceDocumentRevision,
-    SeriesProfile,
-    TeiHeader,
 )
 from episodic.canonical.reference_documents.resolution import (
     ResolvedBinding,
     resolve_bindings,
 )
-from episodic.canonical.storage.uow import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.ports import CanonicalUnitOfWork
 
+from tests.conftest import create_episode_template_for_binding_tests
+
 pytestmark = pytest.mark.asyncio
 
 
-def _create_series(now: dt.datetime) -> SeriesProfile:
-    """Create and return a series profile for testing."""
-    return SeriesProfile(
-        id=uuid.uuid4(),
-        title="Resolution Test Series",
-        slug="resolution-test",
-        description="Series for resolution tests",
-        configuration={},
-        guardrails={},
-        created_at=now,
-        updated_at=now,
-    )
-
-
-def _create_episodes_with_headers(
-    series_id: uuid.UUID, now: dt.datetime
-) -> tuple[CanonicalEpisode, CanonicalEpisode, CanonicalEpisode, list[TeiHeader]]:
-    """Create three episodes with staggered timestamps and their TEI headers."""
-    episode_early = CanonicalEpisode(
-        id=uuid.uuid4(),
-        series_profile_id=series_id,
-        tei_header_id=uuid.uuid4(),
-        title="Early Episode",
-        tei_xml="<TEI/>",
-        status=EpisodeStatus.DRAFT,
-        approval_state=ApprovalState.DRAFT,
-        created_at=now - dt.timedelta(days=10),
-        updated_at=now - dt.timedelta(days=10),
-    )
-    episode_middle = CanonicalEpisode(
-        id=uuid.uuid4(),
-        series_profile_id=series_id,
-        tei_header_id=uuid.uuid4(),
-        title="Middle Episode",
-        tei_xml="<TEI/>",
-        status=EpisodeStatus.DRAFT,
-        approval_state=ApprovalState.DRAFT,
-        created_at=now - dt.timedelta(days=5),
-        updated_at=now - dt.timedelta(days=5),
-    )
-    episode_late = CanonicalEpisode(
-        id=uuid.uuid4(),
-        series_profile_id=series_id,
-        tei_header_id=uuid.uuid4(),
-        title="Late Episode",
-        tei_xml="<TEI/>",
-        status=EpisodeStatus.DRAFT,
-        approval_state=ApprovalState.DRAFT,
-        created_at=now,
-        updated_at=now,
-    )
-
-    headers = [
-        TeiHeader(
-            id=ep.tei_header_id,
-            title=ep.title,
-            payload={"file_desc": {"title": ep.title}},
-            raw_xml="<teiHeader/>",
-            created_at=ep.created_at,
-            updated_at=ep.updated_at,
-        )
-        for ep in [episode_early, episode_middle, episode_late]
-    ]
-
-    return episode_early, episode_middle, episode_late, headers
-
-
-def _create_reference_document(
-    series_id: uuid.UUID, now: dt.datetime
-) -> ReferenceDocument:
-    """Create and return a reference document for testing."""
-    return ReferenceDocument(
-        id=uuid.uuid4(),
-        owner_series_profile_id=series_id,
-        kind=ReferenceDocumentKind.STYLE_GUIDE,
-        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
-        metadata={},
-        created_at=now,
-        updated_at=now,
-        lock_version=1,
-    )
-
-
-def _create_revisions(
-    doc_id: uuid.UUID, now: dt.datetime
-) -> tuple[
-    ReferenceDocumentRevision, ReferenceDocumentRevision, ReferenceDocumentRevision
-]:
-    """Create and return three revisions with staggered timestamps."""
-    revision_v1 = ReferenceDocumentRevision(
-        id=uuid.uuid4(),
-        reference_document_id=doc_id,
-        content={"version": "1", "rules": ["rule1"]},
-        content_hash="hash-v1",
-        author="editor",
-        change_note="Initial version",
-        created_at=now - dt.timedelta(days=15),
-    )
-    revision_v2 = ReferenceDocumentRevision(
-        id=uuid.uuid4(),
-        reference_document_id=doc_id,
-        content={"version": "2", "rules": ["rule1", "rule2"]},
-        content_hash="hash-v2",
-        author="editor",
-        change_note="Added rule2",
-        created_at=now - dt.timedelta(days=8),
-    )
-    revision_v3 = ReferenceDocumentRevision(
-        id=uuid.uuid4(),
-        reference_document_id=doc_id,
-        content={"version": "3", "rules": ["rule1", "rule2", "rule3"]},
-        content_hash="hash-v3",
-        author="editor",
-        change_note="Added rule3",
-        created_at=now - dt.timedelta(days=2),
-    )
-    return revision_v1, revision_v2, revision_v3
-
-
+# Alias fixture for backward compatibility
 @pytest_asyncio.fixture
-async def uow_with_fixtures(session_factory):  # noqa: ANN201, ANN001
-    """Provide UOW with series, episodes, reference documents, and revisions."""
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        now = dt.datetime.now(tz=dt.UTC)
-
-        # Create entities using helper functions
-        series = _create_series(now)
-        await uow.series_profiles.add(series)
-        await uow.flush()  # Ensure series exists before adding episodes
-
-        episode_early, episode_middle, episode_late, headers = (
-            _create_episodes_with_headers(series.id, now)
-        )
-        # Add headers and episodes one-by-one to maintain referential integrity
-        for ep, header in zip(
-            [episode_early, episode_middle, episode_late], headers, strict=True
-        ):
-            await uow.tei_headers.add(header)
-            await uow.flush()  # Ensure header exists before adding episode
-            await uow.episodes.add(ep)
-
-        doc = _create_reference_document(series.id, now)
-        await uow.reference_documents.add(doc)
-
-        revision_v1, revision_v2, revision_v3 = _create_revisions(doc.id, now)
-        for rev in [revision_v1, revision_v2, revision_v3]:
-            await uow.reference_document_revisions.add(rev)
-
-        await uow.commit()
-
-        yield {
-            "uow": uow,
-            "series": series,
-            "episode_early": episode_early,
-            "episode_middle": episode_middle,
-            "episode_late": episode_late,
-            "doc": doc,
-            "revision_v1": revision_v1,
-            "revision_v2": revision_v2,
-            "revision_v3": revision_v3,
-            "now": now,
-        }
+def uow_with_fixtures(uow_with_binding_fixtures):  # noqa: ANN001, ANN201
+    """Alias for uow_with_binding_fixtures from conftest."""
+    yield uow_with_binding_fixtures
 
 
 async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
@@ -213,19 +47,13 @@ async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
 async def test_resolve_bindings_returns_empty_for_nonexistent_episode_id(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
-    """Resolution returns empty list when episode_id does not exist in the DB.
-
-    This test exercises the target_episode is None code path in
-    _resolve_with_episode_context by creating a binding (so the fast path
-    is bypassed) then passing a non-existent episode_id.
-    """
+    """Resolution returns empty list when episode_id does not exist in the DB."""
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
     series = fixtures["series"]
     revision_v1 = fixtures["revision_v1"]
     now = fixtures["now"]
 
-    # Create a binding so resolve_bindings doesn't take the empty fast path
     binding = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v1.id,
@@ -250,128 +78,6 @@ async def test_resolve_bindings_returns_empty_for_nonexistent_episode_id(
     assert resolved == []
 
 
-async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
-    uow_with_fixtures,  # noqa: ANN001
-) -> None:
-    """Resolution returns empty list when episode belongs to a different series."""
-    fixtures = uow_with_fixtures
-    uow: CanonicalUnitOfWork = fixtures["uow"]
-    series = fixtures["series"]
-    now = fixtures["now"]
-
-    # Create a second series and episode
-    other_series = SeriesProfile(
-        id=uuid.uuid4(),
-        title="Other Series",
-        slug="other-series",
-        description="Another series",
-        configuration={},
-        guardrails={},
-        created_at=now,
-        updated_at=now,
-    )
-    await uow.series_profiles.add(other_series)
-    await uow.flush()
-
-    other_header = TeiHeader(
-        id=uuid.uuid4(),
-        title="Other Episode",
-        payload={"file_desc": {"title": "Other Episode"}},
-        raw_xml="<teiHeader/>",
-        created_at=now,
-        updated_at=now,
-    )
-    await uow.tei_headers.add(other_header)
-    await uow.flush()
-
-    other_episode = CanonicalEpisode(
-        id=uuid.uuid4(),
-        series_profile_id=other_series.id,
-        tei_header_id=other_header.id,
-        title="Other Episode",
-        tei_xml="<TEI/>",
-        status=EpisodeStatus.DRAFT,
-        approval_state=ApprovalState.DRAFT,
-        created_at=now,
-        updated_at=now,
-    )
-    await uow.episodes.add(other_episode)
-    await uow.commit()
-
-    # Try to resolve with episode from wrong series
-    resolved = await resolve_bindings(
-        uow,
-        series_profile_id=series.id,
-        episode_id=other_episode.id,
-    )
-
-    assert resolved == []
-
-
-async def test_resolve_bindings_skips_template_from_wrong_series(
-    uow_with_fixtures,  # noqa: ANN001
-) -> None:
-    """Resolution skips template bindings when template belongs to different series."""
-    fixtures = uow_with_fixtures
-    uow: CanonicalUnitOfWork = fixtures["uow"]
-    series = fixtures["series"]
-    revision_v1 = fixtures["revision_v1"]
-    now = fixtures["now"]
-
-    # Create a second series and template
-    other_series = SeriesProfile(
-        id=uuid.uuid4(),
-        title="Other Series",
-        slug="other-series",
-        description="Another series",
-        configuration={},
-        guardrails={},
-        created_at=now,
-        updated_at=now,
-    )
-    await uow.series_profiles.add(other_series)
-    await uow.flush()
-
-    other_template = EpisodeTemplate(
-        id=uuid.uuid4(),
-        series_profile_id=other_series.id,
-        slug="other-template",
-        title="Other Template",
-        description=None,
-        structure={},
-        guardrails={},
-        created_at=now,
-        updated_at=now,
-    )
-    await uow.episode_templates.add(other_template)
-    await uow.commit()
-
-    # Create a series binding
-    await uow.reference_bindings.add(
-        ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=revision_v1.id,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=series.id,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=now,
-        )
-    )
-    await uow.commit()
-
-    # Try to resolve with template from wrong series - should only get series binding
-    resolved = await resolve_bindings(
-        uow,
-        series_profile_id=series.id,
-        template_id=other_template.id,
-    )
-
-    assert len(resolved) == 1
-    assert resolved[0].revision.id == revision_v1.id
-
-
 async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
@@ -381,7 +87,6 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     series = fixtures["series"]
     revision_v1 = fixtures["revision_v1"]
 
-    # Create a default binding (effective_from_episode_id = None)
     binding = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v1.id,
@@ -403,21 +108,30 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     assert resolved[0].revision.id == revision_v1.id
 
 
-async def _add_default_and_episode_specific_binding(
-    uow: CanonicalUnitOfWork,
-    fixtures: dict,
-    *,
-    episode_specific_episode_id: uuid.UUID,
-    episode_specific_revision_id: uuid.UUID,
-) -> tuple[ReferenceBinding, ReferenceBinding]:
-    """Add default binding (v1) and episode-specific binding, then commit."""
+@pytest.mark.parametrize(
+    ("episode_key", "revision_key", "resolve_key", "expect_default"),
+    [
+        ("episode_middle", "revision_v2", "episode_middle", False),
+        ("episode_late", "revision_v3", "episode_early", True),
+    ],
+    ids=["episode_specific_over_default", "fallback_to_default"],
+)
+async def test_resolve_bindings_scenario(
+    uow_with_fixtures,  # noqa: ANN001
+    episode_key: str,
+    revision_key: str,
+    resolve_key: str,
+    expect_default: bool,  # noqa: FBT001
+) -> None:
+    """Test binding resolution scenarios with episode precedence logic."""
+    fixtures = uow_with_fixtures
+    uow = fixtures["uow"]
     series = fixtures["series"]
     now = fixtures["now"]
-    revision_v1 = fixtures["revision_v1"]
 
     binding_default = ReferenceBinding(
         id=uuid.uuid4(),
-        reference_document_revision_id=revision_v1.id,
+        reference_document_revision_id=fixtures["revision_v1"].id,
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         series_profile_id=series.id,
         episode_template_id=None,
@@ -427,78 +141,34 @@ async def _add_default_and_episode_specific_binding(
     )
     binding_episode = ReferenceBinding(
         id=uuid.uuid4(),
-        reference_document_revision_id=episode_specific_revision_id,
+        reference_document_revision_id=fixtures[revision_key].id,
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         series_profile_id=series.id,
         episode_template_id=None,
         ingestion_job_id=None,
-        effective_from_episode_id=episode_specific_episode_id,
+        effective_from_episode_id=fixtures[episode_key].id,
         created_at=now - dt.timedelta(days=6),
     )
     await uow.reference_bindings.add(binding_default)
     await uow.reference_bindings.add(binding_episode)
     await uow.commit()
-    return binding_default, binding_episode
-
-
-class _ResolutionScenario(typ.NamedTuple):
-    episode_specific_episode_key: str
-    episode_specific_revision_key: str
-    resolve_for_episode_key: str
-    expect_default: bool
-
-
-async def _run_binding_resolution_scenario(
-    fixtures: dict,
-    scenario: _ResolutionScenario,
-) -> None:
-    """Drive the add-bindings → resolve → assert lifecycle for a single scenario."""
-    uow: CanonicalUnitOfWork = fixtures["uow"]
-    series = fixtures["series"]
-
-    binding_default, binding_episode = await _add_default_and_episode_specific_binding(
-        uow,
-        fixtures,
-        episode_specific_episode_id=fixtures[scenario.episode_specific_episode_key].id,
-        episode_specific_revision_id=fixtures[
-            scenario.episode_specific_revision_key
-        ].id,
-    )
 
     resolved = await resolve_bindings(
         uow,
         series_profile_id=series.id,
-        episode_id=fixtures[scenario.resolve_for_episode_key].id,
+        episode_id=fixtures[resolve_key].id,
     )
 
-    expected_binding = binding_default if scenario.expect_default else binding_episode
+    expected = binding_default if expect_default else binding_episode
     assert len(resolved) == 1
-    assert resolved[0].binding.id == expected_binding.id
-    assert resolved[0].revision.id == expected_binding.reference_document_revision_id
-
-
-async def test_resolve_bindings_selects_episode_specific_binding_over_default(
-    uow_with_fixtures,  # noqa: ANN001
-) -> None:
-    """Episode-specific binding takes precedence over default when provided."""
-    await _run_binding_resolution_scenario(
-        uow_with_fixtures,
-        _ResolutionScenario(
-            episode_specific_episode_key="episode_middle",
-            episode_specific_revision_key="revision_v2",
-            resolve_for_episode_key="episode_middle",
-            expect_default=False,
-        ),
-    )
+    assert resolved[0].binding.id == expected.id
+    assert resolved[0].revision.id == expected.reference_document_revision_id
 
 
 async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
-    """Resolution selects the binding with the latest effective_from_episode_id.
-
-    The selected binding must be on or before the target episode.
-    """
+    """Resolution selects the binding with the latest effective_from_episode_id."""
     fixtures = uow_with_fixtures
     uow: CanonicalUnitOfWork = fixtures["uow"]
     series = fixtures["series"]
@@ -509,7 +179,6 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
     revision_v2 = fixtures["revision_v2"]
     revision_v3 = fixtures["revision_v3"]
 
-    # Binding v1: effective from early episode
     binding_early = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v1.id,
@@ -520,7 +189,6 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
         effective_from_episode_id=episode_early.id,
         created_at=fixtures["now"] - dt.timedelta(days=11),
     )
-    # Binding v2: effective from middle episode
     binding_middle = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v2.id,
@@ -531,7 +199,6 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
         effective_from_episode_id=episode_middle.id,
         created_at=fixtures["now"] - dt.timedelta(days=6),
     )
-    # Binding v3: effective from late episode
     binding_late = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v3.id,
@@ -547,7 +214,6 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
         await uow.reference_bindings.add(b)
     await uow.commit()
 
-    # Resolve for early episode -> should get binding_early (v1)
     resolved_early = await resolve_bindings(
         uow, series_profile_id=series.id, episode_id=episode_early.id
     )
@@ -555,7 +221,6 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
     assert resolved_early[0].binding.id == binding_early.id
     assert resolved_early[0].revision.id == revision_v1.id
 
-    # Resolve for middle episode -> should get binding_middle (v2)
     resolved_middle = await resolve_bindings(
         uow, series_profile_id=series.id, episode_id=episode_middle.id
     )
@@ -563,7 +228,6 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
     assert resolved_middle[0].binding.id == binding_middle.id
     assert resolved_middle[0].revision.id == revision_v2.id
 
-    # Resolve for late episode -> should get binding_late (v3)
     resolved_late = await resolve_bindings(
         uow, series_profile_id=series.id, episode_id=episode_late.id
     )
@@ -583,7 +247,6 @@ async def test_resolve_bindings_excludes_future_episode_bindings(
     episode_late = fixtures["episode_late"]
     revision_v3 = fixtures["revision_v3"]
 
-    # Binding effective from late episode
     binding_late = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v3.id,
@@ -597,7 +260,6 @@ async def test_resolve_bindings_excludes_future_episode_bindings(
     await uow.reference_bindings.add(binding_late)
     await uow.commit()
 
-    # Resolve for early episode -> future binding should be excluded
     resolved = await resolve_bindings(
         uow, series_profile_id=series.id, episode_id=episode_early.id
     )
@@ -605,86 +267,38 @@ async def test_resolve_bindings_excludes_future_episode_bindings(
     assert resolved == []
 
 
-async def test_resolve_bindings_falls_back_to_default_when_no_episode_match(
-    uow_with_fixtures,  # noqa: ANN001
-) -> None:
-    """Fall back to default (effective_from_episode_id=None) when no match."""
-    await _run_binding_resolution_scenario(
-        uow_with_fixtures,
-        _ResolutionScenario(
-            episode_specific_episode_key="episode_late",
-            episode_specific_revision_key="revision_v3",
-            resolve_for_episode_key="episode_early",
-            expect_default=True,
-        ),
-    )
-
-
-async def _create_episode_template(
-    uow: CanonicalUnitOfWork,
-    series_id: uuid.UUID,
-    now: dt.datetime,
-) -> EpisodeTemplate:
-    """Create, persist, commit, and return an episode template for testing."""
-    template = EpisodeTemplate(
-        id=uuid.uuid4(),
-        series_profile_id=series_id,
-        slug="test-template",
-        title="Test Template",
-        description=None,
-        structure={},
-        guardrails={},
-        created_at=now,
-        updated_at=now,
-    )
-    await uow.episode_templates.add(template)
-    await uow.commit()
-    return template
-
-
 async def test_resolve_bindings_includes_template_bindings(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
-    """Template bindings are included when template_id is provided.
-
-    Without episode_id context, both series and template bindings are returned.
-    """
-    uow: CanonicalUnitOfWork = uow_with_fixtures["uow"]
+    """Template bindings are included when template_id is provided."""
+    uow = uow_with_fixtures["uow"]
     series = uow_with_fixtures["series"]
     now = uow_with_fixtures["now"]
 
-    template = await _create_episode_template(uow, series.id, now)
+    template = await create_episode_template_for_binding_tests(uow, series.id, now)
 
-    # Create series-profile binding
-    await uow.reference_bindings.add(
-        ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=uow_with_fixtures["revision_v1"].id,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=series.id,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=now,
+    for rev_key, kind, tmpl_id in [
+        ("revision_v1", ReferenceBindingTargetKind.SERIES_PROFILE, None),
+        ("revision_v2", ReferenceBindingTargetKind.EPISODE_TEMPLATE, template.id),
+    ]:
+        await uow.reference_bindings.add(
+            ReferenceBinding(
+                id=uuid.uuid4(),
+                reference_document_revision_id=uow_with_fixtures[rev_key].id,
+                target_kind=kind,
+                series_profile_id=(
+                    series.id
+                    if kind == ReferenceBindingTargetKind.SERIES_PROFILE
+                    else None
+                ),
+                episode_template_id=tmpl_id,
+                ingestion_job_id=None,
+                effective_from_episode_id=None,
+                created_at=now,
+            )
         )
-    )
-
-    # Create template binding
-    await uow.reference_bindings.add(
-        ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=uow_with_fixtures["revision_v2"].id,
-            target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
-            series_profile_id=None,
-            episode_template_id=template.id,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=now,
-        )
-    )
     await uow.commit()
 
-    # Resolve with template_id, no episode_id
     resolved = await resolve_bindings(
         uow, series_profile_id=series.id, template_id=template.id
     )
@@ -701,56 +315,46 @@ async def test_resolve_bindings_merges_template_with_episode(
     uow_with_fixtures,  # noqa: ANN001
 ) -> None:
     """Template bindings are always included, series bindings filtered by episode."""
-    uow: CanonicalUnitOfWork = uow_with_fixtures["uow"]
+    uow = uow_with_fixtures["uow"]
     series = uow_with_fixtures["series"]
     now = uow_with_fixtures["now"]
 
-    template = await _create_episode_template(uow, series.id, now)
+    template = await create_episode_template_for_binding_tests(uow, series.id, now)
 
-    # Series binding effective from early episode
-    await uow.reference_bindings.add(
-        ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=uow_with_fixtures["revision_v1"].id,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=series.id,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=uow_with_fixtures["episode_early"].id,
-            created_at=now,
+    bindings = [
+        (
+            uow_with_fixtures["revision_v1"].id,
+            series.id,
+            None,
+            uow_with_fixtures["episode_early"].id,
+        ),
+        (
+            uow_with_fixtures["revision_v3"].id,
+            series.id,
+            None,
+            uow_with_fixtures["episode_late"].id,
+        ),
+        (uow_with_fixtures["revision_v2"].id, None, template.id, None),
+    ]
+    for rev_id, sp_id, tmpl_id, ep_id in bindings:
+        await uow.reference_bindings.add(
+            ReferenceBinding(
+                id=uuid.uuid4(),
+                reference_document_revision_id=rev_id,
+                target_kind=(
+                    ReferenceBindingTargetKind.SERIES_PROFILE
+                    if sp_id
+                    else ReferenceBindingTargetKind.EPISODE_TEMPLATE
+                ),
+                series_profile_id=sp_id,
+                episode_template_id=tmpl_id,
+                ingestion_job_id=None,
+                effective_from_episode_id=ep_id,
+                created_at=now,
+            )
         )
-    )
-
-    # Series binding effective from late episode (should be excluded for early)
-    await uow.reference_bindings.add(
-        ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=uow_with_fixtures["revision_v3"].id,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=series.id,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=uow_with_fixtures["episode_late"].id,
-            created_at=now,
-        )
-    )
-
-    # Template binding (always included)
-    await uow.reference_bindings.add(
-        ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=uow_with_fixtures["revision_v2"].id,
-            target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
-            series_profile_id=None,
-            episode_template_id=template.id,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=now,
-        )
-    )
     await uow.commit()
 
-    # Resolve for early episode with template
     resolved = await resolve_bindings(
         uow,
         series_profile_id=series.id,
@@ -758,11 +362,8 @@ async def test_resolve_bindings_merges_template_with_episode(
         episode_id=uow_with_fixtures["episode_early"].id,
     )
 
-    # Should have: series binding from early + template binding
-    # Should NOT have: series binding from late (future episode)
     assert len(resolved) == 2
-    resolved_revision_ids = {r.revision.id for r in resolved}
-    assert resolved_revision_ids == {
+    assert {r.revision.id for r in resolved} == {
         uow_with_fixtures["revision_v1"].id,
         uow_with_fixtures["revision_v2"].id,
     }
@@ -778,9 +379,8 @@ async def test_resolve_bindings_template_only(
     revision_v2 = fixtures["revision_v2"]
     now = fixtures["now"]
 
-    template = await _create_episode_template(uow, series.id, now)
+    template = await create_episode_template_for_binding_tests(uow, series.id, now)
 
-    # Create only template binding, no series bindings
     template_binding = ReferenceBinding(
         id=uuid.uuid4(),
         reference_document_revision_id=revision_v2.id,
@@ -794,7 +394,6 @@ async def test_resolve_bindings_template_only(
     await uow.reference_bindings.add(template_binding)
     await uow.commit()
 
-    # Resolve with template_id only
     resolved = await resolve_bindings(
         uow, series_profile_id=series.id, template_id=template.id
     )

@@ -217,6 +217,26 @@ async def _load_template_bindings(
     )
 
 
+async def _episode_belongs_to_series(
+    uow: CanonicalUnitOfWork,
+    episode_id: uuid.UUID,
+    series_profile_id: uuid.UUID,
+) -> bool:
+    """Return True if the episode exists and belongs to the given series profile."""
+    episode = await uow.episodes.get(episode_id)
+    return episode is not None and episode.series_profile_id == series_profile_id
+
+
+async def _template_belongs_to_series(
+    uow: CanonicalUnitOfWork,
+    template_id: uuid.UUID,
+    series_profile_id: uuid.UUID,
+) -> bool:
+    """Return True if the template exists and belongs to the given series profile."""
+    template = await uow.episode_templates.get(template_id)
+    return template is not None and template.series_profile_id == series_profile_id
+
+
 async def resolve_bindings(
     uow: CanonicalUnitOfWork,
     *,
@@ -268,19 +288,14 @@ async def resolve_bindings(
         The resolved bindings with their revisions and documents.
 
     """
-    # Validate episode if provided
-    if episode_id is not None:
-        episode = await uow.episodes.get(episode_id)
-        if episode is None or episode.series_profile_id != series_profile_id:
-            return []
+    if episode_id is not None and not await _episode_belongs_to_series(
+        uow, episode_id, series_profile_id
+    ):
+        return []
 
-    # Validate template if provided
-    template_is_valid = False
-    if template_id is not None:
-        template = await uow.episode_templates.get(template_id)
-        template_is_valid = (
-            template is not None and template.series_profile_id == series_profile_id
-        )
+    template_is_valid = template_id is not None and await _template_belongs_to_series(
+        uow, template_id, series_profile_id
+    )
 
     series_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
@@ -304,7 +319,6 @@ async def resolve_bindings(
             all_bindings, revision_map, document_map
         )
 
-    # Template bindings are always included without episode filtering
     template_resolved = _resolve_without_episode_context(
         template_bindings, revision_map, document_map
     )
