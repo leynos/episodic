@@ -143,6 +143,34 @@ def _write_response_template(
     )
 
 
+_VIDAIMOCK_STARTUP_TIMEOUT = 5.0
+_VIDAIMOCK_PROBE_INTERVAL = 0.2
+
+
+def _await_port_ready(
+    process: subprocess.Popen[str],
+    host: str,
+    port: int,
+    timeout: float = _VIDAIMOCK_STARTUP_TIMEOUT,
+) -> None:
+    """Poll a TCP port until the server accepts connections or the deadline expires."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if process.poll() is not None:
+            msg = "Vidai Mock failed to start for the Pedante behavioural test."
+            raise RuntimeError(msg)
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                break
+        except OSError:
+            if time.monotonic() >= deadline:
+                if process.poll() is None:
+                    process.terminate()
+                msg = "Vidai Mock did not become ready within the timeout."
+                raise RuntimeError(msg) from None
+            time.sleep(_VIDAIMOCK_PROBE_INTERVAL)
+
+
 def _start_vidaimock_process(
     pedante_context: PedanteBDDContext,
     config_dir: Path,
@@ -170,22 +198,7 @@ def _start_vidaimock_process(
         text=True,
     )
 
-    # Probe the TCP port instead of a fixed sleep so slower CI runners succeed.
-    deadline = time.monotonic() + 5.0
-    while True:
-        if pedante_context.process.poll() is not None:
-            msg = "Vidai Mock failed to start for the Pedante behavioural test."
-            raise RuntimeError(msg)
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                break
-        except OSError:
-            if time.monotonic() >= deadline:
-                if pedante_context.process.poll() is None:
-                    pedante_context.process.terminate()
-                msg = "Vidai Mock did not become ready within the timeout."
-                raise RuntimeError(msg) from None
-            time.sleep(0.2)
+    _await_port_ready(pedante_context.process, "127.0.0.1", port)
 
 
 # ── BDD step ──

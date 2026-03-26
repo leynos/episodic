@@ -161,34 +161,22 @@ def test_pedante_parse_result_rejects_non_object_json(payload: str) -> None:
         PedanteEvaluationResult.from_json(payload, usage=LLMUsage(1, 2, 3))
 
 
-def test_pedante_parse_result_rejects_missing_summary() -> None:
-    """Reject payloads with missing or blank summary."""
-    usage = LLMUsage(1, 2, 3)
-    with pytest.raises(PedanteResponseFormatError, match="summary"):
-        PedanteEvaluationResult.from_json(
-            json.dumps({"findings": [_valid_finding_payload()]}),
-            usage=usage,
-        )
-
-
-def test_pedante_parse_result_rejects_blank_summary() -> None:
-    """Reject payloads with blank summary."""
-    usage = LLMUsage(1, 2, 3)
-    with pytest.raises(PedanteResponseFormatError, match="summary"):
-        PedanteEvaluationResult.from_json(
-            json.dumps({"summary": "   ", "findings": [_valid_finding_payload()]}),
-            usage=usage,
-        )
-
-
-def test_pedante_parse_result_rejects_missing_findings() -> None:
-    """Reject payloads with missing findings field."""
-    usage = LLMUsage(1, 2, 3)
-    with pytest.raises(PedanteResponseFormatError, match="findings"):
-        PedanteEvaluationResult.from_json(
-            json.dumps({"summary": "Summary."}),
-            usage=usage,
-        )
+@pytest.mark.parametrize(
+    ("payload", "match"),
+    [
+        ({"findings": [_valid_finding_payload()]}, "summary"),
+        ({"summary": "   ", "findings": [_valid_finding_payload()]}, "summary"),
+        ({"summary": "Summary."}, "findings"),
+    ],
+    ids=["missing_summary", "blank_summary", "missing_findings"],
+)
+def test_pedante_parse_result_rejects_invalid_top_level_fields(
+    payload: dict[str, object],
+    match: str,
+) -> None:
+    """Reject payloads with missing or blank top-level fields."""
+    with pytest.raises(PedanteResponseFormatError, match=match):
+        PedanteEvaluationResult.from_json(json.dumps(payload), usage=LLMUsage(1, 2, 3))
 
 
 @pytest.mark.parametrize(
@@ -228,22 +216,10 @@ def test_pedante_parse_result_rejects_non_object_finding_items(
 # ── JSON parsing: enum validation ──
 
 
-def test_pedante_parse_result_rejects_unknown_support_level() -> None:
-    """Reject unsupported finding taxonomy values."""
-    with pytest.raises(PedanteResponseFormatError, match="support_level"):
-        PedanteEvaluationResult.from_json(
-            json.dumps(
-                _valid_result_payload(
-                    findings=[_valid_finding_payload(support_level="mystery_value")]
-                )
-            ),
-            usage=LLMUsage(5, 7, 12),
-        )
-
-
 @pytest.mark.parametrize(
     ("field_name", "bad_value"),
     [
+        ("support_level", "mystery_value"),
         ("claim_kind", "not-a-valid-kind"),
         ("severity", "not-a-valid-severity"),
     ],
@@ -252,8 +228,7 @@ def test_pedante_parse_result_rejects_invalid_enum_values(
     field_name: str,
     bad_value: str,
 ) -> None:
-    """Reject findings with invalid claim_kind or severity values."""
-    usage = LLMUsage(1, 2, 3)
+    """Reject findings with invalid claim_kind, support_level, or severity values."""
     with pytest.raises(PedanteResponseFormatError, match=field_name):
         PedanteEvaluationResult.from_json(
             json.dumps(
@@ -261,7 +236,7 @@ def test_pedante_parse_result_rejects_invalid_enum_values(
                     findings=[_valid_finding_payload(**{field_name: bad_value})]
                 )
             ),
-            usage=usage,
+            usage=LLMUsage(1, 2, 3),
         )
 
 
