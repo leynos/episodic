@@ -12,6 +12,7 @@ Run database-backed tests with py-pglite:
 
 import asyncio
 import contextlib
+import datetime as dt  # noqa: TC003
 import json
 import os
 import typing as typ
@@ -34,7 +35,6 @@ from episodic.llm import (
 )
 
 if typ.TYPE_CHECKING:
-    import datetime as dt
     from pathlib import Path
 
     from falcon import testing
@@ -570,10 +570,25 @@ async def create_episode_template_for_binding_tests(
     return template
 
 
+class BindingFixtures(typ.TypedDict):
+    """Type definition for uow_with_binding_fixtures fixture."""
+
+    uow: CanonicalUnitOfWork
+    series: SeriesProfile
+    episode_early: CanonicalEpisode
+    episode_middle: CanonicalEpisode
+    episode_late: CanonicalEpisode
+    doc: ReferenceDocument
+    revision_v1: ReferenceDocumentRevision
+    revision_v2: ReferenceDocumentRevision
+    revision_v3: ReferenceDocumentRevision
+    now: dt.datetime
+
+
 @pytest_asyncio.fixture
 async def uow_with_binding_fixtures(
     session_factory: async_sessionmaker[AsyncSession],
-) -> typ.AsyncIterator[dict[str, typ.Any]]:
+) -> typ.AsyncIterator[BindingFixtures]:
     """Provide UOW with series, episodes, reference documents, and revisions."""
     import datetime as dt
 

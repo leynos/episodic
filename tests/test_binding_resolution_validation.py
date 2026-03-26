@@ -3,7 +3,6 @@
 import uuid
 
 import pytest
-import pytest_asyncio
 
 from episodic.canonical.domain import (
     ApprovalState,
@@ -16,23 +15,15 @@ from episodic.canonical.domain import (
     TeiHeader,
 )
 from episodic.canonical.reference_documents.resolution import resolve_bindings
-from tests.conftest import uow_with_binding_fixtures  # noqa: F401
 
 pytestmark = pytest.mark.asyncio
 
 
-# Alias fixture for consistency
-@pytest_asyncio.fixture
-def uow_with_fixtures(uow_with_binding_fixtures):  # noqa: ANN001, ANN201, F811
-    """Alias for uow_with_binding_fixtures from conftest."""
-    yield uow_with_binding_fixtures
-
-
 async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_binding_fixtures,  # noqa: ANN001
 ) -> None:
     """Resolution returns empty list when episode belongs to a different series."""
-    fixtures = uow_with_fixtures
+    fixtures = uow_with_binding_fixtures
     uow = fixtures["uow"]
     series = fixtures["series"]
     now = fixtures["now"]
@@ -85,10 +76,10 @@ async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
 
 
 async def test_resolve_bindings_skips_template_from_wrong_series(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_binding_fixtures,  # noqa: ANN001
 ) -> None:
     """Resolution skips template bindings when template belongs to different series."""
-    fixtures = uow_with_fixtures
+    fixtures = uow_with_binding_fixtures
     uow = fixtures["uow"]
     series = fixtures["series"]
     revision_v1 = fixtures["revision_v1"]

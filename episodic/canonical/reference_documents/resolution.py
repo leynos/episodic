@@ -236,6 +236,24 @@ async def _template_belongs_to_series(
     return template is not None and template.series_profile_id == series_profile_id
 
 
+async def _validate_context(
+    uow: CanonicalUnitOfWork,
+    series_profile_id: uuid.UUID,
+    episode_id: uuid.UUID | None,
+    template_id: uuid.UUID | None,
+) -> tuple[CanonicalEpisode | None, bool]:
+    """Validate episode and template context, returning (episode, template_is_valid)."""
+    episode = None
+    if episode_id is not None:
+        episode = await _episode_belongs_to_series(uow, episode_id, series_profile_id)
+
+    template_is_valid = template_id is not None and await _template_belongs_to_series(
+        uow, template_id, series_profile_id
+    )
+
+    return episode, template_is_valid
+
+
 async def resolve_bindings(
     uow: CanonicalUnitOfWork,
     *,
@@ -287,17 +305,12 @@ async def resolve_bindings(
         The resolved bindings with their revisions and documents.
 
     """
-    target_episode = None
-    if episode_id is not None:
-        target_episode = await _episode_belongs_to_series(
-            uow, episode_id, series_profile_id
-        )
-        if target_episode is None:
-            return []
-
-    template_is_valid = template_id is not None and await _template_belongs_to_series(
-        uow, template_id, series_profile_id
+    target_episode, template_is_valid = await _validate_context(
+        uow, series_profile_id, episode_id, template_id
     )
+
+    if episode_id is not None and target_episode is None:
+        return []
 
     series_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
