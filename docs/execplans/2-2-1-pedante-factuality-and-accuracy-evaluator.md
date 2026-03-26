@@ -251,8 +251,8 @@ The codebase already contains a working first version of Pedante:
 - `episodic/qa/langgraph.py` defines the minimal LangGraph seam:
   `PedanteGraphState`, `route_after_pedante(...)`, and
   `build_pedante_graph(...)`.
-- `tests/test_pedante.py` covers DTO validation, JSON parsing, and one
-  successful single-pass evaluation.
+- `tests/test_pedante.py` covers data transfer object (DTO) validation, JSON
+  parsing, and one successful single-pass evaluation.
 - `tests/test_pedante_langgraph.py` covers the minimal graph routing seam.
 - `tests/features/pedante.feature` and `tests/steps/test_pedante_steps.py`
   cover the Vidai Mock-backed behaviour path.
@@ -265,7 +265,7 @@ The codebase already contains a working first version of Pedante:
 
 Terms used in this plan:
 
-- Claim catalogue pass: the first Pedante pass that identifies candidate claims
+- Claim-catalogue pass: the first Pedante pass that identifies candidate claims
   and harvests citation context from the TEI-backed script representation.
 - Citation spine: the canonical TEI sources of citation truth used by Pedante,
   especially utterance-local provenance attributes and header-level `refsDecl`.
@@ -593,7 +593,7 @@ This plan is safe to execute incrementally.
   the current public result type, stop at the usage tolerance gate and add ADR
   coverage before proceeding.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Expected validation logs:
 
@@ -605,7 +605,7 @@ Expected validation logs:
 - `/tmp/pedante-adr-align-make-markdownlint.log`
 - `/tmp/pedante-adr-align-make-nixie.log`
 
-Expected long-lived project artifacts if the implementation needs them:
+Expected long-lived project artefacts if the implementation needs them:
 
 - updated `tests/test_pedante.py`
 - updated `tests/test_pedante_langgraph.py`

@@ -31,7 +31,6 @@ class PedanteGraphState:
 
     pedante_request: PedanteEvaluationRequest | None = None
     pedante_result: PedanteEvaluationResult | None = None
-    qa_route: str | None = None
 
 
 async def _pedante_node(
@@ -47,22 +46,15 @@ async def _pedante_node(
 
 
 def route_after_pedante(state: PedanteGraphState) -> typ.Literal["pass", "refine"]:
-    """Route supported scripts to pass and blocking findings to refine."""
+    """Route supported scripts to pass and blocking findings to refine.
+
+    The routing decision is derived solely from ``pedante_result.requires_revision``
+    to keep routing logic centralised and avoid divergence with other state.
+    """
     if state.pedante_result is None:
         msg = "pedante_result"
         raise KeyError(msg)
-    qa_route = state.qa_route
-    if qa_route is None:
-        msg = "qa_route"
-        raise KeyError(msg)
-    match qa_route:
-        case "pass":
-            return "pass"
-        case "refine":
-            return "refine"
-        case _:
-            msg = "qa_route"
-            raise ValueError(msg)
+    return "refine" if state.pedante_result.requires_revision else "pass"
 
 
 def build_pedante_graph(
@@ -78,14 +70,8 @@ def build_pedante_graph(
 
     async def _run_pedante_node(
         state: PedanteGraphState,
-    ) -> dict[str, object]:
-        result = await _pedante_node(state, evaluator=evaluator)
-        pedante_result = result["pedante_result"]
-        qa_route = "refine" if pedante_result.requires_revision else "pass"
-        return {
-            "pedante_result": pedante_result,
-            "qa_route": qa_route,
-        }
+    ) -> dict[str, PedanteEvaluationResult]:
+        return await _pedante_node(state, evaluator=evaluator)
 
     graph.add_node("pedante", _run_pedante_node)
     graph.add_edge(START, "pedante")

@@ -16,17 +16,6 @@ from episodic.llm import (
     LLMUsage,
 )
 
-_BLOCKING_SUPPORT_LEVELS = frozenset({
-    "citation_absent",
-    "misquotation",
-    "misinterpreted_claim",
-    "fabricated_claim",
-    "inference_not_supported",
-    "inaccurate_reinterpretation",
-    "inference_supported_with_irrelevant_sources",
-    "contradictory_claims_in_document",
-})
-
 
 class ClaimKind(enum.StrEnum):
     """Kinds of claims Pedante can evaluate."""
@@ -54,6 +43,18 @@ class SupportLevel(enum.StrEnum):
     INFERENCE_PLAUSIBLY_SUPPORTED = "inference_plausibly_supported"
     INFERENCE_DIRECTLY_SUPPORTED = "inference_directly_supported"
     CONTRADICTORY_CLAIMS_IN_DOCUMENT = "contradictory_claims_in_document"
+
+
+_BLOCKING_SUPPORT_LEVELS = frozenset({
+    SupportLevel.CITATION_ABSENT,
+    SupportLevel.MISQUOTATION,
+    SupportLevel.MISINTERPRETED_CLAIM,
+    SupportLevel.FABRICATED_CLAIM,
+    SupportLevel.INFERENCE_NOT_SUPPORTED,
+    SupportLevel.INACCURATE_REINTERPRETATION,
+    SupportLevel.INFERENCE_SUPPORTED_WITH_IRRELEVANT_SOURCES,
+    SupportLevel.CONTRADICTORY_CLAIMS_IN_DOCUMENT,
+})
 
 
 class FindingSeverity(enum.StrEnum):
@@ -135,7 +136,7 @@ class PedanteFinding:
     @property
     def is_blocking(self) -> bool:
         """Return whether the finding should force a refinement loop."""
-        return self.support_level.value in _BLOCKING_SUPPORT_LEVELS
+        return self.support_level in _BLOCKING_SUPPORT_LEVELS
 
 
 @dc.dataclass(frozen=True, slots=True)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses as dc
 import json
 import shutil
+import socket
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
 import time
 import typing as typ
@@ -168,10 +169,23 @@ def _start_vidaimock_process(
         stderr=subprocess.DEVNULL,
         text=True,
     )
-    time.sleep(1)
-    if pedante_context.process.poll() is not None:
-        msg = "Vidai Mock failed to start for the Pedante behavioural test."
-        raise RuntimeError(msg)
+
+    # Probe the TCP port instead of a fixed sleep so slower CI runners succeed.
+    deadline = time.monotonic() + 5.0
+    while True:
+        if pedante_context.process.poll() is not None:
+            msg = "Vidai Mock failed to start for the Pedante behavioural test."
+            raise RuntimeError(msg)
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                break
+        except OSError:
+            if time.monotonic() >= deadline:
+                if pedante_context.process.poll() is None:
+                    pedante_context.process.terminate()
+                msg = "Vidai Mock did not become ready within the timeout."
+                raise RuntimeError(msg) from None
+            time.sleep(0.2)
 
 
 # ── BDD step ──

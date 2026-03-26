@@ -29,13 +29,18 @@ jobs:
           npm install -g markdownlint-cli2
 
       - name: Install VidaiMock
+        env:
+          VIDAIMOCK_VERSION: "0.1.3"
+          VIDAIMOCK_SHA256: "214032f365b7f6d8e43fc32fbdb73a2f5d1ccec963c20807eb0675260af16665"
         run: |
-          curl -LO https://github.com/vidaiUK/VidaiMock/releases/latest/download/vidaimock-linux-x64.tar.gz
+          curl -fsSL -o vidaimock-linux-x64.tar.gz \
+            "https://github.com/vidaiUK/VidaiMock/releases/download/v${VIDAIMOCK_VERSION}/vidaimock-linux-x64.tar.gz"
+          echo "${VIDAIMOCK_SHA256}  vidaimock-linux-x64.tar.gz" | sha256sum -c -
           tar -xzf vidaimock-linux-x64.tar.gz
           chmod +x vidaimock
           mkdir -p "$HOME/.local/bin"
-          mv vidaimock/vidaimock  "$HOME/.local/bin/"
-          rm -rf vidaimock
+          mv vidaimock/vidaimock "$HOME/.local/bin/"
+          rm -rf vidaimock vidaimock-linux-x64.tar.gz
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           "$HOME/.local/bin/vidaimock" --version
 

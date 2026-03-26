@@ -10,6 +10,7 @@ import pytest
 from episodic.llm import LLMUsage
 from episodic.qa.langgraph import (
     PedanteGraphState,
+    _pedante_node,
     build_pedante_graph,
     route_after_pedante,
 )
@@ -88,7 +89,6 @@ async def test_pedante_graph_routes_supported_scripts_to_pass() -> None:
     state = await graph.ainvoke(PedanteGraphState(pedante_request=_request()))
     pedante_result = typ.cast("PedanteEvaluationResult", state["pedante_result"])
 
-    assert state["qa_route"] == "pass"
     assert pedante_result.requires_revision is False
 
 
@@ -100,7 +100,6 @@ async def test_pedante_graph_routes_blocking_findings_to_refine() -> None:
     state = await graph.ainvoke(PedanteGraphState(pedante_request=_request()))
     pedante_result = typ.cast("PedanteEvaluationResult", state["pedante_result"])
 
-    assert state["qa_route"] == "refine"
     assert pedante_result.requires_revision is True
 
 
@@ -108,3 +107,23 @@ def test_route_after_pedante_requires_result() -> None:
     """Routing should fail loudly when graph state is incomplete."""
     with pytest.raises(KeyError, match="pedante_result"):
         route_after_pedante(PedanteGraphState())
+
+
+def test_route_after_pedante_pass_for_non_blocking() -> None:
+    """Non-blocking result should route to pass."""
+    state = PedanteGraphState(pedante_result=_result(blocking=False))
+    assert route_after_pedante(state) == "pass"
+
+
+def test_route_after_pedante_refine_for_blocking() -> None:
+    """Blocking result should route to refine."""
+    state = PedanteGraphState(pedante_result=_result(blocking=True))
+    assert route_after_pedante(state) == "refine"
+
+
+@pytest.mark.asyncio
+async def test_pedante_node_requires_pedante_request() -> None:
+    """_pedante_node should require a pedante_request in the graph state."""
+    evaluator = _FakePedanteEvaluator(_result(blocking=False))
+    with pytest.raises(KeyError, match="pedante_request"):
+        await _pedante_node(PedanteGraphState(), evaluator=evaluator)
