@@ -185,17 +185,14 @@ async def _resolve_with_episode_context(
         dict[uuid.UUID, ReferenceDocumentRevision], dict[uuid.UUID, ReferenceDocument]
     ],
     *,
-    episode_id: uuid.UUID,
+    target_episode_created_at: dt.datetime,
 ) -> list[ResolvedBinding]:
     """Resolve bindings with episode-aware precedence logic."""
     revision_map, _ = maps
-    target_episode = await uow.episodes.get(episode_id)
-    if target_episode is None:
-        return []
 
     bindings_by_document = _group_bindings_by_document(series_bindings, revision_map)
     episodes_by_id = await _build_applicable_episodes_map(
-        uow, bindings_by_document, target_episode.created_at
+        uow, bindings_by_document, target_episode_created_at
     )
 
     resolved = []
@@ -221,10 +218,12 @@ async def _episode_belongs_to_series(
     uow: CanonicalUnitOfWork,
     episode_id: uuid.UUID,
     series_profile_id: uuid.UUID,
-) -> bool:
-    """Return True if the episode exists and belongs to the given series profile."""
+) -> CanonicalEpisode | None:
+    """Return the episode if it exists and belongs to the series profile, else None."""
     episode = await uow.episodes.get(episode_id)
-    return episode is not None and episode.series_profile_id == series_profile_id
+    if episode is not None and episode.series_profile_id == series_profile_id:
+        return episode
+    return None
 
 
 async def _template_belongs_to_series(
@@ -288,10 +287,13 @@ async def resolve_bindings(
         The resolved bindings with their revisions and documents.
 
     """
-    if episode_id is not None and not await _episode_belongs_to_series(
-        uow, episode_id, series_profile_id
-    ):
-        return []
+    target_episode = None
+    if episode_id is not None:
+        target_episode = await _episode_belongs_to_series(
+            uow, episode_id, series_profile_id
+        )
+        if target_episode is None:
+            return []
 
     template_is_valid = template_id is not None and await _template_belongs_to_series(
         uow, template_id, series_profile_id
@@ -314,7 +316,7 @@ async def resolve_bindings(
         uow, all_bindings
     )
 
-    if episode_id is None:
+    if target_episode is None:
         return _resolve_without_episode_context(
             all_bindings, revision_map, document_map
         )
@@ -323,6 +325,9 @@ async def resolve_bindings(
         template_bindings, revision_map, document_map
     )
     series_resolved = await _resolve_with_episode_context(
-        uow, series_bindings, (revision_map, document_map), episode_id=episode_id
+        uow,
+        series_bindings,
+        (revision_map, document_map),
+        target_episode_created_at=target_episode.created_at,
     )
     return series_resolved + template_resolved
