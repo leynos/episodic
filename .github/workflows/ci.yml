@@ -37,9 +37,9 @@ jobs:
             "https://github.com/vidaiUK/VidaiMock/releases/download/v${VIDAIMOCK_VERSION}/vidaimock-linux-x64.tar.gz"
           echo "${VIDAIMOCK_SHA256}  vidaimock-linux-x64.tar.gz" | sha256sum -c -
           tar -xzf vidaimock-linux-x64.tar.gz
-          chmod +x vidaimock
           mkdir -p "$HOME/.local/bin"
           mv vidaimock/vidaimock "$HOME/.local/bin/"
+          chmod +x "$HOME/.local/bin/vidaimock"
           rm -rf vidaimock vidaimock-linux-x64.tar.gz
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           "$HOME/.local/bin/vidaimock" --version
