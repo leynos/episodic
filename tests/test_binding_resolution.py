@@ -108,20 +108,24 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     assert resolved[0].revision.id == revision_v1.id
 
 
+class _ScenarioParams(typ.NamedTuple):
+    episode_key: str
+    revision_key: str
+    resolve_key: str
+    expect_default: bool
+
+
 @pytest.mark.parametrize(
-    ("episode_key", "revision_key", "resolve_key", "expect_default"),
+    "scenario",
     [
-        ("episode_middle", "revision_v2", "episode_middle", False),
-        ("episode_late", "revision_v3", "episode_early", True),
+        _ScenarioParams("episode_middle", "revision_v2", "episode_middle", False),  # noqa: FBT003
+        _ScenarioParams("episode_late", "revision_v3", "episode_early", True),  # noqa: FBT003
     ],
     ids=["episode_specific_over_default", "fallback_to_default"],
 )
 async def test_resolve_bindings_scenario(
     uow_with_fixtures,  # noqa: ANN001
-    episode_key: str,
-    revision_key: str,
-    resolve_key: str,
-    expect_default: bool,  # noqa: FBT001
+    scenario: _ScenarioParams,
 ) -> None:
     """Test binding resolution scenarios with episode precedence logic."""
     fixtures = uow_with_fixtures
@@ -141,12 +145,12 @@ async def test_resolve_bindings_scenario(
     )
     binding_episode = ReferenceBinding(
         id=uuid.uuid4(),
-        reference_document_revision_id=fixtures[revision_key].id,
+        reference_document_revision_id=fixtures[scenario.revision_key].id,
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         series_profile_id=series.id,
         episode_template_id=None,
         ingestion_job_id=None,
-        effective_from_episode_id=fixtures[episode_key].id,
+        effective_from_episode_id=fixtures[scenario.episode_key].id,
         created_at=now - dt.timedelta(days=6),
     )
     await uow.reference_bindings.add(binding_default)
@@ -156,10 +160,10 @@ async def test_resolve_bindings_scenario(
     resolved = await resolve_bindings(
         uow,
         series_profile_id=series.id,
-        episode_id=fixtures[resolve_key].id,
+        episode_id=fixtures[scenario.resolve_key].id,
     )
 
-    expected = binding_default if expect_default else binding_episode
+    expected = binding_default if scenario.expect_default else binding_episode
     assert len(resolved) == 1
     assert resolved[0].binding.id == expected.id
     assert resolved[0].revision.id == expected.reference_document_revision_id
