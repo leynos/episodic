@@ -232,11 +232,19 @@ async def resolve_bindings(
     effective_from_episode_id). When episode_id is omitted, all bindings are
     returned (backward compatible).
 
+    Validation:
+    - If episode_id is provided, the episode must exist and belong to the
+      specified series_profile_id. If validation fails, returns empty list.
+    - If template_id is provided, the template must exist and belong to the
+      specified series_profile_id. If validation fails, template bindings are
+      skipped (treated as empty).
+
     Algorithm:
-    1. Collect all bindings for the series profile target.
-    2. If template_id is provided, collect all bindings for that template.
-    3. Group bindings by their parent reference document.
-    4. For each document group, select the binding with the latest
+    1. Validate episode and template entities if provided.
+    2. Collect all bindings for the series profile target.
+    3. If template_id is provided and validated, collect bindings for that template.
+    4. Group bindings by their parent reference document.
+    5. For each document group, select the binding with the latest
        effective_from_episode_id that is on or before the target episode's
        created_at timestamp. If no episode-specific binding matches, fall back
        to bindings with effective_from_episode_id = None (default). Template
@@ -260,13 +268,27 @@ async def resolve_bindings(
         The resolved bindings with their revisions and documents.
 
     """
+    # Validate episode if provided
+    if episode_id is not None:
+        episode = await uow.episodes.get(episode_id)
+        if episode is None or episode.series_profile_id != series_profile_id:
+            return []
+
+    # Validate template if provided
+    template_is_valid = False
+    if template_id is not None:
+        template = await uow.episode_templates.get(template_id)
+        template_is_valid = (
+            template is not None and template.series_profile_id == series_profile_id
+        )
+
     series_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         target_id=series_profile_id,
     )
 
     template_bindings: list[ReferenceBinding] = []
-    if template_id is not None:
+    if template_is_valid and template_id is not None:
         template_bindings = await _load_template_bindings(uow, template_id)
 
     all_bindings = series_bindings + template_bindings
