@@ -66,6 +66,20 @@ async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
     await uow.episodes.add(other_episode)
     await uow.commit()
 
+    # Create a binding for the correct series to verify it's not returned
+    binding = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=fixtures["revision_v1"].id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=now,
+    )
+    await uow.reference_bindings.add(binding)
+    await uow.commit()
+
     resolved = await resolve_bindings(
         uow,
         series_profile_id=series.id,
@@ -112,6 +126,7 @@ async def test_resolve_bindings_skips_template_from_wrong_series(
     await uow.episode_templates.add(other_template)
     await uow.commit()
 
+    # Create series-level binding
     await uow.reference_bindings.add(
         ReferenceBinding(
             id=uuid.uuid4(),
@@ -119,6 +134,19 @@ async def test_resolve_bindings_skips_template_from_wrong_series(
             target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
             series_profile_id=series.id,
             episode_template_id=None,
+            ingestion_job_id=None,
+            effective_from_episode_id=None,
+            created_at=now,
+        )
+    )
+    # Create template binding for wrong-series template
+    await uow.reference_bindings.add(
+        ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=revision_v1.id,
+            target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+            series_profile_id=None,
+            episode_template_id=other_template.id,
             ingestion_job_id=None,
             effective_from_episode_id=None,
             created_at=now,

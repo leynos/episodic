@@ -5,7 +5,6 @@ reference document bindings. See ADR-001 for the algorithm design decision.
 """
 
 import dataclasses as dc
-import operator
 import typing as typ
 
 if typ.TYPE_CHECKING:
@@ -101,20 +100,20 @@ def _select_best_binding_for_document(
     """Select the best binding: latest applicable episode binding or default.
 
     Selection is deterministic: for applicable episode bindings, ties on episode
-    timestamp are broken by binding.created_at; for default bindings, the latest
-    by created_at is chosen.
+    timestamp are broken by binding.created_at, then by binding.id; for default
+    bindings, the latest by created_at is chosen, with binding.id as tiebreaker.
     """
     if applicable_episode_bindings:
-        # Select max by episode timestamp, then by binding created_at for ties
+        # Select max by episode timestamp, then by binding created_at, then by id
         return max(
             applicable_episode_bindings,
-            key=lambda item: (item[1], item[0].created_at),
+            key=lambda item: (item[1], item[0].created_at, item[0].id),
         )[0]
 
-    # Fall back to default binding (latest by created_at)
+    # Fall back to default binding (latest by created_at, then by id)
     default_bindings = [b for b in doc_bindings if b.effective_from_episode_id is None]
     if default_bindings:
-        return max(default_bindings, key=operator.attrgetter("created_at"))
+        return max(default_bindings, key=lambda b: (b.created_at, b.id))
 
     return None
 
