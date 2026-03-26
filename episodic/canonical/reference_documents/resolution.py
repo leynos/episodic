@@ -254,6 +254,44 @@ async def _validate_context(
     return episode, template_is_valid
 
 
+async def _dispatch_resolution(
+    uow: CanonicalUnitOfWork,
+    series_bindings: list[ReferenceBinding],
+    template_bindings: list[ReferenceBinding],
+    target_episode: CanonicalEpisode | None,
+) -> list[ResolvedBinding]:
+    """Build revision/document maps and dispatch to the appropriate resolver.
+
+    When target_episode is None, all bindings are resolved without episode
+    precedence. When target_episode is provided, series-profile bindings are
+    resolved with episode-aware precedence and template bindings are merged
+    without filtering.
+    """
+    all_bindings = series_bindings + template_bindings
+    if not all_bindings:
+        return []
+
+    revision_map, document_map = await _load_revision_and_document_maps(
+        uow, all_bindings
+    )
+
+    if target_episode is None:
+        return _resolve_without_episode_context(
+            all_bindings, revision_map, document_map
+        )
+
+    template_resolved = _resolve_without_episode_context(
+        template_bindings, revision_map, document_map
+    )
+    series_resolved = await _resolve_with_episode_context(
+        uow,
+        series_bindings,
+        (revision_map, document_map),
+        target_episode_created_at=target_episode.created_at,
+    )
+    return series_resolved + template_resolved
+
+
 async def resolve_bindings(
     uow: CanonicalUnitOfWork,
     *,
@@ -321,26 +359,6 @@ async def resolve_bindings(
     if template_is_valid and template_id is not None:
         template_bindings = await _load_template_bindings(uow, template_id)
 
-    all_bindings = series_bindings + template_bindings
-    if not all_bindings:
-        return []
-
-    revision_map, document_map = await _load_revision_and_document_maps(
-        uow, all_bindings
+    return await _dispatch_resolution(
+        uow, series_bindings, template_bindings, target_episode
     )
-
-    if target_episode is None:
-        return _resolve_without_episode_context(
-            all_bindings, revision_map, document_map
-        )
-
-    template_resolved = _resolve_without_episode_context(
-        template_bindings, revision_map, document_map
-    )
-    series_resolved = await _resolve_with_episode_context(
-        uow,
-        series_bindings,
-        (revision_map, document_map),
-        target_episode_created_at=target_episode.created_at,
-    )
-    return series_resolved + template_resolved
