@@ -137,6 +137,7 @@ class SourceDocument:
     id: uuid.UUID
     ingestion_job_id: uuid.UUID
     canonical_episode_id: uuid.UUID | None
+    reference_document_revision_id: uuid.UUID | None
     source_type: str
     source_uri: str
     weight: float
@@ -269,6 +270,7 @@ class SourceDocumentInput:
     weight: float
     content_hash: str
     metadata: JsonMapping
+    reference_document_revision_id: uuid.UUID | None = None
 
 
 @dc.dataclass(frozen=True)

@@ -83,6 +83,7 @@ def episode_fixture() -> tuple[
         id=uuid.uuid4(),
         ingestion_job_id=job_id,
         canonical_episode_id=episode_id,
+        reference_document_revision_id=None,
         source_type="web",
         source_uri="https://example.com",
         weight=0.75,

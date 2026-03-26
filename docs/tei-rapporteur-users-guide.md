@@ -184,6 +184,7 @@ they miswire a call. A complete round trip therefore looks like:
 doc = tei.Document("Bridgewater")
 payload = tei.to_msgpack(doc)
 from tei_rapporteur.structs import Episode
+
 episode = msgspec.msgpack.decode(payload, type=Episode)
 ```
 
@@ -452,8 +453,10 @@ import msgspec
 import tei_rapporteur as tr
 from tei_rapporteur.structs import Event
 
-xml = "<TEI><teiHeader><fileDesc><title>Wolf 359</title></fileDesc></teiHeader>" \
-      "<text><body><p>Hello <hi rend='stress'>there</hi></p></body></text></TEI>"
+xml = (
+    "<TEI><teiHeader><fileDesc><title>Wolf 359</title></fileDesc></teiHeader>"
+    "<text><body><p>Hello <hi rend='stress'>there</hi></p></body></text></TEI>"
+)
 
 for event in tr.iter_parse(xml):
     typed = msgspec.convert(event, type=Event)

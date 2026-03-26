@@ -206,6 +206,23 @@ class EpisodeRepository(typ.Protocol):
         """
         ...
 
+    async def list_by_ids(
+        self, episode_ids: cabc.Collection[uuid.UUID]
+    ) -> list[CanonicalEpisode]:
+        """Fetch canonical episodes by identifiers.
+
+        Parameters
+        ----------
+        episode_ids : cabc.Collection[uuid.UUID]
+            Collection of episode identifiers.
+
+        Returns
+        -------
+        list[CanonicalEpisode]
+            The matching episodes (order not guaranteed).
+        """
+        ...
+
 
 class IngestionJobRepository(typ.Protocol):
     """Persistence interface for ingestion jobs.

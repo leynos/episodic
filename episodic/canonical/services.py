@@ -140,6 +140,7 @@ def _create_source_documents(
             id=_new_storage_id(),
             ingestion_job_id=job_id,
             canonical_episode_id=episode_id,
+            reference_document_revision_id=source.reference_document_revision_id,
             source_type=source.source_type,
             source_uri=source.source_uri,
             weight=source.weight,

@@ -30,6 +30,16 @@ class _RepositoryBase:
             return None
         return mapper(record)
 
+    async def _get_many[RecordT, DomainT](
+        self,
+        record_type: type[RecordT],
+        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        mapper: cabc.Callable[[RecordT], DomainT],
+    ) -> list[DomainT]:
+        """Return mapped records matching the query."""
+        result = await self._session.execute(sa.select(record_type).where(where_clause))
+        return [mapper(row) for row in result.scalars()]
+
     async def _add_record[RecordT](self, record: RecordT) -> None:
         """Add a record to the current SQLAlchemy session."""
         self._session.add(record)
