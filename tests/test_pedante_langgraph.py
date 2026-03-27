@@ -82,30 +82,26 @@ def _result(*, blocking: bool) -> PedanteEvaluationResult:
 
 
 @pytest.mark.asyncio
-async def test_pedante_graph_routes_supported_scripts_to_pass() -> None:
-    """Supported findings should route the graph to the pass branch."""
-    canned = _result(blocking=False)
+@pytest.mark.parametrize(
+    ("blocking", "expected_requires_revision"),
+    [
+        (False, False),
+        (True, True),
+    ],
+    ids=["supported_to_pass", "blocking_to_refine"],
+)
+async def test_pedante_graph_propagates_result(
+    blocking: bool,
+    expected_requires_revision: bool,
+) -> None:
+    """Graph should propagate the canned result and honour requires_revision."""
+    canned = _result(blocking=blocking)
     graph = build_pedante_graph(_FakePedanteEvaluator(canned))
 
     state = await graph.ainvoke(PedanteGraphState(pedante_request=_request()))
     pedante_result = typ.cast("PedanteEvaluationResult", state["pedante_result"])
 
-    assert pedante_result.requires_revision is False
-    assert pedante_result.usage == canned.usage
-    assert pedante_result.model == canned.model
-    assert pedante_result.provider_response_id == canned.provider_response_id
-
-
-@pytest.mark.asyncio
-async def test_pedante_graph_routes_blocking_findings_to_refine() -> None:
-    """Blocking findings should route the graph to the refine branch."""
-    canned = _result(blocking=True)
-    graph = build_pedante_graph(_FakePedanteEvaluator(canned))
-
-    state = await graph.ainvoke(PedanteGraphState(pedante_request=_request()))
-    pedante_result = typ.cast("PedanteEvaluationResult", state["pedante_result"])
-
-    assert pedante_result.requires_revision is True
+    assert pedante_result.requires_revision is expected_requires_revision
     assert pedante_result.usage == canned.usage
     assert pedante_result.model == canned.model
     assert pedante_result.provider_response_id == canned.provider_response_id
