@@ -42,7 +42,7 @@ Success is observable when:
   `make lint`, `make check-fmt`, or `make typecheck`.
 - No new external dependencies may be added. The implementation must use only
   `alembic` (already `>=1.13,<2.0`), `sqlalchemy` (already `>=2.0.34,<3.0.0`),
-  and `py-pglite[asyncpg]` (already a dev dependency).
+  and `py-pglite[async]` (already a dev dependency).
 - The `alembic/env.py` async configuration and the existing migration file
   `alembic/versions/20260203_000001_create_canonical_schema.py` must not be
   modified.

@@ -98,7 +98,9 @@ async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
     work_dir = tmp_path / "pglite"
     config = PGliteConfig(work_dir=work_dir)
 
-    with PGliteManager(config):
+    mgr = PGliteManager(config)
+    mgr.start()
+    try:
         from sqlalchemy.ext.asyncio import create_async_engine
 
         dsn = config.get_connection_string()
@@ -107,7 +109,13 @@ async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
             await _wait_for_engine_ready(engine)
             yield engine
         finally:
-            await engine.dispose()
+            try:
+                mgr.stop()
+            finally:
+                await engine.dispose(close=False)
+    finally:
+        if mgr.is_running():
+            mgr.stop()
 
 
 async def _wait_for_engine_ready(engine: AsyncEngine) -> None:

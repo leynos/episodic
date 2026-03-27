@@ -721,7 +721,7 @@ Existing dependencies used (no new additions):
 - `sqlalchemy` (`>=2.0.34,<3.0.0`) — ORM and async engine.
 - `tei-rapporteur` — TEI XML construction and parsing.
 - `femtologging` — structured logging.
-- `py-pglite[asyncpg]` — in-process Postgres for tests.
+- `py-pglite[async]` — in-process Postgres for tests.
 - `pytest`, `pytest-asyncio`, `pytest-bdd` — test framework.
 
 ## Revision note
