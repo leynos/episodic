@@ -17,6 +17,15 @@ from episodic.llm import (
 )
 
 
+def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
+    """Reject blank or whitespace-only string fields on a dataclass instance."""
+    for field_name in field_names:
+        value = getattr(instance, field_name)
+        if not isinstance(value, str) or value.strip() == "":
+            msg = f"{field_name} must be non-empty."
+            raise ValueError(msg)
+
+
 class ClaimKind(enum.StrEnum):
     """Kinds of claims Pedante can evaluate."""
 
@@ -78,17 +87,9 @@ class PedanteSourcePacket:
 
     def __post_init__(self) -> None:
         """Reject blank source packet fields."""
-        for field_name in (
-            "source_id",
-            "citation_label",
-            "tei_locator",
-            "title",
-            "excerpt",
-        ):
-            value = getattr(self, field_name)
-            if value.strip() == "":
-                msg = f"{field_name} must be non-empty."
-                raise ValueError(msg)
+        _ensure_non_empty_fields(
+            self, "source_id", "citation_label", "tei_locator", "title", "excerpt"
+        )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -123,11 +124,9 @@ class PedanteFinding:
 
     def __post_init__(self) -> None:
         """Reject blank claim identifiers and prose fields."""
-        for field_name in ("claim_id", "claim_text", "summary", "remediation"):
-            value = getattr(self, field_name)
-            if value.strip() == "":
-                msg = f"{field_name} must be non-empty."
-                raise ValueError(msg)
+        _ensure_non_empty_fields(
+            self, "claim_id", "claim_text", "summary", "remediation"
+        )
         for source_id in self.cited_source_ids:
             if source_id.strip() == "":
                 msg = "cited_source_ids must not contain blank values."
@@ -152,9 +151,7 @@ class PedanteEvaluationResult:
 
     def __post_init__(self) -> None:
         """Reject blank summaries."""
-        if self.summary.strip() == "":
-            msg = "summary must be non-empty."
-            raise ValueError(msg)
+        _ensure_non_empty_fields(self, "summary")
 
     @property
     def requires_revision(self) -> bool:
@@ -203,12 +200,7 @@ class PedanteEvaluatorConfig:
 
     def __post_init__(self) -> None:
         """Reject blank model names and system prompts."""
-        if self.model.strip() == "":
-            msg = "model must be non-empty."
-            raise ValueError(msg)
-        if self.system_prompt.strip() == "":
-            msg = "system_prompt must be non-empty."
-            raise ValueError(msg)
+        _ensure_non_empty_fields(self, "model", "system_prompt")
 
 
 @dc.dataclass(slots=True)

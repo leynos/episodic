@@ -1,7 +1,5 @@
 """Quality-assurance evaluator contracts and orchestration helpers."""
 
-from __future__ import annotations
-
 from .langgraph import build_pedante_graph, route_after_pedante
 from .pedante import (
     ClaimKind,

@@ -11,8 +11,8 @@ Status: DRAFT
 
 Pedante already exists in `episodic/qa/`, but the shipped implementation still
 reflects the original single-pass design: it sends one prompt containing raw
-TEI XML and source packets, then parses one structured response. The revised
-Architecture Decision Record (ADR) at
+Text Encoding Initiative (TEI) XML and source packets, then parses one
+structured response. The revised Architecture Decision Record (ADR) at
 `docs/adr-001-pedante-evaluator-contract.md` now requires a more specific
 internal design. Pedante must remain TEI-first, use the richer `tei-rapporteur`
 citation model, and be free to execute internally as two passes:

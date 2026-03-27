@@ -75,7 +75,13 @@ def test_pedante_behaviour() -> None:
 
 
 def _build_assistant_content_literal() -> str:
-    """Build the double-encoded assistant content JSON literal."""
+    """Build the double-encoded assistant content JSON literal.
+
+    The OpenAI chat-completion schema requires ``message.content`` to be a JSON
+    string, not a raw object.  The inner ``json.dumps`` produces the Pedante
+    result object; the outer ``json.dumps`` wraps it in a JSON string literal so
+    that the Jinja template emits a valid ``"content": "<escaped-json>"`` field.
+    """
     assistant_content = json.dumps({
         "summary": "One likely inaccuracy requires revision.",
         "findings": [
@@ -288,7 +294,7 @@ def evaluate_script(
 
 @then("Pedante returns structured findings and normalized usage")
 def assert_result(pedante_context: PedanteBDDContext) -> None:
-    """Assert that structured findings and usage survive the live adapter path."""
+    """Assert findings, usage, and metadata survive the live adapter path."""
     result = typ.cast("PedanteEvaluationResult", pedante_context.result)
     assert result.summary == "One likely inaccuracy requires revision."
     assert result.usage.input_tokens == 32
@@ -298,6 +304,9 @@ def assert_result(pedante_context: PedanteBDDContext) -> None:
     assert len(result.findings) == 1
     assert result.findings[0].claim_id == "claim-1"
     assert result.findings[0].cited_source_ids == ("src-1",)
+
+    assert result.model == "gpt-4o-mini"
+    assert result.provider_response_id.startswith("chatcmpl-")
 
 
 @then("the Pedante prompt includes TEI XML and cited source packets")

@@ -396,6 +396,15 @@ def test_pedante_requires_revision_false_for_empty_findings() -> None:
     assert result.requires_revision is False
 
 
+def test_pedante_parse_result_allows_empty_findings_list() -> None:
+    """Empty findings list in JSON should parse and not require revision."""
+    payload = json.dumps({"summary": "No issues found.", "findings": []})
+    result = PedanteEvaluationResult.from_json(payload, usage=LLMUsage(10, 5, 15))
+
+    assert result.findings == ()
+    assert result.requires_revision is False
+
+
 def test_pedante_requires_revision_false_for_non_blocking_findings() -> None:
     """Multiple non-blocking findings should not flip requires_revision."""
     non_blocking_findings = (

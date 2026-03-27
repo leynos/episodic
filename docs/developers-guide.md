@@ -263,6 +263,18 @@ from structured briefs:
 - `episodic.canonical.prompts` exposes:
   - `build_series_brief_template(...)` to construct a Python 3.14 template
     string (`t"..."`) representation.
+  - `build_series_guardrail_template(...)` to construct the persisted
+    guardrail scaffold from the same brief payload.
+  - `render_template(...)` to render prompt text while preserving static and
+    interpolation metadata for audit trails.
+  - `render_series_brief_prompt(...)` as the standard convenience renderer for
+    brief payloads.
+  - `render_series_guardrail_prompt(...)` as the standard convenience renderer
+    for guardrail/system prompt payloads.
+
+The renderer accepts an optional interpolation escape callback, so adapters can
+apply policy-specific sanitization (for example, XML/HTML escaping) without
+changing canonical prompt assembly rules.
 
 ## Quality-assurance evaluators
 
@@ -297,18 +309,6 @@ Pedante is implemented in the `episodic/qa/` package.
   `response_template` paths are resolved relative to the template root. For
   example, use `pedante/response.json.j2`, not
   `templates/pedante/response.json.j2`.
-  - `build_series_guardrail_template(...)` to construct the persisted
-    guardrail scaffold from the same brief payload.
-  - `render_template(...)` to render prompt text while preserving static and
-    interpolation metadata for audit trails.
-  - `render_series_brief_prompt(...)` as the standard convenience renderer for
-    brief payloads.
-  - `render_series_guardrail_prompt(...)` as the standard convenience renderer
-    for guardrail/system prompt payloads.
-
-The renderer accepts an optional interpolation escape callback, so adapters can
-apply policy-specific sanitization (for example, XML/HTML escaping) without
-changing canonical prompt assembly rules.
 
 ## LLM adapter boundary
 

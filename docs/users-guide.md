@@ -88,7 +88,7 @@ Reusable reference-document workflows currently support:
 ### Quality & Compliance
 
 - Setting up brand guidelines and compliance rules
-- Configuring multi-layer quality assurance checks
+- Configuring multi-layer quality assurance (QA) checks
 - Generated scripts now pass through the internal Pedante factuality evaluator
   before editorial approval. Pedante inspects claim-level support against the
   canonical TEI script and cited source packets, then records structured

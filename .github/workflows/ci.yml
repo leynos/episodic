@@ -64,8 +64,10 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          which vidaimock || echo "WARNING: vidaimock not in PATH"
+          if ! command -v vidaimock >/dev/null 2>&1; then
+            echo "ERROR: vidaimock binary not found in PATH"
+            exit 1
+          fi
           uv pip install slipcover pytest-forked
           uv run python -m slipcover \
             --source=./episodic \

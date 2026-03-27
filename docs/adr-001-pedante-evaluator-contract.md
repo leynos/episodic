@@ -1,4 +1,4 @@
-# ADR 001: Pedante evaluator contract
+# Architecture Decision Record (ADR) 001: Pedante evaluator contract
 
 ## Status
 
