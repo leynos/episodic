@@ -97,6 +97,25 @@ using `create_all` is fine for simple cases.
 Postgres bundle via Node.js. Once installed, database startup is very fast (a
 couple of seconds or less) for each test.
 
+In Episodic, `tests/conftest.py` keeps the py-pglite startup details behind a
+shared `pglite_sqlalchemy_manager` fixture. The public test fixtures are built
+from that manager in a small stack:
+
+- `pglite_engine` provides the async SQLAlchemy engine from py-pglite's
+  helper-backed manager.
+- `migrated_engine` applies Alembic migrations to that engine.
+- `session_factory` and `pglite_session` are the default entry points for
+  repository, unit-of-work, and service tests.
+
+When adding new database-backed tests, extend that shared stack rather than
+creating a parallel manager, hard-coded database URL, or long-lived global
+connection.
+
+In this repository, direct `asyncpg` access is not part of the shared fixture
+stack today. If a future business-logic test genuinely needs raw driver
+behaviour, verify py-pglite and `asyncpg` compatibility for the current
+dependency set before adding a new fixture path.
+
 ## Writing asynchronous tests with SQLAlchemy 2.x and pytest-asyncio
 
 SQLAlchemy 2.x supports an async ORM API, and async database logic can be
