@@ -188,7 +188,7 @@ invocation; Chrono is a non-LLM runtime estimator. Later iterations may replace
 individual evaluators with more cost-effective or service-oriented approaches
 without changing the orchestration contract.
 
-- [ ] 2.2.1. Implement Pedante for factuality and accuracy checks.
+- [x] 2.2.1. Implement Pedante for factuality and accuracy checks.
   - Return structured findings for unsupported claims and likely inaccuracies.
   - Return normalized usage metrics for LangGraph cost accounting.
 - [ ] 2.2.2. Implement Bromide to detect overused tropes, cliches, and
