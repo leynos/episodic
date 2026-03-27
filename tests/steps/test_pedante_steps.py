@@ -74,6 +74,13 @@ def test_pedante_behaviour() -> None:
     """Run the Pedante behaviour scenario."""
 
 
+def _find_free_port() -> int:
+    """Bind to an ephemeral port and return its number before releasing it."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
 def _build_assistant_content_literal() -> str:
     """Build the double-encoded assistant content JSON literal.
 
@@ -233,7 +240,7 @@ def vidaimock_server(
     assistant_content_literal = _build_assistant_content_literal()
     _write_provider_config(provider_dir)
     _write_response_template(template_dir, assistant_content_literal)
-    _start_vidaimock_process(pedante_context, tmp_path, port=18110)
+    _start_vidaimock_process(pedante_context, tmp_path, port=_find_free_port())
 
 
 @given("a TEI-backed Pedante evaluation request is prepared")
