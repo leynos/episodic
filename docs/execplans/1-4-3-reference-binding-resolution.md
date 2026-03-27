@@ -7,7 +7,7 @@ proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose and big picture
 
@@ -16,6 +16,12 @@ resolution, the mechanism that determines which pinned
 `ReferenceDocumentRevision` applies to a given consuming context (ingestion
 run, series profile, or episode template) and preserves provenance snapshots in
 ingestion records.
+
+As of 2026-03-27, the repository has completed the algorithm design, the
+Architectural Decision Record (ADR), the additive source-document schema work,
+and a unit-tested resolution service. The roadmap item is still incomplete
+because the brief/API integration, provenance snapshotting workflow,
+behavioural coverage, and final documentation updates have not landed yet.
 
 After implementation, the system will:
 
@@ -109,21 +115,16 @@ Success is observable when:
 
 ## Risks
 
-- Risk: The `source_documents` table does not currently have a
-  `reference_document_revision_id` column, though the Entity-Relationship (ER)
-  diagram in the system design document shows one. Adding it requires an
-  Alembic migration. Severity: medium. Likelihood: high. Mitigation: add a
-  nullable `reference_document_revision_id` foreign key column via an additive
-  migration. Existing rows retain `NULL`. New provenance snapshots populate the
-  column.
+- Resolved 2026-03-22: The `source_documents` table now has nullable
+  `reference_document_revision_id` support via migration
+  `20260322_000007_add_reference_revision_to_source_documents.py`. Remaining
+  work is not schema design; it is wiring provenance snapshot creation into the
+  workflows that should populate the column.
 
-- Risk: The resolution algorithm for `effective_from_episode_id` requires
-  episode ordering semantics. Episodes must have a stable ordering (by
-  `created_at` or sequence number) to determine "closest but not after".
-  Severity: medium. Likelihood: medium. Mitigation: use episode `created_at` as
-  the ordering dimension. If episodes have explicit sequence numbers, prefer
-  those. Investigate the `episodes` table schema to confirm available ordering
-  fields before implementing.
+- Resolved 2026-03-22: Episode ordering semantics were confirmed on
+  `CanonicalEpisode.created_at` / `EpisodeRecord.created_at`, and ADR-001
+  records the decision to use `created_at` as the precedence dimension for
+  `effective_from_episode_id`.
 
 - Risk: The brief endpoint currently returns all bindings without resolution.
   Changing this default behaviour could break existing consumers. Severity:
@@ -131,22 +132,34 @@ Success is observable when:
   when `episode_id` is explicitly provided. When omitted, the brief continues
   to return all bindings (preserving backward compatibility).
 
-- Risk: Adding `reference_document_revision_id` to `SourceDocument` and
-  `SourceDocumentInput` domain entities changes their shape. Severity: medium.
-  Likelihood: high. Mitigation: use optional (nullable) field with default
-  `None` to avoid breaking existing ingestion pathways that do not resolve
-  bindings.
+- Resolved 2026-03-22: Adding `reference_document_revision_id` to
+  `SourceDocument` and `SourceDocumentInput` did change their shape, but the
+  field landed as optional with default `None`, so existing ingestion pathways
+  remain backward compatible until provenance snapshotting is wired in.
 
 ## Progress
 
-- [x] Initial ExecPlan draft completed.
-- [x] Stage A: codebase investigation and algorithm design.
-- [x] Stage B: migration and domain model updates.
-- [x] Stage C: resolution service implementation with tests.
-- [ ] Stage D: API endpoint updates and integration tests.
-- [ ] Stage E: provenance snapshotting in ingestion records.
-- [ ] Stage F: behavioural tests (pytest-bdd).
-- [ ] Stage G: documentation, ADR, and roadmap completion.
+- [x] 2026-03-22: Initial ExecPlan draft completed.
+- [x] 2026-03-22: Stage A finished with ADR-001 and confirmed
+  `created_at`-based episode precedence semantics.
+- [x] 2026-03-22: Stage B finished with migration
+  `20260322_000007` and domain/storage support for
+  `reference_document_revision_id`.
+- [x] 2026-03-22: Stage C finished with
+  `episodic/canonical/reference_documents/resolution.py` and unit coverage in
+  `tests/test_binding_resolution.py` plus
+  `tests/test_binding_resolution_validation.py`.
+- [ ] 2026-03-27: Stage D remains open. The brief resource still accepts only
+  `template_id`, and no `/series-profiles/{profile_id}/resolved-bindings` route
+  exists.
+- [ ] 2026-03-27: Stage E remains open. The ingestion pipeline carries
+  `reference_document_revision_id` through `SourceDocumentInput`, but no
+  workflow resolves bindings and snapshots them into `source_documents`.
+- [ ] 2026-03-27: Stage F remains open. No binding-resolution Behaviour-Driven
+  Development (BDD) feature or step files exist.
+- [ ] 2026-03-27: Stage G remains open. ADR-001 exists, but the design,
+  user/developer docs, and roadmap completion state are not fully aligned to
+  the partial implementation.
 
 ## Surprises and discoveries
 
@@ -187,6 +200,24 @@ Success is observable when:
 - Suppressed complexity warnings (justified in decision log).
 - All gates pass.
 
+### Stage D/G audit on 2026-03-27
+
+- `SeriesProfileBriefResource.on_get` in
+  `episodic/api/resources/series_profiles.py` still accepts only `template_id`;
+  there is no `episode_id` parsing and no delegation to `resolve_bindings`.
+- `build_series_brief` in `episodic/canonical/profile_templates/brief.py`
+  still returns all series/template bindings without episode-aware filtering.
+- `episodic/api/app.py` has no
+  `/series-profiles/{profile_id}/resolved-bindings` route, and the API
+  resources package has no resolved-binding resource implementation.
+- No API integration file `tests/test_binding_resolution_api.py` exists.
+- No behavioural test files
+  `tests/features/binding_resolution.feature` or
+  `tests/steps/test_binding_resolution_steps.py` exist.
+- `docs/episodic-podcast-generation-system-design.md` still describes the
+  brief endpoint as returning resolved reference-document payloads, which
+  overstates the current implementation.
+
 ## Decision log
 
 ### 2026-03-22: Episode ordering via `created_at`
@@ -213,10 +244,25 @@ timestamps, filtering by precedence, sorting, and fallback logic. Splitting
 into helper functions would obscure the algorithm flow documented in ADR-001.
 Comprehensive unit tests provide safety.
 
+### 2026-03-27: Keep roadmap item `1.4.3` unchecked
+
+The repository has partial implementation only. Stage A through Stage C are in
+place, but the user-visible acceptance criteria are still unmet because the
+brief endpoint does not accept `episode_id`, there is no dedicated
+resolved-bindings endpoint, no ingestion workflow snapshots resolved bindings
+into `source_documents`, and no API or BDD coverage proves those paths. The
+roadmap entry must remain unchecked until Stages D through G are complete.
+
 ## Outcomes and retrospective
 
-(Not yet complete. This section will be populated at major milestones and on
-completion.)
+Partial outcome as of 2026-03-27:
+
+- The repository now has the core resolution algorithm, ADR, schema support,
+  and unit tests needed to finish `1.4.3` without more foundational design work.
+- The work is not complete from a product or roadmap perspective because none
+  of the externally observable API/provenance behaviours have shipped yet.
+- The next contributor should treat this ExecPlan as an execution handoff for
+  Stages D through G, not as a fresh design exercise.
 
 ## Context and orientation
 
@@ -239,13 +285,10 @@ Three domain entities are already defined:
   target identifier fields plus `target_kind` and optional
   `effective_from_episode_id`.
 
-The `SourceDocument` domain entity (line 134) currently has `ingestion_job_id`,
-`source_type`, `source_uri`, `weight`, `content_hash`, and `metadata` but no
-`reference_document_revision_id`.
-
-The `SourceDocumentInput` (line 264) is the input payload for creating source
-documents during ingestion. It similarly lacks a
-`reference_document_revision_id`.
+The `SourceDocument` domain entity (line 134) now includes nullable
+`reference_document_revision_id`, and `SourceDocumentInput` (line 265) carries
+the same optional field so ingestion paths can preserve reference provenance
+when callers provide it.
 
 ### Port contracts (`episodic/canonical/ports.py`)
 
@@ -271,9 +314,13 @@ modules:
 - `bindings.py`: create, get, list bindings with full target alignment
   validation.
 - `helpers.py`: shared parsing, validation, and error extraction utilities.
+- `resolution.py`: `ResolvedBinding` plus the `resolve_bindings` service that
+  applies episode-aware precedence for series bindings and merges template
+  bindings.
 
-There is no resolution service yet. Resolution (determining which binding
-"wins" for a given episode context) is the core deliverable of this plan.
+The missing service-layer work is not the resolver itself; it is the
+provenance-snapshot helper and the adapter integration that calls the resolver
+from API or ingestion entry points.
 
 ### Brief assembly (`episodic/canonical/profile_templates/brief.py`)
 
@@ -289,8 +336,8 @@ or precedence logic. Every binding is included regardless of
 - ORM models in `episodic/canonical/storage/reference_models.py` implement
   all three reference entities with partial unique indexes on bindings.
 - `SourceDocumentRecord` in `episodic/canonical/storage/models.py` (line 344)
-  maps to the `source_documents` table but has no
-  `reference_document_revision_id` column.
+  maps to the `source_documents` table and now includes nullable
+  `reference_document_revision_id`.
 - Repository implementations in
   `episodic/canonical/storage/reference_repositories.py` implement all port
   methods.
@@ -299,9 +346,9 @@ or precedence logic. Every binding is included regardless of
 
 The `ingest_multi_source` function normalizes, weights, resolves conflicts, and
 persists source documents via `ingest_sources`. It does not resolve reference
-bindings or snapshot revision content. The `IngestionRequest` (line 275 of
+bindings or snapshot revision content. The `IngestionRequest` (line 272 of
 `domain.py`) carries `tei_xml`, `sources` (list of `SourceDocumentInput`), and
-`requested_by`.
+`requested_by`, so the remaining gap is orchestration rather than schema shape.
 
 ### API layer
 
@@ -312,13 +359,19 @@ All reference-document endpoints are wired in `episodic/api/app.py`:
 - Binding operations at `/reference-bindings/...`
 - Brief endpoint at `/series-profiles/{profile_id}/brief`
 
+The brief endpoint still exposes only `template_id` filtering. There is no
+`/series-profiles/{profile_id}/resolved-bindings` route yet.
+
 ### Test coverage
 
 Extensive test coverage exists for CRUD operations, optimistic locking,
-validation, alignment, and conflict handling. Behavioural tests exist in
+validation, alignment, and conflict handling. Binding-resolution unit coverage
+now exists in `tests/test_binding_resolution.py` and
+`tests/test_binding_resolution_validation.py`. Behavioural tests still exist
+only for the CRUD/model flows in
 `tests/features/reference_document_api.feature` and
-`tests/features/reference_document_model.feature`. No tests currently cover
-binding resolution logic.
+`tests/features/reference_document_model.feature`; no API integration or BDD
+suite covers the unfinished resolution endpoints/workflows.
 
 ## Plan of work
 
@@ -354,7 +407,7 @@ The resolution function must not duplicate bindings: if the same revision is
 bound to both the series profile and a template, both bindings appear (they
 represent different target contexts).
 
-Go/no-go: the ADR is written and committed, episode ordering semantics are
+Go/no-go: complete. ADR-001 is written, episode ordering semantics are
 confirmed, and the algorithm design is unambiguous.
 
 ### Stage B: migration and domain model updates
@@ -372,8 +425,8 @@ Files expected to change:
 - `episodic/canonical/storage/models.py` (`SourceDocumentRecord`).
 - `episodic/canonical/domain.py` (`SourceDocument`, `SourceDocumentInput`).
 
-Go/no-go: the migration runs cleanly, existing tests pass unchanged, and the
-new column is visible in the ORM model.
+Go/no-go: complete. The migration landed, existing tests passed, and the new
+column is visible in the ORM model.
 
 ### Stage C: resolution service implementation with fail-first tests
 
@@ -410,7 +463,7 @@ New types:
 Update the service package re-exports in
 `episodic/canonical/reference_documents/services.py`.
 
-Go/no-go: all resolution unit tests pass, and existing tests remain green.
+Go/no-go: complete. Resolution unit tests pass, and existing tests remain green.
 
 ### Stage D: API endpoint updates and integration tests
 

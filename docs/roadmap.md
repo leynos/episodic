@@ -117,6 +117,10 @@ content. Completion enables downstream generators to retrieve structured briefs.
   - Support `effective_from_episode_id` for revisions applying from specific
     episodes onwards.
   - Scope: repository and API behaviour only.
+  - Note: ADR-001, the resolver service, and the
+    `reference_document_revision_id` schema groundwork are complete; brief/API
+    integration, provenance snapshotting, behavioural coverage, and final doc
+    alignment remain pending.
 
 ### 1.5. Service scaffolding and hexagonal boundaries
 
