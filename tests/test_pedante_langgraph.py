@@ -1,7 +1,5 @@
 """Unit tests for Pedante's minimal LangGraph seam."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
@@ -91,8 +89,8 @@ def _result(*, blocking: bool) -> PedanteEvaluationResult:
     ids=["supported_to_pass", "blocking_to_refine"],
 )
 async def test_pedante_graph_propagates_result(
-    blocking: bool,
-    expected_requires_revision: bool,
+    blocking: bool,  # noqa: FBT001
+    expected_requires_revision: bool,  # noqa: FBT001
 ) -> None:
     """Graph should propagate the canned result and honour requires_revision."""
     canned = _result(blocking=blocking)

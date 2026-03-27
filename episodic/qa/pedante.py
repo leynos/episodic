@@ -1,11 +1,68 @@
-"""Pedante factuality and accuracy evaluator."""
+"""Pedante factuality and accuracy evaluator.
 
-from __future__ import annotations
+This module implements Pedante, an LLM-backed evaluator that checks whether claims
+in TEI P5 podcast scripts are accurately supported by their cited source material.
+
+Main entry points:
+
+- ``PedanteEvaluator``: The primary evaluator class that orchestrates LLM-based
+  factuality assessment. Call ``await evaluator.evaluate(request)`` to analyze a
+  script and receive structured findings.
+
+- ``PedanteEvaluationRequest``: Input contract containing the TEI XML script and
+  source packets (evidence excerpts with locators and citation labels).
+
+- ``PedanteEvaluationResult``: Output contract providing a summary, typed findings,
+  LLM usage metadata, and a ``requires_revision`` flag derived from severity and
+  support-level classification.
+
+Typical usage::
+
+    config = PedanteEvaluatorConfig(
+        model="gpt-4o-mini",
+        provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
+        token_budget=LLMTokenBudget(
+            max_input_tokens=500,
+            max_output_tokens=200,
+            max_total_tokens=700,
+        ),
+    )
+    evaluator = PedanteEvaluator(llm=adapter, config=config)
+
+    request = PedanteEvaluationRequest(
+        script_tei_xml="<TEI>...</TEI>",
+        sources=(
+            PedanteSourcePacket(
+                source_id="src-1",
+                citation_label="Source 1",
+                tei_locator="//body/div[1]/p[1]",
+                title="Primary source",
+                excerpt="Supporting excerpt text.",
+            ),
+        ),
+    )
+
+    result = await evaluator.evaluate(request)
+    if result.requires_revision:
+        # Handle blocking findings
+        ...
+
+Constraints:
+
+- Source packet fields (``source_id``, ``citation_label``, ``tei_locator``, ``title``,
+  ``excerpt``) must be non-empty strings.
+- Finding fields (``claim_id``, ``claim_text``, ``summary``, ``remediation``) must be
+  non-empty strings.
+- LLM responses must conform to the expected JSON schema or
+  ``PedanteResponseFormatError`` is raised.
+- Token budgets are enforced; requests exceeding configured limits will fail.
+"""
 
 import dataclasses as dc
 import enum
 import json
 import typing as typ
+from typing import Type, TypeVar  # noqa: UP035, ICN003
 
 from episodic.llm import (
     LLMPort,
@@ -332,12 +389,15 @@ def _parse_finding(raw_finding: object) -> PedanteFinding:
     )
 
 
-def _coerce_enum[TEnum: enum.StrEnum](
-    enum_type: type[TEnum],
+_TEnum = TypeVar("_TEnum", bound=enum.StrEnum)
+
+
+def _coerce_enum(  # noqa: UP047
+    enum_type: Type[_TEnum],  # noqa: UP006
     raw_value: object,
     *,
     field_name: str,
-) -> TEnum:
+) -> _TEnum:
     """Convert one string value into a strict string enumeration."""
     if not isinstance(raw_value, str):
         msg = f"Pedante response field {field_name!r} must be a string."

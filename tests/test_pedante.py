@@ -1,7 +1,5 @@
 """Unit tests for the Pedante factuality evaluator contract."""
 
-from __future__ import annotations
-
 import json
 import typing as typ
 
