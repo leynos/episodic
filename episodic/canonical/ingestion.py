@@ -17,10 +17,14 @@ Build a raw source input for ingestion:
 ... )
 """
 
+from __future__ import annotations
+
 import dataclasses as dc
 import typing as typ
 
 if typ.TYPE_CHECKING:
+    import uuid
+
     from .domain import JsonMapping, SourceDocumentInput
 
 
@@ -135,8 +139,12 @@ class MultiSourceRequest:
         Slug identifying the target series profile.
     requested_by : str | None
         Actor requesting the ingestion, used for audit trails.
+    episode_template_id : uuid.UUID | None
+        Optional episode-template identifier used when ingestion should
+        snapshot template-scoped reference bindings.
     """
 
     raw_sources: list[RawSourceInput]
     series_slug: str
     requested_by: str | None
+    episode_template_id: uuid.UUID | None = None

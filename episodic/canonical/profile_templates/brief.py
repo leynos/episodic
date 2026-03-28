@@ -17,6 +17,7 @@ import typing as typ
 from itertools import starmap
 
 from episodic.canonical.domain import ReferenceBindingTargetKind
+from episodic.canonical.reference_documents import resolve_bindings
 
 from .helpers import _profile_payload_fields, _template_payload_fields
 from .services import get_entity_with_revision, list_entities_with_revisions
@@ -231,8 +232,36 @@ async def _load_reference_documents_for_brief(
     *,
     profile_id: uuid.UUID,
     template_items: list[tuple[EpisodeTemplate, int]],
+    episode_id: uuid.UUID | None,
 ) -> list[JsonMapping]:
     """Load serialized reference documents for profile/template contexts."""
+    if episode_id is not None:
+        resolved_bindings = await resolve_bindings(
+            uow,
+            series_profile_id=profile_id,
+            episode_id=episode_id,
+        )
+        resolved_documents = [
+            _serialize_reference_document_for_brief(
+                binding=resolved.binding,
+                document=resolved.document,
+                revision=resolved.revision,
+            )
+            for resolved in resolved_bindings
+        ]
+
+        template_documents: list[JsonMapping] = []
+        for template, _ in template_items:
+            template_documents.extend(
+                await _load_reference_documents_for_target(
+                    uow,
+                    target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+                    target_id=template.id,
+                    owner_series_profile_id=profile_id,
+                )
+            )
+        return resolved_documents + template_documents
+
     all_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         target_id=profile_id,
@@ -270,6 +299,7 @@ async def build_series_brief(
     *,
     profile_id: uuid.UUID,
     template_id: uuid.UUID | None,
+    episode_id: uuid.UUID | None = None,
 ) -> JsonMapping:
     """Build a structured brief payload for downstream generators.
 
@@ -283,6 +313,10 @@ async def build_series_brief(
         Optional episode-template identifier. When provided, only that template
         is included. When ``None``, all templates for ``profile_id`` are
         included.
+    episode_id : uuid.UUID | None
+        Optional canonical-episode identifier used to resolve
+        ``effective_from_episode_id`` precedence for series-level reference
+        bindings.
 
     Returns
     -------
@@ -318,6 +352,7 @@ async def build_series_brief(
         uow,
         profile_id=profile.id,
         template_items=template_items,
+        episode_id=episode_id,
     )
 
     return {

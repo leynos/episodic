@@ -111,16 +111,15 @@ content. Completion enables downstream generators to retrieve structured briefs.
   - Publish REST API specification.
   - See
     [Profile/template REST API specification](episodic-podcast-generation-system-design.md#profiletemplate-rest-api-specification).
-- [ ] 1.4.3. Implement reference-binding resolution. Requires 1.3.1.
+- [x] 1.4.3. Implement reference-binding resolution. Requires 1.3.1.
   - Enable ingestion runs, profiles, and templates to reuse pinned revisions.
   - Preserve provenance snapshots in ingestion records.
   - Support `effective_from_episode_id` for revisions applying from specific
     episodes onwards.
   - Scope: repository and API behaviour only.
-  - Note: ADR-001, the resolver service, and the
-    `reference_document_revision_id` schema groundwork are complete; brief/API
-    integration, provenance snapshotting, behavioural coverage, and final doc
-    alignment remain pending.
+  - Completed 2026-03-28: ADR-001, the resolver service, brief/API
+    integration, ingestion provenance snapshotting, behavioural coverage, and
+    documentation alignment are all in place.
 
 ### 1.5. Service scaffolding and hexagonal boundaries
 

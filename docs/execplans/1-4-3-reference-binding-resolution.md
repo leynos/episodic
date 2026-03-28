@@ -7,7 +7,7 @@ proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -17,11 +17,10 @@ resolution, the mechanism that determines which pinned
 run, series profile, or episode template) and preserves provenance snapshots in
 ingestion records.
 
-As of 2026-03-27, the repository has completed the algorithm design, the
+As of 2026-03-28, the repository has completed the algorithm design, the
 Architectural Decision Record (ADR), the additive source-document schema work,
-and a unit-tested resolution service. The roadmap item is still incomplete
-because the brief/API integration, provenance snapshotting workflow,
-behavioural coverage, and final documentation updates have not landed yet.
+the brief/API integration, ingestion provenance snapshotting, behavioural
+coverage, and the documentation updates needed to close roadmap item `1.4.3`.
 
 After implementation, the system will:
 
@@ -149,17 +148,20 @@ Success is observable when:
   `episodic/canonical/reference_documents/resolution.py` and unit coverage in
   `tests/test_binding_resolution.py` plus
   `tests/test_binding_resolution_validation.py`.
-- [ ] 2026-03-27: Stage D remains open. The brief resource still accepts only
-  `template_id`, and no `/series-profiles/{profile_id}/resolved-bindings` route
-  exists.
-- [ ] 2026-03-27: Stage E remains open. The ingestion pipeline carries
-  `reference_document_revision_id` through `SourceDocumentInput`, but no
-  workflow resolves bindings and snapshots them into `source_documents`.
-- [ ] 2026-03-27: Stage F remains open. No binding-resolution Behaviour-Driven
-  Development (BDD) feature or step files exist.
-- [ ] 2026-03-27: Stage G remains open. ADR-001 exists, but the design,
-  user/developer docs, and roadmap completion state are not fully aligned to
-  the partial implementation.
+- [x] 2026-03-28: Stage D finished. The brief resource accepts optional
+  `episode_id`, `build_series_brief(...)` applies episode-aware resolution when
+  requested, and `/series-profiles/{profile_id}/resolved-bindings` is wired
+  into the API with integration coverage in
+  `tests/test_binding_resolution_api.py`.
+- [x] 2026-03-28: Stage E finished. Ingestion resolves the applicable
+  series/template bindings and snapshots them into `source_documents` with
+  `reference_document_revision_id` populated.
+- [x] 2026-03-28: Stage F finished. Behaviour-Driven Development (BDD)
+  coverage now lives in `tests/features/binding_resolution.feature` and
+  `tests/steps/test_binding_resolution_steps.py`.
+- [x] 2026-03-28: Stage G finished. The design, user, and developer
+  documentation now match the implementation, and the roadmap item is ready to
+  be marked complete.
 
 ## Surprises and discoveries
 
@@ -200,23 +202,31 @@ Success is observable when:
 - Suppressed complexity warnings (justified in decision log).
 - All gates pass.
 
-### Stage D/G audit on 2026-03-27
+### Completion audit on 2026-03-28
 
 - `SeriesProfileBriefResource.on_get` in
-  `episodic/api/resources/series_profiles.py` still accepts only `template_id`;
-  there is no `episode_id` parsing and no delegation to `resolve_bindings`.
+  `episodic/api/resources/series_profiles.py` now accepts optional `episode_id`
+  and passes it into `build_series_brief(...)`.
 - `build_series_brief` in `episodic/canonical/profile_templates/brief.py`
-  still returns all series/template bindings without episode-aware filtering.
-- `episodic/api/app.py` has no
-  `/series-profiles/{profile_id}/resolved-bindings` route, and the API
-  resources package has no resolved-binding resource implementation.
-- No API integration file `tests/test_binding_resolution_api.py` exists.
-- No behavioural test files
-  `tests/features/binding_resolution.feature` or
-  `tests/steps/test_binding_resolution_steps.py` exist.
-- `docs/episodic-podcast-generation-system-design.md` still describes the
-  brief endpoint as returning resolved reference-document payloads, which
-  overstates the current implementation.
+  resolves series bindings through `resolve_bindings(...)` when an episode
+  context is supplied, while preserving the legacy "return all bindings"
+  behaviour when `episode_id` is omitted.
+- `episodic/api/app.py` now wires
+  `/series-profiles/{profile_id}/resolved-bindings` to
+  `ResolvedBindingsResource`, and `episodic/api/serializers.py` exposes
+  dedicated resolved-binding serialization.
+- `episodic/canonical/services.py` now resolves bindings during ingestion and
+  snapshots them into `source_documents` through
+  `snapshot_resolved_bindings(...)`.
+- API integration coverage exists in `tests/test_binding_resolution_api.py`,
+  ingestion integration coverage exists in
+  `tests/test_ingestion_integration.py`, and behavioural coverage exists in
+  `tests/features/binding_resolution.feature` plus
+  `tests/steps/test_binding_resolution_steps.py`.
+- `docs/episodic-podcast-generation-system-design.md`,
+  `docs/users-guide.md`, and `docs/developers-guide.md` now describe the
+  episode-aware brief behaviour, the resolved-bindings endpoint, and ingestion
+  provenance snapshotting accurately.
 
 ## Decision log
 
@@ -253,16 +263,31 @@ resolved-bindings endpoint, no ingestion workflow snapshots resolved bindings
 into `source_documents`, and no API or BDD coverage proves those paths. The
 roadmap entry must remain unchecked until Stages D through G are complete.
 
+### 2026-03-28: Mark roadmap item `1.4.3` complete
+
+All staged acceptance criteria are now met:
+
+- `GET /series-profiles/{profile_id}/brief` accepts optional `episode_id` and
+  applies episode-aware precedence when present.
+- `GET /series-profiles/{profile_id}/resolved-bindings` exposes the resolved
+  binding/document/revision set directly.
+- Ingestion snapshots resolved bindings into `source_documents` provenance
+  records with `reference_document_revision_id`.
+- Unit, API integration, ingestion integration, and BDD coverage all pass.
+- Design, user, developer, roadmap, and ExecPlan documentation are aligned.
+
 ## Outcomes and retrospective
 
-Partial outcome as of 2026-03-27:
+Completed outcome as of 2026-03-28:
 
-- The repository now has the core resolution algorithm, ADR, schema support,
-  and unit tests needed to finish `1.4.3` without more foundational design work.
-- The work is not complete from a product or roadmap perspective because none
-  of the externally observable API/provenance behaviours have shipped yet.
-- The next contributor should treat this ExecPlan as an execution handoff for
-  Stages D through G, not as a fresh design exercise.
+- The repository now resolves reference bindings for episode-aware brief
+  assembly, exposes that resolution through a dedicated API endpoint, and
+  snapshots the consumed reference revisions into ingestion provenance.
+- `1.4.3` no longer depends on further foundational work; the remaining risk
+  is ordinary maintenance of the shipped contracts rather than unfinished
+  feature scope.
+- This ExecPlan now records the delivered implementation rather than acting as
+  a handoff for unfinished stages.
 
 ## Context and orientation
 
@@ -318,18 +343,18 @@ modules:
   applies episode-aware precedence for series bindings and merges template
   bindings.
 
-The missing service-layer work is not the resolver itself; it is the
-provenance-snapshot helper and the adapter integration that calls the resolver
-from API or ingestion entry points.
+The service layer now includes the provenance-snapshot helper
+`snapshot_resolved_bindings(...)` alongside `resolve_bindings(...)`, and both
+are wired into the API and ingestion entry points.
 
 ### Brief assembly (`episodic/canonical/profile_templates/brief.py`)
 
-`build_series_brief` (line 268) assembles a structured brief payload with keys
+`build_series_brief` assembles a structured brief payload with keys
 `series_profile`, `episode_templates`, and `reference_documents`. The reference
 documents section is populated by `_load_reference_documents_for_brief`, which
-loads all bindings for the series profile and each template without filtering
-or precedence logic. Every binding is included regardless of
-`effective_from_episode_id`.
+applies episode-aware series-binding resolution when `episode_id` is provided
+and preserves the legacy "return all matching bindings" behaviour when it is
+omitted.
 
 ### Storage layer
 

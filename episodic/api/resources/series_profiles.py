@@ -268,18 +268,28 @@ class SeriesProfileBriefResource:
         Raises
         ------
         falcon.HTTPBadRequest
-            Raised when ``profile_id`` or ``template_id`` is not a valid UUID.
+            Raised when ``profile_id``, ``template_id``, or ``episode_id`` is
+            not a valid UUID.
         falcon.HTTPNotFound
             Raised when the requested profile or template is not found.
         """
         parsed_profile_id = parse_uuid(profile_id, "profile_id")
         raw_template_id = req.get_param("template_id")
+        raw_episode_id = req.get_param("episode_id")
         template_id = (
             None
             if raw_template_id is None
             else parse_uuid(
                 raw_template_id,
                 "template_id",
+            )
+        )
+        episode_id = (
+            None
+            if raw_episode_id is None
+            else parse_uuid(
+                raw_episode_id,
+                "episode_id",
             )
         )
 
@@ -289,6 +299,7 @@ class SeriesProfileBriefResource:
                     uow,
                     profile_id=parsed_profile_id,
                     template_id=template_id,
+                    episode_id=episode_id,
                 )
         except EntityNotFoundError as exc:
             raise falcon.HTTPNotFound(description=str(exc)) from exc
