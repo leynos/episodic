@@ -22,6 +22,7 @@ import uuid
 
 from episodic.logging import get_logger, log_info
 
+from . import reference_documents
 from .domain import (
     ApprovalEvent,
     ApprovalState,
@@ -170,7 +171,7 @@ def _create_initial_approval_event(
     )
 
 
-async def ingest_sources(
+async def ingest_sources(  # noqa: PLR0914
     uow: CanonicalUnitOfWork,
     series_profile: SeriesProfile,
     request: IngestionRequest,
@@ -229,6 +230,19 @@ async def ingest_sources(
         await uow.source_documents.add(document)
 
     await uow.flush()
+
+    resolved_bindings = await reference_documents.resolve_bindings(
+        uow,
+        series_profile_id=series_profile.id,
+        template_id=request.episode_template_id,
+        episode_id=episode_id,
+    )
+    await reference_documents.snapshot_resolved_bindings(
+        uow,
+        resolved=resolved_bindings,
+        ingestion_job_id=job_id,
+        canonical_episode_id=episode_id,
+    )
 
     event = _create_initial_approval_event(episode_id, request, now)
     await uow.approval_events.add(event)

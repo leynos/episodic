@@ -228,6 +228,7 @@ async def ingest_multi_source(
         tei_xml=outcome.merged_tei_xml,
         sources=source_inputs,
         requested_by=request.requested_by,
+        episode_template_id=request.episode_template_id,
     )
 
     episode = await ingest_sources(

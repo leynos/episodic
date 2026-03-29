@@ -24,6 +24,7 @@ from .resources import (
     ReferenceDocumentRevisionResource,
     ReferenceDocumentRevisionsResource,
     ReferenceDocumentsResource,
+    ResolvedBindingsResource,
     SeriesProfileBriefResource,
     SeriesProfileHistoryResource,
     SeriesProfileResource,
@@ -47,6 +48,10 @@ def create_app(uow_factory: UowFactory) -> asgi.App:
     app.add_route(
         "/series-profiles/{profile_id}/brief",
         SeriesProfileBriefResource(uow_factory),
+    )
+    app.add_route(
+        "/series-profiles/{profile_id}/resolved-bindings",
+        ResolvedBindingsResource(uow_factory),
     )
 
     app.add_route("/episode-templates", EpisodeTemplatesResource(uow_factory))

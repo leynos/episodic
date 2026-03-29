@@ -13,6 +13,7 @@ if typ.TYPE_CHECKING:
         SeriesProfile,
         SeriesProfileHistoryEntry,
     )
+    from episodic.canonical.reference_documents import ResolvedBinding
 
 
 def serialize_series_profile(
@@ -129,4 +130,15 @@ def serialize_reference_binding(binding: ReferenceBinding) -> dict[str, typ.Any]
             binding.effective_from_episode_id
         ),
         "created_at": binding.created_at.isoformat(),
+    }
+
+
+def serialize_resolved_binding(
+    resolved_binding: ResolvedBinding,
+) -> dict[str, typ.Any]:
+    """Serialize a resolved binding bundle for API responses."""
+    return {
+        "binding": serialize_reference_binding(resolved_binding.binding),
+        "revision": serialize_reference_document_revision(resolved_binding.revision),
+        "document": serialize_reference_document(resolved_binding.document),
     }
