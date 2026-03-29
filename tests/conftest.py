@@ -38,6 +38,7 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
     from falcon import testing
+    from py_pglite.sqlalchemy.manager_async import SQLAlchemyAsyncPGliteManager
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
     from episodic.canonical.domain import (
@@ -58,7 +59,7 @@ if typ.TYPE_CHECKING:
     )
 
 try:
-    from py_pglite import PGliteConfig, PGliteManager
+    from py_pglite import PGliteConfig
 
     _PGLITE_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
@@ -88,42 +89,8 @@ def _should_use_pglite() -> bool:
     return True
 
 
-@contextlib.asynccontextmanager
-async def _pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
-    """Start a py-pglite Postgres and yield an async engine bound to it."""
-    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
-        msg = "py-pglite is not available for test fixtures."
-        raise RuntimeError(msg)
-
-    work_dir = tmp_path / "pglite"
-    config = PGliteConfig(work_dir=work_dir)
-
-    mgr = PGliteManager(config)
-    mgr.start()
-    try:
-        from sqlalchemy.ext.asyncio import create_async_engine
-
-        dsn = config.get_connection_string()
-        engine = create_async_engine(dsn, pool_pre_ping=True)
-        try:
-            await _wait_for_engine_ready(engine)
-            yield engine
-        finally:
-            try:
-                mgr.stop()
-            finally:
-                await engine.dispose(close=False)
-    finally:
-        if mgr.is_running():
-            mgr.stop()
-
-
 async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
-    """Wait for py-pglite to accept SQLAlchemy connections.
-
-    Under xdist parallel workers, py-pglite can report startup before the
-    socket is ready for the first connection. This retry keeps tests stable.
-    """
+    """Wait for the helper-managed py-pglite engine to accept connections."""
     max_attempts = 30
     delay_seconds = 0.1
     for attempt in range(1, max_attempts + 1):
@@ -136,6 +103,30 @@ async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
             await asyncio.sleep(delay_seconds)
         else:
             return
+
+
+@contextlib.asynccontextmanager
+async def _pglite_sqlalchemy_manager(
+    tmp_path: Path,
+) -> typ.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
+    """Start a helper-backed py-pglite manager for SQLAlchemy tests."""
+    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
+        msg = "py-pglite is not available for test fixtures."
+        raise RuntimeError(msg)
+
+    from py_pglite.sqlalchemy.manager_async import SQLAlchemyAsyncPGliteManager
+    from sqlalchemy.pool import NullPool
+
+    work_dir = tmp_path / "pglite"
+    config = PGliteConfig(work_dir=work_dir)
+    manager = SQLAlchemyAsyncPGliteManager(config)
+    manager.start()
+    try:
+        engine = typ.cast("AsyncEngine", manager.get_engine(poolclass=NullPool))
+        await _wait_for_engine_ready(engine)
+        yield manager
+    finally:
+        await manager.stop()
 
 
 @contextlib.contextmanager
@@ -157,13 +148,29 @@ def temporary_drift_table() -> typ.Iterator[sa.Table]:
 
 
 @pytest_asyncio.fixture
-async def pglite_engine(tmp_path: Path) -> typ.AsyncIterator[AsyncEngine]:
-    """Yield an async engine backed by py-pglite Postgres."""
+async def pglite_sqlalchemy_manager(
+    tmp_path: Path,
+) -> typ.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
+    """Yield the function-scoped py-pglite SQLAlchemy manager.
+
+    This is the shared py-pglite entry point for SQLAlchemy-backed tests in
+    this repository. Prefer `session_factory`, `pglite_session`, or
+    `migrated_engine` in tests unless you need lower-level manager access.
+    """
     if not _should_use_pglite():
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
 
-    async with _pglite_engine(tmp_path) as engine:
-        yield engine
+    async with _pglite_sqlalchemy_manager(tmp_path) as manager:
+        yield manager
+
+
+@pytest_asyncio.fixture
+async def pglite_engine(
+    pglite_sqlalchemy_manager: SQLAlchemyAsyncPGliteManager,
+) -> typ.AsyncIterator[AsyncEngine]:
+    """Yield an async SQLAlchemy engine provided by py-pglite's helper manager."""
+    await asyncio.sleep(0)
+    yield typ.cast("AsyncEngine", pglite_sqlalchemy_manager.get_engine())
 
 
 @pytest.fixture

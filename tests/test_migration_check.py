@@ -10,12 +10,23 @@ Run migration drift detection tests:
 import typing as typ
 
 import pytest
+from sqlalchemy import text
 
 from episodic.canonical.storage import detect_schema_drift
 from tests.conftest import temporary_drift_table
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine
+
+
+@pytest.mark.asyncio
+async def test_pglite_engine_fixture_provides_direct_async_engine(
+    pglite_engine: AsyncEngine,
+) -> None:
+    """The shared py-pglite engine fixture resolves for direct async tests."""
+    async with pglite_engine.connect() as connection:
+        result = await connection.execute(text("SELECT 1"))
+    assert result.scalar_one() == 1, "Expected pglite_engine to yield a live engine."
 
 
 @pytest.mark.asyncio

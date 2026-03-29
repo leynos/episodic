@@ -81,6 +81,13 @@ Key expectations:
   runtime.
 - Tests run against Postgres semantics, not SQLite.
 - Migrations are applied automatically for each test fixture instance.
+- `tests/conftest.py` keeps py-pglite startup behind the shared
+  `pglite_sqlalchemy_manager` fixture. Most database-backed tests should use
+  `migrated_engine`, `session_factory`, or `pglite_session` instead of starting
+  their own py-pglite manager or inventing alternate database URLs.
+- Keep direct driver tests narrowly scoped. Do not introduce a parallel
+  `asyncpg` fixture stack or bespoke connection bootstrap unless py-pglite's
+  async-driver compatibility has been verified for the current dependency set.
 - `make test` uses `PYTEST_XDIST_WORKERS=1` by default to avoid py-pglite
   cross-worker process termination. Override with
   `PYTEST_XDIST_WORKERS=<n> make test` when debugging worker-count behaviour.
