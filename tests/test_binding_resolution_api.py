@@ -1,6 +1,7 @@
 """Integration tests for reference-binding resolution API flows."""
 
 import asyncio
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -18,6 +19,19 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 if typ.TYPE_CHECKING:
     from falcon import testing
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@dc.dataclass(frozen=True)
+class _BriefFilterFixture:
+    """Reference-binding fixture data for brief filtering assertions."""
+
+    profile_id: str
+    template_id: str
+    early_episode_id: str
+    late_episode_id: str
+    revision_early_id: str
+    revision_late_id: str
+    template_revision_id: str
 
 
 def _create_series_binding(
@@ -82,11 +96,39 @@ async def _create_episode(
     return str(episode_id)
 
 
-def test_structured_brief_filters_series_bindings_by_episode(  # noqa: PLR0914
+def _create_document_with_revision(
+    client: testing.TestClient,
+    *,
+    profile_id: str,
+    kind: str,
+    name: str,
+    summary: str,
+    content_hash: str,
+) -> tuple[str, str]:
+    """Create a reference document and its first revision; return ids."""
+    document_id = reference_support._create_reference_document(
+        client,
+        profile_id=profile_id,
+        kind=kind,
+        name=name,
+    )
+    revision_id = reference_support._create_reference_document_revision(
+        client,
+        profile_id=profile_id,
+        document_id=document_id,
+        revision=reference_support._RevisionRequest(
+            summary=summary,
+            content_hash=content_hash,
+        ),
+    )
+    return document_id, revision_id
+
+
+def _setup_brief_filter_fixture(
     canonical_api_client: testing.TestClient,
     session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Brief endpoint should resolve series bindings when `episode_id` is provided."""
+) -> _BriefFilterFixture:
+    """Create the series/template bindings used by brief filter assertions."""
     fixture = reference_support._build_api_fixture(canonical_api_client)
     profile_id = fixture.primary_profile_id
     template_id = fixture.template_id
@@ -109,20 +151,13 @@ def test_structured_brief_filters_series_bindings_by_episode(  # noqa: PLR0914
             )
         )
 
-    document_id = reference_support._create_reference_document(
+    document_id, revision_early_id = _create_document_with_revision(
         canonical_api_client,
         profile_id=profile_id,
         kind="style_guide",
         name="Series style guide",
-    )
-    revision_early_id = reference_support._create_reference_document_revision(
-        canonical_api_client,
-        profile_id=profile_id,
-        document_id=document_id,
-        revision=reference_support._RevisionRequest(
-            summary="Early style guide",
-            content_hash="binding-resolution-api-early",
-        ),
+        summary="Early style guide",
+        content_hash="binding-resolution-api-early",
     )
     revision_late_id = reference_support._create_reference_document_revision(
         canonical_api_client,
@@ -146,138 +181,135 @@ def test_structured_brief_filters_series_bindings_by_episode(  # noqa: PLR0914
         effective_from_episode_id=late_episode_id,
     )
 
-    template_document_id = reference_support._create_reference_document(
+    _, template_revision_id = _create_document_with_revision(
         canonical_api_client,
         profile_id=profile_id,
         kind="guest_profile",
         name="Template guest profile",
-    )
-    template_revision_id = reference_support._create_reference_document_revision(
-        canonical_api_client,
-        profile_id=profile_id,
-        document_id=template_document_id,
-        revision=reference_support._RevisionRequest(
-            summary="Template guest profile",
-            content_hash="binding-resolution-api-template",
-        ),
+        summary="Template guest profile",
+        content_hash="binding-resolution-api-template",
     )
     reference_support._create_reference_binding(
         canonical_api_client,
         revision_id=template_revision_id,
         template_id=template_id,
     )
+    return _BriefFilterFixture(
+        profile_id=profile_id,
+        template_id=template_id,
+        early_episode_id=early_episode_id,
+        late_episode_id=late_episode_id,
+        revision_early_id=revision_early_id,
+        revision_late_id=revision_late_id,
+        template_revision_id=template_revision_id,
+    )
 
-    early_response = canonical_api_client.simulate_get(
+
+def _assert_brief_response(
+    client: testing.TestClient,
+    profile_id: str,
+    template_id: str,
+    episode_id: str,
+    expected_revision_ids: list[str],
+    description: str,
+) -> None:
+    """Assert that one brief response contains the expected revision ids."""
+    response = client.simulate_get(
         f"/series-profiles/{profile_id}/brief",
-        params={
-            "template_id": template_id,
-            "episode_id": early_episode_id,
-        },
+        params={"template_id": template_id, "episode_id": episode_id},
     )
-    assert early_response.status_code == 200, (
-        "Expected structured brief lookup for the early episode to succeed."
-    )
-    early_documents = typ.cast(
+    assert response.status_code == 200, description
+    documents = typ.cast(
         "list[dict[str, object]]",
-        typ.cast("dict[str, object]", early_response.json)["reference_documents"],
+        typ.cast("dict[str, object]", response.json)["reference_documents"],
     )
-    assert [item["revision_id"] for item in early_documents] == [
-        revision_early_id,
-        template_revision_id,
-    ], "Expected early episode brief to include early series revision plus template."
-
-    late_response = canonical_api_client.simulate_get(
-        f"/series-profiles/{profile_id}/brief",
-        params={
-            "template_id": template_id,
-            "episode_id": late_episode_id,
-        },
+    assert [item["revision_id"] for item in documents] == expected_revision_ids, (
+        description
     )
-    assert late_response.status_code == 200, (
-        "Expected structured brief lookup for the late episode to succeed."
-    )
-    late_documents = typ.cast(
-        "list[dict[str, object]]",
-        typ.cast("dict[str, object]", late_response.json)["reference_documents"],
-    )
-    assert [item["revision_id"] for item in late_documents] == [
-        revision_late_id,
-        template_revision_id,
-    ], "Expected late episode brief to include late series revision plus template."
 
 
-def test_resolved_bindings_endpoint_returns_resolved_payloads(  # noqa: PLR0914
+def test_structured_brief_filters_series_bindings_by_episode(
+    canonical_api_client: testing.TestClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Brief endpoint should resolve series bindings when `episode_id` is provided."""
+    fixture = _setup_brief_filter_fixture(canonical_api_client, session_factory)
+    _assert_brief_response(
+        canonical_api_client,
+        fixture.profile_id,
+        fixture.template_id,
+        fixture.early_episode_id,
+        [fixture.revision_early_id, fixture.template_revision_id],
+        "Expected early episode brief to include early series revision plus template.",
+    )
+    _assert_brief_response(
+        canonical_api_client,
+        fixture.profile_id,
+        fixture.template_id,
+        fixture.late_episode_id,
+        [fixture.revision_late_id, fixture.template_revision_id],
+        "Expected late episode brief to include late series revision plus template.",
+    )
+
+
+def test_resolved_bindings_endpoint_returns_resolved_payloads(
     canonical_api_client: testing.TestClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Resolved-bindings endpoint should return document, revision, and binding data."""
     fixture = reference_support._build_api_fixture(canonical_api_client)
-    profile_id = fixture.primary_profile_id
-    template_id = fixture.template_id
 
     with asyncio.Runner() as runner:
         episode_id = runner.run(
             _create_episode(
                 session_factory,
-                profile_id=profile_id,
+                profile_id=fixture.primary_profile_id,
                 title="Resolution target episode",
                 created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
             )
         )
 
-    series_document_id = reference_support._create_reference_document(
+    _, series_revision_id = _create_document_with_revision(
         canonical_api_client,
-        profile_id=profile_id,
+        profile_id=fixture.primary_profile_id,
         kind="style_guide",
         name="Resolved series guide",
-    )
-    series_revision_id = reference_support._create_reference_document_revision(
-        canonical_api_client,
-        profile_id=profile_id,
-        document_id=series_document_id,
-        revision=reference_support._RevisionRequest(
-            summary="Resolved series guide",
-            content_hash="resolved-bindings-series",
-        ),
+        summary="Resolved series guide",
+        content_hash="resolved-bindings-series",
     )
     _create_series_binding(
         canonical_api_client,
         revision_id=series_revision_id,
-        profile_id=profile_id,
+        profile_id=fixture.primary_profile_id,
         effective_from_episode_id=episode_id,
     )
 
-    template_document_id = reference_support._create_reference_document(
+    _, template_revision_id = _create_document_with_revision(
         canonical_api_client,
-        profile_id=profile_id,
+        profile_id=fixture.primary_profile_id,
         kind="guest_profile",
         name="Resolved template guest",
-    )
-    template_revision_id = reference_support._create_reference_document_revision(
-        canonical_api_client,
-        profile_id=profile_id,
-        document_id=template_document_id,
-        revision=reference_support._RevisionRequest(
-            summary="Resolved template guest",
-            content_hash="resolved-bindings-template",
-        ),
+        summary="Resolved template guest",
+        content_hash="resolved-bindings-template",
     )
     reference_support._create_reference_binding(
         canonical_api_client,
         revision_id=template_revision_id,
-        template_id=template_id,
+        template_id=fixture.template_id,
     )
 
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{profile_id}/resolved-bindings",
-        params={"episode_id": episode_id, "template_id": template_id},
+        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        params={"episode_id": episode_id, "template_id": fixture.template_id},
     )
 
     assert response.status_code == 200, (
         "Expected resolved-bindings endpoint to return 200."
     )
-    payload = typ.cast("dict[str, object]", response.json)
-    items = typ.cast("list[dict[str, object]]", payload["items"])
+    items = typ.cast(
+        "list[dict[str, object]]",
+        typ.cast("dict[str, object]", response.json)["items"],
+    )
     revisions = [typ.cast("dict[str, object]", item["revision"]) for item in items]
     documents = [typ.cast("dict[str, object]", item["document"]) for item in items]
     assert [revision["id"] for revision in revisions] == [

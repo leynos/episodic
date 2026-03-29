@@ -112,6 +112,49 @@ def _verify_source_documents(
         )
 
 
+async def _create_reference_fixtures(
+    session_factory: typ.Callable[[], AsyncSession],
+    profile: SeriesProfile,
+) -> tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding]:
+    """Persist the reference document fixtures used by snapshotting tests."""
+    now = dt.datetime.now(dt.UTC)
+    reference_document = ReferenceDocument(
+        id=uuid.uuid4(),
+        owner_series_profile_id=profile.id,
+        kind=ReferenceDocumentKind.STYLE_GUIDE,
+        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+        metadata={"name": "Ingestion style guide"},
+        created_at=now,
+        updated_at=now,
+    )
+    reference_revision = ReferenceDocumentRevision(
+        id=uuid.uuid4(),
+        reference_document_id=reference_document.id,
+        content={"summary": "Use short declarative sentences."},
+        content_hash="ingestion-reference-hash",
+        author="editor@example.com",
+        change_note="Initial guidance",
+        created_at=now,
+    )
+    reference_binding = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=reference_revision.id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=profile.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=now,
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.reference_documents.add(reference_document)
+        await uow.reference_document_revisions.add(reference_revision)
+        await uow.flush()
+        await uow.reference_bindings.add(reference_binding)
+        await uow.commit()
+    return reference_document, reference_revision, reference_binding
+
+
 async def _assert_ingestion_raises(
     context: IngestionTestContext,
     request: MultiSourceRequest,
@@ -140,6 +183,57 @@ def ingestion_test_context(
         profile=series_profile_for_ingestion,
         ingestion_pipeline=ingestion_pipeline,
     )
+
+
+def _make_reference_ingestion_request(profile: SeriesProfile) -> MultiSourceRequest:
+    """Build the multi-source request used by reference snapshotting tests."""
+    return MultiSourceRequest(
+        raw_sources=[
+            _make_raw_source(
+                source_type="transcript",
+                source_uri="s3://bucket/reference-transcript.txt",
+                content="Primary transcript",
+                content_hash="hash-primary-reference",
+                metadata={"title": "Primary Episode"},
+            ),
+            _make_raw_source(
+                source_type="brief",
+                source_uri="s3://bucket/reference-brief.txt",
+                content="Background brief",
+                content_hash="hash-brief-reference",
+                metadata={"title": "Brief Notes"},
+            ),
+        ],
+        series_slug=profile.slug,
+        requested_by="producer@example.com",
+    )
+
+
+def _assert_reference_snapshot(
+    documents: list[typ.Any],
+    reference_document: ReferenceDocument,
+    reference_revision: ReferenceDocumentRevision,
+    reference_binding: ReferenceBinding,
+) -> None:
+    """Assert that one reference snapshot document was persisted correctly."""
+    assert len(documents) == 3, (
+        "Expected two raw sources plus one reference snapshot document."
+    )
+    reference_documents = [
+        document
+        for document in documents
+        if document.source_type == "reference_document"
+    ]
+    assert len(reference_documents) == 1, (
+        "Expected exactly one persisted reference snapshot."
+    )
+    reference_snapshot = reference_documents[0]
+    assert reference_snapshot.reference_document_revision_id == reference_revision.id
+    assert reference_snapshot.source_uri == (
+        f"ref://{reference_document.id}/revisions/{reference_revision.id}"
+    )
+    assert reference_snapshot.metadata["binding_id"] == str(reference_binding.id)
+    assert reference_snapshot.metadata["document_kind"] == "style_guide"
 
 
 @pytest.mark.asyncio
@@ -398,70 +492,19 @@ async def test_ingest_multi_source_records_conflict_metadata(
 
 
 @pytest.mark.asyncio
-async def test_ingest_multi_source_snapshots_resolved_reference_bindings(  # noqa: PLR0914
+async def test_ingest_multi_source_snapshots_resolved_reference_bindings(
     session_factory: typ.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
     ingestion_pipeline: IngestionPipeline,
 ) -> None:
     """Series-level resolved bindings should be snapshotted as source documents."""
     profile = series_profile_for_ingestion
-    now = dt.datetime.now(dt.UTC)
-
-    reference_document = ReferenceDocument(
-        id=uuid.uuid4(),
-        owner_series_profile_id=profile.id,
-        kind=ReferenceDocumentKind.STYLE_GUIDE,
-        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
-        metadata={"name": "Ingestion style guide"},
-        created_at=now,
-        updated_at=now,
-    )
-    reference_revision = ReferenceDocumentRevision(
-        id=uuid.uuid4(),
-        reference_document_id=reference_document.id,
-        content={"summary": "Use short declarative sentences."},
-        content_hash="ingestion-reference-hash",
-        author="editor@example.com",
-        change_note="Initial guidance",
-        created_at=now,
-    )
-    reference_binding = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=reference_revision.id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=profile.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=None,
-        created_at=now,
-    )
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await uow.reference_documents.add(reference_document)
-        await uow.reference_document_revisions.add(reference_revision)
-        await uow.flush()
-        await uow.reference_bindings.add(reference_binding)
-        await uow.commit()
-
-    request = MultiSourceRequest(
-        raw_sources=[
-            _make_raw_source(
-                source_type="transcript",
-                source_uri="s3://bucket/reference-transcript.txt",
-                content="Primary transcript",
-                content_hash="hash-primary-reference",
-                metadata={"title": "Primary Episode"},
-            ),
-            _make_raw_source(
-                source_type="brief",
-                source_uri="s3://bucket/reference-brief.txt",
-                content="Background brief",
-                content_hash="hash-brief-reference",
-                metadata={"title": "Brief Notes"},
-            ),
-        ],
-        series_slug=profile.slug,
-        requested_by="producer@example.com",
-    )
+    (
+        reference_document,
+        reference_revision,
+        reference_binding,
+    ) = await _create_reference_fixtures(session_factory, profile)
+    request = _make_reference_ingestion_request(profile)
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         episode = await ingest_multi_source(
@@ -476,21 +519,9 @@ async def test_ingest_multi_source_snapshots_resolved_reference_bindings(  # noq
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         documents = await uow.source_documents.list_for_job(job_record.id)
 
-    assert len(documents) == 3, (
-        "Expected two raw sources plus one reference snapshot document."
+    _assert_reference_snapshot(
+        documents,
+        reference_document,
+        reference_revision,
+        reference_binding,
     )
-    reference_documents = [
-        document
-        for document in documents
-        if document.source_type == "reference_document"
-    ]
-    assert len(reference_documents) == 1, (
-        "Expected exactly one persisted reference snapshot."
-    )
-    reference_snapshot = reference_documents[0]
-    assert reference_snapshot.reference_document_revision_id == reference_revision.id
-    assert reference_snapshot.source_uri == (
-        f"ref://{reference_document.id}/revisions/{reference_revision.id}"
-    )
-    assert reference_snapshot.metadata["binding_id"] == str(reference_binding.id)
-    assert reference_snapshot.metadata["document_kind"] == "style_guide"

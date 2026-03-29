@@ -171,12 +171,15 @@ def _create_initial_approval_event(
     )
 
 
-async def ingest_sources(  # noqa: PLR0914
+async def _persist_source_documents_and_snapshot_bindings(  # noqa: PLR0913, PLR0917
     uow: CanonicalUnitOfWork,
     series_profile: SeriesProfile,
     request: IngestionRequest,
-) -> CanonicalEpisode:
-    """Create canonical records for an ingestion job.
+    job_id: uuid.UUID,
+    episode_id: uuid.UUID,
+    now: dt.datetime,
+) -> None:
+    """Persist source documents and snapshot resolved reference bindings.
 
     Parameters
     ----------
@@ -185,26 +188,41 @@ async def ingest_sources(  # noqa: PLR0914
     series_profile : SeriesProfile
         Series profile that owns the canonical episode.
     request : IngestionRequest
-        Ingestion payload containing TEI XML and source metadata.
-
-    Returns
-    -------
-    CanonicalEpisode
-        Persisted canonical episode representing the ingested TEI content.
-
-    Raises
-    ------
-    TypeError
-        If the TEI header is missing from the parsed payload.
-    ValueError
-        If the TEI header title is missing or blank.
-
-    Notes
-    -----
-    This function writes TEI headers, episodes, ingestion jobs, source
-    documents, and approval events via the unit-of-work and commits the
-    transaction.
+        Ingestion payload containing source metadata and optional template
+        context.
+    job_id : uuid.UUID
+        Identifier for the ingestion job owning the source documents.
+    episode_id : uuid.UUID
+        Identifier for the canonical episode consuming the sources.
+    now : dt.datetime
+        Timestamp used for new source-document records.
     """
+    documents = _create_source_documents(request, job_id, episode_id, now)
+    for document in documents:
+        await uow.source_documents.add(document)
+
+    await uow.flush()
+
+    resolved_bindings = await reference_documents.resolve_bindings(
+        uow,
+        series_profile_id=series_profile.id,
+        template_id=request.episode_template_id,
+        episode_id=episode_id,
+    )
+    await reference_documents.snapshot_resolved_bindings(
+        uow,
+        resolved=resolved_bindings,
+        ingestion_job_id=job_id,
+        canonical_episode_id=episode_id,
+    )
+
+
+async def ingest_sources(
+    uow: CanonicalUnitOfWork,
+    series_profile: SeriesProfile,
+    request: IngestionRequest,
+) -> CanonicalEpisode:
+    """Create canonical records for an ingestion job."""
     now = dt.datetime.now(dt.UTC)
     header_payload = parse_tei_header(request.tei_xml)
     header_payload = _with_ingestion_provenance(
@@ -224,24 +242,8 @@ async def ingest_sources(  # noqa: PLR0914
     await uow.flush()
     await uow.episodes.add(episode)
     await uow.ingestion_jobs.add(job)
-
-    documents = _create_source_documents(request, job_id, episode_id, now)
-    for document in documents:
-        await uow.source_documents.add(document)
-
-    await uow.flush()
-
-    resolved_bindings = await reference_documents.resolve_bindings(
-        uow,
-        series_profile_id=series_profile.id,
-        template_id=request.episode_template_id,
-        episode_id=episode_id,
-    )
-    await reference_documents.snapshot_resolved_bindings(
-        uow,
-        resolved=resolved_bindings,
-        ingestion_job_id=job_id,
-        canonical_episode_id=episode_id,
+    await _persist_source_documents_and_snapshot_bindings(
+        uow, series_profile, request, job_id, episode_id, now
     )
 
     event = _create_initial_approval_event(episode_id, request, now)

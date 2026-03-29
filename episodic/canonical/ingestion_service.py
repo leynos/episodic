@@ -165,49 +165,49 @@ def _create_normalisation_tasks(
     ]
 
 
+def _build_ingestion_request(
+    outcome: ConflictOutcome,
+    weighted: list[WeightingResult],
+    request: MultiSourceRequest,
+) -> tuple[IngestionRequest, list[SourceDocumentInput]]:
+    """Build the ingestion request and source inputs for persistence."""
+    conflict_metadata = _build_conflict_metadata(outcome)
+    source_inputs = _enrich_source_metadata(weighted, conflict_metadata)
+    return (
+        IngestionRequest(
+            tei_xml=outcome.merged_tei_xml,
+            sources=source_inputs,
+            requested_by=request.requested_by,
+            episode_template_id=request.episode_template_id,
+        ),
+        source_inputs,
+    )
+
+
+def _log_multi_source_outcome(
+    source_inputs: list[SourceDocumentInput],
+    outcome: ConflictOutcome,
+    episode: CanonicalEpisode,
+) -> None:
+    """Log the completed multi-source ingestion outcome."""
+    log_info(
+        logger,
+        "Multi-source ingestion complete: %s sources, "
+        "%s preferred, %s rejected. Episode %s.",
+        len(source_inputs),
+        len(outcome.preferred_sources),
+        len(outcome.rejected_sources),
+        episode.id,
+    )
+
+
 async def ingest_multi_source(
     uow: CanonicalUnitOfWork,
     series_profile: SeriesProfile,
     request: MultiSourceRequest,
     pipeline: IngestionPipeline,
 ) -> CanonicalEpisode:
-    """Normalize, weight, resolve, and persist multi-source content.
-
-    This orchestrator runs the full ingestion pipeline:
-
-    1. Normalize each raw source into a TEI fragment via the normalizer
-       (concurrently using ``asyncio.gather``).
-    2. Compute weights using the weighting strategy and series
-       configuration.
-    3. Resolve conflicts between sources via the conflict resolver.
-    4. Build an ``IngestionRequest`` with the merged TEI, computed
-       weights, and conflict-resolution metadata.
-    5. Delegate persistence to ``ingest_sources``.
-
-    Parameters
-    ----------
-    uow : CanonicalUnitOfWork
-        Unit-of-work boundary providing repository access and transaction
-        scope.
-    series_profile : SeriesProfile
-        Series profile that owns the canonical episode.
-    request : MultiSourceRequest
-        Multi-source ingestion payload with raw source inputs.
-    pipeline : IngestionPipeline
-        Bundled normalizer, weighting strategy, and conflict resolver.
-
-    Returns
-    -------
-    CanonicalEpisode
-        Persisted canonical episode representing the merged content.
-
-    Raises
-    ------
-    ValueError
-        If ``request.raw_sources`` is empty or if
-        ``request.series_slug`` does not match
-        ``series_profile.slug``.
-    """
+    """Normalize, weight, resolve, and persist multi-source content."""
     _validate_ingestion_request(request, series_profile)
 
     normalisation_tasks = _create_normalisation_tasks(
@@ -221,28 +221,13 @@ async def ingest_multi_source(
         series_profile.configuration,
     )
     outcome = await pipeline.resolver.resolve(weighted)
-
-    conflict_metadata = _build_conflict_metadata(outcome)
-    source_inputs = _enrich_source_metadata(weighted, conflict_metadata)
-    ingestion_request = IngestionRequest(
-        tei_xml=outcome.merged_tei_xml,
-        sources=source_inputs,
-        requested_by=request.requested_by,
-        episode_template_id=request.episode_template_id,
+    ingestion_request, source_inputs = _build_ingestion_request(
+        outcome, weighted, request
     )
 
     episode = await ingest_sources(
         uow=uow, series_profile=series_profile, request=ingestion_request
     )
-
-    log_info(
-        logger,
-        "Multi-source ingestion complete: %s sources, "
-        "%s preferred, %s rejected. Episode %s.",
-        len(source_inputs),
-        len(outcome.preferred_sources),
-        len(outcome.rejected_sources),
-        episode.id,
-    )
+    _log_multi_source_outcome(source_inputs, outcome, episode)
 
     return episode

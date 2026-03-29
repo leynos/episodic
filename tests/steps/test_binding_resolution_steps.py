@@ -207,21 +207,31 @@ def create_binding_resolution_bindings(
     )
 
 
+def _simulate_get_ok(
+    client: testing.TestClient,
+    path: str,
+    params: dict[str, str],
+) -> dict[str, object]:
+    """Make a GET request, assert HTTP 200, and return the parsed JSON payload."""
+    response = client.simulate_get(path, params=params)
+    assert response.status_code == 200
+    return typ.cast("dict[str, object]", response.json)
+
+
 @when("the editorial team requests the structured brief for the early episode")
 def request_early_episode_brief(
     canonical_api_client: testing.TestClient,
     context: BindingResolutionContext,
 ) -> None:
     """Request the structured brief using the early-episode context."""
-    response = canonical_api_client.simulate_get(
+    payload = _simulate_get_ok(
+        canonical_api_client,
         f"/series-profiles/{context['profile_id']}/brief",
-        params={
+        {
             "template_id": context["template_id"],
             "episode_id": context["early_episode_id"],
         },
     )
-    assert response.status_code == 200
-    payload = typ.cast("dict[str, object]", response.json)
     reference_documents = typ.cast(
         "list[dict[str, object]]", payload["reference_documents"]
     )
@@ -236,15 +246,14 @@ def request_late_episode_resolution(
     context: BindingResolutionContext,
 ) -> None:
     """Request the resolved-bindings endpoint using the late-episode context."""
-    response = canonical_api_client.simulate_get(
+    payload = _simulate_get_ok(
+        canonical_api_client,
         f"/series-profiles/{context['profile_id']}/resolved-bindings",
-        params={
+        {
             "template_id": context["template_id"],
             "episode_id": context["late_episode_id"],
         },
     )
-    assert response.status_code == 200
-    payload = typ.cast("dict[str, object]", response.json)
     items = typ.cast("list[dict[str, object]]", payload["items"])
     context["late_resolved_revision_ids"] = [
         typ.cast("str", typ.cast("dict[str, object]", item["revision"])["id"])
