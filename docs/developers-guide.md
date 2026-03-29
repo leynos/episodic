@@ -80,14 +80,32 @@ Key expectations:
 - Node.js 18+ is required because py-pglite runs a WebAssembly-based Postgres
   runtime.
 - Tests run against Postgres semantics, not SQLite.
-- Migrations are applied automatically for each test fixture instance.
-- `tests/conftest.py` keeps py-pglite startup behind the shared
-  `pglite_sqlalchemy_manager` fixture. Most database-backed tests should use
-  `migrated_engine`, `session_factory`, or `pglite_session` instead of starting
-  their own py-pglite manager or inventing alternate database URLs.
+- The shared fixture stack is fully asynchronous:
+  - `_pglite_sqlalchemy_manager(tmp_path)` starts
+    `SQLAlchemyAsyncPGliteManager`, waits for the helper-managed engine to
+    accept connections, and shuts the manager down after the test.
+  - `pglite_sqlalchemy_manager` is the public function-scoped manager fixture.
+  - `pglite_engine` yields the helper-managed `AsyncEngine`.
+  - `migrated_engine` applies Alembic migrations to that engine.
+  - `session_factory` returns `async_sessionmaker[AsyncSession]` with
+    `expire_on_commit=False`.
+  - `pglite_session` yields a ready-to-use `AsyncSession`.
+- Because the stack depends on pytest's function-scoped `tmp_path`, each
+  database-backed test gets an isolated ephemeral database by default.
+- Most database-backed tests should use `session_factory` or `pglite_session`.
+  Use `pglite_engine` only for lower-level engine assertions, and use
+  `pglite_sqlalchemy_manager` only when a test genuinely needs direct manager
+  access.
 - Keep direct driver tests narrowly scoped. Do not introduce a parallel
   `asyncpg` fixture stack or bespoke connection bootstrap unless py-pglite's
   async-driver compatibility has been verified for the current dependency set.
+  In this repository, the helper-managed async SQLAlchemy engine is the source
+  of truth; raw driver wiring is an implementation detail, not a public test
+  pattern.
+- Use `pytest.mark.asyncio` and `@pytest_asyncio.fixture` for asynchronous
+  database tests. Synchronous Falcon API tests should use
+  `canonical_api_client`, which is already wired to `SqlAlchemyUnitOfWork`
+  backed by the shared `session_factory`.
 - `make test` uses `PYTEST_XDIST_WORKERS=1` by default to avoid py-pglite
   cross-worker process termination. Override with
   `PYTEST_XDIST_WORKERS=<n> make test` when debugging worker-count behaviour.
@@ -95,6 +113,11 @@ Key expectations:
   on them will be skipped).
 - If a non-SQLite backend is requested while py-pglite is unavailable, the
   fixtures raise a clear error instead of silently skipping tests.
+- `make check-migrations` uses the same database technology, but a separate
+  bootstrap path. `episodic/canonical/storage/migration_check.py` starts a
+  plain `PGliteManager`, creates an async SQLAlchemy engine from
+  `config.get_connection_string()`, applies Alembic migrations, and compares
+  the migrated schema against `Base.metadata`.
 
 ## Canonical content persistence
 
