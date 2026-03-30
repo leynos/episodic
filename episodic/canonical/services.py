@@ -171,33 +171,23 @@ def _create_initial_approval_event(
     )
 
 
-async def _persist_source_documents_and_snapshot_bindings(  # noqa: PLR0913, PLR0917
+@dc.dataclass(frozen=True)
+class _IngestionContext:
+    job_id: uuid.UUID
+    episode_id: uuid.UUID
+    now: dt.datetime
+
+
+async def _persist_source_documents_and_snapshot_bindings(
     uow: CanonicalUnitOfWork,
     series_profile: SeriesProfile,
     request: IngestionRequest,
-    job_id: uuid.UUID,
-    episode_id: uuid.UUID,
-    now: dt.datetime,
+    context: _IngestionContext,
 ) -> None:
-    """Persist source documents and snapshot resolved reference bindings.
-
-    Parameters
-    ----------
-    uow : CanonicalUnitOfWork
-        Unit-of-work boundary providing repository access and transaction scope.
-    series_profile : SeriesProfile
-        Series profile that owns the canonical episode.
-    request : IngestionRequest
-        Ingestion payload containing source metadata and optional template
-        context.
-    job_id : uuid.UUID
-        Identifier for the ingestion job owning the source documents.
-    episode_id : uuid.UUID
-        Identifier for the canonical episode consuming the sources.
-    now : dt.datetime
-        Timestamp used for new source-document records.
-    """
-    documents = _create_source_documents(request, job_id, episode_id, now)
+    """Persist source documents and snapshot resolved reference bindings."""
+    documents = _create_source_documents(
+        request, context.job_id, context.episode_id, context.now
+    )
     for document in documents:
         await uow.source_documents.add(document)
 
@@ -207,13 +197,13 @@ async def _persist_source_documents_and_snapshot_bindings(  # noqa: PLR0913, PLR
         uow,
         series_profile_id=series_profile.id,
         template_id=request.episode_template_id,
-        episode_id=episode_id,
+        episode_id=context.episode_id,
     )
     await reference_documents.snapshot_resolved_bindings(
         uow,
         resolved=resolved_bindings,
-        ingestion_job_id=job_id,
-        canonical_episode_id=episode_id,
+        ingestion_job_id=context.job_id,
+        canonical_episode_id=context.episode_id,
     )
 
 
@@ -242,8 +232,9 @@ async def ingest_sources(
     await uow.flush()
     await uow.episodes.add(episode)
     await uow.ingestion_jobs.add(job)
+    context = _IngestionContext(job_id=job_id, episode_id=episode_id, now=now)
     await _persist_source_documents_and_snapshot_bindings(
-        uow, series_profile, request, job_id, episode_id, now
+        uow, series_profile, request, context
     )
 
     event = _create_initial_approval_event(episode_id, request, now)
