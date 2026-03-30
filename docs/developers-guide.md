@@ -6,7 +6,8 @@ this file.
 
 Accepted design decisions relevant to current implementation work:
 
-- [`adr-001-pedante-evaluator-contract.md`](adr-001-pedante-evaluator-contract.md)
+- [`adr-001-reference-binding-resolution-algorithm.md`](adr/adr-001-reference-binding-resolution-algorithm.md)
+- [`adr-002-http-service-composition-root.md`](adr/adr-002-http-service-composition-root.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -17,6 +18,40 @@ Accepted design decisions relevant to current implementation work:
   repository logic.
 - The Makefile exports `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` so the
   `tei-rapporteur` bindings build against Python 3.14.
+
+## Falcon HTTP runtime
+
+The canonical HTTP adapter has two layers:
+
+- `episodic/api/app.py` is the pure Falcon route factory.
+- `episodic/api/runtime.py` is the Granian composition root that reads
+  `DATABASE_URL`, creates the SQLAlchemy session factory, and injects readiness
+  probes through `ApiDependencies`.
+
+Run the service locally with:
+
+```shell
+granian episodic.api.runtime:create_app_from_env --interface asgi --factory
+```
+
+Health contract:
+
+- `GET /health/live` is a process-level liveness check.
+- `GET /health/ready` is an infrastructure readiness check. It currently
+  verifies database connectivity and returns `503 Service Unavailable` when the
+  probe fails.
+
+Testing guidance:
+
+- Use `tests/test_http_service_scaffold.py` for in-memory ASGI coverage of the
+  typed dependency contract and health endpoints.
+- Use `tests/steps/test_http_service_scaffold_steps.py` and
+  `tests/features/http_service_scaffold.feature` for the live Granian process
+  path.
+- Runtime-process tests should use the dedicated `migrated_database_url`
+  fixture rather than sharing a long-lived migrated engine fixture. The full
+  engine disposal step is required to keep the py-pglite-backed runtime probe
+  responsive.
 
 ## Database migrations
 

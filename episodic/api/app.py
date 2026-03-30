@@ -1,8 +1,9 @@
-"""Falcon ASGI entry point for profile-template APIs.
+"""Falcon ASGI entry point for canonical HTTP APIs.
 
 This module exposes :func:`create_app`, which wires the canonical series
-profile and episode template resources into a Falcon ASGI application.
-Callers pass a unit-of-work factory and receive a ready-to-serve app object.
+profile, episode template, reference-document, and health resources into a
+Falcon ASGI application. Callers pass a typed dependency object and receive a
+ready-to-serve app object.
 
 Example
 -------
@@ -18,6 +19,8 @@ from .resources import (
     EpisodeTemplateHistoryResource,
     EpisodeTemplateResource,
     EpisodeTemplatesResource,
+    HealthLiveResource,
+    HealthReadyResource,
     ReferenceBindingResource,
     ReferenceBindingsResource,
     ReferenceDocumentResource,
@@ -32,12 +35,19 @@ from .resources import (
 )
 
 if typ.TYPE_CHECKING:
-    from .types import UowFactory
+    from .dependencies import ApiDependencies
 
 
-def create_app(uow_factory: UowFactory) -> asgi.App:
+def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
+    uow_factory = dependencies.uow_factory
+
+    app.add_route("/health/live", HealthLiveResource())
+    app.add_route(
+        "/health/ready",
+        HealthReadyResource(dependencies.readiness_probes),
+    )
 
     app.add_route("/series-profiles", SeriesProfilesResource(uow_factory))
     app.add_route("/series-profiles/{profile_id}", SeriesProfileResource(uow_factory))

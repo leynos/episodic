@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -135,15 +135,18 @@ Success is observable in eight ways:
 - [x] (2026-03-28 00:00Z) Confirmed the current state: Falcon 4.2.x is already
   wired for canonical routes, `granian` is absent from `pyproject.toml`, no
   health endpoints exist, and the only HTTP dependency seam is `UowFactory`.
-- [ ] Stage A: add fail-first unit, integration, and behavioural tests for the
-  new HTTP scaffold.
-- [ ] Stage B: introduce the typed HTTP dependency object and health resources.
-- [ ] Stage C: add the Granian runtime composition root and runtime
-  configuration parsing.
-- [ ] Stage D: finish the Granian behavioural harness and verify the health
-  contract over real HTTP.
-- [ ] Stage E: update ADRs, design/user/developer docs, and roadmap state.
-- [ ] Stage F: run the full validation gates and record the delivery outcome.
+- [x] (2026-03-30 00:00Z) Stage A: add fail-first unit, integration, and
+  behavioural tests for the new HTTP scaffold.
+- [x] (2026-03-30 00:00Z) Stage B: introduce the typed HTTP dependency object
+  and health resources.
+- [x] (2026-03-30 00:00Z) Stage C: add the Granian runtime composition root and
+  runtime configuration parsing.
+- [x] (2026-03-30 00:00Z) Stage D: finish the Granian behavioural harness and
+  verify the health contract over real HTTP.
+- [x] (2026-03-30 00:00Z) Stage E: update ADRs, design/user/developer docs, and
+  roadmap state.
+- [x] (2026-03-30 00:00Z) Stage F: run the full validation gates and record the
+  delivery outcome.
 
 ## Surprises & Discoveries
 
@@ -163,6 +166,12 @@ Success is observable in eight ways:
 - Observation: no existing route or test mentions `health`, and no runtime
   entrypoint or server command is exposed in `pyproject.toml`. Impact: the
   runtime path, health contract, and operator guidance are all net-new.
+
+- Observation: py-pglite-backed runtime tests became reliable only when the
+  dedicated runtime database fixture fully disposed its migration engine before
+  yielding the database URL. Impact: live-process and runtime-factory tests now
+  use a dedicated `migrated_database_url` fixture instead of sharing a
+  long-lived migrated engine.
 
 - Observation: the project already documents Vidai Mock usage for inference
   services, but this roadmap item does not invoke `LLMPort`. Impact: the plan
@@ -197,19 +206,35 @@ Success is observable in eight ways:
 
 ## Outcomes & Retrospective
 
-Implementation has not started. The current outcome is a self-contained plan
-for delivering roadmap item `1.5.1` without conflating it with Celery worker
-scaffolding or later architecture-enforcement work.
+Outcome:
 
-Expected outcome after implementation:
+- the Falcon API now boots through Granian via
+  `episodic.api.runtime:create_app_from_env`;
+- health endpoints exist and are covered both in memory and over a live
+  Granian subprocess;
+- the HTTP layer now receives its unit-of-work seam and readiness probes
+  through `ApiDependencies`;
+- the design, user, and developer documentation now describe the runtime and
+  health contract; and
+- `docs/roadmap.md` now marks `1.5.1` complete.
 
-- the Falcon API boots through Granian;
-- health endpoints exist and are testable both in memory and over a live
-  subprocess;
-- the HTTP layer receives outbound ports through a typed composition root;
-- the design, user, and developer documentation describe how to run and extend
-  the service; and
-- `docs/roadmap.md` truthfully marks `1.5.1` complete.
+Retrospective:
+
+- keeping `app.py` pure and moving environment parsing into `runtime.py`
+  preserved the inbound adapter boundary cleanly;
+- the dedicated runtime-process fixture mattered for py-pglite stability; and
+- the new typed dependency object provides a small but durable extension seam
+  for future injected ports such as `LLMPort`.
+
+Validation outcome:
+
+- `make fmt`
+- `make check-fmt`
+- `make lint`
+- `make typecheck`
+- `make test` (`292 passed`, `2 skipped`)
+- `make markdownlint`
+- `make nixie`
 
 ## Context and orientation
 

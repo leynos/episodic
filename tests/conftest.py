@@ -32,8 +32,10 @@ if typ.TYPE_CHECKING:
     from _fixtures_binding_resolution import BindingFixtures
     from falcon import testing
     from py_pglite.sqlalchemy.manager_async import SQLAlchemyAsyncPGliteManager
+    from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+    from episodic.api import ApiDependencies
     from episodic.canonical.domain import (
         CanonicalEpisode,
         EpisodeTemplate,
@@ -180,6 +182,36 @@ async def migrated_engine(
     yield pglite_engine
 
 
+@pytest_asyncio.fixture
+async def migrated_database_url(tmp_path: Path) -> typ.AsyncIterator[str]:
+    """Yield a migrated ephemeral database URL for runtime process tests."""
+    if not _should_use_pglite():
+        pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
+
+    if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
+        msg = "py-pglite is not available for runtime test fixtures."
+        raise RuntimeError(msg)
+
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    work_dir = tmp_path / "runtime-pglite"
+    config = PGliteConfig(work_dir=work_dir)
+    manager = PGliteManager(config)
+    manager.start()
+    try:
+        database_url = config.get_connection_string()
+        engine = create_async_engine(database_url, pool_pre_ping=True)
+        try:
+            await _wait_for_engine_ready(engine)
+            await apply_migrations(engine)
+        finally:
+            await engine.dispose()
+        yield database_url
+    finally:
+        if manager.is_running():
+            manager.stop()
+
+
 @pytest.fixture
 def session_factory(
     migrated_engine: AsyncEngine,
@@ -217,11 +249,41 @@ def canonical_api_client(
     """Build a Falcon test client for profile/template REST endpoints."""
     from falcon import testing
 
-    from episodic.api import create_app
+    from episodic.api import ApiDependencies, create_app
     from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
-    app = create_app(lambda: SqlAlchemyUnitOfWork(session_factory))
+    app = create_app(
+        ApiDependencies(uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory))
+    )
     return testing.TestClient(app)
+
+
+@pytest.fixture
+def canonical_api_dependencies(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> ApiDependencies:
+    """Build typed API dependencies for in-memory ASGI tests."""
+    from episodic.api import ApiDependencies
+    from episodic.canonical.storage import SqlAlchemyUnitOfWork
+
+    return ApiDependencies(uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory))
+
+
+@pytest_asyncio.fixture
+async def canonical_api_async_client(
+    canonical_api_dependencies: ApiDependencies,
+) -> typ.AsyncIterator[httpx.AsyncClient]:
+    """Yield an async HTTP client bound to the Falcon ASGI app."""
+    from episodic.api import create_app
+
+    transport = httpx.ASGITransport(
+        app=typ.cast("_ASGIApp", create_app(canonical_api_dependencies))
+    )
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        yield client
 
 
 @dc.dataclass(frozen=True, slots=True)
