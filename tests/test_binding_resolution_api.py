@@ -459,6 +459,32 @@ def test_brief_endpoint_returns_404_for_invalid_episode(
     assert response.status_code == 404, "Expected 404 when episode_id does not exist."
 
 
+def test_brief_endpoint_returns_404_for_episode_not_in_profile(
+    canonical_api_client: testing.TestClient,
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Brief endpoint returns 404 when episode belongs to a different profile."""
+    fixture = reference_support._build_api_fixture(canonical_api_client)
+    # Create an episode under the *secondary* profile.
+    episode_id = _function_scoped_runner.run(
+        _create_episode(
+            session_factory,
+            profile_id=fixture.secondary_profile_id,
+            title="Wrong-profile episode for brief",
+            created_at=dt.datetime(2026, 3, 1, tzinfo=dt.UTC),
+        )
+    )
+    # Request brief for the *primary* profile with this episode.
+    response = canonical_api_client.simulate_get(
+        f"/series-profiles/{fixture.primary_profile_id}/brief",
+        params={"episode_id": episode_id},
+    )
+    assert response.status_code == 404, (
+        "Expected 404 when episode does not belong to the requested profile."
+    )
+
+
 def test_resolved_bindings_endpoint_returns_404_for_unknown_template(
     canonical_api_client: testing.TestClient,
     _function_scoped_runner: asyncio.Runner,  # noqa: PT019
