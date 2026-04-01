@@ -13,6 +13,7 @@ from .documents import (
 )
 from .resolution import (
     ResolvedBinding,
+    SnapshotContext,
     resolve_bindings,
     snapshot_resolved_bindings,
 )
@@ -50,6 +51,7 @@ __all__: tuple[str, ...] = (
     "ReferenceRevisionConflictError",
     "ReferenceValidationError",
     "ResolvedBinding",
+    "SnapshotContext",
     "create_reference_binding",
     "create_reference_document",
     "create_reference_document_revision",

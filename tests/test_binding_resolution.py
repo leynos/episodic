@@ -15,6 +15,7 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.reference_documents.resolution import (
     ResolvedBinding,
+    SnapshotContext,
     resolve_bindings,
     snapshot_resolved_bindings,
 )
@@ -457,8 +458,10 @@ async def test_snapshot_resolved_bindings_persists_reference_source_documents(  
     created_documents = await snapshot_resolved_bindings(
         uow,
         resolved=resolved,
-        ingestion_job_id=job.id,
-        canonical_episode_id=episode.id,
+        context=SnapshotContext(
+            ingestion_job_id=job.id,
+            canonical_episode_id=episode.id,
+        ),
     )
     await uow.commit()
 

@@ -202,9 +202,11 @@ async def _persist_source_documents_and_snapshot_bindings(
     await reference_documents.snapshot_resolved_bindings(
         uow,
         resolved=resolved_bindings,
-        ingestion_job_id=context.job_id,
-        canonical_episode_id=context.episode_id,
-        created_at=context.now,
+        context=reference_documents.SnapshotContext(
+            ingestion_job_id=context.job_id,
+            canonical_episode_id=context.episode_id,
+            created_at=context.now,
+        ),
     )
 
 

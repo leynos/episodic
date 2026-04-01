@@ -410,25 +410,34 @@ def _build_snapshot_source_document(
     )
 
 
-async def snapshot_resolved_bindings(  # noqa: PLR0913
+@dc.dataclass(frozen=True, slots=True)
+class SnapshotContext:
+    """Job-context parameters for snapshotting resolved bindings as source documents."""
+
+    ingestion_job_id: uuid.UUID
+    canonical_episode_id: uuid.UUID | None = None
+    created_at: dt.datetime | None = None
+
+
+async def snapshot_resolved_bindings(
     uow: CanonicalUnitOfWork,
     *,
     resolved: list[ResolvedBinding],
-    ingestion_job_id: uuid.UUID,
-    canonical_episode_id: uuid.UUID | None = None,
-    created_at: dt.datetime | None = None,
+    context: SnapshotContext,
 ) -> list[SourceDocument]:
     """Persist resolved bindings as provenance source documents."""
     if not resolved:
         return []
 
     effective_created_at = (
-        created_at if created_at is not None else dt.datetime.now(dt.UTC)
+        context.created_at
+        if context.created_at is not None
+        else dt.datetime.now(dt.UTC)
     )
     source_documents = [
         _build_snapshot_source_document(
-            ingestion_job_id=ingestion_job_id,
-            canonical_episode_id=canonical_episode_id,
+            ingestion_job_id=context.ingestion_job_id,
+            canonical_episode_id=context.canonical_episode_id,
             resolved_binding=resolved_binding,
             created_at=effective_created_at,
         )

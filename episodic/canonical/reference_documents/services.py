@@ -11,7 +11,12 @@ from .documents import (
     list_reference_documents,
     update_reference_document,
 )
-from .resolution import resolve_bindings, snapshot_resolved_bindings
+from .resolution import (
+    ResolvedBinding,
+    SnapshotContext,
+    resolve_bindings,
+    snapshot_resolved_bindings,
+)
 from .revisions import (
     create_reference_document_revision,
     get_reference_document_revision,
@@ -19,6 +24,8 @@ from .revisions import (
 )
 
 __all__: tuple[str, ...] = (
+    "ResolvedBinding",
+    "SnapshotContext",
     "create_reference_binding",
     "create_reference_document",
     "create_reference_document_revision",
