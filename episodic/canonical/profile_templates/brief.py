@@ -267,17 +267,32 @@ async def _load_reference_documents_for_brief(
                 revision=resolved.revision,
             )
             for resolved in resolved_bindings
+            if resolved.document.owner_series_profile_id == profile_id
         ]
 
         template_documents: list[JsonMapping] = []
+        all_template_bindings: list[ReferenceBinding] = []
         for template, _ in template_items:
-            template_documents.extend(
-                await _load_reference_documents_for_target(
-                    uow,
-                    target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
-                    target_id=template.id,
-                    owner_series_profile_id=profile_id,
-                )
+            bindings = await uow.reference_bindings.list_for_target(
+                target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+                target_id=template.id,
+            )
+            all_template_bindings.extend(bindings)
+
+        if all_template_bindings:
+            revisions_by_id = await _load_revisions_by_id(
+                uow=uow,
+                bindings=all_template_bindings,
+            )
+            documents_by_id = await _load_documents_by_id(
+                uow=uow,
+                revisions=revisions_by_id.values(),
+            )
+            template_documents = _serialize_bindings_for_owner(
+                bindings=all_template_bindings,
+                revisions_by_id=revisions_by_id,
+                documents_by_id=documents_by_id,
+                owner_series_profile_id=profile_id,
             )
         return resolved_documents + template_documents
 

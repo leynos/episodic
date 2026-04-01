@@ -51,6 +51,18 @@ class ResolvedBindingsResource:
                     )
                     raise falcon.HTTPNotFound(description=msg)
 
+                if template_id is not None:
+                    template = await uow.episode_templates.get(template_id)
+                    if (
+                        template is None
+                        or template.series_profile_id != parsed_profile_id
+                    ):
+                        msg = (
+                            f"Episode template not found or does not belong to "
+                            f"series profile: {template_id}."
+                        )
+                        raise falcon.HTTPNotFound(description=msg)
+
                 resolved = await resolve_bindings(
                     uow,
                     series_profile_id=parsed_profile_id,

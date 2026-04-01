@@ -23,7 +23,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _BriefFilterFixture:
     """Reference-binding fixture data for brief filtering assertions."""
 
@@ -36,7 +36,7 @@ class _BriefFilterFixture:
     template_revision_id: str
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _DocumentSpec:
     """Document-creation parameters for reference-document test helpers."""
 
@@ -46,7 +46,7 @@ class _DocumentSpec:
     content_hash: str
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _BriefRequest:
     profile_id: str
     template_id: str
@@ -457,3 +457,53 @@ def test_brief_endpoint_returns_404_for_invalid_episode(
         params={"episode_id": nonexistent_episode_id},
     )
     assert response.status_code == 404, "Expected 404 when episode_id does not exist."
+
+
+def test_resolved_bindings_endpoint_returns_404_for_unknown_template(
+    canonical_api_client: testing.TestClient,
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Resolved-bindings endpoint should return 404 for a nonexistent template."""
+    fixture = reference_support._build_api_fixture(canonical_api_client)
+    episode_id = _function_scoped_runner.run(
+        _create_episode(
+            session_factory,
+            profile_id=fixture.primary_profile_id,
+            title="Test episode",
+            created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
+        )
+    )
+    unknown_template_id = str(uuid.uuid4())
+    response = canonical_api_client.simulate_get(
+        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        params={"episode_id": episode_id, "template_id": unknown_template_id},
+    )
+    assert response.status_code == 404, "Expected 404 for unknown episode template."
+
+
+def test_resolved_bindings_endpoint_returns_404_for_cross_profile_template(
+    canonical_api_client: testing.TestClient,
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Resolved-bindings endpoint returns 404 for template not in profile."""
+    fixture = reference_support._build_api_fixture(canonical_api_client)
+    # Create an episode under the primary profile.
+    episode_id = _function_scoped_runner.run(
+        _create_episode(
+            session_factory,
+            profile_id=fixture.primary_profile_id,
+            title="Test episode",
+            created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
+        )
+    )
+    # Request resolved bindings for the primary profile with the secondary
+    # profile's template.
+    response = canonical_api_client.simulate_get(
+        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        params={"episode_id": episode_id, "template_id": fixture.secondary_template_id},
+    )
+    assert response.status_code == 404, (
+        "Expected 404 when template does not belong to the requested profile."
+    )
