@@ -227,6 +227,22 @@ def _raise_if_missing_ids(
     raise ValueError(msg)
 
 
+async def _validate_episode_for_brief(
+    uow: CanonicalUnitOfWork,
+    *,
+    episode_id: uuid.UUID,
+    profile_id: uuid.UUID,
+) -> None:
+    """Verify that the episode exists and belongs to the series profile."""
+    episode = await uow.episodes.get(episode_id)
+    if episode is None or episode.series_profile_id != profile_id:
+        msg = (
+            f"Episode {episode_id} not found or does not belong to "
+            f"series profile {profile_id}."
+        )
+        raise EntityNotFoundError(msg, entity_id=str(episode_id))
+
+
 async def _load_reference_documents_for_brief(
     uow: CanonicalUnitOfWork,
     *,
@@ -236,6 +252,9 @@ async def _load_reference_documents_for_brief(
 ) -> list[JsonMapping]:
     """Load serialized reference documents for profile/template contexts."""
     if episode_id is not None:
+        await _validate_episode_for_brief(
+            uow, episode_id=episode_id, profile_id=profile_id
+        )
         resolved_bindings = await resolve_bindings(
             uow,
             series_profile_id=profile_id,

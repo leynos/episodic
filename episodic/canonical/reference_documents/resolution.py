@@ -15,7 +15,6 @@ if typ.TYPE_CHECKING:
         ReferenceBinding,
         ReferenceDocument,
         ReferenceDocumentRevision,
-        SourceDocument,
     )
     from episodic.canonical.ports import CanonicalUnitOfWork
 
@@ -411,24 +410,27 @@ def _build_snapshot_source_document(
     )
 
 
-async def snapshot_resolved_bindings(
+async def snapshot_resolved_bindings(  # noqa: PLR0913
     uow: CanonicalUnitOfWork,
     *,
     resolved: list[ResolvedBinding],
     ingestion_job_id: uuid.UUID,
     canonical_episode_id: uuid.UUID | None = None,
+    created_at: dt.datetime | None = None,
 ) -> list[SourceDocument]:
     """Persist resolved bindings as provenance source documents."""
     if not resolved:
         return []
 
-    created_at = dt.datetime.now(dt.UTC)
+    effective_created_at = (
+        created_at if created_at is not None else dt.datetime.now(dt.UTC)
+    )
     source_documents = [
         _build_snapshot_source_document(
             ingestion_job_id=ingestion_job_id,
             canonical_episode_id=canonical_episode_id,
             resolved_binding=resolved_binding,
-            created_at=created_at,
+            created_at=effective_created_at,
         )
         for resolved_binding in resolved
     ]

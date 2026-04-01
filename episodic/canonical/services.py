@@ -171,7 +171,7 @@ def _create_initial_approval_event(
     )
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _IngestionContext:
     job_id: uuid.UUID
     episode_id: uuid.UUID
@@ -204,6 +204,7 @@ async def _persist_source_documents_and_snapshot_bindings(
         resolved=resolved_bindings,
         ingestion_job_id=context.job_id,
         canonical_episode_id=context.episode_id,
+        created_at=context.now,
     )
 
 

@@ -1,6 +1,5 @@
 """Integration tests for reference-binding resolution API flows."""
 
-import asyncio
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -18,6 +17,8 @@ from episodic.canonical.domain import (
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
+    import asyncio
+
     from falcon import testing
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -139,26 +140,27 @@ def _create_document_with_revision(
 
 
 def _create_episode_pair(
-    session_factory: async_sessionmaker[AsyncSession], profile_id: str
+    runner: asyncio.Runner,
+    session_factory: async_sessionmaker[AsyncSession],
+    profile_id: str,
 ) -> tuple[str, str]:
     """Create an early (2026-01-01) and late (2026-01-10) episode; return their IDs."""
-    with asyncio.Runner() as runner:
-        early_episode_id = runner.run(
-            _create_episode(
-                session_factory,
-                profile_id=profile_id,
-                title="Early episode",
-                created_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
-            )
+    early_episode_id = runner.run(
+        _create_episode(
+            session_factory,
+            profile_id=profile_id,
+            title="Early episode",
+            created_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
         )
-        late_episode_id = runner.run(
-            _create_episode(
-                session_factory,
-                profile_id=profile_id,
-                title="Late episode",
-                created_at=dt.datetime(2026, 1, 10, tzinfo=dt.UTC),
-            )
+    )
+    late_episode_id = runner.run(
+        _create_episode(
+            session_factory,
+            profile_id=profile_id,
+            title="Late episode",
+            created_at=dt.datetime(2026, 1, 10, tzinfo=dt.UTC),
         )
+    )
     return early_episode_id, late_episode_id
 
 
@@ -227,6 +229,7 @@ def _create_template_guest_binding(
 
 def _setup_brief_filter_fixture(
     canonical_api_client: testing.TestClient,
+    runner: asyncio.Runner,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> _BriefFilterFixture:
     """Create the series/template bindings used by brief filter assertions."""
@@ -234,7 +237,7 @@ def _setup_brief_filter_fixture(
     profile_id = fixture.primary_profile_id
     template_id = fixture.template_id
     early_episode_id, late_episode_id = _create_episode_pair(
-        session_factory, profile_id
+        runner, session_factory, profile_id
     )
     revision_early_id, revision_late_id = _create_style_guide_bindings(
         canonical_api_client, profile_id, early_episode_id, late_episode_id
@@ -279,10 +282,13 @@ def _assert_brief_response(
 
 def test_structured_brief_filters_series_bindings_by_episode(
     canonical_api_client: testing.TestClient,
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Brief endpoint should resolve series bindings when `episode_id` is provided."""
-    fixture = _setup_brief_filter_fixture(canonical_api_client, session_factory)
+    fixture = _setup_brief_filter_fixture(
+        canonical_api_client, _function_scoped_runner, session_factory
+    )
     _assert_brief_response(
         canonical_api_client,
         _BriefRequest(
@@ -301,20 +307,20 @@ def test_structured_brief_filters_series_bindings_by_episode(
 
 def test_resolved_bindings_endpoint_returns_resolved_payloads(
     canonical_api_client: testing.TestClient,
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Resolved-bindings endpoint should return document, revision, and binding data."""
     fixture = reference_support._build_api_fixture(canonical_api_client)
 
-    with asyncio.Runner() as runner:
-        episode_id = runner.run(
-            _create_episode(
-                session_factory,
-                profile_id=fixture.primary_profile_id,
-                title="Resolution target episode",
-                created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
-            )
+    episode_id = _function_scoped_runner.run(
+        _create_episode(
+            session_factory,
+            profile_id=fixture.primary_profile_id,
+            title="Resolution target episode",
+            created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
         )
+    )
 
     _, series_revision_id = _create_document_with_revision(
         canonical_api_client,
@@ -399,3 +405,55 @@ def test_resolved_bindings_endpoint_rejects_bad_episode_id(
     assert response.status_code == 400
     payload = typ.cast("dict[str, object]", response.json)
     assert payload["description"] == expected_description
+
+
+def test_resolved_bindings_endpoint_returns_404_for_unknown_profile(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Resolved-bindings endpoint should return 404 for a nonexistent profile."""
+    unknown_profile_id = str(uuid.uuid4())
+    episode_id = str(uuid.uuid4())
+    response = canonical_api_client.simulate_get(
+        f"/series-profiles/{unknown_profile_id}/resolved-bindings",
+        params={"episode_id": episode_id},
+    )
+    assert response.status_code == 404, "Expected 404 for unknown series profile."
+
+
+def test_resolved_bindings_endpoint_returns_404_for_episode_not_in_profile(
+    canonical_api_client: testing.TestClient,
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Resolved-bindings endpoint returns 404 for cross-profile episode."""
+    fixture = reference_support._build_api_fixture(canonical_api_client)
+    # Create an episode under the *secondary* profile.
+    episode_id = _function_scoped_runner.run(
+        _create_episode(
+            session_factory,
+            profile_id=fixture.secondary_profile_id,
+            title="Wrong-profile episode",
+            created_at=dt.datetime(2026, 2, 1, tzinfo=dt.UTC),
+        )
+    )
+    # Request resolved bindings for the *primary* profile with this episode.
+    response = canonical_api_client.simulate_get(
+        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        params={"episode_id": episode_id},
+    )
+    assert response.status_code == 404, (
+        "Expected 404 when episode does not belong to the requested profile."
+    )
+
+
+def test_brief_endpoint_returns_404_for_invalid_episode(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Brief endpoint should return 404 when episode_id does not exist."""
+    fixture = reference_support._build_api_fixture(canonical_api_client)
+    nonexistent_episode_id = str(uuid.uuid4())
+    response = canonical_api_client.simulate_get(
+        f"/series-profiles/{fixture.primary_profile_id}/brief",
+        params={"episode_id": nonexistent_episode_id},
+    )
+    assert response.status_code == 404, "Expected 404 when episode_id does not exist."

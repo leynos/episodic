@@ -117,9 +117,10 @@ content. Completion enables downstream generators to retrieve structured briefs.
   - Support `effective_from_episode_id` for revisions applying from specific
     episodes onwards.
   - Scope: repository and API behaviour only.
-  - Completed 2026-03-28: ADR-001, the resolver service, brief/API
-    integration, ingestion provenance snapshotting, behavioural coverage, and
-    documentation alignment are all in place.
+  - Completed 2026-03-28: Architectural Decision Record (ADR) 001,
+    the resolver service, brief/API integration, ingestion provenance
+    snapshotting, behavioural coverage, and documentation alignment
+    are all in place.
 
 ### 1.5. Service scaffolding and hexagonal boundaries
 

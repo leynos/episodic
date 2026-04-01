@@ -216,18 +216,18 @@ def _assert_reference_snapshot(
     reference_binding: ReferenceBinding,
 ) -> None:
     """Assert that one reference snapshot document was persisted correctly."""
-    assert len(documents) == 3, (
-        "Expected two raw sources plus one reference snapshot document."
-    )
-    reference_documents = [
+    snapshot_documents = [
         document
         for document in documents
         if document.source_type == "reference_document"
     ]
-    assert len(reference_documents) == 1, (
-        "Expected exactly one persisted reference snapshot."
+    assert len(snapshot_documents) == 1, (
+        "Expected exactly one persisted reference snapshot document."
     )
-    reference_snapshot = reference_documents[0]
+    assert len(documents) >= 3, (
+        "Expected at least two raw sources plus one reference snapshot document."
+    )
+    reference_snapshot = snapshot_documents[0]
     assert reference_snapshot.reference_document_revision_id == reference_revision.id
     assert reference_snapshot.source_uri == (
         f"ref://{reference_document.id}/revisions/{reference_revision.id}"

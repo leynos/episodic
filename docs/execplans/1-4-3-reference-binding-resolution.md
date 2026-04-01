@@ -312,7 +312,7 @@ Three domain entities are already defined:
 
 The `SourceDocument` domain entity (line 134) now includes nullable
 `reference_document_revision_id`, and `SourceDocumentInput` (line 265) carries
-the same optional field so ingestion paths can preserve reference provenance
+the same optional field, so ingestion paths can preserve reference provenance
 when callers provide it.
 
 ### Port contracts (`episodic/canonical/ports.py`)
@@ -367,13 +367,15 @@ omitted.
   `episodic/canonical/storage/reference_repositories.py` implement all port
   methods.
 
-### Ingestion pipeline (`episodic/canonical/ingestion_service.py`)
+### Ingestion pipeline (`episodic/canonical/services.py`)
 
 The `ingest_multi_source` function normalizes, weights, resolves conflicts, and
-persists source documents via `ingest_sources`. It does not resolve reference
-bindings or snapshot revision content. The `IngestionRequest` (line 272 of
-`domain.py`) carries `tei_xml`, `sources` (list of `SourceDocumentInput`), and
-`requested_by`, so the remaining gap is orchestration rather than schema shape.
+persists source documents via `ingest_sources`. It now also resolves applicable
+reference bindings and snapshots them as `source_documents` rows with
+`reference_document_revision_id` populated via
+`snapshot_resolved_bindings(...)`. The snapshot `created_at` timestamp is
+derived from the shared `_IngestionContext.now` value to ensure consistency
+with other ingestion records.
 
 ### API layer
 
@@ -384,19 +386,22 @@ All reference-document endpoints are wired in `episodic/api/app.py`:
 - Binding operations at `/reference-bindings/...`
 - Brief endpoint at `/series-profiles/{profile_id}/brief`
 
-The brief endpoint still exposes only `template_id` filtering. There is no
-`/series-profiles/{profile_id}/resolved-bindings` route yet.
+The brief endpoint accepts optional `template_id` and `episode_id` query
+parameters. The `/series-profiles/{profile_id}/resolved-bindings` route is
+wired in `episodic/api/app.py` and handled by `ResolvedBindingsResource`.
 
 ### Test coverage
 
 Extensive test coverage exists for CRUD operations, optimistic locking,
 validation, alignment, and conflict handling. Binding-resolution unit coverage
-now exists in `tests/test_binding_resolution.py` and
-`tests/test_binding_resolution_validation.py`. Behavioural tests still exist
-only for the CRUD/model flows in
-`tests/features/reference_document_api.feature` and
-`tests/features/reference_document_model.feature`; no API integration or BDD
-suite covers the unfinished resolution endpoints/workflows.
+exists in `tests/test_binding_resolution.py` and
+`tests/test_binding_resolution_validation.py`. API integration coverage exists
+in `tests/test_binding_resolution_api.py` (brief filtering by episode,
+resolved-bindings endpoint, bad-input rejection). Ingestion integration
+coverage for reference snapshotting exists in
+`tests/test_ingestion_integration.py`. Behavioural coverage exists in
+`tests/features/binding_resolution.feature` and
+`tests/steps/test_binding_resolution_steps.py`.
 
 ## Plan of work
 

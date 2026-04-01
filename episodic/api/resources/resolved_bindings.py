@@ -6,6 +6,7 @@ import falcon
 
 from episodic.api.helpers import parse_uuid, require_query_params
 from episodic.api.serializers import serialize_resolved_binding
+from episodic.canonical.profile_templates import EntityNotFoundError
 from episodic.canonical.reference_documents import resolve_bindings
 
 if typ.TYPE_CHECKING:
@@ -35,13 +36,29 @@ class ResolvedBindingsResource:
             else parse_uuid(raw_template_id, "template_id")
         )
 
-        async with self._uow_factory() as uow:
-            resolved = await resolve_bindings(
-                uow,
-                series_profile_id=parsed_profile_id,
-                template_id=template_id,
-                episode_id=parsed_episode_id,
-            )
+        try:
+            async with self._uow_factory() as uow:
+                profile = await uow.series_profiles.get(parsed_profile_id)
+                if profile is None:
+                    msg = f"Series profile not found: {parsed_profile_id}."
+                    raise falcon.HTTPNotFound(description=msg)
+
+                episode = await uow.episodes.get(parsed_episode_id)
+                if episode is None or episode.series_profile_id != parsed_profile_id:
+                    msg = (
+                        f"Episode not found or does not belong to "
+                        f"series profile: {parsed_episode_id}."
+                    )
+                    raise falcon.HTTPNotFound(description=msg)
+
+                resolved = await resolve_bindings(
+                    uow,
+                    series_profile_id=parsed_profile_id,
+                    template_id=template_id,
+                    episode_id=parsed_episode_id,
+                )
+        except EntityNotFoundError as exc:
+            raise falcon.HTTPNotFound(description=str(exc)) from exc
 
         resp.media = {"items": [serialize_resolved_binding(item) for item in resolved]}
         resp.status = falcon.HTTP_200

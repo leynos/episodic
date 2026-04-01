@@ -16,7 +16,7 @@ Utilities provided
   ``ReferenceDocumentsResource``, ``ReferenceDocumentResource``,
   ``ReferenceDocumentRevisionsResource``,
   ``ReferenceDocumentRevisionResource``, ``ReferenceBindingsResource``,
-  ``ReferenceBindingResource``
+  ``ReferenceBindingResource``, ``ResolvedBindingsResource``
 
 Examples
 --------
