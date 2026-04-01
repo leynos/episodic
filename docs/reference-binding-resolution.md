@@ -38,9 +38,9 @@ without filtering.
 
 ### `resolve_bindings()` Behavior
 
-1. **Validation**: If `episode_id` is provided, validates the episode exists and
-   belongs to the series profile. If `template_id` is provided, validates the
-   template exists and belongs to the series profile.
+1. **Validation**: If `episode_id` is provided, validates that the episode exists
+   and belongs to the series profile. If `template_id` is provided, validates that
+   the template exists and belongs to the series profile.
 
 2. **Binding Collection**: Collects all series-profile bindings and optionally
    template bindings (if `template_id` is valid).
@@ -134,6 +134,7 @@ information.
 ### `serialize_resolved_binding()` Arguments
 
 | Parameter | Type | Description |
+| --- | --- | --- |
 | `resolved_binding` | `ResolvedBinding` | The resolved binding to serialize |
 
 ### `serialize_resolved_binding()` Result
