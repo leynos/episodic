@@ -88,11 +88,14 @@ Reusable reference-document workflows currently support:
   cross-series profile paths do not expose documents owned by another series.
 - Requesting `GET /series-profiles/{profile_id}/brief?episode_id=...` to apply
   `effective_from_episode_id` precedence for series-level bindings while still
-  including any selected template bindings.
+  including any selected template bindings. Add optional `template_id=...` to
+  restrict the template section selection to one episode template.
 - Requesting
   `GET /series-profiles/{profile_id}/resolved-bindings?episode_id=...` to
   inspect the resolved binding, document, and revision payloads for one episode
-  context without fetching the full structured brief.
+  context without fetching the full structured brief. Add optional
+  `template_id=...` to restrict template-scoped bindings to one episode
+  template.
 - Ingestion runs snapshot the resolved reusable reference revisions as
   provenance-backed `source_documents`, so audit trails record the exact
   reference revisions consumed for that episode build.

@@ -209,6 +209,11 @@ Reusable reference-document workflows are implemented as Falcon resources in:
 Route wiring lives in `episodic/api/app.py`, and service orchestration is
 implemented in `episodic/canonical/reference_documents/services.py`.
 
+See also:
+[`docs/reference-binding-resolution.md`](reference-binding-resolution.md) for
+the episode-aware resolver, provenance snapshot APIs, and endpoint-specific
+binding-resolution behavior.
+
 Supported endpoints:
 
 - `POST /series-profiles/{profile_id}/reference-documents`
