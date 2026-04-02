@@ -13,14 +13,16 @@ from .documents import (
 )
 from .resolution import (
     ResolvedBinding,
-    SnapshotContext,
     resolve_bindings,
-    snapshot_resolved_bindings,
 )
 from .revisions import (
     create_reference_document_revision,
     get_reference_document_revision,
     list_reference_document_revisions,
+)
+from .snapshots import (
+    SnapshotContext,
+    snapshot_resolved_bindings,
 )
 from .types import (
     ReferenceBindingData,

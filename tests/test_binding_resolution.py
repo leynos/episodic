@@ -5,19 +5,14 @@ import typing as typ
 import uuid
 
 import pytest
-import pytest_asyncio
 
 from episodic.canonical.domain import (
-    IngestionJob,
-    IngestionStatus,
     ReferenceBinding,
     ReferenceBindingTargetKind,
 )
 from episodic.canonical.reference_documents.resolution import (
     ResolvedBinding,
-    SnapshotContext,
     resolve_bindings,
-    snapshot_resolved_bindings,
 )
 
 if typ.TYPE_CHECKING:
@@ -26,13 +21,6 @@ if typ.TYPE_CHECKING:
 from tests.conftest import create_episode_template_for_binding_tests
 
 pytestmark = pytest.mark.asyncio
-
-
-# Alias fixture for backward compatibility
-@pytest_asyncio.fixture
-def uow_with_fixtures(uow_with_binding_fixtures):  # noqa: ANN001, ANN201
-    """Alias for uow_with_binding_fixtures from conftest."""
-    yield uow_with_binding_fixtures
 
 
 async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
@@ -409,73 +397,3 @@ async def test_resolve_bindings_template_only(
     assert len(resolved) == 1
     assert resolved[0].revision.id == revision_v2.id
     assert resolved[0].binding.id == template_binding.id
-
-
-async def test_snapshot_resolved_bindings_persists_reference_source_documents(  # noqa: PLR0914
-    uow_with_fixtures,  # noqa: ANN001
-) -> None:
-    """Resolved bindings should be persisted as provenance source documents."""
-    fixtures = uow_with_fixtures
-    uow: CanonicalUnitOfWork = fixtures["uow"]
-    series = fixtures["series"]
-    episode = fixtures["episode_early"]
-    revision_v1 = fixtures["revision_v1"]
-    now = fixtures["now"]
-
-    job = IngestionJob(
-        id=uuid.uuid4(),
-        series_profile_id=series.id,
-        target_episode_id=episode.id,
-        status=IngestionStatus.COMPLETED,
-        requested_at=now,
-        started_at=now,
-        completed_at=now,
-        error_message=None,
-        created_at=now,
-        updated_at=now,
-    )
-    await uow.ingestion_jobs.add(job)
-    await uow.reference_bindings.add(
-        ReferenceBinding(
-            id=uuid.uuid4(),
-            reference_document_revision_id=revision_v1.id,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=series.id,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=now,
-        )
-    )
-    await uow.commit()
-
-    resolved = await resolve_bindings(
-        uow,
-        series_profile_id=series.id,
-        episode_id=episode.id,
-    )
-
-    created_documents = await snapshot_resolved_bindings(
-        uow,
-        resolved=resolved,
-        context=SnapshotContext(
-            ingestion_job_id=job.id,
-            canonical_episode_id=episode.id,
-        ),
-    )
-    await uow.commit()
-
-    assert len(created_documents) == 1
-    created = created_documents[0]
-    assert created.source_type == "reference_document"
-    assert created.reference_document_revision_id == revision_v1.id
-    assert created.canonical_episode_id == episode.id
-    assert created.source_uri == (
-        f"ref://{fixtures['doc'].id}/revisions/{revision_v1.id}"
-    )
-    assert created.metadata["binding_id"] is not None
-    assert created.metadata["document_kind"] == fixtures["doc"].kind.value
-
-    persisted = await uow.source_documents.list_for_job(job.id)
-    assert len(persisted) == 1
-    assert persisted[0].reference_document_revision_id == revision_v1.id

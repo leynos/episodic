@@ -1,11 +1,11 @@
-# Reference Binding Resolution Developer Guide
+# Reference binding resolution developer guide
 
 ## Overview
 
-This document describes the developer-facing APIs for reference binding resolution,
-which powers the structured brief and resolved-bindings endpoints. These APIs
-enable episode-aware resolution of reference documents, selecting the appropriate
-revision based on `effective_from_episode_id` precedence.
+This document describes the developer-facing APIs for reference binding
+resolution, which powers the structured brief and resolved-bindings endpoints.
+These APIs enable episode-aware resolution of reference documents, selecting
+the appropriate revision based on `effective_from_episode_id` precedence.
 
 ## Core Functions
 
@@ -13,9 +13,9 @@ revision based on `effective_from_episode_id` precedence.
 
 **Location:** `episodic/canonical/reference_documents/resolution.py`
 
-Resolves reference bindings for a series profile context, applying episode-aware
-precedence logic for series-profile bindings while merging template bindings
-without filtering.
+Resolves reference bindings for a series profile context, applying
+episode-aware precedence logic for series-profile bindings while merging
+template bindings without filtering.
 
 ### `resolve_bindings()` Usage
 
@@ -25,12 +25,14 @@ without filtering.
 
 ### `resolve_bindings()` Arguments
 
-| Parameter | Type | Description |
-| --------- | ---- | ----------- |
-| `uow` | `CanonicalUnitOfWork` | Unit of work for database access |
-| `series_profile_id` | `uuid.UUID` | The series profile identifier |
-| `template_id` | `uuid.UUID \| None` | Optional episode template for merging template bindings |
-| `episode_id` | `uuid.UUID \| None` | Optional episode for episode-aware precedence |
+Table: Parameters for `resolve_bindings()`
+
+| Parameter           | Type                  | Description                                             |
+| ------------------- | --------------------- | ------------------------------------------------------- |
+| `uow`               | `CanonicalUnitOfWork` | Unit of work for database access                        |
+| `series_profile_id` | `uuid.UUID`           | The series profile identifier                           |
+| `template_id`       | `uuid.UUID or None`   | Optional episode template for merging template bindings |
+| `episode_id`        | `uuid.UUID or None`   | Optional episode for episode-aware precedence           |
 
 ### `resolve_bindings()` Result
 
@@ -38,9 +40,9 @@ without filtering.
 
 ### `resolve_bindings()` Behavior
 
-1. **Validation**: If `episode_id` is provided, validates that the episode exists
-   and belongs to the series profile. If `template_id` is provided, validates that
-   the template exists and belongs to the series profile.
+1. **Validation**: If `episode_id` is provided, validates that the episode
+   exists and belongs to the series profile. If `template_id` is provided,
+   validates that the template exists and belongs to the series profile.
 
 2. **Binding Collection**: Collects all series-profile bindings and optionally
    template bindings (if `template_id` is valid).
@@ -69,11 +71,11 @@ async with SqlAlchemyUnitOfWork(session_factory) as uow:
         print(f"Revision: {binding.revision.content_hash}")
 ```
 
----
+______________________________________________________________________
 
 ### `snapshot_resolved_bindings()`
 
-**Location:** `episodic/canonical/reference_documents/resolution.py`
+**Location:** `episodic/canonical/reference_documents/snapshots.py`
 
 Persists resolved bindings as provenance source documents, creating a snapshot
 of which reference documents were used at a specific point in time.
@@ -86,13 +88,15 @@ of which reference documents were used at a specific point in time.
 
 ### `snapshot_resolved_bindings()` Arguments
 
-| Parameter | Type | Description |
-| --------- | ---- | ----------- |
-| `uow` | `CanonicalUnitOfWork` | Unit of work for database access |
-| `resolved` | `list[ResolvedBinding]` | The resolved bindings to snapshot |
-| `ingestion_job_id` | `uuid.UUID` | The ingestion job identifier |
-| `canonical_episode_id` | `uuid.UUID \| None` | Optional associated episode |
-| `created_at` | `datetime \| None` | Optional timestamp (defaults to now) |
+Table: Parameters for `snapshot_resolved_bindings()`
+
+| Parameter              | Type                    | Description                          |
+| ---------------------- | ----------------------- | ------------------------------------ |
+| `uow`                  | `CanonicalUnitOfWork`   | Unit of work for database access     |
+| `resolved`             | `list[ResolvedBinding]` | The resolved bindings to snapshot    |
+| `ingestion_job_id`     | `uuid.UUID`             | The ingestion job identifier         |
+| `canonical_episode_id` | `uuid.UUID or None`     | Optional associated episode          |
+| `created_at`           | `datetime or None`      | Optional timestamp (defaults to now) |
 
 ### `snapshot_resolved_bindings()` Result
 
@@ -116,7 +120,7 @@ async with SqlAlchemyUnitOfWork(session_factory) as uow:
     )
 ```
 
----
+______________________________________________________________________
 
 ### `serialize_resolved_binding()`
 
@@ -133,8 +137,10 @@ information.
 
 ### `serialize_resolved_binding()` Arguments
 
-| Parameter | Type | Description |
-| --- | --- | --- |
+Table: Parameters for `serialize_resolved_binding()`
+
+| Parameter          | Type              | Description                       |
+| ------------------ | ----------------- | --------------------------------- |
 | `resolved_binding` | `ResolvedBinding` | The resolved binding to serialize |
 
 ### `serialize_resolved_binding()` Result
@@ -242,14 +248,16 @@ When `episode_id` is provided, the resolution algorithm works as follows:
 
 ### `snapshot_resolved_bindings()` Errors
 
-- Raises `ReferenceEntityNotFoundError` if any referenced entity doesn't exist
-- Handles database integrity errors via the unit of work
+- Persists only the already-resolved bindings it is given
+- Relies on the unit-of-work and database layers to surface integrity errors
+  during flush or commit
 
 ## Testing
 
 ### Unit Tests
 
-See `tests/test_serializers.py` for unit tests of `serialize_resolved_binding()`.
+See `tests/test_serializers.py` for unit tests of
+`serialize_resolved_binding()`.
 
 ### Integration Tests
 
@@ -262,6 +270,7 @@ See `tests/test_binding_resolution_api.py` for integration tests covering:
 
 ## Related Documentation
 
-- ADR-001: Reference binding resolution algorithm design
-- API documentation for `/series-profiles/{id}/brief`
-- API documentation for `/series-profiles/{id}/resolved-bindings`
+- Architecture Decision Record (ADR-001): Reference binding resolution
+  algorithm design
+- API documentation for `/series-profiles/{profile_id}/brief`
+- API documentation for `/series-profiles/{profile_id}/resolved-bindings`

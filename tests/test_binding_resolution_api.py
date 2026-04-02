@@ -420,14 +420,19 @@ def test_resolved_bindings_endpoint_returns_404_for_unknown_profile(
     assert response.status_code == 404, "Expected 404 for unknown series profile."
 
 
-def test_resolved_bindings_endpoint_returns_404_for_episode_not_in_profile(
+@pytest.mark.parametrize(
+    "endpoint",
+    ["resolved-bindings", "brief"],
+    ids=["resolved_bindings", "brief"],
+)
+def test_endpoint_returns_404_for_episode_not_in_profile(
     canonical_api_client: testing.TestClient,
     _function_scoped_runner: asyncio.Runner,  # noqa: PT019
     session_factory: async_sessionmaker[AsyncSession],
+    endpoint: str,
 ) -> None:
-    """Resolved-bindings endpoint returns 404 for cross-profile episode."""
+    """Both endpoints return 404 when episode_id belongs to a different profile."""
     fixture = reference_support._build_api_fixture(canonical_api_client)
-    # Create an episode under the *secondary* profile.
     episode_id = _function_scoped_runner.run(
         _create_episode(
             session_factory,
@@ -436,9 +441,8 @@ def test_resolved_bindings_endpoint_returns_404_for_episode_not_in_profile(
             created_at=dt.datetime(2026, 2, 1, tzinfo=dt.UTC),
         )
     )
-    # Request resolved bindings for the *primary* profile with this episode.
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        f"/series-profiles/{fixture.primary_profile_id}/{endpoint}",
         params={"episode_id": episode_id},
     )
     assert response.status_code == 404, (
@@ -459,38 +463,18 @@ def test_brief_endpoint_returns_404_for_invalid_episode(
     assert response.status_code == 404, "Expected 404 when episode_id does not exist."
 
 
-def test_brief_endpoint_returns_404_for_episode_not_in_profile(
+@pytest.mark.parametrize(
+    "use_secondary_template",
+    [False, True],
+    ids=["unknown_template", "cross_profile_template"],
+)
+def test_resolved_bindings_endpoint_returns_404_for_invalid_template(
     canonical_api_client: testing.TestClient,
     _function_scoped_runner: asyncio.Runner,  # noqa: PT019
     session_factory: async_sessionmaker[AsyncSession],
+    use_secondary_template: object,
 ) -> None:
-    """Brief endpoint returns 404 when episode belongs to a different profile."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
-    # Create an episode under the *secondary* profile.
-    episode_id = _function_scoped_runner.run(
-        _create_episode(
-            session_factory,
-            profile_id=fixture.secondary_profile_id,
-            title="Wrong-profile episode for brief",
-            created_at=dt.datetime(2026, 3, 1, tzinfo=dt.UTC),
-        )
-    )
-    # Request brief for the *primary* profile with this episode.
-    response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/brief",
-        params={"episode_id": episode_id},
-    )
-    assert response.status_code == 404, (
-        "Expected 404 when episode does not belong to the requested profile."
-    )
-
-
-def test_resolved_bindings_endpoint_returns_404_for_unknown_template(
-    canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Resolved-bindings endpoint should return 404 for a nonexistent template."""
+    """Resolved-bindings endpoint returns 404 for missing or cross-profile templates."""
     fixture = reference_support._build_api_fixture(canonical_api_client)
     episode_id = _function_scoped_runner.run(
         _create_episode(
@@ -500,36 +484,15 @@ def test_resolved_bindings_endpoint_returns_404_for_unknown_template(
             created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
         )
     )
-    unknown_template_id = str(uuid.uuid4())
+    template_id = (
+        fixture.secondary_template_id
+        if typ.cast("bool", use_secondary_template)
+        else str(uuid.uuid4())
+    )
     response = canonical_api_client.simulate_get(
         f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
-        params={"episode_id": episode_id, "template_id": unknown_template_id},
-    )
-    assert response.status_code == 404, "Expected 404 for unknown episode template."
-
-
-def test_resolved_bindings_endpoint_returns_404_for_cross_profile_template(
-    canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Resolved-bindings endpoint returns 404 for template not in profile."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
-    # Create an episode under the primary profile.
-    episode_id = _function_scoped_runner.run(
-        _create_episode(
-            session_factory,
-            profile_id=fixture.primary_profile_id,
-            title="Test episode",
-            created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
-        )
-    )
-    # Request resolved bindings for the primary profile with the secondary
-    # profile's template.
-    response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
-        params={"episode_id": episode_id, "template_id": fixture.secondary_template_id},
+        params={"episode_id": episode_id, "template_id": template_id},
     )
     assert response.status_code == 404, (
-        "Expected 404 when template does not belong to the requested profile."
+        "Expected 404 for template not owned by the requested profile."
     )
