@@ -12,42 +12,29 @@ from episodic.canonical.reference_documents.snapshots import (
 )
 
 if typ.TYPE_CHECKING:
-    from episodic.canonical.domain import (
-        CanonicalEpisode,
-        IngestionJob,
-        ReferenceBinding,
-        ReferenceDocument,
-        ReferenceDocumentRevision,
-        SeriesProfile,
-    )
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from tests.conftest import _SnapshotTestFixtures
 
 pytestmark = pytest.mark.asyncio
 
 
 async def test_snapshot_resolved_bindings_persists_reference_source_documents(
-    binding_test_uow: CanonicalUnitOfWork,
-    binding_test_episode: CanonicalEpisode,
-    binding_test_document: ReferenceDocument,
-    binding_test_revision_v1: ReferenceDocumentRevision,
-    binding_test_series: SeriesProfile,
-    binding_snapshot_job: IngestionJob,
-    binding_snapshot_reference_binding: ReferenceBinding,
+    binding_snapshot_fixtures: _SnapshotTestFixtures,
 ) -> None:
     """Resolved bindings should be persisted as provenance source documents."""
+    fx = binding_snapshot_fixtures
     resolved = await resolve_bindings(
-        binding_test_uow,
-        series_profile_id=binding_test_series.id,
-        episode_id=binding_test_episode.id,
+        fx.uow,
+        series_profile_id=fx.series.id,
+        episode_id=fx.episode.id,
     )
     snapshot_created_at = dt.datetime(2026, 4, 2, 12, 0, tzinfo=dt.UTC)
 
     created_documents = await snapshot_resolved_bindings(
-        binding_test_uow,
+        fx.uow,
         resolved=resolved,
         context=SnapshotContext(
-            ingestion_job_id=binding_snapshot_job.id,
-            canonical_episode_id=binding_test_episode.id,
+            ingestion_job_id=fx.job.id,
+            canonical_episode_id=fx.episode.id,
             created_at=snapshot_created_at,
         ),
     )
@@ -55,20 +42,18 @@ async def test_snapshot_resolved_bindings_persists_reference_source_documents(
     assert len(created_documents) == 1
     created = created_documents[0]
     assert created.source_type == "reference_document"
-    assert created.reference_document_revision_id == binding_test_revision_v1.id
-    assert created.canonical_episode_id == binding_test_episode.id
+    assert created.reference_document_revision_id == fx.revision_v1.id
+    assert created.canonical_episode_id == fx.episode.id
     assert created.source_uri == (
-        f"ref://{binding_test_document.id}/revisions/{binding_test_revision_v1.id}"
+        f"ref://{fx.document.id}/revisions/{fx.revision_v1.id}"
     )
-    assert created.metadata["binding_id"] == str(binding_snapshot_reference_binding.id)
-    assert created.metadata["document_kind"] == binding_test_document.kind.value
+    assert created.metadata["binding_id"] == str(fx.reference_binding.id)
+    assert created.metadata["document_kind"] == fx.document.kind.value
     assert created.created_at == snapshot_created_at
 
-    await binding_test_uow.commit()
+    await fx.uow.commit()
 
-    persisted = await binding_test_uow.source_documents.list_for_job(
-        binding_snapshot_job.id
-    )
+    persisted = await fx.uow.source_documents.list_for_job(fx.job.id)
     assert len(persisted) == 1
-    assert persisted[0].reference_document_revision_id == binding_test_revision_v1.id
+    assert persisted[0].reference_document_revision_id == fx.revision_v1.id
     assert persisted[0].created_at == snapshot_created_at
