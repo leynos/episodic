@@ -31,8 +31,8 @@ if typ.TYPE_CHECKING:
 
     from _fixtures_binding_resolution import BindingFixtures
     from falcon import testing
-    from py_pglite.sqlalchemy.manager_async import SQLAlchemyAsyncPGliteManager
     from httpx._transports.asgi import _ASGIApp
+    from py_pglite.sqlalchemy.manager_async import SQLAlchemyAsyncPGliteManager
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
     from episodic.api import ApiDependencies
@@ -55,7 +55,7 @@ pytest_plugins: list[str] = [
 
 
 try:
-    from py_pglite import PGliteConfig
+    from py_pglite import PGliteConfig, PGliteManager
 
     _PGLITE_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
