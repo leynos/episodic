@@ -1,13 +1,14 @@
 """Binding-resolution domain helpers and pytest fixtures."""
 
-import datetime as dt  # noqa: TC003
+import asyncio
 import typing as typ
 import uuid
 
-import pytest
 import pytest_asyncio
 
 if typ.TYPE_CHECKING:
+    import datetime as dt
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.canonical.domain import (
@@ -200,53 +201,66 @@ class BindingFixtures(typ.TypedDict):
     now: dt.datetime
 
 
-@pytest.fixture
-def uow_with_fixtures(
+@pytest_asyncio.fixture
+async def uow_with_fixtures(
     uow_with_binding_fixtures: BindingFixtures,
 ) -> BindingFixtures:
     """Backward-compatible alias for binding-resolution tests."""
+    await asyncio.sleep(0)
     return uow_with_binding_fixtures
 
 
-@pytest.fixture
-def binding_test_uow(uow_with_binding_fixtures: BindingFixtures) -> CanonicalUnitOfWork:
+@pytest_asyncio.fixture
+async def binding_test_uow(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> CanonicalUnitOfWork:
     """Return the shared unit of work for binding-resolution tests."""
+    await asyncio.sleep(0)
     return uow_with_binding_fixtures["uow"]
 
 
-@pytest.fixture
-def binding_test_series(uow_with_binding_fixtures: BindingFixtures) -> SeriesProfile:
+@pytest_asyncio.fixture
+async def binding_test_series(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> SeriesProfile:
     """Return the shared series profile for binding-resolution tests."""
+    await asyncio.sleep(0)
     return uow_with_binding_fixtures["series"]
 
 
-@pytest.fixture
-def binding_test_episode(
+@pytest_asyncio.fixture
+async def binding_test_episode(
     uow_with_binding_fixtures: BindingFixtures,
 ) -> CanonicalEpisode:
     """Return the default episode fixture for snapshot tests."""
+    await asyncio.sleep(0)
     return uow_with_binding_fixtures["episode_early"]
 
 
-@pytest.fixture
-def binding_test_document(
+@pytest_asyncio.fixture
+async def binding_test_document(
     uow_with_binding_fixtures: BindingFixtures,
 ) -> ReferenceDocument:
     """Return the shared reference document for binding-resolution tests."""
+    await asyncio.sleep(0)
     return uow_with_binding_fixtures["doc"]
 
 
-@pytest.fixture
-def binding_test_revision_v1(
+@pytest_asyncio.fixture
+async def binding_test_revision_v1(
     uow_with_binding_fixtures: BindingFixtures,
 ) -> ReferenceDocumentRevision:
     """Return the first reference-document revision for binding tests."""
+    await asyncio.sleep(0)
     return uow_with_binding_fixtures["revision_v1"]
 
 
-@pytest.fixture
-def binding_test_now(uow_with_binding_fixtures: BindingFixtures) -> dt.datetime:
+@pytest_asyncio.fixture
+async def binding_test_now(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> dt.datetime:
     """Return the common timestamp baseline for binding-resolution tests."""
+    await asyncio.sleep(0)
     return uow_with_binding_fixtures["now"]
 
 

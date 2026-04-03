@@ -56,11 +56,11 @@ This guide will cover:
 - Creating and updating episode templates linked to series profiles
 - Retrieving change history for series profiles and episode templates
 - Fetching structured brief payloads for downstream generators through
-  `GET /series-profiles/{id}/brief`
+  `GET /series-profiles/{profile_id}/brief`
 - Managing reusable reference documents (including series-aligned host and
   guest profiles) through pinned revision bindings used by structured briefs
 - Resolving the exact reference bindings for a target episode through
-  `GET /series-profiles/{id}/resolved-bindings`
+  `GET /series-profiles/{profile_id}/resolved-bindings`
 - Rendering deterministic prompt scaffolds from structured briefs for
   downstream Large Language Model (LLM) adapters, including interpolation audit
   metadata and optional escaping policies

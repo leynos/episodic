@@ -90,13 +90,19 @@ of which reference documents were used at a specific point in time.
 
 Table: Parameters for `snapshot_resolved_bindings()`
 
-| Parameter              | Type                    | Description                          |
-| ---------------------- | ----------------------- | ------------------------------------ |
-| `uow`                  | `CanonicalUnitOfWork`   | Unit of work for database access     |
-| `resolved`             | `list[ResolvedBinding]` | The resolved bindings to snapshot    |
-| `ingestion_job_id`     | `uuid.UUID`             | The ingestion job identifier         |
-| `canonical_episode_id` | `uuid.UUID or None`     | Optional associated episode          |
-| `created_at`           | `datetime or None`      | Optional timestamp (defaults to now) |
+| Parameter  | Type                    | Description                               |
+| ---------- | ----------------------- | ----------------------------------------- |
+| `uow`      | `CanonicalUnitOfWork`   | Unit of work for database access          |
+| `resolved` | `list[ResolvedBinding]` | The already-resolved bindings to snapshot |
+| `context`  | `SnapshotContext`       | Snapshot metadata passed to the function  |
+
+Table: Fields for `SnapshotContext` used by `snapshot_resolved_bindings()`
+
+| Field                  | Type                | Description                                      |
+| ---------------------- | ------------------- | ------------------------------------------------ |
+| `ingestion_job_id`     | `uuid.UUID`         | The ingestion job identifier                     |
+| `canonical_episode_id` | `uuid.UUID or None` | Optional associated episode                      |
+| `created_at`           | `datetime or None`  | Optional timestamp; defaults to current UTC time |
 
 ### `snapshot_resolved_bindings()` Result
 
@@ -115,10 +121,17 @@ async with SqlAlchemyUnitOfWork(session_factory) as uow:
     source_docs = await snapshot_resolved_bindings(
         uow,
         resolved=resolved,
-        ingestion_job_id=job_id,
-        canonical_episode_id=episode_id,
+        context=SnapshotContext(
+            ingestion_job_id=job_id,
+            canonical_episode_id=episode_id,
+        ),
     )
 ```
+
+Legacy keyword arguments such as `ingestion_job_id`, `canonical_episode_id`,
+and `created_at` are no longer accepted directly by
+`snapshot_resolved_bindings()`. Callers must pass a `SnapshotContext` instance
+instead.
 
 ______________________________________________________________________
 

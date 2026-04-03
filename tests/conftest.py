@@ -209,7 +209,7 @@ def canonical_api_client(
     return testing.TestClient(app)
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _SnapshotTestFixtures:
     uow: CanonicalUnitOfWork
     episode: CanonicalEpisode

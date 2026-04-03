@@ -262,15 +262,21 @@ async def _load_episode_aware_reference_documents(
         series_profile_id=profile_id,
         episode_id=episode_id,
     )
-    resolved_documents = [
-        _serialize_reference_document_for_brief(
-            binding=resolved.binding,
-            document=resolved.document,
-            revision=resolved.revision,
+    resolved_documents: list[JsonMapping] = []
+    for resolved in resolved_bindings:
+        if resolved.document.owner_series_profile_id != profile_id:
+            msg = (
+                f"Reference document {resolved.document.id} does not belong to "
+                f"requested series profile {profile_id}."
+            )
+            raise ValueError(msg)
+        resolved_documents.append(
+            _serialize_reference_document_for_brief(
+                binding=resolved.binding,
+                document=resolved.document,
+                revision=resolved.revision,
+            )
         )
-        for resolved in resolved_bindings
-        if resolved.document.owner_series_profile_id == profile_id
-    ]
 
     template_documents: list[JsonMapping] = []
     all_template_bindings: list[ReferenceBinding] = []
