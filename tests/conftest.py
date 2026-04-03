@@ -15,6 +15,9 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import EpisodeTemplate
     from episodic.canonical.ports import CanonicalUnitOfWork
+    from tests.fixtures.binding import _SnapshotTestFixtures
+
+__all__ = ["_SnapshotTestFixtures"]
 
 pytest_plugins: list[str] = [
     "tests.fixtures.database",
@@ -58,5 +61,9 @@ def __getattr__(name: str) -> object:
         from tests.fixtures.binding import BindingFixtures
 
         return BindingFixtures
+    if name == "_SnapshotTestFixtures":
+        from tests.fixtures.binding import _SnapshotTestFixtures
+
+        return _SnapshotTestFixtures
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)

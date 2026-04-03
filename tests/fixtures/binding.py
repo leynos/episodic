@@ -1,8 +1,10 @@
 """Binding resolution helper functions and fixtures."""
 
+import dataclasses as dc
 import typing as typ
 import uuid
 
+import pytest
 import pytest_asyncio
 
 if typ.TYPE_CHECKING:
@@ -13,6 +15,8 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         CanonicalEpisode,
         EpisodeTemplate,
+        IngestionJob,
+        ReferenceBinding,
         ReferenceDocument,
         ReferenceDocumentRevision,
         SeriesProfile,
@@ -198,6 +202,19 @@ class BindingFixtures(typ.TypedDict):
     now: dt.datetime
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _SnapshotTestFixtures:
+    """Bundle the domain objects used by source-document snapshot tests."""
+
+    uow: CanonicalUnitOfWork
+    episode: CanonicalEpisode
+    document: ReferenceDocument
+    revision_v1: ReferenceDocumentRevision
+    series: SeriesProfile
+    job: IngestionJob
+    reference_binding: ReferenceBinding
+
+
 @pytest_asyncio.fixture
 async def uow_with_binding_fixtures(
     session_factory: async_sessionmaker[AsyncSession],
@@ -247,3 +264,124 @@ async def uow_with_binding_fixtures(
             "revision_v3": revision_v3,
             "now": now,
         }
+
+
+@pytest.fixture
+def uow_with_fixtures(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> BindingFixtures:
+    """Provide the legacy fixture name used by existing binding tests."""
+    return uow_with_binding_fixtures
+
+
+@pytest.fixture
+def binding_test_uow(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> CanonicalUnitOfWork:
+    """Return the shared unit of work for binding-resolution tests."""
+    return uow_with_binding_fixtures["uow"]
+
+
+@pytest.fixture
+def binding_test_series(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> SeriesProfile:
+    """Return the shared series profile for binding-resolution tests."""
+    return uow_with_binding_fixtures["series"]
+
+
+@pytest.fixture
+def binding_test_episode(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> CanonicalEpisode:
+    """Return the default episode fixture for snapshot tests."""
+    return uow_with_binding_fixtures["episode_early"]
+
+
+@pytest.fixture
+def binding_test_revision_v1(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> ReferenceDocumentRevision:
+    """Return the first reference-document revision for binding tests."""
+    return uow_with_binding_fixtures["revision_v1"]
+
+
+@pytest.fixture
+def binding_test_now(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> dt.datetime:
+    """Return the common timestamp baseline for binding-resolution tests."""
+    return uow_with_binding_fixtures["now"]
+
+
+@pytest_asyncio.fixture
+async def binding_snapshot_job(
+    binding_test_uow: CanonicalUnitOfWork,
+    binding_test_series: SeriesProfile,
+    binding_test_episode: CanonicalEpisode,
+    binding_test_now: dt.datetime,
+) -> IngestionJob:
+    """Persist an ingestion job for reference snapshot tests."""
+    from episodic.canonical.domain import IngestionJob, IngestionStatus
+
+    job = IngestionJob(
+        id=uuid.uuid4(),
+        series_profile_id=binding_test_series.id,
+        target_episode_id=binding_test_episode.id,
+        status=IngestionStatus.COMPLETED,
+        requested_at=binding_test_now,
+        started_at=binding_test_now,
+        completed_at=binding_test_now,
+        error_message=None,
+        created_at=binding_test_now,
+        updated_at=binding_test_now,
+    )
+    await binding_test_uow.ingestion_jobs.add(job)
+    await binding_test_uow.commit()
+    return job
+
+
+@pytest_asyncio.fixture
+async def binding_snapshot_reference_binding(
+    binding_test_uow: CanonicalUnitOfWork,
+    binding_test_series: SeriesProfile,
+    binding_test_revision_v1: ReferenceDocumentRevision,
+    binding_test_now: dt.datetime,
+) -> ReferenceBinding:
+    """Persist one series-level reference binding for snapshot tests."""
+    from episodic.canonical.domain import (
+        ReferenceBinding,
+        ReferenceBindingTargetKind,
+    )
+
+    binding = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=binding_test_revision_v1.id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=binding_test_series.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=binding_test_now,
+    )
+    await binding_test_uow.reference_bindings.add(binding)
+    await binding_test_uow.commit()
+    return binding
+
+
+@pytest.fixture
+def binding_snapshot_fixtures(
+    uow_with_binding_fixtures: BindingFixtures,
+    binding_snapshot_job: IngestionJob,
+    binding_snapshot_reference_binding: ReferenceBinding,
+) -> _SnapshotTestFixtures:
+    """Bundle all snapshot-test domain fixtures into a single object."""
+    return _SnapshotTestFixtures(
+        uow=uow_with_binding_fixtures["uow"],
+        episode=uow_with_binding_fixtures["episode_early"],
+        document=uow_with_binding_fixtures["doc"],
+        revision_v1=uow_with_binding_fixtures["revision_v1"],
+        series=uow_with_binding_fixtures["series"],
+        job=binding_snapshot_job,
+        reference_binding=binding_snapshot_reference_binding,
+    )
