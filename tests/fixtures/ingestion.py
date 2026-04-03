@@ -1,15 +1,13 @@
 """Ingestion pipeline and seed-data fixtures."""
 
-from __future__ import annotations
-
-import asyncio
 import typing as typ
 import uuid
 
+import pytest
 import pytest_asyncio
 
 if typ.TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.canonical.domain import SeriesProfile
     from episodic.canonical.ingestion_service import IngestionPipeline
@@ -17,15 +15,14 @@ if typ.TYPE_CHECKING:
 
 @pytest_asyncio.fixture
 async def series_profile_for_ingestion(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> SeriesProfile:
     """Create and persist a series profile for ingestion integration tests.
 
     Parameters
     ----------
-    session_factory : Callable[[], AsyncSession]
-        Factory that returns an async SQLAlchemy session bound to the
-        migrated test database.
+    session_factory : async_sessionmaker[AsyncSession]
+        Async SQLAlchemy session factory bound to the migrated test database.
 
     Returns
     -------
@@ -55,8 +52,8 @@ async def series_profile_for_ingestion(
     return profile
 
 
-@pytest_asyncio.fixture
-async def ingestion_pipeline() -> IngestionPipeline:
+@pytest.fixture
+def ingestion_pipeline() -> IngestionPipeline:
     """Build the standard multi-source ingestion pipeline for tests.
 
     Parameters
@@ -70,9 +67,6 @@ async def ingestion_pipeline() -> IngestionPipeline:
         ``InMemorySourceNormalizer``, ``DefaultWeightingStrategy``, and
         ``HighestWeightConflictResolver``.
     """
-    # Yield control once so async fixture setup is consistently scheduled.
-    await asyncio.sleep(0)
-
     from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
     from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
     from episodic.canonical.adapters.weighting import DefaultWeightingStrategy

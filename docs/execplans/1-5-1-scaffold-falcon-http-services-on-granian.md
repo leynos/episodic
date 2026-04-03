@@ -97,14 +97,14 @@ Success is observable in eight ways:
 - Health tolerance: stop and escalate if readiness checks require a new durable
   database schema or any destructive migration.
 - Behavioural-test tolerance: stop and escalate after three failed attempts to
-  stabilise the same Granian subprocess or BDD scenario.
+  stabilize the same Granian subprocess or BDD scenario.
 
 ## Risks
 
 - Risk: the current Falcon app factory accepts only `UowFactory`, and many
   tests construct it directly. Moving to a richer dependency object may create
   widespread fixture churn. Severity: medium. Likelihood: high. Mitigation:
-  centralise the new dependency object in one module, update shared fixtures in
+  centralize the new dependency object in one module, update shared fixtures in
   `tests/conftest.py` early, and keep the migration mechanical.
 
 - Risk: readiness checks can accidentally couple the inbound HTTP layer to

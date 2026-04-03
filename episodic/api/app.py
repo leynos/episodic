@@ -7,8 +7,9 @@ ready-to-serve app object.
 
 Example
 -------
-from episodic.api.app import create_app
-app = create_app(uow_factory)  # Returns a Falcon ASGI app with API routes.
+from episodic.api import ApiDependencies, create_app
+dependencies = ApiDependencies(uow_factory=uow_factory)
+app = create_app(dependencies)  # Returns a Falcon ASGI app with API routes.
 """
 
 import asyncio

@@ -5,8 +5,6 @@ Falcon app factory. The HTTP layer receives ports and readiness hooks through
 this contract instead of importing concrete adapter implementations directly.
 """
 
-from __future__ import annotations
-
 import collections.abc as cabc
 import dataclasses as dc
 import inspect

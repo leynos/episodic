@@ -62,13 +62,12 @@ def _build_database_probe(
 
     async def check_database() -> bool:
         try:
-            connection = await psycopg.AsyncConnection.connect(probe_database_url)
-            try:
-                async with connection.cursor() as cursor:
-                    await cursor.execute("SELECT 1")
-                    await cursor.fetchone()
-            finally:
-                await connection.close()
+            async with (
+                await psycopg.AsyncConnection.connect(probe_database_url) as connection,
+                connection.cursor() as cursor,
+            ):
+                await cursor.execute("SELECT 1")
+                await cursor.fetchone()
         except psycopg.Error:
             return False
         return True

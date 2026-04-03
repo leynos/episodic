@@ -1,14 +1,13 @@
 """Binding resolution helper functions and fixtures."""
 
-from __future__ import annotations
-
-import datetime as dt  # noqa: TC003
 import typing as typ
 import uuid
 
 import pytest_asyncio
 
 if typ.TYPE_CHECKING:
+    import datetime as dt
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.canonical.domain import (

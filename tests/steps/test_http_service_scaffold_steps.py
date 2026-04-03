@@ -5,7 +5,6 @@ from __future__ import annotations
 import dataclasses as dc
 import os
 import shutil
-import socket
 import subprocess  # noqa: S404 - required to start a local Granian server
 import time
 import typing as typ
@@ -62,13 +61,6 @@ def test_granian_serves_health_endpoints() -> None:
     """Run the Falcon-on-Granian health scenario."""
 
 
-def _find_free_port() -> int:
-    """Bind to an ephemeral port and return its number before releasing it."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
 _GRANIAN_STARTUP_TIMEOUT_SECONDS = 10.0
 _GRANIAN_PROBE_INTERVAL_SECONDS = 0.2
 
@@ -114,6 +106,84 @@ def _wait_for_health_endpoint(
     raise RuntimeError(msg)
 
 
+def _require_granian_process(
+    context: HttpServiceScaffoldBDDContext,
+) -> subprocess.Popen[str]:
+    """Return the running Granian process or fail with a clear error."""
+    if context.process is None:
+        msg = "Granian process has not been started."
+        raise RuntimeError(msg)
+    return context.process
+
+
+def _read_granian_listening_ports(
+    process: subprocess.Popen[str],
+    lsof_path: str,
+) -> list[int]:
+    """Inspect a Granian process and return any listening TCP ports."""
+    result = subprocess.run(  # noqa: S603 - trusted local diagnostic command
+        [
+            lsof_path,
+            "-Pan",
+            "-a",
+            "-p",
+            str(process.pid),
+            "-iTCP",
+            "-sTCP:LISTEN",
+            "-Fn",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode not in {0, 1}:
+        msg = (
+            "Failed to inspect Granian listening sockets.\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+        raise RuntimeError(msg)
+
+    ports: list[int] = []
+    for line in result.stdout.splitlines():
+        if not line.startswith("n"):
+            continue
+        _, _, port = line[1:].rpartition(":")
+        if port.isdigit():
+            ports.append(int(port))
+    return ports
+
+
+def _wait_for_granian_port(context: HttpServiceScaffoldBDDContext) -> int:
+    """Poll the Granian process until it binds an ephemeral listening port."""
+    process = _require_granian_process(context)
+    lsof_path = shutil.which("lsof")
+    if lsof_path is None:
+        msg = "lsof executable not found in PATH"
+        raise RuntimeError(msg)
+
+    deadline = time.monotonic() + _GRANIAN_STARTUP_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            msg = (
+                "Granian exited before binding a listening port.\n"
+                f"{_read_granian_log(context)}"
+            )
+            raise RuntimeError(msg)
+
+        listening_ports = _read_granian_listening_ports(process, lsof_path)
+        if listening_ports:
+            return listening_ports[0]
+
+        time.sleep(_GRANIAN_PROBE_INTERVAL_SECONDS)
+
+    msg = (
+        "Timed out waiting for Granian to bind an ephemeral port.\n"
+        f"{_read_granian_log(context)}"
+    )
+    raise RuntimeError(msg)
+
+
 @given("a Granian Falcon HTTP service is running")
 def given_granian_service_running(
     http_service_scaffold_context: HttpServiceScaffoldBDDContext,
@@ -124,8 +194,6 @@ def given_granian_service_running(
         msg = "granian executable not found in PATH"
         raise RuntimeError(msg)
 
-    port = _find_free_port()
-    http_service_scaffold_context.base_url = f"http://127.0.0.1:{port}"
     if http_service_scaffold_context.log_path is None:
         msg = "Granian log path was not initialized."
         raise RuntimeError(msg)
@@ -146,13 +214,15 @@ def given_granian_service_running(
             "--host",
             "127.0.0.1",
             "--port",
-            str(port),
+            "0",
         ],
         env=env,
         stdout=http_service_scaffold_context.log_handle,
         stderr=subprocess.STDOUT,
         text=True,
     )
+    port = _wait_for_granian_port(http_service_scaffold_context)
+    http_service_scaffold_context.base_url = f"http://127.0.0.1:{port}"
 
 
 @when("an operator checks the health endpoints")

@@ -123,6 +123,36 @@ async def test_health_ready_route_reflects_probe_result(
     assert response.json() == expected_body
 
 
+@pytest.mark.asyncio
+async def test_health_ready_route_treats_probe_exceptions_as_failures() -> None:
+    """Map unexpected probe exceptions to the documented not-ready response."""
+    from episodic.api import ApiDependencies, ReadinessProbe, create_app
+
+    async def check_database() -> bool:
+        await asyncio.sleep(0)
+        msg = "probe failed"
+        raise RuntimeError(msg)
+
+    app = create_app(
+        ApiDependencies(
+            uow_factory=_unexpected_uow_factory,
+            readiness_probes=(ReadinessProbe(name="database", check=check_database),),
+        )
+    )
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "error",
+        "checks": [{"name": "database", "status": "error"}],
+    }
+
+
 def test_api_dependencies_require_callable_uow_factory() -> None:
     """Reject dependency objects without a canonical unit-of-work factory."""
     from episodic.api import ApiDependencies

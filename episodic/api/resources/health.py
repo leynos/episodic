@@ -21,6 +21,14 @@ def _build_check_payload(name: str, status: str) -> HealthCheckPayload:
     }
 
 
+async def _check_probe(probe: ReadinessProbe) -> bool:
+    """Treat unexpected probe exceptions as a failed readiness check."""
+    try:
+        return await probe.check()
+    except Exception:  # noqa: BLE001 - readiness failures should degrade to 503
+        return False
+
+
 class HealthLiveResource:
     """Serve a process liveness response once the app has booted."""
 
@@ -47,7 +55,7 @@ class HealthReadyResource:
         """Return readiness status for all configured probes."""
         del req
         results = await asyncio.gather(
-            *(probe.check() for probe in self._readiness_probes)
+            *(_check_probe(probe) for probe in self._readiness_probes)
         )
         checks = [
             _build_check_payload(
