@@ -57,13 +57,34 @@ async def test_health_live_route_returns_application_ok() -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_ready_route_returns_probe_success() -> None:
-    """Report readiness success when all configured probes succeed."""
+@pytest.mark.parametrize(
+    ("probe_result", "expected_status", "expected_body"),
+    [
+        pytest.param(
+            True,
+            200,
+            {"status": "ok", "checks": [{"name": "database", "status": "ok"}]},
+            id="probe_success",
+        ),
+        pytest.param(
+            False,
+            503,
+            {"status": "error", "checks": [{"name": "database", "status": "error"}]},
+            id="probe_failure",
+        ),
+    ],
+)
+async def test_health_ready_route_reflects_probe_result(
+    probe_result: bool,  # noqa: FBT001
+    expected_status: int,
+    expected_body: dict[str, object],
+) -> None:
+    """Report probe results without mutating the domain."""
     from episodic.api import ApiDependencies, ReadinessProbe, create_app
 
     async def check_database() -> bool:
         await asyncio.sleep(0)
-        return True
+        return probe_result
 
     app = create_app(
         ApiDependencies(
@@ -78,42 +99,8 @@ async def test_health_ready_route_returns_probe_success() -> None:
     ) as client:
         response = await client.get("/health/ready")
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-        "checks": [{"name": "database", "status": "ok"}],
-    }
-
-
-@pytest.mark.asyncio
-async def test_health_ready_route_returns_service_unavailable_on_probe_failure() -> (
-    None
-):
-    """Report probe failures without mutating the domain."""
-    from episodic.api import ApiDependencies, ReadinessProbe, create_app
-
-    async def check_database() -> bool:
-        await asyncio.sleep(0)
-        return False
-
-    app = create_app(
-        ApiDependencies(
-            uow_factory=_unexpected_uow_factory,
-            readiness_probes=(ReadinessProbe(name="database", check=check_database),),
-        )
-    )
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
-        response = await client.get("/health/ready")
-
-    assert response.status_code == 503
-    assert response.json() == {
-        "status": "error",
-        "checks": [{"name": "database", "status": "error"}],
-    }
+    assert response.status_code == expected_status
+    assert response.json() == expected_body
 
 
 def test_api_dependencies_require_callable_uow_factory() -> None:
