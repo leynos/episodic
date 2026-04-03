@@ -15,8 +15,8 @@ if typ.TYPE_CHECKING:
 
     from .types import UowFactory
 
-type ReadinessCheck = cabc.Callable[[], cabc.Awaitable[bool]]
-type ShutdownHook = cabc.Callable[[], cabc.Awaitable[None]]
+type ReadinessCheck = cabc.Callable[[], cabc.Coroutine[None, None, bool]]
+type ShutdownHook = cabc.Callable[[], cabc.Coroutine[None, None, None]]
 
 
 def _validate_async_callable(callback: object, attribute_name: str) -> None:
@@ -65,6 +65,29 @@ class ApiDependencies:
             raise TypeError(msg)
         object.__setattr__(self, "readiness_probes", tuple(self.readiness_probes))
         object.__setattr__(self, "shutdown_hooks", tuple(self.shutdown_hooks))
+        for probe in self.readiness_probes:
+            if not hasattr(probe, "name") or not isinstance(probe.name, str):
+                msg = (
+                    "ApiDependencies.readiness_probes entries must define "
+                    "a string name."
+                )
+                raise TypeError(msg)
+            if not probe.name.strip():
+                msg = (
+                    "ApiDependencies.readiness_probes entries must define "
+                    "a non-empty name."
+                )
+                raise ValueError(msg)
+            if not hasattr(probe, "check"):
+                msg = (
+                    "ApiDependencies.readiness_probes entries must define "
+                    "an async check."
+                )
+                raise TypeError(msg)
+            _validate_async_callable(
+                probe.check,
+                "ApiDependencies.readiness_probes entries",
+            )
         for shutdown_hook in self.shutdown_hooks:
             _validate_async_callable(
                 shutdown_hook,

@@ -170,6 +170,40 @@ def test_readiness_probe_requires_async_check() -> None:
         )
 
 
+def test_api_dependencies_validate_readiness_probe_entries() -> None:
+    """Reject malformed readiness probe objects at dependency construction."""
+    from episodic.api import ApiDependencies, ReadinessProbe
+
+    async def check_database() -> bool:
+        await asyncio.sleep(0)
+        return True
+
+    invalid_probe = typ.cast(
+        "object",
+        type(
+            "_InvalidProbe",
+            (),
+            {"name": "database", "check": lambda: True},
+        )(),
+    )
+    nameless_probe = typ.cast(
+        "object",
+        type("_NamelessProbe", (), {"check": check_database})(),
+    )
+
+    with pytest.raises(TypeError, match="async callable"):
+        ApiDependencies(
+            uow_factory=_unexpected_uow_factory,
+            readiness_probes=(typ.cast("ReadinessProbe", invalid_probe),),
+        )
+
+    with pytest.raises(TypeError, match="string name"):
+        ApiDependencies(
+            uow_factory=_unexpected_uow_factory,
+            readiness_probes=(typ.cast("ReadinessProbe", nameless_probe),),
+        )
+
+
 @pytest.mark.asyncio
 async def test_create_app_runs_shutdown_hooks_during_asgi_shutdown() -> None:
     """Expose a cleanup seam for runtime-managed resources like DB engines."""
@@ -264,9 +298,19 @@ async def test_create_app_from_env_wires_database_readiness_probe(
     strip_driver: bool,  # noqa: FBT001
 ) -> None:
     """Use DATABASE_URL to build a live readiness probe in the runtime factory."""
+    from urllib.parse import urlsplit, urlunsplit
+
     database_url = migrated_database_url
     if strip_driver:
-        database_url = database_url.replace("+asyncpg", "").replace("+psycopg", "")
+        parsed_url = urlsplit(migrated_database_url)
+        base_scheme = parsed_url.scheme.split("+", 1)[0]
+        database_url = urlunsplit((
+            base_scheme,
+            parsed_url.netloc,
+            parsed_url.path,
+            parsed_url.query,
+            parsed_url.fragment,
+        ))
     monkeypatch.setenv("DATABASE_URL", database_url)
 
     from episodic.api.runtime import create_app_from_env

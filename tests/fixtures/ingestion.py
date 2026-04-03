@@ -56,10 +56,6 @@ async def series_profile_for_ingestion(
 def ingestion_pipeline() -> IngestionPipeline:
     """Build the standard multi-source ingestion pipeline for tests.
 
-    Parameters
-    ----------
-    None
-
     Returns
     -------
     IngestionPipeline

@@ -117,7 +117,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
     """Build async context managers yielding configured OpenAI adapters."""
 
     @contextlib.asynccontextmanager
-    async def _build_adapter(  # noqa: PLR0913 - mirrors adapter override knobs in tests; see PR #49
+    async def _build_adapter(  # noqa: PLR0913, TD001  # FIXME(@codex): https://github.com/leynos/episodic/pull/49
         *,
         transport: httpx.AsyncBaseTransport,
         provider_operation: str | LLMProviderOperation = "chat_completions",

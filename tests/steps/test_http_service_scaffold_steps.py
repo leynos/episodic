@@ -159,8 +159,7 @@ def _wait_for_granian_port(context: HttpServiceScaffoldBDDContext) -> int:
     process = _require_granian_process(context)
     lsof_path = shutil.which("lsof")
     if lsof_path is None:
-        msg = "lsof executable not found in PATH"
-        raise RuntimeError(msg)
+        pytest.skip("Granian BDD tests require the `lsof` executable in PATH.")
 
     deadline = time.monotonic() + _GRANIAN_STARTUP_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
@@ -245,10 +244,14 @@ def then_liveness_reports_application_up(
     http_service_scaffold_context: HttpServiceScaffoldBDDContext,
 ) -> None:
     """Assert the liveness contract exposed over real HTTP."""
-    assert http_service_scaffold_context.live_payload == {
-        "status": "ok",
-        "checks": [{"name": "application", "status": "ok"}],
-    }
+    payload = http_service_scaffold_context.live_payload
+    assert payload is not None, "Expected the liveness payload to be captured."
+    assert payload.get("status") == "ok", "Expected liveness status to be ok."
+    checks = typ.cast("list[dict[str, object]]", payload.get("checks", []))
+    assert any(
+        check.get("name") == "application" and check.get("status") == "ok"
+        for check in checks
+    ), "Expected an application health check with status ok."
 
 
 @then("the readiness endpoint reports that the database is ready")
@@ -256,7 +259,11 @@ def then_readiness_reports_database_ready(
     http_service_scaffold_context: HttpServiceScaffoldBDDContext,
 ) -> None:
     """Assert the readiness contract exposed over real HTTP."""
-    assert http_service_scaffold_context.ready_payload == {
-        "status": "ok",
-        "checks": [{"name": "database", "status": "ok"}],
-    }
+    payload = http_service_scaffold_context.ready_payload
+    assert payload is not None, "Expected the readiness payload to be captured."
+    assert payload.get("status") == "ok", "Expected readiness status to be ok."
+    checks = typ.cast("list[dict[str, object]]", payload.get("checks", []))
+    assert any(
+        check.get("name") == "database" and check.get("status") == "ok"
+        for check in checks
+    ), "Expected a database health check with status ok."

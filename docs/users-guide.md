@@ -102,7 +102,7 @@ Reusable reference-document workflows currently support:
   provenance-backed `source_documents`, so audit trails record the exact
   reference revisions consumed for that episode build.
 
-### HTTP Service Health and Runtime
+### HTTP service health and runtime
 
 The canonical-content HTTP service now runs as a Falcon ASGI application under
 Granian.
