@@ -94,13 +94,17 @@ testable service that a future LangGraph node can compose.
 
 ## Risks
 
-- Risk: `tei_rapporteur` may not support arbitrary `<div type="notes">`
-  elements in the TEI body model, which would force show-notes TEI to be
-  assembled as raw XML text rather than through the structured API. Severity:
-  medium. Likelihood: medium. Mitigation: prototype TEI enrichment early (Stage
-  B) and verify that `tei_rapporteur.parse_xml(...)` accepts the enriched
-  document. If validation fails, fall back to string-based TEI assembly with a
-  well-tested builder function, and document the gap.
+- Risk: **CONFIRMED** — `tei_rapporteur` does not support `<div>`, `<list>`,
+  `<item>`, or `<label>` elements at any layer. The Rust `BodyBlock` enum has
+  only `Paragraph` and `Utterance` variants. The XML parser silently ignores
+  `<div>` and its children. The ODD and Relax NG schemas restrict `<body>` to
+  `<p>` and `<u>` only. The Python structs mirror this restriction. Enriched
+  documents containing `<div type="notes">` will lose the notes division on
+  round-trip through `tei_rapporteur`. Severity: high. Likelihood: certain.
+  Mitigation: request `<div>`/`<list>`/`<item>` support in tei-rapporteur
+  (see "Surprises & discoveries" for the full change manifest). Until that
+  lands, fall back to `xml.etree.ElementTree` for TEI body enrichment with
+  well-formedness validation only. Document the gap in ADR-002.
 
 - Risk: the LLM response format for show notes may be difficult to parse
   reliably, especially for timestamp extraction. Severity: medium. Likelihood:
@@ -142,8 +146,60 @@ testable service that a future LangGraph node can compose.
 
 ## Surprises & discoveries
 
-No implementation has started yet. This section will be updated as work
-proceeds.
+### tei-rapporteur does not support `<div>`, `<list>`, or `<item>` (2026-04-03)
+
+Source code inspection of tei-rapporteur at commit `ad7642f` confirms that the
+body model is restricted to `<p>` and `<u>` elements at every layer:
+
+- **Rust core**: `BodyBlock` enum has two variants: `Paragraph(P)` and
+  `Utterance(Utterance)`. No `Div` variant. `TeiBody` only exposes
+  `push_paragraph()` and `push_utterance()`.
+- **XML parser**: `handle_body_content_start()` recognises only `b"p"` and
+  `b"u"`. A `<div>` element is silently ignored. The parser state machine has
+  no `InDiv`, `InList`, or `InItem` states.
+- **XML emitter**: serde derives on `BodyBlock` can only produce `<p>` and
+  `<u>`. Cannot emit `<div>`.
+- **ODD schema**: `<body>` content model is
+  `alternate(elementRef(p), elementRef(u))`. The `textstructure` module
+  includes only `TEI text body` — `div` is excluded. The `core` module
+  includes only `p hi title desc` — `list` and `item` are excluded.
+- **Relax NG schema**: mirrors the ODD. No `div`, `list`, or `item`
+  definitions exist.
+- **Python structs**: `BodyBlock: TypeAlias = Paragraph | Utterance`. No
+  `Div`, `List`, or `Item` types.
+- **JSON schema**: `BodyBlock` `oneOf` contains only `p` and `u`.
+
+**Impact**: enriched TEI containing `<div type="notes">` will silently lose
+the notes division when parsed by `tei_rapporteur`. The `emit_xml` path
+cannot produce `<div>` elements. Round-trip through the library destroys the
+enrichment.
+
+**Requested changes to tei-rapporteur** (filed with maintainer):
+
+1. New Rust types: `Div` (with `@type`, `@xml:id`), `List` (with
+   `Vec<Item>`), `Item` (with optional `<label>`, inline content, `@n`,
+   `@corresp`, `@xml:id`), `Label` (inline content wrapper).
+2. New `BodyBlock::Div(Div)` variant and `TeiBody::push_div()`.
+3. New `DivContent` enum for `<div>` children: `{List, Paragraph, Utterance}`.
+4. Parser: new `InDiv`, `InList`, `InItem` states and handler methods.
+5. ODD/RNG schema updates: add `div` to `textstructure` include, add `list`,
+   `item`, `label` to `core` include, new `<elementSpec>` entries, updated
+   `<body>` content model.
+6. Python structs: new `Div`, `List`, `Item` msgspec classes, updated
+   `BodyBlock` TypeAlias.
+7. JSON schema: new `$defs`, updated `BodyBlock` oneOf.
+8. Validation: traverse `Div` children for `xml:id` uniqueness and pointer
+   resolution.
+9. BDD tests for div/list parsing, emission, and round-trip.
+
+Estimated scope: ~15-20 files across all crates. This is a cross-cutting
+change touching `tei-core`, `tei-xml`, `tei-py`, both schema formats, and
+the JSON schema.
+
+**Interim approach**: use `xml.etree.ElementTree` for TEI body enrichment
+with `ET.fromstring(...)` well-formedness validation. Document the gap in
+ADR-002. Once tei-rapporteur ships `<div>` support, migrate the enrichment
+helper to use the structured API and add round-trip validation tests.
 
 ## Decision log
 
@@ -169,9 +225,11 @@ proceeds.
   with `<list>` and `<item>` children. Rationale: TEI P5 guidelines use `<div>`
   with a `@type` attribute to denote functional divisions of text. A `<list>`
   of `<item>` elements is the natural TEI idiom for enumerating topics.
-  Timestamps and locators attach as attributes on `<item>`. This is compatible
-  with the existing `tei_rapporteur` body model which supports `<div>` and
-  structured content. Date/Author: 2026-04-02 / ExecPlan.
+  Timestamps and locators attach as attributes on `<item>`. **Note:**
+  tei-rapporteur does not currently support `<div>`, `<list>`, or `<item>`.
+  Changes to the library have been requested. Until they land, TEI enrichment
+  will use `xml.etree.ElementTree` for XML manipulation with well-formedness
+  validation only. Date/Author: 2026-04-02 / ExecPlan; updated 2026-04-03.
 
 ## Outcomes & retrospective
 
