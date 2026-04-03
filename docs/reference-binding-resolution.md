@@ -78,7 +78,7 @@ ______________________________________________________________________
 **Location:** `episodic/canonical/reference_documents/snapshots.py`
 
 Persists resolved bindings as provenance source documents, creating a snapshot
-of which reference documents were used at a specific point in time.
+of which reference documents were used at a specific time.
 
 ### `snapshot_resolved_bindings()` Usage
 
@@ -112,9 +112,11 @@ Table: Fields for `SnapshotContext` used by `snapshot_resolved_bindings()`
 
 ```python
 from episodic.canonical.reference_documents import (
+    SnapshotContext,
     resolve_bindings,
     snapshot_resolved_bindings,
 )
+from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 async with SqlAlchemyUnitOfWork(session_factory) as uow:
     resolved = await resolve_bindings(uow, ...)
