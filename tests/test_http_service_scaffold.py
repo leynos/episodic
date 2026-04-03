@@ -37,8 +37,26 @@ def _unexpected_uow_factory() -> CanonicalUnitOfWork:
 
 
 @pytest.mark.asyncio
-async def test_health_live_route_returns_application_ok() -> None:
-    """Expose a deterministic liveness payload once the app has booted."""
+@pytest.mark.parametrize(
+    ("endpoint", "expected_body"),
+    [
+        pytest.param(
+            "/health/live",
+            {"status": "ok", "checks": [{"name": "application", "status": "ok"}]},
+            id="liveness",
+        ),
+        pytest.param(
+            "/health/ready",
+            {"status": "ok", "checks": []},
+            id="readiness_no_probes",
+        ),
+    ],
+)
+async def test_health_endpoints_without_probes_return_ok(
+    endpoint: str,
+    expected_body: dict[str, object],
+) -> None:
+    """Expose the baseline health contract when no probes are configured."""
     from episodic.api import ApiDependencies, create_app
 
     app = create_app(ApiDependencies(uow_factory=_unexpected_uow_factory))
@@ -47,33 +65,10 @@ async def test_health_live_route_returns_application_ok() -> None:
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        response = await client.get("/health/live")
+        response = await client.get(endpoint)
 
     assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-        "checks": [{"name": "application", "status": "ok"}],
-    }
-
-
-@pytest.mark.asyncio
-async def test_health_ready_route_with_no_probes_returns_ok_with_empty_checks() -> None:
-    """Treat an app with no infrastructural probes as ready by default."""
-    from episodic.api import ApiDependencies, create_app
-
-    app = create_app(ApiDependencies(uow_factory=_unexpected_uow_factory))
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
-        response = await client.get("/health/ready")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-        "checks": [],
-    }
+    assert response.json() == expected_body
 
 
 @pytest.mark.asyncio
@@ -256,41 +251,23 @@ def test_create_app_from_env_rejects_unsupported_database_driver(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "strip_driver",
+    [
+        pytest.param(False, id="async_dialect_url"),
+        pytest.param(True, id="plain_postgresql_url"),
+    ],
+)
 async def test_create_app_from_env_wires_database_readiness_probe(
     migrated_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
+    strip_driver: bool,  # noqa: FBT001
 ) -> None:
     """Use DATABASE_URL to build a live readiness probe in the runtime factory."""
-    monkeypatch.setenv("DATABASE_URL", migrated_database_url)
-
-    from episodic.api.runtime import create_app_from_env
-
-    app = create_app_from_env()
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
-        response = await client.get("/health/ready")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "status": "ok",
-        "checks": [{"name": "database", "status": "ok"}],
-    }
-
-
-@pytest.mark.asyncio
-async def test_create_app_from_env_accepts_plain_postgresql_database_url(
-    migrated_database_url: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Normalize a plain PostgreSQL URL to the async dialect automatically."""
-    plain_database_url = migrated_database_url.replace("+asyncpg", "").replace(
-        "+psycopg",
-        "",
-    )
-    monkeypatch.setenv("DATABASE_URL", plain_database_url)
+    database_url = migrated_database_url
+    if strip_driver:
+        database_url = database_url.replace("+asyncpg", "").replace("+psycopg", "")
+    monkeypatch.setenv("DATABASE_URL", database_url)
 
     from episodic.api.runtime import create_app_from_env
 
