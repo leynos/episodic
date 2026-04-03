@@ -11,6 +11,7 @@ from episodic.api.app import create_app
 app = create_app(uow_factory)  # Returns a Falcon ASGI app with API routes.
 """
 
+import asyncio
 import typing as typ
 
 from falcon import asgi
@@ -35,12 +36,37 @@ from .resources import (
 )
 
 if typ.TYPE_CHECKING:
-    from .dependencies import ApiDependencies
+    from .dependencies import ApiDependencies, ShutdownHook
+
+
+class _ShutdownHooksMiddleware:
+    """Run injected async cleanup hooks during the ASGI shutdown phase."""
+
+    def __init__(self, shutdown_hooks: tuple[ShutdownHook, ...]) -> None:
+        self._shutdown_hooks = shutdown_hooks
+
+    async def process_shutdown(
+        self,
+        scope: dict[str, typ.Any],
+        event: dict[str, typ.Any],
+    ) -> None:
+        """Release runtime-managed resources before the process exits."""
+        del scope, event
+        await asyncio.gather(
+            *(shutdown_hook() for shutdown_hook in self._shutdown_hooks)
+        )
 
 
 def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
+    if dependencies.shutdown_hooks:
+        # Falcon supports lifespan middleware at runtime, but its exported
+        # middleware type union does not model process_shutdown-only hooks.
+        app.add_middleware(
+            typ.cast("typ.Any", _ShutdownHooksMiddleware(dependencies.shutdown_hooks))
+        )
+
     uow_factory = dependencies.uow_factory
 
     app.add_route("/health/live", HealthLiveResource())

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import typing as typ
 
 import falcon
@@ -45,12 +46,15 @@ class HealthReadyResource:
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Return readiness status for all configured probes."""
         del req
+        results = await asyncio.gather(
+            *(probe.check() for probe in self._readiness_probes)
+        )
         checks = [
             _build_check_payload(
                 probe.name,
-                "ok" if await probe.check() else "error",
+                "ok" if result else "error",
             )
-            for probe in self._readiness_probes
+            for probe, result in zip(self._readiness_probes, results, strict=True)
         ]
         is_ready = all(check["status"] == "ok" for check in checks)
         resp.media = {

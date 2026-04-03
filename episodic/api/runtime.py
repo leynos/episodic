@@ -7,12 +7,13 @@ import os
 import typing as typ
 
 import psycopg
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 from . import create_app
-from .dependencies import ApiDependencies, ReadinessProbe
+from .dependencies import ApiDependencies, ReadinessProbe, ShutdownHook
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -31,6 +32,11 @@ class RuntimeConfig:
     database_url: str
 
 
+_SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
+_SUPPORTED_ASYNC_POSTGRES_DRIVERS = frozenset({"asyncpg", "psycopg"})
+_DEFAULT_ASYNC_POSTGRES_DRIVER = "psycopg"
+
+
 def _load_runtime_config(
     environ: cabc.Mapping[str, str] | None = None,
 ) -> RuntimeConfig:
@@ -45,14 +51,14 @@ def _load_runtime_config(
 
 def _build_database_probe(
     database_url: str,
-) -> tuple[ReadinessProbe, UowFactory]:
+) -> tuple[ReadinessProbe, UowFactory, ShutdownHook]:
     """Build the database readiness probe and unit-of-work factory."""
-    engine = create_async_engine(database_url, pool_pre_ping=True)
+    async_database_url, probe_database_url = _normalize_database_urls(database_url)
+    engine = create_async_engine(async_database_url, pool_pre_ping=True)
     session_factory = async_sessionmaker(
         engine,
         expire_on_commit=False,
     )
-    probe_database_url = database_url.replace("+asyncpg", "").replace("+psycopg", "")
 
     async def check_database() -> bool:
         try:
@@ -70,16 +76,56 @@ def _build_database_probe(
     def uow_factory() -> CanonicalUnitOfWork:
         return SqlAlchemyUnitOfWork(session_factory)
 
-    return ReadinessProbe(name="database", check=check_database), uow_factory
+    return (
+        ReadinessProbe(name="database", check=check_database),
+        uow_factory,
+        engine.dispose,
+    )
+
+
+def _normalize_database_urls(database_url: str) -> tuple[str, str]:
+    """Build async-engine and sync-probe URLs from one operator-facing setting."""
+    url = make_url(database_url)
+    base_driver, separator, driver = url.drivername.partition("+")
+    if base_driver not in _SUPPORTED_POSTGRES_DRIVERS:
+        msg = (
+            "DATABASE_URL must use PostgreSQL, for example "
+            "postgresql://..., postgresql+asyncpg://..., or "
+            "postgresql+psycopg://...."
+        )
+        raise RuntimeError(msg)
+
+    if not separator:
+        async_driver = _DEFAULT_ASYNC_POSTGRES_DRIVER
+    elif driver in _SUPPORTED_ASYNC_POSTGRES_DRIVERS:
+        async_driver = driver
+    else:
+        msg = (
+            "DATABASE_URL async drivers must be one of asyncpg or psycopg "
+            f"(got {url.drivername!r})."
+        )
+        raise RuntimeError(msg)
+
+    normalized_driver = "postgresql"
+    async_database_url = url.set(
+        drivername=f"{normalized_driver}+{async_driver}"
+    ).render_as_string(hide_password=False)
+    probe_database_url = url.set(drivername=normalized_driver).render_as_string(
+        hide_password=False
+    )
+    return async_database_url, probe_database_url
 
 
 def create_app_from_env() -> asgi.App:
     """Build the Falcon ASGI service from environment configuration."""
     config = _load_runtime_config()
-    database_probe, uow_factory = _build_database_probe(config.database_url)
+    database_probe, uow_factory, shutdown_hook = _build_database_probe(
+        config.database_url
+    )
     return create_app(
         ApiDependencies(
             uow_factory=uow_factory,
             readiness_probes=(database_probe,),
+            shutdown_hooks=(shutdown_hook,),
         )
     )

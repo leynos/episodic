@@ -57,6 +57,26 @@ async def test_health_live_route_returns_application_ok() -> None:
 
 
 @pytest.mark.asyncio
+async def test_health_ready_route_with_no_probes_returns_ok_with_empty_checks() -> None:
+    """Treat an app with no infrastructural probes as ready by default."""
+    from episodic.api import ApiDependencies, create_app
+
+    app = create_app(ApiDependencies(uow_factory=_unexpected_uow_factory))
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "checks": [],
+    }
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("probe_result", "expected_status", "expected_body"),
     [
@@ -111,6 +131,65 @@ def test_api_dependencies_require_callable_uow_factory() -> None:
         ApiDependencies(uow_factory=typ.cast("UowFactory", None))
 
 
+def test_readiness_probe_requires_async_check() -> None:
+    """Reject sync readiness callbacks that would fail when awaited."""
+    from episodic.api import ReadinessProbe
+
+    def check_database() -> bool:
+        return True
+
+    with pytest.raises(TypeError, match="async callable"):
+        ReadinessProbe(
+            name="database",
+            check=typ.cast("typ.Any", check_database),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_app_runs_shutdown_hooks_during_asgi_shutdown() -> None:
+    """Expose a cleanup seam for runtime-managed resources like DB engines."""
+    from episodic.api import ApiDependencies, create_app
+
+    hook_calls: list[str] = []
+
+    async def shutdown_hook() -> None:
+        await asyncio.sleep(0)
+        hook_calls.append("shutdown")
+
+    app = create_app(
+        ApiDependencies(
+            uow_factory=_unexpected_uow_factory,
+            shutdown_hooks=(shutdown_hook,),
+        )
+    )
+    sent_events: list[dict[str, str]] = []
+    receive_queue = asyncio.Queue[dict[str, str]]()
+    await receive_queue.put({"type": "lifespan.startup"})
+    await receive_queue.put({"type": "lifespan.shutdown"})
+
+    async def receive() -> dict[str, str]:
+        return await receive_queue.get()
+
+    async def send(message: dict[str, str]) -> None:
+        sent_events.append(message)
+        await asyncio.sleep(0)
+
+    await app(
+        {
+            "type": "lifespan",
+            "asgi": {"spec_version": "2.0", "version": "3.0"},
+        },
+        receive,
+        send,
+    )
+
+    assert hook_calls == ["shutdown"]
+    assert sent_events == [
+        {"type": "lifespan.startup.complete"},
+        {"type": "lifespan.shutdown.complete"},
+    ]
+
+
 @pytest.mark.asyncio
 async def test_create_app_keeps_existing_canonical_routes_working(
     canonical_api_async_client: httpx.AsyncClient,
@@ -134,6 +213,18 @@ def test_create_app_from_env_requires_database_url(
         create_app_from_env()
 
 
+def test_create_app_from_env_rejects_unsupported_database_driver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail fast with a clear error for non-PostgreSQL database URLs."""
+    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///tmp/episodic.db")
+
+    from episodic.api.runtime import create_app_from_env
+
+    with pytest.raises(RuntimeError, match="PostgreSQL"):
+        create_app_from_env()
+
+
 @pytest.mark.asyncio
 async def test_create_app_from_env_wires_database_readiness_probe(
     migrated_database_url: str,
@@ -141,6 +232,35 @@ async def test_create_app_from_env_wires_database_readiness_probe(
 ) -> None:
     """Use DATABASE_URL to build a live readiness probe in the runtime factory."""
     monkeypatch.setenv("DATABASE_URL", migrated_database_url)
+
+    from episodic.api.runtime import create_app_from_env
+
+    app = create_app_from_env()
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "checks": [{"name": "database", "status": "ok"}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_app_from_env_accepts_plain_postgresql_database_url(
+    migrated_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Normalize a plain PostgreSQL URL to the async dialect automatically."""
+    plain_database_url = migrated_database_url.replace("+asyncpg", "").replace(
+        "+psycopg",
+        "",
+    )
+    monkeypatch.setenv("DATABASE_URL", plain_database_url)
 
     from episodic.api.runtime import create_app_from_env
 

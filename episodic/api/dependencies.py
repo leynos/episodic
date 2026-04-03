@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import collections.abc as cabc
 import dataclasses as dc
+import inspect
 import typing as typ
 
 if typ.TYPE_CHECKING:
@@ -17,6 +18,22 @@ if typ.TYPE_CHECKING:
     from .types import UowFactory
 
 type ReadinessCheck = cabc.Callable[[], cabc.Awaitable[bool]]
+type ShutdownHook = cabc.Callable[[], cabc.Awaitable[None]]
+
+
+def _validate_async_callable(callback: object, attribute_name: str) -> None:
+    """Require a coroutine function for adapter hooks invoked with ``await``."""
+    if not callable(callback):
+        msg = f"{attribute_name} must be callable."
+        raise TypeError(msg)
+
+    if inspect.iscoroutinefunction(callback) or inspect.iscoroutinefunction(
+        type(callback).__call__
+    ):
+        return
+
+    msg = f"{attribute_name} must be an async callable returning an awaitable."
+    raise TypeError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -31,9 +48,7 @@ class ReadinessProbe:
         if not self.name.strip():
             msg = "ReadinessProbe.name must be a non-empty string."
             raise ValueError(msg)
-        if not callable(self.check):
-            msg = "ReadinessProbe.check must be callable."
-            raise TypeError(msg)
+        _validate_async_callable(self.check, "ReadinessProbe.check")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -42,6 +57,7 @@ class ApiDependencies:
 
     uow_factory: UowFactory
     readiness_probes: tuple[ReadinessProbe, ...] = ()
+    shutdown_hooks: tuple[ShutdownHook, ...] = ()
     llm_port: LLMPort | None = None
 
     def __post_init__(self) -> None:
@@ -50,3 +66,9 @@ class ApiDependencies:
             msg = "ApiDependencies.uow_factory must be callable."
             raise TypeError(msg)
         object.__setattr__(self, "readiness_probes", tuple(self.readiness_probes))
+        object.__setattr__(self, "shutdown_hooks", tuple(self.shutdown_hooks))
+        for shutdown_hook in self.shutdown_hooks:
+            _validate_async_callable(
+                shutdown_hook,
+                "ApiDependencies.shutdown_hooks entries",
+            )

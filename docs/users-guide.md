@@ -116,7 +116,10 @@ granian episodic.api.runtime:create_app_from_env --interface asgi --factory
 Required environment:
 
 - `DATABASE_URL` must point at the canonical Postgres database before the
-  service starts.
+  service starts. The runtime accepts a plain Postgres URL such as
+  `postgresql://...` and normalizes it to the supported async driver
+  automatically. Driver-qualified URLs such as `postgresql+asyncpg://...` and
+  `postgresql+psycopg://...` are also accepted.
 
 Health endpoints:
 

@@ -26,7 +26,9 @@ The canonical HTTP adapter has two layers:
 - `episodic/api/app.py` is the pure Falcon route factory.
 - `episodic/api/runtime.py` is the Granian composition root that reads
   `DATABASE_URL`, creates the SQLAlchemy session factory, and injects readiness
-  probes through `ApiDependencies`.
+  probes through `ApiDependencies`. It also normalizes plain `postgresql://...`
+  URLs to the supported async dialect and disposes the long-lived async engine
+  via Falcon's ASGI shutdown lifecycle.
 
 Run the service locally with:
 
