@@ -1,7 +1,5 @@
 """Falcon HTTP/ASGI test-client fixtures."""
 
-from __future__ import annotations
-
 import typing as typ
 
 import httpx
@@ -18,17 +16,14 @@ if typ.TYPE_CHECKING:
 
 @pytest.fixture
 def canonical_api_client(
-    session_factory: async_sessionmaker[AsyncSession],
+    canonical_api_dependencies: ApiDependencies,
 ) -> testing.TestClient:
     """Build a Falcon test client for profile/template REST endpoints."""
     from falcon import testing
 
-    from episodic.api import ApiDependencies, create_app
-    from episodic.canonical.storage import SqlAlchemyUnitOfWork
+    from episodic.api import create_app
 
-    app = create_app(
-        ApiDependencies(uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory))
-    )
+    app = create_app(canonical_api_dependencies)
     return testing.TestClient(app)
 
 

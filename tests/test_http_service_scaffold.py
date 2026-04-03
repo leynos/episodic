@@ -1,7 +1,5 @@
 """Tests for the Falcon-on-Granian HTTP service scaffold."""
 
-from __future__ import annotations
-
 import asyncio
 import typing as typ
 

@@ -14,7 +14,7 @@ dependencies = [
     "granian>=2.2,<3.0",
     "httpx>=0.28,<1.0",
     "langgraph>=1.1,<2.0",
-    "psycopg>=3.0.0,<4.0",
+    "psycopg[binary]>=3.0.0,<4.0",
     "sqlalchemy>=2.0.34,<3.0.0",
     "tenacity>=8.0,<10",
     "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@ad7642f21aeb3c0f3b517057f1bed76056d85407",

@@ -1,7 +1,5 @@
 """Database infrastructure fixtures (py-pglite, SQLAlchemy)."""
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import os
@@ -91,22 +89,29 @@ async def _pglite_sqlalchemy_manager(
         await manager.stop()
 
 
-@contextlib.contextmanager
-def temporary_drift_table() -> typ.Iterator[sa.Table]:
-    """Add a temporary table to Base.metadata and remove it on exit.
+if typ.TYPE_CHECKING:
 
-    This helper is shared between the unit tests and BDD steps that
-    verify schema drift detection against an unmigrated table.
-    """
-    table = sa.Table(
-        "_test_drift_table",
-        Base.metadata,
-        sa.Column("id", sa.Integer, primary_key=True),
-    )
-    try:
-        yield table
-    finally:
-        Base.metadata.remove(table)
+    def temporary_drift_table() -> typ.ContextManager[sa.Table]:
+        """Add a temporary table to Base.metadata and remove it on exit."""
+
+else:
+
+    @contextlib.contextmanager
+    def temporary_drift_table() -> typ.Iterator[sa.Table]:
+        """Add a temporary table to Base.metadata and remove it on exit.
+
+        This helper is shared between the unit tests and BDD steps that
+        verify schema drift detection against an unmigrated table.
+        """
+        table = sa.Table(
+            "_test_drift_table",
+            Base.metadata,
+            sa.Column("id", sa.Integer, primary_key=True),
+        )
+        try:
+            yield table
+        finally:
+            Base.metadata.remove(table)
 
 
 @pytest_asyncio.fixture

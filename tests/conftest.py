@@ -1,11 +1,15 @@
 """Root pytest configuration: plugin registration and cross-cutting fixtures."""
 
-from __future__ import annotations
-
 import asyncio
+import os
 import typing as typ
 
 import pytest
+
+# psycopg-binary currently segfaults against py-pglite in this test harness.
+os.environ.setdefault("PSYCOPG_IMPL", "python")
+
+from tests.fixtures.binding import BindingFixtures, _SnapshotTestFixtures
 
 if typ.TYPE_CHECKING:
     import datetime as dt
@@ -15,9 +19,8 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import EpisodeTemplate
     from episodic.canonical.ports import CanonicalUnitOfWork
-    from tests.fixtures.binding import _SnapshotTestFixtures
 
-__all__ = ["_SnapshotTestFixtures"]
+__all__ = ["BindingFixtures", "_SnapshotTestFixtures"]
 
 pytest_plugins: list[str] = [
     "tests.fixtures.database",
@@ -53,17 +56,3 @@ async def create_episode_template_for_binding_tests(
     )
 
     return await _create_episode_template(uow, series_id, now)
-
-
-def __getattr__(name: str) -> object:
-    """Provide compatibility re-exports for tests importing from conftest."""
-    if name == "BindingFixtures":
-        from tests.fixtures.binding import BindingFixtures
-
-        return BindingFixtures
-    if name == "_SnapshotTestFixtures":
-        from tests.fixtures.binding import _SnapshotTestFixtures
-
-        return _SnapshotTestFixtures
-    msg = f"module {__name__!r} has no attribute {name!r}"
-    raise AttributeError(msg)

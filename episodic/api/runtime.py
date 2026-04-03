@@ -1,7 +1,5 @@
 """Granian runtime composition root for the Falcon ASGI service."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import os
 import typing as typ
