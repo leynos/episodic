@@ -9,3 +9,4 @@ __pycache__/
 .bin/
 **/*.rs.bk
 *.swp
+.agents/mcp/context_pack/packs/.repo.lock
