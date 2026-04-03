@@ -82,7 +82,6 @@ async def test_snapshot_resolved_bindings_persists_reference_source_documents(
 ) -> None:
     """Resolved bindings should be persisted as provenance source documents."""
     fx = binding_snapshot_fixtures
-    real_datetime = snapshot_module.dt.datetime
 
     class _FixedDateTime(dt.datetime):
         @classmethod
@@ -95,11 +94,8 @@ async def test_snapshot_resolved_bindings_persists_reference_source_documents(
 
     if requested_created_at is None:
         monkeypatch.setattr(snapshot_module.dt, "datetime", _FixedDateTime)
-    try:
-        await _assert_snapshot_persistence(
-            fx=fx,
-            requested_created_at=requested_created_at,
-            expected_created_at=expected_created_at,
-        )
-    finally:
-        monkeypatch.setattr(snapshot_module.dt, "datetime", real_datetime)
+    await _assert_snapshot_persistence(
+        fx=fx,
+        requested_created_at=requested_created_at,
+        expected_created_at=expected_created_at,
+    )

@@ -254,9 +254,9 @@ When `episode_id` is provided, the resolution algorithm works as follows:
 
 ### `resolve_bindings()` Errors
 
-- If `episode_id` is provided but the episode doesn't exist or doesn't belong
+- If `episode_id` is provided, but the episode doesn't exist or doesn't belong
   to the series profile, returns an empty list
-- If `template_id` is provided but the template doesn't exist or doesn't belong
+- If `template_id` is provided, but the template doesn't exist or doesn't belong
   to the series profile, template bindings are skipped
 
 ### `snapshot_resolved_bindings()` Errors
