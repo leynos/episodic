@@ -14,6 +14,7 @@ class _ApiFixture:
     primary_profile_id: str
     secondary_profile_id: str
     template_id: str
+    secondary_template_id: str
 
 
 def _post_and_return_id(
@@ -70,10 +71,25 @@ def _build_api_fixture(client: testing.TestClient) -> _ApiFixture:
         },
         assertion_message="Expected template creation to return 201.",
     )
+    secondary_template_id = _post_and_return_id(
+        client,
+        "/episode-templates",
+        {
+            "series_profile_id": secondary_profile_id,
+            "slug": "api-reference-secondary-template",
+            "title": "api-reference-secondary-template title",
+            "description": "api-reference-secondary-template description",
+            "structure": {"segments": ["intro", "outro"]},
+            "actor": "api-reference@example.com",
+            "note": "Create secondary template",
+        },
+        assertion_message="Expected secondary template creation to return 201.",
+    )
     return _ApiFixture(
         primary_profile_id=primary_profile_id,
         secondary_profile_id=secondary_profile_id,
         template_id=template_id,
+        secondary_template_id=secondary_template_id,
     )
 
 

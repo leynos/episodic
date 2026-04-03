@@ -5,7 +5,6 @@ import typing as typ
 import uuid
 
 import pytest
-import pytest_asyncio
 
 from episodic.canonical.domain import (
     ReferenceBinding,
@@ -22,13 +21,6 @@ if typ.TYPE_CHECKING:
 from tests.conftest import create_episode_template_for_binding_tests
 
 pytestmark = pytest.mark.asyncio
-
-
-# Alias fixture for backward compatibility
-@pytest_asyncio.fixture
-def uow_with_fixtures(uow_with_binding_fixtures):  # noqa: ANN001, ANN201
-    """Alias for uow_with_binding_fixtures from conftest."""
-    yield uow_with_binding_fixtures
 
 
 async def test_resolve_bindings_returns_empty_when_no_bindings_exist(

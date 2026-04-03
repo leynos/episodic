@@ -16,7 +16,7 @@ Utilities provided
   ``ReferenceDocumentsResource``, ``ReferenceDocumentResource``,
   ``ReferenceDocumentRevisionsResource``,
   ``ReferenceDocumentRevisionResource``, ``ReferenceBindingsResource``,
-  ``ReferenceBindingResource``
+  ``ReferenceBindingResource``, ``ResolvedBindingsResource``
 
 Examples
 --------
@@ -38,6 +38,7 @@ from .reference_documents import (
     ReferenceDocumentRevisionsResource,
     ReferenceDocumentsResource,
 )
+from .resolved_bindings import ResolvedBindingsResource
 from .series_profiles import (
     SeriesProfileBriefResource,
     SeriesProfileHistoryResource,
@@ -55,6 +56,7 @@ __all__ = [
     "ReferenceDocumentRevisionResource",
     "ReferenceDocumentRevisionsResource",
     "ReferenceDocumentsResource",
+    "ResolvedBindingsResource",
     "SeriesProfileBriefResource",
     "SeriesProfileHistoryResource",
     "SeriesProfileResource",

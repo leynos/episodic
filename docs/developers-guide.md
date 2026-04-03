@@ -194,6 +194,7 @@ adapter (`episodic/api/app.py`) over domain services in
 - `PATCH /series-profiles/{profile_id}`
 - `GET /series-profiles/{profile_id}/history`
 - `GET /series-profiles/{profile_id}/brief`
+- `GET /series-profiles/{profile_id}/resolved-bindings`
 - `POST /episode-templates`
 - `GET /episode-templates`
 - `GET /episode-templates/{template_id}`
@@ -220,6 +221,19 @@ adapter (`episodic/api/app.py`) over domain services in
 - `reference_documents`: reusable reference bindings resolved for the selected
   series profile and template context.
 
+The brief endpoint accepts optional query parameters:
+
+- `template_id`: restricts the template section to one episode template.
+- `episode_id`: applies `effective_from_episode_id` precedence to
+  series-profile bindings before the `reference_documents` payload is
+  serialized. Omitting it preserves the legacy behaviour of returning all
+  matching bindings.
+
+`GET /series-profiles/{profile_id}/resolved-bindings` returns the resolved
+binding set directly. It requires `episode_id`, accepts optional `template_id`,
+and responds with `items`, where each item includes serialized `binding`,
+`document`, and `revision` payloads.
+
 ### Reusable reference-document APIs
 
 Reusable reference-document workflows are implemented as Falcon resources in:
@@ -229,6 +243,11 @@ Reusable reference-document workflows are implemented as Falcon resources in:
 
 Route wiring lives in `episodic/api/app.py`, and service orchestration is
 implemented in `episodic/canonical/reference_documents/services.py`.
+
+See also:
+[`docs/reference-binding-resolution.md`](reference-binding-resolution.md) for
+the episode-aware resolver, provenance snapshot APIs, and endpoint-specific
+binding-resolution behavior.
 
 Supported endpoints:
 
@@ -279,6 +298,9 @@ invariants:
 For profile/template brief assembly, `build_series_brief(...)` resolves
 reference bindings from the selected profile and template contexts and emits
 serialized `reference_documents` payload entries with pinned revision metadata.
+When an episode context is present, the same resolution algorithm is exposed
+through `ResolvedBindingsResource` and reused by ingestion to snapshot the
+resolved reference revisions into provenance `source_documents`.
 
 ### Prompt scaffolding for generators
 

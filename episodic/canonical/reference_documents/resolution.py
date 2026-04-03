@@ -181,7 +181,8 @@ async def _resolve_with_episode_context(
     uow: CanonicalUnitOfWork,
     series_bindings: list[ReferenceBinding],
     maps: tuple[
-        dict[uuid.UUID, ReferenceDocumentRevision], dict[uuid.UUID, ReferenceDocument]
+        dict[uuid.UUID, ReferenceDocumentRevision],
+        dict[uuid.UUID, ReferenceDocument],
     ],
     *,
     target_episode_created_at: dt.datetime,

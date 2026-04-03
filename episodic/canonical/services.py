@@ -22,6 +22,7 @@ import uuid
 
 from episodic.logging import get_logger, log_info
 
+from . import reference_documents
 from .domain import (
     ApprovalEvent,
     ApprovalState,
@@ -170,6 +171,45 @@ def _create_initial_approval_event(
     )
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _IngestionContext:
+    job_id: uuid.UUID
+    episode_id: uuid.UUID
+    now: dt.datetime
+
+
+async def _persist_source_documents_and_snapshot_bindings(
+    uow: CanonicalUnitOfWork,
+    series_profile: SeriesProfile,
+    request: IngestionRequest,
+    context: _IngestionContext,
+) -> None:
+    """Persist source documents and snapshot resolved reference bindings."""
+    documents = _create_source_documents(
+        request, context.job_id, context.episode_id, context.now
+    )
+    for document in documents:
+        await uow.source_documents.add(document)
+
+    await uow.flush()
+
+    resolved_bindings = await reference_documents.resolve_bindings(
+        uow,
+        series_profile_id=series_profile.id,
+        template_id=request.episode_template_id,
+        episode_id=context.episode_id,
+    )
+    await reference_documents.snapshot_resolved_bindings(
+        uow,
+        resolved=resolved_bindings,
+        context=reference_documents.SnapshotContext(
+            ingestion_job_id=context.job_id,
+            canonical_episode_id=context.episode_id,
+            created_at=context.now,
+        ),
+    )
+
+
 async def ingest_sources(
     uow: CanonicalUnitOfWork,
     series_profile: SeriesProfile,
@@ -180,29 +220,25 @@ async def ingest_sources(
     Parameters
     ----------
     uow : CanonicalUnitOfWork
-        Unit-of-work boundary providing repository access and transaction scope.
+        Unit of work used to persist the canonical episode, ingestion job,
+        source documents, and approval event.
     series_profile : SeriesProfile
-        Series profile that owns the canonical episode.
+        Series profile that owns the ingested episode and any resolved
+        reference bindings.
     request : IngestionRequest
-        Ingestion payload containing TEI XML and source metadata.
+        Parsed ingestion payload containing TEI input, raw sources, and
+        optional episode-template context.
 
     Returns
     -------
     CanonicalEpisode
-        Persisted canonical episode representing the ingested TEI content.
-
-    Raises
-    ------
-    TypeError
-        If the TEI header is missing from the parsed payload.
-    ValueError
-        If the TEI header title is missing or blank.
+        The newly created canonical episode persisted for the ingestion job.
 
     Notes
     -----
-    This function writes TEI headers, episodes, ingestion jobs, source
-    documents, and approval events via the unit-of-work and commits the
-    transaction.
+    This function writes multiple canonical records through the provided unit
+    of work, resolves reusable reference bindings for provenance snapshotting,
+    and commits the transaction before returning.
     """
     now = dt.datetime.now(dt.UTC)
     header_payload = parse_tei_header(request.tei_xml)
@@ -223,12 +259,10 @@ async def ingest_sources(
     await uow.flush()
     await uow.episodes.add(episode)
     await uow.ingestion_jobs.add(job)
-
-    documents = _create_source_documents(request, job_id, episode_id, now)
-    for document in documents:
-        await uow.source_documents.add(document)
-
-    await uow.flush()
+    context = _IngestionContext(job_id=job_id, episode_id=episode_id, now=now)
+    await _persist_source_documents_and_snapshot_bindings(
+        uow, series_profile, request, context
+    )
 
     event = _create_initial_approval_event(episode_id, request, now)
     await uow.approval_events.add(event)

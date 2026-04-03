@@ -62,13 +62,16 @@ def _build_source_priorities(
         key=lambda source: -source.weight,
     )
     return [
-        {
-            "priority": priority,
-            "source_uri": source.source_uri,
-            "source_type": source.source_type,
-            "weight": source.weight,
-            "content_hash": source.content_hash,
-        }
+        typ.cast(
+            "SourcePriorityRecord",
+            {
+                "priority": priority,
+                "source_uri": source.source_uri,
+                "source_type": source.source_type,
+                "weight": source.weight,
+                "content_hash": source.content_hash,
+            },
+        )
         for priority, source in enumerate(ordered_sources, start=1)
     ]
 

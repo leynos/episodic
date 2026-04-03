@@ -280,6 +280,7 @@ class IngestionRequest:
     tei_xml: str
     sources: list[SourceDocumentInput]
     requested_by: str | None
+    episode_template_id: uuid.UUID | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)

@@ -423,15 +423,18 @@ def build_profile_update_request(
     falcon.HTTPBadRequest
         Raised when required revision or profile fields are missing/invalid.
     """
-    return _build_typed_update_request(
-        entity_id,
-        payload,
-        data_builder=_build_profile_data,
-        request_builder=lambda eid, rev, data, audit: UpdateSeriesProfileRequest(
-            profile_id=eid,
-            expected_revision=rev,
-            data=typ.cast("SeriesProfileUpdateFields", data),
-            audit=audit,
+    return typ.cast(
+        "UpdateSeriesProfileRequest",
+        _build_typed_update_request(
+            entity_id,
+            payload,
+            data_builder=_build_profile_data,
+            request_builder=lambda eid, rev, data, audit: UpdateSeriesProfileRequest(
+                profile_id=eid,
+                expected_revision=rev,
+                data=typ.cast("SeriesProfileUpdateFields", data),
+                audit=audit,
+            ),
         ),
     )
 
@@ -460,14 +463,19 @@ def build_template_update_request(
     falcon.HTTPBadRequest
         Raised when required revision or template fields are missing/invalid.
     """
-    return _build_typed_update_request(
-        entity_id,
-        payload,
-        data_builder=_build_template_fields,
-        request_builder=lambda eid, rev, fields, audit: UpdateEpisodeTemplateRequest(
-            template_id=eid,
-            expected_revision=rev,
-            data=typ.cast("EpisodeTemplateUpdateFields", fields),
-            audit=audit,
+    return typ.cast(
+        "UpdateEpisodeTemplateRequest",
+        _build_typed_update_request(
+            entity_id,
+            payload,
+            data_builder=_build_template_fields,
+            request_builder=lambda eid, rev, fields, audit: (
+                UpdateEpisodeTemplateRequest(
+                    template_id=eid,
+                    expected_revision=rev,
+                    data=typ.cast("EpisodeTemplateUpdateFields", fields),
+                    audit=audit,
+                )
+            ),
         ),
     )

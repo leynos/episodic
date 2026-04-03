@@ -1278,7 +1278,14 @@ Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
   history (`revision`, `actor`, `note`, `snapshot`, `created_at`).
 - `GET /series-profiles/{profile_id}/brief` returns a structured brief with the
   selected series profile, associated episode template payload(s), and reusable
-  reference-document payloads resolved from series/template bindings.
+  reference-document payloads resolved from series/template bindings. Optional
+  query parameters `template_id` and `episode_id` narrow the template context
+  and apply `effective_from_episode_id` precedence for series-level reference
+  bindings.
+- `GET /series-profiles/{profile_id}/resolved-bindings` returns the resolved
+  series/template reference-binding set for a required `episode_id` and an
+  optional `template_id`, exposing the binding, document, and revision payloads
+  without the rest of the structured brief.
 - `POST /episode-templates` creates a template and revision `1`.
 - `GET /episode-templates` lists templates, optionally filtered by
   `series_profile_id`.
@@ -1316,6 +1323,9 @@ through Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
 - `GET /reference-bindings` lists bindings for one target context using
   required query parameters `target_kind` and `target_id`.
 - `GET /reference-bindings/{binding_id}` fetches one binding by identifier.
+- Ingestion workflows snapshot the resolved binding set into
+  `source_documents`, linking each provenance record to the consumed
+  `reference_document_revision_id`.
 
 Pagination contract for list endpoints:
 
