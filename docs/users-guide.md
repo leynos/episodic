@@ -18,6 +18,8 @@ This guide will cover:
 ### Getting Started
 
 - Installing and configuring the Episodic CLI
+- Starting the Falcon HTTP service through Granian
+- Checking `/health/live` and `/health/ready` during deployments
 - Setting up your first podcast series
 - Creating series profiles and episode templates
 - Understanding the workflow from source documents to finished audio
@@ -99,6 +101,35 @@ Reusable reference-document workflows currently support:
 - Ingestion runs snapshot the resolved reusable reference revisions as
   provenance-backed `source_documents`, so audit trails record the exact
   reference revisions consumed for that episode build.
+
+### HTTP service health and runtime
+
+The canonical-content HTTP service now runs as a Falcon ASGI application under
+Granian.
+
+Start the service with:
+
+```shell
+granian episodic.api.runtime:create_app_from_env --interface asgi --factory
+```
+
+Required environment:
+
+- `DATABASE_URL` must point at the canonical Postgres database before the
+  service starts. The runtime accepts a plain Postgres URL such as
+  `postgresql://...` and normalizes it to the supported async driver
+  automatically. Driver-qualified URLs such as `postgresql+asyncpg://...` and
+  `postgresql+psycopg://...` are also accepted.
+
+Health endpoints:
+
+- `GET /health/live` reports whether the Falcon application booted
+  successfully.
+- `GET /health/ready` reports whether the configured infrastructural readiness
+  probes are passing. The current probe checks database connectivity.
+- `GET /health/ready` returns `503 Service Unavailable` when a readiness probe
+  fails, so deployment platforms can keep traffic away from an unhealthy
+  instance.
 
 ### Quality & Compliance
 

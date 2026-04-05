@@ -127,12 +127,12 @@ content. Completion enables downstream generators to retrieve structured briefs.
 Scaffold the application services with consistent architecture patterns.
 Completion enables feature development within enforced boundaries.
 
-- [ ] 1.5.1. Scaffold Falcon 4.2.x HTTP services running on Granian.
+- [x] 1.5.1. Scaffold Falcon 4.2.x HTTP services running on Granian.
   - Configure baseline routing and health check endpoints.
   - Wire dependency injection hooks for port adapters.
-  - [ ] Integrate the Granian runtime for Falcon deployment.
-  - Note: Falcon 4.2.x is operational; Granian runtime integration remains
-    pending.
+  - [x] Integrate the Granian runtime for Falcon deployment.
+  - Implement the typed `ApiDependencies` composition seam and the
+    `/health/live` plus `/health/ready` operator contract.
   - See
     [Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary).
 - [ ] 1.5.2. Scaffold Celery workers with RabbitMQ integration.
