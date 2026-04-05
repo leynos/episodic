@@ -1,4 +1,4 @@
-"""LLM adapter fixtures for unit and BDD tests."""
+"""OpenAI-compatible LLM adapter test fixtures."""
 
 import contextlib
 import json
@@ -117,7 +117,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
     """Build async context managers yielding configured OpenAI adapters."""
 
     @contextlib.asynccontextmanager
-    async def _build_adapter(  # noqa: PLR0913  # TODO(@codex): mirrors config overrides across tests; see https://github.com/leynos/episodic/pull/49
+    async def _build_adapter(  # noqa: PLR0913, TD001, TD002  # FIXME: https://github.com/leynos/episodic/pull/49 — narrow PLR0913 suppression; see ticket to refactor helper signature
         *,
         transport: httpx.AsyncBaseTransport,
         provider_operation: str | LLMProviderOperation = "chat_completions",

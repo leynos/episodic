@@ -17,6 +17,8 @@ Utilities provided
   ``ReferenceDocumentRevisionsResource``,
   ``ReferenceDocumentRevisionResource``, ``ReferenceBindingsResource``,
   ``ReferenceBindingResource``, ``ResolvedBindingsResource``
+- Health resources:
+  ``HealthLiveResource``, ``HealthReadyResource``
 
 Examples
 --------
@@ -31,6 +33,7 @@ from .episode_templates import (
     EpisodeTemplateResource,
     EpisodeTemplatesResource,
 )
+from .health import HealthLiveResource, HealthReadyResource
 from .reference_bindings import ReferenceBindingResource, ReferenceBindingsResource
 from .reference_documents import (
     ReferenceDocumentResource,
@@ -50,6 +53,8 @@ __all__ = [
     "EpisodeTemplateHistoryResource",
     "EpisodeTemplateResource",
     "EpisodeTemplatesResource",
+    "HealthLiveResource",
+    "HealthReadyResource",
     "ReferenceBindingResource",
     "ReferenceBindingsResource",
     "ReferenceDocumentResource",

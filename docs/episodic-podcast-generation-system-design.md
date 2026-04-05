@@ -7,7 +7,8 @@ architecture
 
 Accepted decision records:
 
-- [ADR 001: Pedante evaluator contract](adr-001-pedante-evaluator-contract.md)
+- [ADR 001: Reference binding resolution algorithm](adr/adr-001-reference-binding-resolution-algorithm.md)
+- [ADR 002: HTTP service composition root](adr/adr-002-http-service-composition-root.md)
 
 ## Overview
 
@@ -70,6 +71,13 @@ workflows based on evaluation outcomes, whilst human-in-the-loop checkpoints
 support editorial approvals at configurable stages. Persistence and
 checkpointing provide resumable workflows that survive service restarts and
 enable long-running editorial review periods.
+
+For the canonical-content API specifically, the Falcon adapter is assembled in
+two steps: `episodic/api/app.py` remains the pure route factory, whilst
+`episodic/api/runtime.py` is the runtime composition root that reads
+environment configuration, constructs the SQLAlchemy-backed unit-of-work
+factory, and injects infrastructural readiness probes through a typed
+dependency object.
 
 ### Hexagonal architecture enforcement
 
@@ -272,6 +280,9 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 
 - REST and GraphQL APIs expose domain resources with RBAC enforcement, served
   via Falcon 4.2.x on Granian.
+- The canonical REST adapter exposes `/health/live` and `/health/ready` so
+  deployment platforms can distinguish process liveness from infrastructure
+  readiness.
 - CLI client provides ergonomics for ingest, generate, QA review, and approval
   commands.
 - Web console surfaces dashboards, approval queues, and configuration editors.
