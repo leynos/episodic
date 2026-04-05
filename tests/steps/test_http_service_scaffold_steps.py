@@ -239,19 +239,31 @@ def when_operator_checks_health_endpoints(
     )
 
 
+def _assert_health_check_ok(
+    payload: dict[str, object] | None,
+    kind: str,
+    check_name: str,
+) -> None:
+    """Assert a health endpoint payload contains a named check with status ok."""
+    assert payload is not None, f"Expected the {kind} payload to be captured."
+    assert payload.get("status") == "ok", f"Expected {kind} status to be ok."
+    checks = typ.cast("list[dict[str, object]]", payload.get("checks", []))
+    assert any(
+        check.get("name") == check_name and check.get("status") == "ok"
+        for check in checks
+    ), f"Expected a {check_name} health check with status ok."
+
+
 @then("the liveness endpoint reports that the application is up")
 def then_liveness_reports_application_up(
     http_service_scaffold_context: HttpServiceScaffoldBDDContext,
 ) -> None:
     """Assert the liveness contract exposed over real HTTP."""
-    payload = http_service_scaffold_context.live_payload
-    assert payload is not None, "Expected the liveness payload to be captured."
-    assert payload.get("status") == "ok", "Expected liveness status to be ok."
-    checks = typ.cast("list[dict[str, object]]", payload.get("checks", []))
-    assert any(
-        check.get("name") == "application" and check.get("status") == "ok"
-        for check in checks
-    ), "Expected an application health check with status ok."
+    _assert_health_check_ok(
+        http_service_scaffold_context.live_payload,
+        "liveness",
+        "application",
+    )
 
 
 @then("the readiness endpoint reports that the database is ready")
@@ -259,11 +271,8 @@ def then_readiness_reports_database_ready(
     http_service_scaffold_context: HttpServiceScaffoldBDDContext,
 ) -> None:
     """Assert the readiness contract exposed over real HTTP."""
-    payload = http_service_scaffold_context.ready_payload
-    assert payload is not None, "Expected the readiness payload to be captured."
-    assert payload.get("status") == "ok", "Expected readiness status to be ok."
-    checks = typ.cast("list[dict[str, object]]", payload.get("checks", []))
-    assert any(
-        check.get("name") == "database" and check.get("status") == "ok"
-        for check in checks
-    ), "Expected a database health check with status ok."
+    _assert_health_check_ok(
+        http_service_scaffold_context.ready_payload,
+        "readiness",
+        "database",
+    )

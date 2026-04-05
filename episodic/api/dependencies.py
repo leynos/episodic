@@ -34,6 +34,24 @@ def _validate_async_callable(callback: object, attribute_name: str) -> None:
     raise TypeError(msg)
 
 
+def _validate_readiness_probe(
+    probe: object,
+    *,
+    label: str = "ApiDependencies.readiness_probes entries",
+) -> None:
+    """Require a readiness-probe entry to have a non-empty name and async check."""
+    if not hasattr(probe, "name") or not isinstance(probe.name, str):  # type: ignore[union-attr]
+        msg = f"{label} must define a string name."
+        raise TypeError(msg)
+    if not probe.name.strip():  # type: ignore[union-attr]
+        msg = f"{label} must define a non-empty name."
+        raise ValueError(msg)
+    if not hasattr(probe, "check"):
+        msg = f"{label} must define an async check."
+        raise TypeError(msg)
+    _validate_async_callable(probe.check, label)  # type: ignore[union-attr]
+
+
 @dc.dataclass(frozen=True, slots=True)
 class ReadinessProbe:
     """Describe one infrastructural readiness check."""
@@ -66,28 +84,7 @@ class ApiDependencies:
         object.__setattr__(self, "readiness_probes", tuple(self.readiness_probes))
         object.__setattr__(self, "shutdown_hooks", tuple(self.shutdown_hooks))
         for probe in self.readiness_probes:
-            if not hasattr(probe, "name") or not isinstance(probe.name, str):
-                msg = (
-                    "ApiDependencies.readiness_probes entries must define "
-                    "a string name."
-                )
-                raise TypeError(msg)
-            if not probe.name.strip():
-                msg = (
-                    "ApiDependencies.readiness_probes entries must define "
-                    "a non-empty name."
-                )
-                raise ValueError(msg)
-            if not hasattr(probe, "check"):
-                msg = (
-                    "ApiDependencies.readiness_probes entries must define "
-                    "an async check."
-                )
-                raise TypeError(msg)
-            _validate_async_callable(
-                probe.check,
-                "ApiDependencies.readiness_probes entries",
-            )
+            _validate_readiness_probe(probe)
         for shutdown_hook in self.shutdown_hooks:
             _validate_async_callable(
                 shutdown_hook,
