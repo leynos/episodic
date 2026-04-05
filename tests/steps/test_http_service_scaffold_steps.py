@@ -190,8 +190,7 @@ def given_granian_service_running(
     """Launch Granian against the runtime factory target."""
     granian_path = shutil.which("granian")
     if granian_path is None:
-        msg = "granian executable not found in PATH"
-        raise RuntimeError(msg)
+        pytest.skip("granian executable not found in PATH")
 
     if http_service_scaffold_context.log_path is None:
         msg = "Granian log path was not initialized."

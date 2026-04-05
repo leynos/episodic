@@ -34,6 +34,48 @@ def _unexpected_uow_factory() -> CanonicalUnitOfWork:
     return typ.cast("CanonicalUnitOfWork", _UnexpectedUnitOfWork())
 
 
+async def _run_asgi_lifespan(
+    app: _ASGIApp,
+    event_sequence: tuple[dict[str, typ.Any], ...],
+) -> list[dict[str, typ.Any]]:
+    """Simulate ASGI lifespan protocol for testing shutdown/startup hooks.
+
+    Args:
+        app: The ASGI application to run the lifespan protocol against.
+        event_sequence: Sequence of ASGI lifespan events to send (e.g.,
+            startup, shutdown).
+
+    Returns
+    -------
+        List of events sent by the application during the lifespan.
+
+    """
+    import collections.abc as cabc
+
+    sent_events: list[dict[str, typ.Any]] = []
+    receive_queue = asyncio.Queue[cabc.MutableMapping[str, typ.Any]]()
+    for event in event_sequence:
+        await receive_queue.put(event)
+
+    async def receive() -> cabc.MutableMapping[str, typ.Any]:
+        return await receive_queue.get()
+
+    async def send(message: cabc.MutableMapping[str, typ.Any]) -> None:
+        sent_events.append(dict(message))
+        await asyncio.sleep(0)
+
+    await app(
+        {
+            "type": "lifespan",
+            "asgi": {"spec_version": "2.0", "version": "3.0"},
+        },
+        receive,
+        send,
+    )
+
+    return sent_events
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("endpoint", "expected_body"),
@@ -219,25 +261,12 @@ async def test_create_app_runs_shutdown_hooks_during_asgi_shutdown() -> None:
             shutdown_hooks=(shutdown_hook,),
         )
     )
-    sent_events: list[dict[str, str]] = []
-    receive_queue = asyncio.Queue[dict[str, str]]()
-    await receive_queue.put({"type": "lifespan.startup"})
-    await receive_queue.put({"type": "lifespan.shutdown"})
-
-    async def receive() -> dict[str, str]:
-        return await receive_queue.get()
-
-    async def send(message: dict[str, str]) -> None:
-        sent_events.append(message)
-        await asyncio.sleep(0)
-
-    await app(
-        {
-            "type": "lifespan",
-            "asgi": {"spec_version": "2.0", "version": "3.0"},
-        },
-        receive,
-        send,
+    sent_events = await _run_asgi_lifespan(
+        typ.cast("_ASGIApp", app),
+        (
+            {"type": "lifespan.startup"},
+            {"type": "lifespan.shutdown"},
+        ),
     )
 
     assert hook_calls == ["shutdown"]

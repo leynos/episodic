@@ -97,7 +97,7 @@ if typ.TYPE_CHECKING:
 else:
 
     @contextlib.contextmanager
-    def temporary_drift_table() -> typ.Iterator[sa.Table]:
+    def temporary_drift_table() -> typ.ContextManager[sa.Table]:
         """Add a temporary table to Base.metadata and remove it on exit.
 
         This helper is shared between the unit tests and BDD steps that
@@ -195,13 +195,14 @@ async def pglite_session(
         yield session
 
 
-@pytest.fixture
-def session_factory(
+@pytest_asyncio.fixture
+async def session_factory(
     migrated_engine: AsyncEngine,
 ) -> async_sessionmaker[AsyncSession]:
     """Yield an async session factory bound to the migrated engine."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    await asyncio.sleep(0)
     return async_sessionmaker(
         migrated_engine,
         class_=AsyncSession,
