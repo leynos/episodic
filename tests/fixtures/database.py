@@ -64,9 +64,13 @@ async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
         try:
             async with engine.connect() as connection:
                 await connection.execute(sa.text("SELECT 1"))
-        except sa_exc.OperationalError:
+        except sa_exc.OperationalError as exc:
             if attempt == max_attempts:
-                raise
+                msg = (
+                    f"py-pglite engine not ready after {max_attempts} "
+                    f"attempts ({delay_seconds}s apart)"
+                )
+                raise RuntimeError(msg) from exc
             await asyncio.sleep(delay_seconds)
         else:
             return
@@ -96,29 +100,22 @@ async def _pglite_sqlalchemy_manager(
         await manager.stop()
 
 
-if typ.TYPE_CHECKING:
+@contextlib.contextmanager
+def temporary_drift_table() -> typ.Iterator[sa.Table]:
+    """Add a temporary table to Base.metadata and remove it on exit.
 
-    def temporary_drift_table() -> typ.ContextManager[sa.Table]:
-        """Add a temporary table to Base.metadata and remove it on exit."""
-
-else:
-
-    @contextlib.contextmanager
-    def temporary_drift_table() -> typ.ContextManager[sa.Table]:
-        """Add a temporary table to Base.metadata and remove it on exit.
-
-        This helper is shared between the unit tests and BDD steps that
-        verify schema drift detection against an unmigrated table.
-        """
-        table = sa.Table(
-            "_test_drift_table",
-            Base.metadata,
-            sa.Column("id", sa.Integer, primary_key=True),
-        )
-        try:
-            yield table
-        finally:
-            Base.metadata.remove(table)
+    This helper is shared between the unit tests and BDD steps that
+    verify schema drift detection against an unmigrated table.
+    """
+    table = sa.Table(
+        "_test_drift_table",
+        Base.metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+    )
+    try:
+        yield table
+    finally:
+        Base.metadata.remove(table)
 
 
 @pytest_asyncio.fixture

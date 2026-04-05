@@ -13,6 +13,12 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 
+class _LifespanEvent(typ.TypedDict):
+    """ASGI lifespan event carrying a mandatory type key."""
+
+    type: str
+
+
 class _UnexpectedUnitOfWork:
     """Fail fast if a health endpoint tries to open a canonical unit of work."""
 
@@ -36,8 +42,8 @@ def _unexpected_uow_factory() -> CanonicalUnitOfWork:
 
 async def _run_asgi_lifespan(
     app: _ASGIApp,
-    event_sequence: tuple[dict[str, typ.Any], ...],
-) -> list[dict[str, typ.Any]]:
+    event_sequence: tuple[_LifespanEvent, ...],
+) -> list[_LifespanEvent]:
     """Simulate ASGI lifespan protocol for testing shutdown/startup hooks.
 
     Args:
@@ -52,16 +58,18 @@ async def _run_asgi_lifespan(
     """
     import collections.abc as cabc
 
-    sent_events: list[dict[str, typ.Any]] = []
+    sent_events: list[_LifespanEvent] = []
     receive_queue = asyncio.Queue[cabc.MutableMapping[str, typ.Any]]()
     for event in event_sequence:
-        await receive_queue.put(event)
+        await receive_queue.put(
+            typ.cast("cabc.MutableMapping[str, typ.Any]", event),
+        )
 
     async def receive() -> cabc.MutableMapping[str, typ.Any]:
         return await receive_queue.get()
 
     async def send(message: cabc.MutableMapping[str, typ.Any]) -> None:
-        sent_events.append(dict(message))
+        sent_events.append(_LifespanEvent(type=str(message["type"])))
         await asyncio.sleep(0)
 
     await app(
@@ -130,7 +138,7 @@ async def test_health_endpoints_without_probes_return_ok(
     ],
 )
 async def test_health_ready_route_reflects_probe_result(
-    probe_result: bool,  # noqa: FBT001
+    probe_result: bool,  # noqa: FBT001  # pytest.mark.parametrize injects a bool fixture value directly
     expected_status: int,
     expected_body: dict[str, object],
 ) -> None:
@@ -322,7 +330,7 @@ def test_create_app_from_env_rejects_unsupported_database_driver(
 async def test_create_app_from_env_wires_database_readiness_probe(
     migrated_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
-    strip_driver: bool,  # noqa: FBT001
+    strip_driver: bool,  # noqa: FBT001  # pytest.mark.parametrize injects a bool fixture value directly
 ) -> None:
     """Use DATABASE_URL to build a live readiness probe in the runtime factory."""
     from urllib.parse import urlsplit, urlunsplit
@@ -363,16 +371,39 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ensure create_app_from_env shutdown hooks run during ASGI lifespan."""
+    from unittest import mock
+
+    from episodic.api import runtime as runtime_module
+
     monkeypatch.setenv("DATABASE_URL", migrated_database_url)
 
-    from episodic.api.runtime import create_app_from_env
+    shutdown_hook_called = False
+    original_build = runtime_module._build_database_probe
 
-    app = create_app_from_env()
+    def _tracking_build(database_url: str) -> tuple[object, ...]:
+        probe, uow, original_hook = original_build(database_url)
+
+        async def _tracked_hook() -> None:
+            nonlocal shutdown_hook_called
+            shutdown_hook_called = True
+            await original_hook()
+
+        return probe, uow, _tracked_hook
+
+    with mock.patch.object(
+        runtime_module,
+        "_build_database_probe",
+        side_effect=_tracking_build,
+    ):
+        from episodic.api.runtime import create_app_from_env
+
+        app = create_app_from_env()
+
     sent_events = await _run_asgi_lifespan(
         typ.cast("_ASGIApp", app),
         (
-            {"type": "lifespan.startup"},
-            {"type": "lifespan.shutdown"},
+            _LifespanEvent(type="lifespan.startup"),
+            _LifespanEvent(type="lifespan.shutdown"),
         ),
     )
 
@@ -380,3 +411,4 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
         {"type": "lifespan.startup.complete"},
         {"type": "lifespan.shutdown.complete"},
     ]
+    assert shutdown_hook_called, "engine.dispose shutdown hook was not called"
