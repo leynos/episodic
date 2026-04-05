@@ -355,3 +355,28 @@ async def test_create_app_from_env_wires_database_readiness_probe(
         "status": "ok",
         "checks": [{"name": "database", "status": "ok"}],
     }
+
+
+@pytest.mark.asyncio
+async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
+    migrated_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure create_app_from_env shutdown hooks run during ASGI lifespan."""
+    monkeypatch.setenv("DATABASE_URL", migrated_database_url)
+
+    from episodic.api.runtime import create_app_from_env
+
+    app = create_app_from_env()
+    sent_events = await _run_asgi_lifespan(
+        typ.cast("_ASGIApp", app),
+        (
+            {"type": "lifespan.startup"},
+            {"type": "lifespan.shutdown"},
+        ),
+    )
+
+    assert sent_events == [
+        {"type": "lifespan.startup.complete"},
+        {"type": "lifespan.shutdown.complete"},
+    ]

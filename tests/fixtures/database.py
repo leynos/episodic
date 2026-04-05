@@ -35,10 +35,17 @@ def _should_use_pglite() -> bool:
     If a non-SQLite backend is requested but py-pglite is unavailable,
     fail fast with a clear error instead of silently skipping tests.
     """
+    allowed_values = {"sqlite", "pglite"}
     target = os.getenv("EPISODIC_TEST_DB", "pglite").lower()
+    if target not in allowed_values:
+        msg = (
+            f"Unsupported EPISODIC_TEST_DB value: {target!r}. "
+            f"Allowed values are: {', '.join(sorted(allowed_values))}."
+        )
+        raise RuntimeError(msg)
     if target == "sqlite":
         return False
-    if not _PGLITE_AVAILABLE:
+    if target == "pglite" and not _PGLITE_AVAILABLE:
         msg = (
             "Database-backed tests requested via EPISODIC_TEST_DB="
             f"{target!r}, but py-pglite is not installed or unavailable. "
