@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+import typing as typ
+
 import pytest
 
 from episodic import logging as episodic_logging
@@ -78,6 +81,29 @@ class _CollectorHandler:
 
     def handle(self, logger_name: str, level: str, message: str) -> None:
         self.records.append((logger_name, level, message))
+
+
+class _SupportsFlushHandlers(typ.Protocol):
+    """Minimal logger protocol needed by the asynchronous test helper."""
+
+    def flush_handlers(self) -> object: ...
+
+
+def _wait_for_record_count(
+    logger: _SupportsFlushHandlers,
+    collector: _CollectorHandler,
+    *,
+    expected_count: int,
+    timeout_seconds: float = 2.0,
+) -> None:
+    """Wait until the asynchronous logger worker drains into the collector."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        logger.flush_handlers()
+        if len(collector.records) >= expected_count:
+            return
+        time.sleep(0.01)
+    logger.flush_handlers()
 
 
 @pytest.mark.parametrize(
@@ -191,7 +217,7 @@ def test_stdlib_style_logger_methods_emit_to_python_handlers() -> None:
     except RuntimeError:
         logger.exception("captured failure")
 
-    logger.flush_handlers()
+    _wait_for_record_count(logger, collector, expected_count=3)
 
     assert collector.records == [
         ("tests.logging.runtime", "INFO", "hello from episodic"),
