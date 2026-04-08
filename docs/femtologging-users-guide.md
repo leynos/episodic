@@ -16,12 +16,11 @@ pip install .
 ```
 
 ```python
-from femtologging import FemtoStreamHandler, get_logger
+from femtologging import FemtoStreamHandler, getLogger
 
-logger = get_logger("demo.app")
+logger = getLogger("demo.app")
 logger.add_handler(FemtoStreamHandler.stderr())
-
-logger.log("INFO", "hello from femtologging")
+logger.info("hello from femtologging")
 ```
 
 Handlers run in background threads, so remember to flush or close them before
@@ -48,7 +47,8 @@ your process exits.
 
 ### Creating and naming loggers
 
-- Use `get_logger(name)` to obtain a singleton `FemtoLogger`. Names must not be
+- Use `get_logger(name)` to obtain a singleton `FemtoLogger`. `getLogger(name)`
+  is an equivalent alias when you want stdlib-style naming. Names must not be
   empty, start or end with `.`, or contain consecutive dots.
 - Logger parents are derived from dotted names. `get_logger("api.v1")` creates
   a parent `api` logger that ultimately propagates to `root`.
@@ -65,11 +65,18 @@ your process exits.
   (default format is `"{logger} [LEVEL] message"`), or `None` when the record
   is filtered out. This differs from `logging.Logger.log()`, which always
   returns `None`.
-- Convenience methods (`logger.info`, `logger.warning`, and so on) are not
-  implemented yet; call `log()` directly or wrap it in a helper.
+- Convenience methods (`logger.debug`, `logger.info`, `logger.warning`,
+  `logger.error`, `logger.critical`, and `logger.exception`) are available and
+  accept a pre-formatted message plus optional `exc_info` and `stack_info`
+  keyword arguments.
+- `logger.exception(message)` behaves like `logger.error(message)` but defaults
+  `exc_info=True`, so it automatically captures the active exception.
+- `logger.isEnabledFor(level)` is available for guarding expensive message
+  construction.
 - Currently, `FemtoLogger` sends only the text form of each record to handlers.
-  There is no equivalent to `extra`, `exc_info`, `stack_info`, or lazy
-  formatting. Build the final message string yourself before calling `log()`.
+  There is no equivalent to `extra` or stdlib lazy `*args` / `**kwargs`
+  formatting. Build the final message string yourself before calling a logger
+  method.
 
 ### Managing handlers and custom sinks
 
@@ -97,8 +104,8 @@ your process exits.
 - `handler.flush()` waits (up to one second by default) for the worker to flush
   buffered writes and returns `True` on success. `handler.close()` shuts down
   the worker thread and should be called before process exit.
-- To tune capacity, flush timeout, or formatters use `StreamHandlerBuilder`. It
-  provides `.with_capacity(n)`, `.with_flush_timeout_ms(ms)`, and
+- To tune capacity, flush timing, or formatters use `StreamHandlerBuilder`. It
+  provides `.with_capacity(n)`, `.with_flush_after_ms(ms)`, and
   `.with_formatter(callable_or_id)` fluent methods before calling `.build()`.
 
 ### FemtoFileHandler
@@ -395,21 +402,19 @@ stream = StreamHandlerBuilder.stdout().with_formatter(json_formatter).build()
 
 ## Deviations from stdlib logging
 
-- No shorthand methods (`info`, `debug`, `warning`, …) or `LoggerAdapter`.
-- `log()` returns the formatted string instead of `None`, and there is no
-  `Logger.isEnabledFor()` helper.
-- Records lack `extra`, `exc_info`, `stack_info`, and stack introspection.
+- `log()` returns the formatted string instead of `None`.
+- Records still lack `extra` and stdlib lazy `*args` / `**kwargs` formatting.
 - Handlers expect `handle(logger, level, message)` rather than `emit(LogRecord)`
-  and run on dedicated worker threads, so Python `logging.Handler` subclasses
-  cannot be reused.
+  unless you wrap a stdlib handler with `StdlibHandlerAdapter`.
 - The `dictConfig` schema lacks incremental updates, filters, handler levels,
   and formatter attachment. `fileConfig` is likewise cut down.
 - Queue capacity is capped (1 024 per logger/handler). The stdlib blocks the
   emitting thread; femtologging drops records and emits warnings instead.
 - Formatting styles (`%`, `{}`, `$`) are not implemented. Provide the final
   string yourself, or supply a callable formatter per handler.
-- The logging manager is separate from `logging`’s global state. Mixing both
-  systems in the same process is unsupported.
+- The logging manager is separate from `logging`’s global state. Use
+  `StdlibHandlerAdapter` when you need a stdlib `logging.Handler` subclass to
+  receive femtologging records, but do not treat this as shared global state.
 
 ## Operational tips and caveats
 

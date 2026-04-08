@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision log`, and `Outcomes & retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -131,12 +131,19 @@ Success is observable in six ways:
   the target femtologging revision `691a73962df8f99308a82348d99c4f707c245e63`
   directly.
 - [x] (2026-04-08 00:00Z) Drafted this ExecPlan.
-- [ ] Stage A: add fail-first logging regression tests.
-- [ ] Stage B: update the femtologging pin and refresh `uv.lock`.
-- [ ] Stage C: align `episodic` call sites and compatibility helpers with the
-  stdlib-like API.
-- [ ] Stage D: update maintainer documentation and local femtologging guide.
-- [ ] Stage E: run full validation and capture evidence.
+- [x] (2026-04-08 20:40Z) Stage A: added fail-first logging regression tests
+  in `tests/test_logging.py` and confirmed they failed against the old
+  dependency because `getLogger`, logger convenience methods, and
+  `isEnabledFor` were absent.
+- [x] (2026-04-08 20:42Z) Stage B: updated the femtologging pin in
+  `pyproject.toml`, refreshed `uv.lock`, and confirmed the lockfile diff was
+  limited to the targeted SHA movement.
+- [x] (2026-04-08 20:50Z) Stage C: aligned `episodic` call sites and
+  compatibility helpers with the stdlib-like API.
+- [x] (2026-04-08 20:56Z) Stage D: updated maintainer documentation and the
+  local femtologging guide for the v0.1.0 surface.
+- [x] (2026-04-08 21:10Z) Stage E: ran the full repository gate set and
+  captured evidence under `/tmp/femtologging-migration-*.log`.
 
 ## Surprises & discoveries
 
@@ -174,6 +181,15 @@ Success is observable in six ways:
   need a breaking redesign just to survive the dependency bump. Impact: the
   migration can stay incremental.
 
+- Observation: femtologging v0.1.0 adds stdlib-style method names, but it
+  still does not implement stdlib lazy `*args` formatting. Impact: the direct
+  call-site migration must build final strings before calling
+  `logger.info(...)` or `logger.error(...)`.
+
+- Observation: runtime handler assertions need an explicit
+  `logger.flush_handlers()` before checking collected Python-handler output.
+  Impact: integration tests should flush before asserting on emitted records.
+
 ## Decision log
 
 - Decision: use a compatibility-first migration. Bump the dependency and
@@ -205,16 +221,27 @@ Success is observable in six ways:
 
 Outcome:
 
-- No code has been changed yet. This document defines the implementation path
-  and the evidence that must be captured when the migration is executed.
+- `pyproject.toml` and `uv.lock` now pin femtologging to
+  `691a73962df8f99308a82348d99c4f707c245e63`.
+- `tests/test_logging.py` covers wrapper normalization, compatibility helpers,
+  `getLogger`, direct convenience methods, and `isEnabledFor`.
+- `episodic.logging` remains the configuration seam, now re-exporting
+  `getLogger` and delegating compatibility helpers through direct logger
+  methods.
+- The internal logging call sites in ingestion, canonical services, unit of
+  work, and schema-drift detection now use direct logger methods.
+- Maintainer docs were updated to stop teaching wrapper-only usage and stale
+  builder names.
 
-Retrospective so far:
+Retrospective:
 
-- The actual code migration is likely small.
-- The larger risk is stale local guidance and missing regression tests.
-- The target femtologging revision is intentionally closer to stdlib logging,
-  so the migration should use that to simplify touched call sites rather than
-  preserving wrapper-heavy patterns everywhere.
+- The code migration was small, but the missing tests and stale docs were the
+  real risk surface.
+- Compatibility-first worked: the wrapper remains available without blocking
+  direct stdlib-style usage in touched code.
+- The main behavioural nuance worth preserving in docs and tests is that
+  femtologging v0.1.0 keeps pre-formatted-message semantics even though the
+  method names now look more like stdlib logging.
 
 ## Context and orientation
 

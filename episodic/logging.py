@@ -1,27 +1,22 @@
 """Logging helpers for femtologging integration.
 
-This module wraps femtologging with convenience helpers that keep logging
-configuration and structured formatting consistent across the codebase.
-
-Note: The log_info, log_warning, and log_error functions intentionally follow a
-consistent structure to provide a discoverable, ergonomic public API. Shared
-formatting and emission logic is factored into private helpers (_format_message,
-_emit). This design mirrors Python's standard logging module and prioritizes
-usability over eliminating structural similarity.
+This module keeps the local logging configuration seam stable while exposing
+the newer stdlib-aligned femtologging logger surface for current code.
 
 Examples
 --------
 Configure logging and emit a message:
 
 >>> level, used_default = configure_logging("INFO")
->>> log_info(get_logger(__name__), "Started %s", "ingestion")
+>>> logger = get_logger(__name__)
+>>> logger.info("Started ingestion")
 """
 
 import enum
 import typing as typ
 import warnings
 
-from femtologging import basicConfig, get_logger
+from femtologging import basicConfig, get_logger, getLogger
 
 
 class LogLevel(enum.StrEnum):
@@ -90,12 +85,29 @@ def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, b
 
 
 # _SupportsLog is private because callers can rely on structural typing instead.
-class _SupportsLog(typ.Protocol):
-    """Protocol for loggers supporting the femtologging API."""
+class _SupportsConvenienceLog(typ.Protocol):
+    """Protocol for loggers supporting stdlib-like femtologging methods."""
 
-    def log(
+    def info(
         self,
-        level: str,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None: ...
+
+    def warning(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None: ...
+
+    def error(
+        self,
         message: str,
         /,
         *,
@@ -110,14 +122,12 @@ def _format_message(template: str, args: tuple[object, ...]) -> str:
 
 
 def _emit(
-    logger: _SupportsLog,
-    level: LogLevel,
+    emit: typ.Callable[..., None],
     message: str,
     exc_info: object | None = None,
 ) -> None:
     """Emit a log message."""
-    logger.log(
-        level,
+    emit(
         message,
         exc_info=exc_info,
         stack_info=False,
@@ -125,7 +135,7 @@ def _emit(
 
 
 def log_info(
-    logger: _SupportsLog,
+    logger: _SupportsConvenienceLog,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -134,8 +144,8 @@ def log_info(
 
     Parameters
     ----------
-    logger : _SupportsLog
-        Logger instance that supports the femtologging log API.
+    logger : _SupportsConvenienceLog
+        Logger instance that supports femtologging convenience methods.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -152,11 +162,11 @@ def log_info(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _emit(logger, LogLevel.INFO, _format_message(template, args), exc_info=exc_info)
+    _emit(logger.info, _format_message(template, args), exc_info=exc_info)
 
 
 def log_warning(
-    logger: _SupportsLog,
+    logger: _SupportsConvenienceLog,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -165,8 +175,8 @@ def log_warning(
 
     Parameters
     ----------
-    logger : _SupportsLog
-        Logger instance that supports the femtologging log API.
+    logger : _SupportsConvenienceLog
+        Logger instance that supports femtologging convenience methods.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -183,11 +193,11 @@ def log_warning(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _emit(logger, LogLevel.WARNING, _format_message(template, args), exc_info=exc_info)
+    _emit(logger.warning, _format_message(template, args), exc_info=exc_info)
 
 
 def log_error(
-    logger: _SupportsLog,
+    logger: _SupportsConvenienceLog,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -196,8 +206,8 @@ def log_error(
 
     Parameters
     ----------
-    logger : _SupportsLog
-        Logger instance that supports the femtologging log API.
+    logger : _SupportsConvenienceLog
+        Logger instance that supports femtologging convenience methods.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -214,12 +224,13 @@ def log_error(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _emit(logger, LogLevel.ERROR, _format_message(template, args), exc_info=exc_info)
+    _emit(logger.error, _format_message(template, args), exc_info=exc_info)
 
 
 __all__ = (
     "LogLevel",
     "configure_logging",
+    "getLogger",
     "get_logger",
     "log_error",
     "log_info",
