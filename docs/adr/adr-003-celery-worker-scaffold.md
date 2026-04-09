@@ -1,4 +1,4 @@
-# ADR-003: Celery worker scaffold
+# Architectural Decision Record (ADR)-003: Celery worker scaffold
 
 ## Status
 
