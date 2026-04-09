@@ -131,6 +131,38 @@ Health endpoints:
   fails, so deployment platforms can keep traffic away from an unhealthy
   instance.
 
+### Worker runtime
+
+The background-worker scaffold now exists for operators who need to stand up
+Celery alongside the Falcon service.
+
+Start a CPU-focused worker with:
+
+```shell
+celery --app episodic.worker.runtime:create_celery_app_from_env worker --pool prefork --queues episodic.cpu
+```
+
+and an I/O-focused worker with:
+
+```shell
+celery --app episodic.worker.runtime:create_celery_app_from_env worker --pool gevent --queues episodic.io
+```
+
+Required environment:
+
+- `EPISODIC_CELERY_BROKER_URL` must point at RabbitMQ using AMQP.
+- `EPISODIC_CELERY_RESULT_BACKEND` is optional for the current scaffold.
+
+Current queue model:
+
+- `episodic.tasks` topic exchange
+- `episodic.io` queue for I/O-bound workloads
+- `episodic.cpu` queue for CPU-bound workloads
+
+The current scaffold provides representative diagnostic tasks so routing and
+runtime wiring can be verified before later roadmap items add workflow-specific
+jobs.
+
 ### Quality & Compliance
 
 - Setting up brand guidelines and compliance rules

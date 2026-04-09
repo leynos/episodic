@@ -5,17 +5,17 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
 Roadmap item `1.5.2` fills the missing asynchronous worker scaffold for the
 canonical-content platform. The system design already commits Episodic to a
-split between a control plane and a data plane: Falcon on Granian handles
-HTTP ingress, while Celery on RabbitMQ handles durable background execution.
-At the moment, the repository has the HTTP scaffold from `1.5.1`, but it does
-not yet expose a typed worker runtime, queue-routing configuration, or a
-hexagonal seam for dispatching workload classes to the correct worker pool.
+split between a control plane and a data plane: Falcon on Granian handles HTTP
+ingress, while Celery on RabbitMQ handles durable background execution. At the
+moment, the repository has the HTTP scaffold from `1.5.1`, but it does not yet
+expose a typed worker runtime, queue-routing configuration, or a hexagonal seam
+for dispatching workload classes to the correct worker pool.
 
 After this work, developers will be able to boot Celery workers against the
 project's application factory, route tasks through explicit RabbitMQ bindings
@@ -115,80 +115,126 @@ Success is observable in the following ways:
 ## Risks
 
 - Risk: the repository may not yet include Celery or kombu, so adding the
-  worker scaffold could introduce dependency and import-shape churn.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: inspect `pyproject.toml` and existing modules early, keep the
-  runtime surface small, and confine dependency additions to the minimal set
-  needed for the scaffold.
+  worker scaffold could introduce dependency and import-shape churn. Severity:
+  medium. Likelihood: medium. Mitigation: inspect `pyproject.toml` and existing
+  modules early, keep the runtime surface small, and confine dependency
+  additions to the minimal set needed for the scaffold.
 
 - Risk: broker-backed behavioural tests can become flaky if they depend on a
   real RabbitMQ instance that is not provisioned consistently in local and CI
-  environments.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: prefer contract-level behavioural verification around the worker
-  runtime and task routing seams, and only use a live broker path if the
-  repository already has a stable strategy for it.
+  environments. Severity: high. Likelihood: medium. Mitigation: prefer
+  contract-level behavioural verification around the worker runtime and task
+  routing seams, and only use a live broker path if the repository already has
+  a stable strategy for it.
 
 - Risk: queue taxonomy may drift from the design document if routing keys,
-  queues, and concurrency classes are defined in multiple places.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: centralize topology definitions in one typed module and ensure
-  both runtime wiring and tests read from that same source of truth.
+  queues, and concurrency classes are defined in multiple places. Severity:
+  medium. Likelihood: high. Mitigation: centralize topology definitions in one
+  typed module and ensure both runtime wiring and tests read from that same
+  source of truth.
 
 - Risk: representative tasks may accidentally grow into domain behaviour that
-  belongs to later roadmap items.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: keep the tasks intentionally narrow, such as echo, diagnostic,
-  or probe-style tasks that exercise routing and dependency seams without
-  claiming business completeness.
+  belongs to later roadmap items. Severity: medium. Likelihood: medium.
+  Mitigation: keep the tasks intentionally narrow, such as echo, diagnostic, or
+  probe-style tasks that exercise routing and dependency seams without claiming
+  business completeness.
 
 - Risk: Vidai Mock integration may be underspecified for worker contexts if no
-  current inference-facing task scaffold exists.
-  Severity: low.
-  Likelihood: medium.
-  Mitigation: decide early whether the scaffold includes an `LLMPort`-facing
-  task. If not, document explicitly why Vidai Mock is not exercised in this
-  slice; if yes, route all behavioural coverage for that task through Vidai
-  Mock.
+  current inference-facing task scaffold exists. Severity: low. Likelihood:
+  medium. Mitigation: decide early whether the scaffold includes an
+  `LLMPort`-facing task. If not, document explicitly why Vidai Mock is not
+  exercised in this slice; if yes, route all behavioural coverage for that task
+  through Vidai Mock.
 
 ## Progress
 
-- [ ] Review the current repository state for Celery, RabbitMQ, worker runtime,
+- [x] Review the current repository state for Celery, RabbitMQ, worker runtime,
   test infrastructure, and relevant design constraints.
-- [ ] Add fail-first unit and behavioural tests covering queue topology,
+- [x] Add fail-first unit and behavioural tests covering queue topology,
   routing decisions, worker-factory wiring, and representative tasks.
-- [ ] Implement the typed worker runtime, queue topology, and task-registration
+- [x] Implement the typed worker runtime, queue topology, and task-registration
   scaffold.
-- [ ] Implement representative I/O-bound and CPU-bound task paths and the
+- [x] Implement representative I/O-bound and CPU-bound task paths and the
   associated dependency seams.
-- [ ] Update ADR, design, developer, and user documentation, then mark roadmap
+- [x] Update ADR, design, developer, and user documentation, then mark roadmap
   item `1.5.2` done.
-- [ ] Run `make check-fmt`, `make typecheck`, `make lint`, and `make test`, and
+- [x] Run `make check-fmt`, `make typecheck`, `make lint`, and `make test`, and
   record the outcome.
 
 ## Surprises & Discoveries
 
-- Observation: None yet.
-  Evidence: Research has not started.
-  Impact: This section must be updated during implementation as repository
-  facts replace assumptions.
+- Observation: The repository had no pre-existing Celery, Kombu, or RabbitMQ
+  runtime surface.
+  Evidence: Stage A codebase inspection and the initial red-phase collection
+  failure (`ModuleNotFoundError` for `kombu`).
+  Impact: `pyproject.toml` had to add Celery, and the worker scaffold could be
+  introduced without conflicting with legacy runtime modules.
+- Observation: A live RabbitMQ behavioural harness still does not exist in the
+  repository.
+  Evidence: Existing behavioural coverage patterns cover Falcon, py-pglite, and
+  Vidai Mock, but nothing provisions a broker-backed queue path.
+  Impact: Behavioural coverage for `1.5.2` was kept at the contract level:
+  create the Celery app from environment configuration, inspect queue routing,
+  and execute representative tasks in eager mode.
+- Observation: Celery task names can be reused across app instances during one
+  pytest session unless the scaffold explicitly replaces prior registrations.
+  Evidence: The full `make test` run initially reused an earlier task
+  registration, so injected fake dependencies were not observed.
+  Impact: `register_scaffold_tasks(...)` now removes prior scaffold task names
+  before registering app-specific task closures.
 
 ## Decision Log
 
-- Decision: No implementation decisions have been made yet.
-  Rationale: This plan is being written before repository-specific worker
-  investigation and fail-first testing.
-  Date/Author: 2026-04-06 / Droid.
+- Decision: Keep the first worker behavioural slice broker-free.
+  Rationale: A contract-level Celery factory plus eager-mode task execution
+  proves the queue and runtime seams without inventing an unstable RabbitMQ
+  fixture strategy.
+  Date/Author: 2026-04-09 / Codex.
+- Decision: Introduce a dedicated `episodic/worker/` package with separate
+  `topology.py`, `runtime.py`, and `tasks.py` modules.
+  Rationale: This mirrors the accepted Falcon composition-root split and keeps
+  queue topology, environment parsing, and task registration in explicit
+  adapter modules.
+  Date/Author: 2026-04-09 / Codex.
+- Decision: Represent the first I/O-bound and CPU-bound tasks as diagnostic
+  scaffolds with typed payload and dependency seams.
+  Rationale: Roadmap item `1.5.2` needed real routing and extension points, not
+  premature workflow behaviour from later roadmap items.
+  Date/Author: 2026-04-09 / Codex.
 
 ## Outcomes & Retrospective
 
-Outcome: Pending implementation.
+Outcome:
 
-Retrospective: Pending implementation.
+- Added a typed worker scaffold under `episodic/worker/` with:
+  - canonical queue topology (`episodic.tasks`, `episodic.io`, `episodic.cpu`);
+  - RabbitMQ-backed runtime configuration parsing and worker launch profiles;
+  - representative I/O-bound and CPU-bound diagnostic tasks; and
+  - environment-driven Celery application creation via
+    `episodic.worker.runtime:create_celery_app_from_env`.
+- Added fail-first unit and `pytest-bdd` coverage in
+  `tests/test_worker_service_scaffold.py`,
+  `tests/features/worker_service_scaffold.feature`, and
+  `tests/steps/test_worker_service_scaffold_steps.py`.
+- Added ADR-003 and updated the design, developer, user, and roadmap
+  documentation to reflect the implemented worker boundary.
+
+Retrospective:
+
+- The scaffold stayed within the intended scope by proving queue topology,
+  routing, and dependency injection without adding broker orchestration,
+  checkpoint persistence, or workflow-specific task logic.
+- The only meaningful implementation trap was Celery task-name reuse across
+  repeated app construction in one pytest session; addressing that in the
+  scaffold registration path should make future task additions less surprising.
+- Validation completed successfully:
+  - `make check-fmt`
+  - `make lint`
+  - `make typecheck` (existing non-blocking `redundant-cast` warnings remain in
+    untouched files)
+  - `make test` (`330 passed, 2 skipped`)
+  - `PATH=/root/.bun/bin:$PATH make markdownlint`
+  - `make nixie`
 
 ## Context and orientation
 
@@ -336,8 +382,8 @@ inspected by tests, and extended safely by future roadmap items.
 Once the worker scaffold exists, make the behavioural contract real.
 
 1. Decide whether the repository can support a live broker-backed behavioural
-   path with existing test infrastructure. If it can, use that path to verify
-   a representative dispatch and result flow.
+   path with existing test infrastructure. If it can, use that path to verify a
+   representative dispatch and result flow.
 2. If a live broker path would exceed the stated tolerances, keep behavioural
    tests focused on public worker surfaces that remain deterministic under the
    current repository constraints, such as task routing metadata and runtime
