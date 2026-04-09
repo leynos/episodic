@@ -108,16 +108,23 @@ def when_operator_dispatches_representative_tasks(
     )
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _TaskContractAssertion:
+    """Bundled task-level data for a single contract assertion."""
+
+    task_name: str
+    expected_route: dict[str, str]
+    actual_result: dict[str, object] | None
+    expected_result: dict[str, object]
+
+
 def _assert_task_contract(
     routes: dict[str, dict[str, str]],
-    task_name: str,
-    expected_route: dict[str, str],
-    actual_result: dict[str, object] | None,
-    expected_result: dict[str, object],
+    assertion: _TaskContractAssertion,
 ) -> None:
     """Assert that a task's route and execution result match the documented contract."""
-    assert routes[task_name] == expected_route
-    assert actual_result == expected_result
+    assert routes[assertion.task_name] == assertion.expected_route
+    assert assertion.actual_result == assertion.expected_result
 
 
 @then("the I/O-bound task targets the I/O queue and succeeds")
@@ -129,14 +136,19 @@ def then_io_task_targets_io_queue(
 
     _assert_task_contract(
         worker_service_scaffold_context.routes,
-        IO_DIAGNOSTIC_TASK_NAME,
-        {"queue": "episodic.io", "routing_key": "episodic.io.diagnostic"},
-        worker_service_scaffold_context.io_result,
-        {
-            "message": "bdd-io",
-            "correlation_id": "bdd-trace",
-            "worker_kind": "io-bound",
-        },
+        _TaskContractAssertion(
+            task_name=IO_DIAGNOSTIC_TASK_NAME,
+            expected_route={
+                "queue": "episodic.io",
+                "routing_key": "episodic.io.diagnostic",
+            },
+            actual_result=worker_service_scaffold_context.io_result,
+            expected_result={
+                "message": "bdd-io",
+                "correlation_id": "bdd-trace",
+                "worker_kind": "io-bound",
+            },
+        ),
     )
 
 
@@ -149,16 +161,21 @@ def then_cpu_task_targets_cpu_queue(
 
     _assert_task_contract(
         worker_service_scaffold_context.routes,
-        CPU_DIAGNOSTIC_TASK_NAME,
-        {"queue": "episodic.cpu", "routing_key": "episodic.cpu.diagnostic"},
-        worker_service_scaffold_context.cpu_result,
-        {
-            "digest": (
-                "49cc6085bf11501a3f8634450ef3eefdbf52359aee0e7b0c2deb7407829b2ba8"
-            ),
-            "iterations": 3,
-            "worker_kind": "cpu-bound",
-        },
+        _TaskContractAssertion(
+            task_name=CPU_DIAGNOSTIC_TASK_NAME,
+            expected_route={
+                "queue": "episodic.cpu",
+                "routing_key": "episodic.cpu.diagnostic",
+            },
+            actual_result=worker_service_scaffold_context.cpu_result,
+            expected_result={
+                "digest": (
+                    "49cc6085bf11501a3f8634450ef3eefdbf52359aee0e7b0c2deb7407829b2ba8"
+                ),
+                "iterations": 3,
+                "worker_kind": "cpu-bound",
+            },
+        ),
     )
 
 
