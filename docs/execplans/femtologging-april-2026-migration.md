@@ -14,7 +14,7 @@ revision `7c139fb7aca18f9277e00b88604b8bf5eb471be0` in `pyproject.toml` and
 `uv.lock`. The target revision `691a73962df8f99308a82348d99c4f707c245e63`
 includes the v0.1.0 migration changes documented in the upstream migration
 guide:
-<https://raw.githubusercontent.com/leynos/femtologging/refs/heads/main/docs/v0-1-0-migration-guide.md>.
+<https://raw.githubusercontent.com/leynos/femtologging/691a73962df8f99308a82348d99c4f707c245e63/docs/v0-1-0-migration-guide.md>.
 
 The practical goal is not only to bump the pinned dependency, but to align the
 `episodic` codebase with the newer stdlib-like logging surface where it helps:
@@ -510,7 +510,7 @@ The migration is complete only when all of the following are true:
 
 ## Artifacts and notes
 
-Expected evidence artefacts:
+Expected evidence artifacts:
 
 - `/tmp/femtologging-migration-git-status.log`
 - `/tmp/femtologging-migration-scan.log`

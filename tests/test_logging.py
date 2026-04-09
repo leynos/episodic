@@ -1,7 +1,5 @@
 """Tests for episodic logging integration and femtologging compatibility."""
 
-from __future__ import annotations
-
 import time
 import typing as typ
 
@@ -14,11 +12,13 @@ class _SpyLogger:
     """Collect low-level log calls emitted by the compatibility wrappers."""
 
     def __init__(self) -> None:
-        self.calls: list[tuple[str, str, object | None, bool]] = []
+        self.calls: list[
+            tuple[episodic_logging.LogLevel, str, object | None, bool]
+        ] = []
 
     def _record(
         self,
-        level: str,
+        level: episodic_logging.LogLevel,
         message: str,
         /,
         *,
@@ -71,6 +71,26 @@ class _SpyLogger:
             exc_info=exc_info,
             stack_info=stack_info,
         )
+
+
+class _LogOnlySpyLogger:
+    """Collect low-level log calls through a stdlib-style `log` method only."""
+
+    def __init__(self) -> None:
+        self.calls: list[
+            tuple[episodic_logging.LogLevel, str, object | None, bool]
+        ] = []
+
+    def log(
+        self,
+        level: episodic_logging.LogLevel,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        self.calls.append((level, message, exc_info, stack_info))
 
 
 class _CollectorHandler:
@@ -142,9 +162,68 @@ def test_configure_logging_normalizes_levels(
     assert recorded_calls == [(expected_level, True)]
 
 
-def test_log_wrappers_delegate_through_logger_log() -> None:
+def test_configure_logging_uses_false_as_default_force_value() -> None:
+    """configure_logging should forward `force=False` when omitted."""
+    recorded_calls: list[tuple[str, bool]] = []
+
+    def _fake_basic_config(*, level: str, force: bool) -> None:
+        recorded_calls.append((level, force))
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(episodic_logging, "basicConfig", _fake_basic_config)
+    try:
+        effective_level, used_default = episodic_logging.configure_logging("debug")
+    finally:
+        monkeypatch.undo()
+
+    assert (effective_level, used_default) == (episodic_logging.LogLevel.DEBUG, False)
+    assert recorded_calls == [(episodic_logging.LogLevel.DEBUG, False)]
+
+
+def test_log_wrappers_delegate_through_convenience_methods() -> None:
     """Compatibility helpers should preserve percent-style formatting semantics."""
     logger = _SpyLogger()
+    err = RuntimeError("boom")
+
+    episodic_logging.log_info(logger, "Loaded %s documents", 3)
+    episodic_logging.log_warning(logger, "Potential issue in %s", "ingestion")
+    episodic_logging.log_error(
+        logger,
+        "Failed job %s",
+        "job-1",
+        exc_info=err,
+    )
+
+    assert logger.calls == [
+        (episodic_logging.LogLevel.INFO, "Loaded 3 documents", None, False),
+        (
+            episodic_logging.LogLevel.WARNING,
+            "Potential issue in ingestion",
+            None,
+            False,
+        ),
+        (
+            episodic_logging.LogLevel.ERROR,
+            "Failed job job-1",
+            err,
+            False,
+        ),
+    ]
+
+
+def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
+    """Compatibility helpers should propagate `TypeError` from formatting."""
+    logger = _SpyLogger()
+
+    with pytest.raises(TypeError):
+        episodic_logging.log_info(logger, "Loaded %s documents for %s", 3)
+
+    assert logger.calls == []
+
+
+def test_log_wrappers_fall_back_to_logger_log_when_needed() -> None:
+    """Compatibility helpers should support loggers that only expose `log()`."""
+    logger = _LogOnlySpyLogger()
     err = RuntimeError("boom")
 
     episodic_logging.log_info(logger, "Loaded %s documents", 3)
@@ -190,6 +269,22 @@ def test_femtologging_exposes_stdlib_style_logger_surface() -> None:
         "isEnabledFor",
     ):
         assert hasattr(logger, method_name), method_name
+
+
+def test_episodic_logging_get_logger_reexport_matches_femtologging_surface() -> None:
+    """Episodic logging should re-export the stdlib-style logger constructor."""
+    logger = episodic_logging.getLogger("tests.logging.surface")
+    for method_name in (
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "exception",
+        "isEnabledFor",
+    ):
+        assert hasattr(logger, method_name), method_name
+    assert logger.isEnabledFor("INFO") is True
 
 
 def _raise_logged_exception() -> None:

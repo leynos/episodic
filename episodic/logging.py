@@ -116,26 +116,30 @@ class _SupportsConvenienceLog(typ.Protocol):
     ) -> None: ...
 
 
+class _SupportsLogMethod(typ.Protocol):
+    """Protocol for loggers exposing the stdlib-style `log` entry point."""
+
+    def log(
+        self,
+        level: LogLevel,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None: ...
+
+
+type _CompatibleLogger = _SupportsConvenienceLog | _SupportsLogMethod
+
+
 def _format_message(template: str, args: tuple[object, ...]) -> str:
     """Format a log message template."""
     return template % args if args else template
 
 
-def _emit(
-    emit: typ.Callable[..., None],
-    message: str,
-    exc_info: object | None = None,
-) -> None:
-    """Emit a log message."""
-    emit(
-        message,
-        exc_info=exc_info,
-        stack_info=False,
-    )
-
-
 def log_info(
-    logger: _SupportsConvenienceLog,
+    logger: _CompatibleLogger,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -162,11 +166,24 @@ def log_info(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _emit(logger.info, _format_message(template, args), exc_info=exc_info)
+    message = _format_message(template, args)
+    try:
+        typ.cast("_SupportsConvenienceLog", logger).info(
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
+    except AttributeError, TypeError:
+        typ.cast("_SupportsLogMethod", logger).log(
+            LogLevel.INFO,
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
 
 
 def log_warning(
-    logger: _SupportsConvenienceLog,
+    logger: _CompatibleLogger,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -193,11 +210,24 @@ def log_warning(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _emit(logger.warning, _format_message(template, args), exc_info=exc_info)
+    message = _format_message(template, args)
+    try:
+        typ.cast("_SupportsConvenienceLog", logger).warning(
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
+    except AttributeError, TypeError:
+        typ.cast("_SupportsLogMethod", logger).log(
+            LogLevel.WARNING,
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
 
 
 def log_error(
-    logger: _SupportsConvenienceLog,
+    logger: _CompatibleLogger,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -224,7 +254,20 @@ def log_error(
     TypeError
         If the template and arguments do not align for percent formatting.
     """
-    _emit(logger.error, _format_message(template, args), exc_info=exc_info)
+    message = _format_message(template, args)
+    try:
+        typ.cast("_SupportsConvenienceLog", logger).error(
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
+    except AttributeError, TypeError:
+        typ.cast("_SupportsLogMethod", logger).log(
+            LogLevel.ERROR,
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
 
 
 __all__ = (

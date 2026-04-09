@@ -48,8 +48,8 @@ your process exits.
 ### Creating and naming loggers
 
 - Use `get_logger(name)` to obtain a singleton `FemtoLogger`. `getLogger(name)`
-  is an equivalent alias when you want stdlib-style naming. Names must not be
-  empty, start or end with `.`, or contain consecutive dots.
+  is an equivalent alias for stdlib-style naming. Names must not be empty,
+  start or end with `.`, or contain consecutive dots.
 - Logger parents are derived from dotted names. `get_logger("api.v1")` creates
   a parent `api` logger that ultimately propagates to `root`.
 - Call `logger.set_propagate(False)` to stop parent propagation. The default is
@@ -75,8 +75,7 @@ your process exits.
   construction.
 - Currently, `FemtoLogger` sends only the text form of each record to handlers.
   There is no equivalent to `extra` or stdlib lazy `*args` / `**kwargs`
-  formatting. Build the final message string yourself before calling a logger
-  method.
+  formatting. Build the final message string before calling a logger method.
 
 ### Managing handlers and custom sinks
 
@@ -411,9 +410,9 @@ stream = StreamHandlerBuilder.stdout().with_formatter(json_formatter).build()
 - Queue capacity is capped (1 024 per logger/handler). The stdlib blocks the
   emitting thread; femtologging drops records and emits warnings instead.
 - Formatting styles (`%`, `{}`, `$`) are not implemented. Provide the final
-  string yourself, or supply a callable formatter per handler.
-- The logging manager is separate from `logging`’s global state. Use
-  `StdlibHandlerAdapter` when you need a stdlib `logging.Handler` subclass to
+  string, or supply a callable formatter per handler.
+- The logging manager is separate from `logging`’s global state.
+  Use `StdlibHandlerAdapter` when a stdlib `logging.Handler` subclass must
   receive femtologging records, but do not treat this as shared global state.
 
 ## Operational tips and caveats
