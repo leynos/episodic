@@ -49,6 +49,27 @@ class WorkerQueueSpec:
         )
 
 
+def _validate_non_empty_str(attr_path: str, value: str) -> None:
+    """Raise ValueError if value is blank or whitespace-only."""
+    if not value.strip():
+        msg = f"{attr_path} must be a non-empty string."
+        raise ValueError(msg)
+
+
+def _validate_queue_contract(
+    queues: tuple[WorkerQueueSpec, ...],
+    default_workload: WorkloadClass,
+) -> None:
+    """Raise ValueError if queues lack uniqueness or default_workload is unmatched."""
+    queue_map = {queue.workload: queue for queue in queues}
+    if len(queue_map) != len(queues):
+        msg = "WorkerTopology.queues must contain unique workload mappings."
+        raise ValueError(msg)
+    if default_workload not in queue_map:
+        msg = "WorkerTopology.default_workload must match a configured queue."
+        raise ValueError(msg)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class WorkerTopology:
     """Group the canonical exchange and queue definitions."""
@@ -60,19 +81,9 @@ class WorkerTopology:
 
     def __post_init__(self) -> None:
         """Validate the topology contract."""
-        if not self.exchange_name.strip():
-            msg = "WorkerTopology.exchange_name must be a non-empty string."
-            raise ValueError(msg)
-        if not self.exchange_type.strip():
-            msg = "WorkerTopology.exchange_type must be a non-empty string."
-            raise ValueError(msg)
-        queue_map = {queue.workload: queue for queue in self.queues}
-        if len(queue_map) != len(self.queues):
-            msg = "WorkerTopology.queues must contain unique workload mappings."
-            raise ValueError(msg)
-        if self.default_workload not in queue_map:
-            msg = "WorkerTopology.default_workload must match a configured queue."
-            raise ValueError(msg)
+        _validate_non_empty_str("WorkerTopology.exchange_name", self.exchange_name)
+        _validate_non_empty_str("WorkerTopology.exchange_type", self.exchange_type)
+        _validate_queue_contract(self.queues, self.default_workload)
 
     def queue_for(self, workload: WorkloadClass) -> WorkerQueueSpec:
         """Return the queue configuration for a workload class."""
