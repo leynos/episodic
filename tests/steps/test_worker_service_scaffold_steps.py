@@ -108,6 +108,18 @@ def when_operator_dispatches_representative_tasks(
     )
 
 
+def _assert_task_contract(
+    routes: dict[str, dict[str, str]],
+    task_name: str,
+    expected_route: dict[str, str],
+    actual_result: dict[str, object] | None,
+    expected_result: dict[str, object],
+) -> None:
+    """Assert that a task's route and execution result match the documented contract."""
+    assert routes[task_name] == expected_route
+    assert actual_result == expected_result
+
+
 @then("the I/O-bound task targets the I/O queue and succeeds")
 def then_io_task_targets_io_queue(
     worker_service_scaffold_context: WorkerServiceScaffoldContext,
@@ -115,15 +127,17 @@ def then_io_task_targets_io_queue(
     """Assert the documented I/O routing and response contract."""
     from episodic.worker import IO_DIAGNOSTIC_TASK_NAME
 
-    assert worker_service_scaffold_context.routes[IO_DIAGNOSTIC_TASK_NAME] == {
-        "queue": "episodic.io",
-        "routing_key": "episodic.io.diagnostic",
-    }
-    assert worker_service_scaffold_context.io_result == {
-        "message": "bdd-io",
-        "correlation_id": "bdd-trace",
-        "worker_kind": "io-bound",
-    }
+    _assert_task_contract(
+        worker_service_scaffold_context.routes,
+        IO_DIAGNOSTIC_TASK_NAME,
+        {"queue": "episodic.io", "routing_key": "episodic.io.diagnostic"},
+        worker_service_scaffold_context.io_result,
+        {
+            "message": "bdd-io",
+            "correlation_id": "bdd-trace",
+            "worker_kind": "io-bound",
+        },
+    )
 
 
 @then("the CPU-bound task targets the CPU queue and succeeds")
@@ -133,15 +147,17 @@ def then_cpu_task_targets_cpu_queue(
     """Assert the documented CPU routing and response contract."""
     from episodic.worker import CPU_DIAGNOSTIC_TASK_NAME
 
-    assert worker_service_scaffold_context.routes[CPU_DIAGNOSTIC_TASK_NAME] == {
-        "queue": "episodic.cpu",
-        "routing_key": "episodic.cpu.diagnostic",
-    }
-    assert worker_service_scaffold_context.cpu_result == {
-        "digest": "49cc6085bf11501a3f8634450ef3eefdbf52359aee0e7b0c2deb7407829b2ba8",
-        "iterations": 3,
-        "worker_kind": "cpu-bound",
-    }
+    _assert_task_contract(
+        worker_service_scaffold_context.routes,
+        CPU_DIAGNOSTIC_TASK_NAME,
+        {"queue": "episodic.cpu", "routing_key": "episodic.cpu.diagnostic"},
+        worker_service_scaffold_context.cpu_result,
+        {
+            "digest": "49cc6085bf11501a3f8634450ef3eefdbf52359aee0e7b0c2deb7407829b2ba8",
+            "iterations": 3,
+            "worker_kind": "cpu-bound",
+        },
+    )
 
 
 @then("the worker launch profiles map I/O and CPU workloads to distinct pools")
