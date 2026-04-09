@@ -87,6 +87,41 @@ def test_load_runtime_config_requires_rabbitmq_broker_url() -> None:
         load_runtime_config({"EPISODIC_CELERY_BROKER_URL": "redis://localhost/0"})
 
 
+def test_worker_runtime_config_rejects_non_worker_pool_values() -> None:
+    """Reject non-enum pool values at dataclass construction time."""
+    from episodic.worker import WorkerPool, WorkerRuntimeConfig
+
+    invalid_io_pool_config = object.__new__(WorkerRuntimeConfig)
+    object.__setattr__(
+        invalid_io_pool_config,
+        "broker_url",
+        "amqp://guest:guest@localhost:5672//",
+    )
+    object.__setattr__(invalid_io_pool_config, "result_backend", None)
+    object.__setattr__(invalid_io_pool_config, "task_always_eager", False)
+    object.__setattr__(invalid_io_pool_config, "io_pool", "gevent")
+    object.__setattr__(invalid_io_pool_config, "io_concurrency", 128)
+    object.__setattr__(invalid_io_pool_config, "cpu_pool", "prefork")
+    object.__setattr__(invalid_io_pool_config, "cpu_concurrency", 4)
+    with pytest.raises(TypeError, match=r"WorkerRuntimeConfig\.io_pool"):
+        invalid_io_pool_config.__post_init__()
+
+    invalid_cpu_pool_config = object.__new__(WorkerRuntimeConfig)
+    object.__setattr__(
+        invalid_cpu_pool_config,
+        "broker_url",
+        "amqp://guest:guest@localhost:5672//",
+    )
+    object.__setattr__(invalid_cpu_pool_config, "result_backend", None)
+    object.__setattr__(invalid_cpu_pool_config, "task_always_eager", False)
+    object.__setattr__(invalid_cpu_pool_config, "io_pool", WorkerPool.GEVENT)
+    object.__setattr__(invalid_cpu_pool_config, "io_concurrency", 128)
+    object.__setattr__(invalid_cpu_pool_config, "cpu_pool", "prefork")
+    object.__setattr__(invalid_cpu_pool_config, "cpu_concurrency", 4)
+    with pytest.raises(TypeError, match=r"WorkerRuntimeConfig\.cpu_pool"):
+        invalid_cpu_pool_config.__post_init__()
+
+
 def test_build_worker_launch_profiles_maps_workloads_to_distinct_pools() -> None:
     """Capture the documented pool split between I/O and CPU workloads."""
     from episodic.worker import (
@@ -185,6 +220,51 @@ def test_create_celery_app_executes_representative_tasks_through_dependencies() 
         "iterations": 4,
         "worker_kind": "cpu-bound",
     }
+
+
+def test_task_payload_requests_require_json_object_payloads() -> None:
+    """Reject non-mapping task payload containers before field validation runs."""
+    from episodic.worker import CpuDiagnosticRequest, IoDiagnosticRequest
+
+    with pytest.raises(
+        TypeError,
+        match=r"IoDiagnosticRequest payload must be a JSON object\.",
+    ):
+        IoDiagnosticRequest.from_mapping(["not", "an", "object"])
+
+    with pytest.raises(
+        TypeError,
+        match=r"CpuDiagnosticRequest payload must be a JSON object\.",
+    ):
+        CpuDiagnosticRequest.from_mapping("not-an-object")
+
+
+def test_worker_queue_spec_rejects_incompatible_diagnostic_routing_key() -> None:
+    """Require diagnostic routing keys to match the queue binding pattern."""
+    from episodic.worker import WorkloadClass
+    from episodic.worker.topology import WorkerQueueSpec
+
+    with pytest.raises(ValueError, match=r"must end with '\.#'"):
+        WorkerQueueSpec(
+            name="episodic.io",
+            workload=WorkloadClass.IO_BOUND,
+            routing_key="episodic.io",
+            diagnostic_routing_key="episodic.io.diagnostic",
+        )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Worker diagnostic routing keys must be matched by the queue "
+            r"routing key\."
+        ),
+    ):
+        WorkerQueueSpec(
+            name="episodic.io",
+            workload=WorkloadClass.IO_BOUND,
+            routing_key="episodic.io.#",
+            diagnostic_routing_key="episodic.cpu.diagnostic",
+        )
 
 
 def test_create_celery_app_from_env_reads_runtime_configuration(

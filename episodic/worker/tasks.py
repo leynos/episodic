@@ -43,6 +43,14 @@ def _require_positive_int(value: object, *, field_name: str) -> int:
     return value
 
 
+def _require_mapping(payload: object, *, dto_name: str) -> cabc.Mapping[str, object]:
+    """Validate that a task payload is a JSON object."""
+    if not isinstance(payload, cabc.Mapping):
+        msg = f"{dto_name} payload must be a JSON object."
+        raise TypeError(msg)
+    return typ.cast("cabc.Mapping[str, object]", payload)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class IoDiagnosticRequest:
     """Represent the payload for the I/O-bound diagnostic scaffold task."""
@@ -56,11 +64,12 @@ class IoDiagnosticRequest:
         _require_non_empty_string(self.correlation_id, field_name="correlation_id")
 
     @classmethod
-    def from_mapping(cls, payload: cabc.Mapping[str, object]) -> IoDiagnosticRequest:
+    def from_mapping(cls, payload: object) -> IoDiagnosticRequest:
         """Build a request from a JSON-serializable Celery payload."""
+        payload_mapping = _require_mapping(payload, dto_name="IoDiagnosticRequest")
         return cls(
-            message=typ.cast("str", payload.get("message")),
-            correlation_id=typ.cast("str", payload.get("correlation_id")),
+            message=typ.cast("str", payload_mapping.get("message")),
+            correlation_id=typ.cast("str", payload_mapping.get("correlation_id")),
         )
 
 
@@ -94,11 +103,12 @@ class CpuDiagnosticRequest:
         _require_positive_int(self.iterations, field_name="iterations")
 
     @classmethod
-    def from_mapping(cls, payload: cabc.Mapping[str, object]) -> CpuDiagnosticRequest:
+    def from_mapping(cls, payload: object) -> CpuDiagnosticRequest:
         """Build a request from a JSON-serializable Celery payload."""
+        payload_mapping = _require_mapping(payload, dto_name="CpuDiagnosticRequest")
         return cls(
-            message=typ.cast("str", payload.get("message")),
-            iterations=typ.cast("int", payload.get("iterations")),
+            message=typ.cast("str", payload_mapping.get("message")),
+            iterations=typ.cast("int", payload_mapping.get("iterations")),
         )
 
 

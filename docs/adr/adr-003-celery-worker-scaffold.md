@@ -43,7 +43,14 @@ The worker scaffold now follows these rules:
      `episodic.cpu.diagnostic`.
 5. The initial worker-profile split is:
    - I/O-bound workloads default to the `gevent` pool with high concurrency;
-   - CPU-bound workloads default to the `prefork` pool with lower concurrency.
+   - CPU-bound workloads default to the `prefork` pool with lower concurrency,
+     matching the process-isolation path described in
+     [`upgrade-python-to-3-14-adopt-concurrent-interpreters.md`](../execplans/upgrade-python-to-3-14-adopt-concurrent-interpreters.md)
+     and issue `#66`.
+   - CPU-heavy pure-Python tasks may instead use the repository's optional
+     interpreter-pool seam by enabling `EPISODIC_USE_INTERPRETER_POOL=1`,
+     tuning dispatch with `EPISODIC_INTERPRETER_POOL_MIN_ITEMS`, and capping
+     workers with `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`.
 6. Behavioural coverage for this roadmap slice remains contract-level rather
    than broker-backed. Tests create the Celery app from environment
    configuration, inspect routing metadata, and execute representative tasks in
@@ -75,6 +82,10 @@ story across developer machines and CI runners.
   runtime pattern.
 - Queue names, routing keys, and worker pools are defined once and reused by
   runtime code, tests, and documentation.
+- CPU worker defaults now explicitly distinguish between Celery `prefork`
+  process fan-out and the repository's opt-in interpreter-pool path for
+  selected pure-Python workloads, with the enabling knobs documented in the
+  same place.
 - Future roadmap items can add Celery tasks by extending typed dependency seams
   rather than introducing ad hoc globals.
 

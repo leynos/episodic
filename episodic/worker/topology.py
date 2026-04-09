@@ -37,6 +37,16 @@ class WorkerQueueSpec:
         if not self.diagnostic_routing_key.strip():
             msg = "Worker diagnostic routing keys must be non-empty strings."
             raise ValueError(msg)
+        if not self.routing_key.endswith(".#"):
+            msg = "Worker queue routing keys must end with '.#'."
+            raise ValueError(msg)
+        routing_prefix = self.routing_key.removesuffix("#")
+        if not self.diagnostic_routing_key.startswith(routing_prefix):
+            msg = (
+                "Worker diagnostic routing keys must be matched by the queue "
+                "routing key."
+            )
+            raise ValueError(msg)
 
     def as_kombu_queue(self, *, exchange_name: str, exchange_type: str) -> Queue:
         """Build the Kombu queue definition consumed by Celery."""

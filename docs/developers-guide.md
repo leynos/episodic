@@ -86,6 +86,14 @@ Required environment:
 - `EPISODIC_CELERY_RESULT_BACKEND` is optional in this scaffold slice.
 - `EPISODIC_CELERY_IO_POOL` and `EPISODIC_CELERY_CPU_POOL` override the
   default pool choices (`gevent` and `prefork` respectively).
+- The CPU `prefork` default remains the baseline Celery process-isolation
+  path. For CPU-heavy pure-Python workloads inside repository adapters, the
+  optional interpreter-pool seam is enabled separately with
+  `EPISODIC_USE_INTERPRETER_POOL=1`.
+- `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
+  interpreter-pool dispatch activates, and
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
+  that path is enabled.
 - `EPISODIC_CELERY_IO_CONCURRENCY` and `EPISODIC_CELERY_CPU_CONCURRENCY`
   override the default worker-profile concurrency values.
 - `EPISODIC_CELERY_ALWAYS_EAGER=true` is for tests and local contract checks

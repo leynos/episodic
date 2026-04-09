@@ -357,7 +357,10 @@ For selected pure-Python CPU workloads, adapters may optionally use Python 3.14
 interpreter pools within a worker process before escalating to broader process
 fan-out. This path remains explicitly opt-in through feature flags and
 task-size thresholds so small workloads avoid dispatch overhead and unsupported
-runtime environments fall back to baseline inline execution.
+runtime environments fall back to baseline inline execution. Enable it with
+`EPISODIC_USE_INTERPRETER_POOL=1`, tune the activation threshold with
+`EPISODIC_INTERPRETER_POOL_MIN_ITEMS`, and cap workers with
+`EPISODIC_INTERPRETER_POOL_MAX_WORKERS`.
 
 The following sequence diagram illustrates how `DefaultWeightingStrategy`
 selects and uses a `CpuTaskExecutor` for batch weighting.
