@@ -19,6 +19,7 @@ class WorkerServiceScaffoldContext:
     """Shared state for worker scaffold behavioural steps."""
 
     app: Celery | None = None
+    creation_error: Exception | None = None
     routes: dict[str, dict[str, str]] = dc.field(default_factory=dict)
     io_result: dict[str, object] | None = None
     cpu_result: dict[str, object] | None = None
@@ -39,6 +40,14 @@ def test_worker_scaffold_contract() -> None:
     """Run the worker scaffold contract scenario."""
 
 
+@scenario(
+    "../features/worker_service_scaffold.feature",
+    "App creation fails without broker config",
+)
+def test_worker_scaffold_requires_broker_config() -> None:
+    """Run the worker scaffold failure scenario."""
+
+
 @given("a worker scaffold environment")
 def given_worker_scaffold_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configure the worker runtime as an eager contract test."""
@@ -46,6 +55,17 @@ def given_worker_scaffold_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "EPISODIC_CELERY_BROKER_URL",
         "amqp://guest:guest@localhost:5672//",
     )
+    monkeypatch.setenv("EPISODIC_CELERY_ALWAYS_EAGER", "true")
+    monkeypatch.setenv("EPISODIC_CELERY_IO_CONCURRENCY", "64")
+    monkeypatch.setenv("EPISODIC_CELERY_CPU_CONCURRENCY", "4")
+
+
+@given("a worker scaffold environment without broker configuration")
+def given_worker_scaffold_environment_without_broker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Configure the worker runtime without the required broker URL."""
+    monkeypatch.delenv("EPISODIC_CELERY_BROKER_URL", raising=False)
     monkeypatch.setenv("EPISODIC_CELERY_ALWAYS_EAGER", "true")
     monkeypatch.setenv("EPISODIC_CELERY_IO_CONCURRENCY", "64")
     monkeypatch.setenv("EPISODIC_CELERY_CPU_CONCURRENCY", "4")
@@ -62,10 +82,16 @@ def when_worker_app_is_created(
         load_runtime_config,
     )
 
-    worker_service_scaffold_context.app = create_celery_app_from_env()
-    worker_service_scaffold_context.profiles = build_worker_launch_profiles(
-        load_runtime_config()
-    )
+    worker_service_scaffold_context.app = None
+    worker_service_scaffold_context.creation_error = None
+    worker_service_scaffold_context.profiles = {}
+    try:
+        worker_service_scaffold_context.app = create_celery_app_from_env()
+        worker_service_scaffold_context.profiles = build_worker_launch_profiles(
+            load_runtime_config()
+        )
+    except RuntimeError as exc:
+        worker_service_scaffold_context.creation_error = exc
 
 
 @when("an operator inspects the worker routing")
@@ -193,3 +219,23 @@ def then_worker_launch_profiles_are_distinct(
     assert io_profile.concurrency == 64
     assert cpu_profile.pool is WorkerPool.PREFORK
     assert cpu_profile.concurrency == 4
+
+
+@then("the worker app creation fails")
+def then_worker_app_creation_fails(
+    worker_service_scaffold_context: WorkerServiceScaffoldContext,
+) -> None:
+    """Assert that worker app creation reported a runtime configuration error."""
+    assert worker_service_scaffold_context.creation_error is not None
+    assert worker_service_scaffold_context.app is None
+
+
+@then("the failure explains that EPISODIC_CELERY_BROKER_URL must be set")
+def then_failure_explains_broker_requirement(
+    worker_service_scaffold_context: WorkerServiceScaffoldContext,
+) -> None:
+    """Assert that the failure message points operators at the missing broker URL."""
+    assert worker_service_scaffold_context.creation_error is not None
+    assert "EPISODIC_CELERY_BROKER_URL must be set" in str(
+        worker_service_scaffold_context.creation_error
+    )

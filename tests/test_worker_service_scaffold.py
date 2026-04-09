@@ -122,6 +122,71 @@ def test_worker_runtime_config_rejects_non_worker_pool_values() -> None:
         invalid_cpu_pool_config.__post_init__()
 
 
+@pytest.mark.parametrize(
+    ("env_key", "env_value", "expected_message"),
+    [
+        (
+            "EPISODIC_CELERY_IO_POOL",
+            "threads",
+            "EPISODIC_CELERY_IO_POOL must be one of prefork, gevent, or eventlet.",
+        ),
+        (
+            "EPISODIC_CELERY_CPU_POOL",
+            "bogus",
+            "EPISODIC_CELERY_CPU_POOL must be one of prefork, gevent, or eventlet.",
+        ),
+    ],
+)
+def test_load_runtime_config_rejects_invalid_pool_names(
+    env_key: str,
+    env_value: str,
+    expected_message: str,
+) -> None:
+    """Exercise invalid pool parsing through environment-driven configuration."""
+    from episodic.worker import load_runtime_config
+
+    with pytest.raises(RuntimeError, match=expected_message):
+        load_runtime_config({
+            **_runtime_environ(),
+            env_key: env_value,
+        })
+
+
+@pytest.mark.parametrize(
+    ("env_key", "env_value", "expected_message"),
+    [
+        (
+            "EPISODIC_CELERY_IO_CONCURRENCY",
+            "0",
+            "EPISODIC_CELERY_IO_CONCURRENCY must be a positive integer.",
+        ),
+        (
+            "EPISODIC_CELERY_CPU_CONCURRENCY",
+            "-1",
+            "EPISODIC_CELERY_CPU_CONCURRENCY must be a positive integer.",
+        ),
+        (
+            "EPISODIC_CELERY_IO_CONCURRENCY",
+            "not-a-number",
+            "EPISODIC_CELERY_IO_CONCURRENCY must be a positive integer.",
+        ),
+    ],
+)
+def test_load_runtime_config_rejects_invalid_concurrency_values(
+    env_key: str,
+    env_value: str,
+    expected_message: str,
+) -> None:
+    """Exercise invalid concurrency parsing through environment-driven configuration."""
+    from episodic.worker import load_runtime_config
+
+    with pytest.raises(RuntimeError, match=expected_message):
+        load_runtime_config({
+            **_runtime_environ(),
+            env_key: env_value,
+        })
+
+
 def test_build_worker_launch_profiles_maps_workloads_to_distinct_pools() -> None:
     """Capture the documented pool split between I/O and CPU workloads."""
     from episodic.worker import (
@@ -237,6 +302,17 @@ def test_task_payload_requests_require_json_object_payloads() -> None:
         match=r"CpuDiagnosticRequest payload must be a JSON object\.",
     ):
         CpuDiagnosticRequest.from_mapping("not-an-object")
+
+
+def test_cpu_diagnostic_request_rejects_iterations_above_scaffold_limit() -> None:
+    """Reject diagnostic iteration counts above the scaffold safety ceiling."""
+    from episodic.worker.tasks import CpuDiagnosticRequest
+
+    with pytest.raises(
+        ValueError,
+        match=(r"iterations must not exceed 1000000 for the diagnostic scaffold\."),
+    ):
+        CpuDiagnosticRequest(message="too-much", iterations=1_000_001)
 
 
 def test_worker_queue_spec_rejects_incompatible_diagnostic_routing_key() -> None:

@@ -9,6 +9,7 @@ Accepted decision records:
 
 - [ADR 001: Reference binding resolution algorithm](adr/adr-001-reference-binding-resolution-algorithm.md)
 - [ADR 002: HTTP service composition root](adr/adr-002-http-service-composition-root.md)
+- [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
 - [ADR 003: Show-notes TEI representation](adr/adr-003-show-notes-tei-representation.md)
 
 ## Overview

@@ -1,4 +1,4 @@
-# Architectural Decision Record (ADR)-003: Celery worker scaffold
+# Architectural Decision Record (ADR-003): Celery worker scaffold
 
 ## Status
 
@@ -102,11 +102,11 @@ story across developer machines and CI runners.
 
 ## References
 
-- `docs/execplans/1-5-2-scaffold-celery-workers-with-rabbit-mq-integration.md`
-- `docs/episodic-podcast-generation-system-design.md`
-- `episodic/worker/topology.py`
-- `episodic/worker/runtime.py`
-- `episodic/worker/tasks.py`
-- `tests/test_worker_service_scaffold.py`
-- `tests/features/worker_service_scaffold.feature`
-- `tests/steps/test_worker_service_scaffold_steps.py`
+- [docs/execplans/1-5-2-scaffold-celery-workers-with-rabbit-mq-integration.md](../execplans/1-5-2-scaffold-celery-workers-with-rabbit-mq-integration.md)
+- [docs/episodic-podcast-generation-system-design.md](../episodic-podcast-generation-system-design.md)
+- [episodic/worker/topology.py](../../episodic/worker/topology.py)
+- [episodic/worker/runtime.py](../../episodic/worker/runtime.py)
+- [episodic/worker/tasks.py](../../episodic/worker/tasks.py)
+- [tests/test_worker_service_scaffold.py](../../tests/test_worker_service_scaffold.py)
+- [tests/features/worker_service_scaffold.feature](../../tests/features/worker_service_scaffold.feature)
+- [tests/steps/test_worker_service_scaffold_steps.py](../../tests/steps/test_worker_service_scaffold_steps.py)
