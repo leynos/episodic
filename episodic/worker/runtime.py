@@ -39,19 +39,10 @@ class WorkerRuntimeConfig:
 
     def __post_init__(self) -> None:
         """Validate runtime configuration values."""
-        parsed = urlparse(self.broker_url)
-        if parsed.scheme not in {"amqp", "amqps", "pyamqp"}:
-            msg = "WorkerRuntimeConfig.broker_url must point at RabbitMQ via AMQP."
-            raise ValueError(msg)
-        if self.result_backend is not None and not self.result_backend.strip():
-            msg = "WorkerRuntimeConfig.result_backend cannot be blank."
-            raise ValueError(msg)
-        if self.io_concurrency <= 0:
-            msg = "WorkerRuntimeConfig.io_concurrency must be positive."
-            raise ValueError(msg)
-        if self.cpu_concurrency <= 0:
-            msg = "WorkerRuntimeConfig.cpu_concurrency must be positive."
-            raise ValueError(msg)
+        _validate_amqp_scheme(self.broker_url)
+        _validate_result_backend(self.result_backend)
+        _validate_positive_concurrency("io_concurrency", self.io_concurrency)
+        _validate_positive_concurrency("cpu_concurrency", self.cpu_concurrency)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -112,6 +103,28 @@ def _parse_pool(
     except ValueError as exc:
         msg = f"{key} must be one of prefork, gevent, or eventlet."
         raise RuntimeError(msg) from exc
+
+
+def _validate_amqp_scheme(url: str) -> None:
+    """Raise ValueError if broker_url does not use an AMQP scheme."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"amqp", "amqps", "pyamqp"}:
+        msg = "WorkerRuntimeConfig.broker_url must point at RabbitMQ via AMQP."
+        raise ValueError(msg)
+
+
+def _validate_result_backend(backend: str | None) -> None:
+    """Raise ValueError if result_backend is set but blank."""
+    if backend is not None and not backend.strip():
+        msg = "WorkerRuntimeConfig.result_backend cannot be blank."
+        raise ValueError(msg)
+
+
+def _validate_positive_concurrency(name: str, value: int) -> None:
+    """Raise ValueError if a concurrency field is not positive."""
+    if value <= 0:
+        msg = f"WorkerRuntimeConfig.{name} must be positive."
+        raise ValueError(msg)
 
 
 def load_runtime_config(

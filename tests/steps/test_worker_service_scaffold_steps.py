@@ -153,7 +153,9 @@ def then_cpu_task_targets_cpu_queue(
         {"queue": "episodic.cpu", "routing_key": "episodic.cpu.diagnostic"},
         worker_service_scaffold_context.cpu_result,
         {
-            "digest": "49cc6085bf11501a3f8634450ef3eefdbf52359aee0e7b0c2deb7407829b2ba8",
+            "digest": (
+                "49cc6085bf11501a3f8634450ef3eefdbf52359aee0e7b0c2deb7407829b2ba8"
+            ),
             "iterations": 3,
             "worker_kind": "cpu-bound",
         },
