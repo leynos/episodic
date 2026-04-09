@@ -80,6 +80,14 @@ environment configuration, constructs the SQLAlchemy-backed unit-of-work
 factory, and injects infrastructural readiness probes through a typed
 dependency object.
 
+The worker data plane now follows the same pattern.
+`episodic/worker/topology.py` defines the canonical RabbitMQ exchange, queue,
+and routing-key taxonomy, `episodic/worker/tasks.py` holds typed representative
+task seams, and `episodic/worker/runtime.py` acts as the Celery composition
+root that reads environment configuration and constructs the worker
+application. ADR-003 records the accepted queue topology, pool split, and
+test-scope decision.
+
 ### Hexagonal architecture enforcement
 
 Hexagonal architecture is treated as an enforced boundary rather than a
@@ -345,6 +353,13 @@ work to prefork pools. This separation keeps long-running work isolated from
 orchestration throughput and allows worker profiles to match workload
 characteristics.
 
+The current scaffold instantiates this split with one topic exchange,
+`episodic.tasks`, and two queues: `episodic.io` for I/O-bound tasks and
+`episodic.cpu` for CPU-bound tasks. The first implementation validates this
+contract through eager-mode factory and routing tests rather than a broker-
+backed RabbitMQ harness; later roadmap items can layer live dispatch coverage
+on top of the same topology without changing the worker boundary.
+
 For selected pure-Python CPU workloads, adapters may optionally use Python 3.14
 interpreter pools within a worker process before escalating to broader process
 fan-out. This path remains explicitly opt-in through feature flags and
@@ -428,6 +443,11 @@ adapter implementations.
   validate vendor payloads at the boundary and normalize responses into
   provider-agnostic data transfer objects (DTOs) before the orchestration layer
   consumes them.
+
+In the current worker scaffold, representative Celery tasks use injected
+callable seams instead of importing concrete adapters directly. Future task
+implementations should preserve this pattern by resolving storage, LLM, and
+other infrastructure through ports or composition-root-owned dependencies.
 
 #### Inference strategy and tool integration
 
