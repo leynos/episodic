@@ -24,6 +24,7 @@ class WorkerQueueSpec:
     name: str
     workload: WorkloadClass
     routing_key: str
+    diagnostic_routing_key: str
 
     def __post_init__(self) -> None:
         """Validate the queue definition."""
@@ -32,6 +33,9 @@ class WorkerQueueSpec:
             raise ValueError(msg)
         if not self.routing_key.strip():
             msg = "Worker queue routing keys must be non-empty strings."
+            raise ValueError(msg)
+        if not self.diagnostic_routing_key.strip():
+            msg = "Worker diagnostic routing keys must be non-empty strings."
             raise ValueError(msg)
 
     def as_kombu_queue(self, *, exchange_name: str, exchange_type: str) -> Queue:
@@ -78,18 +82,28 @@ class WorkerTopology:
     exchange_type: str
     default_workload: WorkloadClass
     queues: tuple[WorkerQueueSpec, ...]
+    _queue_map: dict[WorkloadClass, WorkerQueueSpec] = dc.field(
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         """Validate the topology contract."""
         _validate_non_empty_str("WorkerTopology.exchange_name", self.exchange_name)
         _validate_non_empty_str("WorkerTopology.exchange_type", self.exchange_type)
         _validate_queue_contract(self.queues, self.default_workload)
+        object.__setattr__(
+            self,
+            "_queue_map",
+            {queue.workload: queue for queue in self.queues},
+        )
 
     def queue_for(self, workload: WorkloadClass) -> WorkerQueueSpec:
         """Return the queue configuration for a workload class."""
-        for queue in self.queues:
-            if queue.workload is workload:
-                return queue
+        queue = self._queue_map.get(workload)
+        if queue is not None:
+            return queue
         msg = f"No queue configured for workload {workload.value!r}."
         raise KeyError(msg)
 
@@ -113,7 +127,7 @@ class WorkerTopology:
             queue = self.queue_for(workload)
             routes[task_name] = {
                 "queue": queue.name,
-                "routing_key": queue.routing_key.removesuffix("#") + "diagnostic",
+                "routing_key": queue.diagnostic_routing_key,
             }
         return routes
 
@@ -127,11 +141,13 @@ DEFAULT_WORKER_TOPOLOGY = WorkerTopology(
             name="episodic.io",
             workload=WorkloadClass.IO_BOUND,
             routing_key="episodic.io.#",
+            diagnostic_routing_key="episodic.io.diagnostic",
         ),
         WorkerQueueSpec(
             name="episodic.cpu",
             workload=WorkloadClass.CPU_BOUND,
             routing_key="episodic.cpu.#",
+            diagnostic_routing_key="episodic.cpu.diagnostic",
         ),
     ),
 )

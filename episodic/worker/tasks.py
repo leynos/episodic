@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections.abc as cabc
 import dataclasses as dc
 import hashlib
 import typing as typ
@@ -10,8 +11,6 @@ from typing import TYPE_CHECKING  # noqa: ICN003
 from .topology import WorkloadClass
 
 if TYPE_CHECKING:
-    import collections.abc as cabc
-
     from celery import Celery
 
 IO_DIAGNOSTIC_TASK_NAME = "episodic.worker.io_diagnostic"
@@ -60,14 +59,8 @@ class IoDiagnosticRequest:
     def from_mapping(cls, payload: cabc.Mapping[str, object]) -> IoDiagnosticRequest:
         """Build a request from a JSON-serializable Celery payload."""
         return cls(
-            message=_require_non_empty_string(
-                payload.get("message"),
-                field_name="message",
-            ),
-            correlation_id=_require_non_empty_string(
-                payload.get("correlation_id"),
-                field_name="correlation_id",
-            ),
+            message=typ.cast("str", payload.get("message")),
+            correlation_id=typ.cast("str", payload.get("correlation_id")),
         )
 
 
@@ -104,14 +97,8 @@ class CpuDiagnosticRequest:
     def from_mapping(cls, payload: cabc.Mapping[str, object]) -> CpuDiagnosticRequest:
         """Build a request from a JSON-serializable Celery payload."""
         return cls(
-            message=_require_non_empty_string(
-                payload.get("message"),
-                field_name="message",
-            ),
-            iterations=_require_positive_int(
-                payload.get("iterations"),
-                field_name="iterations",
-            ),
+            message=typ.cast("str", payload.get("message")),
+            iterations=typ.cast("int", payload.get("iterations")),
         )
 
 
@@ -132,18 +119,8 @@ class CpuDiagnosticResult:
         }
 
 
-class IoDiagnosticHandler(typ.Protocol):
-    """Define the typed callable seam for I/O-bound worker tasks."""
-
-    def __call__(self, request: IoDiagnosticRequest) -> IoDiagnosticResult:
-        """Handle the diagnostic request and return a structured result."""
-
-
-class CpuDiagnosticHandler(typ.Protocol):
-    """Define the typed callable seam for CPU-bound worker tasks."""
-
-    def __call__(self, request: CpuDiagnosticRequest) -> CpuDiagnosticResult:
-        """Handle the diagnostic request and return a structured result."""
+IoDiagnosticHandler = cabc.Callable[[IoDiagnosticRequest], IoDiagnosticResult]
+CpuDiagnosticHandler = cabc.Callable[[CpuDiagnosticRequest], CpuDiagnosticResult]
 
 
 def _default_io_diagnostic(request: IoDiagnosticRequest) -> IoDiagnosticResult:
@@ -157,7 +134,10 @@ def _default_io_diagnostic(request: IoDiagnosticRequest) -> IoDiagnosticResult:
 
 def _default_cpu_diagnostic(request: CpuDiagnosticRequest) -> CpuDiagnosticResult:
     """Provide a deterministic CPU-bound implementation for the scaffold."""
-    digest = hashlib.sha256((request.message * request.iterations).encode("utf-8"))
+    digest = hashlib.sha256()
+    payload = request.message.encode("utf-8")
+    for _ in range(request.iterations):
+        digest.update(payload)
     return CpuDiagnosticResult(
         digest=digest.hexdigest(),
         iterations=request.iterations,
