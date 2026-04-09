@@ -162,6 +162,15 @@ Required environment:
 
 - `EPISODIC_CELERY_BROKER_URL` must point at RabbitMQ using AMQP.
 - `EPISODIC_CELERY_RESULT_BACKEND` is optional for the current scaffold.
+- `EPISODIC_CELERY_IO_POOL` and `EPISODIC_CELERY_CPU_POOL` override the
+  default pool choices (`gevent` for I/O work and `prefork` for CPU work).
+  The CPU `prefork` default is the baseline process-isolation path; for
+  CPU-heavy pure-Python tasks, the repository also exposes an opt-in
+  interpreter-pool path via `EPISODIC_USE_INTERPRETER_POOL=1`.
+- `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
+  interpreter-pool dispatch activates, and
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
+  that path is enabled.
 
 Current queue model:
 
@@ -216,8 +225,10 @@ jobs.
 - Integrating with external systems via API
 - Managing multi-tenant deployments
 - Enabling optional interpreter-pool execution for CPU-heavy pure-Python tasks
-  by setting `EPISODIC_USE_INTERPRETER_POOL=1`; tune dispatch thresholds with
-  `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` and worker count with
+  by setting `EPISODIC_USE_INTERPRETER_POOL=1`. This is separate from the
+  Celery CPU worker's default `prefork` pool and is intended for selected
+  pure-Python workloads inside repository adapters. Tune dispatch thresholds
+  with `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` and worker count with
   `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`
 - Troubleshooting common issues
 

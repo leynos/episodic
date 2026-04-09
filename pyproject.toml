@@ -19,6 +19,8 @@ dependencies = [
     "sqlalchemy>=2.0.34,<3.0.0",
     "tenacity>=8.0,<10",
     "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@016ef253b768c98d7d3664074928d70273eb3793",
+    "eventlet>=0.39,<0.41",
+    "gevent>=24.0,<26.0",
 ]
 
 [project.urls]

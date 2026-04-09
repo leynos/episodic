@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses as dc
 import enum
+import importlib
 import os
 from typing import TYPE_CHECKING  # noqa: ICN003
 from urllib.parse import urlparse
@@ -39,6 +40,14 @@ class WorkerRuntimeConfig:
 
     def __post_init__(self) -> None:
         """Validate runtime configuration values."""
+        if not isinstance(self.io_pool, WorkerPool):
+            msg = "WorkerRuntimeConfig.io_pool must be a WorkerPool value."
+            raise TypeError(msg)
+        if not isinstance(self.cpu_pool, WorkerPool):
+            msg = "WorkerRuntimeConfig.cpu_pool must be a WorkerPool value."
+            raise TypeError(msg)
+        _validate_pool_backend(self.io_pool, field_name="io_pool")
+        _validate_pool_backend(self.cpu_pool, field_name="cpu_pool")
         _validate_amqp_scheme(self.broker_url)
         _validate_result_backend(self.result_backend)
         _validate_positive_concurrency("io_concurrency", self.io_concurrency)
@@ -125,6 +134,21 @@ def _validate_positive_concurrency(name: str, value: int) -> None:
     if value <= 0:
         msg = f"WorkerRuntimeConfig.{name} must be positive."
         raise ValueError(msg)
+
+
+def _validate_pool_backend(pool: WorkerPool, *, field_name: str) -> None:
+    """Raise ValueError when a selected worker pool backend is unavailable."""
+    if pool is WorkerPool.PREFORK:
+        return
+    module_name = pool.value
+    try:
+        importlib.import_module(module_name)
+    except ImportError as exc:
+        msg = (
+            f"WorkerRuntimeConfig.{field_name} requires the optional "
+            f"{module_name!r} backend to be installed."
+        )
+        raise ValueError(msg) from exc
 
 
 def load_runtime_config(
