@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 IO_DIAGNOSTIC_TASK_NAME = "episodic.worker.io_diagnostic"
 CPU_DIAGNOSTIC_TASK_NAME = "episodic.worker.cpu_diagnostic"
+MAX_CPU_DIAGNOSTIC_ITERATIONS = 1_000_000
 SCAFFOLD_TASK_WORKLOADS = {
     IO_DIAGNOSTIC_TASK_NAME: WorkloadClass.IO_BOUND,
     CPU_DIAGNOSTIC_TASK_NAME: WorkloadClass.CPU_BOUND,
@@ -39,6 +40,12 @@ def _require_positive_int(value: object, *, field_name: str) -> int:
         raise TypeError(msg)
     if value <= 0:
         msg = f"{field_name} must be a positive integer."
+        raise ValueError(msg)
+    if value > MAX_CPU_DIAGNOSTIC_ITERATIONS:
+        msg = (
+            f"{field_name} must not exceed {MAX_CPU_DIAGNOSTIC_ITERATIONS} "
+            "for the diagnostic scaffold."
+        )
         raise ValueError(msg)
     return value
 
@@ -190,5 +197,8 @@ def register_scaffold_tasks(
         request = CpuDiagnosticRequest.from_mapping(payload)
         return dependencies.cpu_diagnostic(request).as_payload()
 
+    # register_scaffold_tasks registers run_io_diagnostic and run_cpu_diagnostic on
+    # the Celery app, so deleting the local names avoids accidental direct calls to
+    # those local functions instead of using the registered tasks.
     del run_io_diagnostic, run_cpu_diagnostic
     return (IO_DIAGNOSTIC_TASK_NAME, CPU_DIAGNOSTIC_TASK_NAME)
