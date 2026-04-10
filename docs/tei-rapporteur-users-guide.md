@@ -8,31 +8,23 @@ available today and how to exercise it.
 
 - `tei-core` now models the top-level `TeiDocument` together with its
   `TeiHeader` and body-aware `TeiText`. The text model records ordered
-  paragraphs (`P`), utterances with optional speaker references, and thematic
-  divisions (`Div`) that group structured content such as lists. Each block
+  paragraphs (`P`) and utterances with optional speaker references. Each block
   stores a sequence of `Inline` nodes, allowing clients to mix plain text with
   emphasised `<hi>` spans and `<pause/>` cues without hand-rolling XML. Plain
   strings flow through the new `P::from_text_segments` and
   `Utterance::from_text_segments` helpers; the older `new` constructors remain
-  as deprecated shims for existing callers. The `Div` type models `<div>`
-  elements with a validated `@type` attribute (`DivType`), optional `@xml:id`,
-  and a `Vec<DivContent>` of children. `DivContent` permits `Paragraph`,
-  `Utterance`, and `List` children inside a division. `List` holds an ordered
-  `Vec<Item>`, and each `Item` carries optional `@n` (numbering or timestamp),
-  `@corresp` (pointer list), `@xml:id`, an optional `Label` prefix, and inline
-  content. `Label` wraps `Vec<Inline>` content. `TeiDocument` now exposes
+  as deprecated shims for existing callers. `TeiDocument` now exposes
   `validate()` to enforce document-wide rules: it rejects duplicate `xml:id`
-  values across annotation systems, paragraphs, utterances, divisions, lists,
-  and items, and ensures utterance speakers appear in the profile cast when it
-  exists. An empty cast still counts as declared—every `who` fails until the
-  speakers are populated—whereas the absence of a cast allows speaker
-  references, so drafts can be validated incrementally. Identifier checks span
-  the header as well, catching clashes between annotation systems and body
-  blocks. Violations surface as `TeiError::Validation`. Utterances now also
-  carry local provenance and citation attributes (`@n`, `@source`, `@resp`,
-  `@cert`, `@corresp`, `@ana`), and XML deserialization remains strict for
-  `<u>`: misspelled or unsupported attributes are rejected instead of being
-  silently discarded.
+  values across annotation systems, paragraphs, and utterances, and ensures
+  utterance speakers appear in the profile cast when it exists. An empty cast
+  still counts as declared—every `who` fails until the speakers are populated—
+  whereas the absence of a cast allows speaker references, so drafts can be
+  validated incrementally. Identifier checks span the header as well, catching
+  clashes between annotation systems and body blocks. Violations surface as
+  `TeiError::Validation`. Utterances now also carry local provenance and
+  citation attributes (`@n`, `@source`, `@resp`, `@cert`, `@corresp`, `@ana`),
+  and XML deserialization remains strict for `<u>`: misspelled or unsupported
+  attributes are rejected instead of being silently discarded.
 - `tei-xml` depends on the core crate and now covers both directions of XML
   flow. `serialize_document_title(raw_title)` still emits a `<title>` snippet,
   `parse_xml(xml)` wraps `quick-xml` to materialize full `TeiDocument` values,
@@ -89,30 +81,26 @@ Use the Makefile targets to work with the entire workspace:
 `tei-core` and `tei-xml` ship behaviour-driven tests that exercise happy and
 unhappy paths. Core scenarios validate that header metadata can be assembled,
 that blank revision notes are rejected, and that the body model preserves
-paragraph/utterance/division order while rejecting empty utterances and invalid
-division types. Additional cases demonstrate inline emphasis, rend-aware mixed
-content, pause cues with duration metadata, and ensure empty `<hi>` segments
-are rejected. Division-specific tests cover `Div` construction with validated
-`@type`, `List` and `Item` assembly, `Label` prefix content, `@n` and
-`@corresp` attribute handling on items, and `xml:id` uniqueness checks across
-nested division content. The XML crate now tests title serialization,
-full-document parsing, and XML emission: feature files cover successful
-parsing, missing header errors, syntax failures triggered by truncated
-documents, as well as emission of canonical minimal TEI output and the error
-surfaced when a document sneaks in forbidden control characters. These tests
-run alongside the unit suite, so developers receive fast feedback when
-modifying the scaffolding. The `tei-py` suite layers on `rstest-bdd` scenarios
-for the Python module, covering successful construction of `Document` from a
-valid title, rejection of blank titles via `ValueError`, round-tripping markup
-through the module-level helper, both directions of the MessagePack bridge, and
-the new XML exchange APIs. Behaviour-driven coverage now parses canonical TEI
-fixtures, rejects malformed payloads, emits canonical strings, and proves
-forbidden characters bubble up as `ValueError` with an actionable message. New
-dictionary scenarios cover happy-path decoding, missing fields, blank titles,
-and the `TypeError` raised when `to_dict` is called with the wrong object. New
-validation scenarios assert that duplicate `xml:id` values are rejected and
-that utterance speakers must be declared when a profile cast exists, while
-documents without a cast still pass validation.
+paragraph/utterance order while rejecting empty utterances. Additional cases
+demonstrate inline emphasis, rend-aware mixed content, pause cues with duration
+metadata, and ensure empty `<hi>` segments are rejected. The XML crate now
+tests title serialization, full-document parsing, and XML emission: feature
+files cover successful parsing, missing header errors, syntax failures
+triggered by truncated documents, as well as emission of canonical minimal TEI
+output and the error surfaced when a document sneaks in forbidden control
+characters. These tests run alongside the unit suite, so developers receive
+fast feedback when modifying the scaffolding. The `tei-py` suite layers on
+`rstest-bdd` scenarios for the Python module, covering successful construction
+of `Document` from a valid title, rejection of blank titles via `ValueError`,
+round-tripping markup through the module-level helper, both directions of the
+MessagePack bridge, and the new XML exchange APIs. Behaviour-driven coverage
+now parses canonical TEI fixtures, rejects malformed payloads, emits canonical
+strings, and proves forbidden characters bubble up as `ValueError` with an
+actionable message. New dictionary scenarios cover happy-path decoding, missing
+fields, blank titles, and the `TypeError` raised when `to_dict` is called with
+the wrong object. New validation scenarios assert that duplicate `xml:id`
+values are rejected and that utterance speakers must be declared when a profile
+cast exists, while documents without a cast still pass validation.
 
 The `tei-serde` crate now publishes a versioned JSON Schema for `TeiDocument`.
 Its unit tests assert that the checked-in schema snapshot stays in sync with
@@ -159,23 +147,6 @@ whitespace-separated attribute strings. MessagePack emitted by `to_msgpack`
 decodes directly into these classes, and encoding them feeds the payload
 straight back into `from_msgpack`.
 
-**Note:** the `BodyBlock` TypeAlias in `tei_rapporteur.structs` does not yet
-include `Div`, `DivContent`, `List`, `Item`, or `Label` msgspec Struct classes.
-The `to_dict` and `from_dict` functions handle division blocks correctly via
-the Rust/PyO3 projection layer, so callers can work with division content as
-plain Python dictionaries until the msgspec structs are added upstream. The
-`Event` union similarly does not yet include a `div` streaming event variant.
-
-**Recommendation for clients handling enriched TEI documents:** to safely
-process body content that may include divisions, lists, and items today, use
-`to_dict` to convert documents to plain Python dictionaries rather than relying
-on typed msgspec `BodyBlock` decoding. For streaming workflows, handle
-`BodyBlock` events via the dictionary projection (`to_dict` on the event
-payload) or use non-msgspec event handling until the `Event` union is updated
-to expose division-related variants. This avoids incomplete or partial
-processing of enriched documents in code paths that assume the body contains
-only `Paragraph` and `Utterance` blocks.
-
 Citation metadata is split along TEI-native boundaries. Canonical citation
 declarations live under `header.encoding_desc.refs_decl`, utterance-local
 provenance stays on `Utterance`, and many-to-many overlays live in the optional
@@ -213,7 +184,6 @@ they miswire a call. A complete round trip therefore looks like:
 doc = tei.Document("Bridgewater")
 payload = tei.to_msgpack(doc)
 from tei_rapporteur.structs import Episode
-
 episode = msgspec.msgpack.decode(payload, type=Episode)
 ```
 
@@ -317,14 +287,9 @@ The profile supports:
 - **Header metadata**: title, speaker declarations, annotation systems,
   canonical citation declarations (`refsDecl` / `citeStructure` / `citeData`),
   revision history
-- **Body structure**: paragraphs (`<p>`), utterances (`<u>`) with optional
+- **Body structure**: paragraphs (`<p>`) and utterances (`<u>`) with optional
   speaker attribution via `@who` plus local provenance attributes (`@n`,
-  `@source`, `@resp`, `@cert`, `@corresp`, `@ana`), and thematic divisions
-  (`<div>`) with a required `@type` attribute. Divisions can contain
-  paragraphs, utterances, and lists (`<list>`). Lists hold ordered items
-  (`<item>`) that carry optional `@n` (numbering or timestamp metadata),
-  `@corresp` (pointer list for cross-references), and `@xml:id`. Each item may
-  include an optional label prefix (`<label>`) followed by inline content
+  `@source`, `@resp`, `@cert`, `@corresp`, `@ana`)
 - **Stand-off overlays**: root-level `<standOff>` containers with
   `<spanGrp>`/`<span>` layers for many-to-many citation and analytical markup
 - **Inline elements**: emphasis (`<hi>` with optional `@rend` attribute), pause
@@ -385,11 +350,8 @@ Episodic Profile:
 - **paragraphs**: Body containing `<p>` elements with `xml:id` attributes
 - **utterances**: Profile with speakers, body with `<u>` elements referencing
   speakers via `@who`
-- **divisions**: Body containing `<div type="...">` elements with nested
-  `<list>`, `<item>`, and `<label>` children
 - **comprehensive**: All profile features combined (synopsis, speakers,
-  languages, annotation systems, revision history, mixed body content including
-  divisions)
+  languages, annotation systems, revision history, mixed body content)
 
 Run the binary directly to generate fixtures to a custom location:
 
@@ -457,10 +419,8 @@ The parser yields four high-level event types:
 - **`DocumentStart`**: Emitted once at the beginning of parsing
 - **`Header(TeiHeader)`**: The complete header metadata, emitted once after the
   header section is fully parsed
-- **`BodyBlock(BodyBlock)`**: A paragraph, utterance, or division from the
-  body, emitted one at a time as each block is parsed. Division blocks are
-  accumulated with their full child content (lists, items, nested paragraphs
-  and utterances) before being yielded as a single `BodyBlock::Div` event
+- **`BodyBlock(BodyBlock)`**: A paragraph or utterance from the body, emitted
+  one at a time as each block is parsed
 - **`DocumentEnd`**: Emitted once after all content has been successfully parsed
 
 The streaming parser currently streams the header and body only. Root-level
@@ -492,10 +452,8 @@ import msgspec
 import tei_rapporteur as tr
 from tei_rapporteur.structs import Event
 
-xml = (
-    "<TEI><teiHeader><fileDesc><title>Wolf 359</title></fileDesc></teiHeader>"
-    "<text><body><p>Hello <hi rend='stress'>there</hi></p></body></text></TEI>"
-)
+xml = "<TEI><teiHeader><fileDesc><title>Wolf 359</title></fileDesc></teiHeader>" \
+      "<text><body><p>Hello <hi rend='stress'>there</hi></p></body></text></TEI>"
 
 for event in tr.iter_parse(xml):
     typed = msgspec.convert(event, type=Event)
@@ -506,9 +464,8 @@ Events use internal tagging (`type`), covering:
 
 - `document_start`
 - `header` (with a structured `header` field)
-- `paragraph` / `utterance` / `div` (unwrapped, carrying inline `content` as
-  tagged `Inline` values; `div` events include `div_type` and nested `content`
-  with `DivContent` children)
+- `paragraph` / `utterance` (unwrapped, carrying inline `content` as tagged
+  `Inline` values)
 - `document_end`
 
 Inline content is also tagged (`text`, `hi`, `pause`), so Python callers can
