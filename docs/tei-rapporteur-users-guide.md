@@ -166,6 +166,16 @@ the Rust/PyO3 projection layer, so callers can work with division content as
 plain Python dictionaries until the msgspec structs are added upstream. The
 `Event` union similarly does not yet include a `div` streaming event variant.
 
+**Recommendation for clients handling enriched TEI documents:** to safely
+process body content that may include divisions, lists, and items today, use
+`to_dict` to convert documents to plain Python dictionaries rather than relying
+on typed msgspec `BodyBlock` decoding. For streaming workflows, handle
+`BodyBlock` events via the dictionary projection (`to_dict` on the event
+payload) or use non-msgspec event handling until the `Event` union is updated
+to expose division-related variants. This avoids incomplete or partial
+processing of enriched documents in code paths that assume the body contains
+only `Paragraph` and `Utterance` blocks.
+
 Citation metadata is split along TEI-native boundaries. Canonical citation
 declarations live under `header.encoding_desc.refs_decl`, utterance-local
 provenance stays on `Utterance`, and many-to-many overlays live in the optional

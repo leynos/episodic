@@ -11,9 +11,10 @@ Status: DRAFT
 
 Roadmap item 2.3.1 asks the system to generate show notes from template
 expansions. After this change, the Content Generation Orchestrator can invoke
-an LLM via the existing `LLMPort` contract to extract key topics and timestamps
-from generated podcast script content, then format the results as structured
-metadata within a canonical Text Encoding Initiative (TEI) body.
+a large language model (LLM) via the existing `LLMPort` contract to extract key
+topics and timestamps from generated podcast script content, then format the
+results as structured metadata within a canonical Text Encoding Initiative
+(TEI) body.
 
 Success is observable in six ways:
 
@@ -252,7 +253,10 @@ tests pass.
 - `parse_xml` and `emit_xml` fully support `<div>` round-trips.
 - External XML validation via jing against the Relax NG schema will reject
   `<div>` elements until the ODD/RNG schemas are updated upstream. This affects
-  CI validation only, not runtime behaviour.
+  CI validation (`make nixie`) only, not runtime behaviour. **CI mitigation:**
+  validation in `make nixie` currently skips TEI body validation for enriched
+  documents, so the missing schema support does not block development or commit
+  gates.
 - Typed msgspec decoding of body blocks will skip `Div` blocks until the
   Python structs are updated. Use `to_dict` (returns plain Python dicts) for
   now.
@@ -591,10 +595,15 @@ Each `<item>` element contains:
 - An optional `@n` attribute with the `timestamp` value.
 - An optional `@corresp` attribute with the `tei_locator` value.
 
-If `tei_rapporteur` can produce and validate this structure, use its API.
-Otherwise, use `xml.etree.ElementTree` from the standard library to manipulate
-the XML tree, and validate the result by round-tripping through
-`tei_rapporteur.parse_xml(...)`.
+Use the `tei_rapporteur` API via `to_dict`/`from_dict` and `emit_xml` to
+produce the structure. The Rust core, parser, and emitter at `ffb25c6` fully
+support `<div>`, `<list>`, `<item>`, and `<label>`.
+
+**CI validation note:** while the upstream Relax NG schema has not been updated
+to include `<div>` elements, `make nixie` currently skips body validation for
+enriched TEI documents. This means external validation failures will not block
+commit gates during development. Runtime `parse_xml`/`emit_xml` round-trips
+will succeed.
 
 Write and update unit tests:
 
