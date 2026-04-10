@@ -13,6 +13,7 @@ Configure logging and emit a message:
 """
 
 import enum
+import logging
 import typing as typ
 import warnings
 
@@ -121,7 +122,7 @@ class _SupportsLogMethod(typ.Protocol):
 
     def log(
         self,
-        level: LogLevel,
+        level: int | LogLevel,
         message: str,
         /,
         *,
@@ -148,8 +149,9 @@ def log_info(
 
     Parameters
     ----------
-    logger : _SupportsConvenienceLog
-        Logger instance that supports femtologging convenience methods.
+    logger : _CompatibleLogger
+        Logger instance that supports femtologging convenience methods or a
+        stdlib-style `log(...)` fallback.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -173,9 +175,9 @@ def log_info(
             exc_info=exc_info,
             stack_info=False,
         )
-    except AttributeError, TypeError:
+    except (AttributeError, TypeError):  # fmt: skip
         typ.cast("_SupportsLogMethod", logger).log(
-            LogLevel.INFO,
+            logging.INFO,
             message,
             exc_info=exc_info,
             stack_info=False,
@@ -192,8 +194,9 @@ def log_warning(
 
     Parameters
     ----------
-    logger : _SupportsConvenienceLog
-        Logger instance that supports femtologging convenience methods.
+    logger : _CompatibleLogger
+        Logger instance that supports femtologging convenience methods or a
+        stdlib-style `log(...)` fallback.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -217,9 +220,9 @@ def log_warning(
             exc_info=exc_info,
             stack_info=False,
         )
-    except AttributeError, TypeError:
+    except (AttributeError, TypeError):  # fmt: skip
         typ.cast("_SupportsLogMethod", logger).log(
-            LogLevel.WARNING,
+            logging.WARNING,
             message,
             exc_info=exc_info,
             stack_info=False,
@@ -236,8 +239,9 @@ def log_error(
 
     Parameters
     ----------
-    logger : _SupportsConvenienceLog
-        Logger instance that supports femtologging convenience methods.
+    logger : _CompatibleLogger
+        Logger instance that supports femtologging convenience methods or a
+        stdlib-style `log(...)` fallback.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -261,9 +265,9 @@ def log_error(
             exc_info=exc_info,
             stack_info=False,
         )
-    except AttributeError, TypeError:
+    except (AttributeError, TypeError):  # fmt: skip
         typ.cast("_SupportsLogMethod", logger).log(
-            LogLevel.ERROR,
+            logging.ERROR,
             message,
             exc_info=exc_info,
             stack_info=False,

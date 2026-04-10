@@ -1,5 +1,6 @@
 """Tests for episodic logging integration and femtologging compatibility."""
 
+import logging
 import time
 import typing as typ
 
@@ -77,19 +78,18 @@ class _LogOnlySpyLogger:
     """Collect low-level log calls through a stdlib-style `log` method only."""
 
     def __init__(self) -> None:
-        self.calls: list[
-            tuple[episodic_logging.LogLevel, str, object | None, bool]
-        ] = []
+        self.calls: list[tuple[int, str, object | None, bool]] = []
 
     def log(
         self,
-        level: episodic_logging.LogLevel,
+        level: int | episodic_logging.LogLevel,
         message: str,
         /,
         *,
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        assert isinstance(level, int)
         self.calls.append((level, message, exc_info, stack_info))
 
 
@@ -162,19 +162,17 @@ def test_configure_logging_normalizes_levels(
     assert recorded_calls == [(expected_level, True)]
 
 
-def test_configure_logging_uses_false_as_default_force_value() -> None:
+def test_configure_logging_uses_false_as_default_force_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """configure_logging should forward `force=False` when omitted."""
     recorded_calls: list[tuple[str, bool]] = []
 
     def _fake_basic_config(*, level: str, force: bool) -> None:
         recorded_calls.append((level, force))
 
-    monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(episodic_logging, "basicConfig", _fake_basic_config)
-    try:
-        effective_level, used_default = episodic_logging.configure_logging("debug")
-    finally:
-        monkeypatch.undo()
+    effective_level, used_default = episodic_logging.configure_logging("debug")
 
     assert (effective_level, used_default) == (episodic_logging.LogLevel.DEBUG, False)
     assert recorded_calls == [(episodic_logging.LogLevel.DEBUG, False)]
@@ -236,15 +234,15 @@ def test_log_wrappers_fall_back_to_logger_log_when_needed() -> None:
     )
 
     assert logger.calls == [
-        (episodic_logging.LogLevel.INFO, "Loaded 3 documents", None, False),
+        (logging.INFO, "Loaded 3 documents", None, False),
         (
-            episodic_logging.LogLevel.WARNING,
+            logging.WARNING,
             "Potential issue in ingestion",
             None,
             False,
         ),
         (
-            episodic_logging.LogLevel.ERROR,
+            logging.ERROR,
             "Failed job job-1",
             err,
             False,

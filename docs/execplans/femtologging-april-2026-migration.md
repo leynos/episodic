@@ -83,7 +83,7 @@ Success is observable in six ways:
   cannot be handled with a local compatibility shim.
 - Documentation tolerance: stop and escalate if updating
   `docs/femtologging-users-guide.md` would require a full upstream-document
-  resynchronisation larger than this migration itself. In that case, switch to
+  resynchronization larger than this migration itself. In that case, switch to
   a smaller accuracy-focused update and record the divergence explicitly.
 - Behaviour tolerance: stop and escalate after three failed attempts to make
   the same new logging test pass against the target dependency.
@@ -328,7 +328,7 @@ dependency pin.
 
 Add a new test module, expected to be `tests/test_logging.py`, covering:
 
-- `configure_logging(...)` normalisation and defaulting behaviour
+- `configure_logging(...)` normalization and defaulting behaviour
 - wrapper-level `log_info(...)` / `log_warning(...)` / `log_error(...)`
   compatibility against a lightweight spy object
 - integration coverage against the real femtologging runtime for the intended
@@ -503,7 +503,7 @@ The migration is complete only when all of the following are true:
   files on the wrapper for this revision and record that decision in
   `Decision log`; the dependency bump and documentation refresh can still ship
   separately.
-- If documentation synchronisation becomes too large, reduce Stage D to the
+- If documentation synchronization becomes too large, reduce Stage D to the
   sections known to be wrong and record the remaining drift explicitly in
   `Surprises & Discoveries`.
 - Preserve all `/tmp/femtologging-migration-*.log` files as the evidence trail.
