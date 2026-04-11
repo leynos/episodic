@@ -17,6 +17,37 @@ class WorkloadClass(enum.StrEnum):
     CPU_BOUND = "cpu_bound"
 
 
+def _validate_queue_spec_strings(
+    name: str,
+    routing_key: str,
+    diagnostic_routing_key: str,
+) -> None:
+    """Raise ValueError if any required queue string field is blank."""
+    if not name.strip():
+        msg = "Worker queue names must be non-empty strings."
+        raise ValueError(msg)
+    if not routing_key.strip():
+        msg = "Worker queue routing keys must be non-empty strings."
+        raise ValueError(msg)
+    if not diagnostic_routing_key.strip():
+        msg = "Worker diagnostic routing keys must be non-empty strings."
+        raise ValueError(msg)
+
+
+def _validate_routing_key_pair(
+    routing_key: str,
+    diagnostic_routing_key: str,
+) -> None:
+    """Raise ValueError if routing or diagnostic key violates structural rules."""
+    if not routing_key.endswith(".#"):
+        msg = "Worker queue routing keys must end with '.#'."
+        raise ValueError(msg)
+    routing_prefix = routing_key.removesuffix("#")
+    if not diagnostic_routing_key.startswith(routing_prefix):
+        msg = "Worker diagnostic routing keys must be matched by the queue routing key."
+        raise ValueError(msg)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class WorkerQueueSpec:
     """Describe one queue and its workload routing contract."""
@@ -28,25 +59,15 @@ class WorkerQueueSpec:
 
     def __post_init__(self) -> None:
         """Validate the queue definition."""
-        if not self.name.strip():
-            msg = "Worker queue names must be non-empty strings."
-            raise ValueError(msg)
-        if not self.routing_key.strip():
-            msg = "Worker queue routing keys must be non-empty strings."
-            raise ValueError(msg)
-        if not self.diagnostic_routing_key.strip():
-            msg = "Worker diagnostic routing keys must be non-empty strings."
-            raise ValueError(msg)
-        if not self.routing_key.endswith(".#"):
-            msg = "Worker queue routing keys must end with '.#'."
-            raise ValueError(msg)
-        routing_prefix = self.routing_key.removesuffix("#")
-        if not self.diagnostic_routing_key.startswith(routing_prefix):
-            msg = (
-                "Worker diagnostic routing keys must be matched by the queue "
-                "routing key."
-            )
-            raise ValueError(msg)
+        _validate_queue_spec_strings(
+            self.name,
+            self.routing_key,
+            self.diagnostic_routing_key,
+        )
+        _validate_routing_key_pair(
+            self.routing_key,
+            self.diagnostic_routing_key,
+        )
 
     def as_kombu_queue(self, *, exchange_name: str, exchange_type: str) -> Queue:
         """Build the Kombu queue definition consumed by Celery."""
