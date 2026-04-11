@@ -149,7 +149,7 @@ def _wait_for_record_count(
 def test_configure_logging_normalizes_levels(
     monkeypatch: pytest.MonkeyPatch,
     requested_level: str | None,
-    expected_level: str,
+    expected_level: episodic_logging.LogLevel,
     expected_used_default: object,
 ) -> None:
     """configure_logging should normalize levels before delegating to femtologging."""
@@ -223,7 +223,10 @@ def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
     """Compatibility helpers should propagate `TypeError` from formatting."""
     logger = _SpyLogger()
 
-    with pytest.raises(TypeError):
+    with pytest.raises(
+        TypeError,
+        match=r"not enough arguments for format string",
+    ):
         episodic_logging.log_info(logger, "Loaded %s documents for %s", 3)
 
     assert logger.calls == []
