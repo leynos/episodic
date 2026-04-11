@@ -8,6 +8,7 @@ Accepted design decisions relevant to current implementation work:
 
 - [`adr-001-reference-binding-resolution-algorithm.md`](adr/adr-001-reference-binding-resolution-algorithm.md)
 - [`adr-002-http-service-composition-root.md`](adr/adr-002-http-service-composition-root.md)
+- [`adr-003-celery-worker-scaffold.md`](adr/adr-003-celery-worker-scaffold.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -54,6 +55,76 @@ Testing guidance:
   fixture rather than sharing a long-lived migrated engine fixture. The full
   engine disposal step is required to keep the py-pglite-backed runtime probe
   responsive.
+
+## Celery worker runtime
+
+The worker scaffold mirrors the Falcon composition-root pattern:
+
+- `episodic/worker/topology.py` defines the canonical exchange, queue, and
+  routing-key contract.
+- `episodic/worker/tasks.py` holds representative diagnostic tasks together
+  with typed payload and dependency seams.
+- `episodic/worker/runtime.py` reads environment configuration, exposes worker
+  launch profiles, and builds the Celery application.
+
+Run the worker app locally with:
+
+```shell
+celery --app episodic.worker.runtime:create_celery_app_from_env worker --pool prefork --queues episodic.cpu
+```
+
+and, for the I/O profile:
+
+```shell
+celery --app episodic.worker.runtime:create_celery_app_from_env worker --pool gevent --queues episodic.io
+```
+
+Required environment:
+
+- `EPISODIC_CELERY_BROKER_URL` must point at RabbitMQ using an AMQP URL such
+  as `amqp://guest:guest@localhost:5672//`.
+- `EPISODIC_CELERY_RESULT_BACKEND` is optional in this scaffold slice.
+- `EPISODIC_CELERY_IO_POOL` and `EPISODIC_CELERY_CPU_POOL` override the
+  default pool choices (`gevent` and `prefork` respectively).
+- The CPU `prefork` default remains the baseline Celery process-isolation
+  path. For CPU-heavy pure-Python workloads inside repository adapters, the
+  optional interpreter-pool seam is enabled separately with
+  `EPISODIC_USE_INTERPRETER_POOL=1`.
+- `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
+  interpreter-pool dispatch activates, and
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
+  that path is enabled.
+- `EPISODIC_CELERY_IO_CONCURRENCY` and `EPISODIC_CELERY_CPU_CONCURRENCY`
+  override the default worker-profile concurrency values.
+- `EPISODIC_CELERY_ALWAYS_EAGER=true` is for tests and local contract checks
+  only, not for deployed workers.
+
+Queue contract:
+
+- Exchange: `episodic.tasks` (`topic`)
+- I/O queue: `episodic.io`, routed via `episodic.io.diagnostic`
+- CPU queue: `episodic.cpu`, routed via `episodic.cpu.diagnostic`
+
+Testing guidance:
+
+- Use `tests/test_worker_service_scaffold.py` for unit coverage of topology,
+  runtime parsing, Celery app assembly, and eager task execution.
+- Use `tests/features/worker_service_scaffold.feature` and
+  `tests/steps/test_worker_service_scaffold_steps.py` for contract-level
+  behavioural coverage.
+- This roadmap slice does not yet include a broker-backed RabbitMQ test
+  harness. Behavioural tests intentionally validate routing metadata and eager
+  execution instead of a live queue round-trip.
+
+When adding new worker tasks:
+
+- Keep the task body single-responsibility and idempotent.
+- Add typed payload dataclasses or other narrow data transfer objects (DTOs)
+  in `episodic/worker/tasks.py` or a sibling worker-only module.
+- Depend on ports or injected callables rather than importing concrete
+  adapters directly into task code.
+- Extend `SCAFFOLD_TASK_WORKLOADS` and the topology-backed routing metadata so
+  the new task's queue assignment remains explicit.
 
 ## Database migrations
 
