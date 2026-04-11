@@ -454,13 +454,16 @@ Run all commands from the repository root.
 
 5. Stage D and E final repository gates:
 
+   Ensure the `markdownlint-cli2` executable required by `make markdownlint` is
+   already available on `PATH` before running this sequence.
+
    ```shell
    set -o pipefail; make fmt 2>&1 | tee /tmp/femtologging-migration-make-fmt.log
    set -o pipefail; make check-fmt 2>&1 | tee /tmp/femtologging-migration-make-check-fmt.log
    set -o pipefail; make lint 2>&1 | tee /tmp/femtologging-migration-make-lint.log
    set -o pipefail; make typecheck 2>&1 | tee /tmp/femtologging-migration-make-typecheck.log
    set -o pipefail; make test 2>&1 | tee /tmp/femtologging-migration-make-test.log
-   set -o pipefail; PATH=/root/.bun/bin:$PATH make markdownlint 2>&1 | \
+   set -o pipefail; make markdownlint 2>&1 | \
      tee /tmp/femtologging-migration-make-markdownlint.log
    set -o pipefail; make nixie 2>&1 | tee /tmp/femtologging-migration-make-nixie.log
    ```
