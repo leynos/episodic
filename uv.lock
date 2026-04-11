@@ -159,7 +159,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1.0" },
     { name = "langgraph", specifier = ">=1.1,<2.0" },
     { name = "sqlalchemy", specifier = ">=2.0.34,<3.0.0" },
-    { name = "tei-rapporteur", git = "https://github.com/leynos/tei-rapporteur?rev=ffb25c670179902b0776eacc9286ba98f2819642" },
+    { name = "tei-rapporteur", git = "https://github.com/leynos/tei-rapporteur?rev=7b397e63d51b90c9dd6616804c74cf7585c25573" },
     { name = "tenacity", specifier = ">=8.0,<10" },
 ]
 
@@ -869,7 +869,7 @@ wheels = [
 [[package]]
 name = "tei-rapporteur"
 version = "0.1.0"
-source = { git = "https://github.com/leynos/tei-rapporteur?rev=ffb25c670179902b0776eacc9286ba98f2819642#ffb25c670179902b0776eacc9286ba98f2819642" }
+source = { git = "https://github.com/leynos/tei-rapporteur?rev=7b397e63d51b90c9dd6616804c74cf7585c25573#7b397e63d51b90c9dd6616804c74cf7585c25573" }
 dependencies = [
     { name = "msgspec" },
 ]

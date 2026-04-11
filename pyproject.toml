@@ -15,7 +15,7 @@ dependencies = [
     "langgraph>=1.1,<2.0",
     "sqlalchemy>=2.0.34,<3.0.0",
     "tenacity>=8.0,<10",
-    "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@ffb25c670179902b0776eacc9286ba98f2819642",
+    "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@7b397e63d51b90c9dd6616804c74cf7585c25573",
 ]
 
 [project.urls]
