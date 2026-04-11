@@ -109,6 +109,16 @@ class _SupportsFlushHandlers(typ.Protocol):
     def flush_handlers(self) -> object: ...
 
 
+@pytest.fixture
+def isolated_femtologging() -> typ.Generator[None]:
+    """Reset the femtologging global manager before and after each test."""
+    import femtologging
+
+    femtologging.reset_manager()
+    yield
+    femtologging.reset_manager()
+
+
 def _wait_for_record_count(
     logger: _SupportsFlushHandlers,
     collector: _CollectorHandler,
@@ -290,11 +300,12 @@ def _raise_logged_exception() -> None:
     raise RuntimeError(msg)
 
 
-def test_stdlib_style_logger_methods_emit_to_python_handlers() -> None:
+def test_stdlib_style_logger_methods_emit_to_python_handlers(
+    isolated_femtologging: None,
+) -> None:
     """Direct logger convenience methods should work with Python handlers."""
     import femtologging
 
-    femtologging.reset_manager()
     logger = femtologging.getLogger("tests.logging.runtime")
     collector = _CollectorHandler()
     logger.clear_handlers()
