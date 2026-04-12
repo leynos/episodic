@@ -311,7 +311,9 @@ class ShowNotesGenerator:
         LLMTransientProviderError
             If the LLM call fails transiently after exhausting retries.
         """
-        prompt = self.build_prompt(script_tei_xml, template_structure=template_structure)
+        prompt = self.build_prompt(
+            script_tei_xml, template_structure=template_structure
+        )
 
         request = LLMRequest(
             model=self.config.model,
@@ -372,7 +374,8 @@ def enrich_tei_with_show_notes(
         if entry.timestamp is not None:
             # XML-escape the timestamp
             escaped_timestamp = (
-                entry.timestamp.replace("&", "&amp;")
+                entry.timestamp
+                .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace('"', "&quot;")
@@ -381,7 +384,8 @@ def enrich_tei_with_show_notes(
         if entry.tei_locator is not None:
             # XML-escape the locator
             escaped_locator = (
-                entry.tei_locator.replace("&", "&amp;")
+                entry.tei_locator
+                .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace('"', "&quot;")
@@ -392,12 +396,11 @@ def enrich_tei_with_show_notes(
 
         # XML-escape the topic and summary text
         escaped_topic = (
-            entry.topic.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
+            entry.topic.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         )
         escaped_summary = (
-            entry.summary.replace("&", "&amp;")
+            entry.summary
+            .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
         )
@@ -422,6 +425,8 @@ def enrich_tei_with_show_notes(
         raise ValueError(msg)
 
     # Insert the div before </body>
-    enriched_xml = tei_xml[:body_close_idx] + div_xml + "\n  " + tei_xml[body_close_idx:]
+    enriched_xml = (
+        tei_xml[:body_close_idx] + div_xml + "\n  " + tei_xml[body_close_idx:]
+    )
 
     return enriched_xml

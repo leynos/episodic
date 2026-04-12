@@ -126,14 +126,12 @@ def _valid_llm_response(text: str) -> LLMResponse:
 
 def test_result_from_response_parses_valid_json() -> None:
     """Parse a well-formed JSON response into a ShowNotesResult."""
-    json_text = json.dumps(
-        {
-            "entries": [
-                {"topic": "Topic 1", "summary": "Summary 1"},
-                {"topic": "Topic 2", "summary": "Summary 2", "timestamp": "PT5M"},
-            ]
-        }
-    )
+    json_text = json.dumps({
+        "entries": [
+            {"topic": "Topic 1", "summary": "Summary 1"},
+            {"topic": "Topic 2", "summary": "Summary 2", "timestamp": "PT5M"},
+        ]
+    })
     response = _valid_llm_response(json_text)
 
     config = ShowNotesGeneratorConfig(model="test-model")
@@ -194,9 +192,9 @@ def test_build_prompt_includes_tei_xml() -> None:
 @pytest.mark.asyncio
 async def test_generate_calls_llm_and_returns_result() -> None:
     """The generate method calls the LLM and parses the response."""
-    json_text = json.dumps(
-        {"entries": [{"topic": "Introduction", "summary": "Opening remarks"}]}
-    )
+    json_text = json.dumps({
+        "entries": [{"topic": "Introduction", "summary": "Opening remarks"}]
+    })
     fake_llm = _FakeLLMPort(_valid_llm_response(json_text))
 
     config = ShowNotesGeneratorConfig(model="test-model")
