@@ -317,7 +317,9 @@ The profile supports:
   speaker attribution via `@who` plus local provenance attributes (`@n`,
   `@source`, `@resp`, `@cert`, `@corresp`, `@ana`), and thematic divisions
   (`<div>`) with a required `@type` attribute. Divisions can contain
-  paragraphs, utterances, and lists (`<list>`). Lists hold ordered items
+  paragraphs, utterances, and lists (`<list>` is only permitted as a child of
+  `<div>` and cannot appear as a direct child of `<body>`). Lists hold ordered
+  items
   (`<item>`) that carry optional `@n` (numbering or timestamp metadata),
   `@corresp` (pointer list for cross-references), and `@xml:id`. Each item may
   include an optional label prefix (`<label>`) followed by inline content

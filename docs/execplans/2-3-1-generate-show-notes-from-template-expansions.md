@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN_PROGRESS
 
 ## Purpose and big picture
 
@@ -102,14 +102,14 @@ testable service that a future LangGraph node can compose.
   `pyproject.toml` pin has been updated to `7b397e6` and all 285 existing tests
   pass. The upstream library now includes Python `msgspec` struct support:
   `BodyBlock = Paragraph | Utterance | DivBlock`, `DivContent = Paragraph |
-  Utterance | ListBlock`, and `Event` includes `DivEvent`. Two gaps remain: (a)
-  the ODD and Relax NG schemas have not been updated to include `div`, `list`,
-  `item`, and `label`. This gap affects external XML validation but does **not**
-  block the core enrichment workflow: `parse_xml`/`emit_xml` and
-  `to_dict`/`from_dict` all handle `<div>` elements correctly through the Rust
-  model and PyO3 projection layer. Severity: low (residual). Likelihood: certain
-  (for the remaining schema gap). Mitigation: file follow-up requests for
-  ODD/RNG schema updates.
+  Utterance | ListBlock`, and `Event` includes `DivEvent`. The ODD and Relax NG
+  schemas were also updated in the same release: CI now runs `jing` validation
+  against a `div-list` fixture without skipping, confirming that external XML
+  validation accepts `<div>`, `<list>`, `<item>`, and `<label>` elements.
+  One structural constraint applies: `<list>` is only permitted as a child of
+  `<div>`, not as a direct child of `<body>`. All previously identified gaps are
+  now resolved. Severity: low (residual, structural constraint only).
+  Likelihood: low. Mitigation: none required.
 
 - Risk: the LLM response format for show notes may be difficult to parse
   reliably, especially for timestamp extraction. Severity: medium. Likelihood:
@@ -137,7 +137,7 @@ testable service that a future LangGraph node can compose.
 
 ## Progress
 
-- [ ] Stage A: research and propose (no code changes).
+- [x] Stage A: research and propose (no code changes).
 - [ ] Stage B: prototype TEI enrichment and validate with `tei_rapporteur`.
 - [ ] Stage C: implement DTOs and strict JSON response parsing with fail-first
   unit tests.
@@ -232,18 +232,28 @@ and all 285 existing episodic tests pass.
 - Validation: `xml:id` uniqueness traverses div children; `@corresp` pointer
   resolution covers items.
 
-**Remaining upstream gaps:**
+**Remaining upstream gaps (resolved):**
 
-1. **ODD schema** (`schemas/tei-episodic-profile.odd`): `<body>` content
-   model still restricts to `<p>` and `<u>`. No `<elementSpec>` entries for
-   `div`, `list`, `item`, `label`. The `textstructure` module does not include
-   `div`; the `core` module does not include `list`, `item`, `label`.
-2. **Relax NG schema** (`schemas/tei-episodic-profile.rng`): mirrors the ODD
-   gap. No `<define>` rules for `div`, `list`, `item`, `label`.
+The following gaps were documented when `ffb25c6` was the current pin. Both
+have since been resolved in commit `7b397e6`, which is now pinned in
+`pyproject.toml`.
 
-Python structs are now complete as of `7b397e6`: `BodyBlock = Paragraph |
+1. ~~**ODD schema** (`schemas/tei-episodic-profile.odd`): `<body>` content
+   model still restricts to `<p>` and `<u>`.~~ **Resolved:** the ODD now
+   includes `<elementSpec>` entries for `div`, `list`, `item`, and `label`,
+   and the `<body>` content model accepts `<div>` children.
+2. ~~**Relax NG schema** (`schemas/tei-episodic-profile.rng`): mirrors the
+   ODD gap.~~ **Resolved:** the Relax NG schema includes `<define>` rules
+   for `div`, `list`, `item`, and `label`. CI runs `jing` validation against
+   a `div-list` fixture without skipping.
+
+Python structs are complete as of `7b397e6`: `BodyBlock = Paragraph |
 Utterance | DivBlock`, `DivContent = Paragraph | Utterance | ListBlock`, and
 `Event` includes `DivEvent` variant.
+
+**Structural constraint:** `<list>` is only permitted as a child of `<div>`,
+not as a direct child of `<body>`. This matches the upstream documentation
+and Relax NG schema.
 
 **Impact on show-notes implementation:**
 
@@ -253,14 +263,12 @@ Utterance | DivBlock`, `DivContent = Paragraph | Utterance | ListBlock`, and
   structs (`DivBlock`, `ListBlock`, `Item`, `Label`) or the `to_dict`/`from_dict`
   dictionary projection, then emit via `emit_xml`.
 - `parse_xml` and `emit_xml` fully support `<div>` round-trips.
-- External XML validation via jing against the Relax NG schema will reject
-  `<div>` elements until the ODD/RNG schemas are updated upstream. This affects
-  CI validation (`make nixie`) only, not runtime behaviour. **CI mitigation:**
-  validation in `make nixie` currently skips TEI body validation for enriched
-  documents, so the missing schema support does not block development or commit
-  gates.
-- Typed msgspec decoding of body blocks now works: `BodyBlock = Paragraph |
-  Utterance | DivBlock` as of `7b397e6`.
+- External XML validation via `jing` against the Relax NG schema now accepts
+  `<div>`, `<list>`, `<item>`, and `<label>` elements. `make nixie` runs full
+  TEI body validation including `div-list` fixture checks.
+- Structured body content including `DivBlock` and `ListBlock` is now
+  decodable via typed msgspec structs: `BodyBlock = Paragraph | Utterance |
+  DivBlock` as of `7b397e6`.
 
 ## Decision log
 
@@ -296,8 +304,14 @@ Utterance | DivBlock`, `DivContent = Paragraph | Utterance | ListBlock`, and
 
 ## Outcomes & retrospective
 
-No implementation has started yet. This section will be updated when stages
-complete.
+Stage A completed. Research confirmed that tei-rapporteur at commit `ad7642f`
+did not support `<div>`, `<list>`, `<item>`, or `<label>`. The gap was filed
+with the maintainer and resolved in commits `ffb25c6` (code) and `7b397e6`
+(documentation and Python msgspec structs). The dependency pin has been updated
+to `7b397e6` and the TEI representation strategy is settled: `<div
+type="notes"><list><item>` with `<label>` for topic, `<p>` for summary, `@n`
+for timestamp, `@corresp` for locator. Implementation stages B–H have not
+started.
 
 ## Context and orientation
 
@@ -350,9 +364,12 @@ relative to the repository root.
 
 - `docs/tei-rapporteur-users-guide.md` — documents the TEI body model, Python
   bindings (`msgspec.Struct` classes), validation, and citation metadata. The
-  body model supports paragraphs (`<p>`), utterances (`<u>`), inline emphasis
-  (`<hi>`), and pause cues (`<pause/>`). Stand-off overlays use `<standOff>`
-  with `<spanGrp>` and `<span>`.
+  body model supports paragraphs (`<p>`), utterances (`<u>`) with optional
+  speaker attribution, thematic divisions (`<div>`) with a required `@type`
+  attribute, lists (`<list>` permitted only as children of `<div>`), list items
+  (`<item>`) with optional `@n`, `@corresp`, and `@xml:id` attributes, item
+  labels (`<label>`), inline emphasis (`<hi>`), and pause cues (`<pause/>`).
+  Stand-off overlays use `<standOff>` with `<spanGrp>` and `<span>`.
 
 ### Testing infrastructure
 
@@ -604,11 +621,10 @@ structure. The Rust core, parser, and emitter at `ffb25c6` fully support
 `<div>`, `<list>`, `<item>`, and `<label>`; commit `7b397e6` adds complete
 documentation and Python msgspec struct definitions.
 
-**CI validation note:** while the upstream Relax NG schema has not been updated
-to include `<div>` elements, `make nixie` currently skips body validation for
-enriched TEI documents. This means external validation failures will not block
-commit gates during development. Runtime `parse_xml`/`emit_xml` round-trips
-will succeed.
+**CI validation note:** `make nixie` runs full TEI body validation including
+`div-list` fixture checks. The upstream Relax NG schema now accepts `<div>`,
+`<list>`, `<item>`, and `<label>` elements, so enriched TEI documents pass
+external validation without skipping.
 
 Write and update unit tests:
 
