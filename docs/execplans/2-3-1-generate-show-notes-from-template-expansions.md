@@ -96,20 +96,20 @@ testable service that a future LangGraph node can compose.
 ## Risks
 
 - Risk: **MITIGATED** — `tei_rapporteur` at commit `ad7642f` did not support
-  `<div>`, `<list>`, `<item>`, or `<label>` elements. Commit `ffb25c6` adds
+  `<div>`, `<list>`, `<item>`, or `<label>` elements. Commit `ffb25c6` added
   full Rust core, parser, emitter, PyO3 projection, and JSON schema support for
-  these elements. The `pyproject.toml` pin has been updated to `ffb25c6` and
-  all 285 existing tests pass. Two gaps remain in the upstream library: (a) the
-  ODD and Relax NG schemas have not been updated to include `div`, `list`,
-  `item`, and `label`; (b) the Python `structs.py` msgspec classes do not yet
-  include `Div`, `List`, `Item`, or `Label` types, so the `BodyBlock` TypeAlias
-  is still `Paragraph | Utterance`. These gaps affect external XML validation
-  and typed msgspec decoding but do **not** block the core enrichment workflow:
-  `parse_xml`/`emit_xml` and `to_dict`/`from_dict` all handle `<div>` elements
-  correctly through the Rust model and PyO3 projection layer. Severity: low
-  (residual). Likelihood: certain (for the remaining gaps). Mitigation: file
-  follow-up requests for ODD/RNG schema updates and Python struct additions.
-  Use `to_dict`/`from_dict` rather than msgspec `BodyBlock` decoding for now.
+  these elements, and commit `7b397e6` added complete documentation. The
+  `pyproject.toml` pin has been updated to `7b397e6` and all 285 existing tests
+  pass. The upstream library now includes Python `msgspec` struct support:
+  `BodyBlock = Paragraph | Utterance | DivBlock`, `DivContent = Paragraph |
+  Utterance | ListBlock`, and `Event` includes `DivEvent`. Two gaps remain: (a)
+  the ODD and Relax NG schemas have not been updated to include `div`, `list`,
+  `item`, and `label`. This gap affects external XML validation but does **not**
+  block the core enrichment workflow: `parse_xml`/`emit_xml` and
+  `to_dict`/`from_dict` all handle `<div>` elements correctly through the Rust
+  model and PyO3 projection layer. Severity: low (residual). Likelihood: certain
+  (for the remaining schema gap). Mitigation: file follow-up requests for
+  ODD/RNG schema updates.
 
 - Risk: the LLM response format for show notes may be difficult to parse
   reliably, especially for timestamp extraction. Severity: medium. Likelihood:
@@ -206,13 +206,14 @@ schema.
 Once tei-rapporteur ships `<div>` support, migrate the enrichment helper to use
 the structured API and add round-trip validation tests.
 
-### tei-rapporteur `ffb25c6` ships `<div>` support (2026-04-10)
+### tei-rapporteur `ffb25c6` ships `<div>` support; `7b397e6` adds documentation (2026-04-10)
 
-Commit `ffb25c670179902b0776eacc9286ba98f2819642` (squash-merge of PR #56) adds
+Commit `ffb25c670179902b0776eacc9286ba98f2819642` (squash-merge of PR #56) added
 full `<div>`, `<list>`, `<item>`, and `<label>` support to the Rust core,
-streaming parser, XML emitter, PyO3 projection layer, and JSON schema. The
-`pyproject.toml` dependency pin has been updated and all 285 existing episodic
-tests pass.
+streaming parser, XML emitter, PyO3 projection layer, and JSON schema. Commit
+`7b397e63d51b90c9dd6616804c74cf7585c25573` updated the documentation to reflect
+these changes. The `pyproject.toml` dependency pin has been updated to `7b397e6`
+and all 285 existing episodic tests pass.
 
 **What shipped:**
 
@@ -239,17 +240,18 @@ tests pass.
    `div`; the `core` module does not include `list`, `item`, `label`.
 2. **Relax NG schema** (`schemas/tei-episodic-profile.rng`): mirrors the ODD
    gap. No `<define>` rules for `div`, `list`, `item`, `label`.
-3. **Python structs** (`tei_rapporteur.structs`): `BodyBlock` TypeAlias is
-   still `Paragraph | Utterance`. No `Div`, `DivContent`, `List`, `Item`, or
-   `Label` msgspec Struct classes. The `Event` union does not include a div
-   streaming event variant.
+
+Python structs are now complete as of `7b397e6`: `BodyBlock = Paragraph |
+Utterance | DivBlock`, `DivContent = Paragraph | Utterance | ListBlock`, and
+`Event` includes `DivEvent` variant.
 
 **Impact on show-notes implementation:**
 
 - The `xml.etree.ElementTree` fallback is **no longer required** for
   enrichment. TEI body enrichment can use the structured `tei_rapporteur` API:
-  construct `Div`, `List`, `Item`, and `Label` objects in Python via the
-  `to_dict`/`from_dict` dictionary projection, then emit via `emit_xml`.
+  construct `Div`, `List`, `Item`, and `Label` objects in Python via msgspec
+  structs (`DivBlock`, `ListBlock`, `Item`, `Label`) or the `to_dict`/`from_dict`
+  dictionary projection, then emit via `emit_xml`.
 - `parse_xml` and `emit_xml` fully support `<div>` round-trips.
 - External XML validation via jing against the Relax NG schema will reject
   `<div>` elements until the ODD/RNG schemas are updated upstream. This affects
@@ -257,9 +259,8 @@ tests pass.
   validation in `make nixie` currently skips TEI body validation for enriched
   documents, so the missing schema support does not block development or commit
   gates.
-- Typed msgspec decoding of body blocks will skip `Div` blocks until the
-  Python structs are updated. Use `to_dict` (returns plain Python dicts) for
-  now.
+- Typed msgspec decoding of body blocks now works: `BodyBlock = Paragraph |
+  Utterance | DivBlock` as of `7b397e6`.
 
 ## Decision log
 
@@ -286,10 +287,12 @@ tests pass.
   with a `@type` attribute to denote functional divisions of text. A `<list>`
   of `<item>` elements is the natural TEI idiom for enumerating topics.
   Timestamps and locators attach as attributes on `<item>`. tei-rapporteur
-  `ffb25c6` now supports `<div>`, `<list>`, `<item>`, and `<label>` at the Rust
-  core, parser, emitter, and PyO3 projection layers. TEI enrichment can use the
-  structured API via `to_dict`/`from_dict` and `emit_xml`. Date/Author:
-  2026-04-02 / ExecPlan; updated 2026-04-10.
+  `ffb25c6` added code support for `<div>`, `<list>`, `<item>`, and `<label>`
+  at the Rust core, parser, emitter, and PyO3 projection layers; `7b397e6` added
+  documentation and Python msgspec struct definitions (`DivBlock`, `ListBlock`,
+  `Item`, `Label`). TEI enrichment can use the structured API via msgspec or
+  `to_dict`/`from_dict` and `emit_xml`. Date/Author: 2026-04-02 / ExecPlan;
+  updated 2026-04-10.
 
 ## Outcomes & retrospective
 
@@ -595,9 +598,11 @@ Each `<item>` element contains:
 - An optional `@n` attribute with the `timestamp` value.
 - An optional `@corresp` attribute with the `tei_locator` value.
 
-Use the `tei_rapporteur` API via `to_dict`/`from_dict` and `emit_xml` to
-produce the structure. The Rust core, parser, and emitter at `ffb25c6` fully
-support `<div>`, `<list>`, `<item>`, and `<label>`.
+Use the `tei_rapporteur` API via msgspec structs (`DivBlock`, `ListBlock`,
+`Item`, `Label`) or `to_dict`/`from_dict` and `emit_xml` to produce the
+structure. The Rust core, parser, and emitter at `ffb25c6` fully support
+`<div>`, `<list>`, `<item>`, and `<label>`; commit `7b397e6` adds complete
+documentation and Python msgspec struct definitions.
 
 **CI validation note:** while the upstream Relax NG schema has not been updated
 to include `<div>` elements, `make nixie` currently skips body validation for
