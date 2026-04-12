@@ -50,7 +50,6 @@ Constraints:
 import dataclasses as dc
 import json
 import typing as typ
-import xml.etree.ElementTree as ET
 
 from episodic.llm import (
     LLMPort,
@@ -63,7 +62,14 @@ from episodic.llm import (
 
 type JsonMapping = dict[str, object]
 
-_DEFAULT_SYSTEM_PROMPT = """You are a podcast show-notes generator. Given a TEI P5 podcast script, extract the key topics discussed in the episode. For each topic, provide a short heading and a one-to-three sentence summary. If the script contains timing cues or segment markers, include an approximate timestamp as an ISO 8601 duration (e.g. PT5M30S). Return JSON only with key "entries". Each entry must include "topic" and "summary". Optional fields: "timestamp" and "tei_locator"."""
+_DEFAULT_SYSTEM_PROMPT = (
+    "You are a podcast show-notes generator. Given a TEI P5 podcast script, "
+    "extract the key topics discussed in the episode. For each topic, provide "
+    "a short heading and a one-to-three sentence summary. If the script contains "
+    "timing cues or segment markers, include an approximate timestamp as an ISO 8601 "
+    'duration (e.g. PT5M30S). Return JSON only with key "entries". Each entry must '
+    'include "topic" and "summary". Optional fields: "timestamp" and "tei_locator".'
+)
 
 
 def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
@@ -244,7 +250,8 @@ class ShowNotesGenerator:
 
         return json.dumps(prompt_payload, indent=2)
 
-    def _result_from_response(self, response: LLMResponse) -> ShowNotesResult:
+    @staticmethod
+    def _result_from_response(response: LLMResponse) -> ShowNotesResult:
         """Parse an LLM response into a ShowNotesResult.
 
         Parameters
@@ -327,6 +334,59 @@ class ShowNotesGenerator:
         return self._result_from_response(response)
 
 
+def _xml_escape_attr(text: str) -> str:
+    """Escape `&`, `<`, `>`, and `"` for use in an XML attribute value."""
+    return (
+        text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _xml_escape_text(text: str) -> str:
+    """Escape `&`, `<`, and `>` for use in XML text content."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _build_item_xml(entry: ShowNotesEntry) -> str:
+    """Build one `<item>` XML fragment from a `ShowNotesEntry`."""
+    attrs = []
+    if entry.timestamp is not None:
+        attrs.append(f'n="{_xml_escape_attr(entry.timestamp)}"')
+    if entry.tei_locator is not None:
+        attrs.append(f'corresp="{_xml_escape_attr(entry.tei_locator)}"')
+
+    attr_str = " " + " ".join(attrs) if attrs else ""
+    escaped_topic = _xml_escape_text(entry.topic)
+    escaped_summary = _xml_escape_text(entry.summary)
+
+    return f"""    <item{attr_str}>
+      <label>{escaped_topic}</label>
+      {escaped_summary}
+    </item>"""
+
+
+def _build_notes_div_xml(entries: list[ShowNotesEntry]) -> str:
+    """Join the output of `_build_item_xml` for every entry and wrap in a div."""
+    items_xml = [_build_item_xml(entry) for entry in entries]
+    return f"""  <div type="notes">
+    <list>
+{chr(10).join(items_xml)}
+    </list>
+  </div>"""
+
+
+def _insert_before_body_close(tei_xml: str, fragment: str) -> str:
+    """Find the last `</body>` in `tei_xml` and insert `fragment` before it."""
+    body_close_idx = tei_xml.rfind("</body>")
+    if body_close_idx == -1:
+        msg = "TEI document missing <body> element."
+        raise ValueError(msg)
+    return tei_xml[:body_close_idx] + fragment + "\n  " + tei_xml[body_close_idx:]
+
+
 def enrich_tei_with_show_notes(
     tei_xml: str,
     result: ShowNotesResult,
@@ -364,69 +424,5 @@ def enrich_tei_with_show_notes(
     """
     if not result.entries:
         return tei_xml
-
-    # Build the show-notes div as an XML fragment
-    # We build it manually to ensure proper escaping and formatting
-    items_xml = []
-    for entry in result.entries:
-        # Build attributes
-        attrs = []
-        if entry.timestamp is not None:
-            # XML-escape the timestamp
-            escaped_timestamp = (
-                entry.timestamp
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace('"', "&quot;")
-            )
-            attrs.append(f'n="{escaped_timestamp}"')
-        if entry.tei_locator is not None:
-            # XML-escape the locator
-            escaped_locator = (
-                entry.tei_locator
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace('"', "&quot;")
-            )
-            attrs.append(f'corresp="{escaped_locator}"')
-
-        attr_str = " " + " ".join(attrs) if attrs else ""
-
-        # XML-escape the topic and summary text
-        escaped_topic = (
-            entry.topic.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        )
-        escaped_summary = (
-            entry.summary
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-
-        item_xml = f"""    <item{attr_str}>
-      <label>{escaped_topic}</label>
-      {escaped_summary}
-    </item>"""
-        items_xml.append(item_xml)
-
-    div_xml = f"""  <div type="notes">
-    <list>
-{chr(10).join(items_xml)}
-    </list>
-  </div>"""
-
-    # Find the closing </body> tag and insert the div before it
-    # This preserves the existing body content and namespace declarations
-    body_close_idx = tei_xml.rfind("</body>")
-    if body_close_idx == -1:
-        msg = "TEI document missing <body> element."
-        raise ValueError(msg)
-
-    # Insert the div before </body>
-    enriched_xml = (
-        tei_xml[:body_close_idx] + div_xml + "\n  " + tei_xml[body_close_idx:]
-    )
-
-    return enriched_xml
+    div_xml = _build_notes_div_xml(list(result.entries))
+    return _insert_before_body_close(tei_xml, div_xml)

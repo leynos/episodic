@@ -66,7 +66,8 @@ def show_notes_context() -> cabc.Iterator[ShowNotesBDDContext]:
 
 @scenario(
     "../features/show_notes.feature",
-    "Show notes generator extracts topics from a TEI script via a live Vidai Mock server",
+    "Show notes generator extracts topics from a TEI script via a live Vidai "
+    "Mock server",
 )
 def test_show_notes_behaviour() -> None:
     """Run the show notes behaviour scenario."""

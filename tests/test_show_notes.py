@@ -17,10 +17,8 @@ from episodic.generation.show_notes import (
     enrich_tei_with_show_notes,
 )
 from episodic.llm import (
-    LLMProviderOperation,
     LLMRequest,
     LLMResponse,
-    LLMTokenBudget,
     LLMUsage,
 )
 
@@ -136,7 +134,7 @@ def test_result_from_response_parses_valid_json() -> None:
 
     config = ShowNotesGeneratorConfig(model="test-model")
     generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
-    result = generator._result_from_response(response)  # noqa: SLF001
+    result = generator._result_from_response(response)
 
     assert len(result.entries) == 2
     assert result.entries[0].topic == "Topic 1"
@@ -152,7 +150,7 @@ def test_result_from_response_raises_on_missing_entries_key() -> None:
     generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
 
     with pytest.raises(ShowNotesResponseFormatError, match="entries"):
-        generator._result_from_response(response)  # noqa: SLF001
+        generator._result_from_response(response)
 
 
 def test_result_from_response_raises_on_invalid_json() -> None:
@@ -163,7 +161,7 @@ def test_result_from_response_raises_on_invalid_json() -> None:
     generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
 
     with pytest.raises(ShowNotesResponseFormatError):
-        generator._result_from_response(response)  # noqa: SLF001
+        generator._result_from_response(response)
 
 
 def test_result_from_response_raises_on_empty_topic() -> None:
@@ -175,7 +173,7 @@ def test_result_from_response_raises_on_empty_topic() -> None:
     generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
 
     with pytest.raises(ShowNotesResponseFormatError):
-        generator._result_from_response(response)  # noqa: SLF001
+        generator._result_from_response(response)
 
 
 # ── Stage D: Generator service tests ──
