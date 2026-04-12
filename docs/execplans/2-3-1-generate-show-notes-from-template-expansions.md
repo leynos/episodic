@@ -99,8 +99,9 @@ testable service that a future LangGraph node can compose.
   `<div>`, `<list>`, `<item>`, or `<label>` elements. Commit `ffb25c6` added
   full Rust core, parser, emitter, PyO3 projection, and JSON schema support for
   these elements, and commit `016ef253` added complete documentation. The
-  `pyproject.toml` pin has been updated to `016ef253` and all 285 existing tests
-  pass. The upstream library now includes Python `msgspec` struct support:
+  `pyproject.toml` pin has been updated to `016ef253`; existing episodic tests
+  pass (CI/gate logs capture validation results). The upstream library now
+  includes Python `msgspec` struct support:
   `BodyBlock = Paragraph | Utterance | DivBlock`, `DivContent = Paragraph |
   Utterance | ListBlock`, and `Event` includes `DivEvent`. The ODD and Relax NG
   schemas were also updated in the same release: CI now runs `jing` validation
@@ -138,13 +139,13 @@ testable service that a future LangGraph node can compose.
 ## Progress
 
 - [x] Stage A: research and propose (no code changes).
-- [ ] Stage B: prototype TEI enrichment and validate with `tei_rapporteur`.
-- [ ] Stage C: implement DTOs and strict JSON response parsing with fail-first
+- [x] Stage B: prototype TEI enrichment and validate with `tei_rapporteur`.
+- [x] Stage C: implement DTOs and strict JSON response parsing with fail-first
   unit tests.
-- [ ] Stage D: implement show-notes generator service with LLM prompt
+- [x] Stage D: implement show-notes generator service with LLM prompt
   construction.
-- [ ] Stage E: implement TEI body enrichment and round-trip validation.
-- [ ] Stage F: implement Vidai Mock behavioural tests.
+- [x] Stage E: implement TEI body enrichment and round-trip validation.
+- [x] Stage F: implement Vidai Mock behavioural tests.
 - [ ] Stage G: write ADR, update design document, user's guide, and
   developer's guide.
 - [ ] Stage H: run the full validation gates and update roadmap.
@@ -212,8 +213,8 @@ Commit `ffb25c670179902b0776eacc9286ba98f2819642` (squash-merge of PR #56) added
 full `<div>`, `<list>`, `<item>`, and `<label>` support to the Rust core,
 streaming parser, XML emitter, PyO3 projection layer, and JSON schema. Commit
 `016ef253b768c98d7d3664074928d70273eb3793` updated the documentation to reflect
-these changes. The `pyproject.toml` dependency pin has been updated to `016ef253`
-and all 285 existing episodic tests pass.
+these changes. The `pyproject.toml` dependency pin has been updated to `016ef253`;
+existing episodic tests pass (CI/gate logs capture validation results).
 
 **What shipped:**
 
@@ -298,9 +299,17 @@ and Relax NG schema.
   `ffb25c6` added code support for `<div>`, `<list>`, `<item>`, and `<label>`
   at the Rust core, parser, emitter, and PyO3 projection layers; `016ef253` added
   documentation and Python msgspec struct definitions (`DivBlock`, `ListBlock`,
-  `Item`, `Label`). TEI enrichment can use the structured API via msgspec or
-  `to_dict`/`from_dict` and `emit_xml`. Date/Author: 2026-04-02 / ExecPlan;
-  updated 2026-04-10.
+  `Item`, `Label`). Date/Author: 2026-04-02 / ExecPlan; updated 2026-04-10.
+
+- Decision: use inline text (not `<p>` elements) for summary content within
+  `<item>` elements. Rationale: tei-rapporteur schema expects `<item>` to
+  contain optional `<label>` followed by inline content, not block-level
+  elements. The structure `<item><label>Topic</label>Inline summary text</item>`
+  parses and validates correctly, while `<item><label>Topic</label><p>Summary
+  </p></item>` fails with "data did not match any variant of untagged enum
+  Inline". This matches the TEI P5 Episodic Profile where list items are meant
+  for brief annotations, not full paragraphs. Date/Author: 2026-04-12 /
+  Implementation.
 
 ## Outcomes & retrospective
 
@@ -309,9 +318,25 @@ did not support `<div>`, `<list>`, `<item>`, or `<label>`. The gap was filed
 with the maintainer and resolved in commits `ffb25c6` (code) and `016ef253`
 (documentation and Python msgspec structs). The dependency pin has been updated
 to `016ef253` and the TEI representation strategy is settled: `<div
-type="notes"><list><item>` with `<label>` for topic, `<p>` for summary, `@n`
-for timestamp, `@corresp` for locator. Implementation stages B–H have not
-started.
+type="notes"><list><item>` with `<label>` for topic, inline text for summary,
+`@n` for timestamp, `@corresp` for locator.
+
+Stages B–E completed (2026-04-12). Created `episodic/generation/` package with
+`ShowNotesGenerator`, DTOs (`ShowNotesEntry`, `ShowNotesResult`,
+`ShowNotesGeneratorConfig`), strict JSON parsing, and `enrich_tei_with_show_notes`
+TEI enrichment helper. All 14 unit tests pass. Key findings:
+
+- tei_rapporteur expects simplified `<fileDesc><title>` structure, not
+  `<fileDesc><titleStmt><title>`.
+- `<item>` elements contain inline content after `<label>`, not `<p>` block
+  elements. Correct structure: `<div type="notes"><list><item><label>Topic
+  </label>Inline summary text</item></list></div>`.
+- TEI enrichment uses XML string manipulation (inserting before `</body>`)
+  rather than ElementTree or msgspec because ElementTree serialization doesn't
+  round-trip cleanly through `tei_rapporteur.parse_xml`.
+
+Stages F–H remaining: Vidai Mock BDD tests, ADR/documentation updates, and
+full validation gates.
 
 ## Context and orientation
 
