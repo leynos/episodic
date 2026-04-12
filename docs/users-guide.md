@@ -30,7 +30,11 @@ This guide will cover:
 - Working with TEI (Text Encoding Initiative) canonical content
 - Tracking ingestion jobs, source weighting decisions, and provenance metadata
 - Configuring content weighting and conflict resolution
-- Managing episode metadata and show notes
+- Managing episode metadata and show notes. Show notes are generated as
+  structured TEI body metadata using `<div type="notes">` with one `<item>`
+  per topic. Each item carries a heading, a short summary, and optional
+  timestamp and source-locator attributes when the generation workflow can
+  infer them.
 - Database schema integrity is validated automatically in CI so that canonical
   content storage remains consistent across releases
 - Repository and transactional integrity are validated by integration tests

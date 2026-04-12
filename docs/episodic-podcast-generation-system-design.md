@@ -9,6 +9,7 @@ Accepted decision records:
 
 - [ADR 001: Reference binding resolution algorithm](adr/adr-001-reference-binding-resolution-algorithm.md)
 - [ADR 002: HTTP service composition root](adr/adr-002-http-service-composition-root.md)
+- [ADR 003: Show-notes TEI representation](adr/adr-003-show-notes-tei-representation.md)
 
 ## Overview
 
@@ -186,6 +187,12 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   detection, and runtime estimation to execute concurrently before aggregating
   results.
 - Produces structured drafts, show notes, chapter markers, and sponsorship copy.
+- Treats show-notes generation as a composable enrichment service behind
+  `LLMPort`: `episodic/generation/show_notes.py` accepts a TEI script, asks
+  the configured provider for structured note entries, and enriches the
+  canonical TEI body with `<div type="notes"><list><item>...</item></list></div>`
+  output. This TEI representation is defined in
+  [ADR 003: Show-notes TEI representation](adr/adr-003-show-notes-tei-representation.md).
 - Persists generation runs alongside prompts, responses, iteration counts, and
   cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,

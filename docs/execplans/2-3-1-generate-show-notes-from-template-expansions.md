@@ -146,7 +146,7 @@ testable service that a future LangGraph node can compose.
   construction.
 - [x] Stage E: implement TEI body enrichment and round-trip validation.
 - [x] Stage F: implement Vidai Mock behavioural tests.
-- [ ] Stage G: write ADR, update design document, user's guide, and
+- [x] Stage G: write ADR, update design document, user's guide, and
   developer's guide.
 - [ ] Stage H: run the full validation gates and update roadmap.
 
@@ -314,6 +314,36 @@ Relax NG schema.
   the TEI P5 Episodic Profile where list items are meant for brief annotations,
   not full paragraphs. Date/Author: 2026-04-12 / Implementation.
 
+### Documentation and tooling status (2026-04-12)
+
+- `qdrant-find`/`qdrant-store` tooling is not exposed in this session, so the
+  required project-memory lookup/store protocol could not be executed here.
+- Stage G documentation work now exists in-tree:
+  - `docs/adr/adr-003-show-notes-tei-representation.md`
+  - `docs/episodic-podcast-generation-system-design.md`
+  - `docs/users-guide.md`
+  - `docs/developers-guide.md`
+- The implementation-defined TEI shape supersedes the earlier Stage G draft:
+  summaries are inline text inside `<item>`, not nested `<p>` elements.
+
+### Validation-gate results (2026-04-12)
+
+- `make fmt` passed after supplying temporary PATH helpers for `fd` and
+  `mdtablefix`, because the repository-local `mdformat-all` wrapper assumes
+  those executables are present in the shell environment.
+- `make check-fmt` passed.
+- `make typecheck` passed.
+- `make lint` passed.
+- `make markdownlint` passed.
+- `make nixie` passed.
+- `make test` failed for environment reasons unrelated to show-notes
+  documentation changes. Database-backed tests abort during py-pglite fixture
+  setup because `psycopg` cannot load any `pq` wrapper:
+  `ImportError: no pq wrapper available` with attempted implementations `c`,
+  `binary`, and `python`, the latter failing with `libpq library not found`.
+  Until that runtime dependency issue is resolved, Stage H cannot be marked
+  complete.
+
 ## Outcomes & retrospective
 
 Stage A completed. Research confirmed that tei-rapporteur at commit `ad7642f`
@@ -339,8 +369,13 @@ findings:
   rather than ElementTree or msgspec because ElementTree serialization doesn't
   round-trip cleanly through `tei_rapporteur.parse_xml`.
 
-Stages F–H remaining: Vidai Mock BDD tests, ADR/documentation updates, and full
-validation gates.
+Stages F and G completed (2026-04-12). Vidai Mock BDD coverage exists in
+`tests/features/show_notes.feature` and `tests/steps/test_show_notes_steps.py`.
+Documentation now includes ADR-002 plus design, user, and developer guide
+updates. Stage H has been exercised and partially validated: formatting,
+linting, type-checking, Markdown linting, and Mermaid validation passed, but
+the full `make test` gate is blocked by a `psycopg`/`libpq` environment issue
+in database fixtures, so the ExecPlan remains `IN_PROGRESS`.
 
 ## Context and orientation
 
@@ -722,13 +757,13 @@ Acceptance for Stage F:
 
 #### ADR
 
-Write `docs/adr/adr-002-show-notes-tei-representation.md` documenting the
+Write `docs/adr/adr-003-show-notes-tei-representation.md` documenting the
 chosen TEI representation for show notes:
 
 - Context: roadmap 2.3.1 requires show notes as structured metadata within TEI
   body.
 - Decision: use `<div type="notes"><list><item>` with `<label>` for topic and
-  `<p>` for summary. Timestamps attach as `@n` attributes; script locators
+  inline summary text. Timestamps attach as `@n` attributes; script locators
   attach as `@corresp` attributes.
 - Consequences: later enrichment tasks (2.3.2, 2.3.3, 2.3.4) should use the
   same `<div type="...">` pattern for their respective metadata types,
@@ -862,7 +897,7 @@ Create `tests/features/show_notes.feature` and
 
 ### Step 6: write ADR
 
-Create `docs/adr/adr-002-show-notes-tei-representation.md`.
+Create `docs/adr/adr-003-show-notes-tei-representation.md`.
 
 ### Step 7: update documentation
 
@@ -931,7 +966,7 @@ Expected long-lived project artefacts:
 - `tests/test_show_notes.py`
 - `tests/features/show_notes.feature`
 - `tests/steps/test_show_notes_steps.py`
-- `docs/adr/adr-002-show-notes-tei-representation.md`
+- `docs/adr/adr-003-show-notes-tei-representation.md`
 - updated `docs/episodic-podcast-generation-system-design.md`
 - updated `docs/users-guide.md`
 - updated `docs/developers-guide.md`
