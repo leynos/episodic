@@ -183,7 +183,7 @@ def _require_list(value: object, field_name: str) -> list[object]:
     if not isinstance(value, list):
         msg = f"{field_name} must be a list."
         raise ShowNotesResponseFormatError(msg)
-    return value
+    return typ.cast("list[object]", value)
 
 
 def _parse_entry(raw: dict[str, object]) -> ShowNotesEntry:
