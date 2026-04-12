@@ -98,8 +98,8 @@ testable service that a future LangGraph node can compose.
 - Risk: **MITIGATED** — `tei_rapporteur` at commit `ad7642f` did not support
   `<div>`, `<list>`, `<item>`, or `<label>` elements. Commit `ffb25c6` added
   full Rust core, parser, emitter, PyO3 projection, and JSON schema support for
-  these elements, and commit `7b397e6` added complete documentation. The
-  `pyproject.toml` pin has been updated to `7b397e6` and all 285 existing tests
+  these elements, and commit `016ef253` added complete documentation. The
+  `pyproject.toml` pin has been updated to `016ef253` and all 285 existing tests
   pass. The upstream library now includes Python `msgspec` struct support:
   `BodyBlock = Paragraph | Utterance | DivBlock`, `DivContent = Paragraph |
   Utterance | ListBlock`, and `Event` includes `DivEvent`. The ODD and Relax NG
@@ -206,13 +206,13 @@ schema.
 Once tei-rapporteur ships `<div>` support, migrate the enrichment helper to use
 the structured API and add round-trip validation tests.
 
-### tei-rapporteur `ffb25c6` ships `<div>` support; `7b397e6` adds documentation (2026-04-10)
+### tei-rapporteur `ffb25c6` ships `<div>` support; `016ef253` adds documentation (2026-04-10)
 
 Commit `ffb25c670179902b0776eacc9286ba98f2819642` (squash-merge of PR #56) added
 full `<div>`, `<list>`, `<item>`, and `<label>` support to the Rust core,
 streaming parser, XML emitter, PyO3 projection layer, and JSON schema. Commit
-`7b397e63d51b90c9dd6616804c74cf7585c25573` updated the documentation to reflect
-these changes. The `pyproject.toml` dependency pin has been updated to `7b397e6`
+`016ef253b768c98d7d3664074928d70273eb3793` updated the documentation to reflect
+these changes. The `pyproject.toml` dependency pin has been updated to `016ef253`
 and all 285 existing episodic tests pass.
 
 **What shipped:**
@@ -235,7 +235,7 @@ and all 285 existing episodic tests pass.
 **Remaining upstream gaps (resolved):**
 
 The following gaps were documented when `ffb25c6` was the current pin. Both
-have since been resolved in commit `7b397e6`, which is now pinned in
+have since been resolved in commit `016ef253`, which is now pinned in
 `pyproject.toml`.
 
 1. ~~**ODD schema** (`schemas/tei-episodic-profile.odd`): `<body>` content
@@ -247,7 +247,7 @@ have since been resolved in commit `7b397e6`, which is now pinned in
    for `div`, `list`, `item`, and `label`. CI runs `jing` validation against
    a `div-list` fixture without skipping.
 
-Python structs are complete as of `7b397e6`: `BodyBlock = Paragraph |
+Python structs are complete as of `016ef253`: `BodyBlock = Paragraph |
 Utterance | DivBlock`, `DivContent = Paragraph | Utterance | ListBlock`, and
 `Event` includes `DivEvent` variant.
 
@@ -268,7 +268,7 @@ and Relax NG schema.
   TEI body validation including `div-list` fixture checks.
 - Structured body content including `DivBlock` and `ListBlock` is now
   decodable via typed msgspec structs: `BodyBlock = Paragraph | Utterance |
-  DivBlock` as of `7b397e6`.
+  DivBlock` as of `016ef253`.
 
 ## Decision log
 
@@ -296,7 +296,7 @@ and Relax NG schema.
   of `<item>` elements is the natural TEI idiom for enumerating topics.
   Timestamps and locators attach as attributes on `<item>`. tei-rapporteur
   `ffb25c6` added code support for `<div>`, `<list>`, `<item>`, and `<label>`
-  at the Rust core, parser, emitter, and PyO3 projection layers; `7b397e6` added
+  at the Rust core, parser, emitter, and PyO3 projection layers; `016ef253` added
   documentation and Python msgspec struct definitions (`DivBlock`, `ListBlock`,
   `Item`, `Label`). TEI enrichment can use the structured API via msgspec or
   `to_dict`/`from_dict` and `emit_xml`. Date/Author: 2026-04-02 / ExecPlan;
@@ -306,9 +306,9 @@ and Relax NG schema.
 
 Stage A completed. Research confirmed that tei-rapporteur at commit `ad7642f`
 did not support `<div>`, `<list>`, `<item>`, or `<label>`. The gap was filed
-with the maintainer and resolved in commits `ffb25c6` (code) and `7b397e6`
+with the maintainer and resolved in commits `ffb25c6` (code) and `016ef253`
 (documentation and Python msgspec structs). The dependency pin has been updated
-to `7b397e6` and the TEI representation strategy is settled: `<div
+to `016ef253` and the TEI representation strategy is settled: `<div
 type="notes"><list><item>` with `<label>` for topic, `<p>` for summary, `@n`
 for timestamp, `@corresp` for locator. Implementation stages B–H have not
 started.
@@ -618,7 +618,7 @@ Each `<item>` element contains:
 Use the `tei_rapporteur` API via msgspec structs (`DivBlock`, `ListBlock`,
 `Item`, `Label`) or `to_dict`/`from_dict` and `emit_xml` to produce the
 structure. The Rust core, parser, and emitter at `ffb25c6` fully support
-`<div>`, `<list>`, `<item>`, and `<label>`; commit `7b397e6` adds complete
+`<div>`, `<list>`, `<item>`, and `<label>`; commit `016ef253` adds complete
 documentation and Python msgspec struct definitions.
 
 **CI validation note:** `make nixie` runs full TEI body validation including
