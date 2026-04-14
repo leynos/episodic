@@ -108,6 +108,16 @@ def _ensure_optional_iso8601_duration(timestamp: str | None) -> None:
         raise ValueError(msg)
 
 
+def _normalize_optional_tei_locator(tei_locator: str | None) -> str | None:
+    """Normalize blank TEI locators to None and strip surrounding whitespace."""
+    if tei_locator is None:
+        return None
+    normalized = tei_locator.strip()
+    if normalized == "":
+        return None
+    return normalized
+
+
 @dc.dataclass(frozen=True, slots=True)
 class ShowNotesEntry:
     """A single show-note item extracted from a podcast script.
@@ -135,6 +145,11 @@ class ShowNotesEntry:
         """Reject blank topic and summary fields."""
         _ensure_non_empty_fields(self, "topic", "summary")
         _ensure_optional_iso8601_duration(self.timestamp)
+        object.__setattr__(
+            self,
+            "tei_locator",
+            _normalize_optional_tei_locator(self.tei_locator),
+        )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -206,6 +221,17 @@ def _require_non_empty_string(value: object, field_name: str) -> str:
     return value
 
 
+def _require_optional_string(value: object, field_name: str) -> str | None:
+    """Return *value* typed as ``str | None``.
+
+    Raise if it is a non-null non-string.
+    """
+    if value is not None and not isinstance(value, str):
+        msg = f"{field_name} must be a string or null."
+        raise ShowNotesResponseFormatError(msg)
+    return value if isinstance(value, str) else None
+
+
 def _require_list(value: object, field_name: str) -> list[object]:
     """Require a list value or raise a format error."""
     if not isinstance(value, list):
@@ -218,23 +244,14 @@ def _parse_entry(raw: dict[str, object]) -> ShowNotesEntry:
     """Parse a single show-notes entry from a JSON payload."""
     topic = _require_non_empty_string(raw.get("topic"), "topic")
     summary = _require_non_empty_string(raw.get("summary"), "summary")
-
-    timestamp = raw.get("timestamp")
-    if timestamp is not None and not isinstance(timestamp, str):
-        msg = "timestamp must be a string or null."
-        raise ShowNotesResponseFormatError(msg)
-
-    tei_locator = raw.get("tei_locator")
-    if tei_locator is not None and not isinstance(tei_locator, str):
-        msg = "tei_locator must be a string or null."
-        raise ShowNotesResponseFormatError(msg)
-
+    timestamp = _require_optional_string(raw.get("timestamp"), "timestamp")
+    tei_locator = _require_optional_string(raw.get("tei_locator"), "tei_locator")
     try:
         return ShowNotesEntry(
             topic=topic,
             summary=summary,
-            timestamp=timestamp if isinstance(timestamp, str) else None,
-            tei_locator=tei_locator if isinstance(tei_locator, str) else None,
+            timestamp=timestamp,
+            tei_locator=tei_locator,
         )
     except ValueError as exc:
         raise ShowNotesResponseFormatError(str(exc)) from exc
@@ -369,7 +386,7 @@ def _require_payload_object(value: object, field_name: str) -> dict[str, object]
     """Require a mapping inside a TEI payload or raise ValueError."""
     if not isinstance(value, dict):
         msg = f"TEI payload field {field_name} must be an object."
-        raise TypeError(msg)
+        raise ValueError(msg)  # noqa: TRY004
     return typ.cast("dict[str, object]", value)
 
 
@@ -377,7 +394,7 @@ def _require_payload_list(value: object, field_name: str) -> list[object]:
     """Require a list inside a TEI payload or raise ValueError."""
     if not isinstance(value, list):
         msg = f"TEI payload field {field_name} must be a list."
-        raise TypeError(msg)
+        raise ValueError(msg)  # noqa: TRY004
     return typ.cast("list[object]", value)
 
 

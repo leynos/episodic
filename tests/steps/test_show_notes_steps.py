@@ -171,6 +171,7 @@ def _write_response_template(
 
 _VIDAIMOCK_STARTUP_TIMEOUT = 5.0
 _VIDAIMOCK_PROBE_INTERVAL = 0.2
+_VIDAIMOCK_PORT_START_ATTEMPTS = 5
 
 
 def _handle_connect_failure(
@@ -209,30 +210,47 @@ def _await_port_ready(
 def _start_vidaimock_process(
     show_notes_context: ShowNotesBDDContext,
     config_dir: Path,
-    port: int,
 ) -> None:
-    """Start the Vidai Mock server and verify it started successfully."""
+    """Start Vidai Mock, retrying a few ports to reduce bind races."""
     vidaimock_path = shutil.which("vidaimock")
     if vidaimock_path is None:
         pytest.skip("vidaimock executable not found in PATH")
+    last_error: RuntimeError | None = None
+    for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
+        port = _find_free_port()
+        process = subprocess.Popen(  # noqa: S603
+            [
+                vidaimock_path,
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--config-dir",
+                str(config_dir),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        try:
+            _await_port_ready(process, "127.0.0.1", port)
+        except RuntimeError as exc:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+            last_error = exc
+            continue
 
-    show_notes_context.base_url = f"http://127.0.0.1:{port}/v1"
-    show_notes_context.process = subprocess.Popen(  # noqa: S603
-        [
-            vidaimock_path,
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--config-dir",
-            str(config_dir),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
+        show_notes_context.base_url = f"http://127.0.0.1:{port}/v1"
+        show_notes_context.process = process
+        return
 
-    _await_port_ready(show_notes_context.process, "127.0.0.1", port)
+    msg = "Vidai Mock failed to start for the show notes behavioural test."
+    raise RuntimeError(msg) from last_error
 
 
 @given("a Vidai Mock show-notes server is running")
@@ -251,9 +269,7 @@ def vidaimock_server(
     assistant_content_literal = _build_assistant_content_literal()
     _write_response_template(template_dir, assistant_content_literal)
 
-    port = _find_free_port()
-
-    _start_vidaimock_process(show_notes_context, tmp_path, port)
+    _start_vidaimock_process(show_notes_context, tmp_path)
 
 
 @given("a TEI script body is prepared for show-notes extraction")
@@ -280,33 +296,33 @@ def run_show_notes_generation(
     """Call the show-notes generator with a live LLM adapter."""
 
     async def _generate_show_notes() -> None:
-        adapter = OpenAICompatibleLLMAdapter(
+        async with OpenAICompatibleLLMAdapter(
             config=OpenAICompatibleLLMConfig(
                 base_url=show_notes_context.base_url,
                 api_key="test-key",
             ),
-        )
-        recording_port = _RecordingLLMPort(wrapped=adapter)
+        ) as adapter:
+            recording_port = _RecordingLLMPort(wrapped=adapter)
 
-        config = ShowNotesGeneratorConfig(
-            model="gpt-4o-mini",
-            provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
-            token_budget=LLMTokenBudget(
-                max_input_tokens=1000,
-                max_output_tokens=500,
-                max_total_tokens=1500,
-            ),
-        )
+            config = ShowNotesGeneratorConfig(
+                model="gpt-4o-mini",
+                provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
+                token_budget=LLMTokenBudget(
+                    max_input_tokens=1000,
+                    max_output_tokens=500,
+                    max_total_tokens=1500,
+                ),
+            )
 
-        generator = ShowNotesGenerator(llm=recording_port, config=config)
+            generator = ShowNotesGenerator(llm=recording_port, config=config)
 
-        result = await generator.generate(
-            show_notes_context.script_tei_xml,
-            template_structure=show_notes_context.template_structure,
-        )
+            result = await generator.generate(
+                show_notes_context.script_tei_xml,
+                template_structure=show_notes_context.template_structure,
+            )
 
-        show_notes_context.result = result
-        show_notes_context.request_payload = recording_port.requests[0]
+            show_notes_context.result = result
+            show_notes_context.request_payload = recording_port.requests[0]
 
     _run_async_step(_function_scoped_runner, _generate_show_notes)
 

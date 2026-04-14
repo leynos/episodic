@@ -151,6 +151,31 @@ def test_result_from_response_parses_valid_json() -> None:
     assert result.entries[1].timestamp == "PT5M"
 
 
+@pytest.mark.parametrize(
+    ("json_payload", "expected_match"),
+    [
+        ({"entries": {}}, "entries"),
+        ({"entries": ["not-an-object"]}, "entry"),
+        ({"entries": [{"summary": "Summary only"}]}, "topic"),
+        ({"entries": [{"topic": "Topic only"}]}, "summary"),
+        ({"entries": [{"topic": "T", "summary": "S", "timestamp": 300}]}, None),
+        ({"entries": [{"topic": "T", "summary": "S", "tei_locator": 42}]}, None),
+    ],
+)
+def test_result_from_response_rejects_malformed_entries(
+    json_payload: dict[str, object],
+    expected_match: str | None,
+) -> None:
+    """Raise ShowNotesResponseFormatError for every malformed entry shape."""
+    response = _valid_llm_response(json.dumps(json_payload))
+    generator = ShowNotesGenerator(
+        llm=typ.cast("typ.Any", None),
+        config=ShowNotesGeneratorConfig(model="test-model"),
+    )
+    with pytest.raises(ShowNotesResponseFormatError, match=expected_match):
+        generator._result_from_response(response)
+
+
 def test_result_from_response_raises_on_missing_entries_key() -> None:
     """Raise ShowNotesResponseFormatError when the entries key is missing."""
     json_text = json.dumps({"summary": "No entries key"})
@@ -160,30 +185,6 @@ def test_result_from_response_raises_on_missing_entries_key() -> None:
     generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
 
     with pytest.raises(ShowNotesResponseFormatError, match="entries"):
-        generator._result_from_response(response)
-
-
-def test_result_from_response_rejects_non_list_entries() -> None:
-    """Raise when `entries` exists but is not a list."""
-    response = _valid_llm_response(json.dumps({"entries": {}}))
-    generator = ShowNotesGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ShowNotesGeneratorConfig(model="test-model"),
-    )
-
-    with pytest.raises(ShowNotesResponseFormatError, match="entries"):
-        generator._result_from_response(response)
-
-
-def test_result_from_response_rejects_non_object_entry_items() -> None:
-    """Raise when `entries` contains non-object items."""
-    response = _valid_llm_response(json.dumps({"entries": ["not-an-object"]}))
-    generator = ShowNotesGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ShowNotesGeneratorConfig(model="test-model"),
-    )
-
-    with pytest.raises(ShowNotesResponseFormatError, match="entry"):
         generator._result_from_response(response)
 
 
@@ -205,49 +206,6 @@ def test_result_from_response_raises_on_empty_topic() -> None:
 
     config = ShowNotesGeneratorConfig(model="test-model")
     generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
-
-    with pytest.raises(ShowNotesResponseFormatError):
-        generator._result_from_response(response)
-
-
-@pytest.mark.parametrize(
-    ("entry_payload", "field_name"),
-    [
-        ({"summary": "Summary only"}, "topic"),
-        ({"topic": "Topic only"}, "summary"),
-    ],
-)
-def test_result_from_response_requires_topic_and_summary(
-    entry_payload: dict[str, str],
-    field_name: str,
-) -> None:
-    """Raise when required `topic` or `summary` fields are missing."""
-    response = _valid_llm_response(json.dumps({"entries": [entry_payload]}))
-    generator = ShowNotesGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ShowNotesGeneratorConfig(model="test-model"),
-    )
-
-    with pytest.raises(ShowNotesResponseFormatError, match=field_name):
-        generator._result_from_response(response)
-
-
-@pytest.mark.parametrize(
-    "entry_payload",
-    [
-        ({"topic": "Topic 1", "summary": "Summary 1", "timestamp": 300},),
-        ({"topic": "Topic 2", "summary": "Summary 2", "tei_locator": 42},),
-    ],
-)
-def test_result_from_response_rejects_non_string_optional_fields(
-    entry_payload: dict[str, object],
-) -> None:
-    """Raise when optional fields are present but not strings."""
-    response = _valid_llm_response(json.dumps({"entries": [entry_payload]}))
-    generator = ShowNotesGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ShowNotesGeneratorConfig(model="test-model"),
-    )
 
     with pytest.raises(ShowNotesResponseFormatError):
         generator._result_from_response(response)
@@ -276,6 +234,17 @@ def test_result_from_response_rejects_non_iso8601_timestamp_strings(
 
     with pytest.raises(ShowNotesResponseFormatError, match="ISO 8601"):
         generator._result_from_response(response)
+
+
+def test_show_notes_entry_normalizes_blank_locator_to_none() -> None:
+    """Blank locator text should not survive into TEI `@corresp` values."""
+    entry = ShowNotesEntry(
+        topic="Introduction",
+        summary="Opening remarks",
+        tei_locator="   ",
+    )
+
+    assert entry.tei_locator is None
 
 
 # ── Stage D: Generator service tests ──

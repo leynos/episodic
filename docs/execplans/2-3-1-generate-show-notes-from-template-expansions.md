@@ -775,8 +775,8 @@ touch episodic/generation/__init__.py
 
 Create `episodic/generation/show_notes.py` with:
 
-- Imports: `dataclasses`, `json`, `typing`, `xml.etree.ElementTree`,
-  `episodic.llm.ports` (for `LLMPort`, `LLMRequest`, `LLMResponse`, `LLMUsage`,
+- Imports: `dataclasses`, `json`, `re`, `typing`, `tei_rapporteur`, and
+  `episodic.llm` (for `LLMPort`, `LLMRequest`, `LLMResponse`, `LLMUsage`,
   `LLMTokenBudget`, `LLMProviderOperation`).
 - DTO definitions: `ShowNotesEntry`, `ShowNotesResult`,
   `ShowNotesGeneratorConfig`, `ShowNotesResponseFormatError`.
@@ -784,7 +784,10 @@ Create `episodic/generation/show_notes.py` with:
   `_require_list`, `_parse_entry`, `_result_from_response`.
 - Service class: `ShowNotesGenerator` with `build_prompt(...)` and
   `generate(...)`.
-- TEI helper: `enrich_tei_with_show_notes(...)`.
+- TEI helper: `enrich_tei_with_show_notes(...)`, which parses via
+  `tei_rapporteur.parse_xml(...)`, updates the body payload via
+  `tei_rapporteur.to_dict(...)` / `tei_rapporteur.from_dict(...)`, and
+  serializes via `tei_rapporteur.emit_xml(...)`.
 
 ### Step 3: create the package exports
 
