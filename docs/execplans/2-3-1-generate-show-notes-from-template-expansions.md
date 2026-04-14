@@ -63,8 +63,8 @@ testable service that a future LangGraph node can compose.
 - Follow the repository's lint, type-checking, and formatting rules. Use
   `import typing as typ` (not `from typing import ...` except for
   `TYPE_CHECKING` with `# noqa: ICN003`). Use frozen dataclasses with
-  `slots=True` for DTOs. Use `type` aliases (Python 3.14 style) for type
-  definitions.
+  `slots=True` for data transfer objects (DTOs). Use `type` aliases
+  (Python 3.14 style) for type definitions.
 - Follow the documentation style guide in `docs/documentation-style-guide.md`:
   British English (Oxford style), sentence-case headings, 80-column wrapping
   for prose, 120 columns for code, expand acronyms on first use.
@@ -100,7 +100,8 @@ testable service that a future LangGraph node can compose.
   full Rust core, parser, emitter, PyO3 projection, and JSON schema support for
   these elements, and commit `016ef253` added complete documentation. The
   `pyproject.toml` pin has been updated to `016ef253`; existing episodic tests
-  pass (CI/gate logs capture validation results). The upstream library now
+  pass (continuous integration (CI) gate logs capture validation results). The
+  upstream library now
   includes Python `msgspec` struct support:
   `BodyBlock = Paragraph | Utterance | DivBlock`,
   `DivContent = Paragraph | Utterance | ListBlock`, and `Event` includes
@@ -140,8 +141,8 @@ testable service that a future LangGraph node can compose.
 
 - [x] Stage A: research and propose (no code changes).
 - [x] Stage B: prototype TEI enrichment and validate with `tei_rapporteur`.
-- [x] Stage C: implement DTOs and strict JSON response parsing with fail-first
-  unit tests.
+- [x] Stage C: implement data transfer objects (DTOs) and strict JSON response
+  parsing with fail-first unit tests.
 - [x] Stage D: implement show-notes generator service with LLM prompt
   construction.
 - [x] Stage E: implement TEI body enrichment and round-trip validation.
@@ -152,126 +153,26 @@ testable service that a future LangGraph node can compose.
 
 ## Surprises & discoveries
 
-### tei-rapporteur does not support `<div>`, `<list>`, or `<item>` (2026-04-03)
+### `tei_rapporteur` support for show-notes TEI blocks (2026-04-03 / 2026-04-10)
 
-Source code inspection of tei-rapporteur at commit `ad7642f` confirms that the
-body model is restricted to `<p>` and `<u>` elements at every layer:
+Early investigation found that `tei_rapporteur` could not safely round-trip
+`<div type="notes">` structures. That gap is now closed by upstream work in
+[PR #56](https://github.com/leynos/tei-rapporteur/pull/56), with the current
+dependency pin landing on commit
+[`016ef253`](https://github.com/leynos/tei-rapporteur/commit/016ef253b768c98d7d3664074928d70273eb3793).
 
-- **Rust core**: `BodyBlock` enum has two variants: `Paragraph(P)` and
-  `Utterance(Utterance)`. No `Div` variant. `TeiBody` only exposes
-  `push_paragraph()` and `push_utterance()`.
-- **XML parser**: `handle_body_content_start()` recognises only `b"p"` and
-  `b"u"`. A `<div>` element is silently ignored. The parser state machine has
-  no `InDiv`, `InList`, or `InItem` states.
-- **XML emitter**: serde derives on `BodyBlock` can only produce `<p>` and
-  `<u>`. Cannot emit `<div>`.
-- **ODD schema**: `<body>` content model is
-  `alternate(elementRef(p), elementRef(u))`. The `textstructure` module
-  includes only `TEI text body` — `div` is excluded. The `core` module includes
-  only `p hi title desc` — `list` and `item` are excluded.
-- **Relax NG schema**: mirrors the ODD. No `div`, `list`, or `item`
-  definitions exist.
-- **Python structs**: `BodyBlock: TypeAlias = Paragraph | Utterance`. No
-  `Div`, `List`, or `Item` types.
-- **JSON schema**: `BodyBlock` `oneOf` contains only `p` and `u`.
+The Episodic branch relies on the following upstream contract only:
 
-**Impact**: enriched TEI containing `<div type="notes">` will silently lose the
-notes division when parsed by `tei_rapporteur`. The `emit_xml` path cannot
-produce `<div>` elements. Round-trip through the library destroys the
-enrichment.
+- `parse_xml(...)`, `to_dict(...)`, `from_dict(...)`, and `emit_xml(...)`
+  preserve `<div>`, `<list>`, `<item>`, and `<label>` structures in the body.
+- `<list>` remains nested under `<div>`, not directly under `<body>`.
+- Relax NG validation accepts the enriched show-notes shape, so continuous
+  integration (CI) can validate emitted TEI without special-casing the notes
+  block.
 
-**Requested changes to tei-rapporteur** (filed with maintainer):
-
-1. New Rust types: `Div` (with `@type`, `@xml:id`), `List` (with
-   `Vec<Item>`), `Item` (with optional `<label>`, inline content, `@n`,
-   `@corresp`, `@xml:id`), `Label` (inline content wrapper).
-2. New `BodyBlock::Div(Div)` variant and `TeiBody::push_div()`.
-3. New `DivContent` enum for `<div>` children: `{List, Paragraph, Utterance}`.
-4. Parser: new `InDiv`, `InList`, `InItem` states and handler methods.
-5. ODD/RNG schema updates: add `div` to `textstructure` include, add `list`,
-   `item`, `label` to `core` include, new `<elementSpec>` entries, updated
-   `<body>` content model.
-6. Python structs: new `Div`, `List`, `Item` msgspec classes, updated
-   `BodyBlock` TypeAlias.
-7. JSON schema: new `$defs`, updated `BodyBlock` oneOf.
-8. Validation: traverse `Div` children for `xml:id` uniqueness and pointer
-   resolution.
-9. BDD tests for div/list parsing, emission, and round-trip.
-
-Estimated scope: ~15-20 files across all crates. This is a cross-cutting change
-touching `tei-core`, `tei-xml`, `tei-py`, both schema formats, and the JSON
-schema.
-
-**Interim approach**: use `xml.etree.ElementTree` for TEI body enrichment with
-`ET.fromstring(...)` well-formedness validation. Document the gap in ADR-002.
-Once tei-rapporteur ships `<div>` support, migrate the enrichment helper to use
-the structured API and add round-trip validation tests.
-
-### tei-rapporteur `ffb25c6` ships `<div>` support; `016ef253` adds documentation (2026-04-10)
-
-Commit `ffb25c670179902b0776eacc9286ba98f2819642` (squash-merge of PR #56)
-added full `<div>`, `<list>`, `<item>`, and `<label>` support to the Rust core,
-streaming parser, XML emitter, PyO3 projection layer, and JSON schema. Commit
-`016ef253b768c98d7d3664074928d70273eb3793` updated the documentation to reflect
-these changes. The `pyproject.toml` dependency pin has been updated to
-`016ef253`; existing episodic tests pass (CI/gate logs capture validation
-results).
-
-**What shipped:**
-
-- `BodyBlock::Div(Div)` variant with `DivType` validated newtype for `@type`.
-- `DivContent` enum: `{Paragraph, Utterance, List}`.
-- `List` struct with `Vec<Item>` children and optional `@xml:id`.
-- `Item` struct with optional `<label>`, inline content, `@n`, `@corresp`,
-  `@xml:id`.
-- `Label` struct with `Vec<Inline>` content.
-- `TeiBody::push_div()` and `TeiBody::divs()` methods.
-- Streaming parser states: `InDiv`, `InList`, `InItem`, `InLabel`.
-- Custom hybrid XML emitter handling nested div/list/item/label.
-- PyO3 projection: `PyBodyBlock::Div`, `PyDivContent`, `PyItem`, `PyLabel`.
-- JSON schema: `div`, `DivType`, `DivContent`, `list`, `item`, `label`
-  definitions; `BodyBlock` oneOf updated.
-- Validation: `xml:id` uniqueness traverses div children; `@corresp` pointer
-  resolution covers items.
-
-**Remaining upstream gaps (resolved):**
-
-The following gaps were documented when `ffb25c6` was the current pin. Both
-have since been resolved in commit `016ef253`, which is now pinned in
-`pyproject.toml`.
-
-1. ~~**ODD schema** (`schemas/tei-episodic-profile.odd`): `<body>` content
-   model still restricts to `<p>` and `<u>`.~~ **Resolved:** the ODD now
-   includes `<elementSpec>` entries for `div`, `list`, `item`, and `label`, and
-   the `<body>` content model accepts `<div>` children.
-2. ~~**Relax NG schema** (`schemas/tei-episodic-profile.rng`): mirrors the
-   ODD gap.~~ **Resolved:** the Relax NG schema includes `<define>` rules for
-   `div`, `list`, `item`, and `label`. CI runs `jing` validation against a
-   `div-list` fixture without skipping.
-
-Python structs are complete as of `016ef253`:
-`BodyBlock = Paragraph | Utterance | DivBlock`,
-`DivContent = Paragraph | Utterance | ListBlock`, and `Event` includes
-`DivEvent` variant.
-
-**Structural constraint:** `<list>` is only permitted as a child of `<div>`,
-not as a direct child of `<body>`. This matches the upstream documentation and
-Relax NG schema.
-
-**Impact on show-notes implementation:**
-
-- The `xml.etree.ElementTree` fallback is **no longer required** for
-  enrichment. TEI body enrichment can use the structured `tei_rapporteur` API:
-  construct `Div`, `List`, `Item`, and `Label` objects in Python via msgspec
-  structs (`DivBlock`, `ListBlock`, `Item`, `Label`) or the
-  `to_dict`/`from_dict` dictionary projection, then emit via `emit_xml`.
-- `parse_xml` and `emit_xml` fully support `<div>` round-trips.
-- External XML validation via `jing` against the Relax NG schema now accepts
-  `<div>`, `<list>`, `<item>`, and `<label>` elements. `make nixie` runs full
-  TEI body validation including `div-list` fixture checks.
-- Structured body content including `DivBlock` and `ListBlock` is now
-  decodable via typed msgspec structs:
-  `BodyBlock = Paragraph | Utterance | DivBlock` as of `016ef253`.
+This plan deliberately avoids duplicating upstream parser internals or schema
+implementation details. If future upstream regressions appear, start with PR
+`#56` and the pinned commit above before extending this plan.
 
 ## Decision log
 
@@ -354,9 +255,10 @@ to `016ef253` and the TEI representation strategy is settled:
 `<div type="notes"><list><item>` with `<label>` for topic, inline text for
 summary, `@n` for timestamp, `@corresp` for locator.
 
-Stages B–E completed (2026-04-12). Created `episodic/generation/` package with
-`ShowNotesGenerator`, DTOs (`ShowNotesEntry`, `ShowNotesResult`,
-`ShowNotesGeneratorConfig`), strict JSON parsing, and
+Stages B–E completed (2026-04-12; updated 2026-04-14). Created
+`episodic/generation/` package with `ShowNotesGenerator`, DTOs
+(`ShowNotesEntry`, `ShowNotesResult`, `ShowNotesGeneratorConfig`), strict JSON
+parsing, and
 `enrich_tei_with_show_notes` TEI enrichment helper. All 14 unit tests pass. Key
 findings:
 
@@ -365,17 +267,28 @@ findings:
 - `<item>` elements contain inline content after `<label>`, not `<p>` block
   elements. Correct structure:
   `<div type="notes"><list><item><label>Topic </label>Inline summary text</item></list></div>`.
-- TEI enrichment uses XML string manipulation (inserting before `</body>`)
-  rather than ElementTree or msgspec because ElementTree serialization doesn't
-  round-trip cleanly through `tei_rapporteur.parse_xml`.
+- TEI enrichment now uses `tei_rapporteur.parse_xml(...)`,
+  `tei_rapporteur.to_dict(...)`, `tei_rapporteur.from_dict(...)`, and
+  `tei_rapporteur.emit_xml(...)` to append a structured `div` block instead of
+  mutating XML via string concatenation.
 
 Stages F and G completed (2026-04-12). Vidai Mock BDD coverage exists in
 `tests/features/show_notes.feature` and `tests/steps/test_show_notes_steps.py`.
-Documentation now includes ADR-002 plus design, user, and developer guide
+Documentation now includes ADR-003 plus design, user, and developer guide
 updates. Stage H has been exercised and partially validated: formatting,
-linting, type-checking, Markdown linting, and Mermaid validation passed, but
-the full `make test` gate is blocked by a `psycopg`/`libpq` environment issue
-in database fixtures, so the ExecPlan remains `IN_PROGRESS`.
+linting, type-checking, Markdown linting, and Mermaid validation passed
+during the implementation session, but the ExecPlan remains `IN_PROGRESS`
+because this retrospective has not yet been refreshed to reflect subsequent
+validation on the rebased branch.
+
+Review follow-up on 2026-04-14 tightened two behavioural edges:
+
+- `ShowNotesEntry.timestamp` now rejects non-ISO 8601 duration strings during
+  parsed-entry validation, so malformed values such as `5:30` no longer leak
+  into `@n` attributes.
+- `enrich_tei_with_show_notes(...)` now replaces any existing
+  `<div type="notes">` block before inserting the regenerated notes payload, so
+  reruns keep a single canonical notes container.
 
 ## Context and orientation
 
@@ -514,7 +427,7 @@ writing production code.
 Acceptance for Stage B: the test exists, runs, and fails with a clear message
 about the missing enrichment helper.
 
-### Stage C: implement DTOs and strict JSON response parsing
+### Stage C: implement data transfer objects (DTOs) and strict JSON response parsing
 
 Create the `episodic/generation/` package with the following files:
 
@@ -628,13 +541,13 @@ calls `self.llm.generate(request)`, and parses the response via
 The default system prompt should read:
 
 ```plaintext
-You are a podcast show-notes generator. Given a TEI P5 podcast script,
-extract the key topics discussed in the episode. For each topic, provide a
-short heading and a one-to-three sentence summary. If the script contains
-timing cues or segment markers, include an approximate timestamp as an ISO
-8601 duration (e.g. PT5M30S). Return JSON only with key "entries". Each
-entry must include "topic" and "summary". Optional fields: "timestamp" and
-"tei_locator".
+The assistant acts as a podcast show-notes generator. Given a TEI P5 podcast
+script, extract the key topics discussed in the episode. For each topic,
+provide a short heading and a one-to-three sentence summary. If the script
+contains timing cues or segment markers, include an approximate timestamp as
+an ISO 8601 duration (e.g. PT5M30S). Return JSON only with key "entries".
+Each entry must include "topic" and "summary". Optional fields:
+"timestamp" and "tei_locator".
 ```
 
 Write unit tests:
@@ -669,13 +582,13 @@ def enrich_tei_with_show_notes(
 
 This function parses the input TEI XML, constructs a `<div type="notes">`
 element containing a `<list>` with `<item>` entries derived from
-`result.entries`, appends the division to the TEI body, and emits the enriched
-document as XML text.
+`result.entries`, replaces any existing notes division in the TEI body, and
+emits the enriched document as XML text.
 
 Each `<item>` element contains:
 
 - A `<label>` child with the `topic` text.
-- A `<p>` child with the `summary` text.
+- Inline text nodes containing the `summary` text after the `<label>`.
 - An optional `@n` attribute with the `timestamp` value.
 - An optional `@corresp` attribute with the `tei_locator` value.
 

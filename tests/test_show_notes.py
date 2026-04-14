@@ -1,7 +1,5 @@
 """Unit tests for show notes generation and TEI enrichment."""
 
-from __future__ import annotations
-
 import json
 import typing as typ
 
@@ -77,6 +75,8 @@ def test_prototype_tei_enrichment_with_show_notes() -> None:
     assert 'type="notes"' in enriched_xml
     assert "<list>" in enriched_xml
     assert "<item" in enriched_xml
+    assert 'n="PT0M30S"' in enriched_xml
+    assert 'corresp="#p1"' in enriched_xml
     assert "<label>Introduction</label>" in enriched_xml
     assert "Opening remarks about the topic." in enriched_xml
 
@@ -102,6 +102,16 @@ def test_show_notes_entry_accepts_optional_timestamp() -> None:
         topic="Introduction", summary="Opening remarks", timestamp="PT1M30S"
     )
     assert entry.timestamp == "PT1M30S"
+
+
+def test_show_notes_entry_rejects_non_iso8601_timestamp() -> None:
+    """Reject timestamp metadata that is not an ISO 8601 duration."""
+    with pytest.raises(ValueError, match="ISO 8601"):
+        ShowNotesEntry(
+            topic="Introduction",
+            summary="Opening remarks",
+            timestamp="5:30",
+        )
 
 
 def test_show_notes_entry_accepts_optional_locator() -> None:
@@ -153,6 +163,30 @@ def test_result_from_response_raises_on_missing_entries_key() -> None:
         generator._result_from_response(response)
 
 
+def test_result_from_response_rejects_non_list_entries() -> None:
+    """Raise when `entries` exists but is not a list."""
+    response = _valid_llm_response(json.dumps({"entries": {}}))
+    generator = ShowNotesGenerator(
+        llm=typ.cast("typ.Any", None),
+        config=ShowNotesGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ShowNotesResponseFormatError, match="entries"):
+        generator._result_from_response(response)
+
+
+def test_result_from_response_rejects_non_object_entry_items() -> None:
+    """Raise when `entries` contains non-object items."""
+    response = _valid_llm_response(json.dumps({"entries": ["not-an-object"]}))
+    generator = ShowNotesGenerator(
+        llm=typ.cast("typ.Any", None),
+        config=ShowNotesGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ShowNotesResponseFormatError, match="entry"):
+        generator._result_from_response(response)
+
+
 def test_result_from_response_raises_on_invalid_json() -> None:
     """Raise ShowNotesResponseFormatError when response text is not JSON."""
     response = _valid_llm_response("not valid json {")
@@ -173,6 +207,74 @@ def test_result_from_response_raises_on_empty_topic() -> None:
     generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
 
     with pytest.raises(ShowNotesResponseFormatError):
+        generator._result_from_response(response)
+
+
+@pytest.mark.parametrize(
+    ("entry_payload", "field_name"),
+    [
+        ({"summary": "Summary only"}, "topic"),
+        ({"topic": "Topic only"}, "summary"),
+    ],
+)
+def test_result_from_response_requires_topic_and_summary(
+    entry_payload: dict[str, str],
+    field_name: str,
+) -> None:
+    """Raise when required `topic` or `summary` fields are missing."""
+    response = _valid_llm_response(json.dumps({"entries": [entry_payload]}))
+    generator = ShowNotesGenerator(
+        llm=typ.cast("typ.Any", None),
+        config=ShowNotesGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ShowNotesResponseFormatError, match=field_name):
+        generator._result_from_response(response)
+
+
+@pytest.mark.parametrize(
+    "entry_payload",
+    [
+        ({"topic": "Topic 1", "summary": "Summary 1", "timestamp": 300},),
+        ({"topic": "Topic 2", "summary": "Summary 2", "tei_locator": 42},),
+    ],
+)
+def test_result_from_response_rejects_non_string_optional_fields(
+    entry_payload: dict[str, object],
+) -> None:
+    """Raise when optional fields are present but not strings."""
+    response = _valid_llm_response(json.dumps({"entries": [entry_payload]}))
+    generator = ShowNotesGenerator(
+        llm=typ.cast("typ.Any", None),
+        config=ShowNotesGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ShowNotesResponseFormatError):
+        generator._result_from_response(response)
+
+
+@pytest.mark.parametrize("timestamp", ["5:30", "   "])
+def test_result_from_response_rejects_non_iso8601_timestamp_strings(
+    timestamp: str,
+) -> None:
+    """Raise when `timestamp` is a string but not an ISO 8601 duration."""
+    response = _valid_llm_response(
+        json.dumps({
+            "entries": [
+                {
+                    "topic": "Topic 1",
+                    "summary": "Summary 1",
+                    "timestamp": timestamp,
+                }
+            ]
+        })
+    )
+    generator = ShowNotesGenerator(
+        llm=typ.cast("typ.Any", None),
+        config=ShowNotesGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ShowNotesResponseFormatError, match="ISO 8601"):
         generator._result_from_response(response)
 
 
@@ -244,6 +346,24 @@ def test_enrich_tei_with_empty_result_returns_original() -> None:
     assert "<div" not in enriched_xml
 
 
+def test_enrich_tei_with_missing_body_raises_value_error() -> None:
+    """Malformed TEI should raise ValueError rather than mutating blindly."""
+    malformed_tei_xml = (
+        '<TEI xmlns="http://www.tei-c.org/ns/1.0">'
+        "<teiHeader><fileDesc><title>Test</title></fileDesc></teiHeader>"
+        "<text><body><p>Hello</p></text>"
+        "</TEI>"
+    )
+
+    result = ShowNotesResult(
+        entries=(ShowNotesEntry(topic="Intro", summary="Opening remarks"),),
+        usage=LLMUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+    )
+
+    with pytest.raises(ValueError, match=r"XML processing error|TEI payload field"):
+        enrich_tei_with_show_notes(malformed_tei_xml, result)
+
+
 def test_enrich_tei_escapes_xml_unsafe_characters() -> None:
     """TEI enrichment properly escapes ampersands and angle brackets."""
     minimal_tei_xml = (
@@ -272,3 +392,36 @@ def test_enrich_tei_escapes_xml_unsafe_characters() -> None:
     # Assert: the escaped characters appear in the serialized form
     assert "&amp;" in enriched_xml
     assert "&lt;" in enriched_xml or "<tags>" not in enriched_xml
+
+
+def test_enrich_tei_replaces_existing_notes_div() -> None:
+    """Replacing show notes should keep a single canonical notes container."""
+    tei_with_existing_notes = (
+        '<TEI xmlns="http://www.tei-c.org/ns/1.0">'
+        "<teiHeader><fileDesc><title>Test</title></fileDesc></teiHeader>"
+        "<text><body>"
+        "<p>Hello</p>"
+        '<div type="notes"><list><item><label>Old topic</label>'
+        "Old summary</item></list></div>"
+        "</body></text>"
+        "</TEI>"
+    )
+    result = ShowNotesResult(
+        entries=(
+            ShowNotesEntry(
+                topic="New topic",
+                summary="Fresh summary",
+                timestamp="PT2M",
+                tei_locator="#p1",
+            ),
+        ),
+        usage=LLMUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+    )
+
+    enriched_xml = enrich_tei_with_show_notes(tei_with_existing_notes, result)
+
+    assert enriched_xml.count('type="notes"') == 1
+    assert "Old topic" not in enriched_xml
+    assert "Old summary" not in enriched_xml
+    assert "<label>New topic</label>" in enriched_xml
+    assert "Fresh summary" in enriched_xml

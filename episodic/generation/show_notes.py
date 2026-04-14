@@ -49,7 +49,10 @@ Constraints:
 
 import dataclasses as dc
 import json
+import re
 import typing as typ
+
+import tei_rapporteur as tei
 
 from episodic.llm import (
     LLMPort,
@@ -63,12 +66,27 @@ from episodic.llm import (
 type JsonMapping = dict[str, object]
 
 _DEFAULT_SYSTEM_PROMPT = (
-    "You are a podcast show-notes generator. Given a TEI P5 podcast script, "
+    "The assistant acts as a podcast show-notes generator. Given a TEI P5 "
+    "podcast script, "
     "extract the key topics discussed in the episode. For each topic, provide "
     "a short heading and a one-to-three sentence summary. If the script contains "
     "timing cues or segment markers, include an approximate timestamp as an ISO 8601 "
     'duration (e.g. PT5M30S). Return JSON only with key "entries". Each entry must '
     'include "topic" and "summary". Optional fields: "timestamp" and "tei_locator".'
+)
+
+_ISO_8601_DURATION_PATTERN = re.compile(
+    r"^P(?=.*\d(?:\.\d+)?[YMWDHS])"
+    r"(?:\d+(?:\.\d+)?W|"
+    r"(?:\d+(?:\.\d+)?Y)?"
+    r"(?:\d+(?:\.\d+)?M)?"
+    r"(?:\d+(?:\.\d+)?D)?"
+    r"(?:T"
+    r"(?:\d+(?:\.\d+)?H)?"
+    r"(?:\d+(?:\.\d+)?M)?"
+    r"(?:\d+(?:\.\d+)?S)?"
+    r")?"
+    r")$"
 )
 
 
@@ -79,6 +97,15 @@ def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
         if not isinstance(value, str) or value.strip() == "":
             msg = f"{field_name} must be non-empty."
             raise ValueError(msg)
+
+
+def _ensure_optional_iso8601_duration(timestamp: str | None) -> None:
+    """Reject timestamp strings that are not ISO 8601 durations."""
+    if timestamp is None:
+        return
+    if _ISO_8601_DURATION_PATTERN.fullmatch(timestamp) is None:
+        msg = "timestamp must be an ISO 8601 duration."
+        raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -107,6 +134,7 @@ class ShowNotesEntry:
     def __post_init__(self) -> None:
         """Reject blank topic and summary fields."""
         _ensure_non_empty_fields(self, "topic", "summary")
+        _ensure_optional_iso8601_duration(self.timestamp)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -201,12 +229,15 @@ def _parse_entry(raw: dict[str, object]) -> ShowNotesEntry:
         msg = "tei_locator must be a string or null."
         raise ShowNotesResponseFormatError(msg)
 
-    return ShowNotesEntry(
-        topic=topic,
-        summary=summary,
-        timestamp=timestamp if isinstance(timestamp, str) else None,
-        tei_locator=tei_locator if isinstance(tei_locator, str) else None,
-    )
+    try:
+        return ShowNotesEntry(
+            topic=topic,
+            summary=summary,
+            timestamp=timestamp if isinstance(timestamp, str) else None,
+            tei_locator=tei_locator if isinstance(tei_locator, str) else None,
+        )
+    except ValueError as exc:
+        raise ShowNotesResponseFormatError(str(exc)) from exc
 
 
 @dc.dataclass(slots=True)
@@ -334,57 +365,67 @@ class ShowNotesGenerator:
         return self._result_from_response(response)
 
 
-def _xml_escape_attr(text: str) -> str:
-    """Escape `&`, `<`, `>`, and `"` for use in an XML attribute value."""
-    return (
-        text
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+def _require_payload_object(value: object, field_name: str) -> dict[str, object]:
+    """Require a mapping inside a TEI payload or raise ValueError."""
+    if not isinstance(value, dict):
+        msg = f"TEI payload field {field_name} must be an object."
+        raise TypeError(msg)
+    return typ.cast("dict[str, object]", value)
 
 
-def _xml_escape_text(text: str) -> str:
-    """Escape `&`, `<`, and `>` for use in XML text content."""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+def _require_payload_list(value: object, field_name: str) -> list[object]:
+    """Require a list inside a TEI payload or raise ValueError."""
+    if not isinstance(value, list):
+        msg = f"TEI payload field {field_name} must be a list."
+        raise TypeError(msg)
+    return typ.cast("list[object]", value)
 
 
-def _build_item_xml(entry: ShowNotesEntry) -> str:
-    """Build one `<item>` XML fragment from a `ShowNotesEntry`."""
-    attrs = []
+def _build_text_inline(text: str) -> list[dict[str, str]]:
+    """Build a plain-text inline payload for tei_rapporteur."""
+    return [{"type": "text", "value": text}]
+
+
+def _build_item_payload(entry: ShowNotesEntry) -> dict[str, object]:
+    """Build one list-item payload from a `ShowNotesEntry`."""
+    item_payload: dict[str, object] = {
+        "label": {"content": _build_text_inline(entry.topic)},
+        "content": _build_text_inline(entry.summary),
+    }
     if entry.timestamp is not None:
-        attrs.append(f'n="{_xml_escape_attr(entry.timestamp)}"')
+        item_payload["n"] = entry.timestamp
     if entry.tei_locator is not None:
-        attrs.append(f'corresp="{_xml_escape_attr(entry.tei_locator)}"')
-
-    attr_str = " " + " ".join(attrs) if attrs else ""
-    escaped_topic = _xml_escape_text(entry.topic)
-    escaped_summary = _xml_escape_text(entry.summary)
-
-    return f"""    <item{attr_str}>
-      <label>{escaped_topic}</label>
-      {escaped_summary}
-    </item>"""
+        item_payload["corresp"] = [entry.tei_locator]
+    return item_payload
 
 
-def _build_notes_div_xml(entries: list[ShowNotesEntry]) -> str:
-    """Join the output of `_build_item_xml` for every entry and wrap in a div."""
-    items_xml = [_build_item_xml(entry) for entry in entries]
-    return f"""  <div type="notes">
-    <list>
-{chr(10).join(items_xml)}
-    </list>
-  </div>"""
+def _build_notes_div_payload(entries: tuple[ShowNotesEntry, ...]) -> dict[str, object]:
+    """Build the structured TEI payload for the show-notes div."""
+    return {
+        "type": "div",
+        "div_type": "notes",
+        "content": [
+            {
+                "type": "list",
+                "items": [_build_item_payload(entry) for entry in entries],
+            }
+        ],
+    }
 
 
-def _insert_before_body_close(tei_xml: str, fragment: str) -> str:
-    """Find the last `</body>` in `tei_xml` and insert `fragment` before it."""
-    body_close_idx = tei_xml.rfind("</body>")
-    if body_close_idx == -1:
-        msg = "TEI document missing <body> element."
-        raise ValueError(msg)
-    return tei_xml[:body_close_idx] + fragment + "\n  " + tei_xml[body_close_idx:]
+def _body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
+    """Return the mutable TEI body blocks list from a document payload."""
+    text_payload = _require_payload_object(document_payload.get("text"), "text")
+    body_payload = _require_payload_object(text_payload.get("body"), "text.body")
+    return _require_payload_list(body_payload.get("blocks"), "text.body.blocks")
+
+
+def _is_notes_div_payload(value: object) -> bool:
+    """Return True when a body block payload is the canonical show-notes div."""
+    if not isinstance(value, dict):
+        return False
+    payload = typ.cast("dict[str, object]", value)
+    return payload.get("type") == "div" and payload.get("div_type") == "notes"
 
 
 def enrich_tei_with_show_notes(
@@ -417,12 +458,21 @@ def enrich_tei_with_show_notes(
 
     If the result has no entries, the original TEI is returned unchanged.
 
-    This function uses XML string manipulation rather than the tei_rapporteur
-    structured API because the API requires rebuilding the entire document
-    from scratch. A future optimization could use the structured API once
-    body modification helpers are available.
+    This function uses `tei_rapporteur`'s structured document exchange to
+    parse the TEI, append a `div` block to the body payload, then emit the
+    enriched document back to XML. Malformed TEI raises `ValueError`.
     """
     if not result.entries:
         return tei_xml
-    div_xml = _build_notes_div_xml(list(result.entries))
-    return _insert_before_body_close(tei_xml, div_xml)
+
+    document = tei.parse_xml(tei_xml)
+    document_payload = typ.cast("dict[str, object]", tei.to_dict(document))
+    body_blocks = _body_blocks_payload(document_payload)
+    body_blocks[:] = [
+        body_block
+        for body_block in body_blocks
+        if not _is_notes_div_payload(body_block)
+    ]
+    body_blocks.append(_build_notes_div_payload(result.entries))
+    enriched_document = tei.from_dict(document_payload)
+    return tei.emit_xml(enriched_document)

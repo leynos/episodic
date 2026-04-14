@@ -11,7 +11,7 @@ available today and how to exercise it.
   paragraphs (`P`), utterances with optional speaker references, and thematic
   divisions (`Div`) that group paragraphs, utterances, and lists as
   `DivContent` children. Each block stores a sequence of `Inline` nodes,
-  allowing clients to mix plain text with emphasized `<hi>` spans and
+  allowing clients to mix plain text with emphasised `<hi>` spans and
   `<pause/>` cues without hand-rolling XML. Plain strings flow through
   `P::from_text_segments`, `Utterance::from_text_segments`,
   `Item::from_text_segments`, and `Label::from_text`; the older `P::new` and

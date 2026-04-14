@@ -78,8 +78,6 @@ reads without weakening TEI's role as the canonical authoring model.
 
 - Show-note summaries are constrained to inline content, which is less
   expressive than allowing arbitrary block-level markup.
-- The enrichment helper currently performs targeted XML-string insertion
-  rather than mutating a higher-level TEI document object model.
 
 ### Neutral
 
@@ -89,10 +87,17 @@ reads without weakening TEI's role as the canonical authoring model.
 
 ## References
 
-- Roadmap item `2.3.1` in `docs/roadmap.md`
-- Execplan:
+Roadmap item `2.3.1` in `docs/roadmap.md`.[^1]
+ExecPlan:
+`docs/execplans/2-3-1-generate-show-notes-from-template-expansions.md`.[^2]
+Implementation: `episodic/generation/show_notes.py`.[^3]
+Tests: `tests/test_show_notes.py`, `tests/features/show_notes.feature`,
+`tests/steps/test_show_notes_steps.py`.[^4]
+
+[^1]: Roadmap item `2.3.1` in `docs/roadmap.md`
+[^2]: ExecPlan:
   `docs/execplans/2-3-1-generate-show-notes-from-template-expansions.md`
-- Implementation: `episodic/generation/show_notes.py`
-- Tests: `tests/test_show_notes.py`,
+[^3]: Implementation: `episodic/generation/show_notes.py`
+[^4]: Tests: `tests/test_show_notes.py`,
   `tests/features/show_notes.feature`,
   `tests/steps/test_show_notes_steps.py`

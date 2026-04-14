@@ -29,6 +29,8 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     from pathlib import Path
 
+    from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
+
 
 @dc.dataclass(slots=True)
 class ShowNotesBDDContext:
@@ -39,7 +41,20 @@ class ShowNotesBDDContext:
     script_tei_xml: str = ""
     template_structure: dict[str, object] | None = None
     result: ShowNotesResult | None = None
-    prompt_text: str = ""
+    request_payload: LLMRequest | None = None
+
+
+@dc.dataclass(slots=True)
+class _RecordingLLMPort:
+    """Capture the actual `LLMRequest` before delegating to the real adapter."""
+
+    wrapped: LLMPort
+    requests: list[LLMRequest] = dc.field(default_factory=list)
+
+    async def generate(self, request: LLMRequest) -> LLMResponse:
+        """Record and forward the request."""
+        self.requests.append(request)
+        return await self.wrapped.generate(request)
 
 
 def _run_async_step(
@@ -199,8 +214,7 @@ def _start_vidaimock_process(
     """Start the Vidai Mock server and verify it started successfully."""
     vidaimock_path = shutil.which("vidaimock")
     if vidaimock_path is None:
-        msg = "vidaimock executable not found in PATH"
-        raise RuntimeError(msg)
+        pytest.skip("vidaimock executable not found in PATH")
 
     show_notes_context.base_url = f"http://127.0.0.1:{port}/v1"
     show_notes_context.process = subprocess.Popen(  # noqa: S603
@@ -272,6 +286,7 @@ def run_show_notes_generation(
                 api_key="test-key",
             ),
         )
+        recording_port = _RecordingLLMPort(wrapped=adapter)
 
         config = ShowNotesGeneratorConfig(
             model="gpt-4o-mini",
@@ -283,7 +298,7 @@ def run_show_notes_generation(
             ),
         )
 
-        generator = ShowNotesGenerator(llm=adapter, config=config)
+        generator = ShowNotesGenerator(llm=recording_port, config=config)
 
         result = await generator.generate(
             show_notes_context.script_tei_xml,
@@ -291,12 +306,7 @@ def run_show_notes_generation(
         )
 
         show_notes_context.result = result
-
-        # Capture the prompt for inspection
-        show_notes_context.prompt_text = generator.build_prompt(
-            show_notes_context.script_tei_xml,
-            template_structure=show_notes_context.template_structure,
-        )
+        show_notes_context.request_payload = recording_port.requests[0]
 
     _run_async_step(_function_scoped_runner, _generate_show_notes)
 
@@ -331,11 +341,12 @@ def assert_show_notes_result_structure(show_notes_context: ShowNotesBDDContext) 
 
 @then("the show-notes prompt includes the TEI script body")
 def assert_prompt_contains_tei_script(show_notes_context: ShowNotesBDDContext) -> None:
-    """Verify the prompt includes the TEI script XML."""
-    prompt = show_notes_context.prompt_text
-    assert "Welcome to episode 42" in prompt, (
-        "Expected prompt to contain script text from the TEI body."
+    """Verify the actual outbound request includes the TEI script XML."""
+    request = show_notes_context.request_payload
+    assert request is not None, "Expected the adapter request to be captured."
+    assert "Welcome to episode 42" in request.prompt, (
+        "Expected the outbound prompt to contain script text from the TEI body."
     )
-    assert "script_tei_xml" in prompt, (
-        "Expected prompt to include the script_tei_xml key."
+    assert "script_tei_xml" in request.prompt, (
+        "Expected the outbound prompt to include the script_tei_xml key."
     )
