@@ -207,6 +207,17 @@ def _await_port_ready(
             _handle_connect_failure(process, deadline)
 
 
+def _terminate_process_gracefully(process: subprocess.Popen[str]) -> None:
+    """Terminate *process*, escalating to SIGKILL if it does not exit promptly."""
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
 def _start_vidaimock_process(
     show_notes_context: ShowNotesBDDContext,
     config_dir: Path,
@@ -235,13 +246,7 @@ def _start_vidaimock_process(
         try:
             _await_port_ready(process, "127.0.0.1", port)
         except RuntimeError as exc:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
+            _terminate_process_gracefully(process)
             last_error = exc
             continue
 
