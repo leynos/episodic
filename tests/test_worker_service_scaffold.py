@@ -76,6 +76,36 @@ def test_worker_topology_defines_io_and_cpu_queues() -> None:
     assert cpu_queue.routing_key == "episodic.cpu.#"
 
 
+def test_worker_topology_rejects_duplicate_queue_names() -> None:
+    """Reject queue topologies that reuse the same queue identifier."""
+    from episodic.worker import WorkerTopology, WorkloadClass
+    from episodic.worker.topology import WorkerQueueSpec
+
+    with pytest.raises(
+        ValueError,
+        match=r"WorkerTopology\.queues must contain unique queue names\.",
+    ):
+        WorkerTopology(
+            exchange_name="episodic.tasks",
+            exchange_type="topic",
+            default_workload=WorkloadClass.IO_BOUND,
+            queues=(
+                WorkerQueueSpec(
+                    name="episodic.shared",
+                    workload=WorkloadClass.IO_BOUND,
+                    routing_key="episodic.io.#",
+                    diagnostic_routing_key="episodic.io.diagnostic",
+                ),
+                WorkerQueueSpec(
+                    name="episodic.shared",
+                    workload=WorkloadClass.CPU_BOUND,
+                    routing_key="episodic.cpu.#",
+                    diagnostic_routing_key="episodic.cpu.diagnostic",
+                ),
+            ),
+        )
+
+
 def test_load_runtime_config_requires_rabbitmq_broker_url() -> None:
     """Reject missing or non-AMQP broker URLs for the worker runtime."""
     from episodic.worker import load_runtime_config
@@ -125,59 +155,44 @@ def test_worker_runtime_config_rejects_non_worker_pool_values() -> None:
 @pytest.mark.parametrize(
     ("env_key", "env_value", "expected_message"),
     [
-        (
+        pytest.param(
             "EPISODIC_CELERY_IO_POOL",
             "threads",
             "EPISODIC_CELERY_IO_POOL must be one of prefork, gevent, or eventlet.",
+            id="invalid_io_pool",
         ),
-        (
+        pytest.param(
             "EPISODIC_CELERY_CPU_POOL",
             "bogus",
             "EPISODIC_CELERY_CPU_POOL must be one of prefork, gevent, or eventlet.",
+            id="invalid_cpu_pool",
         ),
-    ],
-)
-def test_load_runtime_config_rejects_invalid_pool_names(
-    env_key: str,
-    env_value: str,
-    expected_message: str,
-) -> None:
-    """Exercise invalid pool parsing through environment-driven configuration."""
-    from episodic.worker import load_runtime_config
-
-    with pytest.raises(RuntimeError, match=expected_message):
-        load_runtime_config({
-            **_runtime_environ(),
-            env_key: env_value,
-        })
-
-
-@pytest.mark.parametrize(
-    ("env_key", "env_value", "expected_message"),
-    [
-        (
+        pytest.param(
             "EPISODIC_CELERY_IO_CONCURRENCY",
             "0",
             "EPISODIC_CELERY_IO_CONCURRENCY must be a positive integer.",
+            id="zero_io_concurrency",
         ),
-        (
+        pytest.param(
             "EPISODIC_CELERY_CPU_CONCURRENCY",
             "-1",
             "EPISODIC_CELERY_CPU_CONCURRENCY must be a positive integer.",
+            id="negative_cpu_concurrency",
         ),
-        (
+        pytest.param(
             "EPISODIC_CELERY_IO_CONCURRENCY",
             "not-a-number",
             "EPISODIC_CELERY_IO_CONCURRENCY must be a positive integer.",
+            id="non_numeric_io_concurrency",
         ),
     ],
 )
-def test_load_runtime_config_rejects_invalid_concurrency_values(
+def test_load_runtime_config_rejects_invalid_env_values(
     env_key: str,
     env_value: str,
     expected_message: str,
 ) -> None:
-    """Exercise invalid concurrency parsing through environment-driven configuration."""
+    """Reject invalid environment values through runtime configuration."""
     from episodic.worker import load_runtime_config
 
     with pytest.raises(RuntimeError, match=expected_message):

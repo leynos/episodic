@@ -2,11 +2,11 @@
 
 import dataclasses as dc
 import enum
-from typing import TYPE_CHECKING  # noqa: ICN003
+import typing as typ
 
 from kombu import Exchange, Queue
 
-if TYPE_CHECKING:
+if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 
@@ -96,6 +96,10 @@ def _validate_queue_contract(
     default_workload: WorkloadClass,
 ) -> None:
     """Raise ValueError if queues lack uniqueness or default_workload is unmatched."""
+    queue_names = {queue.name for queue in queues}
+    if len(queue_names) != len(queues):
+        msg = "WorkerTopology.queues must contain unique queue names."
+        raise ValueError(msg)
     queue_map = {queue.workload: queue for queue in queues}
     if len(queue_map) != len(queues):
         msg = "WorkerTopology.queues must contain unique workload mappings."
