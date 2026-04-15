@@ -32,9 +32,9 @@ This guide will cover:
 - Configuring content weighting and conflict resolution
 - Managing episode metadata and show notes. Show-notes generation runs
   automatically as part of the episode-generation pipeline, with no separate
-  manual step. An LLM analyses the canonical TEI script to extract key topics,
-  short summaries, and, where inferable, timestamps and source locators. The
-  output is written back into the canonical TEI body as a
+  manual step. A Large Language Model (LLM) analyses the canonical TEI script
+  to extract key topics, short summaries, and, where inferable, timestamps and
+  source locators. The output is written back into the canonical TEI body as a
   `<div type="notes">` containing one `<item>` per topic, where each item
   carries a `<label>`, inline summary text, and optional `@n` (ISO 8601
   duration timestamp) and `@corresp` (source locator) attributes.
