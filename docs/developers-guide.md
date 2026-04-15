@@ -414,24 +414,30 @@ critique draft output.
 - `ShowNotesEntry` is an immutable dataclass with constructor-time
   validation:
 
+  Table: `ShowNotesEntry` fields.
+
   | Field | Type | Constraints |
   | --- | --- | --- |
   | `topic` | `str` | Non-empty; whitespace-only values raise `ValueError` |
   | `summary` | `str` | Non-empty; whitespace-only values raise `ValueError` |
   | `timestamp` | `str \| None` | Optional; when present must match ISO 8601 duration pattern (for example, `"PT5M"`) |
-  | `tei_locator` | `str \| None` | Optional; blank strings are normalised to `None` at construction |
+  | `tei_locator` | `str \| None` | Optional; blank strings are normalized to `None` at construction |
 
 - `ShowNotesResult` is an immutable dataclass:
+
+  Table: `ShowNotesResult` fields.
 
   | Field | Type | Notes |
   | --- | --- | --- |
   | `entries` | `tuple[ShowNotesEntry, ...]` | Ordered sequence of parsed show-notes entries |
-  | `usage` | `LLMUsage` | Normalised token-usage counters from the provider response |
+  | `usage` | `LLMUsage` | Normalized token-usage counters from the provider response |
   | `model` | `str` | Model identifier echoed from the provider response (default `""`) |
   | `provider_response_id` | `str` | Provider-assigned response identifier (default `""`) |
   | `finish_reason` | `str \| None` | Provider finish reason, for example `"stop"` (default `None`) |
 
 - `ShowNotesGeneratorConfig` is a dataclass:
+
+  Table: `ShowNotesGeneratorConfig` fields.
 
   | Field | Type | Notes |
   | --- | --- | --- |

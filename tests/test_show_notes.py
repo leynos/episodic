@@ -158,8 +158,11 @@ def test_result_from_response_parses_valid_json() -> None:
         ({"entries": ["not-an-object"]}, "entry"),
         ({"entries": [{"summary": "Summary only"}]}, "topic"),
         ({"entries": [{"topic": "Topic only"}]}, "summary"),
-        ({"entries": [{"topic": "T", "summary": "S", "timestamp": 300}]}, None),
-        ({"entries": [{"topic": "T", "summary": "S", "tei_locator": 42}]}, None),
+        ({"entries": [{"topic": "T", "summary": "S", "timestamp": 300}]}, "timestamp"),
+        (
+            {"entries": [{"topic": "T", "summary": "S", "tei_locator": 42}]},
+            "tei_locator",
+        ),
     ],
 )
 def test_result_from_response_rejects_malformed_entries(
