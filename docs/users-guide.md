@@ -30,11 +30,17 @@ This guide will cover:
 - Working with TEI (Text Encoding Initiative) canonical content
 - Tracking ingestion jobs, source weighting decisions, and provenance metadata
 - Configuring content weighting and conflict resolution
-- Managing episode metadata and show notes. Show notes are generated as
-  structured TEI body metadata using `<div type="notes">` with one `<item>`
-  per topic. Each item carries a heading, a short summary, and optional
-  timestamp and source-locator attributes when the generation workflow can
-  infer them.
+- Managing episode metadata and show notes. Show-notes generation runs
+  automatically as part of the episode-generation pipeline, with no separate
+  manual step. An LLM analyses the canonical TEI script to extract key topics,
+  short summaries, and, where inferable, timestamps and source locators. The
+  output is written back into the canonical TEI body as a
+  `<div type="notes">` containing one `<item>` per topic, where each item
+  carries a `<label>`, inline summary text, and optional `@n` (ISO 8601
+  duration timestamp) and `@corresp` (source locator) attributes.
+  `ShowNotesGeneratorConfig` controls the model, token budget, and system
+  prompt, and an optional `template_structure` mapping can be passed to
+  `build_prompt(...)` to guide extraction against a known episode template.
 - Database schema integrity is validated automatically in CI so that canonical
   content storage remains consistent across releases
 - Repository and transactional integrity are validated by integration tests

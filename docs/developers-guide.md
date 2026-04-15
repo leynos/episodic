@@ -423,6 +423,15 @@ critique draft output.
   `<list>` contains one `<item>` per note, `<label>` carries the topic, the
   summary is inline text, `@n` stores an optional timestamp, and `@corresp`
   stores an optional source locator.
+- `ShowNotesResponseFormatError` is a `ValueError` subclass raised by
+  `ShowNotesGenerator` whenever the LLM response cannot be parsed into a valid
+  `ShowNotesResult`. Callers should catch this exception to handle malformed
+  or unexpected LLM output gracefully. It is raised when the response text is
+  not valid JSON; when the top-level JSON object does not contain an `entries`
+  list; when an entry in `entries` is not a JSON object; when a required field
+  (`topic` or `summary`) is absent, empty, or not a string; when an optional
+  field (`timestamp` or `tei_locator`) is present but is not a string or null;
+  and when a `timestamp` value does not match the ISO 8601 duration format.
 
 ### Testing content generation services
 
