@@ -63,8 +63,8 @@ testable service that a future LangGraph node can compose.
 - Follow the repository's lint, type-checking, and formatting rules. Use
   `import typing as typ` (not `from typing import ...` except for
   `TYPE_CHECKING` with `# noqa: ICN003`). Use frozen dataclasses with
-  `slots=True` for data transfer objects (DTOs). Use `type` aliases
-  (Python 3.14 style) for type definitions.
+  `slots=True` for data transfer objects (DTOs). Use `type` aliases (Python
+  3.14 style) for type definitions.
 - Follow the documentation style guide in `docs/documentation-style-guide.md`:
   British English (Oxford style), sentence-case headings, 80-column wrapping
   for prose, 120 columns for code, expand acronyms on first use.
@@ -101,8 +101,7 @@ testable service that a future LangGraph node can compose.
   these elements, and commit `016ef253` added complete documentation. The
   `pyproject.toml` pin has been updated to `016ef253`; existing episodic tests
   pass (continuous integration (CI) gate logs capture validation results). The
-  upstream library now
-  includes Python `msgspec` struct support:
+  upstream library now includes Python `msgspec` struct support:
   `BodyBlock = Paragraph | Utterance | DivBlock`,
   `DivContent = Paragraph | Utterance | ListBlock`, and `Event` includes
   `DivEvent`. The ODD and Relax NG schemas were also updated in the same
@@ -254,9 +253,8 @@ summary, `@n` for timestamp, `@corresp` for locator.
 Stages B–E completed (2026-04-12; updated 2026-04-14). Created
 `episodic/generation/` package with `ShowNotesGenerator`, DTOs
 (`ShowNotesEntry`, `ShowNotesResult`, `ShowNotesGeneratorConfig`), strict JSON
-parsing, and
-`enrich_tei_with_show_notes` TEI enrichment helper. All 14 unit tests pass. Key
-findings:
+parsing, and `enrich_tei_with_show_notes` TEI enrichment helper. All 14 unit
+tests pass. Key findings:
 
 - tei_rapporteur expects simplified `<fileDesc><title>` structure, not
   `<fileDesc><titleStmt><title>`.
