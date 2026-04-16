@@ -149,7 +149,7 @@ testable service that a future LangGraph node can compose.
 - [x] Stage F: implement Vidai Mock behavioural tests.
 - [x] Stage G: write ADR, update design document, user's guide, and
   developer's guide.
-- [ ] Stage H: run the full validation gates and update roadmap.
+- [x] Stage H: run the full validation gates and update roadmap.
 
 ## Surprises & discoveries
 
@@ -227,23 +227,19 @@ implementation details. If future upstream regressions appear, start with PR
 - The implementation-defined TEI shape supersedes the earlier Stage G draft:
   summaries are inline text inside `<item>`, not nested `<p>` elements.
 
-### Validation-gate results (2026-04-12)
+### Validation-gate results (2026-04-12; refreshed 2026-04-16)
 
 - `make fmt` passed after supplying temporary PATH helpers for `fd` and
   `mdtablefix`, because the repository-local `mdformat-all` wrapper assumes
   those executables are present in the shell environment.
 - `make check-fmt` passed.
-- `make typecheck` passed.
+- `make typecheck` passed, with existing unrelated `redundant-cast` warnings.
 - `make lint` passed.
 - `make markdownlint` passed.
 - `make nixie` passed.
-- `make test` failed for environment reasons unrelated to show-notes
-  documentation changes. Database-backed tests abort during py-pglite fixture
-  setup because `psycopg` cannot load any `pq` wrapper:
-  `ImportError: no pq wrapper available` with attempted implementations `c`,
-  `binary`, and `python`, the latter failing with `libpq library not found`.
-  Until that runtime dependency issue is resolved, Stage H cannot be marked
-  complete.
+- `make test` now passes on the rebased branch:
+  `351 passed, 3 skipped`. The earlier py-pglite / `libpq` blocker was resolved
+  during subsequent validation work, so Stage H can now be marked complete.
 
 ## Outcomes & retrospective
 
@@ -275,11 +271,12 @@ findings:
 Stages F and G completed (2026-04-12). Vidai Mock BDD coverage exists in
 `tests/features/show_notes.feature` and `tests/steps/test_show_notes_steps.py`.
 Documentation now includes ADR-003 plus design, user, and developer guide
-updates. Stage H has been exercised and partially validated: formatting,
-linting, type-checking, Markdown linting, and Mermaid validation passed
-during the implementation session, but the ExecPlan remains `IN_PROGRESS`
-because this retrospective has not yet been refreshed to reflect subsequent
-validation on the rebased branch.
+updates.
+
+Stage H completed (2026-04-16). The rebased branch now passes formatting,
+linting, type-checking, unit and behavioural tests, Markdown linting, and
+Mermaid validation, and roadmap item `2.3.1` is marked done. This ExecPlan is
+therefore complete.
 
 Review follow-up on 2026-04-14 tightened two behavioural edges:
 
