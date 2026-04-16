@@ -757,7 +757,7 @@ make nixie 2>&1 | tee /tmp/show-notes-make-nixie.log
 
 Mark roadmap item 2.3.1 as done in `docs/roadmap.md`.
 
-Only after all gates pass should this ExecPlan be marked `COMPLETE`.
+Only after all gates pass should this ExecPlan be marked `COMPLETED`.
 
 ## Concrete implementation steps
 
@@ -890,10 +890,12 @@ Expected test output after completion:
 ```plaintext
 make test
 ...
-N passed, 2 skipped
+N passed, (skipped tests may vary — see gate logs)
 ```
 
-Where N is the current passing count plus the new show-notes tests.
+Where N is the current passing count plus the new show-notes tests. Skipped
+counts may vary over time; consult CI or local gate logs for the authoritative
+totals.
 
 ## Interfaces and dependencies
 
@@ -978,9 +980,9 @@ No new runtime dependencies are required. The implementation uses:
 
 - `dataclasses` (stdlib)
 - `json` (stdlib)
-- `xml.etree.ElementTree` (stdlib)
 - `episodic.llm.ports` (existing)
-- `tei_rapporteur` (existing, for validation)
+- `tei_rapporteur` (existing, for parsing, structured body mutation, and XML
+  emission)
 
 ### Test dependencies
 
