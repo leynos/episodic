@@ -17,7 +17,7 @@ dependencies = [
     "psycopg[binary]>=3.0.0,<4.0",
     "sqlalchemy>=2.0.34,<3.0.0",
     "tenacity>=8.0,<10",
-    "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@ad7642f21aeb3c0f3b517057f1bed76056d85407",
+    "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@016ef253b768c98d7d3664074928d70273eb3793",
 ]
 
 [project.urls]

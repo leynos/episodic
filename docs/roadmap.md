@@ -227,7 +227,7 @@ without changing the orchestration contract.
 Enrich canonical TEI bodies with structured metadata sourced from templates.
 Completion enables rich episode content with chapter markers and guest details.
 
-- [ ] 2.3.1. Generate show notes from template expansions.
+- [x] 2.3.1. Generate show notes from template expansions.
   - Extract key topics and timestamps from generated content.
   - Format as structured metadata within TEI body.
 - [ ] 2.3.2. Generate chapter markers aligned to script segments.

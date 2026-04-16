@@ -399,6 +399,117 @@ Pedante is implemented in the `episodic/qa/` package.
   example, use `pedante/response.json.j2`, not
   `templates/pedante/response.json.j2`.
 
+## Content generation services
+
+Content-enrichment services that sit on the generation side of the authoring
+loop live in `episodic/generation/`. This package is separate from
+`episodic/qa/`: it creates or enriches content, whereas QA modules score or
+critique draft output.
+
+### Show-notes generation
+
+- `episodic/generation/show_notes.py` defines the `ShowNotesGenerator`,
+  `ShowNotesEntry`, `ShowNotesResult`, `ShowNotesGeneratorConfig`, and
+  `enrich_tei_with_show_notes(...)` helper.
+- `ShowNotesEntry` is an immutable dataclass with constructor-time
+  validation:
+
+  Table: `ShowNotesEntry` fields.
+
+  | Field | Type | Constraints |
+  | --- | --- | --- |
+  | `topic` | `str` | Non-empty; whitespace-only values raise `ValueError` |
+  | `summary` | `str` | Non-empty; whitespace-only values raise `ValueError` |
+  | `timestamp` | `str \| None` | Optional; when present must match ISO 8601 duration pattern (for example, `"PT5M"`) |
+  | `tei_locator` | `str \| None` | Optional; blank strings are normalized to `None` at construction |
+
+- `ShowNotesResult` is an immutable dataclass:
+
+  Table: `ShowNotesResult` fields.
+
+  | Field | Type | Notes |
+  | --- | --- | --- |
+  | `entries` | `tuple[ShowNotesEntry, ...]` | Ordered sequence of parsed show-notes entries |
+  | `usage` | `LLMUsage` | Normalized token-usage counters from the provider response |
+  | `model` | `str` | Model identifier echoed from the provider response (default `""`) |
+  | `provider_response_id` | `str` | Provider-assigned response identifier (default `""`) |
+  | `finish_reason` | `str \| None` | Provider finish reason, for example `"stop"` (default `None`) |
+
+- `ShowNotesGeneratorConfig` is a dataclass:
+
+  Table: `ShowNotesGeneratorConfig` fields.
+
+  | Field | Type | Notes |
+  | --- | --- | --- |
+  | `model` | `str` | Model identifier to pass in the LLM request |
+  | `provider_operation` | `LLMProviderOperation \| str` | Defaults to `LLMProviderOperation.CHAT_COMPLETIONS` |
+  | `token_budget` | `LLMTokenBudget \| None` | Optional token-budget constraints forwarded to `LLMPort` |
+  | `system_prompt` | `str` | System instruction sent alongside the user prompt; defaults to the built-in show-notes extraction prompt |
+
+Standalone usage pattern:
+
+```python
+import asyncio
+from episodic.generation import (
+    ShowNotesGenerator,
+    ShowNotesGeneratorConfig,
+    ShowNotesResponseFormatError,
+    enrich_tei_with_show_notes,
+)
+from episodic.llm.ports import LLMTokenBudget
+
+config = ShowNotesGeneratorConfig(
+    model="gpt-4o-mini",
+    token_budget=LLMTokenBudget(
+        max_input_tokens=4096,
+        max_output_tokens=1024,
+        max_total_tokens=5120,
+    ),
+)
+
+
+async def enrich(llm_port, script_tei_xml: str) -> str:
+    generator = ShowNotesGenerator(llm=llm_port, config=config)
+    try:
+        result = await generator.generate(script_tei_xml)
+    except ShowNotesResponseFormatError as exc:
+        # handle malformed LLM response
+        raise
+    return enrich_tei_with_show_notes(script_tei_xml, result)
+```
+
+- `ShowNotesGenerator` depends only on `LLMPort` and the normalized LLM
+  request/response contract. Keep it free of HTTP, Falcon, Celery, and
+  LangGraph dependencies.
+- `ShowNotesGenerator.build_prompt(...)` accepts a TEI script payload and an
+  optional `template_structure` mapping. `generate(...)` sends that prompt
+  through `LLMPort` and strictly parses JSON output into typed entries.
+- `enrich_tei_with_show_notes(...)` inserts a `<div type="notes">` element
+  into the TEI body using the representation defined by
+  [`adr-003-show-notes-tei-representation.md`](adr/adr-003-show-notes-tei-representation.md):
+  `<list>` contains one `<item>` per note, `<label>` carries the topic, the
+  summary is inline text, `@n` stores an optional timestamp, and `@corresp`
+  stores an optional source locator.
+- `ShowNotesResponseFormatError` is a `ValueError` subclass raised by
+  `ShowNotesGenerator` whenever the LLM response cannot be parsed into a valid
+  `ShowNotesResult`. Callers should catch this exception to handle malformed
+  or unexpected LLM output gracefully. It is raised when the response text is
+  not valid JSON; when the top-level JSON object does not contain an `entries`
+  list; when an entry in `entries` is not a JSON object; when a required field
+  (`topic` or `summary`) is absent, empty, or not a string; when an optional
+  field (`timestamp` or `tei_locator`) is present but is not a string or null;
+  and when a `timestamp` value does not match the ISO 8601 duration format.
+
+### Testing content generation services
+
+- Unit coverage for show notes lives in `tests/test_show_notes.py`.
+- Behavioural coverage lives in `tests/features/show_notes.feature` and
+  `tests/steps/test_show_notes_steps.py`.
+- The behavioural scenario uses Vidai Mock in the same style as Pedante. When
+  writing provider fixtures, keep the prompt assertions structural and the
+  response template minimal so prompt wording can evolve without making the
+  scenario brittle.
+
 ## LLM adapter boundary
 
 `episodic.llm` now owns a richer outbound contract:
