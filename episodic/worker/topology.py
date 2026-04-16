@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import enum
+import types
 import typing as typ
 
 from kombu import Exchange, Queue
@@ -117,7 +118,7 @@ class WorkerTopology:
     exchange_type: str
     default_workload: WorkloadClass
     queues: tuple[WorkerQueueSpec, ...]
-    _queue_map: dict[WorkloadClass, WorkerQueueSpec] = dc.field(
+    _queue_map: typ.Mapping[WorkloadClass, WorkerQueueSpec] = dc.field(
         init=False,
         repr=False,
         compare=False,
@@ -131,7 +132,7 @@ class WorkerTopology:
         object.__setattr__(
             self,
             "_queue_map",
-            {queue.workload: queue for queue in self.queues},
+            types.MappingProxyType({queue.workload: queue for queue in self.queues}),
         )
 
     def queue_for(self, workload: WorkloadClass) -> WorkerQueueSpec:

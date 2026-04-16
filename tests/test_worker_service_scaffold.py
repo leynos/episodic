@@ -1,7 +1,5 @@
 """Tests for the Celery worker scaffold."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
@@ -117,39 +115,49 @@ def test_load_runtime_config_requires_rabbitmq_broker_url() -> None:
         load_runtime_config({"EPISODIC_CELERY_BROKER_URL": "redis://localhost/0"})
 
 
-def test_worker_runtime_config_rejects_non_worker_pool_values() -> None:
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "expected_match"),
+    [
+        pytest.param(
+            "io_pool",
+            "gevent",
+            r"WorkerRuntimeConfig\.io_pool",
+            id="invalid_io_pool",
+        ),
+        pytest.param(
+            "cpu_pool",
+            "prefork",
+            r"WorkerRuntimeConfig\.cpu_pool",
+            id="invalid_cpu_pool",
+        ),
+    ],
+)
+def test_worker_runtime_config_rejects_non_worker_pool_values(
+    field_name: str,
+    field_value: str,
+    expected_match: str,
+) -> None:
     """Reject non-enum pool values at dataclass construction time."""
     from episodic.worker import WorkerPool, WorkerRuntimeConfig
 
-    invalid_io_pool_config = object.__new__(WorkerRuntimeConfig)
-    object.__setattr__(
-        invalid_io_pool_config,
-        "broker_url",
-        "amqp://guest:guest@localhost:5672//",
-    )
-    object.__setattr__(invalid_io_pool_config, "result_backend", None)
-    object.__setattr__(invalid_io_pool_config, "task_always_eager", False)
-    object.__setattr__(invalid_io_pool_config, "io_pool", "gevent")
-    object.__setattr__(invalid_io_pool_config, "io_concurrency", 128)
-    object.__setattr__(invalid_io_pool_config, "cpu_pool", "prefork")
-    object.__setattr__(invalid_io_pool_config, "cpu_concurrency", 4)
-    with pytest.raises(TypeError, match=r"WorkerRuntimeConfig\.io_pool"):
-        invalid_io_pool_config.__post_init__()
-
-    invalid_cpu_pool_config = object.__new__(WorkerRuntimeConfig)
-    object.__setattr__(
-        invalid_cpu_pool_config,
-        "broker_url",
-        "amqp://guest:guest@localhost:5672//",
-    )
-    object.__setattr__(invalid_cpu_pool_config, "result_backend", None)
-    object.__setattr__(invalid_cpu_pool_config, "task_always_eager", False)
-    object.__setattr__(invalid_cpu_pool_config, "io_pool", WorkerPool.GEVENT)
-    object.__setattr__(invalid_cpu_pool_config, "io_concurrency", 128)
-    object.__setattr__(invalid_cpu_pool_config, "cpu_pool", "prefork")
-    object.__setattr__(invalid_cpu_pool_config, "cpu_concurrency", 4)
-    with pytest.raises(TypeError, match=r"WorkerRuntimeConfig\.cpu_pool"):
-        invalid_cpu_pool_config.__post_init__()
+    with pytest.raises(TypeError, match=expected_match):
+        WorkerRuntimeConfig(
+            broker_url="amqp://guest:guest@localhost:5672//",
+            result_backend=None,
+            task_always_eager=False,
+            io_pool=(
+                typ.cast("WorkerPool", field_value)
+                if field_name == "io_pool"
+                else WorkerPool.GEVENT
+            ),
+            io_concurrency=128,
+            cpu_pool=(
+                typ.cast("WorkerPool", field_value)
+                if field_name == "cpu_pool"
+                else WorkerPool.PREFORK
+            ),
+            cpu_concurrency=4,
+        )
 
 
 @pytest.mark.parametrize(
@@ -242,6 +250,7 @@ def test_create_celery_app_registers_task_routes_and_queues() -> None:
     queues = typ.cast("tuple[Queue, ...]", app.conf.task_queues)
 
     assert app.conf.task_default_exchange == DEFAULT_WORKER_TOPOLOGY.exchange_name
+    assert app.conf.task_default_routing_key == "episodic.io.diagnostic"
     assert {queue.name for queue in queues} == {"episodic.io", "episodic.cpu"}
     assert (
         typ.cast("dict[str, str]", app.conf.task_routes[IO_DIAGNOSTIC_TASK_NAME])[
@@ -250,10 +259,22 @@ def test_create_celery_app_registers_task_routes_and_queues() -> None:
         == "episodic.io"
     )
     assert (
+        typ.cast("dict[str, str]", app.conf.task_routes[IO_DIAGNOSTIC_TASK_NAME])[
+            "routing_key"
+        ]
+        == "episodic.io.diagnostic"
+    )
+    assert (
         typ.cast("dict[str, str]", app.conf.task_routes[CPU_DIAGNOSTIC_TASK_NAME])[
             "queue"
         ]
         == "episodic.cpu"
+    )
+    assert (
+        typ.cast("dict[str, str]", app.conf.task_routes[CPU_DIAGNOSTIC_TASK_NAME])[
+            "routing_key"
+        ]
+        == "episodic.cpu.diagnostic"
     )
     assert IO_DIAGNOSTIC_TASK_NAME in app.tasks
     assert CPU_DIAGNOSTIC_TASK_NAME in app.tasks
