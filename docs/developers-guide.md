@@ -626,6 +626,14 @@ normalizer.
 
 ## Logging
 
-Structured logging uses femtologging. Import `get_logger` from
-`episodic.logging` and emit messages via `log_info`, `log_warning`, or
-`log_error` to keep log levels consistent.
+Structured logging uses femtologging v0.1.0-style logger methods. Import
+`get_logger` (or `getLogger` when matching stdlib naming) from
+`episodic.logging`, then emit via `logger.info(...)`, `logger.warning(...)`,
+`logger.error(...)`, or `logger.exception(...)`.
+
+Keep `episodic.logging.configure_logging(...)` as the local configuration seam.
+The legacy `log_info`, `log_warning`, and `log_error` helpers remain available
+for compatibility, but new code should prefer calling the logger methods
+directly. Femtologging still expects pre-formatted messages rather than stdlib
+`logger.info("%s", value)` lazy formatting, so build the final string before
+calling the method.

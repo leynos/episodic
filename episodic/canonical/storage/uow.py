@@ -15,7 +15,7 @@ Commit work in a single unit-of-work:
 import typing as typ
 
 from episodic.canonical.ports import CanonicalUnitOfWork
-from episodic.logging import get_logger, log_info
+from episodic.logging import get_logger
 
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
@@ -164,7 +164,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             If no session has been initialized for the unit of work.
         """
         await self._apply_session_action("commit")
-        log_info(logger, "Committed canonical unit of work.")
+        logger.info("Committed canonical unit of work.")
 
     async def flush(self) -> None:
         """Flush pending unit-of-work changes."""

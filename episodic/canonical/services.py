@@ -20,7 +20,7 @@ import datetime as dt
 import typing as typ
 import uuid
 
-from episodic.logging import get_logger, log_info
+from episodic.logging import get_logger
 
 from . import reference_documents
 from .domain import (
@@ -268,11 +268,8 @@ async def ingest_sources(
     await uow.approval_events.add(event)
 
     await uow.commit()
-    log_info(
-        logger,
-        "Ingested %s sources into canonical episode %s.",
-        len(request.sources),
-        episode_id,
+    logger.info(
+        f"Ingested {len(request.sources)} sources into canonical episode {episode_id}."
     )
 
     return episode

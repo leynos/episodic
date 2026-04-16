@@ -24,7 +24,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
-from episodic.logging import get_logger, log_error, log_info
+from episodic.logging import get_logger
 
 if typ.TYPE_CHECKING:
     import sqlalchemy as sa
@@ -75,10 +75,7 @@ async def check_migrations_cli() -> int:
         detected, 2 on infrastructure errors.
     """
     if importlib.util.find_spec("py_pglite") is None:
-        log_error(
-            _logger,
-            "py-pglite is not installed; cannot run migration drift check.",
-        )
+        _logger.error("py-pglite is not installed; cannot run migration drift check.")
         return 2
 
     import tempfile
@@ -98,31 +95,24 @@ async def check_migrations_cli() -> int:
                 dsn = config.get_connection_string()
                 engine = create_async_engine(dsn, pool_pre_ping=True)
                 try:
-                    log_info(
-                        _logger,
-                        "Applying migrations to ephemeral database.",
-                    )
+                    _logger.info("Applying migrations to ephemeral database.")
                     await apply_migrations(engine)
 
-                    log_info(_logger, "Checking for schema drift.")
+                    _logger.info("Checking for schema drift.")
                     diffs = await detect_schema_drift(engine)
                 finally:
                     await engine.dispose()
     except _INFRASTRUCTURE_ERRORS:
-        log_error(_logger, "Infrastructure error.", exc_info=True)
+        _logger.exception("Infrastructure error.")
         return 2
 
     if diffs:
-        log_error(
-            _logger,
-            "Schema drift detected (%s difference(s)):",
-            len(diffs),
-        )
+        _logger.error(f"Schema drift detected ({len(diffs)} difference(s)):")
         for diff in diffs:
-            log_error(_logger, "  %s", diff)
+            _logger.error(f"  {diff}")
         return 1
 
-    log_info(_logger, "No schema drift detected.")
+    _logger.info("No schema drift detected.")
     return 0
 
 
