@@ -135,7 +135,7 @@ Completion enables feature development within enforced boundaries.
     `/health/live` plus `/health/ready` operator contract.
   - See
     [Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary).
-- [ ] 1.5.2. Scaffold Celery workers with RabbitMQ integration.
+- [x] 1.5.2. Scaffold Celery workers with RabbitMQ integration.
   - Define queue bindings and routing keys for task dispatch.
   - Configure concurrency pools for I/O-bound and CPU-bound workloads.
   - See

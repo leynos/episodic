@@ -8,6 +8,7 @@ Accepted design decisions relevant to current implementation work:
 
 - [`adr-001-reference-binding-resolution-algorithm.md`](adr/adr-001-reference-binding-resolution-algorithm.md)
 - [`adr-002-http-service-composition-root.md`](adr/adr-002-http-service-composition-root.md)
+- [`adr-003-celery-worker-scaffold.md`](adr/adr-003-celery-worker-scaffold.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -54,6 +55,81 @@ Testing guidance:
   fixture rather than sharing a long-lived migrated engine fixture. The full
   engine disposal step is required to keep the py-pglite-backed runtime probe
   responsive.
+
+## Celery worker runtime
+
+The worker scaffold mirrors the Falcon composition-root pattern:
+
+- `episodic/worker/topology.py` defines the canonical exchange, queue, and
+  routing-key contract.
+- `episodic/worker/tasks.py` holds representative diagnostic tasks together
+  with typed payload and dependency seams.
+- `episodic/worker/runtime.py` reads environment configuration, exposes worker
+  launch profiles, and builds the Celery application.
+
+Run the worker app locally with:
+
+```shell
+celery --app episodic.worker.runtime:create_celery_app_from_env worker --pool prefork --queues episodic.cpu
+```
+
+and, for the I/O profile:
+
+```shell
+celery --app episodic.worker.runtime:create_celery_app_from_env worker --pool gevent --queues episodic.io
+```
+
+Required environment:
+
+- `EPISODIC_CELERY_BROKER_URL` must point at RabbitMQ using an AMQP URL such
+  as `amqp://guest:guest@localhost:5672//`.
+- `EPISODIC_CELERY_RESULT_BACKEND` is optional in this scaffold slice.
+- `EPISODIC_CELERY_IO_POOL` and `EPISODIC_CELERY_CPU_POOL` override the
+  default pool choices (`gevent` and `prefork` respectively).
+- `EPISODIC_CELERY_IO_CONCURRENCY` and `EPISODIC_CELERY_CPU_CONCURRENCY`
+  override the default worker-profile concurrency values.
+- `EPISODIC_CELERY_ALWAYS_EAGER=true` is for tests and local contract checks
+  only, not for deployed workers.
+
+Optional interpreter-pool flags:
+
+- `EPISODIC_USE_INTERPRETER_POOL=1` enables the interpreter-pool seam for
+  CPU-heavy pure-Python workloads inside repository adapters.
+- `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
+  interpreter-pool dispatch activates after the seam is enabled.
+- `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
+  that seam is enabled.
+- `create_celery_app_from_env()` and `load_runtime_config()` do not consume
+  these flags directly; enable the interpreter-pool explicitly with
+  `EPISODIC_USE_INTERPRETER_POOL=1`, then use the other two variables as the
+  tuning thresholds for that path.
+
+Queue contract:
+
+- Exchange: `episodic.tasks` (`topic`)
+- I/O queue: `episodic.io`, routed via `episodic.io.diagnostic`
+- CPU queue: `episodic.cpu`, routed via `episodic.cpu.diagnostic`
+
+Testing guidance:
+
+- Use `tests/test_worker_service_scaffold.py` for unit coverage of topology,
+  runtime parsing, Celery app assembly, and eager task execution.
+- Use `tests/features/worker_service_scaffold.feature` and
+  `tests/steps/test_worker_service_scaffold_steps.py` for contract-level
+  behavioural coverage.
+- This roadmap slice does not yet include a broker-backed RabbitMQ test
+  harness. Behavioural tests intentionally validate routing metadata and eager
+  execution instead of a live queue round-trip.
+
+When adding new worker tasks:
+
+- Keep the task body single-responsibility and idempotent.
+- Add typed payload dataclasses or other narrow data transfer objects (DTOs)
+  in `episodic/worker/tasks.py` or a sibling worker-only module.
+- Depend on ports or injected callables rather than importing concrete
+  adapters directly into task code.
+- Extend `SCAFFOLD_TASK_WORKLOADS` and the topology-backed routing metadata, so
+  the new task's queue assignment remains explicit.
 
 ## Database migrations
 
@@ -416,35 +492,35 @@ critique draft output.
 
   Table: `ShowNotesEntry` fields.
 
-  | Field | Type | Constraints |
-  | --- | --- | --- |
-  | `topic` | `str` | Non-empty; whitespace-only values raise `ValueError` |
-  | `summary` | `str` | Non-empty; whitespace-only values raise `ValueError` |
-  | `timestamp` | `str \| None` | Optional; when present must match ISO 8601 duration pattern (for example, `"PT5M"`) |
-  | `tei_locator` | `str \| None` | Optional; blank strings are normalized to `None` at construction |
+  | Field         | Type          | Constraints                                                                         |
+  | ------------- | ------------- | ----------------------------------------------------------------------------------- |
+  | `topic`       | `str`         | Non-empty; whitespace-only values raise `ValueError`                                |
+  | `summary`     | `str`         | Non-empty; whitespace-only values raise `ValueError`                                |
+  | `timestamp`   | `str or None` | Optional; when present must match ISO 8601 duration pattern (for example, `"PT5M"`) |
+  | `tei_locator` | `str or None` | Optional; blank strings are normalized to `None` at construction                    |
 
 - `ShowNotesResult` is an immutable dataclass:
 
   Table: `ShowNotesResult` fields.
 
-  | Field | Type | Notes |
-  | --- | --- | --- |
-  | `entries` | `tuple[ShowNotesEntry, ...]` | Ordered sequence of parsed show-notes entries |
-  | `usage` | `LLMUsage` | Normalized token-usage counters from the provider response |
-  | `model` | `str` | Model identifier echoed from the provider response (default `""`) |
-  | `provider_response_id` | `str` | Provider-assigned response identifier (default `""`) |
-  | `finish_reason` | `str \| None` | Provider finish reason, for example `"stop"` (default `None`) |
+  | Field                  | Type                         | Notes                                                             |
+  | ---------------------- | ---------------------------- | ----------------------------------------------------------------- |
+  | `entries`              | `tuple[ShowNotesEntry, ...]` | Ordered sequence of parsed show-notes entries                     |
+  | `usage`                | `LLMUsage`                   | Normalized token-usage counters from the provider response        |
+  | `model`                | `str`                        | Model identifier echoed from the provider response (default `""`) |
+  | `provider_response_id` | `str`                        | Provider-assigned response identifier (default `""`)              |
+  | `finish_reason`        | `str or None`                | Provider finish reason, for example `"stop"` (default `None`)     |
 
 - `ShowNotesGeneratorConfig` is a dataclass:
 
   Table: `ShowNotesGeneratorConfig` fields.
 
-  | Field | Type | Notes |
-  | --- | --- | --- |
-  | `model` | `str` | Model identifier to pass in the LLM request |
-  | `provider_operation` | `LLMProviderOperation \| str` | Defaults to `LLMProviderOperation.CHAT_COMPLETIONS` |
-  | `token_budget` | `LLMTokenBudget \| None` | Optional token-budget constraints forwarded to `LLMPort` |
-  | `system_prompt` | `str` | System instruction sent alongside the user prompt; defaults to the built-in show-notes extraction prompt |
+  | Field                | Type                          | Notes                                                                                                    |
+  | -------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+  | `model`              | `str`                         | Model identifier to pass in the LLM request                                                              |
+  | `provider_operation` | `LLMProviderOperation or str` | Defaults to `LLMProviderOperation.CHAT_COMPLETIONS`                                                      |
+  | `token_budget`       | `LLMTokenBudget or None`      | Optional token-budget constraints forwarded to `LLMPort`                                                 |
+  | `system_prompt`      | `str`                         | System instruction sent alongside the user prompt; defaults to the built-in show-notes extraction prompt |
 
 Standalone usage pattern:
 
@@ -486,15 +562,15 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   through `LLMPort` and strictly parses JSON output into typed entries.
 - `enrich_tei_with_show_notes(...)` inserts a `<div type="notes">` element
   into the TEI body using the representation defined by
-  [`adr-003-show-notes-tei-representation.md`](adr/adr-003-show-notes-tei-representation.md):
+  [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md):
   `<list>` contains one `<item>` per note, `<label>` carries the topic, the
   summary is inline text, `@n` stores an optional timestamp, and `@corresp`
   stores an optional source locator.
 - `ShowNotesResponseFormatError` is a `ValueError` subclass raised by
   `ShowNotesGenerator` whenever the LLM response cannot be parsed into a valid
-  `ShowNotesResult`. Callers should catch this exception to handle malformed
-  or unexpected LLM output gracefully. It is raised when the response text is
-  not valid JSON; when the top-level JSON object does not contain an `entries`
+  `ShowNotesResult`. Callers should catch this exception to handle malformed or
+  unexpected LLM output gracefully. It is raised when the response text is not
+  valid JSON; when the top-level JSON object does not contain an `entries`
   list; when an entry in `entries` is not a JSON object; when a required field
   (`topic` or `summary`) is absent, empty, or not a string; when an optional
   field (`timestamp` or `tei_locator`) is present but is not a string or null;

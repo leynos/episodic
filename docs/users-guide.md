@@ -141,6 +141,51 @@ Health endpoints:
   fails, so deployment platforms can keep traffic away from an unhealthy
   instance.
 
+### Worker runtime
+
+The background-worker scaffold now exists for operators who need to stand up
+Celery alongside the Falcon service.
+
+Start a CPU-focused worker with:
+
+```shell
+celery --app episodic.worker.runtime:create_celery_app_from_env worker --pool prefork --queues episodic.cpu
+```
+
+and an I/O-focused worker with:
+
+```shell
+celery --app episodic.worker.runtime:create_celery_app_from_env worker --pool gevent --queues episodic.io
+```
+
+Required environment:
+
+- `EPISODIC_CELERY_BROKER_URL` must point at RabbitMQ using AMQP.
+- `EPISODIC_CELERY_RESULT_BACKEND` is optional for the current scaffold.
+- `EPISODIC_CELERY_IO_POOL` and `EPISODIC_CELERY_CPU_POOL` override the
+  default pool choices (`gevent` for I/O work and `prefork` for CPU work).
+- `EPISODIC_CELERY_IO_CONCURRENCY` controls I/O worker concurrency, and
+  `EPISODIC_CELERY_CPU_CONCURRENCY` controls CPU worker concurrency. The
+  runtime only applies the documented defaults when these variables are unset,
+  so set them explicitly when tuning worker counts. The CPU `prefork` default
+  is the baseline process-isolation path; for CPU-heavy pure-Python tasks, the
+  repository also exposes an opt-in interpreter-pool path via
+  `EPISODIC_USE_INTERPRETER_POOL=1`.
+- `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
+  interpreter-pool dispatch activates, and
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
+  that path is enabled.
+
+Current queue model:
+
+- `episodic.tasks` topic exchange
+- `episodic.io` queue for I/O-bound workloads
+- `episodic.cpu` queue for CPU-bound workloads
+
+The current scaffold provides representative diagnostic tasks so routing and
+runtime wiring can be verified before later roadmap items add workflow-specific
+jobs.
+
 ### Quality & Compliance
 
 - Setting up brand guidelines and compliance rules
@@ -184,9 +229,11 @@ Health endpoints:
 - Integrating with external systems via API
 - Managing multi-tenant deployments
 - Enabling optional interpreter-pool execution for CPU-heavy pure-Python tasks
-  by setting `EPISODIC_USE_INTERPRETER_POOL=1`; tune dispatch thresholds with
-  `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` and worker count with
-  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`
+  by setting `EPISODIC_USE_INTERPRETER_POOL=1`. This is separate from the
+  Celery CPU worker's default `prefork` pool and is intended for selected
+  pure-Python workloads inside repository adapters. Tune dispatch thresholds
+  with `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` and worker count with
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`.
 - Troubleshooting common issues
 
 ## In the Meantime

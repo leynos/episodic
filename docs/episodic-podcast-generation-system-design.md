@@ -9,7 +9,8 @@ Accepted decision records:
 
 - [ADR 001: Reference binding resolution algorithm](adr/adr-001-reference-binding-resolution-algorithm.md)
 - [ADR 002: HTTP service composition root](adr/adr-002-http-service-composition-root.md)
-- [ADR 003: Show-notes TEI representation](adr/adr-003-show-notes-tei-representation.md)
+- [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
+- [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
 
 ## Overview
 
@@ -79,6 +80,14 @@ two steps: `episodic/api/app.py` remains the pure route factory, whilst
 environment configuration, constructs the SQLAlchemy-backed unit-of-work
 factory, and injects infrastructural readiness probes through a typed
 dependency object.
+
+The worker data plane now follows the same pattern.
+`episodic/worker/topology.py` defines the canonical RabbitMQ exchange, queue,
+and routing-key taxonomy, `episodic/worker/tasks.py` holds typed representative
+task seams, and `episodic/worker/runtime.py` acts as the Celery composition
+root that reads environment configuration and constructs the worker
+application. ADR-003 records the accepted queue topology, pool split, and
+test-scope decision.
 
 ### Hexagonal architecture enforcement
 
@@ -188,11 +197,11 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   results.
 - Produces structured drafts, show notes, chapter markers, and sponsorship copy.
 - Treats show-notes generation as a composable enrichment service behind
-  `LLMPort`: `episodic/generation/show_notes.py` accepts a TEI script, asks
-  the configured provider for structured note entries, and enriches the
-  canonical TEI body with `<div type="notes"><list><item>...</item></list></div>`
-  output. This TEI representation is defined in
-  [ADR 003: Show-notes TEI representation](adr/adr-003-show-notes-tei-representation.md).
+  `LLMPort`: `episodic/generation/show_notes.py` accepts a TEI script, asks the
+  configured provider for structured note entries, and enriches the canonical
+  TEI body with `<div type="notes"><list><item>...</item></list></div>` output.
+  This TEI representation is defined in
+  [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md).
 - Persists generation runs alongside prompts, responses, iteration counts, and
   cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
@@ -345,11 +354,21 @@ work to prefork pools. This separation keeps long-running work isolated from
 orchestration throughput and allows worker profiles to match workload
 characteristics.
 
+The current scaffold instantiates this split with one topic exchange,
+`episodic.tasks`, and two queues: `episodic.io` for I/O-bound tasks and
+`episodic.cpu` for CPU-bound tasks. The first implementation validates this
+contract through eager-mode factory and routing tests rather than a broker-
+backed RabbitMQ harness; later roadmap items can layer live dispatch coverage
+on top of the same topology without changing the worker boundary.
+
 For selected pure-Python CPU workloads, adapters may optionally use Python 3.14
 interpreter pools within a worker process before escalating to broader process
 fan-out. This path remains explicitly opt-in through feature flags and
 task-size thresholds so small workloads avoid dispatch overhead and unsupported
-runtime environments fall back to baseline inline execution.
+runtime environments fall back to baseline inline execution. Enable it with
+`EPISODIC_USE_INTERPRETER_POOL=1`, tune the activation threshold with
+`EPISODIC_INTERPRETER_POOL_MIN_ITEMS`, and cap workers with
+`EPISODIC_INTERPRETER_POOL_MAX_WORKERS`.
 
 The following sequence diagram illustrates how `DefaultWeightingStrategy`
 selects and uses a `CpuTaskExecutor` for batch weighting.
@@ -428,6 +447,11 @@ adapter implementations.
   validate vendor payloads at the boundary and normalize responses into
   provider-agnostic data transfer objects (DTOs) before the orchestration layer
   consumes them.
+
+In the current worker scaffold, representative Celery tasks use injected
+callable seams instead of importing concrete adapters directly. Future task
+implementations should preserve this pattern by resolving storage, LLM, and
+other infrastructure through ports or composition-root-owned dependencies.
 
 #### Inference strategy and tool integration
 
