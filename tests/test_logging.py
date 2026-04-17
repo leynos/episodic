@@ -13,6 +13,7 @@ class _SpyLogger:
     """Collect low-level log calls emitted by the compatibility wrappers."""
 
     def __init__(self) -> None:
+        """Initialise an empty call record."""
         self.calls: list[
             tuple[episodic_logging.LogLevel, str, object | None, bool]
         ] = []
@@ -26,6 +27,7 @@ class _SpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Append a normalised call tuple to the record list."""
         self.calls.append((level, message, exc_info, stack_info))
 
     def info(
@@ -36,6 +38,7 @@ class _SpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Record an INFO-level call."""
         self._record(
             episodic_logging.LogLevel.INFO,
             message,
@@ -51,6 +54,7 @@ class _SpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Record a WARNING-level call."""
         self._record(
             episodic_logging.LogLevel.WARNING,
             message,
@@ -66,6 +70,7 @@ class _SpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Record an ERROR-level call."""
         self._record(
             episodic_logging.LogLevel.ERROR,
             message,
@@ -78,6 +83,7 @@ class _LogOnlySpyLogger:
     """Collect low-level log calls through a stdlib-style `log` method only."""
 
     def __init__(self) -> None:
+        """Initialise an empty call record."""
         self.calls: list[tuple[int, str, object | None, bool]] = []
 
     def log(
@@ -89,6 +95,7 @@ class _LogOnlySpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Record a call made through the stdlib-style log() entry point."""
         assert isinstance(level, int)
         self.calls.append((level, message, exc_info, stack_info))
 
@@ -97,16 +104,19 @@ class _CollectorHandler:
     """Capture femtologging records through the Python handler protocol."""
 
     def __init__(self) -> None:
+        """Initialise an empty records list."""
         self.records: list[tuple[str, str, str]] = []
 
     def handle(self, logger_name: str, level: str, message: str) -> None:
+        """Append a (logger_name, level, message) tuple to the records list."""
         self.records.append((logger_name, level, message))
 
 
 class _SupportsFlushHandlers(typ.Protocol):
     """Minimal logger protocol needed by the asynchronous test helper."""
 
-    def flush_handlers(self) -> object: ...
+    def flush_handlers(self) -> object:
+        """Flush all pending records through attached handlers."""
 
 
 @pytest.fixture
@@ -299,6 +309,7 @@ def test_episodic_logging_get_logger_reexport_matches_femtologging_surface() -> 
 
 
 def _raise_logged_exception() -> None:
+    """Raise a RuntimeError for use in exception-logging tests."""
     msg = "boom"
     raise RuntimeError(msg)
 
