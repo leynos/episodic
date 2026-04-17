@@ -92,19 +92,32 @@ def _validate_non_empty_str(attr_path: str, value: str) -> None:
         raise ValueError(msg)
 
 
+def _validate_unique_queue_names(queues: tuple[WorkerQueueSpec, ...]) -> None:
+    """Raise ValueError if any two queues share the same name."""
+    queue_names = {queue.name for queue in queues}
+    if len(queue_names) != len(queues):
+        msg = "WorkerTopology.queues must contain unique queue names."
+        raise ValueError(msg)
+
+
+def _validate_unique_workload_mappings(
+    queues: tuple[WorkerQueueSpec, ...],
+) -> dict[WorkloadClass, WorkerQueueSpec]:
+    """Raise ValueError if any two queues share the same workload class."""
+    queue_map = {queue.workload: queue for queue in queues}
+    if len(queue_map) != len(queues):
+        msg = "WorkerTopology.queues must contain unique workload mappings."
+        raise ValueError(msg)
+    return queue_map
+
+
 def _validate_queue_contract(
     queues: tuple[WorkerQueueSpec, ...],
     default_workload: WorkloadClass,
 ) -> None:
     """Raise ValueError if queues lack uniqueness or default_workload is unmatched."""
-    queue_names = {queue.name for queue in queues}
-    if len(queue_names) != len(queues):
-        msg = "WorkerTopology.queues must contain unique queue names."
-        raise ValueError(msg)
-    queue_map = {queue.workload: queue for queue in queues}
-    if len(queue_map) != len(queues):
-        msg = "WorkerTopology.queues must contain unique workload mappings."
-        raise ValueError(msg)
+    _validate_unique_queue_names(queues)
+    queue_map = _validate_unique_workload_mappings(queues)
     if default_workload not in queue_map:
         msg = "WorkerTopology.default_workload must match a configured queue."
         raise ValueError(msg)

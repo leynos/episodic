@@ -27,14 +27,19 @@ def _require_non_empty_string(value: object, *, field_name: str) -> str:
     return value
 
 
-def _require_positive_int(value: object, *, field_name: str) -> int:
-    """Validate and normalize a positive integer field from a task payload."""
+def _require_int_type(value: object, *, field_name: str) -> int:
+    """Raise TypeError if value is bool or not an int."""
     if isinstance(value, bool):
         msg = f"{field_name} must be a positive integer."
         raise TypeError(msg)
     if not isinstance(value, int):
         msg = f"{field_name} must be a positive integer."
         raise TypeError(msg)
+    return value  # type: ignore[return-value]
+
+
+def _require_int_range(value: int, *, field_name: str) -> int:
+    """Raise ValueError if value is not within the positive-integer bounds."""
     if value <= 0:
         msg = f"{field_name} must be a positive integer."
         raise ValueError(msg)
@@ -45,6 +50,12 @@ def _require_positive_int(value: object, *, field_name: str) -> int:
         )
         raise ValueError(msg)
     return value
+
+
+def _require_positive_int(value: object, *, field_name: str) -> int:
+    """Validate and normalise a positive integer field from a task payload."""
+    int_value = _require_int_type(value, field_name=field_name)
+    return _require_int_range(int_value, field_name=field_name)
 
 
 def _require_mapping(payload: object, *, dto_name: str) -> cabc.Mapping[str, object]:
