@@ -86,18 +86,23 @@ Required environment:
 - `EPISODIC_CELERY_RESULT_BACKEND` is optional in this scaffold slice.
 - `EPISODIC_CELERY_IO_POOL` and `EPISODIC_CELERY_CPU_POOL` override the
   default pool choices (`gevent` and `prefork` respectively).
-- The CPU `prefork` default remains the baseline Celery process-isolation
-  path. For CPU-heavy pure-Python workloads inside repository adapters, the
-  optional interpreter-pool seam is enabled separately with
-  `EPISODIC_USE_INTERPRETER_POOL=1`.
-- `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
-  interpreter-pool dispatch activates, and
-  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
-  that path is enabled.
 - `EPISODIC_CELERY_IO_CONCURRENCY` and `EPISODIC_CELERY_CPU_CONCURRENCY`
   override the default worker-profile concurrency values.
 - `EPISODIC_CELERY_ALWAYS_EAGER=true` is for tests and local contract checks
   only, not for deployed workers.
+
+Optional interpreter-pool flags:
+
+- `EPISODIC_USE_INTERPRETER_POOL=1` enables the interpreter-pool seam for
+  CPU-heavy pure-Python workloads inside repository adapters.
+- `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
+  interpreter-pool dispatch activates after the seam is enabled.
+- `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
+  that seam is enabled.
+- `create_celery_app_from_env()` and `load_runtime_config()` do not consume
+  these flags directly; enable the interpreter-pool explicitly with
+  `EPISODIC_USE_INTERPRETER_POOL=1`, then use the other two variables as the
+  tuning thresholds for that path.
 
 Queue contract:
 

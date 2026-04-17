@@ -233,7 +233,7 @@ jobs.
   Celery CPU worker's default `prefork` pool and is intended for selected
   pure-Python workloads inside repository adapters. Tune dispatch thresholds
   with `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` and worker count with
-  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`.
 - Troubleshooting common issues
 
 ## In the Meantime

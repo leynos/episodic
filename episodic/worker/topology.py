@@ -1,14 +1,11 @@
 """Typed queue topology for the Celery worker scaffold."""
 
+import collections.abc as cabc  # noqa: TC003
 import dataclasses as dc
 import enum
 import types
-import typing as typ
 
 from kombu import Exchange, Queue
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
 
 
 class WorkloadClass(enum.StrEnum):
