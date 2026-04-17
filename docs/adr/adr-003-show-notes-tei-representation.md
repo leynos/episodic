@@ -6,8 +6,8 @@ Accepted
 
 ## Context
 
-Roadmap item `2.3.1` requires the generation pipeline to derive show notes
-from template expansions and persist them as structured metadata alongside the
+Roadmap item `2.3.1` requires the generation pipeline to derive show notes from
+template expansions and persist them as structured metadata alongside the
 canonical podcast script. Episodic uses Text Encoding Initiative (TEI) P5 as
 its canonical content model, so show notes must fit that spine rather than
 introducing a competing document format.
@@ -20,9 +20,9 @@ entries containing:
 - An optional timestamp
 - An optional locator back into the source script
 
-The remaining design question is how those entries should be represented
-inside the TEI body so that later enrichment tasks can follow a consistent
-pattern and so that `tei_rapporteur` can parse and validate the result.
+The remaining design question is how those entries should be represented inside
+the TEI body so that later enrichment tasks can follow a consistent pattern and
+so that `tei_rapporteur` can parse and validate the result.
 
 ## Decision
 
@@ -52,8 +52,8 @@ The representation rules are:
 ## Rationale
 
 This structure aligns with the implemented enrichment helper
-`enrich_tei_with_show_notes(...)` and with the current `tei_rapporteur`
-support for `<div>`, `<list>`, `<item>`, and `<label>`.
+`enrich_tei_with_show_notes(...)` and with the current `tei_rapporteur` support
+for `<div>`, `<list>`, `<item>`, and `<label>`.
 
 Using inline summary text is intentional. The current schema and parser shape
 for `item` content expects label-plus-inline content, and implementation
@@ -87,11 +87,10 @@ reads without weakening TEI's role as the canonical authoring model.
 
 ## References
 
-Roadmap item `2.3.1` in `docs/roadmap.md`.[^1]
-ExecPlan:
+Roadmap item `2.3.1` in `docs/roadmap.md`.[^1] ExecPlan:
 `docs/execplans/2-3-1-generate-show-notes-from-template-expansions.md`.[^2]
-Implementation: `episodic/generation/show_notes.py`.[^3]
-Tests: `tests/test_show_notes.py`, `tests/features/show_notes.feature`,
+Implementation: `episodic/generation/show_notes.py`.[^3] Tests:
+`tests/test_show_notes.py`, `tests/features/show_notes.feature`,
 `tests/steps/test_show_notes_steps.py`.[^4]
 
 [^1]: Roadmap item `2.3.1` in `docs/roadmap.md`
@@ -99,5 +98,4 @@ Tests: `tests/test_show_notes.py`, `tests/features/show_notes.feature`,
   `docs/execplans/2-3-1-generate-show-notes-from-template-expansions.md`
 [^3]: Implementation: `episodic/generation/show_notes.py`
 [^4]: Tests: `tests/test_show_notes.py`,
-  `tests/features/show_notes.feature`,
-  `tests/steps/test_show_notes_steps.py`
+  `tests/features/show_notes.feature`, `tests/steps/test_show_notes_steps.py`
