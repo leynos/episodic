@@ -164,43 +164,38 @@ Success is observable in the following ways:
 ## Surprises & Discoveries
 
 - Observation: The repository had no pre-existing Celery, Kombu, or RabbitMQ
-  runtime surface.
-  Evidence: Stage A codebase inspection and the initial red-phase collection
-  failure (`ModuleNotFoundError` for `kombu`).
-  Impact: `pyproject.toml` had to add Celery, and the worker scaffold could be
+  runtime surface. Evidence: Stage A codebase inspection and the initial
+  red-phase collection failure (`ModuleNotFoundError` for `kombu`). Impact:
+  `pyproject.toml` had to add Celery, and the worker scaffold could be
   introduced without conflicting with legacy runtime modules.
 - Observation: A live RabbitMQ behavioural harness still does not exist in the
-  repository.
-  Evidence: Existing behavioural coverage patterns cover Falcon, py-pglite, and
-  Vidai Mock, but nothing provisions a broker-backed queue path.
+  repository. Evidence: Existing behavioural coverage patterns cover Falcon,
+  py-pglite, and Vidai Mock, but nothing provisions a broker-backed queue path.
   Impact: Behavioural coverage for `1.5.2` was kept at the contract level:
   create the Celery app from environment configuration, inspect queue routing,
   and execute representative tasks in eager mode.
 - Observation: Celery task names can be reused across app instances during one
   pytest session unless the scaffold explicitly replaces prior registrations.
   Evidence: The full `make test` run initially reused an earlier task
-  registration, so injected fake dependencies were not observed.
-  Impact: `register_scaffold_tasks(...)` now removes prior scaffold task names
-  before registering app-specific task closures.
+  registration, so injected fake dependencies were not observed. Impact:
+  `register_scaffold_tasks(...)` now removes prior scaffold task names before
+  registering app-specific task closures.
 
 ## Decision Log
 
 - Decision: Keep the first worker behavioural slice broker-free.
   Rationale: A contract-level Celery factory plus eager-mode task execution
   proves the queue and runtime seams without inventing an unstable RabbitMQ
-  fixture strategy.
-  Date/Author: 2026-04-09 / Codex.
+  fixture strategy. Date/Author: 2026-04-09 / Codex.
 - Decision: Introduce a dedicated `episodic/worker/` package with separate
-  `topology.py`, `runtime.py`, and `tasks.py` modules.
-  Rationale: This mirrors the accepted Falcon composition-root split and keeps
-  queue topology, environment parsing, and task registration in explicit
-  adapter modules.
+  `topology.py`, `runtime.py`, and `tasks.py` modules. Rationale: This mirrors
+  the accepted Falcon composition-root split and keeps queue topology,
+  environment parsing, and task registration in explicit adapter modules.
   Date/Author: 2026-04-09 / Codex.
 - Decision: Represent the first I/O-bound and CPU-bound tasks as diagnostic
-  scaffolds with typed payload and dependency seams.
-  Rationale: Roadmap item `1.5.2` needed real routing and extension points, not
-  premature workflow behaviour from later roadmap items.
-  Date/Author: 2026-04-09 / Codex.
+  scaffolds with typed payload and dependency seams. Rationale: Roadmap item
+  `1.5.2` needed real routing and extension points, not premature workflow
+  behaviour from later roadmap items. Date/Author: 2026-04-09 / Codex.
 
 ## Outcomes & Retrospective
 

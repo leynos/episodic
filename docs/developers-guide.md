@@ -123,7 +123,7 @@ When adding new worker tasks:
   in `episodic/worker/tasks.py` or a sibling worker-only module.
 - Depend on ports or injected callables rather than importing concrete
   adapters directly into task code.
-- Extend `SCAFFOLD_TASK_WORKLOADS` and the topology-backed routing metadata so
+- Extend `SCAFFOLD_TASK_WORKLOADS` and the topology-backed routing metadata, so
   the new task's queue assignment remains explicit.
 
 ## Database migrations
@@ -487,35 +487,35 @@ critique draft output.
 
   Table: `ShowNotesEntry` fields.
 
-  | Field | Type | Constraints |
-  | --- | --- | --- |
-  | `topic` | `str` | Non-empty; whitespace-only values raise `ValueError` |
-  | `summary` | `str` | Non-empty; whitespace-only values raise `ValueError` |
-  | `timestamp` | `str \| None` | Optional; when present must match ISO 8601 duration pattern (for example, `"PT5M"`) |
-  | `tei_locator` | `str \| None` | Optional; blank strings are normalized to `None` at construction |
+  | Field         | Type          | Constraints                                                                         |
+  | ------------- | ------------- | ----------------------------------------------------------------------------------- |
+  | `topic`       | `str`         | Non-empty; whitespace-only values raise `ValueError`                                |
+  | `summary`     | `str`         | Non-empty; whitespace-only values raise `ValueError`                                |
+  | `timestamp`   | `str or None` | Optional; when present must match ISO 8601 duration pattern (for example, `"PT5M"`) |
+  | `tei_locator` | `str or None` | Optional; blank strings are normalized to `None` at construction                    |
 
 - `ShowNotesResult` is an immutable dataclass:
 
   Table: `ShowNotesResult` fields.
 
-  | Field | Type | Notes |
-  | --- | --- | --- |
-  | `entries` | `tuple[ShowNotesEntry, ...]` | Ordered sequence of parsed show-notes entries |
-  | `usage` | `LLMUsage` | Normalized token-usage counters from the provider response |
-  | `model` | `str` | Model identifier echoed from the provider response (default `""`) |
-  | `provider_response_id` | `str` | Provider-assigned response identifier (default `""`) |
-  | `finish_reason` | `str \| None` | Provider finish reason, for example `"stop"` (default `None`) |
+  | Field                  | Type                         | Notes                                                             |
+  | ---------------------- | ---------------------------- | ----------------------------------------------------------------- |
+  | `entries`              | `tuple[ShowNotesEntry, ...]` | Ordered sequence of parsed show-notes entries                     |
+  | `usage`                | `LLMUsage`                   | Normalized token-usage counters from the provider response        |
+  | `model`                | `str`                        | Model identifier echoed from the provider response (default `""`) |
+  | `provider_response_id` | `str`                        | Provider-assigned response identifier (default `""`)              |
+  | `finish_reason`        | `str or None`                | Provider finish reason, for example `"stop"` (default `None`)     |
 
 - `ShowNotesGeneratorConfig` is a dataclass:
 
   Table: `ShowNotesGeneratorConfig` fields.
 
-  | Field | Type | Notes |
-  | --- | --- | --- |
-  | `model` | `str` | Model identifier to pass in the LLM request |
-  | `provider_operation` | `LLMProviderOperation \| str` | Defaults to `LLMProviderOperation.CHAT_COMPLETIONS` |
-  | `token_budget` | `LLMTokenBudget \| None` | Optional token-budget constraints forwarded to `LLMPort` |
-  | `system_prompt` | `str` | System instruction sent alongside the user prompt; defaults to the built-in show-notes extraction prompt |
+  | Field                | Type                          | Notes                                                                                                    |
+  | -------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+  | `model`              | `str`                         | Model identifier to pass in the LLM request                                                              |
+  | `provider_operation` | `LLMProviderOperation or str` | Defaults to `LLMProviderOperation.CHAT_COMPLETIONS`                                                      |
+  | `token_budget`       | `LLMTokenBudget or None`      | Optional token-budget constraints forwarded to `LLMPort`                                                 |
+  | `system_prompt`      | `str`                         | System instruction sent alongside the user prompt; defaults to the built-in show-notes extraction prompt |
 
 Standalone usage pattern:
 
@@ -557,15 +557,15 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   through `LLMPort` and strictly parses JSON output into typed entries.
 - `enrich_tei_with_show_notes(...)` inserts a `<div type="notes">` element
   into the TEI body using the representation defined by
-  [`adr-003-show-notes-tei-representation.md`](adr/adr-003-show-notes-tei-representation.md):
+  [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md):
   `<list>` contains one `<item>` per note, `<label>` carries the topic, the
   summary is inline text, `@n` stores an optional timestamp, and `@corresp`
   stores an optional source locator.
 - `ShowNotesResponseFormatError` is a `ValueError` subclass raised by
   `ShowNotesGenerator` whenever the LLM response cannot be parsed into a valid
-  `ShowNotesResult`. Callers should catch this exception to handle malformed
-  or unexpected LLM output gracefully. It is raised when the response text is
-  not valid JSON; when the top-level JSON object does not contain an `entries`
+  `ShowNotesResult`. Callers should catch this exception to handle malformed or
+  unexpected LLM output gracefully. It is raised when the response text is not
+  valid JSON; when the top-level JSON object does not contain an `entries`
   list; when an entry in `entries` is not a JSON object; when a required field
   (`topic` or `summary`) is absent, empty, or not a string; when an optional
   field (`timestamp` or `tei_locator`) is present but is not a string or null;

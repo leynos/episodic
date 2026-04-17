@@ -118,7 +118,7 @@ class WorkerTopology:
     exchange_type: str
     default_workload: WorkloadClass
     queues: tuple[WorkerQueueSpec, ...]
-    _queue_map: typ.Mapping[WorkloadClass, WorkerQueueSpec] = dc.field(
+    _queue_map: cabc.Mapping[WorkloadClass, WorkerQueueSpec] = dc.field(
         init=False,
         repr=False,
         compare=False,

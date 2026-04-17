@@ -1,12 +1,10 @@
 """Celery runtime composition root for the worker scaffold."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import enum
 import importlib
 import os
-from typing import TYPE_CHECKING  # noqa: ICN003
+import typing as typ
 from urllib.parse import urlparse
 
 from celery import Celery
@@ -14,7 +12,7 @@ from celery import Celery
 from .tasks import SCAFFOLD_TASK_WORKLOADS, WorkerDependencies, register_scaffold_tasks
 from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology, WorkloadClass
 
-if TYPE_CHECKING:
+if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 

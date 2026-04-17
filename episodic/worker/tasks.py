@@ -1,16 +1,13 @@
 """Representative Celery task seams for the worker scaffold."""
 
-from __future__ import annotations
-
 import collections.abc as cabc
 import dataclasses as dc
 import hashlib
 import typing as typ
-from typing import TYPE_CHECKING  # noqa: ICN003
 
 from .topology import WorkloadClass
 
-if TYPE_CHECKING:
+if typ.TYPE_CHECKING:
     from celery import Celery
 
 IO_DIAGNOSTIC_TASK_NAME = "episodic.worker.io_diagnostic"

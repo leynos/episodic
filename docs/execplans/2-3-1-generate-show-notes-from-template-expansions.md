@@ -63,8 +63,8 @@ testable service that a future LangGraph node can compose.
 - Follow the repository's lint, type-checking, and formatting rules. Use
   `import typing as typ` (not `from typing import ...` except for
   `TYPE_CHECKING` with `# noqa: ICN003`). Use frozen dataclasses with
-  `slots=True` for data transfer objects (DTOs). Use `type` aliases
-  (Python 3.14 style) for type definitions.
+  `slots=True` for data transfer objects (DTOs). Use `type` aliases (Python
+  3.14 style) for type definitions.
 - Follow the documentation style guide in `docs/documentation-style-guide.md`:
   British English (Oxford style), sentence-case headings, 80-column wrapping
   for prose, 120 columns for code, expand acronyms on first use.
@@ -101,8 +101,7 @@ testable service that a future LangGraph node can compose.
   these elements, and commit `016ef253` added complete documentation. The
   `pyproject.toml` pin has been updated to `016ef253`; existing episodic tests
   pass (continuous integration (CI) gate logs capture validation results). The
-  upstream library now
-  includes Python `msgspec` struct support:
+  upstream library now includes Python `msgspec` struct support:
   `BodyBlock = Paragraph | Utterance | DivBlock`,
   `DivContent = Paragraph | Utterance | ListBlock`, and `Event` includes
   `DivEvent`. The ODD and Relax NG schemas were also updated in the same
@@ -220,7 +219,7 @@ implementation details. If future upstream regressions appear, start with PR
 - `qdrant-find`/`qdrant-store` tooling is not exposed in this session, so the
   required project-memory lookup/store protocol could not be executed here.
 - Stage G documentation work now exists in-tree:
-  - `docs/adr/adr-003-show-notes-tei-representation.md`
+  - `docs/adr/adr-004-show-notes-tei-representation.md`
   - `docs/episodic-podcast-generation-system-design.md`
   - `docs/users-guide.md`
   - `docs/developers-guide.md`
@@ -254,9 +253,8 @@ summary, `@n` for timestamp, `@corresp` for locator.
 Stages B–E completed (2026-04-12; updated 2026-04-14). Created
 `episodic/generation/` package with `ShowNotesGenerator`, DTOs
 (`ShowNotesEntry`, `ShowNotesResult`, `ShowNotesGeneratorConfig`), strict JSON
-parsing, and
-`enrich_tei_with_show_notes` TEI enrichment helper. All 14 unit tests pass. Key
-findings:
+parsing, and `enrich_tei_with_show_notes` TEI enrichment helper. All 14 unit
+tests pass. Key findings:
 
 - tei_rapporteur expects simplified `<fileDesc><title>` structure, not
   `<fileDesc><titleStmt><title>`.
@@ -667,7 +665,7 @@ Acceptance for Stage F:
 
 #### ADR
 
-Write `docs/adr/adr-003-show-notes-tei-representation.md` documenting the
+Write `docs/adr/adr-004-show-notes-tei-representation.md` documenting the
 chosen TEI representation for show notes:
 
 - Context: roadmap 2.3.1 requires show notes as structured metadata within TEI
@@ -810,7 +808,7 @@ Create `tests/features/show_notes.feature` and
 
 ### Step 6: write ADR
 
-Create `docs/adr/adr-003-show-notes-tei-representation.md`.
+Create `docs/adr/adr-004-show-notes-tei-representation.md`.
 
 ### Step 7: update documentation
 
@@ -879,7 +877,7 @@ Expected long-lived project artefacts:
 - `tests/test_show_notes.py`
 - `tests/features/show_notes.feature`
 - `tests/steps/test_show_notes_steps.py`
-- `docs/adr/adr-003-show-notes-tei-representation.md`
+- `docs/adr/adr-004-show-notes-tei-representation.md`
 - updated `docs/episodic-podcast-generation-system-design.md`
 - updated `docs/users-guide.md`
 - updated `docs/developers-guide.md`

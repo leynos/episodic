@@ -111,6 +111,9 @@ def test_load_runtime_config_requires_rabbitmq_broker_url() -> None:
     with pytest.raises(RuntimeError, match="EPISODIC_CELERY_BROKER_URL"):
         load_runtime_config({})
 
+    with pytest.raises(RuntimeError, match="EPISODIC_CELERY_BROKER_URL"):
+        load_runtime_config({"EPISODIC_CELERY_BROKER_URL": "   "})
+
     with pytest.raises(RuntimeError, match="RabbitMQ"):
         load_runtime_config({"EPISODIC_CELERY_BROKER_URL": "redis://localhost/0"})
 
