@@ -110,6 +110,26 @@ Queue contract:
 - I/O queue: `episodic.io`, routed via `episodic.io.diagnostic`
 - CPU queue: `episodic.cpu`, routed via `episodic.cpu.diagnostic`
 
+### Python dependencies
+
+The following packages were added to `pyproject.toml` as part of this scaffold
+and must be present in the virtual environment:
+
+| Package    | Constraint     | Purpose                                                                                                   |
+| ---------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| `celery`   | `>=5.5,<6.0`   | Distributed task queue framework; provides the `Celery` app, worker process, and task-dispatch machinery. |
+| `kombu`    | `>=5.5,<6.0`   | AMQP messaging library used by Celery; defines `Exchange`, `Queue`, and the RabbitMQ connection layer.    |
+| `gevent`   | `>=24.0,<26.0` | Coroutine-based concurrency pool; default pool for I/O-bound workers (`episodic.io` queue).               |
+| `eventlet` | `>=0.39,<0.41` | Alternative green-thread pool; available as an opt-in via `EPISODIC_CELERY_IO_POOL=eventlet`.             |
+
+After pulling this change, run:
+
+```shell
+uv sync
+```
+
+to install the new dependencies into the project virtual environment.
+
 Testing guidance:
 
 - Use `tests/test_worker_service_scaffold.py` for unit coverage of topology,
