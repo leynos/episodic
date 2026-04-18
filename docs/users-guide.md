@@ -167,14 +167,19 @@ Required environment:
 - `EPISODIC_CELERY_IO_CONCURRENCY` controls I/O worker concurrency, and
   `EPISODIC_CELERY_CPU_CONCURRENCY` controls CPU worker concurrency. The
   runtime only applies the documented defaults when these variables are unset,
-  so set them explicitly when tuning worker counts. The CPU `prefork` default
-  is the baseline process-isolation path; for CPU-heavy pure-Python tasks, the
-  repository also exposes an opt-in interpreter-pool path via
-  `EPISODIC_USE_INTERPRETER_POOL=1`.
+  so set them explicitly when tuning worker counts.
+
+Optional interpreter-pool tuning flags:
+
+- `EPISODIC_USE_INTERPRETER_POOL=1` enables the opt-in interpreter-pool path
+  for CPU-heavy pure-Python tasks inside repository adapters.
 - `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
-  interpreter-pool dispatch activates, and
-  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
+  interpreter-pool dispatch activates after that path is enabled.
+- `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
   that path is enabled.
+- `create_celery_app_from_env()` and `load_runtime_config()` do not consume
+  these three variables directly; they are optional tuning inputs outside the
+  runtime config loader.
 
 Current queue model:
 
