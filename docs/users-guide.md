@@ -169,17 +169,16 @@ Required environment:
   runtime only applies the documented defaults when these variables are unset,
   so set them explicitly when tuning worker counts.
 
-Optional interpreter-pool tuning flags:
+Optional interpreter-pool flags:
 
-- `EPISODIC_USE_INTERPRETER_POOL=1` enables the opt-in interpreter-pool path
-  for CPU-heavy pure-Python tasks inside repository adapters.
+- `EPISODIC_USE_INTERPRETER_POOL=1` enables interpreter-pool execution for
+  selected CPU-heavy pure-Python workloads. This is separate from the Celery
+  CPU worker's default `prefork` pool and is not consumed by the runtime config
+  loader.
 - `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` tunes the minimum batch size before
-  interpreter-pool dispatch activates after that path is enabled.
-- `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool size when
-  that path is enabled.
-- `create_celery_app_from_env()` and `load_runtime_config()` do not consume
-  these three variables directly; they are optional tuning inputs outside the
-  runtime config loader.
+  interpreter-pool dispatch activates.
+- `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool worker
+  count when that path is enabled.
 
 Current queue model:
 
