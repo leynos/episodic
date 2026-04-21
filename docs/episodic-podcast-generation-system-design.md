@@ -11,6 +11,7 @@ Accepted decision records:
 - [ADR 002: HTTP service composition root](adr/adr-002-http-service-composition-root.md)
 - [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
 - [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
+- [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
 
 ## Overview
 
@@ -463,6 +464,17 @@ ports, including optional
 [Model Context Protocol (MCP)](agentic-systems-with-langgraph-and-celery.md#5-the-interface-layer-model-context-protocol-mcp)
  adapters that expose tool catalogues. Skill-based tool loading narrows the
 available tool set per workflow, reducing context size and guiding model choice.
+
+Roadmap item `2.4.1` now ships the first narrow implementation of that design
+in `episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort`
+once to obtain strict JSON, parses it into a typed `ExecutionPlan`, and records
+the planning model separately from the execution model selected in
+`GenerationOrchestrationConfig`. `StructuredPlanningOrchestrator` then executes
+the resulting actions through `ToolExecutorPort`, with `ShowNotesToolExecutor`
+serving as the first concrete tool adapter. The matching LangGraph wrapper
+remains in-process and intentionally limited to `plan -> execute -> finish`
+until checkpointing, Celery resume, and cost-ledger persistence land in later
+roadmap items.
 
 ### Content Generation Graph
 

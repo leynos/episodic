@@ -1,0 +1,548 @@
+"""Structured planning and tool execution for content generation."""
+
+from __future__ import annotations
+
+import dataclasses as dc
+import enum
+import json
+import typing as typ
+
+from episodic.generation import (
+    ShowNotesGenerator,
+    ShowNotesGeneratorConfig,
+    ShowNotesResult,
+)
+from episodic.llm import (
+    LLMPort,
+    LLMProviderOperation,
+    LLMRequest,
+    LLMTokenBudget,
+    LLMUsage,
+)
+
+
+class ActionKind(enum.StrEnum):
+    """Supported generation-enrichment actions for this orchestration slice."""
+
+    GENERATE_SHOW_NOTES = "generate_show_notes"
+
+
+class ModelTier(enum.StrEnum):
+    """Logical model tiers used by the orchestration planner and executor."""
+
+    PLANNING = "planning"
+    EXECUTION = "execution"
+
+
+class PlanningResponseFormatError(ValueError):
+    """Raised when the planner returns malformed structured output."""
+
+
+class UnsupportedActionError(ValueError):
+    """Raised when a tool executor receives an unsupported action."""
+
+
+class ToolExecutionError(RuntimeError):
+    """Raised when a planned action fails during tool execution."""
+
+
+def _require_object(value: object, field_name: str) -> dict[str, object]:
+    if isinstance(value, dict):
+        return typ.cast("dict[str, object]", value)
+    msg = f"{field_name} must be an object."
+    raise PlanningResponseFormatError(msg)
+
+
+def _require_non_empty_string(value: object, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        msg = f"{field_name} must be a non-empty string."
+        raise PlanningResponseFormatError(msg)
+    return value.strip()
+
+
+def _require_optional_string_list(
+    value: object,
+    field_name: str,
+) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        msg = f"{field_name} must be a list of strings."
+        raise PlanningResponseFormatError(msg)
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            msg = f"{field_name} must contain only non-empty strings."
+            raise PlanningResponseFormatError(msg)
+        items.append(item.strip())
+    return tuple(items)
+
+
+def _require_plan_step_list(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        msg = "steps must be a list."
+        raise PlanningResponseFormatError(msg)
+    return [_require_object(item, "step") for item in value]
+
+
+def _coerce_action_kind(value: object) -> ActionKind:
+    if not isinstance(value, str):
+        msg = "action_kind must be a non-empty string."
+        raise PlanningResponseFormatError(msg)
+    try:
+        return ActionKind(value.strip())
+    except ValueError as exc:
+        msg = f"action_kind must be one of: {ActionKind.GENERATE_SHOW_NOTES.value}."
+        raise PlanningResponseFormatError(msg) from exc
+
+
+def _coerce_model_tier(value: object) -> ModelTier:
+    if not isinstance(value, str):
+        msg = "model_tier must be a non-empty string."
+        raise PlanningResponseFormatError(msg)
+    try:
+        return ModelTier(value.strip())
+    except ValueError as exc:
+        msg = (
+            "model_tier must be one of: "
+            f"{ModelTier.PLANNING.value}, {ModelTier.EXECUTION.value}."
+        )
+        raise PlanningResponseFormatError(msg) from exc
+
+
+def _normalize_non_empty_text(value: str, field_name: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        msg = f"{field_name} must be a non-empty string."
+        raise ValueError(msg)
+    return stripped
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationOrchestrationRequest:
+    """Typed input for one structured generation-orchestration run."""
+
+    correlation_id: str
+    script_tei_xml: str
+    template_structure: dict[str, object] | None = None
+
+    def __post_init__(self) -> None:
+        """Validate core request invariants eagerly."""
+        object.__setattr__(
+            self,
+            "correlation_id",
+            _normalize_non_empty_text(self.correlation_id, "correlation_id"),
+        )
+        object.__setattr__(
+            self,
+            "script_tei_xml",
+            _normalize_non_empty_text(self.script_tei_xml, "script_tei_xml"),
+        )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationOrchestrationConfig:
+    """Planner and executor configuration for structured orchestration."""
+
+    planning_model: str
+    execution_model: str
+    planning_provider_operation: LLMProviderOperation | str = (
+        LLMProviderOperation.CHAT_COMPLETIONS
+    )
+    execution_provider_operation: LLMProviderOperation | str = (
+        LLMProviderOperation.CHAT_COMPLETIONS
+    )
+    planning_token_budget: LLMTokenBudget | None = None
+    execution_token_budget: LLMTokenBudget | None = None
+    enabled_action_kinds: tuple[ActionKind, ...] = (ActionKind.GENERATE_SHOW_NOTES,)
+    planner_system_prompt: str = dc.field(
+        default=(
+            "You are the planning stage of the Episodic content generator. "
+            "Return JSON only and choose from the enabled action kinds."
+        )
+    )
+    execution_system_prompt: str = dc.field(
+        default=(
+            "The assistant acts as a podcast show-notes generator. Given a "
+            "TEI P5 podcast script, extract the key topics discussed in the "
+            "episode. For each topic, provide a short heading and a "
+            "one-to-three sentence summary. Return JSON only with key "
+            '"entries".'
+        )
+    )
+
+    def __post_init__(self) -> None:
+        """Reject blank config fields and empty action vocabularies."""
+        if not self.enabled_action_kinds:
+            msg = "enabled_action_kinds must not be empty."
+            raise ValueError(msg)
+        for field_name in (
+            "planning_model",
+            "execution_model",
+            "planner_system_prompt",
+            "execution_system_prompt",
+        ):
+            value = getattr(self, field_name)
+            object.__setattr__(
+                self, field_name, _normalize_non_empty_text(value, field_name)
+            )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class PlannedAction:
+    """One typed step emitted by the structured planner."""
+
+    action_id: str
+    action_kind: ActionKind | str
+    rationale: str
+    model_tier: ModelTier | str
+    required_inputs: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Reject blank identifiers and rationale text."""
+        object.__setattr__(
+            self,
+            "action_id",
+            _normalize_non_empty_text(self.action_id, "action_id"),
+        )
+        object.__setattr__(
+            self,
+            "rationale",
+            _normalize_non_empty_text(self.rationale, "rationale"),
+        )
+        if not str(self.action_kind).strip():
+            msg = "action_kind must be a non-empty string."
+            raise ValueError(msg)
+        if not str(self.model_tier).strip():
+            msg = "model_tier must be a non-empty string."
+            raise ValueError(msg)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class ExecutionPlan:
+    """Structured plan derived from one planner response."""
+
+    plan_version: str
+    selected_planning_model: str
+    selected_execution_model: str
+    steps: tuple[PlannedAction, ...]
+
+    def __post_init__(self) -> None:
+        """Validate top-level plan metadata."""
+        for field_name in (
+            "plan_version",
+            "selected_planning_model",
+            "selected_execution_model",
+        ):
+            value = getattr(self, field_name)
+            object.__setattr__(
+                self, field_name, _normalize_non_empty_text(value, field_name)
+            )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class PlannerResult:
+    """Planner output plus normalized provider metadata."""
+
+    plan: ExecutionPlan
+    usage: LLMUsage
+    model: str
+    provider_response_id: str
+    finish_reason: str | None
+
+
+@dc.dataclass(frozen=True, slots=True)
+class ActionExecutionResult:
+    """Typed result for one executed orchestration action."""
+
+    action_id: str
+    action_kind: ActionKind
+    model_tier: ModelTier
+    model: str
+    summary: str
+    usage: LLMUsage | None = None
+    show_notes_result: ShowNotesResult | None = None
+
+    def __post_init__(self) -> None:
+        """Reject blank user-facing summary text."""
+        for field_name in ("action_id", "model", "summary"):
+            value = getattr(self, field_name)
+            object.__setattr__(
+                self, field_name, _normalize_non_empty_text(value, field_name)
+            )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationOrchestrationResult:
+    """Aggregated planner and tool output for one orchestration run."""
+
+    plan: ExecutionPlan
+    action_results: tuple[ActionExecutionResult, ...]
+    planner_usage: LLMUsage
+    total_usage: LLMUsage
+
+
+class ToolExecutorPort(typ.Protocol):
+    """Application-level port for executing planned enrichment actions."""
+
+    async def execute(
+        self,
+        action: PlannedAction,
+        context: GenerationOrchestrationRequest,
+    ) -> ActionExecutionResult:
+        """Execute one planned action against the available generation context."""
+
+
+class PlannerPort(typ.Protocol):
+    """Application-level port for structured orchestration planning."""
+
+    async def plan(
+        self,
+        request: GenerationOrchestrationRequest,
+    ) -> PlannerResult:
+        """Return a typed execution plan for the supplied generation request."""
+
+
+class _ShowNotesGeneratorPort(typ.Protocol):
+    """Abstraction for show-notes generation used by the first tool executor."""
+
+    async def generate(
+        self,
+        script_tei_xml: str,
+        *,
+        template_structure: dict[str, object] | None = None,
+    ) -> ShowNotesResult:
+        """Generate show notes from the supplied TEI context."""
+
+
+def _sum_usage(*usage_values: LLMUsage | None) -> LLMUsage:
+    input_tokens = 0
+    output_tokens = 0
+    total_tokens = 0
+    for usage in usage_values:
+        if usage is None:
+            continue
+        input_tokens += usage.input_tokens
+        output_tokens += usage.output_tokens
+        total_tokens += usage.total_tokens
+    return LLMUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+    )
+
+
+def build_generation_result(
+    planner_result: PlannerResult,
+    action_results: tuple[ActionExecutionResult, ...],
+) -> GenerationOrchestrationResult:
+    """Aggregate planner and tool usage into one orchestration result."""
+    total_usage = _sum_usage(
+        planner_result.usage,
+        *(action_result.usage for action_result in action_results),
+    )
+    return GenerationOrchestrationResult(
+        plan=planner_result.plan,
+        action_results=action_results,
+        planner_usage=planner_result.usage,
+        total_usage=total_usage,
+    )
+
+
+@dc.dataclass(slots=True)
+class StructuredGenerationPlanner:
+    """Generate and validate one strict execution plan via `LLMPort`."""
+
+    llm: LLMPort
+    config: GenerationOrchestrationConfig
+
+    @staticmethod
+    def _parse_plan(
+        payload: dict[str, object],
+        *,
+        config: GenerationOrchestrationConfig,
+    ) -> ExecutionPlan:
+        plan_version = _require_non_empty_string(
+            payload.get("plan_version"),
+            "plan_version",
+        )
+        step_payloads = _require_plan_step_list(payload.get("steps"))
+        steps = tuple(
+            PlannedAction(
+                action_id=_require_non_empty_string(
+                    step_payload.get("action_id"),
+                    "action_id",
+                ),
+                action_kind=_coerce_action_kind(step_payload.get("action_kind")),
+                rationale=_require_non_empty_string(
+                    step_payload.get("rationale"),
+                    "rationale",
+                ),
+                model_tier=_coerce_model_tier(step_payload.get("model_tier")),
+                required_inputs=_require_optional_string_list(
+                    step_payload.get("required_inputs"),
+                    "required_inputs",
+                ),
+            )
+            for step_payload in step_payloads
+        )
+        return ExecutionPlan(
+            plan_version=plan_version,
+            selected_planning_model=config.planning_model,
+            selected_execution_model=config.execution_model,
+            steps=steps,
+        )
+
+    def build_prompt(self, request: GenerationOrchestrationRequest) -> str:
+        """Build the planner prompt payload."""
+        prompt_payload: dict[str, object] = {
+            "task": (
+                "Review the canonical TEI script and decide which enabled "
+                "generation-enrichment actions should run."
+            ),
+            "response_schema": {
+                "plan_version": "string",
+                "steps": [
+                    {
+                        "action_id": "string",
+                        "action_kind": [
+                            action_kind.value
+                            for action_kind in self.config.enabled_action_kinds
+                        ],
+                        "rationale": "string",
+                        "model_tier": [
+                            ModelTier.PLANNING.value,
+                            ModelTier.EXECUTION.value,
+                        ],
+                        "required_inputs": ["string"],
+                    }
+                ],
+            },
+            "enabled_action_kinds": [
+                action_kind.value for action_kind in self.config.enabled_action_kinds
+            ],
+            "correlation_id": request.correlation_id,
+            "script_tei_xml": request.script_tei_xml,
+        }
+        if request.template_structure is not None:
+            prompt_payload["template_structure"] = request.template_structure
+        rendered_payload = json.dumps(prompt_payload, indent=2, ensure_ascii=True)
+        return f"Return JSON only.\n{rendered_payload}"
+
+    async def plan(self, request: GenerationOrchestrationRequest) -> PlannerResult:
+        """Call the LLM and parse the strict planner response."""
+        response = await self.llm.generate(
+            LLMRequest(
+                model=self.config.planning_model,
+                prompt=self.build_prompt(request),
+                system_prompt=self.config.planner_system_prompt,
+                provider_operation=self.config.planning_provider_operation,
+                token_budget=self.config.planning_token_budget,
+            )
+        )
+        try:
+            decoded = json.loads(response.text)
+        except json.JSONDecodeError as exc:
+            msg = "Planner response is not valid JSON."
+            raise PlanningResponseFormatError(msg) from exc
+        payload = _require_object(decoded, "planner response")
+        plan = self._parse_plan(payload, config=self.config)
+        return PlannerResult(
+            plan=plan,
+            usage=response.usage,
+            model=response.model,
+            provider_response_id=response.provider_response_id,
+            finish_reason=response.finish_reason,
+        )
+
+
+@dc.dataclass(slots=True)
+class ShowNotesToolExecutor:
+    """Execute the `generate_show_notes` action through the show-notes service."""
+
+    llm: LLMPort
+    config: GenerationOrchestrationConfig
+    generator: _ShowNotesGeneratorPort | None = None
+
+    def _build_generator(self) -> _ShowNotesGeneratorPort:
+        if self.generator is not None:
+            return self.generator
+        return ShowNotesGenerator(
+            llm=self.llm,
+            config=ShowNotesGeneratorConfig(
+                model=self.config.execution_model,
+                provider_operation=self.config.execution_provider_operation,
+                token_budget=self.config.execution_token_budget,
+                system_prompt=self.config.execution_system_prompt,
+            ),
+        )
+
+    async def execute(
+        self,
+        action: PlannedAction,
+        context: GenerationOrchestrationRequest,
+    ) -> ActionExecutionResult:
+        """Run the show-notes service for the supported action kind."""
+        action_kind = str(action.action_kind)
+        if action_kind != ActionKind.GENERATE_SHOW_NOTES.value:
+            msg = f"Unsupported action kind for show-notes tool: {action_kind}"
+            raise UnsupportedActionError(msg)
+
+        generator = self._build_generator()
+        try:
+            result = await generator.generate(
+                context.script_tei_xml,
+                template_structure=context.template_structure,
+            )
+        except ToolExecutionError:
+            raise
+        except Exception as exc:
+            msg = "show-notes tool execution failed"
+            raise ToolExecutionError(msg) from exc
+
+        entry_count = len(result.entries)
+        noun = "entry" if entry_count == 1 else "entries"
+        return ActionExecutionResult(
+            action_id=action.action_id,
+            action_kind=ActionKind.GENERATE_SHOW_NOTES,
+            model_tier=ModelTier.EXECUTION,
+            model=result.model,
+            summary=f"Generated {entry_count} show-notes {noun}.",
+            usage=result.usage,
+            show_notes_result=result,
+        )
+
+
+@dc.dataclass(slots=True)
+class StructuredPlanningOrchestrator:
+    """Plan one orchestration run, then execute each planned action in order."""
+
+    planner: PlannerPort
+    tool_executor: ToolExecutorPort
+
+    async def execute_plan(
+        self,
+        *,
+        request: GenerationOrchestrationRequest,
+        plan: ExecutionPlan,
+    ) -> tuple[ActionExecutionResult, ...]:
+        """Execute each plan step sequentially through the tool-execution port."""
+        # Planned actions may grow side effects later, so execution stays ordered.
+        results: list[ActionExecutionResult] = []
+        for action in plan.steps:
+            results.append(  # noqa: PERF401
+                await self.tool_executor.execute(action, request)
+            )
+        return tuple(results)
+
+    async def orchestrate(
+        self,
+        request: GenerationOrchestrationRequest,
+    ) -> GenerationOrchestrationResult:
+        """Plan and execute one structured generation request."""
+        planner_result = await self.planner.plan(request)
+        action_results = await self.execute_plan(
+            request=request,
+            plan=planner_result.plan,
+        )
+        return build_generation_result(planner_result, action_results)
