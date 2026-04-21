@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -160,20 +160,55 @@ explicitly approves this plan or requests revisions.
   `episodic/qa/langgraph.py`, `docs/users-guide.md`, and
   `docs/developers-guide.md`.
 - [x] (2026-04-16 00:35Z) Drafted this ExecPlan for roadmap item `2.4.1`.
-- [ ] Stage A: add fail-first unit and behavioural tests defining the new
-  planning-and-execution contract.
-- [ ] Stage B: add typed planning DTOs, model-tier configuration, and strict
-  structured-output parsing.
-- [ ] Stage C: add the orchestration application service and LangGraph wrapper
-  for plan-then-execute flow.
-- [ ] Stage D: add the first enrichment tool port and the show-notes execution
-  path.
-- [ ] Stage E: document the architecture decision and update design, user, and
-  developer guides.
-- [ ] Stage F: run validation gates, update roadmap item `2.4.1`, and record
-  final outcomes in this plan.
+- [x] (2026-04-21 10:06Z) Stage A: added fail-first unit and behavioural tests
+  for structured planning, tool-port execution, LangGraph flow, and Vidai Mock
+  orchestration.
+- [x] (2026-04-21 10:14Z) Stage B: implemented typed planning DTOs, strict JSON
+  parsing, and configuration-driven model-tier selection in
+  `episodic/orchestration/generation.py`.
+- [x] (2026-04-21 10:14Z) Stage C: implemented the orchestration application
+  service and LangGraph wrapper in `episodic/orchestration/`.
+- [x] (2026-04-21 10:14Z) Stage D: implemented the first enrichment tool port
+  and the show-notes execution path.
+- [x] (2026-04-21 10:17Z) Stage E: documented the architecture decision and
+  updated the design, user, and developer guides.
+- [x] (2026-04-21 10:35Z) Stage F: ran the full validation sequence, updated
+  roadmap item `2.4.1`, and recorded final outcomes in this plan.
 
 ## Surprises & Discoveries
+
+- Observation: `LLMPort`, `ShowNotesGenerator`, and the Pedante LangGraph seam
+  already provide the exact three reference implementations needed for this
+  slice: provider-neutral LLM invocation, strict JSON parsing, and compact
+  typed graph state. Evidence: `episodic/llm/ports.py`,
+  `episodic/generation/show_notes.py`, and `episodic/qa/langgraph.py`
+  inspection on 2026-04-21. Impact: the orchestration feature can stay small
+  and follow existing local patterns instead of introducing a new abstraction
+  style.
+
+- Observation: targeted orchestration tests require
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` when run through `uv` on Python 3.14
+  because `tei-rapporteur` still builds via PyO3 0.23.x. Evidence:
+  `/tmp/2-4-1-stage-a-pytest.log` and the failing build trace on 2026-04-21.
+  Impact: use that environment flag consistently for targeted test runs and
+  full validation commands until the dependency updates.
+
+- Observation: the first focused test slice passed after implementation with
+  15 orchestration-specific tests covering planner parsing, tool-port
+  execution, LangGraph state flow, and the live Vidai Mock behaviour scenario.
+  Evidence: `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv run pytest`
+  `tests/test_generation_orchestration.py`
+  `tests/test_generation_orchestration_langgraph.py`
+  `tests/steps/test_generation_orchestration_steps.py` on 2026-04-21. Impact:
+  the vertical slice is stable enough to proceed to documentation and full
+  repository gates.
+
+- Observation: full validation passed after one implementation fix for ordered
+  async tool execution. Evidence: `make fmt`, `make check-fmt`,
+  `make typecheck`, `make lint`, `make test`,
+  `PATH=/root/.bun/bin:$PATH make markdownlint`, and `make nixie` all succeeded
+  on 2026-04-21, with `make test` reporting 367 passed and 2 skipped. Impact:
+  roadmap item `2.4.1` can be marked complete without caveats.
 
 - Observation: the repository already has `langgraph` and `granian` declared in
   `pyproject.toml`, so `2.4.1` can build on an installed orchestration
@@ -235,22 +270,48 @@ explicitly approves this plan or requests revisions.
   queue-dispatched execution compatible with the same contract. Date/Author:
   2026-04-16 / Codex.
 
+- Decision: implement the first vertical slice in a dedicated
+  `episodic/orchestration/` package rather than placing it under
+  `episodic/generation/` or `episodic/qa/`. Rationale: the new planner and
+  executor coordinate generation concerns without being specific to a single
+  enrichment tool or evaluator, and the dedicated package keeps future
+  checkpointing and queue-routing work adjacent without coupling them to
+  show-notes or Pedante internals. Date/Author: 2026-04-21 / Codex.
+
+- Decision: keep the first tool port deliberately narrow by exposing one
+  `ToolExecutorPort.execute(...)` operation and shipping a single
+  `ShowNotesToolExecutor` implementation. Rationale: this preserves the adapter
+  boundary required by the roadmap while avoiding an overbuilt plugin system
+  before additional enrichment tools exist. Date/Author: 2026-04-21 / Codex.
+
 ## Outcomes & Retrospective
 
-No implementation has started yet. The current outcome is a self-contained
-draft plan that describes how to land roadmap item `2.4.1` without absorbing
-later orchestration, queueing, or billing milestones.
+Roadmap item `2.4.1` is now implemented.
 
-Expected outcome after implementation:
+Delivered outcome:
 
-- The repository has a first general content-generation orchestration seam
-  beyond Pedante.
-- One planning call produces a strict typed plan.
-- One execution path resolves that plan through a reusable tool-calling
-  contract.
-- Show notes serve as the first shipped enrichment tool.
-- Vidai Mock proves the plan-and-execute behaviour end to end.
-- Documentation and roadmap state reflect the completed feature accurately.
+- The repository now has a dedicated `episodic/orchestration/` package that
+  introduces a general content-generation orchestration seam beyond Pedante.
+- One planning call produces a strict typed `ExecutionPlan` via
+  `StructuredGenerationPlanner`.
+- One execution path resolves that plan through `ToolExecutorPort`, with
+  `ShowNotesToolExecutor` as the first concrete tool adapter.
+- An in-process LangGraph wrapper now drives the same flow through
+  `plan -> execute -> finish`.
+- Vidai Mock proves the end-to-end plan-and-execute behaviour in
+  `tests/features/generation_orchestration.feature`.
+- Documentation, the ADR set, and `docs/roadmap.md` now reflect the shipped
+  feature accurately.
+
+Retrospective:
+
+- The largest implementation hazard was Python's treatment of
+  `tuple(await ... for ...)` as an async generator rather than a plain
+  iterator. Explicit ordered loops were retained for tool execution to preserve
+  sequence semantics and keep the full test suite stable.
+- The existing show-notes and Pedante patterns were sufficient scaffolding for
+  this milestone; no new runtime dependency or broader architecture rewrite was
+  needed.
 
 ## Context and orientation
 

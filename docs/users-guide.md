@@ -41,6 +41,12 @@ This guide will cover:
   `ShowNotesGeneratorConfig` controls the model, token budget, and system
   prompt, and an optional `template_structure` mapping can be passed to
   `build_prompt(...)` to guide extraction against a known episode template.
+  Current orchestration uses a separate structured-planning pass before the
+  show-notes tool runs, so a higher-capability planning model can choose the
+  work and a cheaper execution model can generate the note payload. If either
+  stage returns malformed structured JSON, the run fails fast with a
+  deterministic validation error instead of silently publishing partial
+  metadata.
 - Database schema integrity is validated automatically in CI so that canonical
   content storage remains consistent across releases
 - Repository and transactional integrity are validated by integration tests
