@@ -470,7 +470,16 @@ changing canonical prompt assembly rules.
 Pedante is implemented in the `episodic/qa/` package.
 
 
-### Orchestration package
+### Episodic QA: Pedante and LangGraph
+
+- `episodic/qa/pedante.py` defines the Pedante request and result contract, the
+  support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
+  calls the existing `LLMPort`.
+- `episodic/qa/langgraph.py` provides the minimal LangGraph seam for Pedante.
+  This graph is intentionally narrow: it runs the evaluator and routes to
+  `pass` or `refine` based on typed findings.
+
+### Episodic QA: Pedante and LangGraph
 
 - `episodic/qa/pedante.py` defines the Pedante request and result contract, the
   support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
