@@ -9,6 +9,7 @@ import pytest
 
 from episodic.generation import (
     ShowNotesEntry,
+    ShowNotesResponseFormatError,
     ShowNotesResult,
 )
 from episodic.llm import (
@@ -88,6 +89,22 @@ class _RaisingShowNotesGenerator:
         raise _InjectedToolExecutionError
 
 
+class _MalformedShowNotesGenerator:
+    """Raise a response-format error from generate for propagation tests."""
+
+    async def generate(
+        self,
+        script_tei_xml: str,
+        *,
+        template_structure: dict[str, object] | None = None,
+    ) -> ShowNotesResult:
+        """Raise the structured-response validation sentinel."""
+        assert script_tei_xml.startswith("<TEI>")
+        assert template_structure == {"sections": ["intro", "analysis"]}
+        msg = "entries must be a list."
+        raise ShowNotesResponseFormatError(msg)
+
+
 class _InjectedToolExecutionError(ToolExecutionError):
     """Sentinel tool error used to verify pass-through behaviour."""
 
@@ -154,6 +171,36 @@ def _plan_payload() -> str:
             }
         ],
     })
+
+
+def test_config_normalizes_string_action_kinds() -> None:
+    """Configuration should accept string-like ActionKind values."""
+    config = GenerationOrchestrationConfig(
+        planning_model="gpt-4.1",
+        execution_model="gpt-4o-mini",
+        enabled_action_kinds=typ.cast(
+            "tuple[ActionKind, ...]",
+            (" generate_show_notes ",),
+        ),
+    )
+
+    assert config.enabled_action_kinds == (ActionKind.GENERATE_SHOW_NOTES,)
+
+
+def test_config_rejects_unknown_action_kinds() -> None:
+    """Configuration should fail before unsupported action kinds flow onward."""
+    with pytest.raises(
+        ValueError,
+        match="enabled_action_kinds contains an unsupported action kind",
+    ):
+        GenerationOrchestrationConfig(
+            planning_model="gpt-4.1",
+            execution_model="gpt-4o-mini",
+            enabled_action_kinds=typ.cast(
+                "tuple[ActionKind, ...]",
+                ("generate_guest_bio",),
+            ),
+        )
 
 
 @pytest.mark.asyncio
@@ -355,6 +402,23 @@ async def test_show_notes_tool_executor_rejects_unsupported_action_kind() -> Non
 
 
 @pytest.mark.asyncio
+async def test_show_notes_tool_executor_rejects_planning_model_tier() -> None:
+    """Show-notes execution should only run on the execution model tier."""
+    llm = _FakeLLMPort([])
+    tool_executor = ShowNotesToolExecutor(llm=llm, config=_config())
+    planning_tier_action = PlannedAction(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        rationale="Show notes are needed for downstream publication surfaces.",
+        model_tier=ModelTier.PLANNING,
+        required_inputs=("script_tei_xml",),
+    )
+
+    with pytest.raises(ToolExecutionError, match="execution model tier"):
+        await tool_executor.execute(planning_tier_action, _request())
+
+
+@pytest.mark.asyncio
 async def test_show_notes_tool_executor_wraps_generator_failures() -> None:
     """Show-notes tool should surface deterministic execution failures."""
     tool_executor = ShowNotesToolExecutor(
@@ -364,4 +428,17 @@ async def test_show_notes_tool_executor_wraps_generator_failures() -> None:
     )
 
     with pytest.raises(ToolExecutionError):
+        await tool_executor.execute(_planned_action(), _request())
+
+
+@pytest.mark.asyncio
+async def test_show_notes_tool_executor_propagates_response_format_errors() -> None:
+    """Structured show-notes validation errors should remain deterministic."""
+    tool_executor = ShowNotesToolExecutor(
+        llm=typ.cast("typ.Any", None),
+        config=_config(),
+        generator=typ.cast("typ.Any", _MalformedShowNotesGenerator()),
+    )
+
+    with pytest.raises(ShowNotesResponseFormatError, match="entries"):
         await tool_executor.execute(_planned_action(), _request())

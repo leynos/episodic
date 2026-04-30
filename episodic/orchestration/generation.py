@@ -10,6 +10,7 @@ import typing as typ
 from episodic.generation import (
     ShowNotesGenerator,
     ShowNotesGeneratorConfig,
+    ShowNotesResponseFormatError,
     ShowNotesResult,
 )
 from episodic.llm import (
@@ -173,6 +174,19 @@ class GenerationOrchestrationConfig:
 
     def __post_init__(self) -> None:
         """Reject blank config fields and empty action vocabularies."""
+        try:
+            enabled_action_kinds = tuple(
+                item if isinstance(item, ActionKind) else ActionKind(str(item).strip())
+                for item in self.enabled_action_kinds
+            )
+        except ValueError as exc:
+            msg = "enabled_action_kinds contains an unsupported action kind."
+            raise ValueError(msg) from exc
+        object.__setattr__(
+            self,
+            "enabled_action_kinds",
+            enabled_action_kinds,
+        )
         if not self.enabled_action_kinds:
             msg = "enabled_action_kinds must not be empty."
             raise ValueError(msg)
@@ -487,6 +501,9 @@ class ShowNotesToolExecutor:
         if action_kind != ActionKind.GENERATE_SHOW_NOTES.value:
             msg = f"Unsupported action kind for show-notes tool: {action_kind}"
             raise UnsupportedActionError(msg)
+        if str(action.model_tier) != ModelTier.EXECUTION.value:
+            msg = "generate_show_notes must use the execution model tier."
+            raise ToolExecutionError(msg)
 
         generator = self._build_generator()
         try:
@@ -495,6 +512,8 @@ class ShowNotesToolExecutor:
                 template_structure=context.template_structure,
             )
         except ToolExecutionError:
+            raise
+        except ShowNotesResponseFormatError:
             raise
         except Exception as exc:
             msg = "show-notes tool execution failed"

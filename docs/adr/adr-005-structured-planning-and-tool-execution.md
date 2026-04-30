@@ -102,21 +102,18 @@ later roadmap items:
 
 ## References
 
-Roadmap item `2.4.1` in `docs/roadmap.md`.[^1] ExecPlan:
-`docs/execplans/2-4-1-structured-output-planning-and-tool-calling-execution.md`.
- [^2] Implementation: `episodic/orchestration/generation.py` and
-`episodic/orchestration/langgraph.py`.[^3] Tests:
-`tests/test_generation_orchestration.py`,
+Roadmap item `2.4.1`[^1] in `docs/roadmap.md`.
+ExecPlan: `docs/execplans/2-4-1-structured-output-planning-and-tool-calling-execution.md`.[^2]
+Implementation files: `episodic/orchestration/generation.py` and `episodic/orchestration/langgraph.py`.[^3]
+Tests: `tests/test_generation_orchestration.py`,
 `tests/test_generation_orchestration_langgraph.py`,
 `tests/features/generation_orchestration.feature`, and
 `tests/steps/test_generation_orchestration_steps.py`.[^4]
 
 [^1]: Roadmap item `2.4.1` in `docs/roadmap.md`
-[^2]: ExecPlan:
-  `docs/execplans/2-4-1-structured-output-planning-and-tool-calling-execution.md`
-[^3]: Implementation: `episodic/orchestration/generation.py` and
-  `episodic/orchestration/langgraph.py`
+[^2]: ExecPlan: `docs/execplans/2-4-1-structured-output-planning-and-tool-calling-execution.md`
+[^3]: Implementation files: `episodic/orchestration/generation.py` and `episodic/orchestration/langgraph.py`
 [^4]: Tests: `tests/test_generation_orchestration.py`,
-  `tests/test_generation_orchestration_langgraph.py`,
-  `tests/features/generation_orchestration.feature`, and
-  `tests/steps/test_generation_orchestration_steps.py`
+      `tests/test_generation_orchestration_langgraph.py`,
+      `tests/features/generation_orchestration.feature`, and
+      `tests/steps/test_generation_orchestration_steps.py`
