@@ -722,13 +722,6 @@ normalizer.
 
 ## Logging
 
-`episodic.logging.LogLevel` is a `StrEnum` that enumerates the accepted log
-levels: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`. `WARN` is
-a deprecated alias for `WARNING`. `configure_logging(level, ...)` accepts a
-case-insensitive string and returns a `tuple[LogLevel, bool]` — the normalized
-`LogLevel` value and a flag indicating whether the default (`INFO`) was
-substituted because the input was absent or unrecognized.
-
 Structured logging uses femtologging v0.1.0-style logger methods. Import
 `get_logger` (or `getLogger` when matching stdlib naming) from
 `episodic.logging`, then emit via `logger.info(...)`, `logger.warning(...)`,
