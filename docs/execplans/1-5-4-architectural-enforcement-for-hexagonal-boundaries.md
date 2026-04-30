@@ -237,6 +237,13 @@ Implementation approval rule:
   `make test`, `make typecheck`, `make markdownlint`, and `make nixie` are
   green.
 
+- Observation: Post-turn hooks run in a narrower `PATH` than the interactive
+  shell, so Makefile targets that required global `ruff`, `ty`, or
+  `markdownlint-cli2` binaries failed before reaching the actual checks.
+  Impact: the Makefile now invokes Python developer tools through `uv`, pins
+  the `ty` tool runner to the already validated `0.0.32` version, and invokes
+  Markdown lint through `npx -y markdownlint-cli2`.
+
 ## Decision Log
 
 - Decision: implement architecture import enforcement as a repo-local checker
