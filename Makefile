@@ -1,7 +1,7 @@
-MDLINT ?= markdownlint-cli2
+MDLINT ?= npx -y markdownlint-cli2
 NIXIE ?= nixie
 MDFORMAT_ALL ?= mdformat-all
-TOOLS = $(MDFORMAT_ALL) ruff ty $(MDLINT) uv
+TOOLS = $(MDFORMAT_ALL) uv
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 PYTEST_XDIST_WORKERS ?= 1
@@ -54,26 +54,26 @@ $(VENV_TOOLS): ## Verify required CLI tools in venv
 	$(call ensure_tool_venv,$@)
 endif
 
-fmt: ruff $(MDFORMAT_ALL) ## Format sources
-	ruff format
-	ruff check --select I --fix
+fmt: build $(MDFORMAT_ALL) ## Format sources
+	$(UV_ENV) uv run ruff format
+	$(UV_ENV) uv run ruff check --select I --fix
 	$(MDFORMAT_ALL)
 
-check-fmt: ruff ## Verify formatting
-	ruff format --check
+check-fmt: build ## Verify formatting
+	$(UV_ENV) uv run ruff format --check
 	# mdformat-all doesn't currently do checking
 
-lint: ruff check-architecture ## Run linters
-	ruff check
+lint: build check-architecture ## Run linters
+	$(UV_ENV) uv run ruff check
 
 check-architecture: build uv ## Check hexagonal architecture import boundaries
 	$(UV_ENV) uv run python -m episodic.architecture
 
-typecheck: build ty ## Run typechecking
-	ty --version
-	ty check
+typecheck: build ## Run typechecking
+	$(UV_ENV) uv tool run ty==0.0.32 --version
+	$(UV_ENV) uv tool run ty==0.0.32 check
 
-markdownlint: $(MDLINT) ## Lint Markdown files
+markdownlint: ## Lint Markdown files
 	$(MDLINT) '**/*.md'
 
 nixie: ## Validate Mermaid diagrams
