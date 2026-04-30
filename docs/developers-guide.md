@@ -298,6 +298,43 @@ Database-level constraints (unique slugs, foreign keys, and CHECK constraints
 such as the weight bound on source documents) are enforced by Postgres and
 raise `sqlalchemy.exc.IntegrityError` on violation.
 
+### Architecture enforcement
+
+Run the architecture checker directly when changing package boundaries:
+
+```shell
+make check-architecture
+```
+
+`make lint` runs Ruff and then this architecture gate. The checker lives in
+`episodic.architecture` and reports diagnostics as `ARCH001` with the importer,
+imported module, and dependency direction.
+
+The enforced groups are:
+
+- `domain_ports`: canonical domain types, canonical ports, ingestion ports,
+  canonical constraint names, and LLM ports.
+- `application`: canonical services, profile/template workflows,
+  reference-document workflows, and generation services.
+- `inbound_adapter`: Falcon API modules and worker task/topology seams.
+- `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
+  OpenAI-compatible LLM adapters.
+- `composition_root`: modules that wire concrete adapters, currently
+  `episodic.api.runtime` and `episodic.worker.runtime`.
+
+When adding a new port or adapter, update the manifest in
+`episodic/architecture/checker.py` in the same change as the package. Add or
+adjust fixture coverage in `tests/fixtures/architecture/` and run:
+
+```shell
+uv run pytest -q tests/test_architecture_enforcement.py \
+  tests/steps/test_architecture_enforcement_steps.py
+```
+
+Port contract coverage lives in `tests/test_port_contracts.py`. Future
+behavioural tests that exercise real `LLMPort` inference paths should use Vidai
+Mock; structural conformance tests do not need an inference server.
+
 ### TEI payload compression
 
 Canonical TEI payload storage now supports transparent Zstandard compression

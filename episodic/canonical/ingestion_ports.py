@@ -26,6 +26,7 @@ if typ.TYPE_CHECKING:
     )
 
 
+@typ.runtime_checkable
 class SourceNormalizer(typ.Protocol):
     """Normalizes a raw source into a TEI fragment with quality scores.
 
@@ -59,6 +60,7 @@ class SourceNormalizer(typ.Protocol):
         ...
 
 
+@typ.runtime_checkable
 class WeightingStrategy(typ.Protocol):
     """Computes weights for normalized sources using series configuration.
 
@@ -95,6 +97,7 @@ class WeightingStrategy(typ.Protocol):
         ...
 
 
+@typ.runtime_checkable
 class ConflictResolver(typ.Protocol):
     """Resolves conflicts between weighted sources into canonical TEI.
 

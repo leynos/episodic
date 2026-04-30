@@ -11,6 +11,7 @@ Accepted decision records:
 - [ADR 002: HTTP service composition root](adr/adr-002-http-service-composition-root.md)
 - [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
 - [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
+- [ADR 005: Hexagonal architecture enforcement](adr/adr-005-hexagonal-architecture-enforcement.md)
 
 ## Overview
 
@@ -105,23 +106,28 @@ Boundary rules:
   domain and ports, but never on outbound adapter implementations.
 - **Outbound adapters** (database, object storage, message broker, LLM/TTS
   vendors) depend on the domain and ports, but never on inbound adapters.
-- **Orchestration code** (LangGraph nodes and Celery tasks) depends on domain
-  services and ports only; direct adapter access is forbidden.
+- **Orchestration code** (LangGraph nodes and Celery tasks) will depend on
+  domain services and ports only; direct adapter access is reserved for the
+  later orchestration-specific enforcement slice.
 - **Cross-adapter imports** are forbidden; interactions happen through ports or
   well-defined message schemas.
-- **Checkpoint payloads** hold orchestration metadata; canonical domain state
-  is persisted through repositories rather than state blobs.
+- **Checkpoint payloads** should hold orchestration metadata; canonical domain
+  state is persisted through repositories rather than state blobs. Dedicated
+  checkpoint audits are part of the later orchestration enforcement slice.
 
 Enforcement mechanisms:
 
-- Lint rules and import conventions flag forbidden dependency direction
-  (e.g. inbound or outbound modules importing each other).
+- `make check-architecture` runs the repo-local architecture checker in
+  `episodic.architecture`, and `make lint` includes that gate after Ruff.
 - Architecture tests validate the allowed dependency graph and port contract
   adherence as part of `make test`.
-- Architecture tests cover LangGraph node and Celery task imports, enforcing
-  port-only dependencies for orchestration code.
+- The current checker covers canonical domain and port modules, application
+  services, Falcon and worker adapter seams, SQLAlchemy and LLM outbound
+  adapters, and explicit composition roots.
 - Contract tests exercise port behaviour against adapter implementations, so
   adapters are verified without coupling to infrastructure in the domain.
+- Roadmap item `2.4.5` extends the same mechanism to LangGraph-node-specific
+  imports, Celery task policies, and checkpoint payload boundaries.
 - Code review checklists enforce idempotency keys, single-responsibility task
   scope, and checkpoint payload audits for orchestration changes.
 

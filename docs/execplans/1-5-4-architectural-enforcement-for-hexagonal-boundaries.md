@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: APPROVED - implementation in progress
 
 ## Purpose and big picture
 
@@ -167,18 +167,26 @@ Implementation approval rule:
   implementation, especially `episodic/canonical/profile_templates/helpers.py`
   and `episodic/canonical/reference_documents/bindings.py`, which currently
   reach into `episodic.canonical.storage.models`.
-- [ ] Stage A: define the first enforced module map and add fail-first
+- [x] (2026-04-30 22:14Z) User explicitly approved implementation of this
+  ExecPlan and requested that the living plan stay current throughout the
+  change.
+- [x] (2026-04-30 22:14Z) Stage A: define the first enforced module map and add
+      fail-first
   architecture tests plus behaviour fixtures.
-- [ ] Stage B: implement the repo-local architecture checker and Makefile
+- [x] (2026-04-30 22:18Z) Stage B: implement the repo-local architecture
+      checker and Makefile
   wiring.
-- [ ] Stage C: remove or explicitly justify current boundary leaks, then enable
+- [x] (2026-04-30 22:21Z) Stage C: remove or explicitly justify current
+      boundary leaks, then enable
   the checker on the scoped production packages.
-- [ ] Stage D: add runtime-checkable port contract tests for current concrete
+- [x] (2026-04-30 22:23Z) Stage D: add runtime-checkable port contract tests
+      for current concrete
   adapters.
-- [ ] Stage E: wire CI, ADR, and guide updates, then mark the roadmap item
+- [x] (2026-04-30 22:27Z) Stage E: wire CI, ADR, and guide updates, then mark
+      the roadmap item
   complete.
-- [ ] Stage F: run the full validation gates and update this ExecPlan with the
-  delivery outcome.
+- [x] (2026-04-30 22:42Z) Stage F: run the full validation gates and update
+  this ExecPlan with the delivery outcome.
 
 ## Surprises & Discoveries
 
@@ -209,6 +217,26 @@ Implementation approval rule:
   task checks already exist. Impact: the documentation update in this plan must
   reconcile that staged rollout clearly.
 
+- Observation: The first focused red run could not reach pytest collection
+  until the Makefile's `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` environment was
+  applied. Impact: all subsequent focused and full validation commands should
+  use the Makefile targets or carry the same environment variable when invoking
+  `uv run` directly.
+
+- Observation: The checker initially saw `from package import storage` as an
+  import of `package` only. Impact: `ImportFrom` handling now emits both the
+  base module and imported member path so fixture and production diagnostics
+  catch package-level adapter imports.
+
+- Observation: `make fmt` runs `mdformat-all`, which shells out to a
+  repository-wide `markdownlint --fix` invocation and reports older MD013
+  line-length findings in many pre-existing documents. The dedicated
+  `make markdownlint` gate uses the configured `markdownlint-cli2` path and
+  passes with zero errors. Impact: this slice treats `make fmt` as blocked by
+  pre-existing formatter-tool scope, while `make check-fmt`, `make lint`,
+  `make test`, `make typecheck`, `make markdownlint`, and `make nixie` are
+  green.
+
 ## Decision Log
 
 - Decision: implement architecture import enforcement as a repo-local checker
@@ -235,13 +263,24 @@ Implementation approval rule:
   should prove the checker's observable behaviour without rewriting real source
   files during the test run. Date/Author: 2026-04-24 / Codex.
 
+- Decision: move database constraint-name constants used by service-layer
+  conflict handling into `episodic.canonical.constraints` and re-export them to
+  storage models by import. Rationale: the names are part of the canonical
+  conflict contract, while SQLAlchemy model classes remain outbound adapter
+  infrastructure. Date/Author: 2026-04-30 / Codex.
+
+- Decision: keep Stage D port tests structural and avoid live inference calls.
+  Rationale: `LLMPort` conformance only needs the adapter method surface for
+  `1.5.4`, so Vidai Mock remains unnecessary until future behaviour tests
+  exercise inference-backed orchestration. Date/Author: 2026-04-30 / Codex.
+
 ## Outcomes & Retrospective
 
-No implementation has started yet. The current outcome is a draft,
-self-contained plan that identifies the staged path to make the documented
-hexagonal boundaries enforceable.
+Implementation began after explicit approval on 2026-04-30. The delivery adds
+the repo-local architecture checker, production boundary fixes, port contract
+tests, CI visibility, ADR-005, guide updates, and roadmap completion.
 
-Expected outcome after implementation:
+Delivered outcome:
 
 - `make lint` includes an architecture-enforcement step that rejects forbidden
   import directions in the scoped package groups.
@@ -252,6 +291,19 @@ Expected outcome after implementation:
   `1.5.4` covers the core service scaffold, while `2.4.5` extends the same
   mechanism to orchestration-specific rules.
 - `docs/roadmap.md` marks `1.5.4` done only after all validation gates pass.
+
+Validation outcome:
+
+- `make check-fmt` passed.
+- `make typecheck` passed with existing `ty` redundant-cast warnings.
+- `make lint` passed, including `make check-architecture`.
+- `make test` passed: 393 passed, 3 skipped.
+- `make markdownlint` passed with zero errors.
+- `make nixie` passed.
+- `make fmt` failed in `mdformat-all` because its raw `markdownlint --fix`
+  invocation reports pre-existing MD013 line-length findings across older
+  documentation files that are outside this change. The committed files pass
+  the configured Markdown and formatting gates above.
 
 ## Context and orientation
 

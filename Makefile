@@ -63,8 +63,11 @@ check-fmt: ruff ## Verify formatting
 	ruff format --check
 	# mdformat-all doesn't currently do checking
 
-lint: ruff ## Run linters
+lint: ruff check-architecture ## Run linters
 	ruff check
+
+check-architecture: build uv ## Check hexagonal architecture import boundaries
+	$(UV_ENV) uv run python -m episodic.architecture
 
 typecheck: build ty ## Run typechecking
 	ty --version
