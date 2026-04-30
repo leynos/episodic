@@ -7,13 +7,13 @@ import uuid
 
 from sqlalchemy.exc import IntegrityError
 
-from episodic.canonical.domain import ReferenceBinding, ReferenceBindingTargetKind
-from episodic.canonical.storage.models import (
+from episodic.canonical.constraints import (
     UQ_REF_DOC_BINDINGS_JOB_REV,
     UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
     UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
     UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
 )
+from episodic.canonical.domain import ReferenceBinding, ReferenceBindingTargetKind
 
 from .helpers import (
     _BindingTargetAlignment,
