@@ -244,6 +244,11 @@ Implementation approval rule:
   the `ty` tool runner to the already validated `0.0.32` version, and invokes
   Markdown lint through `npx -y markdownlint-cli2`.
 
+- Observation: The hook environment can also omit `uv` from `PATH` even though
+  it is installed at `/home/leynos/.local/bin/uv`. Impact: the Makefile now
+  resolves `UV` once, falling back to that absolute path, and all `uv`
+  invocations use `$(UV)`.
+
 ## Decision Log
 
 - Decision: implement architecture import enforcement as a repo-local checker
