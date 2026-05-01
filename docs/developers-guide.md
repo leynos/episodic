@@ -472,48 +472,43 @@ Pedante is implemented in the `episodic/qa/` package.
 
 ### Package structure
 
-- `episodic/qa/pedante.py` defines the Pedante request and result contract, the
-  support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
-  calls the existing `LLMPort`.
-- `episodic/qa/langgraph.py` provides the minimal LangGraph seam for Pedante.
-  This graph is intentionally narrow: it runs the evaluator and routes to
-  `pass` or `refine` based on typed findings.
+- `episodic/orchestration/generation.py` contains DTOs,
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
+  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
+  used for `plan -> execute -> finish`.
 
 ### Package structure
 
-- `episodic/qa/pedante.py` defines the Pedante request and result contract, the
-  support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
-  calls the existing `LLMPort`.
-- `episodic/qa/langgraph.py` provides the minimal LangGraph seam for Pedante.
-  This graph is intentionally narrow: it runs the evaluator and routes to
-  `pass` or `refine` based on typed findings.
+- `episodic/orchestration/generation.py` contains DTOs,
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
+  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
+  used for `plan -> execute -> finish`.
 
 ### Package structure
 
-- `episodic/qa/pedante.py` defines the Pedante request and result contract, the
-  support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
-  calls the existing `LLMPort`.
-- `episodic/qa/langgraph.py` provides the minimal LangGraph seam for Pedante.
-  This graph is intentionally narrow: it runs the evaluator and routes to
-  `pass` or `refine` based on typed findings.
+- `episodic/orchestration/generation.py` contains DTOs,
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
+  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
+  used for `plan -> execute -> finish`.
 
 ### Package structure
 
-- `episodic/qa/pedante.py` defines the Pedante request and result contract, the
-  support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
-  calls the existing `LLMPort`.
-- `episodic/qa/langgraph.py` provides the minimal LangGraph seam for Pedante.
-  This graph is intentionally narrow: it runs the evaluator and routes to
-  `pass` or `refine` based on typed findings.
+- `episodic/orchestration/generation.py` contains DTOs,
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
+  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
+  used for `plan -> execute -> finish`.
 
 ### Package structure
 
-- `episodic/qa/pedante.py` defines the Pedante request and result contract, the
-  support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
-  calls the existing `LLMPort`.
-- `episodic/qa/langgraph.py` provides the minimal LangGraph seam for Pedante.
-  This graph is intentionally narrow: it runs the evaluator and routes to
-  `pass` or `refine` based on typed findings.
+- `episodic/orchestration/generation.py` contains DTOs,
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
+  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
+  used for `plan -> execute -> finish`.
 
 ### Maintainer rules
 
@@ -679,15 +674,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
 Roadmap item `2.4.1` introduces a dedicated orchestration package in
 `episodic/orchestration/`.
 
-
-### Orchestration package structure
-
-- `episodic/orchestration/generation.py` contains the orchestration DTOs,
-  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
-  `ToolExecutorPort`, and the first concrete `ShowNotesToolExecutor`.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
-  used for `plan -> execute -> finish`.
-
+<!-- markdownlint-disable-next-line MD024 -->
 ## LLM adapter boundary
 
 `episodic.llm` now owns a richer outbound contract:
