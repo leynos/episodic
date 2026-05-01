@@ -22,12 +22,12 @@ from episodic.llm import (
 )
 from episodic.logging import getLogger
 
-_logger = getLogger(__name__)
+_log = getLogger(__name__)
 
 
 def _log_event(level: str, message: str, **fields: object) -> None:
     """Emit one structured log event with a JSON fallback."""
-    log_method = getattr(_logger, level)
+    log_method = getattr(_log, level)
     try:
         log_method(message, **fields)
     except TypeError:
@@ -61,11 +61,11 @@ class ToolExecutionError(RuntimeError):
 
 
 class ShowNotesFormatError(ToolExecutionError):
-    """Raised when show-notes output fails deterministic format validation."""
+    """Raised when the show-notes generator returns malformed structured JSON."""
 
 
 def _require_object(value: object, field_name: str) -> dict[str, object]:
-    """Return value as an object or raise a planning response format error."""
+    """Raise TypeError if value is not a plain dict."""
     if isinstance(value, dict):
         return typ.cast("dict[str, object]", value)
     msg = f"{field_name} must be an object."
@@ -73,7 +73,7 @@ def _require_object(value: object, field_name: str) -> dict[str, object]:
 
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
-    """Return the stripped string or raise a planning response format error."""
+    """Raise ValueError if value is not a non-empty string."""
     if not isinstance(value, str) or not value.strip():
         msg = f"{field_name} must be a non-empty string."
         raise PlanningResponseFormatError(msg)
@@ -84,7 +84,7 @@ def _require_optional_string_list(
     value: object,
     field_name: str,
 ) -> tuple[str, ...]:
-    """Return an optional list of strings as an immutable tuple."""
+    """Raise ValueError if value is neither None nor a list of strings."""
     if value is None:
         return ()
     if not isinstance(value, list):
@@ -100,7 +100,7 @@ def _require_optional_string_list(
 
 
 def _require_plan_step_list(value: object) -> list[dict[str, object]]:
-    """Return the planner steps as object mappings."""
+    """Raise ValueError if value is not a non-empty list."""
     if not isinstance(value, list):
         msg = "steps must be a list."
         raise PlanningResponseFormatError(msg)
@@ -108,7 +108,7 @@ def _require_plan_step_list(value: object) -> list[dict[str, object]]:
 
 
 def _coerce_action_kind(value: object) -> ActionKind:
-    """Return the coerced action kind from planner output."""
+    """Return the ActionKind enum for value, raising ValueError for unknown kinds."""
     if not isinstance(value, str):
         msg = "action_kind must be a non-empty string."
         raise PlanningResponseFormatError(msg)
@@ -120,7 +120,7 @@ def _coerce_action_kind(value: object) -> ActionKind:
 
 
 def _coerce_model_tier(value: object) -> ModelTier:
-    """Return the coerced model tier from planner output."""
+    """Return the ModelTier enum for value, raising ValueError for unknown tiers."""
     if not isinstance(value, str):
         msg = "model_tier must be a non-empty string."
         raise PlanningResponseFormatError(msg)
@@ -135,7 +135,7 @@ def _coerce_model_tier(value: object) -> ModelTier:
 
 
 def _normalize_non_empty_text(value: str, field_name: str) -> str:
-    """Return stripped text or raise ValueError if it is blank."""
+    """Strip value and raise ValueError if the result is empty."""
     stripped = value.strip()
     if not stripped:
         msg = f"{field_name} must be a non-empty string."
@@ -201,20 +201,20 @@ class GenerationOrchestrationConfig:
         if not self.enabled_action_kinds:
             msg = "enabled_action_kinds must not be empty."
             raise ValueError(msg)
-        try:
-            enabled_action_kinds = []
-            for item in self.enabled_action_kinds:
-                value = (
-                    item.value if isinstance(item, ActionKind) else str(item).strip()
-                )
-                enabled_action_kinds.append(ActionKind(value))
-        except ValueError as exc:
-            msg = "enabled_action_kinds contains an unsupported action kind."
-            raise ValueError(msg) from exc
+        normalised: list[ActionKind] = []
+        for element in self.enabled_action_kinds:
+            if isinstance(element, ActionKind):
+                normalised.append(element)
+            else:
+                try:
+                    normalised.append(ActionKind(str(element)))
+                except ValueError:
+                    msg = f"Unknown action kind: {element!r}"
+                    raise ValueError(msg) from None
         object.__setattr__(
             self,
             "enabled_action_kinds",
-            tuple(enabled_action_kinds),
+            tuple(normalised),
         )
         for field_name in (
             "planning_model",
@@ -356,7 +356,7 @@ class _ShowNotesGeneratorPort(typ.Protocol):
 
 
 def _sum_usage(*usage_values: LLMUsage | None) -> LLMUsage:
-    """Return the aggregate token usage across optional usage values."""
+    """Return the total token usage across all provided LLMUsage records."""
     input_tokens = 0
     output_tokens = 0
     total_tokens = 0
@@ -403,7 +403,7 @@ class StructuredGenerationPlanner:
         *,
         config: GenerationOrchestrationConfig,
     ) -> ExecutionPlan:
-        """Parse one strict planner payload into an execution plan."""
+        """Parse raw LLM JSON text into a validated ExecutionPlan."""
         plan_version = _require_non_empty_string(
             payload.get("plan_version"),
             "plan_version",
@@ -535,7 +535,7 @@ class ShowNotesToolExecutor:
     generator: _ShowNotesGeneratorPort | None = None
 
     def _build_generator(self) -> _ShowNotesGeneratorPort:
-        """Return the configured generator or build the default service."""
+        """Instantiate a ShowNotesGenerator configured from this executor's settings."""
         if self.generator is not None:
             return self.generator
         return ShowNotesGenerator(
@@ -565,10 +565,12 @@ class ShowNotesToolExecutor:
         if action_kind != ActionKind.GENERATE_SHOW_NOTES.value:
             msg = f"Unsupported action kind for show-notes tool: {action_kind}"
             raise UnsupportedActionError(msg)
-        model_tier = str(action.model_tier)
-        if model_tier != ModelTier.EXECUTION.value:
-            msg = "generate_show_notes must use the execution model tier."
-            raise ToolExecutionError(msg)
+        if action.model_tier != ModelTier.EXECUTION:
+            msg = (
+                f"ShowNotesToolExecutor requires ModelTier.EXECUTION; "
+                f"got {action.model_tier!r}"
+            )
+            raise UnsupportedActionError(msg)
 
         generator = self._build_generator()
         try:
@@ -584,14 +586,22 @@ class ShowNotesToolExecutor:
                 action_id=action.action_id,
             )
             raise
-        except ShowNotesResponseFormatError:
+        except ShowNotesResponseFormatError as exc:
             _log_event(
                 "error",
                 "show_notes_tool_executor.execute.format_error",
                 correlation_id=context.correlation_id,
                 action_id=action.action_id,
             )
-            raise
+            msg = "show-notes generator returned malformed structured output"
+            error = ShowNotesFormatError(msg)
+            _log_event(
+                "error",
+                "show_notes_tool_executor.execute.show_notes_format_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+            )
+            raise error from exc
         except Exception as exc:
             _log_event(
                 "error",
