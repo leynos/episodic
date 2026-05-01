@@ -154,12 +154,16 @@ markers = [
     "act: integration tests that drive GitHub Actions via act",
     "slow: exercises that take longer or require heavyweight tooling",
 ]
+filterwarnings = [
+    "ignore:Core Pydantic V1 functionality isn't compatible with Python 3\\.14 or greater\\.:UserWarning:langchain_core\\._api\\.deprecation",
+    "ignore:\\s*Eventlet is deprecated\\.:DeprecationWarning",
+]
 
 [tool.uv]
 package = true
 
 [build-system]
-requires = ["uv_build>=0.9.18,<0.10.0"]
+requires = ["uv_build>=0.11.7,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

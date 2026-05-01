@@ -72,7 +72,7 @@ typecheck: build ty ## Run typechecking
 	ty check
 
 markdownlint: $(MDLINT) ## Lint Markdown files
-	$(MDLINT) '**/*.md'
+	env -u NO_COLOR $(MDLINT) '**/*.md'
 
 nixie: ## Validate Mermaid diagrams
 	$(call ensure_tool,nixie)
