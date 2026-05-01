@@ -423,7 +423,14 @@ async def test_show_notes_tool_executor_rejects_unsupported_action_kind() -> Non
 
 
 @pytest.mark.asyncio
-async def test_show_notes_executor_rejects_planning_tier() -> None:
+@pytest.mark.parametrize(
+    ("model_tier", "expected_tier"),
+    [(ModelTier.PLANNING, ModelTier.EXECUTION.value)],
+)
+async def test_show_notes_executor_rejects_planning_tier(
+    model_tier: ModelTier,
+    expected_tier: str,
+) -> None:
     """Show-notes execution should only run on the execution model tier."""
     llm = _FakeLLMPort([])
     tool_executor = ShowNotesToolExecutor(llm=llm, config=_config())
@@ -431,11 +438,11 @@ async def test_show_notes_executor_rejects_planning_tier() -> None:
         action_id="action-1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
         rationale="Show notes are needed for downstream publication surfaces.",
-        model_tier=ModelTier.PLANNING,
+        model_tier=model_tier,
         required_inputs=("script_tei_xml",),
     )
 
-    with pytest.raises(UnsupportedActionError, match=r"ModelTier\.EXECUTION"):
+    with pytest.raises(UnsupportedActionError, match=expected_tier):
         await tool_executor.execute(planning_tier_action, _request())
 
 
