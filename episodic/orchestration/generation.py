@@ -548,22 +548,11 @@ class ShowNotesToolExecutor:
             ),
         )
 
-    async def execute(
-        self,
-        action: PlannedAction,
-        context: GenerationOrchestrationRequest,
-    ) -> ActionExecutionResult:
-        """Run the show-notes service for the supported action kind."""
-        action_kind = str(action.action_kind)
-        _log_event(
-            "debug",
-            "show_notes_tool_executor.execute.start",
-            correlation_id=context.correlation_id,
-            action_id=action.action_id,
-            action_kind=action_kind,
-        )
-        if action_kind != ActionKind.GENERATE_SHOW_NOTES.value:
-            msg = f"Unsupported action kind for show-notes tool: {action_kind}"
+    @staticmethod
+    def _validate_action_preconditions(action: PlannedAction) -> None:
+        """Raise UnsupportedActionError if action is not eligible for this executor."""
+        if str(action.action_kind) != ActionKind.GENERATE_SHOW_NOTES.value:
+            msg = f"Unsupported action kind for show-notes tool: {action.action_kind}"
             raise UnsupportedActionError(msg)
         if action.model_tier != ModelTier.EXECUTION:
             msg = (
@@ -572,9 +561,15 @@ class ShowNotesToolExecutor:
             )
             raise UnsupportedActionError(msg)
 
-        generator = self._build_generator()
+    @staticmethod
+    async def _invoke_show_notes_generator(
+        generator: _ShowNotesGeneratorPort,
+        context: GenerationOrchestrationRequest,
+        action: PlannedAction,
+    ) -> ShowNotesResult:
+        """Run the show-notes generator and map exceptions to tool-layer errors."""
         try:
-            result = await generator.generate(
+            return await generator.generate(
                 context.script_tei_xml,
                 template_structure=context.template_structure,
             )
@@ -604,6 +599,25 @@ class ShowNotesToolExecutor:
             )
             msg = "show-notes tool execution failed"
             raise ToolExecutionError(msg) from exc
+
+    async def execute(
+        self,
+        action: PlannedAction,
+        context: GenerationOrchestrationRequest,
+    ) -> ActionExecutionResult:
+        """Run the show-notes service for the supported action kind."""
+        action_kind = str(action.action_kind)
+        _log_event(
+            "debug",
+            "show_notes_tool_executor.execute.start",
+            correlation_id=context.correlation_id,
+            action_id=action.action_id,
+            action_kind=action_kind,
+        )
+        self._validate_action_preconditions(action)
+
+        generator = self._build_generator()
+        result = await self._invoke_show_notes_generator(generator, context, action)
 
         entry_count = len(result.entries)
         _log_event(
