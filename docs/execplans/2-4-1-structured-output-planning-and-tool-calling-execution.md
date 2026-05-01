@@ -348,9 +348,20 @@ The first implementation should introduce three layers.
    dispatches each action through a tool port. This layer owns action routing,
    step result aggregation, and failure handling for unsupported or malformed
    actions.
-3. A small LangGraph wrapper that executes the sequence
-   `initialize -> plan -> execute -> finish`, using typed state and conditional
-   edges where useful. For `2.4.1`, it remains in-process.
+3. A small LangGraph wrapper that executes the plan-execute-finish sequence
+   using typed state and conditional edges where useful. For `2.4.1`, it
+   remains in-process.
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Planner
+    participant Executor
+    Caller->>Planner: plan(request)
+    Planner-->>Caller: PlannerResult
+    Caller->>Executor: execute(action, request)
+    Executor-->>Caller: ActionExecutionResult
+```
 
 The planning layer should expose a DTO set along these lines:
 
