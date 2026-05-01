@@ -23,12 +23,12 @@ if typ.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
 
-_logger = getLogger(__name__)
+_log = getLogger(__name__)
 
 
 def _log_event(level: str, message: str, **fields: object) -> None:
     """Emit one structured log event with a JSON fallback."""
-    log_method = getattr(_logger, level)
+    log_method = getattr(_log, level)
     try:
         log_method(message, **fields)
     except TypeError:
@@ -51,7 +51,7 @@ async def _plan_node(
     *,
     planner: PlannerPort,
 ) -> dict[str, PlannerResult]:
-    """Run the planner graph node and return its state update."""
+    """Validate state and invoke the planner to produce a PlannerResult."""
     request = state.request
     correlation_id = request.correlation_id if request is not None else None
     _log_event(
@@ -76,7 +76,7 @@ async def _execute_node(
     *,
     tool_executor: ToolExecutorPort,
 ) -> dict[str, tuple[ActionExecutionResult, ...]]:
-    """Run planned tool actions and return their state update."""
+    """Validate state and execute each planned action through the tool executor."""
     request = state.request
     correlation_id = request.correlation_id if request is not None else None
     _log_event(
@@ -110,7 +110,7 @@ async def _execute_node(
 def _finish_node(
     state: GenerationGraphState,
 ) -> dict[str, GenerationOrchestrationResult]:
-    """Build the final orchestration result state update."""
+    """Aggregate planner and action results into a GenerationOrchestrationResult."""
     correlation_id = state.request.correlation_id if state.request is not None else None
     _log_event(
         "debug",
@@ -151,13 +151,13 @@ def build_generation_orchestration_graph(
     async def _run_plan_node(
         state: GenerationGraphState,
     ) -> dict[str, PlannerResult]:
-        """Run the bound planner node."""
+        """Async entry point for the plan graph node."""
         return await _plan_node(state, planner=planner)
 
     async def _run_execute_node(
         state: GenerationGraphState,
     ) -> dict[str, tuple[ActionExecutionResult, ...]]:
-        """Run the bound executor node."""
+        """Async entry point for the execute graph node."""
         return await _execute_node(state, tool_executor=tool_executor)
 
     graph.add_node("plan", _run_plan_node)

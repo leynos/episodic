@@ -102,14 +102,12 @@ later roadmap items:
 
 ## References
 
-- Roadmap item `2.4.1`[^1] - `docs/roadmap.md`
-- ExecPlan -
+- Roadmap item `2.4.1` — `docs/roadmap.md`
+- ExecPlan —
   `docs/execplans/2-4-1-structured-output-planning-and-tool-calling-execution.md`
-- Implementation - `episodic/orchestration/generation.py`,
+- Implementation — `episodic/orchestration/generation.py`,
   `episodic/orchestration/langgraph.py`
-- Tests - `tests/test_generation_orchestration.py`,
+- Tests — `tests/test_generation_orchestration.py`,
   `tests/test_generation_orchestration_langgraph.py`,
   `tests/features/generation_orchestration.feature`,
   `tests/steps/test_generation_orchestration_steps.py`
-
-[^1]: Roadmap item `2.4.1` covers structured-output planning and tool-calling execution.
