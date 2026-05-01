@@ -134,6 +134,38 @@ def _coerce_model_tier(value: object) -> ModelTier:
         raise PlanningResponseFormatError(msg) from exc
 
 
+def _coerce_action_kinds(
+    kinds: tuple[ActionKind | str, ...],
+) -> tuple[ActionKind, ...]:
+    """Return normalised ActionKind enums, raising ValueError for unknown kinds."""
+    if not kinds:
+        msg = "enabled_action_kinds must not be empty."
+        raise ValueError(msg)
+    normalised: list[ActionKind] = []
+    for element in kinds:
+        if isinstance(element, ActionKind):
+            normalised.append(element)
+        else:
+            try:
+                normalised.append(ActionKind(str(element)))
+            except ValueError:
+                msg = f"Unknown action kind: {element!r}"
+                raise ValueError(msg) from None
+    return tuple(normalised)
+
+
+def _normalise_string_fields(
+    obj: object,
+    field_names: tuple[str, ...],
+) -> None:
+    """Normalise each named string field on a frozen dataclass instance in-place."""
+    for field_name in field_names:
+        value = getattr(obj, field_name)
+        object.__setattr__(
+            obj, field_name, _normalize_non_empty_text(value, field_name)
+        )
+
+
 def _normalize_non_empty_text(value: str, field_name: str) -> str:
     """Strip value and raise ValueError if the result is empty."""
     stripped = value.strip()
@@ -198,34 +230,20 @@ class GenerationOrchestrationConfig:
 
     def __post_init__(self) -> None:
         """Reject blank config fields and empty action vocabularies."""
-        if not self.enabled_action_kinds:
-            msg = "enabled_action_kinds must not be empty."
-            raise ValueError(msg)
-        normalised: list[ActionKind] = []
-        for element in self.enabled_action_kinds:
-            if isinstance(element, ActionKind):
-                normalised.append(element)
-            else:
-                try:
-                    normalised.append(ActionKind(str(element)))
-                except ValueError:
-                    msg = f"Unknown action kind: {element!r}"
-                    raise ValueError(msg) from None
         object.__setattr__(
             self,
             "enabled_action_kinds",
-            tuple(normalised),
+            _coerce_action_kinds(self.enabled_action_kinds),
         )
-        for field_name in (
-            "planning_model",
-            "execution_model",
-            "planner_system_prompt",
-            "execution_system_prompt",
-        ):
-            value = getattr(self, field_name)
-            object.__setattr__(
-                self, field_name, _normalize_non_empty_text(value, field_name)
-            )
+        _normalise_string_fields(
+            self,
+            (
+                "planning_model",
+                "execution_model",
+                "planner_system_prompt",
+                "execution_system_prompt",
+            ),
+        )
 
 
 @dc.dataclass(frozen=True, slots=True)
