@@ -425,7 +425,7 @@ async def test_show_notes_tool_executor_rejects_unsupported_action_kind() -> Non
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("model_tier", "expected_tier_pattern"),
-    [(ModelTier.PLANNING, r"ModelTier\.EXECUTION")],
+    [(ModelTier.PLANNING, ModelTier.EXECUTION.value)],
 )
 async def test_show_notes_executor_rejects_planning_tier(
     model_tier: ModelTier,
