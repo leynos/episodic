@@ -565,10 +565,11 @@ class ShowNotesToolExecutor:
         if action_kind != ActionKind.GENERATE_SHOW_NOTES.value:
             msg = f"Unsupported action kind for show-notes tool: {action_kind}"
             raise UnsupportedActionError(msg)
-        if action.model_tier != ModelTier.EXECUTION:
+        model_tier = str(action.model_tier)
+        if model_tier != ModelTier.EXECUTION.value:
             msg = (
-                f"ShowNotesToolExecutor requires ModelTier.EXECUTION; "
-                f"got {action.model_tier!r}"
+                f"generate_show_notes requires model_tier "
+                f"'{ModelTier.EXECUTION.value}', got '{model_tier}'"
             )
             raise UnsupportedActionError(msg)
 
