@@ -207,10 +207,10 @@ class GenerationOrchestrationConfig:
                 normalised.append(element)
             else:
                 try:
-                    normalised.append(ActionKind(str(element)))
-                except ValueError:
-                    msg = f"Unknown action kind: {element!r}"
-                    raise ValueError(msg) from None
+                    normalised.append(ActionKind(str(element).strip()))
+                except ValueError as exc:
+                    msg = "enabled_action_kinds contains an unsupported action kind."
+                    raise ValueError(msg) from exc
         object.__setattr__(
             self,
             "enabled_action_kinds",
@@ -567,11 +567,8 @@ class ShowNotesToolExecutor:
             raise UnsupportedActionError(msg)
         model_tier = str(action.model_tier)
         if model_tier != ModelTier.EXECUTION.value:
-            msg = (
-                f"generate_show_notes requires model_tier "
-                f"'{ModelTier.EXECUTION.value}', got '{model_tier}'"
-            )
-            raise UnsupportedActionError(msg)
+            msg = "generate_show_notes must use the execution model tier."
+            raise ToolExecutionError(msg)
 
         generator = self._build_generator()
         try:
@@ -587,22 +584,14 @@ class ShowNotesToolExecutor:
                 action_id=action.action_id,
             )
             raise
-        except ShowNotesResponseFormatError as exc:
+        except ShowNotesResponseFormatError:
             _log_event(
                 "error",
                 "show_notes_tool_executor.execute.format_error",
                 correlation_id=context.correlation_id,
                 action_id=action.action_id,
             )
-            msg = "show-notes generator returned malformed structured output"
-            error = ShowNotesFormatError(msg)
-            _log_event(
-                "error",
-                "show_notes_tool_executor.execute.show_notes_format_error",
-                correlation_id=context.correlation_id,
-                action_id=action.action_id,
-            )
-            raise error from exc
+            raise
         except Exception as exc:
             _log_event(
                 "error",

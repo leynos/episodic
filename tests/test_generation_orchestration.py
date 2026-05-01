@@ -27,7 +27,6 @@ from episodic.orchestration import (
     ModelTier,
     PlannedAction,
     PlanningResponseFormatError,
-    ShowNotesFormatError,
     ShowNotesToolExecutor,
     StructuredGenerationPlanner,
     StructuredPlanningOrchestrator,
@@ -212,7 +211,7 @@ async def test_config_rejects_unknown_action_kind() -> None:
 
     with pytest.raises(
         ValueError,
-        match="Unknown action kind: 'unknown_action'",
+        match="enabled_action_kinds contains an unsupported action kind",
     ):
         GenerationOrchestrationConfig(
             planning_model="gpt-4.1",
@@ -424,12 +423,12 @@ async def test_show_notes_tool_executor_rejects_unsupported_action_kind() -> Non
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("model_tier", "expected_tier_pattern"),
-    [(ModelTier.PLANNING, ModelTier.EXECUTION.value)],
+    ("model_tier", "expected_message"),
+    [(ModelTier.PLANNING, "generate_show_notes must use the execution model tier")],
 )
 async def test_show_notes_executor_rejects_planning_tier(
     model_tier: ModelTier,
-    expected_tier_pattern: str,
+    expected_message: str,
 ) -> None:
     """Show-notes execution should only run on the execution model tier."""
     llm = _FakeLLMPort([])
@@ -442,7 +441,7 @@ async def test_show_notes_executor_rejects_planning_tier(
         required_inputs=("script_tei_xml",),
     )
 
-    with pytest.raises(UnsupportedActionError, match=expected_tier_pattern):
+    with pytest.raises(ToolExecutionError, match=expected_message):
         await tool_executor.execute(planning_tier_action, _request())
 
 
@@ -460,35 +459,32 @@ async def test_show_notes_tool_executor_wraps_generator_failures() -> None:
 
 
 @pytest.mark.asyncio
-async def test_show_notes_executor_wraps_format_error_distinctly() -> None:
-    """Structured show-notes validation errors should keep a distinct wrapper."""
+async def test_show_notes_executor_propagates_format_error_unchanged() -> None:
+    """Structured show-notes validation errors should propagate unchanged."""
     tool_executor = ShowNotesToolExecutor(
         llm=typ.cast("typ.Any", None),
         config=_config(),
         generator=typ.cast("typ.Any", _MalformedShowNotesGenerator()),
     )
 
-    with pytest.raises(
-        ShowNotesFormatError, match="malformed structured output"
-    ) as exc_info:
+    with pytest.raises(ShowNotesResponseFormatError) as exc_info:
         await tool_executor.execute(_planned_action(), _request())
 
-    assert isinstance(exc_info.value.__cause__, ShowNotesResponseFormatError)
+    assert exc_info.value.__cause__ is None
 
 
 @pytest.mark.asyncio
-async def test_show_notes_executor_format_error_is_subtype_of_tool_execution_error() -> (  # noqa: E501
+async def test_show_notes_executor_does_not_collapse_format_error_to_generic_tool_error() -> (  # noqa: E501
     None
 ):
-    """Structured show-notes validation errors should remain distinguishable."""
+    """Structured show-notes validation errors should not become generic errors."""
     tool_executor = ShowNotesToolExecutor(
         llm=typ.cast("typ.Any", None),
         config=_config(),
         generator=typ.cast("typ.Any", _MalformedShowNotesGenerator()),
     )
 
-    with pytest.raises(ToolExecutionError) as exc_info:
+    with pytest.raises(ShowNotesResponseFormatError) as exc_info:
         await tool_executor.execute(_planned_action(), _request())
 
-    assert isinstance(exc_info.value, ShowNotesFormatError)
-    assert type(exc_info.value) is not ToolExecutionError
+    assert not isinstance(exc_info.value, ToolExecutionError)
