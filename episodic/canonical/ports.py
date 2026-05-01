@@ -544,6 +544,7 @@ class EpisodeTemplateHistoryRepository(typ.Protocol):
         ...
 
 
+@typ.runtime_checkable
 class CanonicalUnitOfWork(typ.Protocol):
     """Unit-of-work boundary for canonical persistence.
 

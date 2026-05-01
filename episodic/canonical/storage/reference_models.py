@@ -7,6 +7,14 @@ import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
+from episodic.canonical.constraints import (
+    CK_REFERENCE_BINDINGS_EFFECTIVE_EPISODE,
+    CK_REFERENCE_BINDINGS_TARGET,
+    UQ_REF_DOC_BINDINGS_JOB_REV,
+    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
+    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
+    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
+)
 from episodic.canonical.domain import (
     ReferenceBindingTargetKind,
     ReferenceDocumentKind,
@@ -18,15 +26,9 @@ from episodic.canonical.storage.reference_document_schema import (
 )
 
 from .models import (
-    CK_REFERENCE_BINDINGS_EFFECTIVE_EPISODE,
-    CK_REFERENCE_BINDINGS_TARGET,
     REFERENCE_BINDING_TARGET_KIND,
     REFERENCE_DOCUMENT_KIND,
     REFERENCE_DOCUMENT_LIFECYCLE_STATE,
-    UQ_REF_DOC_BINDINGS_JOB_REV,
-    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
     Base,
 )
 

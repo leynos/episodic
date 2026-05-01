@@ -110,6 +110,7 @@ class LLMTransientProviderError(LLMError):
     """Raised when a provider fails transiently after retries are exhausted."""
 
 
+@typ.runtime_checkable
 class LLMPort(typ.Protocol):
     """Protocol for outbound LLM adapter implementations."""
 

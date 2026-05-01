@@ -1,7 +1,8 @@
-MDLINT ?= markdownlint-cli2
+MDLINT ?= npx -y markdownlint-cli2
 NIXIE ?= nixie
 MDFORMAT_ALL ?= mdformat-all
-TOOLS = $(MDFORMAT_ALL) ruff ty $(MDLINT) uv
+UV ?= $(shell command -v uv 2>/dev/null || printf '/home/leynos/.local/bin/uv')
+TOOLS = $(MDFORMAT_ALL)
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 PYTEST_XDIST_WORKERS ?= 1
@@ -14,10 +15,10 @@ PYTEST_XDIST_WORKERS ?= 1
 all: build check-fmt test typecheck
 
 .venv: pyproject.toml
-	$(UV_ENV) uv venv --clear
+	$(UV_ENV) $(UV) venv --clear
 
-build: uv .venv ## Build virtual-env and install deps
-	$(UV_ENV) uv sync --group dev
+build: .venv ## Build virtual-env and install deps
+	$(UV_ENV) $(UV) sync --group dev
 
 build-release: ## Build artefacts (sdist & wheel)
 	python -m build --sdist --wheel
@@ -36,7 +37,7 @@ define ensure_tool
 endef
 
 define ensure_tool_venv
-	@$(UV_ENV) uv run which $(1) >/dev/null 2>&1 || { \
+	@$(UV_ENV) $(UV) run which $(1) >/dev/null 2>&1 || { \
 	  printf "Error: '%s' is required in the virtualenv, but is not installed\n" "$(1)" >&2; \
 	  exit 1; \
 	}
@@ -54,34 +55,37 @@ $(VENV_TOOLS): ## Verify required CLI tools in venv
 	$(call ensure_tool_venv,$@)
 endif
 
-fmt: ruff $(MDFORMAT_ALL) ## Format sources
-	ruff format
-	ruff check --select I --fix
+fmt: build $(MDFORMAT_ALL) ## Format sources
+	$(UV_ENV) $(UV) run ruff format
+	$(UV_ENV) $(UV) run ruff check --select I --fix
 	$(MDFORMAT_ALL)
 
-check-fmt: ruff ## Verify formatting
-	ruff format --check
+check-fmt: build ## Verify formatting
+	$(UV_ENV) $(UV) run ruff format --check
 	# mdformat-all doesn't currently do checking
 
-lint: ruff ## Run linters
-	ruff check
+lint: build check-architecture ## Run linters
+	$(UV_ENV) $(UV) run ruff check
 
-typecheck: build ty ## Run typechecking
-	ty --version
-	ty check
+check-architecture: build ## Check hexagonal architecture import boundaries
+	$(UV_ENV) $(UV) run python -m episodic.architecture
 
-markdownlint: $(MDLINT) ## Lint Markdown files
+typecheck: build ## Run typechecking
+	$(UV_ENV) $(UV) tool run ty==0.0.32 --version
+	$(UV_ENV) $(UV) tool run ty==0.0.32 check
+
+markdownlint: ## Lint Markdown files
 	$(MDLINT) '**/*.md'
 
 nixie: ## Validate Mermaid diagrams
 	$(call ensure_tool,nixie)
 	$(NIXIE) --no-sandbox
 
-test: build uv $(VENV_TOOLS) ## Run tests
-	$(UV_ENV) uv run pytest -v -n $(PYTEST_XDIST_WORKERS)
+test: build $(VENV_TOOLS) ## Run tests
+	$(UV_ENV) $(UV) run pytest -v -n $(PYTEST_XDIST_WORKERS)
 
-check-migrations: build uv $(VENV_TOOLS) ## Check for schema drift between models and migrations
-	$(UV_ENV) uv run python -m episodic.canonical.storage.migration_check
+check-migrations: build $(VENV_TOOLS) ## Check for schema drift between models and migrations
+	$(UV_ENV) $(UV) run python -m episodic.canonical.storage.migration_check
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \

@@ -257,6 +257,10 @@ While we're building out the platform, you can:
 4. **Contribute**: If you're interested in contributing, check out
    [`../AGENTS.md`](../AGENTS.md) for guidelines and code quality standards.
 
+Architecture checks now run as part of the development and CI gates. They do
+not add a public API, but they protect release stability by preventing service
+code from bypassing the documented ports and adapter boundaries.
+
 ## Questions or Feedback?
 
 This project is developed by **df12 Productions**. Visit
