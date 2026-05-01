@@ -46,7 +46,17 @@ def _make_raw_source(**kwargs: typ.Unpack[RawSourceInputOverrides]) -> RawSource
         "content_hash": "hash-abc",
         "metadata": {},
     }
-    merged = typ.cast("RawSourceInputDict", defaults | kwargs)
+    merged: RawSourceInputDict = defaults.copy()
+    if "source_type" in kwargs:
+        merged["source_type"] = kwargs["source_type"]
+    if "source_uri" in kwargs:
+        merged["source_uri"] = kwargs["source_uri"]
+    if "content" in kwargs:
+        merged["content"] = kwargs["content"]
+    if "content_hash" in kwargs:
+        merged["content_hash"] = kwargs["content_hash"]
+    if "metadata" in kwargs:
+        merged["metadata"] = kwargs["metadata"]
     return RawSourceInput(**merged)
 
 
