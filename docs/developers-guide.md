@@ -467,7 +467,7 @@ changing canonical prompt assembly rules.
 
 Pedante is implemented in the `episodic/qa/` package.
 
-### Episodic QA - Pedante and LangGraph
+### Package structure
 
 - `episodic/qa/pedante.py` defines the Pedante request and result contract, the
   support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
