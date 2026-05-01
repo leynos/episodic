@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import typing as typ
 
@@ -26,6 +27,7 @@ from episodic.orchestration import (
     ModelTier,
     PlannedAction,
     PlanningResponseFormatError,
+    ShowNotesFormatError,
     ShowNotesToolExecutor,
     StructuredGenerationPlanner,
     StructuredPlanningOrchestrator,
@@ -173,22 +175,41 @@ def _plan_payload() -> str:
     })
 
 
-def test_config_normalizes_string_action_kinds() -> None:
+@pytest.mark.asyncio
+async def test_config_rejects_empty_enabled_action_kinds() -> None:
+    """Configuration should reject an empty action vocabulary."""
+    await asyncio.sleep(0)
+
+    with pytest.raises(ValueError, match="enabled_action_kinds must not be empty"):
+        GenerationOrchestrationConfig(
+            planning_model="gpt-4.1",
+            execution_model="gpt-4o-mini",
+            enabled_action_kinds=(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_config_normalises_string_action_kinds() -> None:
     """Configuration should accept string-like ActionKind values."""
+    await asyncio.sleep(0)
+
     config = GenerationOrchestrationConfig(
         planning_model="gpt-4.1",
         execution_model="gpt-4o-mini",
         enabled_action_kinds=typ.cast(
             "tuple[ActionKind, ...]",
-            (" generate_show_notes ",),
+            ("generate_show_notes",),
         ),
     )
 
     assert config.enabled_action_kinds == (ActionKind.GENERATE_SHOW_NOTES,)
 
 
-def test_config_rejects_unknown_action_kinds() -> None:
+@pytest.mark.asyncio
+async def test_config_rejects_unknown_action_kind() -> None:
     """Configuration should fail before unsupported action kinds flow onward."""
+    await asyncio.sleep(0)
+
     with pytest.raises(
         ValueError,
         match="enabled_action_kinds contains an unsupported action kind",
@@ -402,7 +423,7 @@ async def test_show_notes_tool_executor_rejects_unsupported_action_kind() -> Non
 
 
 @pytest.mark.asyncio
-async def test_show_notes_tool_executor_rejects_planning_model_tier() -> None:
+async def test_show_notes_executor_rejects_planning_tier() -> None:
     """Show-notes execution should only run on the execution model tier."""
     llm = _FakeLLMPort([])
     tool_executor = ShowNotesToolExecutor(llm=llm, config=_config())
@@ -414,7 +435,7 @@ async def test_show_notes_tool_executor_rejects_planning_model_tier() -> None:
         required_inputs=("script_tei_xml",),
     )
 
-    with pytest.raises(ToolExecutionError, match="execution model tier"):
+    with pytest.raises(UnsupportedActionError, match=r"ModelTier\.EXECUTION"):
         await tool_executor.execute(planning_tier_action, _request())
 
 
@@ -432,13 +453,32 @@ async def test_show_notes_tool_executor_wraps_generator_failures() -> None:
 
 
 @pytest.mark.asyncio
-async def test_show_notes_tool_executor_propagates_response_format_errors() -> None:
-    """Structured show-notes validation errors should remain deterministic."""
+async def test_show_notes_executor_wraps_format_error_distinctly() -> None:
+    """Structured show-notes validation errors should keep a distinct wrapper."""
     tool_executor = ShowNotesToolExecutor(
         llm=typ.cast("typ.Any", None),
         config=_config(),
         generator=typ.cast("typ.Any", _MalformedShowNotesGenerator()),
     )
 
-    with pytest.raises(ShowNotesResponseFormatError, match="entries"):
+    with pytest.raises(ShowNotesFormatError, match="format validation") as exc_info:
         await tool_executor.execute(_planned_action(), _request())
+
+    assert isinstance(exc_info.value.__cause__, ShowNotesResponseFormatError)
+
+
+@pytest.mark.asyncio
+async def test_show_notes_executor_does_not_collapse_format_error_to_generic_tool_error() -> (  # noqa: E501
+    None
+):
+    """Structured show-notes validation errors should not become generic errors."""
+    tool_executor = ShowNotesToolExecutor(
+        llm=typ.cast("typ.Any", None),
+        config=_config(),
+        generator=typ.cast("typ.Any", _MalformedShowNotesGenerator()),
+    )
+
+    with pytest.raises(ToolExecutionError) as exc_info:
+        await tool_executor.execute(_planned_action(), _request())
+
+    assert type(exc_info.value) is ShowNotesFormatError

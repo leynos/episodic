@@ -467,7 +467,7 @@ changing canonical prompt assembly rules.
 
 Pedante is implemented in the `episodic/qa/` package.
 
-### Episodic QA: Pedante and LangGraph
+### Package structure
 
 - `episodic/qa/pedante.py` defines the Pedante request and result contract, the
   support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
@@ -613,7 +613,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
 Roadmap item `2.4.1` introduces a dedicated orchestration package in
 `episodic/orchestration/`.
 
-### Package structure
+### Orchestration package structure
 
 - `episodic/orchestration/generation.py` contains the orchestration DTOs,
   `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
