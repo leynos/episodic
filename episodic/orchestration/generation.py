@@ -567,8 +567,11 @@ class ShowNotesToolExecutor:
             raise UnsupportedActionError(msg)
         model_tier = str(action.model_tier)
         if model_tier != ModelTier.EXECUTION.value:
-            msg = "generate_show_notes must use the execution model tier."
-            raise ToolExecutionError(msg)
+            msg = (
+                f"generate_show_notes requires model_tier "
+                f"'{ModelTier.EXECUTION.value}', got '{model_tier}'"
+            )
+            raise UnsupportedActionError(msg)
 
         generator = self._build_generator()
         try:
