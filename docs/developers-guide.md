@@ -613,11 +613,12 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
 Roadmap item `2.4.1` introduces a dedicated orchestration package in
 `episodic/orchestration/`.
 
-### Orchestration package structure
+<!-- markdownlint-disable-next-line MD024 -->
+### Package structure
 
-- `episodic/orchestration/generation.py` contains the orchestration DTOs,
+- `episodic/orchestration/generation.py` contains DTOs,
   `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
-  `ToolExecutorPort`, and the first concrete `ShowNotesToolExecutor`.
+  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
 - `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
   used for `plan -> execute -> finish`.
 

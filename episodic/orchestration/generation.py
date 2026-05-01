@@ -511,7 +511,7 @@ class StructuredGenerationPlanner:
         except json.JSONDecodeError as exc:
             msg = "Planner response is not valid JSON."
             _log_event(
-                "warning",
+                "error",
                 "structured_generation_planner.plan.invalid_json",
                 correlation_id=request.correlation_id,
                 planning_model=self.config.planning_model,
@@ -567,12 +567,33 @@ class ShowNotesToolExecutor:
         )
 
     @staticmethod
-    def _validate_action_preconditions(action: PlannedAction) -> None:
+    def _validate_action_preconditions(
+        action: PlannedAction,
+        *,
+        correlation_id: str,
+    ) -> None:
         """Raise UnsupportedActionError if action is not eligible for this executor."""
-        if str(action.action_kind) != ActionKind.GENERATE_SHOW_NOTES.value:
+        action_kind = str(action.action_kind)
+        if action_kind != ActionKind.GENERATE_SHOW_NOTES.value:
+            _log_event(
+                "error",
+                "show_notes_tool_executor.validate.unsupported_action_kind",
+                correlation_id=correlation_id,
+                action_id=action.action_id,
+                action_kind=action_kind,
+                expected_action_kind=ActionKind.GENERATE_SHOW_NOTES.value,
+            )
             msg = f"Unsupported action kind for show-notes tool: {action.action_kind}"
             raise UnsupportedActionError(msg)
         if action.model_tier != ModelTier.EXECUTION:
+            _log_event(
+                "error",
+                "show_notes_tool_executor.validate.unsupported_model_tier",
+                correlation_id=correlation_id,
+                action_id=action.action_id,
+                model_tier=action.model_tier,
+                required_model_tier=ModelTier.EXECUTION,
+            )
             msg = (
                 f"ShowNotesToolExecutor requires ModelTier.EXECUTION; "
                 f"got {action.model_tier!r}"
@@ -632,7 +653,10 @@ class ShowNotesToolExecutor:
             action_id=action.action_id,
             action_kind=action_kind,
         )
-        self._validate_action_preconditions(action)
+        self._validate_action_preconditions(
+            action,
+            correlation_id=context.correlation_id,
+        )
 
         generator = self._build_generator()
         result = await self._invoke_show_notes_generator(generator, context, action)
