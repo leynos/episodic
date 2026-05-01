@@ -207,10 +207,10 @@ class GenerationOrchestrationConfig:
                 normalised.append(element)
             else:
                 try:
-                    normalised.append(ActionKind(str(element).strip()))
-                except ValueError as exc:
-                    msg = "enabled_action_kinds contains an unsupported action kind."
-                    raise ValueError(msg) from exc
+                    normalised.append(ActionKind(str(element)))
+                except ValueError:
+                    msg = f"Unknown action kind: {element!r}"
+                    raise ValueError(msg) from None
         object.__setattr__(
             self,
             "enabled_action_kinds",
@@ -565,11 +565,10 @@ class ShowNotesToolExecutor:
         if action_kind != ActionKind.GENERATE_SHOW_NOTES.value:
             msg = f"Unsupported action kind for show-notes tool: {action_kind}"
             raise UnsupportedActionError(msg)
-        model_tier = str(action.model_tier)
-        if model_tier != ModelTier.EXECUTION.value:
+        if action.model_tier != ModelTier.EXECUTION:
             msg = (
-                f"generate_show_notes requires model_tier "
-                f"'{ModelTier.EXECUTION.value}', got '{model_tier}'"
+                f"ShowNotesToolExecutor requires ModelTier.EXECUTION; "
+                f"got {action.model_tier!r}"
             )
             raise UnsupportedActionError(msg)
 
@@ -587,14 +586,15 @@ class ShowNotesToolExecutor:
                 action_id=action.action_id,
             )
             raise
-        except ShowNotesResponseFormatError:
+        except ShowNotesResponseFormatError as exc:
             _log_event(
                 "error",
                 "show_notes_tool_executor.execute.format_error",
                 correlation_id=context.correlation_id,
                 action_id=action.action_id,
             )
-            raise
+            msg = "show-notes generator returned malformed structured output"
+            raise ShowNotesFormatError(msg) from exc
         except Exception as exc:
             _log_event(
                 "error",
