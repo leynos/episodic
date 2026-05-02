@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: COMPLETE
+Status: IN_PROGRESS
 
 ## Purpose and big picture
 
@@ -52,8 +52,8 @@ Success is observable in eight ways:
    `make check-fmt`, `make typecheck`, `make lint`, `make test`,
    `PATH=/root/.bun/bin:$PATH make markdownlint`, and `make nixie`.
 
-Because this is an ExecPlan draft, implementation must not begin until the user
-explicitly approves this plan or requests revisions.
+Because this ExecPlan is in progress, delivery statements remain provisional
+until Stage F validation and branch-level gates complete.
 
 ## Constraints
 
@@ -283,7 +283,8 @@ explicitly approves this plan or requests revisions.
 
 ## Outcomes & Retrospective
 
-Roadmap item `2.4.1` is now implemented.
+Roadmap item `2.4.1` has implementation work in place, with Stage F validation
+still pending.
 
 Delivered outcome:
 
@@ -297,8 +298,8 @@ Delivered outcome:
   `plan -> execute -> finish`.
 - Vidai Mock proves the end-to-end plan-and-execute behaviour in
   `tests/features/generation_orchestration.feature`.
-- Documentation, the ADR set, and `docs/roadmap.md` now reflect the shipped
-  feature accurately.
+- Documentation and ADR updates describe the intended shipped feature; final
+  roadmap completion waits for current validation evidence.
 
 Retrospective:
 
@@ -349,6 +350,10 @@ The first implementation should introduce three layers.
    `plan -> execute -> finish` using typed state and conditional edges where
    useful. For `2.4.1`, it remains in-process.
 
+Sequence diagram showing Caller invoking Planner, Planner returning an
+ExecutionPlan to Executor, Executor returning ActionExecutionResult[] to
+Finish, and Finish returning GenerationOrchestrationResult to Caller.
+
 ```mermaid
 sequenceDiagram
     participant Caller
@@ -360,6 +365,9 @@ sequenceDiagram
     Executor->>Finish: ActionExecutionResult[]
     Finish->>Caller: GenerationOrchestrationResult
 ```
+
+Figure: Structured output planning and tool-calling execution flow between
+Caller, Planner, Executor, and Finish.
 
 The planning layer should expose a DTO set along these lines:
 

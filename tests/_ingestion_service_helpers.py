@@ -42,7 +42,7 @@ def _make_raw_source(**kwargs: typ.Unpack[RawSourceInputOverrides]) -> RawSource
     allowed_keys = {"source_type", "source_uri", "content", "content_hash", "metadata"}
     unknown_keys = set(kwargs) - allowed_keys
     if unknown_keys:
-        msg = f"Invalid override keys: {unknown_keys}"
+        msg = f"Invalid override keys: {sorted(unknown_keys)}"
         raise ValueError(msg)
     defaults: RawSourceInputDict = {
         "source_type": "transcript",

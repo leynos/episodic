@@ -46,6 +46,9 @@ class _FakeLLMPort:
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """Return the next canned response after recording the request."""
         self.requests.append(request)
+        if not self._responses:
+            msg = f"FakeLLM: no more canned responses for request {request}"
+            raise AssertionError(msg)
         return self._responses.pop(0)
 
 
@@ -241,6 +244,18 @@ async def test_config_rejects_unknown_action_kind() -> None:
                 "tuple[ActionKind, ...]",
                 ("unknown_action",),
             ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_config_rejects_non_string_text_fields() -> None:
+    """Configuration should reject non-string text fields deterministically."""
+    await asyncio.sleep(0)
+
+    with pytest.raises(ValueError, match="planning_model must be a non-empty string"):
+        GenerationOrchestrationConfig(
+            planning_model=typ.cast("str", object()),
+            execution_model="gpt-4o-mini",
         )
 
 
