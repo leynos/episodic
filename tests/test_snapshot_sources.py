@@ -13,7 +13,7 @@ from episodic.canonical.reference_documents.snapshots import (
 )
 
 if typ.TYPE_CHECKING:
-    from tests.conftest import _SnapshotTestFixtures
+    from tests.fixtures.binding import _SnapshotTestFixtures
 
 pytestmark = pytest.mark.asyncio
 

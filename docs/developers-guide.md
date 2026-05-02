@@ -733,3 +733,50 @@ for compatibility, but new code should prefer calling the logger methods
 directly. Femtologging still expects pre-formatted messages rather than stdlib
 `logger.info("%s", value)` lazy formatting, so build the final string before
 calling the method.
+
+### LogLevel
+
+`episodic.logging.LogLevel` is a `StrEnum` with the following members:
+
+Table: Log levels used by the application
+
+| Value | Notes |
+| --- | --- |
+| `TRACE` | Verbose trace-level output |
+| `DEBUG` | Debug-level output |
+| `INFO` | Informational output (default) |
+| `WARNING` | Warning output |
+| `WARN` | Deprecated alias for `WARNING`; raises `DeprecationWarning` |
+| `ERROR` | Error output |
+| `CRITICAL` | Critical error output |
+
+### configure_logging
+
+```python
+def configure_logging(
+    level: str | None,
+    *,
+    force: bool = False,
+) -> tuple[LogLevel, bool]: ...
+```
+
+`level` is matched case-insensitively against `LogLevel` members.
+Returns a `tuple[LogLevel, bool]` — the normalized `LogLevel` value and a
+flag that is `True` when the default (`INFO`) was substituted because the
+input was absent or unrecognized. Passing `"WARN"` (any case) normalizes
+to `WARNING` and emits a `DeprecationWarning`. The `force` parameter is
+forwarded directly to `femtologging.basicConfig`.
+
+### Internal Protocol interfaces
+
+Two private Protocol types define the logger surface consumed by helper
+functions:
+
+- `_SupportsConvenienceLog` — objects with `info(message)`,
+  `warning(message)`, and `error(message)` methods.
+- `_SupportsLogMethod` — objects with a `log(level, message)` method
+  accepting an `int | LogLevel` level.
+
+Custom logger adapters passed to `log_info`, `log_warning`, or `log_error`
+must satisfy `_SupportsConvenienceLog`. Code that calls `log_at_level`
+must satisfy `_SupportsLogMethod`.
