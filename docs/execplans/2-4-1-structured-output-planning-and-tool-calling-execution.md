@@ -45,7 +45,7 @@ Success is observable in eight ways:
 6. Unit tests (`pytest`) prove structured-response parsing, tier selection,
    execution routing, tool error handling, and boundary enforcement at the
    application-service layer.
-7. Behavioural tests (`pytest-bdd`) using Vidai Mock prove that one orchestral
+7. Behavioural tests (`pytest-bdd`) using Vidai Mock prove that one orchestrated
    generation request produces a deterministic planning call plus downstream
    execution activity through the defined tool-calling path.
 8. The required validation commands pass sequentially:

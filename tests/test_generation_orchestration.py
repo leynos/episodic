@@ -570,8 +570,10 @@ async def test_show_notes_tool_executor_wraps_generator_failures() -> None:
         generator=typ.cast("typ.Any", _RaisingShowNotesGenerator()),
     )
 
-    with pytest.raises(ToolExecutionError):
+    with pytest.raises(ToolExecutionError) as exc_info:
         await tool_executor.execute(_planned_action(), _request())
+
+    assert isinstance(exc_info.value, _InjectedToolExecutionError)
 
 
 @pytest.mark.asyncio

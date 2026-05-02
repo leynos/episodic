@@ -198,6 +198,11 @@ class GenerationOrchestrationRequest:
             "script_tei_xml",
             _normalize_non_empty_text(self.script_tei_xml, "script_tei_xml"),
         )
+        if self.template_structure is not None and not isinstance(
+            self.template_structure, dict
+        ):
+            msg = "template_structure must be a mapping object or None."
+            raise TypeError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
