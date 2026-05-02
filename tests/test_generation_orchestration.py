@@ -268,6 +268,49 @@ async def test_config_rejects_non_string_text_fields() -> None:
 
 
 @pytest.mark.asyncio
+async def test_planned_action_normalizes_string_enum_fields() -> None:
+    """Planned actions should normalize string enum fields at construction."""
+    await asyncio.sleep(0)
+
+    action = PlannedAction(
+        action_id="action-1",
+        action_kind="generate_show_notes",
+        rationale="Generate notes.",
+        model_tier="execution",
+    )
+
+    assert action.action_kind == ActionKind.GENERATE_SHOW_NOTES
+    assert action.model_tier == ModelTier.EXECUTION
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "expected_match"),
+    [
+        ("action_kind", typ.cast("ActionKind", object()), "Unknown action kind"),
+        ("model_tier", typ.cast("ModelTier", object()), "Unknown model tier"),
+    ],
+)
+async def test_planned_action_rejects_unknown_enum_fields(
+    field_name: str,
+    field_value: ActionKind | ModelTier,
+    expected_match: str,
+) -> None:
+    """Planned actions should reject invalid enum-like field values."""
+    await asyncio.sleep(0)
+    kwargs: dict[str, object] = {
+        "action_id": "action-1",
+        "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+        "rationale": "Generate notes.",
+        "model_tier": ModelTier.EXECUTION,
+    }
+    kwargs[field_name] = field_value
+
+    with pytest.raises(ValueError, match=expected_match):
+        PlannedAction(**typ.cast("typ.Any", kwargs))
+
+
+@pytest.mark.asyncio
 async def test_planner_returns_typed_plan_and_uses_planning_model() -> None:
     """Planner should decode JSON strictly and use configured planning fields."""
     llm = _FakeLLMPort([
@@ -482,18 +525,16 @@ async def test_show_notes_tool_executor_accepts_execution_tier_string() -> None:
 
 @pytest.mark.asyncio
 async def test_show_notes_tool_executor_rejects_unsupported_action_kind() -> None:
-    """Unsupported action kinds should fail before the show-notes service runs."""
-    llm = _FakeLLMPort([])
-    tool_executor = ShowNotesToolExecutor(llm=llm, config=_config())
-    unsupported = PlannedAction(
-        action_id="action-2",
-        action_kind=typ.cast("ActionKind", "generate_guest_bio"),
-        rationale="Not supported in this slice.",
-        model_tier=ModelTier.EXECUTION,
-    )
+    """Unsupported action kinds should fail before tool execution."""
+    await asyncio.sleep(0)
 
-    with pytest.raises(UnsupportedActionError, match="generate_guest_bio"):
-        await tool_executor.execute(unsupported, _request())
+    with pytest.raises(ValueError, match="Unknown action kind: 'generate_guest_bio'"):
+        PlannedAction(
+            action_id="action-2",
+            action_kind=typ.cast("ActionKind", "generate_guest_bio"),
+            rationale="Not supported in this slice.",
+            model_tier=ModelTier.EXECUTION,
+        )
 
 
 @pytest.mark.asyncio

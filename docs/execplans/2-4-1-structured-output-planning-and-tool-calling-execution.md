@@ -401,27 +401,23 @@ That port may be implemented by a dispatcher that knows how to call show-notes
 generation first and can later grow to handle chapter markers, guest bios, and
 sponsor reads without changing the planner DTOs.
 
-## ADR to add
+## Accepted ADR
 
-Create a new ADR under `docs/adr/` before finalizing the implementation. The
-working topic should be "structured planning and tool execution for generation
-orchestration". The ADR should record:
+ADR-005, "Structured planning and tool execution for generation orchestration",
+is accepted under `docs/adr/adr-005-structured-planning-and-tool-execution.md`
+and is listed in the system design document's accepted decision records.
 
-1. Why planning is modelled as strict structured output instead of prose.
-2. Why execution is modelled through tool ports rather than direct adapter
-   imports inside LangGraph nodes.
-3. How model tiering is represented at this stage without taking on full
-   pricing-catalogue work.
-4. Why show notes are the first shipped enrichment tool.
-5. Which responsibilities are explicitly deferred to `2.4.2`, `2.4.3`,
-   `2.4.4`, and `2.5.x`.
-
-The design document should then reference the new ADR in its accepted-decision
-list.
+ADR-005 records the shipped decision to model planning as strict structured
+output rather than prose, execute enrichment through tool ports rather than
+direct adapter imports, represent model tiering through configuration without a
+pricing catalogue, and use show notes as the first enrichment tool because that
+service already has `LLMPort` and strict JSON validation seams. It also defers
+checkpointing to `2.4.2`, Celery queue routing to `2.4.3`, cost-ledger
+persistence to `2.4.4`, and pricing, SLA, and budget enforcement to `2.5.x`.
 
 ## Implementation stages
 
-## Stage A: define failing tests first
+### Stage A: define failing tests first
 
 Add tests before production code changes. The point of this stage is to freeze
 the intended external behaviour of `2.4.1`.
@@ -460,7 +456,7 @@ Suggested files:
 Run the new tests first and confirm they fail for the expected missing-symbol
 or wrong-behaviour reasons before proceeding.
 
-## Stage B: implement typed planning and model-tier configuration
+### Stage B: implement typed planning and model-tier configuration
 
 Add the planning DTOs and service. Keep the first version small and strict.
 
@@ -491,7 +487,7 @@ Acceptance for Stage B:
 - Invalid planner output fails fast with deterministic parsing errors.
 - Tier selection is observable through unit tests and configuration objects.
 
-## Stage C: implement orchestration service and LangGraph wrapper
+### Stage C: implement orchestration service and LangGraph wrapper
 
 Add the application-service execution flow that uses the planner, then executes
 its actions.
@@ -523,7 +519,7 @@ Acceptance for Stage C:
 - A small LangGraph graph can drive the same flow in-process.
 - The LangGraph seam still respects ports-only dependency rules.
 
-## Stage D: add the first enrichment tool-calling path
+### Stage D: add the first enrichment tool-calling path
 
 Introduce the first concrete tool implementation using show notes.
 
@@ -544,7 +540,7 @@ Acceptance for Stage D:
 - Unit tests prove the executor dispatches through the tool port.
 - Behavioural tests prove the plan-and-execute flow with Vidai Mock.
 
-## Stage E: document the shipped design
+### Stage E: document the shipped design
 
 Update documentation after the code is stable.
 
@@ -564,7 +560,7 @@ Required documentation work:
 Do not mark `docs/roadmap.md` done yet in this stage. Reserve that for the
 final validation stage so roadmap truth matches tested reality.
 
-## Stage F: validate, update roadmap, and finalize the plan
+### Stage F: validate, update roadmap, and finalize the plan
 
 After implementation and documentation changes are in place, run the full gate
 sequence with `tee` logs and `set -o pipefail` so failures are not hidden by
