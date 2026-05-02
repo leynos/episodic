@@ -12,6 +12,7 @@ from episodic.generation import (
 )
 from episodic.generation.show_notes import ShowNotesResponseFormatError
 from episodic.llm import (
+    LLMError,
     LLMPort,
     LLMProviderOperation,
     LLMRequest,
@@ -261,7 +262,7 @@ class PlannedAction:
     required_inputs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        """Reject blank identifiers and rationale text."""
+        """Reject blank identifiers, rationale text, and unknown enum fields."""
         object.__setattr__(
             self,
             "action_id",
@@ -272,12 +273,26 @@ class PlannedAction:
             "rationale",
             _normalize_non_empty_text(self.rationale, "rationale"),
         )
-        if not str(self.action_kind).strip():
-            msg = "action_kind must be a non-empty string."
-            raise ValueError(msg)
-        if not str(self.model_tier).strip():
-            msg = "model_tier must be a non-empty string."
-            raise ValueError(msg)
+        try:
+            action_kind = (
+                self.action_kind
+                if isinstance(self.action_kind, ActionKind)
+                else ActionKind(str(self.action_kind).strip())
+            )
+        except ValueError:
+            msg = f"Unknown action kind: {self.action_kind!r}"
+            raise ValueError(msg) from None
+        try:
+            model_tier = (
+                self.model_tier
+                if isinstance(self.model_tier, ModelTier)
+                else ModelTier(str(self.model_tier).strip())
+            )
+        except ValueError:
+            msg = f"Unknown model tier: {self.model_tier!r}"
+            raise ValueError(msg) from None
+        object.__setattr__(self, "action_kind", action_kind)
+        object.__setattr__(self, "model_tier", model_tier)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -508,17 +523,16 @@ class StructuredGenerationPlanner:
             correlation_id=request.correlation_id,
             planning_model=self.config.planning_model,
         )
+        llm_request = LLMRequest(
+            model=self.config.planning_model,
+            prompt=self.build_prompt(request),
+            system_prompt=self.config.planner_system_prompt,
+            provider_operation=self.config.planning_provider_operation,
+            token_budget=self.config.planning_token_budget,
+        )
         try:
-            response = await self.llm.generate(
-                LLMRequest(
-                    model=self.config.planning_model,
-                    prompt=self.build_prompt(request),
-                    system_prompt=self.config.planner_system_prompt,
-                    provider_operation=self.config.planning_provider_operation,
-                    token_budget=self.config.planning_token_budget,
-                )
-            )
-        except Exception:
+            response = await self.llm.generate(llm_request)
+        except LLMError:
             _log_event(
                 "error",
                 "structured_generation_planner.plan.error",
