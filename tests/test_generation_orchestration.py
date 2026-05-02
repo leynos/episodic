@@ -198,11 +198,31 @@ async def test_config_normalises_string_action_kinds() -> None:
         execution_model="gpt-4o-mini",
         enabled_action_kinds=typ.cast(
             "tuple[ActionKind, ...]",
-            ("generate_show_notes",),
+            (" generate_show_notes ",),
         ),
     )
 
     assert config.enabled_action_kinds == (ActionKind.GENERATE_SHOW_NOTES,)
+
+
+@pytest.mark.asyncio
+async def test_planner_rejects_non_json_serializable_template_structure() -> None:
+    """Prompt construction should reject non-JSON template structures clearly."""
+    await asyncio.sleep(0)
+    planner = StructuredGenerationPlanner(
+        llm=_FakeLLMPort([]),
+        config=_config(),
+    )
+    request = GenerationOrchestrationRequest(
+        correlation_id="corr-123",
+        script_tei_xml="<TEI />",
+        template_structure={"bad": object()},
+    )
+
+    with pytest.raises(
+        ValueError, match="template_structure must be JSON-serializable"
+    ):
+        planner.build_prompt(request)
 
 
 @pytest.mark.asyncio
@@ -469,7 +489,7 @@ async def test_show_notes_executor_wraps_format_error_distinctly() -> None:
     )
 
     with pytest.raises(
-        ShowNotesFormatError, match="malformed structured output"
+        ShowNotesFormatError, match="malformed structured JSON"
     ) as exc_info:
         await tool_executor.execute(_planned_action(), _request())
 

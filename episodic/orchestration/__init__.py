@@ -17,6 +17,7 @@ from episodic.orchestration.generation import (
     StructuredGenerationPlanner,
     StructuredPlanningOrchestrator,
     ToolExecutionError,
+    ToolExecutorPort,
     UnsupportedActionError,
     build_generation_result,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "StructuredGenerationPlanner",
     "StructuredPlanningOrchestrator",
     "ToolExecutionError",
+    "ToolExecutorPort",
     "UnsupportedActionError",
     "build_generation_orchestration_graph",
     "build_generation_result",

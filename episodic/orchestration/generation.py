@@ -1,7 +1,5 @@
 """Structured planning and tool execution for content generation."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import enum
 import json
@@ -147,7 +145,7 @@ def _coerce_action_kinds(
             normalised.append(element)
         else:
             try:
-                normalised.append(ActionKind(str(element)))
+                normalised.append(ActionKind(str(element).strip()))
             except ValueError:
                 msg = f"Unknown action kind: {element!r}"
                 raise ValueError(msg) from None
@@ -486,7 +484,15 @@ class StructuredGenerationPlanner:
         }
         if request.template_structure is not None:
             prompt_payload["template_structure"] = request.template_structure
-        rendered_payload = json.dumps(prompt_payload, indent=2, ensure_ascii=True)
+        try:
+            rendered_payload = json.dumps(
+                prompt_payload,
+                indent=2,
+                ensure_ascii=True,
+            )
+        except TypeError as exc:
+            msg = "template_structure must be JSON-serializable."
+            raise ValueError(msg) from exc
         return f"Return JSON only.\n{rendered_payload}"
 
     async def plan(self, request: GenerationOrchestrationRequest) -> PlannerResult:
@@ -497,15 +503,24 @@ class StructuredGenerationPlanner:
             correlation_id=request.correlation_id,
             planning_model=self.config.planning_model,
         )
-        response = await self.llm.generate(
-            LLMRequest(
-                model=self.config.planning_model,
-                prompt=self.build_prompt(request),
-                system_prompt=self.config.planner_system_prompt,
-                provider_operation=self.config.planning_provider_operation,
-                token_budget=self.config.planning_token_budget,
+        try:
+            response = await self.llm.generate(
+                LLMRequest(
+                    model=self.config.planning_model,
+                    prompt=self.build_prompt(request),
+                    system_prompt=self.config.planner_system_prompt,
+                    provider_operation=self.config.planning_provider_operation,
+                    token_budget=self.config.planning_token_budget,
+                )
             )
-        )
+        except Exception:
+            _log_event(
+                "error",
+                "structured_generation_planner.plan.error",
+                correlation_id=request.correlation_id,
+                planning_model=self.config.planning_model,
+            )
+            raise
         try:
             decoded = json.loads(response.text)
         except json.JSONDecodeError as exc:
@@ -627,7 +642,7 @@ class ShowNotesToolExecutor:
                 correlation_id=context.correlation_id,
                 action_id=action.action_id,
             )
-            msg = "show-notes generator returned malformed structured output"
+            msg = "show-notes tool returned malformed structured JSON"
             raise ShowNotesFormatError(msg) from exc
         except Exception as exc:
             _log_event(
