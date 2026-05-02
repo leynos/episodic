@@ -89,8 +89,12 @@ class _RaisingShowNotesGenerator:
         template_structure: dict[str, object] | None = None,
     ) -> ShowNotesResult:
         """Raise a deterministic tool error after validating the context."""
-        assert script_tei_xml.startswith("<TEI>")
-        assert template_structure == {"sections": ["intro", "analysis"]}
+        assert script_tei_xml.startswith("<TEI>"), (
+            "expected TEI root in generated script_tei_xml"
+        )
+        assert template_structure == {"sections": ["intro", "analysis"]}, (
+            "template_structure does not match expected sections"
+        )
         raise _InjectedToolExecutionError
 
 
@@ -104,8 +108,12 @@ class _MalformedShowNotesGenerator:
         template_structure: dict[str, object] | None = None,
     ) -> ShowNotesResult:
         """Raise the structured-response validation sentinel."""
-        assert script_tei_xml.startswith("<TEI>")
-        assert template_structure == {"sections": ["intro", "analysis"]}
+        assert script_tei_xml.startswith("<TEI>"), (
+            "expected TEI root in generated script_tei_xml"
+        )
+        assert template_structure == {"sections": ["intro", "analysis"]}, (
+            "template_structure does not match expected sections"
+        )
         msg = "entries must be a list."
         raise ShowNotesResponseFormatError(msg)
 
@@ -439,6 +447,37 @@ async def test_show_notes_tool_executor_uses_execution_model_and_returns_result(
     request = llm.requests[0]
     assert request.model == "gpt-4o-mini"
     assert request.provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
+
+
+@pytest.mark.asyncio
+async def test_show_notes_tool_executor_accepts_execution_tier_string() -> None:
+    """Show-notes executor should normalize valid string model tiers."""
+    llm = _FakeLLMPort([
+        _response(
+            json.dumps({
+                "entries": [
+                    {
+                        "topic": "Introduction",
+                        "summary": "Opening remarks.",
+                    }
+                ]
+            }),
+            model="gpt-4o-mini",
+            usage=_usage(input_tokens=18, output_tokens=7),
+        )
+    ])
+    tool_executor = ShowNotesToolExecutor(llm=llm, config=_config())
+    action = PlannedAction(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        rationale="Show notes are needed for downstream publication surfaces.",
+        model_tier="execution",
+        required_inputs=("script_tei_xml",),
+    )
+
+    result = await tool_executor.execute(action, _request())
+
+    assert result.model_tier == ModelTier.EXECUTION
 
 
 @pytest.mark.asyncio

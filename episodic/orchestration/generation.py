@@ -605,18 +605,26 @@ class ShowNotesToolExecutor:
             )
             msg = f"Unsupported action kind for show-notes tool: {action.action_kind}"
             raise UnsupportedActionError(msg)
-        if action.model_tier != ModelTier.EXECUTION:
+        try:
+            normalized_tier = (
+                action.model_tier
+                if isinstance(action.model_tier, ModelTier)
+                else ModelTier(str(action.model_tier).strip())
+            )
+        except ValueError:
+            normalized_tier = str(action.model_tier).strip()
+        if normalized_tier != ModelTier.EXECUTION:
             _log_event(
                 "error",
                 "show_notes_tool_executor.validate.unsupported_model_tier",
                 correlation_id=correlation_id,
                 action_id=action.action_id,
-                model_tier=action.model_tier,
+                model_tier=normalized_tier,
                 required_model_tier=ModelTier.EXECUTION,
             )
             msg = (
                 f"ShowNotesToolExecutor requires ModelTier.EXECUTION; "
-                f"got {action.model_tier!r}"
+                f"got {normalized_tier!r}"
             )
             raise UnsupportedActionError(msg)
 
