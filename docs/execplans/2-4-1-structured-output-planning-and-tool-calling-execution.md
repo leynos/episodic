@@ -558,7 +558,7 @@ Required documentation work:
   behavioural coverage.
 
 Do not mark `docs/roadmap.md` done yet in this stage. Reserve that for the
-final validation stage so roadmap truth matches tested reality.
+final validation stage, so roadmap truth matches tested reality.
 
 ### Stage F: validate, update roadmap, and finalize the plan
 
@@ -585,7 +585,7 @@ If all commands pass:
    - set `Status: COMPLETE`
    - complete the `Progress` checkboxes with timestamps
    - record final validation results under `Surprises & Discoveries` or
-     `Outcomes & Retrospective`
+     `Outcomes & Retrospective`.
 3. Store a project-memory note summarizing the implementation, validation
    commands, any gotchas, and the new ADR path.
 

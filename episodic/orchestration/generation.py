@@ -154,11 +154,11 @@ def _coerce_action_kinds(
     return tuple(_coerce_single_action_kind(element) for element in kinds)
 
 
-def _normalise_string_fields(
+def _normalize_string_fields(
     obj: object,
     field_names: tuple[str, ...],
 ) -> None:
-    """Normalise each named string field on a frozen dataclass instance in-place."""
+    """Normalize each named string field on a frozen dataclass instance in-place."""
     for field_name in field_names:
         value = getattr(obj, field_name)
         object.__setattr__(
@@ -245,7 +245,7 @@ class GenerationOrchestrationConfig:
             "enabled_action_kinds",
             _coerce_action_kinds(self.enabled_action_kinds),
         )
-        _normalise_string_fields(
+        _normalize_string_fields(
             self,
             (
                 "planning_model",
@@ -631,6 +631,14 @@ class ShowNotesToolExecutor:
                 else ModelTier(str(action.model_tier).strip())
             )
         except ValueError:
+            _log_event(
+                "warning",
+                "show_notes_tool_executor.validate.invalid_model_tier",
+                correlation_id=correlation_id,
+                action_id=action.action_id,
+                model_tier=str(action.model_tier),
+                valid_model_tiers=tuple(tier.value for tier in ModelTier),
+            )
             normalized_tier = str(action.model_tier).strip()
         if normalized_tier != ModelTier.EXECUTION:
             _log_event(
