@@ -172,8 +172,7 @@ explicitly approves this plan or requests revisions.
   and the show-notes execution path.
 - [x] (2026-04-21 10:17Z) Stage E: documented the architecture decision and
   updated the design, user, and developer guides.
-- [x] (2026-04-21 10:35Z) Stage F: ran the full validation sequence, updated
-  roadmap item `2.4.1`, and recorded final outcomes in this plan.
+- [ ] Stage F validation pending; awaiting CI/gates.
 
 ## Surprises & Discoveries
 
@@ -203,12 +202,10 @@ explicitly approves this plan or requests revisions.
   the vertical slice is stable enough to proceed to documentation and full
   repository gates.
 
-- Observation: full validation passed after one implementation fix for ordered
-  async tool execution. Evidence: `make fmt`, `make check-fmt`,
-  `make typecheck`, `make lint`, `make test`,
-  `PATH=/root/.bun/bin:$PATH make markdownlint`, and `make nixie` all succeeded
-  on 2026-04-21, with `make test` reporting 367 passed and 2 skipped. Impact:
-  roadmap item `2.4.1` can be marked complete without caveats.
+- Observation: Stage F validation is pending; awaiting CI/gates before final
+  completion claims. Evidence: local validation notes remain provisional until
+  the branch-level gates complete. Impact: keep roadmap item `2.4.1` in
+  progress until the validation record is current.
 
 - Observation: the repository already has `langgraph` and `granian` declared in
   `pyproject.toml`, so `2.4.1` can build on an installed orchestration
@@ -349,18 +346,19 @@ The first implementation should introduce three layers.
    step result aggregation, and failure handling for unsupported or malformed
    actions.
 3. A small LangGraph wrapper that executes the sequence
-   `initialize -> plan -> execute -> finish` using typed state and conditional
-   edges where useful. For `2.4.1`, it remains in-process.
+   `plan -> execute -> finish` using typed state and conditional edges where
+   useful. For `2.4.1`, it remains in-process.
 
 ```mermaid
 sequenceDiagram
     participant Caller
     participant Planner
     participant Executor
+    participant Finish
     Caller->>Planner: plan(request)
-    Planner-->>Caller: PlannerResult
-    Caller->>Executor: execute(action, request)
-    Executor-->>Caller: ActionExecutionResult
+    Planner->>Executor: ExecutionPlan
+    Executor->>Finish: ActionExecutionResult[]
+    Finish->>Caller: GenerationOrchestrationResult
 ```
 
 The planning layer should expose a DTO set along these lines:

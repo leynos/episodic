@@ -39,6 +39,11 @@ class RawSourceInputDict(typ.TypedDict):
 
 def _make_raw_source(**kwargs: typ.Unpack[RawSourceInputOverrides]) -> RawSourceInput:
     """Build a raw source input for testing with sensible defaults."""
+    allowed_keys = {"source_type", "source_uri", "content", "content_hash", "metadata"}
+    unknown_keys = set(kwargs) - allowed_keys
+    if unknown_keys:
+        msg = f"Invalid override keys: {unknown_keys}"
+        raise ValueError(msg)
     defaults: RawSourceInputDict = {
         "source_type": "transcript",
         "source_uri": "s3://bucket/transcript.txt",
