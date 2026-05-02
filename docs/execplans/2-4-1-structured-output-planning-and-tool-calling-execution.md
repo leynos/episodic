@@ -84,7 +84,7 @@ until Stage F validation and branch-level gates complete.
   it with live provider calls.
 - Update the design document, the user's guide, and the developer's guide to
   describe the shipped behaviour and maintainer workflow. Record durable
-  architectural decisions in a new Architecture Decision Record (ADR).
+  architectural decisions in the accepted Architecture Decision Record (ADR).
 - Do not mark `docs/roadmap.md` item `2.4.1` done until the feature is
   implemented, documented, tested, and all validation gates pass.
 
@@ -393,8 +393,9 @@ PlannedAction
 The execution layer should expose a small port surface, for example:
 
 ```plaintext
-EnrichmentToolPort
-- execute(action: PlannedAction, context: ExecutionContext) -> ActionResult
+ToolExecutorPort
+- execute(action: PlannedAction, context: GenerationOrchestrationRequest)
+    -> ActionExecutionResult
 ```
 
 That port may be implemented by a dispatcher that knows how to call show-notes

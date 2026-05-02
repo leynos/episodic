@@ -310,7 +310,7 @@ class ExecutionPlan:
     steps: tuple[PlannedAction, ...]
 
     def __post_init__(self) -> None:
-        """Validate top-level plan metadata."""
+        """Validate top-level plan metadata and freeze the step sequence."""
         for field_name in (
             "plan_version",
             "selected_planning_model",
@@ -320,6 +320,14 @@ class ExecutionPlan:
             object.__setattr__(
                 self, field_name, _normalize_non_empty_text(value, field_name)
             )
+        steps = tuple(self.steps)
+        for index, step in enumerate(steps):
+            if not isinstance(step, PlannedAction):
+                msg = (
+                    f"steps[{index}] must be a PlannedAction; got {type(step).__name__}"
+                )
+                raise TypeError(msg)
+        object.__setattr__(self, "steps", steps)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -763,11 +771,38 @@ class StructuredPlanningOrchestrator:
         request: GenerationOrchestrationRequest,
     ) -> GenerationOrchestrationResult:
         """Plan and execute one structured generation request."""
-        planner_result = await self.planner.plan(request)
-        action_results = await self.execute_plan(
-            request=request,
-            plan=planner_result.plan,
+        _log_event(
+            "info",
+            "structured_planning_orchestrator.orchestrate.start",
+            correlation_id=request.correlation_id,
         )
+        try:
+            planner_result = await self.planner.plan(request)
+        except Exception as exc:
+            _log_event(
+                "error",
+                "structured_planning_orchestrator.orchestrate.error",
+                correlation_id=request.correlation_id,
+                stage="plan",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
+        try:
+            action_results = await self.execute_plan(
+                request=request,
+                plan=planner_result.plan,
+            )
+        except Exception as exc:
+            _log_event(
+                "error",
+                "structured_planning_orchestrator.orchestrate.error",
+                correlation_id=request.correlation_id,
+                stage="execute_plan",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
         result = build_generation_result(planner_result, action_results)
         _log_event(
             "info",
