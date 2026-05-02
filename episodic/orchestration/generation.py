@@ -164,8 +164,11 @@ def _normalise_string_fields(
         )
 
 
-def _normalize_non_empty_text(value: str, field_name: str) -> str:
+def _normalize_non_empty_text(value: object, field_name: str) -> str:
     """Strip value and raise ValueError if the result is empty."""
+    if not isinstance(value, str):
+        msg = f"{field_name} must be a non-empty string."
+        raise ValueError(msg)  # noqa: TRY004
     stripped = value.strip()
     if not stripped:
         msg = f"{field_name} must be a non-empty string."
@@ -209,7 +212,9 @@ class GenerationOrchestrationConfig:
     )
     planning_token_budget: LLMTokenBudget | None = None
     execution_token_budget: LLMTokenBudget | None = None
-    enabled_action_kinds: tuple[ActionKind, ...] = (ActionKind.GENERATE_SHOW_NOTES,)
+    enabled_action_kinds: tuple[ActionKind | str, ...] = (
+        ActionKind.GENERATE_SHOW_NOTES,
+    )
     planner_system_prompt: str = dc.field(
         default=(
             "You are the planning stage of the Episodic content generator. "
@@ -453,6 +458,10 @@ class StructuredGenerationPlanner:
 
     def build_prompt(self, request: GenerationOrchestrationRequest) -> str:
         """Build the planner prompt payload."""
+        enabled_action_kind_values = [
+            action_kind.value
+            for action_kind in _coerce_action_kinds(self.config.enabled_action_kinds)
+        ]
         prompt_payload: dict[str, object] = {
             "task": (
                 "Review the canonical TEI script and decide which enabled "
@@ -463,10 +472,7 @@ class StructuredGenerationPlanner:
                 "steps": [
                     {
                         "action_id": "string",
-                        "action_kind": [
-                            action_kind.value
-                            for action_kind in self.config.enabled_action_kinds
-                        ],
+                        "action_kind": enabled_action_kind_values,
                         "rationale": "string",
                         "model_tier": [
                             ModelTier.PLANNING.value,
@@ -476,9 +482,7 @@ class StructuredGenerationPlanner:
                     }
                 ],
             },
-            "enabled_action_kinds": [
-                action_kind.value for action_kind in self.config.enabled_action_kinds
-            ],
+            "enabled_action_kinds": enabled_action_kind_values,
             "correlation_id": request.correlation_id,
             "script_tei_xml": request.script_tei_xml,
         }
