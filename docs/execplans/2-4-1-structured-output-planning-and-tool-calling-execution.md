@@ -329,11 +329,9 @@ existing seams:
   reference for LangGraph integration, orchestration ports, model tiering, and
   cost-accounting boundaries.
 
-The implementation will likely add a new package such as
-`episodic/orchestration/` or `episodic/generation/orchestration/`. Choose the
-final location based on the narrowest feature-oriented boundary that keeps
-planning and execution separate from `qa/` and `canonical/`. Record that choice
-in the ADR and update this section once implementation begins.
+The implementation ships in `episodic/orchestration/`, keeping planning and
+execution separate from `qa/` and `canonical/`. ADR-005 records this package
+choice as the durable orchestration boundary for roadmap item `2.4.1`.
 
 ## Proposed architecture
 
