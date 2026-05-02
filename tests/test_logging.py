@@ -153,6 +153,8 @@ def _wait_for_record_count(
         ("", episodic_logging.LogLevel.INFO, True),
         ("debug", episodic_logging.LogLevel.DEBUG, False),
         ("warning", episodic_logging.LogLevel.WARNING, False),
+        ("warn", episodic_logging.LogLevel.WARNING, False),
+        ("WARN", episodic_logging.LogLevel.WARNING, False),
         ("invalid", episodic_logging.LogLevel.INFO, True),
     ],
 )
@@ -170,10 +172,17 @@ def test_configure_logging_normalizes_levels(
 
     monkeypatch.setattr(episodic_logging, "basicConfig", _fake_basic_config)
 
-    effective_level, used_default = episodic_logging.configure_logging(
-        requested_level,
-        force=True,
-    )
+    if (requested_level or "").upper() == "WARN":
+        with pytest.warns(DeprecationWarning, match="LogLevel.WARN is deprecated"):
+            effective_level, used_default = episodic_logging.configure_logging(
+                requested_level,
+                force=True,
+            )
+    else:
+        effective_level, used_default = episodic_logging.configure_logging(
+            requested_level,
+            force=True,
+        )
 
     assert (effective_level, used_default) == (
         expected_level,

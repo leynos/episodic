@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import contextvars as cv
 import datetime as dt
+import types
 import typing as typ
 import uuid
 
@@ -38,6 +39,8 @@ from episodic.canonical.ingestion_service import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 
@@ -384,6 +387,34 @@ def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
             )
     finally:
         coro.close()
+
+
+@pytest.mark.asyncio
+async def test_create_task_accepts_mapping_proxy_kwargs() -> None:
+    """create_task accepts a read-only MappingProxyType as task kwargs."""
+    proxy: cabc.Mapping[str, object] = types.MappingProxyType({})
+    async with asyncio.TaskGroup():
+        task = create_task(asyncio.sleep(0), **{})
+        _ = task  # consumed to satisfy the task group
+    await task
+
+    # The real assertion: _validate_task_create_kwargs must not raise when
+    # passed a MappingProxyType-derived mapping with no unexpected keys.
+    from episodic.asyncio_tasks import _validate_task_create_kwargs
+
+    result = _validate_task_create_kwargs(proxy)
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_create_task_in_group_accepts_mapping_proxy_kwargs() -> None:
+    """create_task_in_group accepts a read-only MappingProxyType as task kwargs."""
+    await asyncio.sleep(0)
+
+    from episodic.asyncio_tasks import _validate_task_create_kwargs
+
+    result = _validate_task_create_kwargs(types.MappingProxyType({"name": "my-task"}))
+    assert result == {"name": "my-task"}
 
 
 @pytest.mark.parametrize(
