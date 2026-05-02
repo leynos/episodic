@@ -132,6 +132,17 @@ def _coerce_model_tier(value: object) -> ModelTier:
         raise PlanningResponseFormatError(msg) from exc
 
 
+def _coerce_single_action_kind(element: ActionKind | str) -> ActionKind:
+    """Return the ActionKind enum for element, raising ValueError for unknown kinds."""
+    if isinstance(element, ActionKind):
+        return element
+    try:
+        return ActionKind(str(element).strip())
+    except ValueError:
+        msg = f"Unknown action kind: {element!r}"
+        raise ValueError(msg) from None
+
+
 def _coerce_action_kinds(
     kinds: tuple[ActionKind | str, ...],
 ) -> tuple[ActionKind, ...]:
@@ -139,17 +150,7 @@ def _coerce_action_kinds(
     if not kinds:
         msg = "enabled_action_kinds must not be empty."
         raise ValueError(msg)
-    normalised: list[ActionKind] = []
-    for element in kinds:
-        if isinstance(element, ActionKind):
-            normalised.append(element)
-        else:
-            try:
-                normalised.append(ActionKind(str(element).strip()))
-            except ValueError:
-                msg = f"Unknown action kind: {element!r}"
-                raise ValueError(msg) from None
-    return tuple(normalised)
+    return tuple(_coerce_single_action_kind(element) for element in kinds)
 
 
 def _normalise_string_fields(
