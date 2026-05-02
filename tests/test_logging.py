@@ -115,8 +115,8 @@ class _CollectorHandler:
 class _SupportsFlushHandlers(typ.Protocol):
     """Minimal logger protocol needed by the asynchronous test helper."""
 
-    def flush_handlers(self) -> object:
-        """Flush all pending records through attached handlers."""
+    def flush_handlers(self) -> None:
+        """Flush all pending records through attached handlers and return None."""
 
 
 @pytest.fixture

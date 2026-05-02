@@ -738,6 +738,8 @@ calling the method.
 
 `episodic.logging.LogLevel` is a `StrEnum` with the following members:
 
+Table: Log levels used by the application
+
 | Value | Notes |
 | --- | --- |
 | `TRACE` | Verbose trace-level output |

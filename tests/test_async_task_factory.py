@@ -360,7 +360,7 @@ def test_create_task_rejects_unsupported_metadata_keys_with_mixed_types() -> Non
 def test_create_task_rejects_unknown_task_kwargs() -> None:
     """Unknown task kwargs are rejected instead of being silently ignored."""
     coro = asyncio.sleep(0)
-    task_creator = typ.cast("typ.Callable[..., asyncio.Task[object]]", create_task)
+    task_creator = typ.cast("cabc.Callable[..., asyncio.Task[object]]", create_task)
     try:
         with pytest.raises(TypeError, match="unsupported_kwarg"):
             task_creator(
@@ -375,7 +375,7 @@ def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
     """Group task creation rejects unknown task kwargs."""
     coro = asyncio.sleep(0)
     task_creator = typ.cast(
-        "typ.Callable[..., asyncio.Task[object]]",
+        "cabc.Callable[..., asyncio.Task[object]]",
         create_task_in_group,
     )
     try:
@@ -394,27 +394,18 @@ async def test_create_task_accepts_mapping_proxy_kwargs() -> None:
     """create_task accepts a read-only MappingProxyType as task kwargs."""
     proxy: cabc.Mapping[str, object] = types.MappingProxyType({})
     async with asyncio.TaskGroup():
-        task = create_task(asyncio.sleep(0), **{})
-        _ = task  # consumed to satisfy the task group
-    await task
-
-    # The real assertion: _validate_task_create_kwargs must not raise when
-    # passed a MappingProxyType-derived mapping with no unexpected keys.
-    from episodic.asyncio_tasks import _validate_task_create_kwargs
-
-    result = _validate_task_create_kwargs(proxy)
-    assert result == {}
+        task = create_task(asyncio.sleep(0), **proxy)
+        await task
+    assert task.done()
 
 
 @pytest.mark.asyncio
 async def test_create_task_in_group_accepts_mapping_proxy_kwargs() -> None:
     """create_task_in_group accepts a read-only MappingProxyType as task kwargs."""
-    await asyncio.sleep(0)
-
-    from episodic.asyncio_tasks import _validate_task_create_kwargs
-
-    result = _validate_task_create_kwargs(types.MappingProxyType({"name": "my-task"}))
-    assert result == {"name": "my-task"}
+    proxy: cabc.Mapping[str, object] = types.MappingProxyType({"name": "my-task"})
+    async with asyncio.TaskGroup() as task_group:
+        task = create_task_in_group(task_group, asyncio.sleep(0), **proxy)
+    assert task.get_name() == "my-task"
 
 
 @pytest.mark.parametrize(
