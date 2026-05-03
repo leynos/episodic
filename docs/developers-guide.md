@@ -740,15 +740,15 @@ calling the method.
 
 Table: Log levels used by the application
 
-| Value | Notes |
-| --- | --- |
-| `TRACE` | Verbose trace-level output |
-| `DEBUG` | Debug-level output |
-| `INFO` | Informational output (default) |
-| `WARNING` | Warning output |
-| `WARN` | Deprecated alias for `WARNING`; raises `DeprecationWarning` |
-| `ERROR` | Error output |
-| `CRITICAL` | Critical error output |
+| Value      | Notes                                                       |
+| ---------- | ----------------------------------------------------------- |
+| `TRACE`    | Verbose trace-level output                                  |
+| `DEBUG`    | Debug-level output                                          |
+| `INFO`     | Informational output (default)                              |
+| `WARNING`  | Warning output                                              |
+| `WARN`     | Deprecated alias for `WARNING`; raises `DeprecationWarning` |
+| `ERROR`    | Error output                                                |
+| `CRITICAL` | Critical error output                                       |
 
 ### configure_logging
 
@@ -757,17 +757,19 @@ def configure_logging(
     level: str | None,
     *,
     force: bool = False,
-) -> tuple[LogLevel, bool]: ...
+) -> tuple[str, bool]: ...
 ```
 
-`level` is matched case-insensitively against `LogLevel` members.
-Returns a `tuple[LogLevel, bool]` — the normalized `LogLevel` value and a
-flag that is `True` when the default (`INFO`) was substituted because the
-input was absent or unrecognized. Passing `"WARN"` (any case) normalizes
-to `WARNING` and emits a `DeprecationWarning`. The `force` parameter is
-forwarded directly to `femtologging.basicConfig`.
+`level` is matched case-insensitively against `LogLevel` members. Returns a
+`tuple[str, bool]` — the normalized effective level and a flag that is `True`
+when the default (`INFO`) was substituted because the input was absent or
+unrecognized. The first element is always a `LogLevel` member; because
+`LogLevel` is a `StrEnum`, those values are also `str` instances, which matches
+the `str` slot in the annotated return type. Passing `"WARN"` (any case)
+normalizes to `WARNING` and emits a `DeprecationWarning`. The `force` parameter
+is forwarded directly to `femtologging.basicConfig`.
 
-### Internal Protocol interfaces
+### Internal protocol interfaces
 
 Two private Protocol types define the logger surface consumed by helper
 functions:
@@ -776,25 +778,59 @@ functions:
   convenience methods:
 
   ```python
-  def info(message, *, exc_info=None, stack_info=False) -> None: ...
-  def warning(message, *, exc_info=None, stack_info=False) -> None: ...
-  def error(message, *, exc_info=None, stack_info=False) -> None: ...
+  def info(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
+
+
+  def warning(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
+
+
+  def error(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
   ```
 
 - `_SupportsLogMethod` — objects exposing the generic stdlib-style entry
   point:
 
   ```python
-  def log(level, message, *, exc_info=None, stack_info=False) -> None: ...
+  def log(
+      self,
+      level: int | LogLevel,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
   ```
 
   `level` accepts an `int | LogLevel` value.
 
-In every signature, `exc_info` and `stack_info` are keyword-only (note the
-`*` separator). Adapter authors must implement the full surface — including
-the `exc_info` and `stack_info` keyword-only parameters — for the helpers
-to call them correctly.
+In every signature, the message (and `level` plus message for `log`) are
+positional-only before `/`, and `exc_info` and `stack_info` are keyword-only
+after `*`. Adapter authors must implement the full surface — including the
+`exc_info` and `stack_info` keyword-only parameters — for the helpers to call
+them correctly.
 
-Custom logger adapters passed to `log_info`, `log_warning`, or `log_error`
-must satisfy `_SupportsConvenienceLog`. Code that calls `log_at_level`
-must satisfy `_SupportsLogMethod`.
+Custom logger adapters passed to `log_info`, `log_warning`, or `log_error` must
+satisfy `_SupportsConvenienceLog`. Code that calls `log_at_level` must satisfy
+`_SupportsLogMethod`.
