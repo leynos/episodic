@@ -1,6 +1,7 @@
 """ShowNotesToolExecutor: tool adapter for the show-notes enrichment path."""
 
 import dataclasses as dc
+import typing  # noqa: ICN001
 
 from episodic.generation import (
     ShowNotesGenerator,
@@ -60,6 +61,46 @@ def _log_provider_error(
         error_type=type(exc).__name__,
         error=str(exc),
     )
+
+
+def _handle_generator_error(
+    exc: BaseException,
+    context: GenerationOrchestrationRequest,
+    action: PlannedAction,
+) -> typing.Never:
+    """Dispatch a generator exception to the appropriate tool-layer error and raise it."""  # noqa: E501
+    if isinstance(exc, ToolExecutionError):
+        _log_event(
+            "error",
+            f"{_EVENT_PREFIX}.tool_error",
+            correlation_id=context.correlation_id,
+            action_id=action.action_id,
+        )
+        raise exc
+    if isinstance(exc, ShowNotesResponseFormatError):
+        _log_event(
+            "error",
+            f"{_EVENT_PREFIX}.format_error",
+            correlation_id=context.correlation_id,
+            action_id=action.action_id,
+        )
+        msg = "show-notes tool returned malformed structured JSON"
+        raise ShowNotesFormatError(msg) from exc
+    if isinstance(
+        exc,
+        (LLMTransientProviderError, LLMProviderResponseError, LLMError),
+    ):
+        _log_provider_error(exc, context, action)
+        raise exc
+    _log_event(
+        "error",
+        f"{_EVENT_PREFIX}.unexpected_error",
+        correlation_id=context.correlation_id,
+        action_id=action.action_id,
+        error_type=type(exc).__name__,
+    )
+    msg = "show-notes tool execution failed"
+    raise ToolExecutionError(msg) from exc
 
 
 @dc.dataclass(slots=True)
@@ -146,40 +187,8 @@ class ShowNotesToolExecutor:
                 context.script_tei_xml,
                 template_structure=context.template_structure,
             )
-        except ToolExecutionError:
-            _log_event(
-                "error",
-                "show_notes_tool_executor.execute.tool_error",
-                correlation_id=context.correlation_id,
-                action_id=action.action_id,
-            )
-            raise
-        except ShowNotesResponseFormatError as exc:
-            _log_event(
-                "error",
-                "show_notes_tool_executor.execute.format_error",
-                correlation_id=context.correlation_id,
-                action_id=action.action_id,
-            )
-            msg = "show-notes tool returned malformed structured JSON"
-            raise ShowNotesFormatError(msg) from exc
-        except (
-            LLMTransientProviderError,
-            LLMProviderResponseError,
-            LLMError,
-        ) as exc:
-            _log_provider_error(exc, context, action)
-            raise
-        except Exception as exc:
-            _log_event(
-                "error",
-                "show_notes_tool_executor.execute.unexpected_error",
-                correlation_id=context.correlation_id,
-                action_id=action.action_id,
-                error_type=type(exc).__name__,
-            )
-            msg = "show-notes tool execution failed"
-            raise ToolExecutionError(msg) from exc
+        except Exception as exc:  # noqa: BLE001
+            _handle_generator_error(exc, context, action)
 
     async def execute(
         self,

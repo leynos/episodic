@@ -1,7 +1,5 @@
 """Typed DTOs, protocols, and validation helpers for generation orchestration."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
@@ -128,7 +126,7 @@ def _normalize_non_empty_text(value: object, field_name: str) -> str:
     """Strip value and raise ValueError if the result is empty."""
     if not isinstance(value, str):
         msg = f"{field_name} must be a non-empty string."
-        raise ValueError(msg)  # noqa: TRY004
+        raise ValueError(msg)  # noqa: TRY004 -- ValueError is intentional at this DTO validation raise: normalisation enforces string-shaped fields; TypeError is used for wrong Python types elsewhere.
     stripped = value.strip()
     if not stripped:
         msg = f"{field_name} must be a non-empty string."

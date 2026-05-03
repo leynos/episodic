@@ -168,6 +168,7 @@ class StructuredGenerationPlanner:
         try:
             response = await self.llm.generate(llm_request)
         except LLMError:
+            # All LLMError subtypes are logged the same way and re-raised as-is.
             _log_event(
                 "error",
                 "structured_generation_planner.plan.error",

@@ -222,10 +222,7 @@ def test_config_normalises_string_action_kinds() -> None:
     config = GenerationOrchestrationConfig(
         planning_model="gpt-4.1",
         execution_model="gpt-4o-mini",
-        enabled_action_kinds=typ.cast(
-            "tuple[ActionKind, ...]",
-            (" generate_show_notes ",),
-        ),
+        enabled_action_kinds=("generate_show_notes",),
     )
 
     assert config.enabled_action_kinds == (ActionKind.GENERATE_SHOW_NOTES,)
@@ -258,10 +255,7 @@ def test_config_rejects_unknown_action_kind() -> None:
         GenerationOrchestrationConfig(
             planning_model="gpt-4.1",
             execution_model="gpt-4o-mini",
-            enabled_action_kinds=typ.cast(
-                "tuple[ActionKind, ...]",
-                ("unknown_action",),
-            ),
+            enabled_action_kinds=("unknown_action",),
         )
 
 
