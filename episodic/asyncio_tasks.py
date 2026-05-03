@@ -95,7 +95,9 @@ def _validate_task_metadata(
     return validated or None
 
 
-def _validate_task_create_kwargs(kwargs: dict[str, object]) -> TaskCreateKwargs:
+def _validate_task_create_kwargs(
+    kwargs: cabc.Mapping[str, object],
+) -> TaskCreateKwargs:
     """Validate accepted task-creation kwargs and return a typed payload."""
     unexpected_keys = set(kwargs) - _TASK_CREATE_KWARGS_KEYS
     if unexpected_keys:

@@ -9,6 +9,8 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-001-reference-binding-resolution-algorithm.md`](adr/adr-001-reference-binding-resolution-algorithm.md)
 - [`adr-002-http-service-composition-root.md`](adr/adr-002-http-service-composition-root.md)
 - [`adr-003-celery-worker-scaffold.md`](adr/adr-003-celery-worker-scaffold.md)
+- [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md)
+- [`adr-005-structured-planning-and-tool-execution.md`](adr/adr-005-structured-planning-and-tool-execution.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -605,6 +607,45 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   writing provider fixtures, keep the prompt assertions structural and the
   response template minimal so prompt wording can evolve without making the
   scenario brittle.
+
+## Structured generation orchestration
+
+Roadmap item `2.4.1` introduces a dedicated orchestration package in
+`episodic/orchestration/`.
+
+<!-- markdownlint-disable-next-line MD024 -->
+### Package structure
+
+- `episodic/orchestration/generation.py` contains DTOs,
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
+  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
+  used for `plan -> execute -> finish`.
+
+### Maintainer rules
+
+- Keep the planner strict: parse model output into typed DTOs immediately and
+  raise deterministic validation errors for malformed JSON.
+- Keep model-tier selection in `GenerationOrchestrationConfig`; do not couple
+  this slice to pricing-ledger or budget-reservation persistence.
+- Keep LangGraph nodes dependent on ports and orchestration DTOs only. Tool
+  implementations may call generation services, but the graph should see only
+  `ToolExecutorPort`.
+- Treat `ShowNotesToolExecutor` as the first tool adapter, not as a special
+  case that other orchestration code may import around.
+
+### Testing the orchestration slice
+
+- Unit coverage lives in `tests/test_generation_orchestration.py`.
+- LangGraph seam coverage lives in
+  `tests/test_generation_orchestration_langgraph.py`.
+- Behavioural coverage lives in
+  `tests/features/generation_orchestration.feature` and
+  `tests/steps/test_generation_orchestration_steps.py`.
+- The orchestration behaviour scenario uses Vidai Mock to return two distinct
+  responses from one OpenAI-compatible endpoint: the first for structured
+  planning, and the second for the show-notes tool call. Keep that fixture
+  model-driven so prompt wording can evolve without breaking the scenario.
 
 ## LLM adapter boundary
 

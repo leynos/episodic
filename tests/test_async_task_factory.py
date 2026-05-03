@@ -13,6 +13,7 @@ import pytest
 
 from episodic.asyncio_tasks import (
     TASK_METADATA_KWARG,
+    TaskCreateKwargs,
     TaskMetadata,
     create_task,
     create_task_in_group,
@@ -249,7 +250,7 @@ async def test_create_task_forwards_task_factory_kwargs() -> None:
         await asyncio.sleep(0)
         return "done"
 
-    metadata = {
+    metadata: TaskMetadata = {
         "operation_name": "tests.create_task",
         "correlation_id": "corr-123",
         "priority_hint": 3,
@@ -290,7 +291,7 @@ async def test_create_task_in_group_forwards_task_factory_kwargs() -> None:
         await asyncio.sleep(0)
         return "group-done"
 
-    metadata = {
+    metadata: TaskMetadata = {
         "operation_name": "tests.task_group",
         "correlation_id": "group-456",
     }
@@ -328,7 +329,7 @@ def test_create_task_rejects_unsupported_metadata_key() -> None:
         with pytest.raises(ValueError, match="Unsupported task metadata keys"):
             create_task(
                 coro := asyncio.sleep(0),
-                metadata=typ.cast("dict[str, object]", {"unsupported_key": "nope"}),
+                metadata=typ.cast("TaskMetadata", {"unsupported_key": "nope"}),
             )
     finally:
         if coro is not None:
@@ -361,7 +362,7 @@ def test_create_task_rejects_unknown_task_kwargs() -> None:
         with pytest.raises(TypeError, match="unsupported_kwarg"):
             create_task(
                 coro,
-                **typ.cast("dict[str, object]", {"unsupported_kwarg": "value"}),
+                **typ.cast("TaskCreateKwargs", {"unsupported_kwarg": "value"}),
             )
     finally:
         coro.close()
@@ -375,7 +376,7 @@ def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
             create_task_in_group(
                 asyncio.TaskGroup(),
                 coro,
-                **typ.cast("dict[str, object]", {"unsupported_kwarg": "value"}),
+                **typ.cast("TaskCreateKwargs", {"unsupported_kwarg": "value"}),
             )
     finally:
         coro.close()

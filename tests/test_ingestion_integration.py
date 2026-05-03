@@ -70,6 +70,12 @@ def _require_provenance_payload(
     return typ.cast("TeiHeaderProvenanceRecord", provenance)
 
 
+def test_raw_source_helper_rejects_unknown_overrides() -> None:
+    """Raw source helper should reject typoed override keys."""
+    with pytest.raises(ValueError, match="Invalid override keys"):
+        _make_raw_source(**typ.cast("typ.Any", {"unknown": "value"}))
+
+
 def _verify_provenance_metadata(
     provenance: TeiHeaderProvenanceRecord,
     expected_reviewer: str,
