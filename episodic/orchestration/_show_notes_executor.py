@@ -34,6 +34,34 @@ from ._types import (
 __all__ = ["ShowNotesToolExecutor"]
 
 
+_EVENT_PREFIX = "show_notes_tool_executor.execute"
+_LLM_PROVIDER_ERROR_EVENTS: dict[type[Exception], str] = {
+    LLMTransientProviderError: f"{_EVENT_PREFIX}.transient_provider_error",
+    LLMProviderResponseError: f"{_EVENT_PREFIX}.provider_response_error",
+    LLMError: f"{_EVENT_PREFIX}.llm_error",
+}
+
+
+def _log_provider_error(
+    exc: LLMError,
+    context: GenerationOrchestrationRequest,
+    action: PlannedAction,
+) -> None:
+    """Log an LLM provider error with its event name, type, and message."""
+    event = _LLM_PROVIDER_ERROR_EVENTS.get(
+        type(exc),
+        f"{_EVENT_PREFIX}.llm_error",
+    )
+    _log_event(
+        "error",
+        event,
+        correlation_id=context.correlation_id,
+        action_id=action.action_id,
+        error_type=type(exc).__name__,
+        error=str(exc),
+    )
+
+
 @dc.dataclass(slots=True)
 class ShowNotesToolExecutor:
     """Execute the `generate_show_notes` action through the show-notes service."""
@@ -135,35 +163,12 @@ class ShowNotesToolExecutor:
             )
             msg = "show-notes tool returned malformed structured JSON"
             raise ShowNotesFormatError(msg) from exc
-        except LLMTransientProviderError as exc:
-            _log_event(
-                "error",
-                "show_notes_tool_executor.execute.transient_provider_error",
-                correlation_id=context.correlation_id,
-                action_id=action.action_id,
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
-            raise
-        except LLMProviderResponseError as exc:
-            _log_event(
-                "error",
-                "show_notes_tool_executor.execute.provider_response_error",
-                correlation_id=context.correlation_id,
-                action_id=action.action_id,
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
-            raise
-        except LLMError as exc:
-            _log_event(
-                "error",
-                "show_notes_tool_executor.execute.llm_error",
-                correlation_id=context.correlation_id,
-                action_id=action.action_id,
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
+        except (
+            LLMTransientProviderError,
+            LLMProviderResponseError,
+            LLMError,
+        ) as exc:
+            _log_provider_error(exc, context, action)
             raise
         except Exception as exc:
             _log_event(
