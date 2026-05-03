@@ -13,8 +13,10 @@ from episodic.generation import (
 )
 from episodic.llm import (
     LLMProviderOperation,
+    LLMProviderResponseError,
     LLMRequest,
     LLMResponse,
+    LLMTransientProviderError,
     LLMUsage,
 )
 from episodic.orchestration import (
@@ -94,6 +96,28 @@ class _RaisingShowNotesGenerator:
             "template_structure does not match expected sections"
         )
         raise _InjectedToolExecutionError
+
+
+class _LLMErrorShowNotesGenerator:
+    """Raise a configurable LLM error so provider failures surface untransformed."""
+
+    def __init__(self, error: BaseException) -> None:
+        self._error = error
+
+    async def generate(
+        self,
+        script_tei_xml: str,
+        *,
+        template_structure: dict[str, object] | None = None,
+    ) -> ShowNotesResult:
+        """Raise the injected LLM error after validating the call context."""
+        assert script_tei_xml.startswith("<TEI>"), (
+            "expected TEI root in generated script_tei_xml"
+        )
+        assert template_structure == {"sections": ["intro", "analysis"]}, (
+            "template_structure does not match expected sections"
+        )
+        raise self._error
 
 
 class _MalformedShowNotesGenerator:
@@ -587,3 +611,35 @@ async def test_show_notes_executor_format_error_is_subtype_of_tool_execution_err
 
     assert isinstance(exc_info.value, ShowNotesFormatError)
     assert type(exc_info.value) is not ToolExecutionError
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error_factory",
+    [
+        pytest.param(
+            lambda: LLMTransientProviderError("provider transiently failed"),
+            id="transient_provider_error",
+        ),
+        pytest.param(
+            lambda: LLMProviderResponseError("provider rejected the response"),
+            id="provider_response_error",
+        ),
+    ],
+)
+async def test_show_notes_executor_propagates_llm_provider_errors(
+    error_factory: typ.Callable[[], BaseException],
+) -> None:
+    """Provider errors must surface unchanged so callers can classify them."""
+    error = error_factory()
+    tool_executor = ShowNotesToolExecutor(
+        llm=typ.cast("typ.Any", None),
+        config=_config(),
+        generator=typ.cast("typ.Any", _LLMErrorShowNotesGenerator(error)),
+    )
+
+    with pytest.raises(type(error)) as exc_info:
+        await tool_executor.execute(_planned_action(), _request())
+
+    assert exc_info.value is error
+    assert not isinstance(exc_info.value, ToolExecutionError)

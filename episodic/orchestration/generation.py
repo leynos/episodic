@@ -15,8 +15,10 @@ from episodic.llm import (
     LLMError,
     LLMPort,
     LLMProviderOperation,
+    LLMProviderResponseError,
     LLMRequest,
     LLMTokenBudget,
+    LLMTransientProviderError,
     LLMUsage,
 )
 from episodic.logging import getLogger
@@ -692,12 +694,43 @@ class ShowNotesToolExecutor:
             )
             msg = "show-notes tool returned malformed structured JSON"
             raise ShowNotesFormatError(msg) from exc
+        except LLMTransientProviderError as exc:
+            _log_event(
+                "error",
+                "show_notes_tool_executor.execute.transient_provider_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
+        except LLMProviderResponseError as exc:
+            _log_event(
+                "error",
+                "show_notes_tool_executor.execute.provider_response_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
+        except LLMError as exc:
+            _log_event(
+                "error",
+                "show_notes_tool_executor.execute.llm_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
         except Exception as exc:
             _log_event(
                 "error",
                 "show_notes_tool_executor.execute.unexpected_error",
                 correlation_id=context.correlation_id,
                 action_id=action.action_id,
+                error_type=type(exc).__name__,
             )
             msg = "show-notes tool execution failed"
             raise ToolExecutionError(msg) from exc
