@@ -1,6 +1,5 @@
 """Unit tests for structured generation orchestration."""
 
-import asyncio
 import json
 import typing as typ
 
@@ -232,10 +231,8 @@ def test_config_normalises_string_action_kinds() -> None:
     assert config.enabled_action_kinds == (ActionKind.GENERATE_SHOW_NOTES,)
 
 
-@pytest.mark.asyncio
-async def test_planner_rejects_non_json_serializable_template_structure() -> None:
+def test_planner_rejects_non_json_serializable_template_structure() -> None:
     """Prompt construction should reject non-JSON template structures clearly."""
-    await asyncio.sleep(0)
     planner = StructuredGenerationPlanner(
         llm=_FakeLLMPort([]),
         config=_config(),
