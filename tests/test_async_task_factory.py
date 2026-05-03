@@ -14,6 +14,7 @@ import pytest
 
 from episodic.asyncio_tasks import (
     TASK_METADATA_KWARG,
+    TaskCreateKwargs,
     TaskMetadata,
     create_task,
     create_task_in_group,
@@ -391,12 +392,20 @@ def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
 
 @pytest.mark.asyncio
 async def test_create_task_accepts_mapping_proxy_kwargs() -> None:
-    """create_task accepts a read-only MappingProxyType as task kwargs."""
-    proxy: cabc.Mapping[str, object] = types.MappingProxyType({})
+    """create_task forwards kwargs from a read-only MappingProxyType."""
+    proxy: cabc.Mapping[str, object] = types.MappingProxyType(
+        {"name": "create-task-proxy"},
+    )
     async with asyncio.TaskGroup():
-        task = create_task(asyncio.sleep(0), **proxy)
+        task = create_task(
+            asyncio.sleep(0),
+            **typ.cast(TaskCreateKwargs, proxy),  # noqa: TC006
+        )
         await task
     assert task.done()
+    assert task.get_name() == "create-task-proxy", (
+        f"expected task name 'create-task-proxy', got {task.get_name()}"
+    )
 
 
 @pytest.mark.asyncio
@@ -404,8 +413,14 @@ async def test_create_task_in_group_accepts_mapping_proxy_kwargs() -> None:
     """create_task_in_group accepts a read-only MappingProxyType as task kwargs."""
     proxy: cabc.Mapping[str, object] = types.MappingProxyType({"name": "my-task"})
     async with asyncio.TaskGroup() as task_group:
-        task = create_task_in_group(task_group, asyncio.sleep(0), **proxy)
-    assert task.get_name() == "my-task"
+        task = create_task_in_group(
+            task_group,
+            asyncio.sleep(0),
+            **typ.cast(TaskCreateKwargs, proxy),  # noqa: TC006
+        )
+    assert task.get_name() == "my-task", (
+        f"expected task name 'my-task', got {task.get_name()}"
+    )
 
 
 @pytest.mark.parametrize(

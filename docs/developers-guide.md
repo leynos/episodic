@@ -772,10 +772,28 @@ forwarded directly to `femtologging.basicConfig`.
 Two private Protocol types define the logger surface consumed by helper
 functions:
 
-- `_SupportsConvenienceLog` — objects with `info(message)`,
-  `warning(message)`, and `error(message)` methods.
-- `_SupportsLogMethod` — objects with a `log(level, message)` method
-  accepting an `int | LogLevel` level.
+- `_SupportsConvenienceLog` — objects exposing the three stdlib-style
+  convenience methods:
+
+  ```python
+  def info(message, *, exc_info=None, stack_info=False) -> None: ...
+  def warning(message, *, exc_info=None, stack_info=False) -> None: ...
+  def error(message, *, exc_info=None, stack_info=False) -> None: ...
+  ```
+
+- `_SupportsLogMethod` — objects exposing the generic stdlib-style entry
+  point:
+
+  ```python
+  def log(level, message, *, exc_info=None, stack_info=False) -> None: ...
+  ```
+
+  `level` accepts an `int | LogLevel` value.
+
+In every signature, `exc_info` and `stack_info` are keyword-only (note the
+`*` separator). Adapter authors must implement the full surface — including
+the `exc_info` and `stack_info` keyword-only parameters — for the helpers
+to call them correctly.
 
 Custom logger adapters passed to `log_info`, `log_warning`, or `log_error`
 must satisfy `_SupportsConvenienceLog`. Code that calls `log_at_level`
