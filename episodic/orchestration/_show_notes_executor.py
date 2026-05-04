@@ -86,10 +86,7 @@ def _handle_generator_error(
         )
         msg = "show-notes tool returned malformed structured JSON"
         raise ShowNotesFormatError(msg) from exc
-    if isinstance(
-        exc,
-        (LLMTransientProviderError, LLMProviderResponseError, LLMError),
-    ):
+    if isinstance(exc, LLMError):
         _log_provider_error(exc, context, action)
         raise exc
     _log_event(
