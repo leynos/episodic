@@ -853,4 +853,4 @@ payload.
 
 Accepted keys are those defined in `TaskCreateKwargs`: `name`, `context`,
 `eager_start`, and `metadata` (see `TaskMetadata` for the metadata field
-schema). Passing an unrecognised key raises `TypeError`.
+schema). Passing an unrecognized key raises `TypeError`.
