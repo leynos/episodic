@@ -19,6 +19,8 @@ Accepted design decisions relevant to current implementation work:
   repository logic.
 - The Makefile exports `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` so the
   `tei-rapporteur` bindings build against Python 3.14.
+- The build backend is `uv_build` (`>=0.11.7,<0.12.0`), declared in the
+  `[build-system]` table of `pyproject.toml`.
 
 ## Falcon HTTP runtime
 
@@ -834,3 +836,21 @@ them correctly.
 Custom logger adapters passed to `log_info`, `log_warning`, or `log_error` must
 satisfy `_SupportsConvenienceLog`. Code that calls `log_at_level` must satisfy
 `_SupportsLogMethod`.
+
+## Asyncio task utilities
+
+`episodic.asyncio_tasks` provides `create_task` and `create_task_in_group` as
+thin wrappers around `asyncio.TaskGroup.create_task`. Both helpers accept an
+optional set of extra keyword arguments that are validated by the internal
+`_validate_task_create_kwargs` helper before being forwarded to the underlying
+task-creation call.
+
+`_validate_task_create_kwargs` accepts a `cabc.Mapping[str, object]` rather
+than a concrete `dict[str, object]`, so read-only mappings such as
+`types.MappingProxyType` are accepted at runtime. The helper converts the
+validated mapping to a plain `dict` before returning a `TaskCreateKwargs`
+payload.
+
+Accepted keys are those defined in `TaskCreateKwargs`: `name`, `context`,
+`eager_start`, and `metadata` (see `TaskMetadata` for the metadata field
+schema). Passing an unrecognised key raises `TypeError`.

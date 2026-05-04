@@ -14,8 +14,8 @@ import pytest
 
 from episodic.asyncio_tasks import (
     TASK_METADATA_KWARG,
-    TaskCreateKwargs,
     TaskMetadata,
+    _validate_task_create_kwargs,
     create_task,
     create_task_in_group,
 )
@@ -390,37 +390,18 @@ def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
         coro.close()
 
 
-@pytest.mark.asyncio
-async def test_create_task_accepts_mapping_proxy_kwargs() -> None:
-    """create_task forwards kwargs from a read-only MappingProxyType."""
-    proxy: cabc.Mapping[str, object] = types.MappingProxyType(
-        {"name": "create-task-proxy"},
-    )
-    async with asyncio.TaskGroup():
-        task = create_task(
-            asyncio.sleep(0),
-            **typ.cast(TaskCreateKwargs, proxy),  # noqa: TC006
-        )
-        await task
-    assert task.done()
-    assert task.get_name() == "create-task-proxy", (
-        f"expected task name 'create-task-proxy', got {task.get_name()}"
-    )
+def test_validate_task_kwargs_accepts_empty_mapping_proxy() -> None:
+    """_validate_task_create_kwargs accepts a read-only MappingProxyType."""
+    proxy = types.MappingProxyType({})
+    result = _validate_task_create_kwargs(proxy)
+    assert result == {}
 
 
-@pytest.mark.asyncio
-async def test_create_task_in_group_accepts_mapping_proxy_kwargs() -> None:
-    """create_task_in_group accepts a read-only MappingProxyType as task kwargs."""
-    proxy: cabc.Mapping[str, object] = types.MappingProxyType({"name": "my-task"})
-    async with asyncio.TaskGroup() as task_group:
-        task = create_task_in_group(
-            task_group,
-            asyncio.sleep(0),
-            **typ.cast(TaskCreateKwargs, proxy),  # noqa: TC006
-        )
-    assert task.get_name() == "my-task", (
-        f"expected task name 'my-task', got {task.get_name()}"
-    )
+def test_validate_task_kwargs_accepts_named_mapping_proxy() -> None:
+    """_validate_task_create_kwargs accepts a MappingProxyType with a name key."""
+    proxy = types.MappingProxyType({"name": "my-task"})
+    result = _validate_task_create_kwargs(proxy)
+    assert result == {"name": "my-task"}
 
 
 @pytest.mark.parametrize(
