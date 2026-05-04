@@ -192,6 +192,32 @@ def fixture_policy(package: str) -> ArchitecturePolicy:
     )
 
 
+def _violations_for_module(  # noqa: PLR0913, PLR0917
+    source_path: Path,
+    package: str,
+    module_name: str,
+    importer_group: ModuleGroup,
+    active_policy: ArchitecturePolicy,
+) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
+    for imported_module in _iter_imported_modules(source_path, package, module_name):
+        imported_group = active_policy.group_for(imported_module)
+        if imported_group is None:
+            continue
+        if imported_group.name in importer_group.allowed_groups:
+            continue
+        violations.append(
+            ArchitectureViolation(
+                rule_id=active_policy.rule_id,
+                importer=module_name,
+                imported=imported_module,
+                importer_group=importer_group.name,
+                imported_group=imported_group.name,
+            )
+        )
+    return violations
+
+
 def check_architecture(
     *,
     package_root: Path | str = Path("episodic"),
@@ -207,23 +233,11 @@ def check_architecture(
         importer_group = active_policy.group_for(module_name)
         if importer_group is None:
             continue
-        for imported_module in _iter_imported_modules(
-            source_path, package, module_name
-        ):
-            imported_group = active_policy.group_for(imported_module)
-            if imported_group is None:
-                continue
-            if imported_group.name in importer_group.allowed_groups:
-                continue
-            violations.append(
-                ArchitectureViolation(
-                    rule_id=active_policy.rule_id,
-                    importer=module_name,
-                    imported=imported_module,
-                    importer_group=importer_group.name,
-                    imported_group=imported_group.name,
-                )
+        violations.extend(
+            _violations_for_module(
+                source_path, package, module_name, importer_group, active_policy
             )
+        )
     return ArchitectureCheckResult(violations=tuple(violations))
 
 
