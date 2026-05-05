@@ -7,7 +7,7 @@ proceeds.
 
 Status: COMPLETE
 
-Completed: 2026-05-03
+Completed: 2026-05-05
 
 ## Purpose and big picture
 
@@ -174,8 +174,10 @@ until Stage F validation and branch-level gates complete.
   and the show-notes execution path.
 - [x] (2026-04-21 10:17Z) Stage E: documented the architecture decision and
   updated the design, user, and developer guides.
-- [x] Stage F complete. Gate command sequence passed.
-  Roadmap item `2.4.1` marked done.
+- [x] Stage F complete. Gate command sequence passed. Roadmap item `2.4.1`
+  marked done.
+- [x] (2026-05-05) Stage F complete. Gate command sequence passed. Roadmap
+  item `2.4.1` marked done after rebase validation.
 
 ## Surprises & Discoveries
 

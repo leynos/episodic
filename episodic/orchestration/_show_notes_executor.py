@@ -127,7 +127,7 @@ class ShowNotesToolExecutor:
     generator: _ShowNotesGeneratorPort | None = None
 
     def __post_init__(self) -> None:
-        """Build and pin the default show-notes generator when none is injected."""
+        """Build and store the show-notes generator when none is injected."""
         if self.generator is None:
             object.__setattr__(
                 self,
@@ -144,12 +144,9 @@ class ShowNotesToolExecutor:
             )
 
     def _build_generator(self) -> _ShowNotesGeneratorPort:
-        """Return the show-notes generator for this executor."""
-        gen = self.generator
-        if gen is None:
-            msg = "ShowNotesToolExecutor.generator was not populated by __post_init__"
-            raise RuntimeError(msg)
-        return gen
+        """Return the pre-built show-notes generator."""
+        assert self.generator is not None  # noqa: S101  # guaranteed by __post_init__
+        return self.generator
 
     @staticmethod
     def _validate_action_preconditions(

@@ -33,7 +33,7 @@ stilyagi = "stilyagi.stilyagi:main"
 
 [dependency-groups]
 dev = [
-    "hypothesis>=6,<7",
+    "hypothesis[asyncio]>=6,<7",
     "pytest>=9,<11",
     "pytest-bdd",
     "pytest-asyncio",

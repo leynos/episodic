@@ -294,7 +294,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "hypothesis", specifier = ">=6,<7" },
+    { name = "hypothesis", extras = ["asyncio"], specifier = ">=6,<7" },
     { name = "py-pglite", extras = ["async"], specifier = ">=0.5.3,<0.6.0" },
     { name = "pyright" },
     { name = "pytest", specifier = ">=9,<11" },

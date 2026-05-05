@@ -229,9 +229,7 @@ class StructuredPlanningOrchestrator:
         plan: ExecutionPlan,
     ) -> tuple[ActionExecutionResult, ...]:
         """Execute each plan step sequentially through the tool-execution port."""
-        # Planned actions may grow side effects later, so execution stays ordered.
         results: list[ActionExecutionResult] = []
-        execution_model = plan.selected_execution_model
         for action in plan.steps:
             _log_event(
                 "debug",
@@ -239,9 +237,9 @@ class StructuredPlanningOrchestrator:
                 correlation_id=request.correlation_id,
                 action_id=action.action_id,
                 action_kind=str(action.action_kind),
-                execution_model=execution_model,
+                execution_model=plan.selected_execution_model,
             )
-            elapsed_start = time.monotonic()
+            t0 = time.monotonic()
             result = await self.tool_executor.execute(action, request)
             _log_event(
                 "debug",
@@ -249,8 +247,8 @@ class StructuredPlanningOrchestrator:
                 correlation_id=request.correlation_id,
                 action_id=action.action_id,
                 action_kind=str(action.action_kind),
-                execution_model=execution_model,
-                elapsed_ms=round((time.monotonic() - elapsed_start) * 1000, 1),
+                execution_model=plan.selected_execution_model,
+                elapsed_ms=round((time.monotonic() - t0) * 1000, 1),
             )
             results.append(result)
         return tuple(results)
@@ -297,7 +295,7 @@ class StructuredPlanningOrchestrator:
             "info",
             "structured_planning_orchestrator.orchestrate.complete",
             correlation_id=request.correlation_id,
-            execution_model=result.plan.selected_execution_model,
+            execution_model=planner_result.plan.selected_execution_model,
             input_tokens=result.total_usage.input_tokens,
             output_tokens=result.total_usage.output_tokens,
             total_tokens=result.total_usage.total_tokens,

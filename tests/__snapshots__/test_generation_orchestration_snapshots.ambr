@@ -27,24 +27,22 @@
       "generate_show_notes"
     ],
     "correlation_id": "snap-001",
-    "script_tei_xml": "<TEI><text><body><p>Snapshot teaser</p></body></text></TEI>"
+    "script_tei_xml": "<TEI><text>test</text></TEI>"
   }
   '''
 # ---
 # name: test_execution_plan_serialisation_snapshot
   dict({
-    'plan_version': 'snap-plan-version',
-    'selected_execution_model': 'snap-execution',
-    'selected_planning_model': 'snap-planning',
+    'plan_version': '1',
+    'selected_execution_model': 'gpt-4o-mini',
+    'selected_planning_model': 'gpt-4.1',
     'steps': tuple(
       dict({
-        'action_id': 'snap-act',
+        'action_id': 'a1',
         'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
         'model_tier': <ModelTier.EXECUTION: 'execution'>,
-        'rationale': 'Snapshot rationale string.',
+        'rationale': 'test',
         'required_inputs': tuple(
-          'script_tei_xml',
-          'template_structure',
         ),
       }),
     ),
@@ -54,44 +52,43 @@
   dict({
     'action_results': tuple(
       dict({
-        'action_id': 'snap-act',
+        'action_id': 'a1',
         'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
-        'model': 'snap-worker-model',
+        'model': 'gpt-4o-mini',
         'model_tier': <ModelTier.EXECUTION: 'execution'>,
         'show_notes_result': None,
-        'summary': 'Executed snapshot enrichment.',
+        'summary': 'test',
         'usage': dict({
-          'input_tokens': 6,
-          'output_tokens': 4,
-          'total_tokens': 10,
+          'input_tokens': 10,
+          'output_tokens': 20,
+          'total_tokens': 30,
         }),
       }),
     ),
     'plan': dict({
-      'plan_version': 'snap-plan-version',
-      'selected_execution_model': 'snap-execution',
-      'selected_planning_model': 'snap-planning',
+      'plan_version': '1',
+      'selected_execution_model': 'gpt-4o-mini',
+      'selected_planning_model': 'gpt-4.1',
       'steps': tuple(
         dict({
-          'action_id': 'snap-act',
+          'action_id': 'a1',
           'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
           'model_tier': <ModelTier.EXECUTION: 'execution'>,
-          'rationale': 'Completed snap step.',
+          'rationale': 'test',
           'required_inputs': tuple(
-            'script_tei_xml',
           ),
         }),
       ),
     }),
     'planner_usage': dict({
-      'input_tokens': 40,
-      'output_tokens': 20,
-      'total_tokens': 60,
+      'input_tokens': 1,
+      'output_tokens': 2,
+      'total_tokens': 3,
     }),
     'total_usage': dict({
-      'input_tokens': 46,
-      'output_tokens': 24,
-      'total_tokens': 70,
+      'input_tokens': 11,
+      'output_tokens': 22,
+      'total_tokens': 33,
     }),
   })
 # ---

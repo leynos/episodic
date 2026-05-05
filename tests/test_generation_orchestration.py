@@ -1,6 +1,5 @@
 """Unit tests for structured generation orchestration."""
 
-import asyncio
 import json
 import string
 import typing as typ
@@ -685,26 +684,23 @@ def test_config_rejects_arbitrary_unknown_action_kind_strings(unknown: str) -> N
 
 
 @given(model_tier=st.sampled_from([t for t in ModelTier if t != ModelTier.EXECUTION]))
-@settings(max_examples=50)
-def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(
+@settings(max_examples=len(ModelTier))
+@pytest.mark.asyncio
+async def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(
     model_tier: ModelTier,
 ) -> None:
     """Property test: planner tiers besides execution never reach show-notes tool."""
-
-    async def runner() -> None:
-        fake_llm = _FakeLLMPort([])
-        tool_executor = ShowNotesToolExecutor(llm=fake_llm, config=_config())
-        planning_tier_action = PlannedAction(
-            action_id="action-1",
-            action_kind=ActionKind.GENERATE_SHOW_NOTES,
-            rationale="Hypothesis rejects non-execution tiers.",
-            model_tier=model_tier,
-            required_inputs=("script_tei_xml",),
-        )
-        with pytest.raises(UnsupportedActionError):
-            await tool_executor.execute(planning_tier_action, _request())
-
-    asyncio.run(runner())
+    fake_llm = _FakeLLMPort([])
+    tool_executor = ShowNotesToolExecutor(llm=fake_llm, config=_config())
+    planning_tier_action = PlannedAction(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        rationale="Hypothesis rejects non-execution tiers.",
+        model_tier=model_tier,
+        required_inputs=("script_tei_xml",),
+    )
+    with pytest.raises(UnsupportedActionError):
+        await tool_executor.execute(planning_tier_action, _request())
 
 
 @given(
@@ -716,32 +712,30 @@ def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(
     )
 )
 @settings(max_examples=50)
-def test_planning_response_format_error_for_arbitrary_non_object_json(
+@pytest.mark.asyncio
+async def test_planning_response_format_error_for_arbitrary_non_object_json(
     noise: object,
 ) -> None:
     """Property test: non-object JSON bodies fail strict planner validation."""
     blob = json.dumps(noise)
 
-    async def runner() -> None:
-        response = LLMResponse(
-            text=blob,
-            model="gpt-4.1",
-            provider_response_id="hyp-planner-response",
-            finish_reason="stop",
-            usage=_usage(input_tokens=1, output_tokens=1),
-        )
-        planner = StructuredGenerationPlanner(
-            llm=_FakeLLMPort([response]),
-            config=_config(),
-        )
-        request = GenerationOrchestrationRequest(
-            correlation_id="hyp-corr",
-            script_tei_xml="<TEI><body><p>noise</p></body></TEI>",
-        )
-        with pytest.raises(PlanningResponseFormatError):
-            await planner.plan(request)
-
-    asyncio.run(runner())
+    response = LLMResponse(
+        text=blob,
+        model="gpt-4.1",
+        provider_response_id="hyp-planner-response",
+        finish_reason="stop",
+        usage=_usage(input_tokens=1, output_tokens=1),
+    )
+    planner = StructuredGenerationPlanner(
+        llm=_FakeLLMPort([response]),
+        config=_config(),
+    )
+    request = GenerationOrchestrationRequest(
+        correlation_id="hyp-corr",
+        script_tei_xml="<TEI><body><p>noise</p></body></TEI>",
+    )
+    with pytest.raises(PlanningResponseFormatError):
+        await planner.plan(request)
 
 
 class _PropGraphPlanner:
@@ -784,7 +778,8 @@ class _PropGraphToolExecutor:
     ),
 )
 @settings(max_examples=50)
-def test_langgraph_total_tokens_non_negative(
+@pytest.mark.asyncio
+async def test_langgraph_total_tokens_non_negative(
     planner_input: int,
     planner_output: int,
     action_input: int,
@@ -832,21 +827,18 @@ def test_langgraph_total_tokens_non_negative(
         tool_executor=_PropGraphToolExecutor(result=tool_result),
     )
 
-    async def runner() -> None:
-        request = GenerationOrchestrationRequest(
-            correlation_id=correlation_id,
-            script_tei_xml=(
-                "<TEI><text><body><p>Hypothesis-driven graph workload</p></body>"
-                "</text></TEI>"
-            ),
-            template_structure=None,
-        )
-        state = await graph.ainvoke(GenerationGraphState(request=request))
-        orchestration_result = state["orchestration_result"]
-        expected_total_tokens = planner_usage.total_tokens + tool_usage.total_tokens
-        assert orchestration_result.total_usage.total_tokens >= 0
-        assert orchestration_result.total_usage.total_tokens == expected_total_tokens
-        assert state["planner_result"] == planner_result
-        assert state["action_results"][0].model == "prop-exec-model"
-
-    asyncio.run(runner())
+    request = GenerationOrchestrationRequest(
+        correlation_id=correlation_id,
+        script_tei_xml=(
+            "<TEI><text><body><p>Hypothesis-driven graph workload</p></body>"
+            "</text></TEI>"
+        ),
+        template_structure=None,
+    )
+    state = await graph.ainvoke(GenerationGraphState(request=request))
+    orchestration_result = state["orchestration_result"]
+    expected_total_tokens = planner_usage.total_tokens + tool_usage.total_tokens
+    assert orchestration_result.total_usage.total_tokens >= 0
+    assert orchestration_result.total_usage.total_tokens == expected_total_tokens
+    assert state["planner_result"] == planner_result
+    assert state["action_results"][0].model == "prop-exec-model"

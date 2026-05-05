@@ -30,46 +30,6 @@ This guide will cover:
 - Working with TEI (Text Encoding Initiative) canonical content
 - Tracking ingestion jobs, source weighting decisions, and provenance metadata
 - Configuring content weighting and conflict resolution
-- Managing episode metadata and show notes surfaced alongside published audio.
-
-  #### Episode summaries (“show notes”)
-
-  Show notes are the short headings, timings, and topic blurbs readers skim
-  next to playback—episode-ready blurbs alongside the soundtrack rather than a
-  full transcript.
-
-  #### Two-stage generation
-
-  Each run unfolds in two automatic passes. First, a deliberately capable model
-  inspects your tagged canonical script markup (structured XML used for
-  archival podcast manuscripts) and decides which enrichment jobs run next.
-  Afterwards, an economical companion model performs those chores so
-  predictable spend rests beside dependable quality. Operators only name
-  `planning_model` (chooser) and `execution_model` (executor) beside their
-  Large Language Model account; the split itself needs no bespoke toggling
-  unless you revise those identifiers.
-
-  #### Failure behaviour
-
-  Outputs must honour the negotiated JSON blueprint. When either stage strays
-  off that shape the tool chain stops loudly with reviewer-grade validation
-  chatter instead of dribbling unfinished metadata sideways. Transparent faults
-  beat muted data loss wherever audiences consume summaries.
-
-  #### Configuration
-
-  Treat three settings as obligatory once credential blocks exist:
-
-  - `planning_model` — provider-visible moniker for the planning pass sequencing
-    follow-on work.
-
-  - `execution_model` — moniker for follow-on authors (for example whoever
-    writes
-    the show-notes payload).
-
-  - Both strings must correspond to models your activated Large Language Model
-    service publishes; typoed identifiers fail deterministically beside malformed
-    structured payloads.
 - Database schema integrity is validated automatically in CI so that canonical
   content storage remains consistent across releases
 - Repository and transactional integrity are validated by integration tests
@@ -107,6 +67,43 @@ This guide will cover:
   metadata and optional escaping policies
 - Persisting `guardrails` on series profiles and episode templates so
   generation requests carry stable editorial instructions as system prompts
+
+#### Show notes
+
+Show notes are the episode summaries, topic lists, and chapter markers that
+appear alongside a podcast episode — helping listeners decide whether to tune
+in and navigate the content.
+
+##### Two-stage generation
+
+Generating show notes uses two successive calls to different language models:
+
+1. A **planning model** reads the episode script and decides which enrichment
+   tasks to run. Using a capable model here ensures the right work is selected.
+2. An **execution model** carries out the chosen tasks and writes the note
+   payload. Using a cheaper model for this step reduces API costs without
+   sacrificing quality.
+
+No manual intervention is required; the split is handled automatically.
+Configuration is provided through the provider settings file:
+
+<!-- markdownlint-disable MD013 -->
+| Setting           | Purpose                                                   |
+| ----------------- | --------------------------------------------------------- |
+| `planning_model`  | Name of the model used for the planning pass              |
+| `execution_model` | Name of the model used to generate the show-notes payload |
+<!-- markdownlint-enable MD013 -->
+
+Both model names must reference endpoints available through the configured LLM
+provider.
+
+##### Failure behaviour
+
+If either stage returns a response that does not match the expected structured
+format, the run stops immediately with a clear validation error. No partial or
+malformed metadata is published silently. This "fail fast" behaviour is
+intentional — a clear error is easier to diagnose and correct than silent data
+loss.
 
 ### Reusable Reference Documents
 

@@ -17,15 +17,16 @@ Accepted design decisions relevant to current implementation work:
 
 - Use `uv` to manage the virtual environment and dependencies.
 - Run `make lint`, `make typecheck`, and `make test` before proposing changes.
-- The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
-  so artefacts installed via `uv` or Bun resolve for every recipe without extra
-  shell configuration.
 - Use the canonical content modules under `episodic/canonical` for schema and
   repository logic.
 - The Makefile exports `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` so the
   `tei-rapporteur` bindings build against Python 3.14.
 - The build backend is `uv_build` (`>=0.11.7,<0.12.0`), declared in the
   `[build-system]` table of `pyproject.toml`.
+
+The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
+so that tools installed via `uv` and Bun are discoverable by all Make targets
+without requiring manual shell `PATH` configuration.
 
 ## Falcon HTTP runtime
 
