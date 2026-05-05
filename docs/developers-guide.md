@@ -17,6 +17,9 @@ Accepted design decisions relevant to current implementation work:
 
 - Use `uv` to manage the virtual environment and dependencies.
 - Run `make lint`, `make typecheck`, and `make test` before proposing changes.
+- The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
+  so artefacts installed via `uv` or Bun resolve for every recipe without extra
+  shell configuration.
 - Use the canonical content modules under `episodic/canonical` for schema and
   repository logic.
 - The Makefile exports `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` so the
@@ -469,45 +472,12 @@ changing canonical prompt assembly rules.
 
 Pedante is implemented in the `episodic/qa/` package.
 
-
 ### Package structure
 
 - `episodic/orchestration/generation.py` contains DTOs,
   `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
   `ToolExecutorPort`, and `ShowNotesToolExecutor`.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
-  used for `plan -> execute -> finish`.
-
-### Package structure
-
-- `episodic/orchestration/generation.py` contains DTOs,
-  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
-  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
-  used for `plan -> execute -> finish`.
-
-### Package structure
-
-- `episodic/orchestration/generation.py` contains DTOs,
-  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
-  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
-  used for `plan -> execute -> finish`.
-
-### Package structure
-
-- `episodic/orchestration/generation.py` contains DTOs,
-  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
-  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
-  used for `plan -> execute -> finish`.
-
-### Package structure
-
-- `episodic/orchestration/generation.py` contains DTOs,
-  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
-  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph seam
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
   used for `plan -> execute -> finish`.
 
 ### Maintainer rules
@@ -521,7 +491,6 @@ Pedante is implemented in the `episodic/qa/` package.
   `ToolExecutorPort`.
 - Treat `ShowNotesToolExecutor` as the first tool adapter, not as a special
   case that other orchestration code may import around.
-
 
 ### Testing the orchestration slice
 
@@ -667,7 +636,6 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   writing provider fixtures, keep the prompt assertions structural and the
   response template minimal so prompt wording can evolve without making the
   scenario brittle.
-
 
 ## Structured generation orchestration
 

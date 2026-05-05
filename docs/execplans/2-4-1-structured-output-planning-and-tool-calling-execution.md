@@ -5,7 +5,9 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN_PROGRESS
+Status: COMPLETE
+
+Completed: 2026-05-03
 
 ## Purpose and big picture
 
@@ -172,7 +174,8 @@ until Stage F validation and branch-level gates complete.
   and the show-notes execution path.
 - [x] (2026-04-21 10:17Z) Stage E: documented the architecture decision and
   updated the design, user, and developer guides.
-- [ ] Stage F validation pending; awaiting CI/gates.
+- [x] Stage F complete. Gate command sequence passed.
+  Roadmap item `2.4.1` marked done.
 
 ## Surprises & Discoveries
 

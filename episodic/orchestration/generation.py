@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import json
+import time
 
 from episodic.llm import (
     LLMError,
@@ -230,10 +231,28 @@ class StructuredPlanningOrchestrator:
         """Execute each plan step sequentially through the tool-execution port."""
         # Planned actions may grow side effects later, so execution stays ordered.
         results: list[ActionExecutionResult] = []
+        execution_model = plan.selected_execution_model
         for action in plan.steps:
-            results.append(  # noqa: PERF401
-                await self.tool_executor.execute(action, request)
+            _log_event(
+                "debug",
+                "structured_planning_orchestrator.execute_plan.action.start",
+                correlation_id=request.correlation_id,
+                action_id=action.action_id,
+                action_kind=str(action.action_kind),
+                execution_model=execution_model,
             )
+            elapsed_start = time.monotonic()
+            result = await self.tool_executor.execute(action, request)
+            _log_event(
+                "debug",
+                "structured_planning_orchestrator.execute_plan.action.complete",
+                correlation_id=request.correlation_id,
+                action_id=action.action_id,
+                action_kind=str(action.action_kind),
+                execution_model=execution_model,
+                elapsed_ms=round((time.monotonic() - elapsed_start) * 1000, 1),
+            )
+            results.append(result)
         return tuple(results)
 
     async def orchestrate(
@@ -278,6 +297,7 @@ class StructuredPlanningOrchestrator:
             "info",
             "structured_planning_orchestrator.orchestrate.complete",
             correlation_id=request.correlation_id,
+            execution_model=result.plan.selected_execution_model,
             input_tokens=result.total_usage.input_tokens,
             output_tokens=result.total_usage.output_tokens,
             total_tokens=result.total_usage.total_tokens,

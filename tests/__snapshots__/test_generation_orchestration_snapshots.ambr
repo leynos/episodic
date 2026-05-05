@@ -1,0 +1,97 @@
+# serializer version: 1
+# name: test_build_prompt_snapshot
+  '''
+  Return JSON only.
+  {
+    "task": "Review the canonical TEI script and decide which enabled generation-enrichment actions should run.",
+    "response_schema": {
+      "plan_version": "string",
+      "steps": [
+        {
+          "action_id": "string",
+          "action_kind": [
+            "generate_show_notes"
+          ],
+          "rationale": "string",
+          "model_tier": [
+            "planning",
+            "execution"
+          ],
+          "required_inputs": [
+            "string"
+          ]
+        }
+      ]
+    },
+    "enabled_action_kinds": [
+      "generate_show_notes"
+    ],
+    "correlation_id": "snap-001",
+    "script_tei_xml": "<TEI><text><body><p>Snapshot teaser</p></body></text></TEI>"
+  }
+  '''
+# ---
+# name: test_execution_plan_serialisation_snapshot
+  dict({
+    'plan_version': 'snap-plan-version',
+    'selected_execution_model': 'snap-execution',
+    'selected_planning_model': 'snap-planning',
+    'steps': tuple(
+      dict({
+        'action_id': 'snap-act',
+        'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
+        'model_tier': <ModelTier.EXECUTION: 'execution'>,
+        'rationale': 'Snapshot rationale string.',
+        'required_inputs': tuple(
+          'script_tei_xml',
+          'template_structure',
+        ),
+      }),
+    ),
+  })
+# ---
+# name: test_generation_orchestration_result_snapshot
+  dict({
+    'action_results': tuple(
+      dict({
+        'action_id': 'snap-act',
+        'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
+        'model': 'snap-worker-model',
+        'model_tier': <ModelTier.EXECUTION: 'execution'>,
+        'show_notes_result': None,
+        'summary': 'Executed snapshot enrichment.',
+        'usage': dict({
+          'input_tokens': 6,
+          'output_tokens': 4,
+          'total_tokens': 10,
+        }),
+      }),
+    ),
+    'plan': dict({
+      'plan_version': 'snap-plan-version',
+      'selected_execution_model': 'snap-execution',
+      'selected_planning_model': 'snap-planning',
+      'steps': tuple(
+        dict({
+          'action_id': 'snap-act',
+          'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
+          'model_tier': <ModelTier.EXECUTION: 'execution'>,
+          'rationale': 'Completed snap step.',
+          'required_inputs': tuple(
+            'script_tei_xml',
+          ),
+        }),
+      ),
+    }),
+    'planner_usage': dict({
+      'input_tokens': 40,
+      'output_tokens': 20,
+      'total_tokens': 60,
+    }),
+    'total_usage': dict({
+      'input_tokens': 46,
+      'output_tokens': 24,
+      'total_tokens': 70,
+    }),
+  })
+# ---

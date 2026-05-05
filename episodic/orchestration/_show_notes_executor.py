@@ -100,7 +100,7 @@ def _handle_generator_error(
     raise ToolExecutionError(msg) from exc
 
 
-@dc.dataclass(slots=True)
+@dc.dataclass(slots=True, frozen=True)
 class ShowNotesToolExecutor:
     """Adapter that runs ``generate_show_notes`` through the show-notes generator.
 
@@ -110,34 +110,46 @@ class ShowNotesToolExecutor:
     Parameters
     ----------
     llm : LLMPort
-        Provider port used when lazily constructing a ``ShowNotesGenerator``.
+        Provider port wired into a lazily instantiated ``ShowNotesGenerator``
+        unless ``generator`` is supplied explicitly.
     config : GenerationOrchestrationConfig
-        Orchestration settings supplying execution model, provider operation,
-        token budget, and system prompt for the default generator.
+        Configuration supplying execution model, provider operation, token budget,
+        and system prompt used when constructing the default generator at init.
     generator : _ShowNotesGeneratorPort or None, optional
-        Pre-built generator to reuse. When ``None``, the first call to
-        ``execute`` builds and caches a ``ShowNotesGenerator`` from ``llm`` and
-        ``config``.
+        Pre-built generator to reuse without construction. When ``None``,
+        ``__post_init__`` attaches a freshly built ``ShowNotesGenerator`` backed by
+        ``llm`` and ``config`` so callers never observe deferred field mutation
+        afterward.
     """
 
     llm: LLMPort
     config: GenerationOrchestrationConfig
     generator: _ShowNotesGeneratorPort | None = None
 
+    def __post_init__(self) -> None:
+        """Build and pin the default show-notes generator when none is injected."""
+        if self.generator is None:
+            object.__setattr__(
+                self,
+                "generator",
+                ShowNotesGenerator(
+                    llm=self.llm,
+                    config=ShowNotesGeneratorConfig(
+                        model=self.config.execution_model,
+                        provider_operation=self.config.execution_provider_operation,
+                        token_budget=self.config.execution_token_budget,
+                        system_prompt=self.config.execution_system_prompt,
+                    ),
+                ),
+            )
+
     def _build_generator(self) -> _ShowNotesGeneratorPort:
-        """Return the injected generator or build and memoize ``ShowNotesGenerator``."""
-        if self.generator is not None:
-            return self.generator
-        self.generator = ShowNotesGenerator(
-            llm=self.llm,
-            config=ShowNotesGeneratorConfig(
-                model=self.config.execution_model,
-                provider_operation=self.config.execution_provider_operation,
-                token_budget=self.config.execution_token_budget,
-                system_prompt=self.config.execution_system_prompt,
-            ),
-        )
-        return self.generator
+        """Return the show-notes generator for this executor."""
+        gen = self.generator
+        if gen is None:
+            msg = "ShowNotesToolExecutor.generator was not populated by __post_init__"
+            raise RuntimeError(msg)
+        return gen
 
     @staticmethod
     def _validate_action_preconditions(

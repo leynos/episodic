@@ -30,23 +30,46 @@ This guide will cover:
 - Working with TEI (Text Encoding Initiative) canonical content
 - Tracking ingestion jobs, source weighting decisions, and provenance metadata
 - Configuring content weighting and conflict resolution
-- Managing episode metadata and show notes. Show-notes generation runs
-  automatically as part of the episode-generation pipeline, with no separate
-  manual step. A Large Language Model (LLM) analyses the canonical TEI script
-  to extract key topics, short summaries, and, where inferable, timestamps and
-  source locators. The output is written back into the canonical TEI body as a
-  `<div type="notes">` containing one `<item>` per topic, where each item
-  carries a `<label>`, inline summary text, and optional `@n` (ISO 8601
-  duration timestamp) and `@corresp` (source locator) attributes.
-  `ShowNotesGeneratorConfig` controls the model, token budget, and system
-  prompt, and an optional `template_structure` mapping can be passed to
-  `build_prompt(...)` to guide extraction against a known episode template.
-  Current orchestration uses a separate structured-planning pass before the
-  show-notes tool runs, so a higher-capability planning model can choose the
-  work and a cheaper execution model can generate the note payload. If either
-  stage returns malformed structured JSON, the run fails fast with a
-  deterministic validation error instead of silently publishing partial
-  metadata.
+- Managing episode metadata and show notes surfaced alongside published audio.
+
+  #### Episode summaries (“show notes”)
+
+  Show notes are the short headings, timings, and topic blurbs readers skim
+  next to playback—episode-ready blurbs alongside the soundtrack rather than a
+  full transcript.
+
+  #### Two-stage generation
+
+  Each run unfolds in two automatic passes. First, a deliberately capable model
+  inspects your tagged canonical script markup (structured XML used for
+  archival podcast manuscripts) and decides which enrichment jobs run next.
+  Afterwards, an economical companion model performs those chores so
+  predictable spend rests beside dependable quality. Operators only name
+  `planning_model` (chooser) and `execution_model` (executor) beside their
+  Large Language Model account; the split itself needs no bespoke toggling
+  unless you revise those identifiers.
+
+  #### Failure behaviour
+
+  Outputs must honour the negotiated JSON blueprint. When either stage strays
+  off that shape the tool chain stops loudly with reviewer-grade validation
+  chatter instead of dribbling unfinished metadata sideways. Transparent faults
+  beat muted data loss wherever audiences consume summaries.
+
+  #### Configuration
+
+  Treat three settings as obligatory once credential blocks exist:
+
+  - `planning_model` — provider-visible moniker for the planning pass sequencing
+    follow-on work.
+
+  - `execution_model` — moniker for follow-on authors (for example whoever
+    writes
+    the show-notes payload).
+
+  - Both strings must correspond to models your activated Large Language Model
+    service publishes; typoed identifiers fail deterministically beside malformed
+    structured payloads.
 - Database schema integrity is validated automatically in CI so that canonical
   content storage remains consistent across releases
 - Repository and transactional integrity are validated by integration tests
