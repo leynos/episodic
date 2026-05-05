@@ -96,7 +96,8 @@ class _SupportsConvenienceLog(typ.Protocol):
         *,
         exc_info: object | None = None,
         stack_info: bool = False,
-    ) -> None: ...
+    ) -> None:
+        """Emit an INFO-level log record."""
 
     def warning(
         self,
@@ -105,7 +106,8 @@ class _SupportsConvenienceLog(typ.Protocol):
         *,
         exc_info: object | None = None,
         stack_info: bool = False,
-    ) -> None: ...
+    ) -> None:
+        """Emit a WARNING-level log record."""
 
     def error(
         self,
@@ -114,7 +116,8 @@ class _SupportsConvenienceLog(typ.Protocol):
         *,
         exc_info: object | None = None,
         stack_info: bool = False,
-    ) -> None: ...
+    ) -> None:
+        """Emit an ERROR-level log record."""
 
 
 class _SupportsLogMethod(typ.Protocol):
@@ -128,7 +131,8 @@ class _SupportsLogMethod(typ.Protocol):
         *,
         exc_info: object | None = None,
         stack_info: bool = False,
-    ) -> None: ...
+    ) -> None:
+        """Emit a log record at the given numeric or LogLevel level."""
 
 
 type _CompatibleLogger = _SupportsConvenienceLog | _SupportsLogMethod

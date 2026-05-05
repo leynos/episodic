@@ -19,6 +19,8 @@ Accepted design decisions relevant to current implementation work:
   repository logic.
 - The Makefile exports `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` so the
   `tei-rapporteur` bindings build against Python 3.14.
+- The build backend is `uv_build` (`>=0.11.7,<0.12.0`), declared in the
+  `[build-system]` table of `pyproject.toml`.
 
 ## Falcon HTTP runtime
 
@@ -733,3 +735,122 @@ for compatibility, but new code should prefer calling the logger methods
 directly. Femtologging still expects pre-formatted messages rather than stdlib
 `logger.info("%s", value)` lazy formatting, so build the final string before
 calling the method.
+
+### LogLevel
+
+`episodic.logging.LogLevel` is a `StrEnum` with the following members:
+
+Table: Log levels used by the application
+
+| Value      | Notes                                                       |
+| ---------- | ----------------------------------------------------------- |
+| `TRACE`    | Verbose trace-level output                                  |
+| `DEBUG`    | Debug-level output                                          |
+| `INFO`     | Informational output (default)                              |
+| `WARNING`  | Warning output                                              |
+| `WARN`     | Deprecated alias for `WARNING`; raises `DeprecationWarning` |
+| `ERROR`    | Error output                                                |
+| `CRITICAL` | Critical error output                                       |
+
+### configure_logging
+
+```python
+def configure_logging(
+    level: str | None,
+    *,
+    force: bool = False,
+) -> tuple[str, bool]: ...
+```
+
+`level` is matched case-insensitively against `LogLevel` members. Returns a
+`tuple[str, bool]` — the normalized effective level and a flag that is `True`
+when the default (`INFO`) was substituted because the input was absent or
+unrecognized. The first element is always a `LogLevel` member; because
+`LogLevel` is a `StrEnum`, those values are also `str` instances, which matches
+the `str` slot in the annotated return type. Passing `"WARN"` (any case)
+normalizes to `WARNING` and emits a `DeprecationWarning`. The `force` parameter
+is forwarded directly to `femtologging.basicConfig`.
+
+### Internal protocol interfaces
+
+Two private Protocol types define the logger surface consumed by helper
+functions:
+
+- `_SupportsConvenienceLog` — objects exposing the three stdlib-style
+  convenience methods:
+
+  ```python
+  def info(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
+
+
+  def warning(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
+
+
+  def error(
+      self,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
+  ```
+
+- `_SupportsLogMethod` — objects exposing the generic stdlib-style entry
+  point:
+
+  ```python
+  def log(
+      self,
+      level: int | LogLevel,
+      message: str,
+      /,
+      *,
+      exc_info: object | None = None,
+      stack_info: bool = False,
+  ) -> None: ...
+  ```
+
+  `level` accepts an `int | LogLevel` value.
+
+In every signature, the message (and `level` plus message for `log`) are
+positional-only before `/`, and `exc_info` and `stack_info` are keyword-only
+after `*`. Adapter authors must implement the full surface — including the
+`exc_info` and `stack_info` keyword-only parameters — for the helpers to call
+them correctly.
+
+Custom logger adapters passed to `log_info`, `log_warning`, or `log_error` must
+satisfy `_SupportsConvenienceLog`. Code that calls `log_at_level` must satisfy
+`_SupportsLogMethod`.
+
+## Asyncio task utilities
+
+`episodic.asyncio_tasks` provides `create_task` and `create_task_in_group` as
+thin wrappers around `asyncio.TaskGroup.create_task`. Both helpers accept an
+optional set of extra keyword arguments that are validated by the internal
+`_validate_task_create_kwargs` helper before being forwarded to the underlying
+task-creation call.
+
+`_validate_task_create_kwargs` accepts a `cabc.Mapping[str, object]` rather
+than a concrete `dict[str, object]`, so read-only mappings such as
+`types.MappingProxyType` are accepted at runtime. The helper converts the
+validated mapping to a plain `dict` before returning a `TaskCreateKwargs`
+payload.
+
+Accepted keys are those defined in `TaskCreateKwargs`: `name`, `context`,
+`eager_start`, and `metadata` (see `TaskMetadata` for the metadata field
+schema). Passing an unrecognized key raises `TypeError`.

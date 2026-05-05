@@ -29,7 +29,7 @@ def _make_reference_document(**overrides: object) -> ReferenceDocument:
         "updated_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
     defaults.update(overrides)  # type: ignore[arg-type]
-    return typ.cast("ReferenceDocument", ReferenceDocument(**defaults))
+    return ReferenceDocument(**defaults)
 
 
 def _make_reference_document_revision(
@@ -46,7 +46,7 @@ def _make_reference_document_revision(
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
     defaults.update(overrides)  # type: ignore[arg-type]
-    return typ.cast("ReferenceDocumentRevision", ReferenceDocumentRevision(**defaults))
+    return ReferenceDocumentRevision(**defaults)
 
 
 def _make_reference_binding(**overrides: object) -> ReferenceBinding:
@@ -62,7 +62,7 @@ def _make_reference_binding(**overrides: object) -> ReferenceBinding:
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
     defaults.update(overrides)  # type: ignore[arg-type]
-    return typ.cast("ReferenceBinding", ReferenceBinding(**defaults))
+    return ReferenceBinding(**defaults)
 
 
 def test_serialize_resolved_binding_structure() -> None:

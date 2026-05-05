@@ -141,6 +141,18 @@ Health endpoints:
   fails, so deployment platforms can keep traffic away from an unhealthy
   instance.
 
+### Logging
+
+`episodic.logging.LogLevel` accepts the configured log levels: `TRACE`,
+`DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`. `WARN` remains available
+as a deprecated alias for `WARNING`.
+
+Use `configure_logging(level, ...)` to configure process logging. The `level`
+argument is case-insensitive, and the function returns a
+`tuple[LogLevel, bool]`: the normalized `LogLevel` value and a flag indicating
+whether the default (`INFO`) was substituted because the input was absent or
+unrecognized.
+
 ### Worker runtime
 
 The background-worker scaffold now exists for operators who need to stand up

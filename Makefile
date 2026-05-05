@@ -1,6 +1,7 @@
 MDLINT ?= markdownlint-cli2
 NIXIE ?= nixie
 MDFORMAT_ALL ?= mdformat-all
+export PATH := $(PATH):$(HOME)/.local/bin:$(HOME)/.bun/bin
 TOOLS = $(MDFORMAT_ALL) ruff ty $(MDLINT) uv
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
@@ -71,7 +72,7 @@ typecheck: build ty ## Run typechecking
 	ty check
 
 markdownlint: $(MDLINT) ## Lint Markdown files
-	$(MDLINT) '**/*.md'
+	env -u NO_COLOR $(MDLINT) '**/*.md'
 
 nixie: ## Validate Mermaid diagrams
 	$(call ensure_tool,nixie)

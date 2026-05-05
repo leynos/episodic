@@ -9,8 +9,6 @@ import pytest
 # psycopg-binary currently segfaults against py-pglite in this test harness.
 os.environ.setdefault("PSYCOPG_IMPL", "python")
 
-from tests.fixtures.binding import BindingFixtures, _SnapshotTestFixtures
-
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
@@ -19,9 +17,6 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import EpisodeTemplate
     from episodic.canonical.ports import CanonicalUnitOfWork
-
-__all__ = ["BindingFixtures", "_SnapshotTestFixtures"]
-
 pytest_plugins: list[str] = [
     "tests.fixtures.database",
     "tests.fixtures.llm",

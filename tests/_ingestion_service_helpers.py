@@ -39,14 +39,13 @@ class RawSourceInputDict(typ.TypedDict):
 
 def _make_raw_source(**kwargs: typ.Unpack[RawSourceInputOverrides]) -> RawSourceInput:
     """Build a raw source input for testing with sensible defaults."""
-    defaults: RawSourceInputDict = {
-        "source_type": "transcript",
-        "source_uri": "s3://bucket/transcript.txt",
-        "content": "Episode transcript content",
-        "content_hash": "hash-abc",
-        "metadata": {},
+    merged: RawSourceInputDict = {
+        "source_type": kwargs.get("source_type", "transcript"),
+        "source_uri": kwargs.get("source_uri", "s3://bucket/transcript.txt"),
+        "content": kwargs.get("content", "Episode transcript content"),
+        "content_hash": kwargs.get("content_hash", "hash-abc"),
+        "metadata": kwargs.get("metadata", {}),
     }
-    merged = typ.cast("RawSourceInputDict", defaults | kwargs)
     return RawSourceInput(**merged)
 
 

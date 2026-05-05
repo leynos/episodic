@@ -13,6 +13,7 @@ class _SpyLogger:
     """Collect low-level log calls emitted by the compatibility wrappers."""
 
     def __init__(self) -> None:
+        """Initialise an empty call record."""
         self.calls: list[
             tuple[episodic_logging.LogLevel, str, object | None, bool]
         ] = []
@@ -26,6 +27,7 @@ class _SpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Append a normalised call tuple to the record list."""
         self.calls.append((level, message, exc_info, stack_info))
 
     def info(
@@ -36,6 +38,7 @@ class _SpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Record an INFO-level call."""
         self._record(
             episodic_logging.LogLevel.INFO,
             message,
@@ -51,6 +54,7 @@ class _SpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Record a WARNING-level call."""
         self._record(
             episodic_logging.LogLevel.WARNING,
             message,
@@ -66,6 +70,7 @@ class _SpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Record an ERROR-level call."""
         self._record(
             episodic_logging.LogLevel.ERROR,
             message,
@@ -78,6 +83,7 @@ class _LogOnlySpyLogger:
     """Collect low-level log calls through a stdlib-style `log` method only."""
 
     def __init__(self) -> None:
+        """Initialise an empty call record."""
         self.calls: list[tuple[int, str, object | None, bool]] = []
 
     def log(
@@ -89,6 +95,7 @@ class _LogOnlySpyLogger:
         exc_info: object | None = None,
         stack_info: bool = False,
     ) -> None:
+        """Record a call made through the stdlib-style log() entry point."""
         assert isinstance(level, int)
         self.calls.append((level, message, exc_info, stack_info))
 
@@ -97,16 +104,19 @@ class _CollectorHandler:
     """Capture femtologging records through the Python handler protocol."""
 
     def __init__(self) -> None:
+        """Initialise an empty records list."""
         self.records: list[tuple[str, str, str]] = []
 
     def handle(self, logger_name: str, level: str, message: str) -> None:
+        """Append a (logger_name, level, message) tuple to the records list."""
         self.records.append((logger_name, level, message))
 
 
 class _SupportsFlushHandlers(typ.Protocol):
     """Minimal logger protocol needed by the asynchronous test helper."""
 
-    def flush_handlers(self) -> object: ...
+    def flush_handlers(self) -> None:
+        """Flush all pending records through attached handlers and return None."""
 
 
 @pytest.fixture
@@ -143,6 +153,8 @@ def _wait_for_record_count(
         ("", episodic_logging.LogLevel.INFO, True),
         ("debug", episodic_logging.LogLevel.DEBUG, False),
         ("warning", episodic_logging.LogLevel.WARNING, False),
+        ("warn", episodic_logging.LogLevel.WARNING, False),
+        ("WARN", episodic_logging.LogLevel.WARNING, False),
         ("invalid", episodic_logging.LogLevel.INFO, True),
     ],
 )
@@ -160,10 +172,17 @@ def test_configure_logging_normalizes_levels(
 
     monkeypatch.setattr(episodic_logging, "basicConfig", _fake_basic_config)
 
-    effective_level, used_default = episodic_logging.configure_logging(
-        requested_level,
-        force=True,
-    )
+    if (requested_level or "").upper() == "WARN":
+        with pytest.warns(DeprecationWarning, match="LogLevel.WARN is deprecated"):
+            effective_level, used_default = episodic_logging.configure_logging(
+                requested_level,
+                force=True,
+            )
+    else:
+        effective_level, used_default = episodic_logging.configure_logging(
+            requested_level,
+            force=True,
+        )
 
     assert (effective_level, used_default) == (
         expected_level,
@@ -299,6 +318,7 @@ def test_episodic_logging_get_logger_reexport_matches_femtologging_surface() -> 
 
 
 def _raise_logged_exception() -> None:
+    """Raise a RuntimeError for use in exception-logging tests."""
     msg = "boom"
     raise RuntimeError(msg)
 
