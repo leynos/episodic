@@ -102,17 +102,33 @@ def _handle_generator_error(
 
 @dc.dataclass(slots=True)
 class ShowNotesToolExecutor:
-    """Execute the `generate_show_notes` action through the show-notes service."""
+    """Adapter that runs ``generate_show_notes`` through the show-notes generator.
+
+    Validates planned actions, calls the generator with request context, and
+    wraps success as an ``ActionExecutionResult``.
+
+    Parameters
+    ----------
+    llm : LLMPort
+        Provider port used when lazily constructing a ``ShowNotesGenerator``.
+    config : GenerationOrchestrationConfig
+        Orchestration settings supplying execution model, provider operation,
+        token budget, and system prompt for the default generator.
+    generator : _ShowNotesGeneratorPort or None, optional
+        Pre-built generator to reuse. When ``None``, the first call to
+        ``execute`` builds and caches a ``ShowNotesGenerator`` from ``llm`` and
+        ``config``.
+    """
 
     llm: LLMPort
     config: GenerationOrchestrationConfig
     generator: _ShowNotesGeneratorPort | None = None
 
     def _build_generator(self) -> _ShowNotesGeneratorPort:
-        """Instantiate a ShowNotesGenerator configured from this executor's settings."""
+        """Return the injected generator or build and memoize ``ShowNotesGenerator``."""
         if self.generator is not None:
             return self.generator
-        return ShowNotesGenerator(
+        self.generator = ShowNotesGenerator(
             llm=self.llm,
             config=ShowNotesGeneratorConfig(
                 model=self.config.execution_model,
@@ -121,6 +137,7 @@ class ShowNotesToolExecutor:
                 system_prompt=self.config.execution_system_prompt,
             ),
         )
+        return self.generator
 
     @staticmethod
     def _validate_action_preconditions(
@@ -128,7 +145,7 @@ class ShowNotesToolExecutor:
         *,
         correlation_id: str,
     ) -> None:
-        """Raise UnsupportedActionError if action is not eligible for this executor."""
+        """Reject ineligible planned actions by raising ``UnsupportedActionError``."""
         action_kind = str(action.action_kind)
         if action_kind != ActionKind.GENERATE_SHOW_NOTES.value:
             _log_event(
@@ -178,7 +195,7 @@ class ShowNotesToolExecutor:
         context: GenerationOrchestrationRequest,
         action: PlannedAction,
     ) -> ShowNotesResult:
-        """Run the show-notes generator and map exceptions to tool-layer errors."""
+        """Return ``ShowNotesResult`` from ``generator.generate``; route errors via ``_handle_generator_error``."""  # noqa: E501
         try:
             return await generator.generate(
                 context.script_tei_xml,
@@ -192,7 +209,30 @@ class ShowNotesToolExecutor:
         action: PlannedAction,
         context: GenerationOrchestrationRequest,
     ) -> ActionExecutionResult:
-        """Run the show-notes service for the supported action kind."""
+        """Execute the ``generate_show_notes`` tool step for ``action``.
+
+        Parameters
+        ----------
+        action : PlannedAction
+            Planned step constrained to this executor's supported shape.
+        context : GenerationOrchestrationRequest
+            Correlation-bound script payload and optional template structure.
+
+        Returns
+        -------
+        ActionExecutionResult
+            Normalised tool outcome wrapping model output and summaries.
+
+        Raises
+        ------
+        UnsupportedActionError
+            When the planner step targets another ``ActionKind`` or model tier.
+        ToolExecutionError
+            When downstream tool-layer execution fails after logging.
+            Includes ``ShowNotesFormatError`` for malformed structured output.
+        LLMError
+            Forwarded unchanged from generator or provider faults after logging.
+        """
         action_kind = str(action.action_kind)
         _log_event(
             "debug",
