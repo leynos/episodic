@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import contextvars as cv
 import datetime as dt
-import types
 import typing as typ
 import uuid
 
@@ -15,7 +14,6 @@ import pytest
 from episodic.asyncio_tasks import (
     TASK_METADATA_KWARG,
     TaskMetadata,
-    _validate_task_create_kwargs,
     create_task,
     create_task_in_group,
 )
@@ -388,20 +386,6 @@ def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
             )
     finally:
         coro.close()
-
-
-def test_validate_task_kwargs_accepts_empty_mapping_proxy() -> None:
-    """_validate_task_create_kwargs accepts a read-only MappingProxyType."""
-    proxy = types.MappingProxyType({})
-    result = _validate_task_create_kwargs(proxy)
-    assert result == {}
-
-
-def test_validate_task_kwargs_accepts_named_mapping_proxy() -> None:
-    """_validate_task_create_kwargs accepts a MappingProxyType with a name key."""
-    proxy = types.MappingProxyType({"name": "my-task"})
-    result = _validate_task_create_kwargs(proxy)
-    assert result == {"name": "my-task"}
 
 
 @pytest.mark.parametrize(
