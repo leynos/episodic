@@ -143,7 +143,7 @@ async def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(
         model_tier=model_tier,
         required_inputs=("script_tei_xml",),
     )
-    with pytest.raises(UnsupportedActionError):
+    with pytest.raises(UnsupportedActionError, match=r"requires ModelTier\.EXECUTION"):
         await tool_executor.execute(planning_tier_action, _request())
 
 
@@ -178,7 +178,10 @@ async def test_planning_response_format_error_for_arbitrary_non_object_json(
         correlation_id="hyp-corr",
         script_tei_xml="<TEI><body><p>noise</p></body></TEI>",
     )
-    with pytest.raises(PlanningResponseFormatError):
+    with pytest.raises(
+        PlanningResponseFormatError,
+        match=r"planner response must be an object",
+    ):
         await planner.plan(request)
 
 

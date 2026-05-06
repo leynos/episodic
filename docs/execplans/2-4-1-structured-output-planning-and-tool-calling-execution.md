@@ -54,8 +54,8 @@ Success is observable in eight ways:
    `make check-fmt`, `make typecheck`, `make lint`, `make test`,
    `PATH=/root/.bun/bin:$PATH make markdownlint`, and `make nixie`.
 
-Because this ExecPlan is in progress, delivery statements remain provisional
-until Stage F validation and branch-level gates complete.
+This ExecPlan is complete. Stage F validation and branch-level gates passed,
+and roadmap item `2.4.1` is marked done.
 
 ## Constraints
 
@@ -174,8 +174,6 @@ until Stage F validation and branch-level gates complete.
   and the show-notes execution path.
 - [x] (2026-04-21 10:17Z) Stage E: documented the architecture decision and
   updated the design, user, and developer guides.
-- [x] Stage F complete. Gate command sequence passed. Roadmap item `2.4.1`
-  marked done.
 - [x] (2026-05-05) Stage F complete. Gate command sequence passed. Roadmap
   item `2.4.1` marked done after rebase validation.
 
@@ -287,8 +285,7 @@ until Stage F validation and branch-level gates complete.
 
 ## Outcomes & Retrospective
 
-Roadmap item `2.4.1` has implementation work in place, with Stage F validation
-complete.
+Roadmap item `2.4.1` shipped with Stage F validation complete.
 
 Delivered outcome:
 

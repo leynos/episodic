@@ -619,9 +619,14 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 
 ### Package structure
 
-- `episodic/orchestration/generation.py` contains DTOs,
-  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
-  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
+- `episodic/orchestration/_dto.py` contains the orchestration DTOs and shared
+  port protocols.
+- `episodic/orchestration/generation.py` implements and exports
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`, and the
+  orchestration result builder. It also re-exports `ToolExecutorPort` from the
+  DTO module.
+- `episodic/orchestration/_show_notes_executor.py` contains the concrete
+  `ShowNotesToolExecutor` implementation.
 - `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
   used for `plan -> execute -> finish`.
 
