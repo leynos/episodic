@@ -353,12 +353,32 @@ class ActionExecutionResult:
     show_notes_result: ShowNotesResult | None = None
 
     def __post_init__(self) -> None:
-        """Reject blank user-facing summary text."""
+        """Reject blank text fields and normalize enum-shaped fields."""
         for field_name in ("action_id", "model", "summary"):
             value = getattr(self, field_name)
             object.__setattr__(
                 self, field_name, _normalize_non_empty_text(value, field_name)
             )
+        try:
+            action_kind = (
+                self.action_kind
+                if isinstance(self.action_kind, ActionKind)
+                else ActionKind(str(self.action_kind).strip())
+            )
+        except ValueError:
+            msg = f"Unknown action kind: {self.action_kind!r}"
+            raise ValueError(msg) from None
+        try:
+            model_tier = (
+                self.model_tier
+                if isinstance(self.model_tier, ModelTier)
+                else ModelTier(str(self.model_tier).strip())
+            )
+        except ValueError:
+            msg = f"Unknown model tier: {self.model_tier!r}"
+            raise ValueError(msg) from None
+        object.__setattr__(self, "action_kind", action_kind)
+        object.__setattr__(self, "model_tier", model_tier)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -369,6 +389,18 @@ class GenerationOrchestrationResult:
     action_results: tuple[ActionExecutionResult, ...]
     planner_usage: LLMUsage
     total_usage: LLMUsage
+
+    def __post_init__(self) -> None:
+        """Freeze and validate action results supplied by callers."""
+        action_results = tuple(self.action_results)
+        for index, action_result in enumerate(action_results):
+            if not isinstance(action_result, ActionExecutionResult):
+                msg = (
+                    f"action_results[{index}] must be an ActionExecutionResult; "
+                    f"got {type(action_result).__name__}"
+                )
+                raise TypeError(msg)
+        object.__setattr__(self, "action_results", action_results)
 
 
 class ToolExecutorPort(typ.Protocol):

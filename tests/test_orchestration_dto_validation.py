@@ -4,11 +4,14 @@ import typing as typ
 
 import pytest
 
-from episodic.llm import LLMProviderOperation
+from episodic.llm import LLMProviderOperation, LLMUsage
 from episodic.orchestration import (
+    ActionExecutionResult,
     ActionKind,
+    ExecutionPlan,
     GenerationOrchestrationConfig,
     GenerationOrchestrationRequest,
+    GenerationOrchestrationResult,
     ModelTier,
     PlannedAction,
     StructuredGenerationPlanner,
@@ -17,6 +20,11 @@ from tests._orchestration_fakes import (
     _config,
     _FakeLLMPort,
 )
+
+
+def _empty_usage() -> LLMUsage:
+    """Return deterministic zero-token usage for DTO aggregate tests."""
+    return LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0)
 
 
 def test_config_rejects_empty_enabled_action_kinds() -> None:
@@ -93,35 +101,24 @@ def test_config_normalises_string_provider_operations() -> None:
     assert config.execution_provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
 
 
-@pytest.mark.parametrize("unknown_operation", ["not_a_real_op"])
-def test_config_rejects_unknown_planning_provider_operation(
-    unknown_operation: str,
+@pytest.mark.parametrize(
+    ("field_name", "expected_match"),
+    [
+        ("planning_provider_operation", "Unknown planning_provider_operation"),
+        ("execution_provider_operation", "Unknown execution_provider_operation"),
+    ],
+)
+def test_config_rejects_unknown_provider_operation(
+    field_name: str,
+    expected_match: str,
 ) -> None:
-    """Configuration should reject unknown planning provider operations."""
-    with pytest.raises(
-        ValueError,
-        match="Unknown planning_provider_operation",
-    ):
+    """Configuration should reject unknown provider operations."""
+    kwargs = {field_name: "not_a_real_op"}
+    with pytest.raises(ValueError, match=expected_match):
         GenerationOrchestrationConfig(
             planning_model="gpt-4.1",
             execution_model="gpt-4o-mini",
-            planning_provider_operation=unknown_operation,
-        )
-
-
-@pytest.mark.parametrize("unknown_operation", ["not_a_real_op"])
-def test_config_rejects_unknown_execution_provider_operation(
-    unknown_operation: str,
-) -> None:
-    """Configuration should reject unknown execution provider operations."""
-    with pytest.raises(
-        ValueError,
-        match="Unknown execution_provider_operation",
-    ):
-        GenerationOrchestrationConfig(
-            planning_model="gpt-4.1",
-            execution_model="gpt-4o-mini",
-            execution_provider_operation=unknown_operation,
+            **typ.cast("typ.Any", kwargs),
         )
 
 
@@ -200,3 +197,90 @@ def test_planned_action_rejects_unknown_enum_fields(
 
     with pytest.raises(ValueError, match=expected_match):
         PlannedAction(**typ.cast("typ.Any", kwargs))
+
+
+def test_action_execution_result_normalizes_string_enum_fields() -> None:
+    """Action execution results should expose enum instances after construction."""
+    result = ActionExecutionResult(
+        action_id="action-1",
+        action_kind=typ.cast("ActionKind", "generate_show_notes"),
+        model_tier=typ.cast("ModelTier", "execution"),
+        model="gpt-4o-mini",
+        summary="Generated show notes.",
+    )
+
+    assert result.action_kind == ActionKind.GENERATE_SHOW_NOTES
+    assert result.model_tier == ModelTier.EXECUTION
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "expected_match"),
+    [
+        (
+            "action_kind",
+            typ.cast("ActionKind", "unknown_action"),
+            "Unknown action kind",
+        ),
+        ("model_tier", typ.cast("ModelTier", "unknown_tier"), "Unknown model tier"),
+    ],
+)
+def test_action_execution_result_rejects_unknown_enum_fields(
+    field_name: str,
+    field_value: ActionKind | ModelTier,
+    expected_match: str,
+) -> None:
+    """Action execution results should reject invalid enum-like fields."""
+    kwargs: dict[str, object] = {
+        "action_id": "action-1",
+        "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+        "model_tier": ModelTier.EXECUTION,
+        "model": "gpt-4o-mini",
+        "summary": "Generated show notes.",
+    }
+    kwargs[field_name] = field_value
+
+    with pytest.raises(ValueError, match=expected_match):
+        ActionExecutionResult(**typ.cast("typ.Any", kwargs))
+
+
+def test_generation_orchestration_result_freezes_action_results() -> None:
+    """Generation results should freeze mutable action result iterables."""
+    action_result = ActionExecutionResult(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        model_tier=ModelTier.EXECUTION,
+        model="gpt-4o-mini",
+        summary="Generated show notes.",
+    )
+    aggregate = GenerationOrchestrationResult(
+        plan=ExecutionPlan(
+            plan_version="1",
+            selected_planning_model="gpt-4.1",
+            selected_execution_model="gpt-4o-mini",
+            steps=(),
+        ),
+        action_results=typ.cast("tuple[ActionExecutionResult, ...]", [action_result]),
+        planner_usage=_empty_usage(),
+        total_usage=_empty_usage(),
+    )
+
+    assert aggregate.action_results == (action_result,)
+    assert isinstance(aggregate.action_results, tuple), (
+        "action_results should be frozen as a tuple"
+    )
+
+
+def test_generation_orchestration_result_rejects_invalid_action_results() -> None:
+    """Generation results should reject non-action-result payloads."""
+    with pytest.raises(TypeError, match="action_results\\[0\\]"):
+        GenerationOrchestrationResult(
+            plan=ExecutionPlan(
+                plan_version="1",
+                selected_planning_model="gpt-4.1",
+                selected_execution_model="gpt-4o-mini",
+                steps=(),
+            ),
+            action_results=typ.cast("tuple[ActionExecutionResult, ...]", [object()]),
+            planner_usage=_empty_usage(),
+            total_usage=_empty_usage(),
+        )
