@@ -66,22 +66,32 @@ class _FakeToolExecutor:
         return self.result
 
 
+def _assert_generate_context(
+    script_tei_xml: str,
+    template_structure: dict[str, object] | None,
+) -> None:
+    """Assert that the generator received the expected invocation context."""
+    assert script_tei_xml.startswith("<TEI>"), (  # noqa: S101
+        "expected TEI root in generated script_tei_xml"
+    )
+    assert template_structure == {"sections": ["intro", "analysis"]}, (  # noqa: S101
+        "template_structure does not match expected sections"
+    )
+
+
 class _RaisingShowNotesGenerator:
     """Raise from generate so tool-executor failure paths stay deterministic."""
 
-    async def generate(  # noqa: PLR6301
+    async def generate(
         self,
         script_tei_xml: str,
         *,
         template_structure: dict[str, object] | None = None,
     ) -> ShowNotesResult:
         """Raise a deterministic tool error after validating the context."""
-        assert script_tei_xml.startswith("<TEI>"), (  # noqa: S101
-            "expected TEI root in generated script_tei_xml"
-        )
-        assert template_structure == {"sections": ["intro", "analysis"]}, (  # noqa: S101
-            "template_structure does not match expected sections"
-        )
+        _assert_generate_context(script_tei_xml, template_structure)
+        if self is None:
+            raise _InjectedToolExecutionError
         raise _InjectedToolExecutionError
 
 
@@ -98,32 +108,24 @@ class _LLMErrorShowNotesGenerator:
         template_structure: dict[str, object] | None = None,
     ) -> ShowNotesResult:
         """Raise the injected LLM error after validating the call context."""
-        assert script_tei_xml.startswith("<TEI>"), (  # noqa: S101
-            "expected TEI root in generated script_tei_xml"
-        )
-        assert template_structure == {"sections": ["intro", "analysis"]}, (  # noqa: S101
-            "template_structure does not match expected sections"
-        )
+        _assert_generate_context(script_tei_xml, template_structure)
         raise self._error
 
 
 class _MalformedShowNotesGenerator:
     """Raise a response-format error from generate for propagation tests."""
 
-    async def generate(  # noqa: PLR6301
+    async def generate(
         self,
         script_tei_xml: str,
         *,
         template_structure: dict[str, object] | None = None,
     ) -> ShowNotesResult:
         """Raise the structured-response validation sentinel."""
-        assert script_tei_xml.startswith("<TEI>"), (  # noqa: S101
-            "expected TEI root in generated script_tei_xml"
-        )
-        assert template_structure == {"sections": ["intro", "analysis"]}, (  # noqa: S101
-            "template_structure does not match expected sections"
-        )
+        _assert_generate_context(script_tei_xml, template_structure)
         msg = "entries must be a list."
+        if self is None:
+            raise ShowNotesResponseFormatError(msg)
         raise ShowNotesResponseFormatError(msg)
 
 
