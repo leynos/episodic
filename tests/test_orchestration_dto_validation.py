@@ -189,73 +189,50 @@ def test_action_execution_result_normalizes_string_enum_fields() -> None:
 
 
 @pytest.mark.parametrize(
-    ("dto_type", "base_kwargs", "field_name", "field_value", "expected_match"),
+    ("dto_cls", "base_kwargs"),
     [
         (
             PlannedAction,
             {
-                "action_id": "action-1",
+                "action_id": "a1",
                 "action_kind": ActionKind.GENERATE_SHOW_NOTES,
                 "rationale": "Generate notes.",
                 "model_tier": ModelTier.EXECUTION,
+                "required_inputs": (),
             },
-            "action_kind",
-            typ.cast("ActionKind", object()),
-            "Unknown action kind",
-        ),
-        (
-            PlannedAction,
-            {
-                "action_id": "action-1",
-                "action_kind": ActionKind.GENERATE_SHOW_NOTES,
-                "rationale": "Generate notes.",
-                "model_tier": ModelTier.EXECUTION,
-            },
-            "model_tier",
-            typ.cast("ModelTier", object()),
-            "Unknown model tier",
         ),
         (
             ActionExecutionResult,
             {
-                "action_id": "action-1",
+                "action_id": "a1",
                 "action_kind": ActionKind.GENERATE_SHOW_NOTES,
                 "model_tier": ModelTier.EXECUTION,
-                "model": "gpt-4o-mini",
-                "summary": "Generated show notes.",
+                "model": "exec-model",
+                "summary": "ok",
             },
-            "action_kind",
-            typ.cast("ActionKind", "unknown_action"),
-            "Unknown action kind",
-        ),
-        (
-            ActionExecutionResult,
-            {
-                "action_id": "action-1",
-                "action_kind": ActionKind.GENERATE_SHOW_NOTES,
-                "model_tier": ModelTier.EXECUTION,
-                "model": "gpt-4o-mini",
-                "summary": "Generated show notes.",
-            },
-            "model_tier",
-            typ.cast("ModelTier", "unknown_tier"),
-            "Unknown model tier",
         ),
     ],
 )
-def test_enum_shaped_dtos_reject_unknown_enum_fields(
-    dto_type: type[PlannedAction] | type[ActionExecutionResult],
+@pytest.mark.parametrize(
+    ("field_name", "bad_value", "expected_match"),
+    [
+        ("action_kind", "not_an_action", r"Unknown action kind"),
+        ("model_tier", "not_a_tier", r"Unknown model tier"),
+    ],
+)
+def test_dto_rejects_unknown_enum_fields(
+    dto_cls: type[object],
     base_kwargs: dict[str, object],
     field_name: str,
-    field_value: ActionKind | ModelTier,
+    bad_value: str,
     expected_match: str,
 ) -> None:
-    """Enum-shaped orchestration DTOs should reject invalid enum values."""
+    """All DTOs should reject invalid enum-like values for shared enum fields."""
     kwargs = dict(base_kwargs)
-    kwargs[field_name] = field_value
+    kwargs[field_name] = bad_value
 
     with pytest.raises(ValueError, match=expected_match):
-        dto_type(**typ.cast("typ.Any", kwargs))
+        dto_cls(**kwargs)
 
 
 def test_generation_orchestration_result_freezes_action_results() -> None:
