@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import importlib
+import time
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
@@ -45,7 +46,17 @@ async def _plan_node(
     if request is None:
         msg = "request"
         raise KeyError(msg)
-    result = {"planner_result": await planner.plan(request)}
+    try:
+        planner_result = await planner.plan(request)
+    except Exception as exc:
+        _log_event(
+            "error",
+            "generation_graph.plan_node.error",
+            correlation_id=request.correlation_id,
+            error=str(exc),
+        )
+        raise
+    result = {"planner_result": planner_result}
     _log_event(
         "debug",
         "generation_graph.plan_node.finish",
@@ -78,9 +89,32 @@ async def _execute_node(
     # Keep tool execution ordered so the graph mirrors application-service semantics.
     action_results: list[dto.ActionExecutionResult] = []
     for action in planner_result.plan.steps:
-        action_results.append(  # noqa: PERF401
-            await tool_executor.execute(action, request)
+        started_at = time.monotonic()
+        action_fields = {
+            "correlation_id": request.correlation_id,
+            "action_id": action.action_id,
+            "action_kind": str(action.action_kind),
+            "model_tier": str(action.model_tier),
+            "execution_model": planner_result.plan.selected_execution_model,
+        }
+        try:
+            action_result = await tool_executor.execute(action, request)
+        except Exception as exc:
+            _log_event(
+                "error",
+                "generation_graph.execute_node.action.error",
+                **action_fields,
+                elapsed_ms=round((time.monotonic() - started_at) * 1000, 1),
+                error=str(exc),
+            )
+            raise
+        _log_event(
+            "debug",
+            "generation_graph.execute_node.action.finish",
+            **action_fields,
+            elapsed_ms=round((time.monotonic() - started_at) * 1000, 1),
         )
+        action_results.append(action_result)
     result = {"action_results": tuple(action_results)}
     _log_event(
         "debug",
@@ -104,12 +138,20 @@ def _finish_node(
     if planner_result is None:
         msg = "planner_result"
         raise KeyError(msg)
-    result = {
-        "orchestration_result": build_generation_result(
+    try:
+        orchestration_result = build_generation_result(
             planner_result,
             state.action_results,
         )
-    }
+    except Exception as exc:
+        _log_event(
+            "error",
+            "generation_graph.finish_node.error",
+            correlation_id=correlation_id,
+            error=str(exc),
+        )
+        raise
+    result = {"orchestration_result": orchestration_result}
     _log_event(
         "debug",
         "generation_graph.finish_node.finish",
