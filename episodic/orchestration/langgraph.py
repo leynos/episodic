@@ -1,7 +1,5 @@
 """LangGraph wrapper for structured generation orchestration."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import importlib
 import typing as typ

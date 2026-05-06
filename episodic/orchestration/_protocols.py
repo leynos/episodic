@@ -1,7 +1,5 @@
 """Protocol definitions for generation orchestration boundaries."""
 
-from __future__ import annotations
-
 import typing as typ
 
 if typ.TYPE_CHECKING:
