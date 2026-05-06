@@ -102,7 +102,7 @@ def test_config_normalises_string_provider_operations() -> None:
 
 
 @pytest.mark.parametrize(
-    ("field_name", "expected_match"),
+    ("field_name", "expected_message"),
     [
         ("planning_provider_operation", "Unknown planning_provider_operation"),
         ("execution_provider_operation", "Unknown execution_provider_operation"),
@@ -110,16 +110,16 @@ def test_config_normalises_string_provider_operations() -> None:
 )
 def test_config_rejects_unknown_provider_operation(
     field_name: str,
-    expected_match: str,
+    expected_message: str,
 ) -> None:
-    """Configuration should reject unknown provider operations."""
-    kwargs = {field_name: "not_a_real_op"}
-    with pytest.raises(ValueError, match=expected_match):
-        GenerationOrchestrationConfig(
-            planning_model="gpt-4.1",
-            execution_model="gpt-4o-mini",
-            **typ.cast("typ.Any", kwargs),
-        )
+    """Reject any unknown provider operation field for planning/execution."""
+    kwargs: dict[str, object] = {
+        "planning_model": "gpt-4.1",
+        "execution_model": "gpt-4o-mini",
+    }
+    kwargs[field_name] = "not_a_real_op"
+    with pytest.raises(ValueError, match=expected_message):
+        GenerationOrchestrationConfig(**typ.cast("typ.Any", kwargs))
 
 
 def test_planned_action_normalizes_string_enum_fields() -> None:
