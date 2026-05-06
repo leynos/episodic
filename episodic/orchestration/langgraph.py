@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import dataclasses as dc
-import json
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
 
-from episodic.logging import getLogger
+from episodic.orchestration._types import _log_event
 from episodic.orchestration.generation import (
     ActionExecutionResult,
     GenerationOrchestrationRequest,
@@ -21,19 +20,6 @@ from episodic.orchestration.generation import (
 
 if typ.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
-
-
-_log = getLogger(__name__)
-
-
-def _log_event(level: str, message: str, **fields: object) -> None:
-    """Emit one structured log event with a JSON fallback."""
-    log_method = getattr(_log, level)
-    try:
-        log_method(message, **fields)
-    except TypeError:
-        payload = {"event": message, **fields}
-        log_method(json.dumps(payload, sort_keys=True))
 
 
 @dc.dataclass(slots=True)
