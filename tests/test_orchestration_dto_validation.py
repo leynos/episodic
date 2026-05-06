@@ -139,6 +139,45 @@ def test_planned_action_normalizes_string_enum_fields() -> None:
 
 
 @pytest.mark.parametrize(
+    ("required_inputs", "expected_match"),
+    [
+        (["  "], "required_inputs must be a non-empty string"),
+        ("oops", "required_inputs must be an iterable of non-empty strings"),
+        (None, "required_inputs must be an iterable of non-empty strings"),
+    ],
+)
+def test_planned_action_rejects_invalid_required_inputs(
+    required_inputs: object,
+    expected_match: str,
+) -> None:
+    """Planned actions should reject malformed required input declarations."""
+    with pytest.raises(ValueError, match=expected_match):
+        PlannedAction(
+            action_id="action-1",
+            action_kind=ActionKind.GENERATE_SHOW_NOTES,
+            rationale="Generate notes.",
+            model_tier=ModelTier.EXECUTION,
+            required_inputs=typ.cast("tuple[str, ...]", required_inputs),
+        )
+
+
+def test_planned_action_normalizes_required_input_iterables() -> None:
+    """Planned actions should freeze valid required input iterables as tuples."""
+    action = PlannedAction(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        rationale="Generate notes.",
+        model_tier=ModelTier.EXECUTION,
+        required_inputs=typ.cast("tuple[str, ...]", ["valid", "inputs"]),
+    )
+
+    assert action.required_inputs == (
+        "valid",
+        "inputs",
+    ), "required_inputs should be normalised into a tuple"
+
+
+@pytest.mark.parametrize(
     ("field_name", "field_value", "expected_match"),
     [
         ("action_kind", typ.cast("ActionKind", object()), "Unknown action kind"),

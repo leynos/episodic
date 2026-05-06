@@ -283,6 +283,18 @@ class PlannedAction:
         except ValueError:
             msg = f"Unknown model tier: {self.model_tier!r}"
             raise ValueError(msg) from None
+        if isinstance(self.required_inputs, str):
+            msg = "required_inputs must be an iterable of non-empty strings."
+            raise ValueError(msg)  # noqa: TRY004 -- DTO validation uses ValueError for malformed field values.
+        try:
+            required_inputs = tuple(
+                _normalize_non_empty_text(item, "required_inputs")
+                for item in self.required_inputs
+            )
+        except TypeError as exc:
+            msg = "required_inputs must be an iterable of non-empty strings."
+            raise ValueError(msg) from exc
+        object.__setattr__(self, "required_inputs", required_inputs)
         object.__setattr__(self, "action_kind", action_kind)
         object.__setattr__(self, "model_tier", model_tier)
 
