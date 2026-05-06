@@ -1,5 +1,6 @@
 """Typed DTOs, protocols, and validation helpers for generation orchestration."""
 
+import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
@@ -111,19 +112,19 @@ def _coerce_single_model_tier(element: ModelTier | str) -> ModelTier:
         raise ValueError(msg) from None
 
 
+def _raise_required_inputs_value_error() -> typ.Never:
+    """Raise ValueError for malformed required_inputs values."""
+    msg = "required_inputs must be an iterable of non-empty strings."
+    raise ValueError(msg)
+
+
 def _normalize_required_inputs(value: object) -> tuple[str, ...]:
     """Normalise required_inputs to a tuple of non-empty strings."""
     if isinstance(value, str):
-        msg = "required_inputs must be an iterable of non-empty strings."
-        raise ValueError(msg)  # noqa: TRY004 -- DTO validation uses ValueError for malformed field values.
-    try:
-        return tuple(
-            _normalize_non_empty_text(item, "required_inputs")
-            for item in typ.cast("typ.Iterable[object]", value)
-        )
-    except TypeError as exc:
-        msg = "required_inputs must be an iterable of non-empty strings."
-        raise ValueError(msg) from exc
+        _raise_required_inputs_value_error()
+    if not isinstance(value, cabc.Iterable):
+        _raise_required_inputs_value_error()
+    return tuple(_normalize_non_empty_text(item, "required_inputs") for item in value)
 
 
 def _coerce_action_kinds(
