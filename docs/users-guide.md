@@ -87,12 +87,10 @@ Generating show notes uses two successive calls to different language models:
 No manual intervention is required; the split is handled automatically.
 Configuration is provided through the provider settings file:
 
-<!-- markdownlint-disable MD013 -->
-| Setting           | Purpose                                                   |
-| ----------------- | --------------------------------------------------------- |
-| `planning_model`  | Name of the model used for the planning pass              |
+| Setting | Purpose |
+| --- | --- |
+| `planning_model` | Name of the model used for the planning pass |
 | `execution_model` | Name of the model used to generate the show-notes payload |
-<!-- markdownlint-enable MD013 -->
 
 Both model names must reference endpoints available through the configured LLM
 provider.
