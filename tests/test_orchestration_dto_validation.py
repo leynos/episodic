@@ -1,5 +1,6 @@
 """Tests for DTO validation in GenerationOrchestrationConfig and PlannedAction."""
 
+import dataclasses as dc
 import typing as typ
 
 import pytest
@@ -188,51 +189,63 @@ def test_action_execution_result_normalizes_string_enum_fields() -> None:
     assert result.model_tier == ModelTier.EXECUTION
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _EnumDtoCase:
+    """DTO-under-test and its base kwargs."""
+
+    dto_cls: type[object]
+    base: dict[str, object]
+
+
+_ENUM_DTO_CASES = (
+    _EnumDtoCase(
+        dto_cls=PlannedAction,
+        base={
+            "action_id": "a1",
+            "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+            "rationale": "Generate notes.",
+            "model_tier": ModelTier.EXECUTION,
+            "required_inputs": (),
+        },
+    ),
+    _EnumDtoCase(
+        dto_cls=ActionExecutionResult,
+        base={
+            "action_id": "a1",
+            "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+            "model_tier": ModelTier.EXECUTION,
+            "model": "exec-model",
+            "summary": "ok",
+        },
+    ),
+)
+
+
+_EXPECTED_BY_FIELD = {
+    "action_kind": r"Unknown action kind",
+    "model_tier": r"Unknown model tier",
+}
+
+
+@pytest.mark.parametrize("case", _ENUM_DTO_CASES)
 @pytest.mark.parametrize(
-    ("dto_cls", "base_kwargs"),
+    ("field_name", "bad_value"),
     [
-        (
-            PlannedAction,
-            {
-                "action_id": "a1",
-                "action_kind": ActionKind.GENERATE_SHOW_NOTES,
-                "rationale": "Generate notes.",
-                "model_tier": ModelTier.EXECUTION,
-                "required_inputs": (),
-            },
-        ),
-        (
-            ActionExecutionResult,
-            {
-                "action_id": "a1",
-                "action_kind": ActionKind.GENERATE_SHOW_NOTES,
-                "model_tier": ModelTier.EXECUTION,
-                "model": "exec-model",
-                "summary": "ok",
-            },
-        ),
+        ("action_kind", "not_an_action"),
+        ("model_tier", "not_a_tier"),
     ],
 )
-@pytest.mark.parametrize(
-    ("field_name", "bad_value", "expected_match"),
-    [
-        ("action_kind", "not_an_action", r"Unknown action kind"),
-        ("model_tier", "not_a_tier", r"Unknown model tier"),
-    ],
-)
-def test_dto_rejects_unknown_enum_fields(
-    dto_cls: type[object],
-    base_kwargs: dict[str, object],
+def test_enum_shaped_dtos_reject_unknown_enum_fields(
+    case: _EnumDtoCase,
     field_name: str,
     bad_value: str,
-    expected_match: str,
 ) -> None:
     """All DTOs should reject invalid enum-like values for shared enum fields."""
-    kwargs = dict(base_kwargs)
+    kwargs = dict(case.base)
     kwargs[field_name] = bad_value
 
-    with pytest.raises(ValueError, match=expected_match):
-        dto_cls(**kwargs)
+    with pytest.raises(ValueError, match=_EXPECTED_BY_FIELD[field_name]):
+        case.dto_cls(**kwargs)
 
 
 def test_generation_orchestration_result_freezes_action_results() -> None:
