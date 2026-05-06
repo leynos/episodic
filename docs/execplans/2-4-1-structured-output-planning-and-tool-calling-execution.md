@@ -205,7 +205,7 @@ and roadmap item `2.4.1` is marked done.
   the vertical slice is stable enough to proceed to documentation and full
   repository gates.
 
-- Observation: Stage F validation passed and the roadmap item is complete.
+- Observation: Stage F validation passed, and the roadmap item is complete.
   Evidence: branch-level gate commands passed and roadmap item `2.4.1` was
   marked done. Impact: keep this ExecPlan in `COMPLETE` state.
 
