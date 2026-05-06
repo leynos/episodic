@@ -44,8 +44,8 @@ async def _plan_node(
         correlation_id=correlation_id,
     )
     if request is None:
-        msg = "request"
-        raise KeyError(msg)
+        msg = "missing required state value: request"
+        raise ValueError(msg)
     try:
         planner_result = await planner.plan(request)
     except Exception as exc:
@@ -79,12 +79,12 @@ async def _execute_node(
         correlation_id=correlation_id,
     )
     if request is None:
-        msg = "request"
-        raise KeyError(msg)
+        msg = "missing required state value: request"
+        raise ValueError(msg)
     planner_result = state.planner_result
     if planner_result is None:
-        msg = "planner_result"
-        raise KeyError(msg)
+        msg = "missing required state value: planner_result"
+        raise ValueError(msg)
 
     # Keep tool execution ordered so the graph mirrors application-service semantics.
     action_results: list[dto.ActionExecutionResult] = []
@@ -128,16 +128,20 @@ def _finish_node(
     state: GenerationGraphState,
 ) -> dict[str, dto.GenerationOrchestrationResult]:
     """Aggregate planner and action results into a GenerationOrchestrationResult."""
-    correlation_id = state.request.correlation_id if state.request is not None else None
+    request = state.request
+    correlation_id = request.correlation_id if request is not None else None
     _log_event(
         "debug",
         "generation_graph.finish_node.start",
         correlation_id=correlation_id,
     )
+    if request is None:
+        msg = "missing required state value: request"
+        raise ValueError(msg)
     planner_result = state.planner_result
     if planner_result is None:
-        msg = "planner_result"
-        raise KeyError(msg)
+        msg = "missing required state value: planner_result"
+        raise ValueError(msg)
     try:
         orchestration_result = build_generation_result(
             planner_result,
