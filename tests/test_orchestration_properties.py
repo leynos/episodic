@@ -1,5 +1,6 @@
 """Hypothesis property-based tests for orchestration invariants."""
 
+import dataclasses as dc
 import json
 import string
 
@@ -71,6 +72,25 @@ class _PropGraphToolExecutor:
         )
         assert action.action_kind is ActionKind.GENERATE_SHOW_NOTES
         return self._result
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _PropTokenInputs:
+    """Bundled token-count inputs for LangGraph property tests."""
+
+    planner_input: int
+    planner_output: int
+    action_input: int
+    action_output: int
+
+
+_token_inputs_strategy: st.SearchStrategy[_PropTokenInputs] = st.builds(
+    _PropTokenInputs,
+    planner_input=st.integers(min_value=0, max_value=10_000),
+    planner_output=st.integers(min_value=0, max_value=10_000),
+    action_input=st.integers(min_value=0, max_value=10_000),
+    action_output=st.integers(min_value=0, max_value=10_000),
+)
 
 
 @given(st.lists(st.sampled_from(_ACTION_KIND_SAMPLES), min_size=1, max_size=48))
@@ -163,10 +183,7 @@ async def test_planning_response_format_error_for_arbitrary_non_object_json(
 
 
 @given(
-    planner_input=st.integers(min_value=0, max_value=10_000),
-    planner_output=st.integers(min_value=0, max_value=10_000),
-    action_input=st.integers(min_value=0, max_value=10_000),
-    action_output=st.integers(min_value=0, max_value=10_000),
+    tokens=_token_inputs_strategy,
     correlation_id=st.text(
         min_size=1,
         max_size=48,
@@ -176,19 +193,20 @@ async def test_planning_response_format_error_for_arbitrary_non_object_json(
 @settings(max_examples=50)
 @pytest.mark.asyncio
 async def test_langgraph_total_tokens_non_negative(
-    planner_input: int,
-    planner_output: int,
-    action_input: int,
-    action_output: int,
+    tokens: _PropTokenInputs,
     correlation_id: str,
 ) -> None:
     """Property test: LangGraph rollups keep total token counts semiring-safe."""
     planner_usage = LLMUsage(
-        planner_input,
-        planner_output,
-        planner_input + planner_output,
+        tokens.planner_input,
+        tokens.planner_output,
+        tokens.planner_input + tokens.planner_output,
     )
-    tool_usage = LLMUsage(action_input, action_output, action_input + action_output)
+    tool_usage = LLMUsage(
+        tokens.action_input,
+        tokens.action_output,
+        tokens.action_input + tokens.action_output,
+    )
     planner_result = PlannerResult(
         plan=ExecutionPlan(
             plan_version="1.0",
