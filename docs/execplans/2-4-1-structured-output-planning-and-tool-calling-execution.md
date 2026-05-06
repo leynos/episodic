@@ -200,17 +200,16 @@ until Stage F validation and branch-level gates complete.
 - Observation: the first focused test slice passed after implementation with
   15 orchestration-specific tests covering planner parsing, tool-port
   execution, LangGraph state flow, and the live Vidai Mock behaviour scenario.
-  Evidence: `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv run pytest`
-  `tests/test_generation_orchestration.py`
-  `tests/test_generation_orchestration_langgraph.py`
+  Evidence: `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv run pytest` against the
+  focused orchestration test modules,
+  `tests/test_generation_orchestration_langgraph.py`, and
   `tests/steps/test_generation_orchestration_steps.py` on 2026-04-21. Impact:
   the vertical slice is stable enough to proceed to documentation and full
   repository gates.
 
-- Observation: Stage F validation is pending; awaiting CI/gates before final
-  completion claims. Evidence: local validation notes remain provisional until
-  the branch-level gates complete. Impact: keep roadmap item `2.4.1` in
-  progress until the validation record is current.
+- Observation: Stage F validation passed and the roadmap item is complete.
+  Evidence: branch-level gate commands passed and roadmap item `2.4.1` was
+  marked done. Impact: keep this ExecPlan in `COMPLETE` state.
 
 - Observation: the repository already has `langgraph` and `granian` declared in
   `pyproject.toml`, so `2.4.1` can build on an installed orchestration
@@ -289,7 +288,7 @@ until Stage F validation and branch-level gates complete.
 ## Outcomes & Retrospective
 
 Roadmap item `2.4.1` has implementation work in place, with Stage F validation
-still pending.
+complete.
 
 Delivered outcome:
 
@@ -454,7 +453,11 @@ Behavioural-test target:
 
 Suggested files:
 
-- `tests/test_generation_orchestration.py`
+- `tests/test_orchestration_dto_validation.py`
+- `tests/test_orchestration_planner.py`
+- `tests/test_orchestration_orchestrator.py`
+- `tests/test_show_notes_executor.py`
+- `tests/test_orchestration_properties.py`
 - `tests/test_generation_orchestration_langgraph.py`
 - `tests/features/generation_orchestration.feature`
 - `tests/steps/test_generation_orchestration_steps.py`
@@ -552,10 +555,11 @@ Update documentation after the code is stable.
 
 Required documentation work:
 
-- Add the new ADR in `docs/adr/`.
+- Refer to ADR-005 and subsequent ADR amendments in `docs/adr/`.
 - Update `docs/episodic-podcast-generation-system-design.md` to describe the
   first shipped structured-planning seam, its model-tiering contract, and the
-  first enrichment-tool path.
+  first enrichment-tool path, documenting required decision changes as ADR
+  amendments rather than creating a new ADR.
 - Update `docs/users-guide.md` with any user-visible behaviour for generation
   orchestration and model tiering. Keep it task-oriented and avoid maintainer
   internals.

@@ -240,7 +240,21 @@ class StructuredPlanningOrchestrator:
                 execution_model=plan.selected_execution_model,
             )
             t0 = time.monotonic()
-            result = await self.tool_executor.execute(action, request)
+            try:
+                result = await self.tool_executor.execute(action, request)
+            except (LLMError, ToolExecutionError, UnsupportedActionError) as exc:
+                _log_event(
+                    "error",
+                    "structured_planning_orchestrator.execute_plan.action.error",
+                    correlation_id=request.correlation_id,
+                    action_id=action.action_id,
+                    action_kind=str(action.action_kind),
+                    execution_model=plan.selected_execution_model,
+                    elapsed_ms=round((time.monotonic() - t0) * 1000, 1),
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+                raise
             _log_event(
                 "debug",
                 "structured_planning_orchestrator.execute_plan.action.complete",
@@ -265,7 +279,7 @@ class StructuredPlanningOrchestrator:
         )
         try:
             planner_result = await self.planner.plan(request)
-        except Exception as exc:
+        except (LLMError, PlanningResponseFormatError) as exc:
             _log_event(
                 "error",
                 "structured_planning_orchestrator.orchestrate.error",
@@ -280,7 +294,7 @@ class StructuredPlanningOrchestrator:
                 request=request,
                 plan=planner_result.plan,
             )
-        except Exception as exc:
+        except (LLMError, ToolExecutionError, UnsupportedActionError) as exc:
             _log_event(
                 "error",
                 "structured_planning_orchestrator.orchestrate.error",

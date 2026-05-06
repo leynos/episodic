@@ -48,8 +48,10 @@ class _PropGraphPlanner:
         self._result = result
 
     async def plan(self, request: GenerationOrchestrationRequest) -> PlannerResult:
-        assert request.script_tei_xml.startswith("<TEI>")
-        assert request.correlation_id
+        assert request.script_tei_xml.startswith("<TEI>"), (
+            f"expected TEI input, got {request.script_tei_xml!r}"
+        )
+        assert request.correlation_id, "expected non-empty correlation_id"
         return self._result
 
 
@@ -64,7 +66,9 @@ class _PropGraphToolExecutor:
         action: PlannedAction,
         context: GenerationOrchestrationRequest,
     ) -> ActionExecutionResult:
-        assert context.script_tei_xml.startswith("<TEI>")
+        assert context.script_tei_xml.startswith("<TEI>"), (
+            f"expected TEI input, got {context.script_tei_xml!r}"
+        )
         assert action.action_kind is ActionKind.GENERATE_SHOW_NOTES
         return self._result
 

@@ -1,7 +1,5 @@
 """Syrupy regression snapshots for typed generation artefacts."""
 
-from __future__ import annotations
-
 import dataclasses
 
 from syrupy.assertion import SnapshotAssertion

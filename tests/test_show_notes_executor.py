@@ -36,6 +36,9 @@ from tests._orchestration_fakes import (
     _usage,
 )
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 
 @pytest.mark.asyncio
 async def test_show_notes_tool_executor_uses_execution_model_and_returns_result() -> (
@@ -174,9 +177,7 @@ async def test_show_notes_executor_wraps_format_error_distinctly() -> None:
 
 
 @pytest.mark.asyncio
-async def test_show_notes_executor_format_error_is_subtype_of_tool_execution_error() -> (  # noqa: E501
-    None
-):
+async def _show_notes_format_error_is_subtype_test() -> None:
     """Structured show-notes validation errors should remain distinguishable."""
     tool_executor = ShowNotesToolExecutor(
         llm=typ.cast("typ.Any", None),
@@ -189,6 +190,11 @@ async def test_show_notes_executor_format_error_is_subtype_of_tool_execution_err
 
     assert isinstance(exc_info.value, ShowNotesFormatError)
     assert type(exc_info.value) is not ToolExecutionError
+
+
+test_show_notes_executor_format_error_is_subtype_of_tool_execution_error = (
+    _show_notes_format_error_is_subtype_test
+)
 
 
 @pytest.mark.asyncio
@@ -206,7 +212,7 @@ async def test_show_notes_executor_format_error_is_subtype_of_tool_execution_err
     ],
 )
 async def test_show_notes_executor_propagates_llm_provider_errors(
-    error_factory: typ.Callable[[], BaseException],
+    error_factory: cabc.Callable[[], BaseException],
 ) -> None:
     """Provider errors must surface unchanged so callers can classify them."""
     error = error_factory()

@@ -473,48 +473,22 @@ changing canonical prompt assembly rules.
 
 Pedante is implemented in the `episodic/qa/` package.
 
-### Package structure
+### Pedante package structure
 
-- `episodic/orchestration/generation.py` contains DTOs,
-  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
-  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
-  used for `plan -> execute -> finish`.
+- `episodic/qa/pedante.py` contains `PedanteEvaluator`, typed request/result
+  objects, and strict response parsing for evaluator output.
+- `episodic/qa/langgraph.py` contains the in-process LangGraph path for the
+  Pedante evaluate-and-route flow.
 
-### Maintainer rules
-
-- Keep the planner strict: parse model output into typed DTOs immediately and
-  raise deterministic validation errors for malformed JSON.
-- Keep model-tier selection in `GenerationOrchestrationConfig`; do not couple
-  this slice to pricing-ledger or budget-reservation persistence.
-- Keep LangGraph nodes dependent on ports and orchestration DTOs only. Tool
-  implementations may call generation services, but the graph should see only
-  `ToolExecutorPort`.
-- Treat `ShowNotesToolExecutor` as the first tool adapter, not as a special
-  case that other orchestration code may import around.
-
-### Testing the orchestration slice
-
-- Unit coverage lives in `tests/test_generation_orchestration.py`.
-- LangGraph seam coverage lives in
-  `tests/test_generation_orchestration_langgraph.py`.
-- Behavioural coverage lives in
-  `tests/features/generation_orchestration.feature` and
-  `tests/steps/test_generation_orchestration_steps.py`.
-- The orchestration behaviour scenario uses Vidai Mock to return two distinct
-  responses from one OpenAI-compatible endpoint: the first for structured
-  planning, and the second for the show-notes tool call. Keep that fixture
-  model-driven so prompt wording can evolve without breaking the scenario.
-
-### Contract rules
+### Pedante maintainer rules
 
 - Treat `PedanteEvaluationRequest.script_tei_xml` as the canonical script input
   and keep TEI P5 as the authoring-loop data spine.
 - Use JSON only as a prompt-facing or transport-facing projection of that
   TEI-backed content, not as a second canonical document model.
-- Keep orchestration code dependent on ports and domain contracts only.
-  LangGraph state should hold orchestration metadata and evaluator results, not
-  the sole canonical copy of editorial data.
+- Keep Pedante dependent on evaluator contracts and LLM ports only. LangGraph
+  state should hold evaluator metadata and results, not the sole canonical copy
+  of editorial data.
 
 ### Testing the evaluator
 
@@ -643,7 +617,42 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
 Roadmap item `2.4.1` introduces a dedicated orchestration package in
 `episodic/orchestration/`.
 
-<!-- markdownlint-disable-next-line MD024 -->
+### Package structure
+
+- `episodic/orchestration/generation.py` contains DTOs,
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`,
+  `ToolExecutorPort`, and `ShowNotesToolExecutor`.
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
+  used for `plan -> execute -> finish`.
+
+### Maintainer rules
+
+- Keep the planner strict: parse model output into typed DTOs immediately and
+  raise deterministic validation errors for malformed JSON.
+- Keep model-tier selection in `GenerationOrchestrationConfig`; do not couple
+  this slice to pricing-ledger or budget-reservation persistence.
+- Keep LangGraph nodes dependent on ports and orchestration DTOs only. Tool
+  implementations may call generation services, but the graph should see only
+  `ToolExecutorPort`.
+- Treat `ShowNotesToolExecutor` as the first tool adapter, not as a special
+  case that other orchestration code may import around.
+
+### Testing the orchestration slice
+
+- Unit coverage for DTO validation, planner behaviour, orchestration dispatch,
+  show-notes execution, and properties lives in the focused
+  `tests/test_orchestration_*.py` and `tests/test_show_notes_executor.py`
+  modules.
+- LangGraph seam coverage lives in
+  `tests/test_generation_orchestration_langgraph.py`.
+- Behavioural coverage lives in
+  `tests/features/generation_orchestration.feature` and
+  `tests/steps/test_generation_orchestration_steps.py`.
+- The orchestration behaviour scenario uses Vidai Mock to return two distinct
+  responses from one OpenAI-compatible endpoint: the first for structured
+  planning, and the second for the show-notes tool call. Keep that fixture
+  model-driven so prompt wording can evolve without breaking the scenario.
+
 ## LLM adapter boundary
 
 `episodic.llm` now owns a richer outbound contract:
