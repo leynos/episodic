@@ -4,6 +4,7 @@ import typing as typ
 
 import pytest
 
+from episodic.llm import LLMProviderOperation
 from episodic.orchestration import (
     ActionKind,
     GenerationOrchestrationConfig,
@@ -76,6 +77,51 @@ def test_config_rejects_non_string_text_fields() -> None:
         GenerationOrchestrationConfig(
             planning_model=typ.cast("str", object()),
             execution_model="gpt-4o-mini",
+        )
+
+
+def test_config_normalises_string_provider_operations() -> None:
+    """Configuration should accept string-like provider-operation values."""
+    config = GenerationOrchestrationConfig(
+        planning_model="gpt-4.1",
+        execution_model="gpt-4o-mini",
+        planning_provider_operation="chat_completions",
+        execution_provider_operation="chat_completions",
+    )
+
+    assert config.planning_provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
+    assert config.execution_provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
+
+
+@pytest.mark.parametrize("unknown_operation", ["not_a_real_op"])
+def test_config_rejects_unknown_planning_provider_operation(
+    unknown_operation: str,
+) -> None:
+    """Configuration should reject unknown planning provider operations."""
+    with pytest.raises(
+        ValueError,
+        match="Unknown planning_provider_operation",
+    ):
+        GenerationOrchestrationConfig(
+            planning_model="gpt-4.1",
+            execution_model="gpt-4o-mini",
+            planning_provider_operation=unknown_operation,
+        )
+
+
+@pytest.mark.parametrize("unknown_operation", ["not_a_real_op"])
+def test_config_rejects_unknown_execution_provider_operation(
+    unknown_operation: str,
+) -> None:
+    """Configuration should reject unknown execution provider operations."""
+    with pytest.raises(
+        ValueError,
+        match="Unknown execution_provider_operation",
+    ):
+        GenerationOrchestrationConfig(
+            planning_model="gpt-4.1",
+            execution_model="gpt-4o-mini",
+            execution_provider_operation=unknown_operation,
         )
 
 

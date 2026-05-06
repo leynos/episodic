@@ -110,6 +110,21 @@ def _coerce_action_kinds(
     return tuple(_coerce_single_action_kind(element) for element in kinds)
 
 
+def _coerce_provider_operation(
+    value: LLMProviderOperation | str,
+    field_name: str,
+) -> LLMProviderOperation:
+    """Return the provider-operation enum or raise ValueError for unknown values."""
+    if isinstance(value, LLMProviderOperation):
+        return value
+    normalised = _normalize_non_empty_text(value, field_name)
+    try:
+        return LLMProviderOperation(normalised)
+    except ValueError:
+        msg = f"Unknown {field_name}: {value!r}"
+        raise ValueError(msg) from None
+
+
 def _normalize_string_fields(
     obj: object,
     field_names: tuple[str, ...],
@@ -200,6 +215,22 @@ class GenerationOrchestrationConfig:
             self,
             "enabled_action_kinds",
             _coerce_action_kinds(self.enabled_action_kinds),
+        )
+        object.__setattr__(
+            self,
+            "planning_provider_operation",
+            _coerce_provider_operation(
+                self.planning_provider_operation,
+                "planning_provider_operation",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "execution_provider_operation",
+            _coerce_provider_operation(
+                self.execution_provider_operation,
+                "execution_provider_operation",
+            ),
         )
         _normalize_string_fields(
             self,
