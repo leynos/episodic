@@ -1,6 +1,7 @@
 """Shared fakes and builder helpers for orchestration tests."""
 
 import json
+import typing as typ
 
 from episodic.generation import (
     ShowNotesResponseFormatError,
@@ -79,9 +80,23 @@ def _assert_generate_context(
     )
 
 
-class _RaisingShowNotesGenerator:
+class _BaseShowNotesGenerator:
+    """Interface for fakes that emulate show-notes generation."""
+
+    async def generate(
+        self,
+        script_tei_xml: str,
+        *,
+        template_structure: dict[str, object] | None = None,
+    ) -> ShowNotesResult:
+        """Generate show notes for a fake test context."""
+        raise NotImplementedError
+
+
+class _RaisingShowNotesGenerator(_BaseShowNotesGenerator):
     """Raise from generate so tool-executor failure paths stay deterministic."""
 
+    @typ.override
     async def generate(
         self,
         script_tei_xml: str,
@@ -90,17 +105,16 @@ class _RaisingShowNotesGenerator:
     ) -> ShowNotesResult:
         """Raise a deterministic tool error after validating the context."""
         _assert_generate_context(script_tei_xml, template_structure)
-        if self is None:
-            raise _InjectedToolExecutionError
         raise _InjectedToolExecutionError
 
 
-class _LLMErrorShowNotesGenerator:
+class _LLMErrorShowNotesGenerator(_BaseShowNotesGenerator):
     """Raise a configurable LLM error so provider failures surface untransformed."""
 
     def __init__(self, error: BaseException) -> None:
         self._error = error
 
+    @typ.override
     async def generate(
         self,
         script_tei_xml: str,
@@ -112,9 +126,10 @@ class _LLMErrorShowNotesGenerator:
         raise self._error
 
 
-class _MalformedShowNotesGenerator:
+class _MalformedShowNotesGenerator(_BaseShowNotesGenerator):
     """Raise a response-format error from generate for propagation tests."""
 
+    @typ.override
     async def generate(
         self,
         script_tei_xml: str,
@@ -124,8 +139,6 @@ class _MalformedShowNotesGenerator:
         """Raise the structured-response validation sentinel."""
         _assert_generate_context(script_tei_xml, template_structure)
         msg = "entries must be a list."
-        if self is None:
-            raise ShowNotesResponseFormatError(msg)
         raise ShowNotesResponseFormatError(msg)
 
 
