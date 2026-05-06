@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import dataclasses as dc
 import json
+import os
 import shutil
 import socket
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
 import time
 import typing as typ
+from pathlib import Path
 
 import pytest
 from pytest_bdd import given, scenario, then, when
@@ -29,7 +31,6 @@ from episodic.orchestration import (
 if typ.TYPE_CHECKING:
     import asyncio
     import collections.abc as cabc
-    from pathlib import Path
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
     from episodic.orchestration import GenerationOrchestrationResult
@@ -223,6 +224,8 @@ def _start_vidaimock_process(
 ) -> None:
     vidaimock_path = shutil.which("vidaimock")
     if vidaimock_path is None:
+        if os.getenv("CI"):
+            pytest.fail("vidaimock executable not found in PATH")
         pytest.skip("vidaimock executable not found in PATH")
 
     orchestration_context.base_url = f"http://127.0.0.1:{port}/v1"
@@ -242,6 +245,28 @@ def _start_vidaimock_process(
     )
 
     _await_port_ready(orchestration_context.process, "127.0.0.1", port)
+
+
+def test_start_vidaimock_process_fails_in_ci_when_executable_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail the behavioural story in CI when Vidai Mock is unavailable."""
+    monkeypatch.setenv("CI", "1")
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+
+    with pytest.raises(pytest.fail.Exception, match="vidaimock executable not found"):
+        _start_vidaimock_process(OrchestrationBDDContext(), config_dir=Path(), port=0)
+
+
+def test_start_vidaimock_process_skips_locally_when_executable_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the local developer skip when Vidai Mock is unavailable."""
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+
+    with pytest.raises(pytest.skip.Exception, match="vidaimock executable not found"):
+        _start_vidaimock_process(OrchestrationBDDContext(), config_dir=Path(), port=0)
 
 
 @given("a Vidai Mock orchestration server is running")
