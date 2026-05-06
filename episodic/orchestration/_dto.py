@@ -100,6 +100,32 @@ def _coerce_single_action_kind(element: ActionKind | str) -> ActionKind:
         raise ValueError(msg) from None
 
 
+def _coerce_single_model_tier(element: ModelTier | str) -> ModelTier:
+    """Return the ModelTier enum for element, raising ValueError for unknown tiers."""
+    if isinstance(element, ModelTier):
+        return element
+    try:
+        return ModelTier(str(element).strip())
+    except ValueError:
+        msg = f"Unknown model tier: {element!r}"
+        raise ValueError(msg) from None
+
+
+def _normalize_required_inputs(value: object) -> tuple[str, ...]:
+    """Normalise required_inputs to a tuple of non-empty strings."""
+    if isinstance(value, str):
+        msg = "required_inputs must be an iterable of non-empty strings."
+        raise ValueError(msg)  # noqa: TRY004 -- DTO validation uses ValueError for malformed field values.
+    try:
+        return tuple(
+            _normalize_non_empty_text(item, "required_inputs")
+            for item in typ.cast("typ.Iterable[object]", value)
+        )
+    except TypeError as exc:
+        msg = "required_inputs must be an iterable of non-empty strings."
+        raise ValueError(msg) from exc
+
+
 def _coerce_action_kinds(
     kinds: tuple[ActionKind | str, ...],
 ) -> tuple[ActionKind, ...]:
@@ -255,48 +281,16 @@ class PlannedAction:
 
     def __post_init__(self) -> None:
         """Reject blank identifiers, rationale text, and unknown enum fields."""
+        _normalize_string_fields(self, ("action_id", "rationale"))
         object.__setattr__(
-            self,
-            "action_id",
-            _normalize_non_empty_text(self.action_id, "action_id"),
+            self, "action_kind", _coerce_single_action_kind(self.action_kind)
         )
         object.__setattr__(
-            self,
-            "rationale",
-            _normalize_non_empty_text(self.rationale, "rationale"),
+            self, "model_tier", _coerce_single_model_tier(self.model_tier)
         )
-        try:
-            action_kind = (
-                self.action_kind
-                if isinstance(self.action_kind, ActionKind)
-                else ActionKind(str(self.action_kind).strip())
-            )
-        except ValueError:
-            msg = f"Unknown action kind: {self.action_kind!r}"
-            raise ValueError(msg) from None
-        try:
-            model_tier = (
-                self.model_tier
-                if isinstance(self.model_tier, ModelTier)
-                else ModelTier(str(self.model_tier).strip())
-            )
-        except ValueError:
-            msg = f"Unknown model tier: {self.model_tier!r}"
-            raise ValueError(msg) from None
-        if isinstance(self.required_inputs, str):
-            msg = "required_inputs must be an iterable of non-empty strings."
-            raise ValueError(msg)  # noqa: TRY004 -- DTO validation uses ValueError for malformed field values.
-        try:
-            required_inputs = tuple(
-                _normalize_non_empty_text(item, "required_inputs")
-                for item in self.required_inputs
-            )
-        except TypeError as exc:
-            msg = "required_inputs must be an iterable of non-empty strings."
-            raise ValueError(msg) from exc
-        object.__setattr__(self, "required_inputs", required_inputs)
-        object.__setattr__(self, "action_kind", action_kind)
-        object.__setattr__(self, "model_tier", model_tier)
+        object.__setattr__(
+            self, "required_inputs", _normalize_required_inputs(self.required_inputs)
+        )
 
 
 @dc.dataclass(frozen=True, slots=True)
