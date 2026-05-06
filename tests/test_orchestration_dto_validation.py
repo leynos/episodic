@@ -174,31 +174,6 @@ def test_planned_action_normalizes_required_input_iterables() -> None:
     ), "required_inputs should be normalised into a tuple"
 
 
-@pytest.mark.parametrize(
-    ("field_name", "field_value", "expected_match"),
-    [
-        ("action_kind", typ.cast("ActionKind", object()), "Unknown action kind"),
-        ("model_tier", typ.cast("ModelTier", object()), "Unknown model tier"),
-    ],
-)
-def test_planned_action_rejects_unknown_enum_fields(
-    field_name: str,
-    field_value: ActionKind | ModelTier,
-    expected_match: str,
-) -> None:
-    """Planned actions should reject invalid enum-like field values."""
-    kwargs: dict[str, object] = {
-        "action_id": "action-1",
-        "action_kind": ActionKind.GENERATE_SHOW_NOTES,
-        "rationale": "Generate notes.",
-        "model_tier": ModelTier.EXECUTION,
-    }
-    kwargs[field_name] = field_value
-
-    with pytest.raises(ValueError, match=expected_match):
-        PlannedAction(**typ.cast("typ.Any", kwargs))
-
-
 def test_action_execution_result_normalizes_string_enum_fields() -> None:
     """Action execution results should expose enum instances after construction."""
     result = ActionExecutionResult(
@@ -214,33 +189,73 @@ def test_action_execution_result_normalizes_string_enum_fields() -> None:
 
 
 @pytest.mark.parametrize(
-    ("field_name", "field_value", "expected_match"),
+    ("dto_type", "base_kwargs", "field_name", "field_value", "expected_match"),
     [
         (
+            PlannedAction,
+            {
+                "action_id": "action-1",
+                "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+                "rationale": "Generate notes.",
+                "model_tier": ModelTier.EXECUTION,
+            },
+            "action_kind",
+            typ.cast("ActionKind", object()),
+            "Unknown action kind",
+        ),
+        (
+            PlannedAction,
+            {
+                "action_id": "action-1",
+                "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+                "rationale": "Generate notes.",
+                "model_tier": ModelTier.EXECUTION,
+            },
+            "model_tier",
+            typ.cast("ModelTier", object()),
+            "Unknown model tier",
+        ),
+        (
+            ActionExecutionResult,
+            {
+                "action_id": "action-1",
+                "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+                "model_tier": ModelTier.EXECUTION,
+                "model": "gpt-4o-mini",
+                "summary": "Generated show notes.",
+            },
             "action_kind",
             typ.cast("ActionKind", "unknown_action"),
             "Unknown action kind",
         ),
-        ("model_tier", typ.cast("ModelTier", "unknown_tier"), "Unknown model tier"),
+        (
+            ActionExecutionResult,
+            {
+                "action_id": "action-1",
+                "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+                "model_tier": ModelTier.EXECUTION,
+                "model": "gpt-4o-mini",
+                "summary": "Generated show notes.",
+            },
+            "model_tier",
+            typ.cast("ModelTier", "unknown_tier"),
+            "Unknown model tier",
+        ),
     ],
 )
-def test_action_execution_result_rejects_unknown_enum_fields(
+def test_enum_shaped_dtos_reject_unknown_enum_fields(
+    dto_type: type[PlannedAction] | type[ActionExecutionResult],
+    base_kwargs: dict[str, object],
     field_name: str,
     field_value: ActionKind | ModelTier,
     expected_match: str,
 ) -> None:
-    """Action execution results should reject invalid enum-like fields."""
-    kwargs: dict[str, object] = {
-        "action_id": "action-1",
-        "action_kind": ActionKind.GENERATE_SHOW_NOTES,
-        "model_tier": ModelTier.EXECUTION,
-        "model": "gpt-4o-mini",
-        "summary": "Generated show notes.",
-    }
+    """Enum-shaped orchestration DTOs should reject invalid enum values."""
+    kwargs = dict(base_kwargs)
     kwargs[field_name] = field_value
 
     with pytest.raises(ValueError, match=expected_match):
-        ActionExecutionResult(**typ.cast("typ.Any", kwargs))
+        dto_type(**typ.cast("typ.Any", kwargs))
 
 
 def test_generation_orchestration_result_freezes_action_results() -> None:

@@ -3,40 +3,39 @@
 from __future__ import annotations
 
 import dataclasses as dc
+import importlib
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
 
 from episodic.orchestration._types import _log_event
-from episodic.orchestration.generation import (
-    ActionExecutionResult,
-    GenerationOrchestrationRequest,
-    GenerationOrchestrationResult,
-    PlannerPort,
-    PlannerResult,
-    ToolExecutorPort,
-    build_generation_result,
-)
+from episodic.orchestration._usage import build_generation_result
 
 if typ.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
+
+    from episodic.orchestration import _dto as dto
+    from episodic.orchestration import _protocols as protocols
+else:
+    dto = importlib.import_module("episodic.orchestration._dto")
+    protocols = importlib.import_module("episodic.orchestration._protocols")
 
 
 @dc.dataclass(slots=True)
 class GenerationGraphState:
     """Typed graph state for initialize-plan-execute-finish orchestration."""
 
-    request: GenerationOrchestrationRequest | None = None
-    planner_result: PlannerResult | None = None
-    action_results: tuple[ActionExecutionResult, ...] = ()
-    orchestration_result: GenerationOrchestrationResult | None = None
+    request: dto.GenerationOrchestrationRequest | None = None
+    planner_result: dto.PlannerResult | None = None
+    action_results: tuple[dto.ActionExecutionResult, ...] = ()
+    orchestration_result: dto.GenerationOrchestrationResult | None = None
 
 
 async def _plan_node(
     state: GenerationGraphState,
     *,
-    planner: PlannerPort,
-) -> dict[str, PlannerResult]:
+    planner: protocols.PlannerPort,
+) -> dict[str, dto.PlannerResult]:
     """Validate state and invoke the planner to produce a PlannerResult."""
     request = state.request
     correlation_id = request.correlation_id if request is not None else None
@@ -60,8 +59,8 @@ async def _plan_node(
 async def _execute_node(
     state: GenerationGraphState,
     *,
-    tool_executor: ToolExecutorPort,
-) -> dict[str, tuple[ActionExecutionResult, ...]]:
+    tool_executor: protocols.ToolExecutorPort,
+) -> dict[str, tuple[dto.ActionExecutionResult, ...]]:
     """Validate state and execute each planned action through the tool executor."""
     request = state.request
     correlation_id = request.correlation_id if request is not None else None
@@ -79,7 +78,7 @@ async def _execute_node(
         raise KeyError(msg)
 
     # Keep tool execution ordered so the graph mirrors application-service semantics.
-    action_results: list[ActionExecutionResult] = []
+    action_results: list[dto.ActionExecutionResult] = []
     for action in planner_result.plan.steps:
         action_results.append(  # noqa: PERF401
             await tool_executor.execute(action, request)
@@ -95,7 +94,7 @@ async def _execute_node(
 
 def _finish_node(
     state: GenerationGraphState,
-) -> dict[str, GenerationOrchestrationResult]:
+) -> dict[str, dto.GenerationOrchestrationResult]:
     """Aggregate planner and action results into a GenerationOrchestrationResult."""
     correlation_id = state.request.correlation_id if state.request is not None else None
     _log_event(
@@ -123,8 +122,8 @@ def _finish_node(
 
 def build_generation_orchestration_graph(
     *,
-    planner: PlannerPort,
-    tool_executor: ToolExecutorPort,
+    planner: protocols.PlannerPort,
+    tool_executor: protocols.ToolExecutorPort,
 ) -> CompiledStateGraph[
     GenerationGraphState,
     None,
@@ -136,13 +135,13 @@ def build_generation_orchestration_graph(
 
     async def _run_plan_node(
         state: GenerationGraphState,
-    ) -> dict[str, PlannerResult]:
+    ) -> dict[str, dto.PlannerResult]:
         """Async entry point for the plan graph node."""
         return await _plan_node(state, planner=planner)
 
     async def _run_execute_node(
         state: GenerationGraphState,
-    ) -> dict[str, tuple[ActionExecutionResult, ...]]:
+    ) -> dict[str, tuple[dto.ActionExecutionResult, ...]]:
         """Async entry point for the execute graph node."""
         return await _execute_node(state, tool_executor=tool_executor)
 

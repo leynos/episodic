@@ -21,7 +21,6 @@ from ._dto import (
     GenerationOrchestrationConfig,
     GenerationOrchestrationRequest,
     PlannedAction,
-    _ShowNotesGeneratorPort,
 )
 from ._types import (
     ActionKind,
@@ -31,6 +30,9 @@ from ._types import (
     UnsupportedActionError,
     _log_event,
 )
+
+if typing.TYPE_CHECKING:
+    from ._protocols import _ShowNotesGeneratorPort
 
 __all__ = ["ShowNotesToolExecutor"]
 

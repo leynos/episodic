@@ -17,9 +17,7 @@ from ._dto import (
     GenerationOrchestrationRequest,
     GenerationOrchestrationResult,
     PlannedAction,
-    PlannerPort,
     PlannerResult,
-    ToolExecutorPort,
     _coerce_action_kind,
     _coerce_action_kinds,
     _coerce_model_tier,
@@ -27,8 +25,8 @@ from ._dto import (
     _require_object,
     _require_optional_string_list,
     _require_plan_step_list,
-    build_generation_result,
 )
+from ._protocols import PlannerPort, ToolExecutorPort
 from ._show_notes_executor import ShowNotesToolExecutor
 from ._types import (
     ActionKind,
@@ -39,6 +37,7 @@ from ._types import (
     UnsupportedActionError,
     _log_event,
 )
+from ._usage import build_generation_result
 
 __all__ = [
     "ActionExecutionResult",
