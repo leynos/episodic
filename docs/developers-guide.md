@@ -306,7 +306,6 @@ Database-level constraints (unique slugs, foreign keys, and CHECK constraints
 such as the weight bound on source documents) are enforced by Postgres and
 raise `sqlalchemy.exc.IntegrityError` on violation.
 
-
 ### Architecture enforcement
 
 Run the architecture checker directly when changing package boundaries:
