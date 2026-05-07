@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import dataclasses
 import dataclasses as dc
 import sys
 import typing as typ
@@ -71,75 +72,97 @@ class ArchitectureCheckResult:
         return not self.violations
 
 
+_ALL_GROUPS: frozenset[str] = frozenset({
+    "domain_ports",
+    "application",
+    "inbound_adapter",
+    "outbound_adapter",
+    "composition_root",
+})
+
+
+def _composition_root_group() -> ModuleGroup:
+    return ModuleGroup(
+        name="composition_root",
+        module_prefixes=(
+            "episodic.api.runtime",
+            "episodic.worker.runtime",
+        ),
+        allowed_groups=_ALL_GROUPS,
+    )
+
+
+def _domain_ports_group() -> ModuleGroup:
+    return ModuleGroup(
+        name="domain_ports",
+        module_prefixes=(
+            "episodic.canonical.domain",
+            "episodic.canonical.constraints",
+            "episodic.canonical.ingestion",
+            "episodic.canonical.ingestion_ports",
+            "episodic.canonical.ports",
+            "episodic.llm.ports",
+        ),
+        allowed_groups=frozenset({"domain_ports"}),
+    )
+
+
+def _application_group() -> ModuleGroup:
+    return ModuleGroup(
+        name="application",
+        module_prefixes=(
+            "episodic.canonical.services",
+            "episodic.canonical.ingestion_service",
+            "episodic.canonical.profile_templates",
+            "episodic.canonical.reference_documents",
+            "episodic.generation",
+        ),
+        allowed_groups=frozenset({"domain_ports", "application"}),
+    )
+
+
+def _inbound_adapter_group() -> ModuleGroup:
+    return ModuleGroup(
+        name="inbound_adapter",
+        module_prefixes=(
+            "episodic.api",
+            "episodic.worker.tasks",
+            "episodic.worker.topology",
+        ),
+        allowed_groups=frozenset({
+            "domain_ports",
+            "application",
+            "inbound_adapter",
+        }),
+    )
+
+
+def _outbound_adapter_group() -> ModuleGroup:
+    return ModuleGroup(
+        name="outbound_adapter",
+        module_prefixes=(
+            "episodic.canonical.adapters",
+            "episodic.canonical.storage",
+            "episodic.llm.openai_adapter",
+            "episodic.llm.openai_client",
+        ),
+        allowed_groups=frozenset({
+            "domain_ports",
+            "application",
+            "outbound_adapter",
+        }),
+    )
+
+
 def default_policy() -> ArchitecturePolicy:
     """Return the first-scope Episodic architecture policy."""
-    all_groups = frozenset({
-        "domain_ports",
-        "application",
-        "inbound_adapter",
-        "outbound_adapter",
-        "composition_root",
-    })
     return ArchitecturePolicy(
         groups=(
-            ModuleGroup(
-                name="composition_root",
-                module_prefixes=(
-                    "episodic.api.runtime",
-                    "episodic.worker.runtime",
-                ),
-                allowed_groups=all_groups,
-            ),
-            ModuleGroup(
-                name="domain_ports",
-                module_prefixes=(
-                    "episodic.canonical.domain",
-                    "episodic.canonical.constraints",
-                    "episodic.canonical.ingestion",
-                    "episodic.canonical.ingestion_ports",
-                    "episodic.canonical.ports",
-                    "episodic.llm.ports",
-                ),
-                allowed_groups=frozenset({"domain_ports"}),
-            ),
-            ModuleGroup(
-                name="application",
-                module_prefixes=(
-                    "episodic.canonical.services",
-                    "episodic.canonical.ingestion_service",
-                    "episodic.canonical.profile_templates",
-                    "episodic.canonical.reference_documents",
-                    "episodic.generation",
-                ),
-                allowed_groups=frozenset({"domain_ports", "application"}),
-            ),
-            ModuleGroup(
-                name="inbound_adapter",
-                module_prefixes=(
-                    "episodic.api",
-                    "episodic.worker.tasks",
-                    "episodic.worker.topology",
-                ),
-                allowed_groups=frozenset({
-                    "domain_ports",
-                    "application",
-                    "inbound_adapter",
-                }),
-            ),
-            ModuleGroup(
-                name="outbound_adapter",
-                module_prefixes=(
-                    "episodic.canonical.adapters",
-                    "episodic.canonical.storage",
-                    "episodic.llm.openai_adapter",
-                    "episodic.llm.openai_client",
-                ),
-                allowed_groups=frozenset({
-                    "domain_ports",
-                    "application",
-                    "outbound_adapter",
-                }),
-            ),
+            _composition_root_group(),
+            _domain_ports_group(),
+            _application_group(),
+            _inbound_adapter_group(),
+            _outbound_adapter_group(),
         )
     )
 
@@ -192,15 +215,24 @@ def fixture_policy(package: str) -> ArchitecturePolicy:
     )
 
 
-def _violations_for_module(  # noqa: PLR0913, PLR0917
-    source_path: Path,
-    package: str,
-    module_name: str,
+@dataclasses.dataclass(frozen=True)
+class _ModuleContext:
+    source_path: Path
+    package: str
+    module_name: str
+
+
+def _violations_for_module(
+    ctx: _ModuleContext,
     importer_group: ModuleGroup,
     active_policy: ArchitecturePolicy,
 ) -> list[ArchitectureViolation]:
     violations: list[ArchitectureViolation] = []
-    for imported_module in _iter_imported_modules(source_path, package, module_name):
+    for imported_module in _iter_imported_modules(
+        ctx.source_path,
+        ctx.package,
+        ctx.module_name,
+    ):
         imported_group = active_policy.group_for(imported_module)
         if imported_group is None:
             continue
@@ -209,7 +241,7 @@ def _violations_for_module(  # noqa: PLR0913, PLR0917
         violations.append(
             ArchitectureViolation(
                 rule_id=active_policy.rule_id,
-                importer=module_name,
+                importer=ctx.module_name,
                 imported=imported_module,
                 importer_group=importer_group.name,
                 imported_group=imported_group.name,
@@ -233,11 +265,12 @@ def check_architecture(
         importer_group = active_policy.group_for(module_name)
         if importer_group is None:
             continue
-        violations.extend(
-            _violations_for_module(
-                source_path, package, module_name, importer_group, active_policy
-            )
+        ctx = _ModuleContext(
+            source_path=source_path,
+            package=package,
+            module_name=module_name,
         )
+        violations.extend(_violations_for_module(ctx, importer_group, active_policy))
     return ArchitectureCheckResult(violations=tuple(violations))
 
 
