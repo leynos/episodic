@@ -9,6 +9,8 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-001-reference-binding-resolution-algorithm.md`](adr/adr-001-reference-binding-resolution-algorithm.md)
 - [`adr-002-http-service-composition-root.md`](adr/adr-002-http-service-composition-root.md)
 - [`adr-003-celery-worker-scaffold.md`](adr/adr-003-celery-worker-scaffold.md)
+- [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md)
+- [`adr-005-structured-planning-and-tool-execution.md`](adr/adr-005-structured-planning-and-tool-execution.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -21,6 +23,10 @@ Accepted design decisions relevant to current implementation work:
   `tei-rapporteur` bindings build against Python 3.14.
 - The build backend is `uv_build` (`>=0.11.7,<0.12.0`), declared in the
   `[build-system]` table of `pyproject.toml`.
+
+The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
+so that tools installed via `uv` and Bun are discoverable by all Make targets
+without requiring manual shell `PATH` configuration.
 
 ## Falcon HTTP runtime
 
@@ -467,24 +473,22 @@ changing canonical prompt assembly rules.
 
 Pedante is implemented in the `episodic/qa/` package.
 
-### Package structure
+### Pedante package structure
 
-- `episodic/qa/pedante.py` defines the Pedante request and result contract, the
-  support-level taxonomy, strict JSON parsing, and the `PedanteEvaluator` that
-  calls the existing `LLMPort`.
-- `episodic/qa/langgraph.py` provides the minimal LangGraph seam for Pedante.
-  This graph is intentionally narrow: it runs the evaluator and routes to
-  `pass` or `refine` based on typed findings.
+- `episodic/qa/pedante.py` contains `PedanteEvaluator`, typed request/result
+  objects, and strict response parsing for evaluator output.
+- `episodic/qa/langgraph.py` contains the in-process LangGraph path for the
+  Pedante evaluate-and-route flow.
 
-### Contract rules
+### Pedante maintainer rules
 
 - Treat `PedanteEvaluationRequest.script_tei_xml` as the canonical script input
   and keep TEI P5 as the authoring-loop data spine.
 - Use JSON only as a prompt-facing or transport-facing projection of that
   TEI-backed content, not as a second canonical document model.
-- Keep orchestration code dependent on ports and domain contracts only.
-  LangGraph state should hold orchestration metadata and evaluator results, not
-  the sole canonical copy of editorial data.
+- Keep Pedante dependent on evaluator contracts and LLM ports only. LangGraph
+  state should hold evaluator metadata and results, not the sole canonical copy
+  of editorial data.
 
 ### Testing the evaluator
 
@@ -607,6 +611,52 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   writing provider fixtures, keep the prompt assertions structural and the
   response template minimal so prompt wording can evolve without making the
   scenario brittle.
+
+## Structured generation orchestration
+
+Roadmap item `2.4.1` introduces a dedicated orchestration package in
+`episodic/orchestration/`.
+
+### Package structure
+
+- `episodic/orchestration/_dto.py` contains the orchestration DTOs and shared
+  port protocols.
+- `episodic/orchestration/generation.py` implements and exports
+  `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`, and the
+  orchestration result builder. It also re-exports `ToolExecutorPort` from the
+  DTO module.
+- `episodic/orchestration/_show_notes_executor.py` contains the concrete
+  `ShowNotesToolExecutor` implementation.
+- `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
+  used for `plan -> execute -> finish`.
+
+### Maintainer rules
+
+- Keep the planner strict: parse model output into typed DTOs immediately and
+  raise deterministic validation errors for malformed JSON.
+- Keep model-tier selection in `GenerationOrchestrationConfig`; do not couple
+  this slice to pricing-ledger or budget-reservation persistence.
+- Keep LangGraph nodes dependent on ports and orchestration DTOs only. Tool
+  implementations may call generation services, but the graph should see only
+  `ToolExecutorPort`.
+- Treat `ShowNotesToolExecutor` as the first tool adapter, not as a special
+  case that other orchestration code may import around.
+
+### Testing the orchestration slice
+
+- Unit coverage for DTO validation, planner behaviour, orchestration dispatch,
+  show-notes execution, and properties lives in the focused
+  `tests/test_orchestration_*.py` and `tests/test_show_notes_executor.py`
+  modules.
+- LangGraph seam coverage lives in
+  `tests/test_generation_orchestration_langgraph.py`.
+- Behavioural coverage lives in
+  `tests/features/generation_orchestration.feature` and
+  `tests/steps/test_generation_orchestration_steps.py`.
+- The orchestration behaviour scenario uses Vidai Mock to return two distinct
+  responses from one OpenAI-compatible endpoint: the first for structured
+  planning, and the second for the show-notes tool call. Keep that fixture
+  model-driven so prompt wording can evolve without breaking the scenario.
 
 ## LLM adapter boundary
 

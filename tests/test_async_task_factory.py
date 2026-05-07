@@ -13,6 +13,7 @@ import pytest
 
 from episodic.asyncio_tasks import (
     TASK_METADATA_KWARG,
+    TaskCreateKwargs,
     TaskMetadata,
     create_task,
     create_task_in_group,
@@ -38,8 +39,6 @@ from episodic.canonical.ingestion_service import (
 )
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 
@@ -359,12 +358,11 @@ def test_create_task_rejects_unsupported_metadata_keys_with_mixed_types() -> Non
 def test_create_task_rejects_unknown_task_kwargs() -> None:
     """Unknown task kwargs are rejected instead of being silently ignored."""
     coro = asyncio.sleep(0)
-    task_creator = typ.cast("cabc.Callable[..., asyncio.Task[object]]", create_task)
     try:
         with pytest.raises(TypeError, match="unsupported_kwarg"):
-            task_creator(
+            create_task(
                 coro,
-                unsupported_kwarg="value",
+                **typ.cast("TaskCreateKwargs", {"unsupported_kwarg": "value"}),
             )
     finally:
         coro.close()
@@ -373,16 +371,12 @@ def test_create_task_rejects_unknown_task_kwargs() -> None:
 def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
     """Group task creation rejects unknown task kwargs."""
     coro = asyncio.sleep(0)
-    task_creator = typ.cast(
-        "cabc.Callable[..., asyncio.Task[object]]",
-        create_task_in_group,
-    )
     try:
         with pytest.raises(TypeError, match="unsupported_kwarg"):
-            task_creator(
+            create_task_in_group(
                 asyncio.TaskGroup(),
                 coro,
-                unsupported_kwarg="value",
+                **typ.cast("TaskCreateKwargs", {"unsupported_kwarg": "value"}),
             )
     finally:
         coro.close()

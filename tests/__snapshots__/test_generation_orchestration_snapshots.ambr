@@ -1,0 +1,94 @@
+# serializer version: 1
+# name: test_build_prompt_snapshot
+  '''
+  Return JSON only.
+  {
+    "task": "Review the canonical TEI script and decide which enabled generation-enrichment actions should run.",
+    "response_schema": {
+      "plan_version": "string",
+      "steps": [
+        {
+          "action_id": "string",
+          "action_kind": [
+            "generate_show_notes"
+          ],
+          "rationale": "string",
+          "model_tier": [
+            "planning",
+            "execution"
+          ],
+          "required_inputs": [
+            "string"
+          ]
+        }
+      ]
+    },
+    "enabled_action_kinds": [
+      "generate_show_notes"
+    ],
+    "correlation_id": "snap-001",
+    "script_tei_xml": "<TEI><text>test</text></TEI>"
+  }
+  '''
+# ---
+# name: test_execution_plan_serialisation_snapshot
+  dict({
+    'plan_version': '1',
+    'selected_execution_model': 'gpt-4o-mini',
+    'selected_planning_model': 'gpt-4.1',
+    'steps': tuple(
+      dict({
+        'action_id': 'a1',
+        'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
+        'model_tier': <ModelTier.EXECUTION: 'execution'>,
+        'rationale': 'test',
+        'required_inputs': tuple(
+        ),
+      }),
+    ),
+  })
+# ---
+# name: test_generation_orchestration_result_snapshot
+  dict({
+    'action_results': tuple(
+      dict({
+        'action_id': 'a1',
+        'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
+        'model': 'gpt-4o-mini',
+        'model_tier': <ModelTier.EXECUTION: 'execution'>,
+        'show_notes_result': None,
+        'summary': 'test',
+        'usage': dict({
+          'input_tokens': 10,
+          'output_tokens': 20,
+          'total_tokens': 30,
+        }),
+      }),
+    ),
+    'plan': dict({
+      'plan_version': '1',
+      'selected_execution_model': 'gpt-4o-mini',
+      'selected_planning_model': 'gpt-4.1',
+      'steps': tuple(
+        dict({
+          'action_id': 'a1',
+          'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
+          'model_tier': <ModelTier.EXECUTION: 'execution'>,
+          'rationale': 'test',
+          'required_inputs': tuple(
+          ),
+        }),
+      ),
+    }),
+    'planner_usage': dict({
+      'input_tokens': 1,
+      'output_tokens': 2,
+      'total_tokens': 3,
+    }),
+    'total_usage': dict({
+      'input_tokens': 11,
+      'output_tokens': 22,
+      'total_tokens': 33,
+    }),
+  })
+# ---

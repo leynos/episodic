@@ -30,17 +30,6 @@ This guide will cover:
 - Working with TEI (Text Encoding Initiative) canonical content
 - Tracking ingestion jobs, source weighting decisions, and provenance metadata
 - Configuring content weighting and conflict resolution
-- Managing episode metadata and show notes. Show-notes generation runs
-  automatically as part of the episode-generation pipeline, with no separate
-  manual step. A Large Language Model (LLM) analyses the canonical TEI script
-  to extract key topics, short summaries, and, where inferable, timestamps and
-  source locators. The output is written back into the canonical TEI body as a
-  `<div type="notes">` containing one `<item>` per topic, where each item
-  carries a `<label>`, inline summary text, and optional `@n` (ISO 8601
-  duration timestamp) and `@corresp` (source locator) attributes.
-  `ShowNotesGeneratorConfig` controls the model, token budget, and system
-  prompt, and an optional `template_structure` mapping can be passed to
-  `build_prompt(...)` to guide extraction against a known episode template.
 - Database schema integrity is validated automatically in CI so that canonical
   content storage remains consistent across releases
 - Repository and transactional integrity are validated by integration tests
@@ -78,6 +67,41 @@ This guide will cover:
   metadata and optional escaping policies
 - Persisting `guardrails` on series profiles and episode templates so
   generation requests carry stable editorial instructions as system prompts
+
+#### Show notes
+
+Show notes are the episode summaries, topic lists, and chapter markers that
+appear alongside a podcast episode — helping listeners decide whether to tune
+in and navigate the content.
+
+##### Two-stage generation
+
+Generating show notes uses two successive calls to different language models:
+
+1. A **planning model** reads the episode script and decides which enrichment
+   tasks to run. Using a capable model here ensures the right work is selected.
+2. An **execution model** carries out the chosen tasks and writes the note
+   payload. Using a cheaper model for this step reduces API costs without
+   sacrificing quality.
+
+No manual intervention is required; the split is handled automatically.
+Configuration is provided through the provider settings file:
+
+| Setting | Purpose |
+| --- | --- |
+| `planning_model` | Name of the model used for the planning pass |
+| `execution_model` | Name of the model used to generate the show-notes payload |
+
+Both model names must reference endpoints available through the configured LLM
+provider.
+
+##### Failure behaviour
+
+If either stage returns a response that does not match the expected structured
+format, the run stops immediately with a clear validation error. No partial or
+malformed metadata is published silently. This "fail fast" behaviour is
+intentional — a clear error is easier to diagnose and correct than silent data
+loss.
 
 ### Reusable Reference Documents
 

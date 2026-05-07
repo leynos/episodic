@@ -245,7 +245,7 @@ Completion enables rich episode content with chapter markers and guest details.
 Implement resumable orchestration with idempotency, queue routing, and cost
 metering. Completion enables reliable, auditable generation workflows.
 
-- [ ] 2.4.1. Implement structured-output planning and tool-calling execution.
+- [x] 2.4.1. Implement structured-output planning and tool-calling execution.
   - Define model tiering for cost control.
   - Implement tool-calling patterns for enrichment steps.
 - [ ] 2.4.2. Add LangGraph suspend-and-resume orchestration. Requires 2.1.1.

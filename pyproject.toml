@@ -33,13 +33,15 @@ stilyagi = "stilyagi.stilyagi:main"
 
 [dependency-groups]
 dev = [
-    "pytest",
+    "hypothesis[asyncio]>=6,<7",
+    "pytest>=9,<11",
     "pytest-bdd",
     "pytest-asyncio",
     "pytest-xdist",
     "py-pglite[async]>=0.5.3,<0.6.0",
     "ruff",
     "pyright",
+    "syrupy>=5,<6",
     "ty",
     "pytest-timeout",
 ]
@@ -108,6 +110,7 @@ extend-ignore = [
 [tool.ruff.lint.per-file-ignores]
 "**/test_*.py" = ["S101", "PLR0913", "PLR0917", "PLR2004", "PLR6301"]
 "tests/steps/*.py" = ["S101", "PLR0913", "PLR0917", "PLR2004", "PLR6301"]
+"tests/test_generation_orchestration_snapshots.py" = ["D103", "TC002"]
 
 [tool.ruff.lint.flake8-import-conventions]
 # Declare the banned `from` imports.
