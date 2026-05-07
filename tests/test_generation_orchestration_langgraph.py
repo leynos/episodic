@@ -124,6 +124,16 @@ async def test_plan_node_requires_request() -> None:
 
 
 @pytest.mark.asyncio
+async def test_execute_node_requires_request() -> None:
+    """Execution node should fail loudly when request state is missing."""
+    with pytest.raises(ValueError, match="missing required state value: request"):
+        await _execute_node(
+            GenerationGraphState(planner_result=_planner_result()),
+            tool_executor=_FakeToolExecutor(_action_result()),
+        )
+
+
+@pytest.mark.asyncio
 async def test_execute_node_requires_planner_result() -> None:
     """Execution node should fail loudly when planning state is missing."""
     with pytest.raises(
