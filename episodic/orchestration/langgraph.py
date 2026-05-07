@@ -108,6 +108,7 @@ async def _execute_node(
                 error=str(exc),
             )
             raise
+        action_fields["execution_model"] = action_result.model
         _log_event(
             "debug",
             "generation_graph.execute_node.action.finish",
