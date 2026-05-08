@@ -1,14 +1,17 @@
 """Property tests for Chrono spoken-runtime invariants."""
 
-import re
-
 import hypothesis.strategies as st
 from hypothesis import given
 
-from episodic.qa.chrono import ChronoEvaluationRequest, ChronoRuntimeEstimator
+from episodic.qa.chrono import (
+    SPOKEN_WORD_REGEX,
+    ChronoEvaluationRequest,
+    ChronoRuntimeEstimator,
+    tokenize_spoken_words,
+)
 
 _SIMPLE_WORDS = st.lists(
-    st.from_regex(r"[A-Za-z][A-Za-z0-9'-]*", fullmatch=True),
+    st.from_regex(SPOKEN_WORD_REGEX, fullmatch=True),
     max_size=50,
 )
 
@@ -59,7 +62,7 @@ def test_reported_word_count_matches_naive_tokenizer(words: list[str]) -> None:
         ChronoEvaluationRequest(script_tei_xml=script)
     )
 
-    expected_word_count = len(re.findall(r"[A-Za-z][A-Za-z0-9'-]*", " ".join(words)))
+    expected_word_count = len(tokenize_spoken_words(" ".join(words)))
     assert result.metadata.spoken_word_count == expected_word_count, (
         "expected reported spoken_word_count to match tokenizer count: "
         f"reported={result.metadata.spoken_word_count}, expected={expected_word_count}"

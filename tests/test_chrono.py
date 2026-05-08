@@ -68,6 +68,33 @@ def test_chrono_metadata_rejects_negative_counts(
         ChronoEstimatorMetadata(**kwargs)
 
 
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("estimator_name", ""),
+        ("estimator_name", "   "),
+        ("estimator_version", ""),
+        ("estimator_version", "   "),
+    ],
+)
+def test_chrono_metadata_rejects_blank_identity(
+    field_name: str,
+    field_value: str,
+) -> None:
+    """Reject blank metadata identity fields."""
+    kwargs = {
+        "estimator_name": "chrono-naive-word-count",
+        "estimator_version": "1",
+        "input_character_count": 10,
+        "spoken_word_count": 3,
+        "words_per_minute": 150,
+    }
+    kwargs[field_name] = field_value
+
+    with pytest.raises(ValueError, match=field_name):
+        ChronoEstimatorMetadata(**kwargs)
+
+
 def test_chrono_runtime_estimate_rejects_negative_duration() -> None:
     """Reject impossible spoken durations."""
     metadata = ChronoEstimatorMetadata(
@@ -149,3 +176,25 @@ def test_chrono_estimator_uses_custom_metadata() -> None:
     assert result.estimated_seconds == 3
     assert result.metadata.estimator_version == "2"
     assert result.metadata.words_per_minute == 60
+
+
+@pytest.mark.asyncio
+async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
+    """Async evaluate() should produce the same result as sync estimate()."""
+    config = ChronoEstimatorConfig(
+        estimator_name="chrono-naive-word-count",
+        estimator_version="2",
+        words_per_minute=60,
+    )
+    request = ChronoEvaluationRequest(
+        script_tei_xml=(
+            "<TEI><text><body><sp><p>one two three</p></sp></body></text></TEI>"
+        )
+    )
+    estimator = ChronoRuntimeEstimator(config=config)
+
+    sync_result = estimator.estimate(request)
+    async_result = await estimator.evaluate(request)
+
+    assert async_result.estimated_seconds == sync_result.estimated_seconds
+    assert async_result.metadata == sync_result.metadata

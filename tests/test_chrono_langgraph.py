@@ -12,7 +12,6 @@ from episodic.qa.chrono import (
 )
 from episodic.qa.chrono_langgraph import (
     ChronoGraphState,
-    _chrono_node,
     build_chrono_graph,
 )
 
@@ -56,11 +55,12 @@ def _result() -> ChronoRuntimeEstimate:
 
 @pytest.mark.asyncio
 async def test_chrono_node_requires_chrono_request() -> None:
-    """_chrono_node should require a chrono_request in graph state."""
+    """Graph node should require a chrono_request in graph state."""
     evaluator = _FakeChronoEvaluator(_result())
+    graph = build_chrono_graph(evaluator)
 
     with pytest.raises(KeyError, match="chrono_request"):
-        await _chrono_node(ChronoGraphState(), evaluator=evaluator)
+        await graph.ainvoke(ChronoGraphState())
 
 
 @pytest.mark.asyncio
@@ -69,14 +69,12 @@ async def test_chrono_node_calls_evaluator_and_stores_result() -> None:
     request = _request()
     result = _result()
     evaluator = _FakeChronoEvaluator(result)
+    graph = build_chrono_graph(evaluator)
 
-    delta = await _chrono_node(
-        ChronoGraphState(chrono_request=request),
-        evaluator=evaluator,
-    )
+    state = await graph.ainvoke(ChronoGraphState(chrono_request=request))
 
     assert evaluator.requests == [request]
-    assert delta == {"chrono_result": result}
+    assert state["chrono_result"] == result
 
 
 @pytest.mark.asyncio

@@ -34,30 +34,21 @@ class ChronoGraphState:
     chrono_result: ChronoRuntimeEstimate | None = None
 
 
-async def _chrono_node(
-    state: ChronoGraphState,
-    *,
-    evaluator: ChronoEvaluatorPort,
-) -> dict[str, ChronoRuntimeEstimate]:
-    """Run Chrono and return the state delta."""
-    if state.chrono_request is None:
-        msg = "chrono_request"
-        raise KeyError(msg)
-    return {"chrono_result": await evaluator.evaluate(state.chrono_request)}
-
-
 def build_chrono_graph(
     evaluator: ChronoEvaluatorPort,
 ) -> CompiledStateGraph[ChronoGraphState, None, ChronoGraphState, ChronoGraphState]:
     """Build the minimal Chrono StateGraph used by the QA layer."""
     graph = StateGraph(ChronoGraphState)
 
-    async def _run_chrono_node(
+    async def chrono_node(
         state: ChronoGraphState,
     ) -> dict[str, ChronoRuntimeEstimate]:
-        return await _chrono_node(state, evaluator=evaluator)
+        if state.chrono_request is None:
+            msg = "chrono_request"
+            raise KeyError(msg)
+        return {"chrono_result": await evaluator.evaluate(state.chrono_request)}
 
-    graph.add_node("chrono", _run_chrono_node)
+    graph.add_node("chrono", chrono_node)
     graph.add_edge(START, "chrono")
     graph.add_edge("chrono", END)
     return graph.compile()

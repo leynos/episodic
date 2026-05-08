@@ -5,7 +5,8 @@ import math
 import re
 from xml.etree import ElementTree  # noqa: S405
 
-_WORD_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9'-]*")
+SPOKEN_WORD_REGEX = r"[A-Za-z][A-Za-z0-9'-]*"
+_WORD_PATTERN = re.compile(SPOKEN_WORD_REGEX)
 _DEFAULT_ESTIMATOR_NAME = "chrono-naive-word-count"
 _DEFAULT_ESTIMATOR_VERSION = "1"
 _DEFAULT_WORDS_PER_MINUTE = 150
@@ -53,14 +54,22 @@ def _extract_spoken_text(script_tei_xml: str) -> str:
     return _extract_spoken_text_from_element(root)
 
 
+def tokenize_spoken_words(spoken_text: str) -> list[str]:
+    """Return deterministic simple word tokens for Chrono's naive heuristic."""
+    return _WORD_PATTERN.findall(spoken_text)
+
+
 def _count_spoken_words(spoken_text: str) -> int:
     """Count deterministic simple word tokens in extracted spoken text."""
-    return len(_WORD_PATTERN.findall(spoken_text))
+    return len(tokenize_spoken_words(spoken_text))
 
 
 @dc.dataclass(frozen=True, slots=True)
 class ChronoEvaluationRequest:
-    """Canonical Chrono request built from a TEI script."""
+    """Canonical Chrono request built from a TEI script.
+
+    Malformed XML is accepted by the estimator and treated as raw spoken text.
+    """
 
     script_tei_xml: str
 
@@ -127,7 +136,11 @@ class ChronoRuntimeEstimate:
 
 @dc.dataclass(frozen=True, slots=True)
 class ChronoRuntimeEstimator:
-    """Estimate anticipated spoken duration from TEI using a local heuristic."""
+    """Estimate anticipated spoken duration from TEI using a local heuristic.
+
+    Parseable TEI is reduced to conventional spoken-text elements; malformed
+    XML falls back to raw-text tokenization instead of being rejected.
+    """
 
     config: ChronoEstimatorConfig = dc.field(default_factory=ChronoEstimatorConfig)
 

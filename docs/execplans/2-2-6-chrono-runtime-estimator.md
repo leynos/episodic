@@ -27,12 +27,12 @@ includes:
 
 Success is observable when unit tests prove the heuristic is deterministic and
 well validated, property tests prove core invariants across generated inputs,
-pytest-bdd behavioural tests prove the evaluator can run in the same QA
-workflow style as the other evaluators, and LangGraph seam tests show Chrono
-results can be carried through graph state without introducing an LLM charge.
-The feature is complete only after documentation is updated, roadmap item
-`2.2.6` is marked done, and the required gates pass: `make check-fmt`,
-`make typecheck`, `make lint`, and `make test`.
+pytest-bdd (behaviour-driven development) behavioural tests prove the evaluator
+can run in the same QA workflow style as the other evaluators, and LangGraph
+seam tests show Chrono results can be carried through graph state without
+introducing an LLM charge. The feature is complete only after documentation is
+updated, roadmap item `2.2.6` is marked done, and the required gates pass:
+`make check-fmt`, `make typecheck`, `make lint`, and `make test`.
 
 ## Constraints
 
