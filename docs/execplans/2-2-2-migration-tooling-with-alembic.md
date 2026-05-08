@@ -283,7 +283,7 @@ Update `episodic/canonical/storage/__init__.py` to add `detect_schema_drift` to
 Add to `Makefile`:
 
     check-migrations: build uv $(VENV_TOOLS) ## Check for schema drift between models and migrations
-    	$(UV_ENV) uv run python -m episodic.canonical.storage.migration_check
+     $(UV_ENV) uv run python -m episodic.canonical.storage.migration_check
 
 Add `check-migrations` to the `.PHONY` line.
 
