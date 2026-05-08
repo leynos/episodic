@@ -284,6 +284,14 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   TEI body with `<div type="notes"><list><item>...</item></list></div>` output.
   This TEI representation is defined in
   [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md).
+- Treats chapter-marker generation as the matching segment-aligned enrichment
+  service: `episodic/generation/chapter_markers.py` accepts a TEI script plus
+  segment-transition metadata, asks the configured provider for structured
+  chapter entries, validates ordered ISO 8601 starts, and enriches the
+  canonical TEI body with
+  `<div type="chapters"><list><item n="...">...</item></list></div>` output.
+  This TEI representation is defined in
+  [ADR 006: Chapter-marker TEI representation](adr/adr-006-chapter-marker-tei-representation.md).
 - Persists generation runs alongside prompts, responses, iteration counts, and
   cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,

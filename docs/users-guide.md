@@ -68,11 +68,17 @@ This guide will cover:
 - Persisting `guardrails` on series profiles and episode templates so
   generation requests carry stable editorial instructions as system prompts
 
-#### Show notes
 
-Show notes are the episode summaries, topic lists, and chapter markers that
-appear alongside a podcast episode — helping listeners decide whether to tune
-in and navigate the content.
+#### Show notes and chapter markers
+
+Show notes are the episode summaries and topic lists that appear alongside a
+podcast episode, helping listeners decide whether to tune in.
+
+Chapter markers are separate navigational playback boundaries. They are aligned
+to script segment transitions and carry required ISO 8601 start times such as
+`PT0S`, `PT5M30S`, and `PT1H2M3S`. When a source segment has a TEI locator, the
+chapter marker records that link so later audio publishing steps can project
+the canonical timing data into player-specific chapter formats.
 
 ##### Two-stage generation
 
@@ -113,6 +119,10 @@ format, the run stops immediately with a clear validation error. No partial or
 malformed metadata is published silently. This "fail fast" behaviour is
 intentional — a clear error is easier to diagnose and correct than silent data
 loss.
+
+Chapter markers apply the same fail-fast rule. Blank titles, invalid durations,
+negative starts, duplicate starts, and descending starts are rejected before the
+canonical TEI document is enriched.
 
 ### Reusable Reference Documents
 

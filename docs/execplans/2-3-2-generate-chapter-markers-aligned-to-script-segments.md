@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -122,23 +122,52 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 
 - [x] (2026-05-08 00:00Z) Drafted this ExecPlan from roadmap item 2.3.2,
   existing show-notes implementation, and the named design documents.
-- [ ] Await explicit approval before implementation.
-- [ ] Stage A: inspect current TEI segment conventions and document any
-  representation gaps.
-- [ ] Stage B: write fail-first unit and property tests for chapter DTOs,
-  timing validation, JSON parsing, prompt construction, and TEI enrichment.
-- [ ] Stage C: implement the minimal chapter-marker generation service.
-- [ ] Stage D: add Vidai Mock behavioural coverage.
-- [ ] Stage E: update ADR, system design, developer's guide, user's guide, and
-  roadmap.
-- [ ] Stage F: run all required gates sequentially and commit the finished
-  feature.
+- [x] (2026-05-08 00:00Z) User approved implementation by asking to proceed
+  with the planned functionality.
+- [x] (2026-05-08 00:00Z) Stage A: inspected current TEI segment conventions
+  and documented representation gaps.
+- [x] (2026-05-08 00:00Z) Stage B: wrote fail-first unit, property, and BDD
+  tests; the first focused run failed because the chapter-marker module and
+  exports did not exist.
+- [x] (2026-05-08 00:00Z) Stage C: implemented
+  `episodic/generation/chapter_markers.py` and package exports.
+- [x] (2026-05-08 00:00Z) Stage D: added Vidai Mock behavioural coverage and
+  verified it in the focused suite.
+- [x] (2026-05-08 00:00Z) Stage E: updated ADR, system design, developer's
+  guide, user's guide, and roadmap.
+- [x] (2026-05-08 00:00Z) Stage F: ran all required gates sequentially on the
+  final tree. `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+  `make markdownlint`, and `make nixie` passed.
 
 ## Surprises & discoveries
 
-- Observation: none yet.
-  Evidence: this plan is in draft and implementation has not started.
-  Impact: keep this section current during execution.
+- Observation: profile-template and API fixtures store segment structure as
+  JSON-like metadata such as `{"segments": ["intro", "main", "outro"]}`, while
+  current TEI fixtures mostly use paragraphs and optional `xml:id` values
+  rather than a dedicated segment element.
+  Evidence: `tests/test_profile_template_service.py`,
+  `tests/test_profile_template_api.py`, and `tests/test_show_notes.py`.
+  Impact: the chapter generator will accept explicit `segment_structure`
+  metadata and will use `tei_locator`/`@corresp` to align generated chapters
+  back to segment transitions without requiring a new TEI segment element.
+
+- Observation: the show-notes TEI representation already proves that
+  `tei_rapporteur` preserves `<div type="...">`, `<list>`, `<item>`,
+  `<label>`, `@n`, and `@corresp`.
+  Evidence: `episodic/generation/show_notes.py` and
+  `docs/adr/adr-004-show-notes-tei-representation.md`.
+  Impact: chapter markers can reuse the same canonical container pattern with
+  `div_type="chapters"` and avoid dependency or parser changes.
+
+- Observation: `tei_rapporteur` does not preserve attempted `dur` payload
+  metadata on `<item>`, and it rejects list items with empty inline content.
+  Evidence: focused test run logged in
+  `/tmp/test-episodic-2-3-2-chapter-markers-focused.out`.
+  Impact: canonical TEI stores the required player timing in `@n` and source
+  alignment in `@corresp`. Optional `duration` and `end` remain DTO fields for
+  LLM validation but are not emitted into TEI until the TEI tooling exposes a
+  supported attribute. When no summary exists, TEI inline content falls back to
+  the chapter title so the document remains valid.
 
 ## Decision log
 
@@ -162,11 +191,39 @@ roadmap item 2.3.2 as done only after all quality gates pass.
   non-negative starts, and duration formatting across a useful input range.
   Date/Author: 2026-05-08 / ExecPlan.
 
+- Decision: align chapters through explicit `segment_structure` metadata and
+  optional TEI locators rather than inventing a dedicated TEI segment element
+  in this milestone.
+  Rationale: existing code consistently treats segment layouts as template
+  structure metadata, while current TEI examples do not establish a separate
+  segment element convention. The generator can therefore align chapter
+  boundaries to segment transitions without widening the canonical TEI model.
+  Date/Author: 2026-05-08 / Implementation.
+
+- Decision: emit only `@n` and `@corresp` timing/alignment attributes in the
+  canonical TEI chapter block for this milestone.
+  Rationale: `@n` carries the required ISO 8601 chapter start time, which is
+  the player-compatible boundary needed by roadmap item 2.3.2.
+  `tei_rapporteur` drops an attempted `dur` payload field, so forcing
+  unsupported optional duration metadata into TEI would create false
+  persistence expectations.
+  Date/Author: 2026-05-08 / Implementation.
+
 ## Outcomes & retrospective
 
-No implementation outcome exists yet. This plan is ready for review. After the
-user approves execution, update this section at each major milestone and
-compare the delivered behaviour against the purpose above.
+The implementation delivered a chapter-marker enrichment service, tests,
+documentation, ADR, and roadmap update. The feature keeps inference behind the
+existing `LLMPort`, stores canonical chapter starts as ISO 8601 durations in
+TEI `@n`, and validates ordering before enrichment.
+
+Validation on the final tree passed:
+
+- `make check-fmt`
+- `make typecheck`
+- `make lint`
+- `make test` with 465 passed and 3 skipped
+- `make markdownlint`
+- `make nixie`
 
 ## Context and orientation
 
