@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -31,8 +31,8 @@ pytest-bdd behavioural tests prove the evaluator can run in the same QA
 workflow style as the other evaluators, and LangGraph seam tests show Chrono
 results can be carried through graph state without introducing an LLM charge.
 The feature is complete only after documentation is updated, roadmap item
-`2.2.6` is marked done, and the required gates pass:
-`make check-fmt`, `make typecheck`, `make lint`, and `make test`.
+`2.2.6` is marked done, and the required gates pass: `make check-fmt`,
+`make typecheck`, `make lint`, and `make test`.
 
 ## Constraints
 
@@ -98,10 +98,10 @@ The feature is complete only after documentation is updated, roadmap item
   as a spoken-runtime estimator in public prose.
 
 - Risk: the initial word-count heuristic may mishandle stage directions,
-  markup, or non-dialogue text. Severity: medium. Likelihood: high.
-  Mitigation: document the heuristic as naive, make the counted input size
-  visible, and add tests for dialogue text, markup-only input, and mixed
-  narrative/script content.
+  markup, or non-dialogue text. Severity: medium. Likelihood: high. Mitigation:
+  document the heuristic as naive, make the counted input size visible, and add
+  tests for dialogue text, markup-only input, and mixed narrative/script
+  content.
 
 - Risk: property tests over arbitrary text may generate pathological whitespace
   or XML-like fragments that do not match the estimator's intended input.
@@ -112,26 +112,38 @@ The feature is complete only after documentation is updated, roadmap item
 ## Progress
 
 - [x] (2026-05-08 00:00Z) Drafted this pre-implementation ExecPlan from
-  `docs/roadmap.md`,
-  `docs/episodic-podcast-generation-system-design.md`,
+  `docs/roadmap.md`, `docs/episodic-podcast-generation-system-design.md`,
   `docs/agentic-systems-with-langgraph-and-celery.md`, and current QA code in
   `episodic/qa/`.
 - [x] (2026-05-08 00:30Z) Validated the pre-implementation plan branch with
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie`.
-- [ ] Stage A: inspect current QA module exports, Pedante tests, and
+- [x] (2026-05-08 20:05Z) Reconfirmed the branch and current QA symbols before
+  implementation. The package still has a Pedante-specific graph seam and no
+  Chrono implementation.
+- [x] Stage A: inspect current QA module exports, Pedante tests, and
   generation graph seams immediately before implementation.
-- [ ] Stage B: add fail-first unit and property tests for Chrono request,
+- [x] (2026-05-08 20:15Z) Added fail-first Chrono unit, property, LangGraph,
+  and pytest-bdd tests. The focused pytest run failed during collection with
+  `ModuleNotFoundError: No module named 'episodic.qa.chrono'`, as expected.
+- [x] Stage B: add fail-first unit and property tests for Chrono request,
   result, metadata, validation, and heuristic invariants.
-- [ ] Stage C: add fail-first LangGraph seam tests and pytest-bdd behavioural
+- [x] Stage C: add fail-first LangGraph seam tests and pytest-bdd behavioural
   scenarios for Chrono in the QA workflow.
-- [ ] Stage D: implement the Chrono domain/policy module and exports.
-- [ ] Stage E: implement the minimal Chrono graph seam and any orchestration
+- [x] (2026-05-08 20:35Z) Implemented `episodic.qa.chrono` and
+  `episodic.qa.chrono_langgraph`, exported the Chrono public QA surface, and
+  confirmed the focused Chrono suite passes with 18 tests.
+- [x] (2026-05-08 20:50Z) Updated the system design, users guide, developers
+  guide, and roadmap for the initial Chrono behaviour.
+- [x] (2026-05-08 21:10Z) Ran final gates. `make check-fmt`, `make typecheck`,
+  `make lint`, `make test`, `make markdownlint`, and `make nixie` all passed.
+- [x] Stage D: implement the Chrono domain/policy module and exports.
+- [x] Stage E: implement the minimal Chrono graph seam and any orchestration
   state wiring required by tests.
-- [ ] Stage F: update user, developer, architecture, and design documentation.
-- [ ] Stage G: mark roadmap item `2.2.6` done after all implementation gates
+- [x] Stage F: update user, developer, architecture, and design documentation.
+- [x] Stage G: mark roadmap item `2.2.6` done after all implementation gates
   pass.
-- [ ] Stage H: run final validation, update this ExecPlan with evidence, and
+- [x] Stage H: run final validation, update this ExecPlan with evidence, and
   commit the completed feature.
 
 ## Surprises & Discoveries
@@ -155,13 +167,24 @@ The feature is complete only after documentation is updated, roadmap item
   add a focused seam instead of assuming a complete multi-evaluator graph
   already exists.
 
+- Observation: implementation started on the existing
+  `docs/execplans/2-2-6-chrono-runtime-estimator` branch after explicit user
+  instruction to proceed. Evidence: branch and status checks on 2026-05-08.
+  Impact: the ExecPlan approval gate is satisfied and the status is now
+  `IN PROGRESS`.
+
+- Observation: Chrono behavioural coverage does not need Vidai Mock because
+  the estimator has no inference-service boundary. Evidence:
+  `tests/steps/test_chrono_steps.py` exercises the BDD path entirely
+  in-process with `ChronoRuntimeEstimator`. Impact: Vidai Mock remains reserved
+  for LLM-backed evaluators and adapters.
+
 ## Decision Log
 
 - Decision: implement Chrono as a pure local QA evaluator with typed request,
   result, and metadata objects, separate from LLM-backed evaluators. Rationale:
   the roadmap and design both say Chrono is non-LLM, deterministic, and should
-  remain comparable with later implementations. Date/Author: 2026-05-08 /
-  Codex.
+  remain comparable with later implementations. Date/Author: 2026-05-08 / Codex.
 
 - Decision: keep persistence out of this item and defer durable QA artefact
   storage to roadmap item `2.2.7`. Rationale: `2.2.6` asks only for estimation
@@ -173,18 +196,29 @@ The feature is complete only after documentation is updated, roadmap item
   spoken words should not reduce the estimated duration for a fixed heuristic.
   Date/Author: 2026-05-08 / Codex.
 
+- Decision: keep the initial TEI extraction on `xml.etree.ElementTree` with a
+  local lint suppression at the parse boundary. Rationale: the implementation
+  plan explicitly constrained the estimator to the Python standard library, the
+  estimator consumes internal canonical TEI, and adopting `defusedxml` would
+  add a runtime dependency outside the roadmap slice. Date/Author: 2026-05-08 /
+  Codex.
+
 ## Outcomes & Retrospective
 
-No implementation has started yet. This branch carries the pre-implementation
-plan only. Expected delivery outcomes after execution are:
+Chrono now exposes a deterministic typed spoken-runtime estimate for TEI
+dialogue through `episodic.qa.chrono`. The result includes estimator identity,
+input character count, spoken word count, words-per-minute configuration, and
+estimated seconds. `episodic.qa.chrono_langgraph` provides a narrow graph seam
+for running Chrono inside QA orchestration without adding `LLMUsage`.
 
-- Chrono exposes a deterministic typed estimate for TEI dialogue.
-- The estimate includes metadata that supports later estimator comparison.
-- Chrono has unit, property, LangGraph seam, and pytest-bdd behavioural
-  coverage.
-- Documentation explains what Chrono estimates, where it lives, and why it
-  does not incur LLM usage charges.
-- Roadmap item `2.2.6` is marked complete after the feature and all gates pass.
+Unit tests, property tests, LangGraph seam tests, and pytest-bdd behavioural
+coverage are in place. Documentation explains the initial heuristic, the lack
+of LLM charges, maintainer boundaries, and test locations. Roadmap item
+`2.2.6` is marked done.
+
+The main implementation lesson is that keeping Chrono separate from the
+Pedante graph avoided unnecessary generalisation while still preserving a
+consistent evaluator port shape for future orchestration work.
 
 ## Context and orientation
 
@@ -237,8 +271,8 @@ Before writing code, inspect the current branch state and QA symbols:
   `PedanteEvaluationResult`, `PedanteEvaluator`, `PedanteGraphState`, and
   `build_pedante_graph`.
 - Inspect `tests/test_pedante.py`, `tests/test_pedante_langgraph.py`,
-  `tests/features/pedante.feature`, and
-  `tests/steps/test_pedante_steps.py` for local test style.
+  `tests/features/pedante.feature`, and `tests/steps/test_pedante_steps.py` for
+  local test style.
 
 Go/no-go: proceed only if the current QA structure still matches this plan. If
 a general QA graph or Chrono implementation already exists, update this plan
@@ -395,9 +429,9 @@ Do not mark roadmap item `2.2.7` done.
 ### Stage H: final validation and commit
 
 Run all required gates sequentially, using `tee` to preserve logs under `/tmp`.
-Do not run formatting, linting, typechecking, or tests in parallel. If a command
-fails, inspect its log, fix the issue, rerun the focused failing check, and then
-rerun the full gate sequence.
+Do not run formatting, linting, typechecking, or tests in parallel. If a
+command fails, inspect its log, fix the issue, rerun the focused failing check,
+and then rerun the full gate sequence.
 
 Commit the implementation only after all gates pass. Keep refactors separate
 from the feature commit if post-commit review identifies unrelated cleanup.
@@ -563,10 +597,21 @@ make markdownlint ... passed; Summary: 0 error(s)
 make nixie ... passed; All diagrams validated successfully!
 ```
 
+Final implementation validation:
+
+```plaintext
+make check-fmt ... passed; 277 files already formatted
+make typecheck ... passed; ty check: All checks passed!
+make lint ... passed; ruff check: All checks passed!
+make test ... passed; 457 passed, 3 skipped
+make markdownlint ... passed; Summary: 0 error(s)
+make nixie ... passed; All diagrams validated successfully!
+```
+
 ## Revision note
 
-Initial draft. This plan defines the implementation sequence for roadmap item
-`2.2.6`, including Chrono contracts, test-first milestones, documentation,
-roadmap completion, and quality gates. The draft branch was validated with the
-required Python and Markdown gates. Implementation must not begin until the plan
-is explicitly approved.
+Initial draft defined the implementation sequence for roadmap item `2.2.6`,
+including Chrono contracts, test-first milestones, documentation, roadmap
+completion, and quality gates. The plan was later executed after explicit user
+approval, and the completed implementation was validated with the required
+Python and Markdown gates.

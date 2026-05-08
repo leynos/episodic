@@ -314,8 +314,12 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Caesura detects false endings where a script appears to wrap up but continues
   for another four minutes or more.
 - Chrono estimates spoken runtime for written dialogue. The initial
-  implementation is a naive local heuristic, with room to adopt more
-  sophisticated estimation later.
+  implementation is a deterministic local heuristic that extracts spoken prose
+  from common TEI dialogue elements, counts simple word tokens, and estimates
+  duration at 150 words per minute with the result rounded up to whole seconds.
+  The result records the estimator name, estimator version, input character
+  count, spoken word count, and words-per-minute setting so later estimators
+  can be compared against the first baseline.
 - Pedante, Bromide, Chiltern, Anthem, and Caesura initially execute as
   internal LangGraph evaluator nodes backed by structured `LLMPort` calls
   rather than separate network services.
@@ -1018,9 +1022,10 @@ evaluator is later replaced with a cheaper implementation.
   ledger model.
 - Evaluator nodes return typed findings plus normalized usage metadata from the
   underlying `LLMPort` call.
-- Chrono records estimator version, input size, and predicted runtime so its
-  decisions remain explainable even though it does not create an external-call
-  charge in the initial design.
+- Chrono records estimator name, estimator version, input character count,
+  spoken word count, words-per-minute setting, and predicted spoken runtime so
+  its decisions remain explainable even though it does not create an
+  external-call charge in the initial design.
 - Immutable `pricing_snapshots` capture the provider rate cards used to compute
   LLM and TTS cost for a run. These snapshots are pinned from cost ledger
   entries so historical pricing stays reproducible.

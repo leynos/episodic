@@ -1,5 +1,13 @@
 """Quality-assurance evaluator contracts and orchestration helpers."""
 
+from .chrono import (
+    ChronoEstimatorConfig,
+    ChronoEstimatorMetadata,
+    ChronoEvaluationRequest,
+    ChronoRuntimeEstimate,
+    ChronoRuntimeEstimator,
+)
+from .chrono_langgraph import build_chrono_graph
 from .langgraph import build_pedante_graph, route_after_pedante
 from .pedante import (
     ClaimKind,
@@ -15,6 +23,11 @@ from .pedante import (
 )
 
 __all__: list[str] = [
+    "ChronoEstimatorConfig",
+    "ChronoEstimatorMetadata",
+    "ChronoEvaluationRequest",
+    "ChronoRuntimeEstimate",
+    "ChronoRuntimeEstimator",
     "ClaimKind",
     "FindingSeverity",
     "PedanteEvaluationRequest",
@@ -25,6 +38,7 @@ __all__: list[str] = [
     "PedanteResponseFormatError",
     "PedanteSourcePacket",
     "SupportLevel",
+    "build_chrono_graph",
     "build_pedante_graph",
     "route_after_pedante",
 ]
