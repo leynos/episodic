@@ -39,6 +39,14 @@ FIXTURE_ROOT = Path("tests/fixtures/architecture")
                 "tests.fixtures.architecture.api_imports_reexported_outbound_adapter.storage",
             ),
         ),
+        (
+            "api_imports_star_reexported_outbound_adapter",
+            (
+                "ARCH001",
+                "tests.fixtures.architecture.api_imports_star_reexported_outbound_adapter.api",
+                "tests.fixtures.architecture.api_imports_star_reexported_outbound_adapter.storage",
+            ),
+        ),
     ],
 )
 def test_checker_reports_fixture_boundary_violations(
@@ -54,10 +62,12 @@ def test_checker_reports_fixture_boundary_violations(
         policy=fixture_policy(package),
     )
 
-    assert not result.ok
     rendered = "\n".join(violation.render() for violation in result.violations)
+    assert not result.ok, rendered
     for expected_message_part in expected_message_parts:
-        assert expected_message_part in rendered
+        assert expected_message_part in rendered, (
+            f"expected {expected_message_part!r} in {rendered!r}"
+        )
 
 
 def test_checker_accepts_allowed_fixture_graph() -> None:
@@ -71,7 +81,8 @@ def test_checker_accepts_allowed_fixture_graph() -> None:
         policy=fixture_policy(package),
     )
 
-    assert result.ok
+    rendered = "\n".join(violation.render() for violation in result.violations)
+    assert result.ok, rendered
 
 
 def test_checker_accepts_composition_root_fixture_wiring() -> None:
@@ -85,7 +96,8 @@ def test_checker_accepts_composition_root_fixture_wiring() -> None:
         policy=fixture_policy(package),
     )
 
-    assert result.ok
+    rendered = "\n".join(violation.render() for violation in result.violations)
+    assert result.ok, rendered
 
 
 def test_production_checker_accepts_scoped_packages() -> None:

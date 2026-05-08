@@ -306,11 +306,23 @@ def _iter_from_imports(node: ast.ImportFrom, ctx: _ModuleContext) -> cabc.Iterat
         return
     yield imported_module
     for alias in node.names:
-        if alias.name != "*":
-            imported_symbol = f"{imported_module}.{alias.name}"
-            yield imported_symbol
-            if resolved_reexport := ctx.reexport_index.get(imported_symbol):
-                yield resolved_reexport
+        if alias.name == "*":
+            yield from _iter_star_reexports(imported_module, ctx.reexport_index)
+            continue
+        imported_symbol = f"{imported_module}.{alias.name}"
+        yield imported_symbol
+        if resolved_reexport := ctx.reexport_index.get(imported_symbol):
+            yield resolved_reexport
+
+
+def _iter_star_reexports(
+    imported_module: str, reexport_index: dict[str, str]
+) -> cabc.Iterator[str]:
+    prefix = f"{imported_module}."
+    for exported_symbol, resolved_reexport in reexport_index.items():
+        if exported_symbol.startswith(prefix):
+            yield exported_symbol
+            yield resolved_reexport
 
 
 def _build_reexport_index(root: Path, package: str) -> dict[str, str]:
@@ -336,17 +348,26 @@ def _collect_reexports_from_tree(
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom):
             continue
-        imported_module = _resolve_import_from(node, source_path, package, module_name)
-        if imported_module is None:
-            continue
-        for alias in node.names:
-            if alias.name == "*":
-                continue
-            exported_name = alias.asname or alias.name
-            reexports[f"{module_name}.{exported_name}"] = (
-                f"{imported_module}.{alias.name}"
-            )
+        reexports.update(
+            _iter_reexports_from_importfrom(node, source_path, package, module_name)
+        )
     return reexports
+
+
+def _iter_reexports_from_importfrom(
+    node: ast.ImportFrom,
+    source_path: Path,
+    package: str,
+    module_name: str,
+) -> cabc.Iterator[tuple[str, str]]:
+    imported_module = _resolve_import_from(node, source_path, package, module_name)
+    if imported_module is None:
+        return
+    for alias in node.names:
+        if alias.name == "*":
+            continue
+        exported_name = alias.asname or alias.name
+        yield f"{module_name}.{exported_name}", f"{imported_module}.{alias.name}"
 
 
 def _resolve_import_from(

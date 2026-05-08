@@ -5,20 +5,19 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: APPROVED - implementation in progress
+Status: SHIPPED - implementation complete
 
 ## Purpose and big picture
 
 Roadmap item `1.5.4` is the missing automation layer for the boundary rules
 that were documented in `1.5.3`. The design document already says Episodic uses
 a hexagonal architecture with domain logic, typed ports, inbound adapters,
-outbound adapters, and composition roots. Today, however, that rule set is
-still enforced mostly by convention. Ruff is configured and CI already gates on
-`make lint` plus `make test`, but the repository does not yet have a dedicated
-dependency-direction checker or an architecture-test suite that proves concrete
-adapters still satisfy the published port contracts.
+outbound adapters, and composition roots. This shipped slice turns those rules
+from convention into a repo-local dependency-direction checker and
+architecture-test suite that proves concrete adapters still satisfy the
+published port contracts.
 
-After this work, a maintainer should be able to change code in
+After this work, a maintainer can change code in
 `episodic/canonical`, `episodic/api`, `episodic/llm`, and related packages and
 immediately learn whether the change crosses a forbidden boundary. The local
 developer path and the Continuous Integration (CI) path should agree:
@@ -59,8 +58,8 @@ Success is observable in eight ways:
 
 Implementation approval rule:
 
-- This document is a draft only. No implementation work should begin until the
-  user explicitly approves this plan.
+- Implementation was explicitly approved on 2026-04-30 and has shipped. Future
+  edits should keep this document aligned with the delivered behaviour.
 
 ## Constraints
 
@@ -249,10 +248,10 @@ Implementation approval rule:
   the `ty` tool runner to the already validated `0.0.32` version, and invokes
   Markdown lint through `npx -y markdownlint-cli2`.
 
-- Observation: The hook environment can also omit `uv` from `PATH` even though
-  it is installed at `/home/leynos/.local/bin/uv`. Impact: the Makefile now
-  resolves `UV` once, falling back to that absolute path, and all `uv`
-  invocations use `$(UV)`.
+- Observation: The hook environment can also omit `uv` from `PATH`, and the
+  fallback install location is user-specific. Impact: the Makefile now resolves
+  `UV` once, falling back to `$(HOME)/.local/bin/uv`, and all `uv` invocations
+  use `$(UV)`.
 
 - Observation: Application and inbound modules can import concrete adapters
   through package barrels such as
@@ -360,6 +359,15 @@ Review follow-up validation:
 - `make test` passed: 451 passed, 3 skipped.
 - `make markdownlint` passed with zero errors.
 
+Shipped-state and star-import follow-up validation:
+
+- `make check-fmt` passed.
+- `make lint` passed.
+- `make typecheck` passed.
+- Focused architecture tests passed: 10 passed.
+- `make test` passed: 452 passed, 3 skipped.
+- `make markdownlint` passed with zero errors.
+
 ## Context and orientation
 
 This section describes the current repository state so a novice can navigate
@@ -421,19 +429,17 @@ enforcement slice:
   explicitly modelled, but orchestration-specific worker-task rules are still a
   later roadmap concern.
 
-### Current gaps
+### Resolved gaps
 
-The current codebase documents the architecture but does not yet automate it:
+The shipped codebase now automates the documented architecture:
 
-- `Makefile` exposes `lint`, `typecheck`, and `test`, but `lint` currently
-  runs `ruff check` only.
-- `.github/workflows/ci.yml` runs `make lint` and `make test`, but there is no
-  named architecture-enforcement step.
-- No `tests/test_architecture_*.py` module exists yet.
-- No `tests/features/architecture_*.feature` scenario exists yet.
+- `Makefile` exposes `check-architecture`, and `make lint` includes that gate.
+- `.github/workflows/ci.yml` includes a named architecture-enforcement step.
+- `tests/test_architecture_enforcement.py` covers the static checker.
+- `tests/features/architecture_enforcement.feature` covers behaviour fixtures.
 - Public ports such as `CanonicalUnitOfWork`, the ingestion ports, and
-  `LLMPort` are `typing.Protocol` contracts but are not currently marked
-  `@runtime_checkable`.
+  `LLMPort` are runtime-checkable where the contract tests need structural
+  assertions.
 
 ### Terms used in this plan
 
@@ -634,7 +640,7 @@ set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-1-5-4-make-check-fmt.lo
 set -o pipefail; make typecheck 2>&1 | tee /tmp/execplan-1-5-4-make-typecheck.log
 set -o pipefail; make lint 2>&1 | tee /tmp/execplan-1-5-4-make-lint.log
 set -o pipefail; make test 2>&1 | tee /tmp/execplan-1-5-4-make-test.log
-set -o pipefail; PATH=/root/.bun/bin:$PATH make markdownlint 2>&1 | tee /tmp/execplan-1-5-4-make-markdownlint.log
+set -o pipefail; make markdownlint 2>&1 | tee /tmp/execplan-1-5-4-make-markdownlint.log
 set -o pipefail; make nixie 2>&1 | tee /tmp/execplan-1-5-4-make-nixie.log
 ```
 
