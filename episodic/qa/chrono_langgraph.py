@@ -1,17 +1,18 @@
 """LangGraph seam for the Chrono spoken-runtime estimator."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.state import CompiledStateGraph  # noqa: TC002
 
-from .chrono import (  # noqa: TC001
-    ChronoEvaluationRequest,
-    ChronoRuntimeEstimate,
-)
+if typ.TYPE_CHECKING:
+    from langgraph.graph.state import CompiledStateGraph
+
+    from .chrono import ChronoEvaluationRequest, ChronoRuntimeEstimate
+else:
+    CompiledStateGraph = typ.Any
+    ChronoEvaluationRequest = typ.Any
+    ChronoRuntimeEstimate = typ.Any
 
 
 class ChronoEvaluatorPort(typ.Protocol):
@@ -47,12 +48,7 @@ async def _chrono_node(
 
 def build_chrono_graph(
     evaluator: ChronoEvaluatorPort,
-) -> CompiledStateGraph[
-    ChronoGraphState,
-    None,
-    ChronoGraphState,
-    ChronoGraphState,
-]:
+) -> CompiledStateGraph[ChronoGraphState, None, ChronoGraphState, ChronoGraphState]:
     """Build the minimal Chrono StateGraph used by the QA layer."""
     graph = StateGraph(ChronoGraphState)
 

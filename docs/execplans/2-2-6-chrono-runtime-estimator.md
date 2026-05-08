@@ -171,13 +171,13 @@ The feature is complete only after documentation is updated, roadmap item
   `docs/execplans/2-2-6-chrono-runtime-estimator` branch after explicit user
   instruction to proceed. Evidence: branch and status checks on 2026-05-08.
   Impact: the ExecPlan approval gate is satisfied and the status is now
-  `IN PROGRESS`.
+  `COMPLETE`.
 
 - Observation: Chrono behavioural coverage does not need Vidai Mock because
   the estimator has no inference-service boundary. Evidence:
-  `tests/steps/test_chrono_steps.py` exercises the BDD path entirely
-  in-process with `ChronoRuntimeEstimator`. Impact: Vidai Mock remains reserved
-  for LLM-backed evaluators and adapters.
+  `tests/steps/test_chrono_steps.py` exercises the BDD path entirely in-process
+  with `ChronoRuntimeEstimator`. Impact: Vidai Mock remains reserved for
+  LLM-backed evaluators and adapters.
 
 ## Decision Log
 
@@ -213,12 +213,12 @@ for running Chrono inside QA orchestration without adding `LLMUsage`.
 
 Unit tests, property tests, LangGraph seam tests, and pytest-bdd behavioural
 coverage are in place. Documentation explains the initial heuristic, the lack
-of LLM charges, maintainer boundaries, and test locations. Roadmap item
-`2.2.6` is marked done.
+of LLM charges, maintainer boundaries, and test locations. Roadmap item `2.2.6`
+is marked done.
 
-The main implementation lesson is that keeping Chrono separate from the
-Pedante graph avoided unnecessary generalisation while still preserving a
-consistent evaluator port shape for future orchestration work.
+The main implementation lesson is that keeping Chrono separate from the Pedante
+graph avoided unnecessary generalization while still preserving a consistent
+evaluator port shape for future orchestration work.
 
 ## Context and orientation
 
@@ -438,8 +438,7 @@ from the feature commit if post-commit review identifies unrelated cleanup.
 
 ## Concrete steps
 
-Run these commands from the repository root
-`/home/leynos/.lody/repos/github---leynos---episodic/worktrees/35a26e97-19d8-42f9-a7a5-d906dad1340f`.
+Run these commands from the repository root.
 
 First confirm context:
 

@@ -563,6 +563,10 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 - Keep Pedante dependent on evaluator contracts and LLM ports only. LangGraph
   state should hold evaluator metadata and results, not the sole canonical copy
   of editorial data.
+
+
+### Chrono maintainer rules
+
 - Keep Chrono local and deterministic. The domain module must not import
   Falcon, SQLAlchemy, Celery, Vidai Mock, HTTP adapters, or LLM ports. Its
   first heuristic extracts spoken prose from TEI, counts simple word tokens,

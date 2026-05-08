@@ -116,6 +116,21 @@ def test_chrono_estimator_ignores_markup_only_script() -> None:
     assert result.metadata.input_character_count == len(request.script_tei_xml)
 
 
+def test_chrono_estimator_does_not_double_count_nested_spoken_elements() -> None:
+    """Nested spoken TEI elements should count only once."""
+    request = ChronoEvaluationRequest(
+        script_tei_xml=(
+            "<TEI><text><body><sp><p>outer words "
+            "<seg>nested words</seg></p></sp></body></text></TEI>"
+        )
+    )
+
+    result = ChronoRuntimeEstimator().estimate(request)
+
+    assert result.metadata.spoken_word_count == 4
+    assert result.estimated_seconds == 2
+
+
 def test_chrono_estimator_uses_custom_metadata() -> None:
     """Carry custom estimator identity and speaking rate into result metadata."""
     config = ChronoEstimatorConfig(

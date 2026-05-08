@@ -24,7 +24,9 @@ def test_estimated_seconds_are_never_negative(words: list[str]) -> None:
         ChronoEvaluationRequest(script_tei_xml=_script_from_words(words))
     )
 
-    assert result.estimated_seconds >= 0
+    assert result.estimated_seconds >= 0, (
+        f"expected non-negative estimated_seconds, got {result.estimated_seconds}"
+    )
 
 
 @given(prefix_words=_SIMPLE_WORDS, suffix_words=_SIMPLE_WORDS)
@@ -43,7 +45,10 @@ def test_adding_spoken_words_does_not_reduce_runtime(
         )
     )
 
-    assert combined.estimated_seconds >= prefix.estimated_seconds
+    assert combined.estimated_seconds >= prefix.estimated_seconds, (
+        "expected added spoken words not to reduce estimated_seconds: "
+        f"prefix={prefix.estimated_seconds}, combined={combined.estimated_seconds}"
+    )
 
 
 @given(words=_SIMPLE_WORDS)
@@ -54,6 +59,8 @@ def test_reported_word_count_matches_naive_tokenizer(words: list[str]) -> None:
         ChronoEvaluationRequest(script_tei_xml=script)
     )
 
-    assert result.metadata.spoken_word_count == len(
-        re.findall(r"[A-Za-z][A-Za-z0-9'-]*", " ".join(words))
+    expected_word_count = len(re.findall(r"[A-Za-z][A-Za-z0-9'-]*", " ".join(words)))
+    assert result.metadata.spoken_word_count == expected_word_count, (
+        "expected reported spoken_word_count to match tokenizer count: "
+        f"reported={result.metadata.spoken_word_count}, expected={expected_word_count}"
     )

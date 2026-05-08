@@ -1,7 +1,5 @@
 """Deterministic spoken-runtime estimation for TEI scripts."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import math
 import re
@@ -29,11 +27,20 @@ def _local_name(tag: str) -> str:
 def _extract_spoken_text_from_element(root: ElementTree.Element[str]) -> str:
     """Extract text from TEI elements that conventionally hold spoken prose."""
     chunks: list[str] = []
-    for element in root.iter():
-        if _local_name(element.tag) in _SPOKEN_TEXT_ELEMENTS:
+
+    def _walk(element: ElementTree.Element[str], *, inside_spoken: bool) -> None:
+        is_spoken = _local_name(element.tag) in _SPOKEN_TEXT_ELEMENTS
+        if is_spoken and not inside_spoken:
             text = " ".join(part.strip() for part in element.itertext() if part.strip())
             if text:
                 chunks.append(text)
+            inside_spoken = True
+        if inside_spoken:
+            return
+        for child in element:
+            _walk(child, inside_spoken=False)
+
+    _walk(root, inside_spoken=False)
     return " ".join(chunks)
 
 
