@@ -83,7 +83,7 @@ Implementation approval rule:
   extensions already reserved for `2.4.5`, such as deep checkpoint-payload
   audits or LangGraph-node-specific policies beyond what is necessary to avoid
   contradiction with the design.
-- Avoid a broad package reorganisation unless the checker cannot be made
+- Avoid a broad package reorganization unless the checker cannot be made
   truthful without moving code. Prefer small refactors that remove specific
   boundary leaks over renaming half the repository.
 - Use fail-first tests for each milestone: add or update tests, run them to
@@ -190,6 +190,8 @@ Implementation approval rule:
 - [x] (2026-05-08 00:00Z) Fixed a post-delivery false negative where imports
   through package `__init__` re-exports could hide concrete outbound adapters
   from the architecture checker.
+- [x] (2026-05-08 00:00Z) Applied review follow-ups for Makefile lint wiring,
+  fixture-policy reuse, assertion diagnostics, and checker helper extraction.
 
 ## Surprises & Discoveries
 
@@ -253,11 +255,12 @@ Implementation approval rule:
   invocations use `$(UV)`.
 
 - Observation: Application and inbound modules can import concrete adapters
-  through package barrels such as `from episodic.llm import
-  OpenAICompatibleLLMAdapter`. The original checker only emitted
-  `episodic.llm` and `episodic.llm.OpenAICompatibleLLMAdapter`, neither of
-  which matched the outbound adapter prefixes. Impact: package `__init__`
-  re-exports must be resolved before dependency groups are classified.
+  through package barrels such as
+  `from episodic.llm import OpenAICompatibleLLMAdapter`. The original checker
+  only emitted `episodic.llm` and `episodic.llm.OpenAICompatibleLLMAdapter`,
+  neither of which matched the outbound adapter prefixes. Impact: package
+  `__init__` re-exports must be resolved before dependency groups are
+  classified.
 
 ## Decision Log
 
@@ -302,6 +305,12 @@ Implementation approval rule:
   application at lint time or requiring runtime introspection. Date/Author:
   2026-05-08 / Codex.
 
+- Decision: keep tests aligned with the CLI fixture mode by importing
+  `fixture_policy` from `episodic.architecture.checker` instead of duplicating
+  the policy in tests. Rationale: fixture tests should exercise the same helper
+  as `python -m episodic.architecture --fixture-policy`. Date/Author:
+  2026-05-08 / Codex.
+
 ## Outcomes & Retrospective
 
 Implementation began after explicit approval on 2026-04-30. The delivery adds
@@ -339,6 +348,15 @@ Post-delivery barrel-import fix validation:
 - `make lint` passed, including `make check-architecture`.
 - `make typecheck` passed.
 - Focused architecture and port-contract tests passed: 12 passed.
+- `make test` passed: 451 passed, 3 skipped.
+- `make markdownlint` passed with zero errors.
+
+Review follow-up validation:
+
+- `make check-fmt` passed.
+- `make lint` passed.
+- `make typecheck` passed.
+- Focused architecture and port-contract tests passed: 9 passed.
 - `make test` passed: 451 passed, 3 skipped.
 - `make markdownlint` passed with zero errors.
 

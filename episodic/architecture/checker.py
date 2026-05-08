@@ -215,16 +215,8 @@ def fixture_policy(package: str) -> ArchitecturePolicy:
     )
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class _ModuleContext:
-    source_path: Path
-    package: str
-    module_name: str
-    reexport_index: dict[str, str]
-
-
-@dc.dataclass(frozen=True)
-class _ImportContext:
     source_path: Path
     package: str
     module_name: str
@@ -237,14 +229,7 @@ def _violations_for_module(
     active_policy: ArchitecturePolicy,
 ) -> list[ArchitectureViolation]:
     violations: list[ArchitectureViolation] = []
-    for imported_module in _iter_imported_modules(
-        _ImportContext(
-            source_path=ctx.source_path,
-            package=ctx.package,
-            module_name=ctx.module_name,
-            reexport_index=ctx.reexport_index,
-        )
-    ):
+    for imported_module in _iter_imported_modules(ctx):
         imported_group = active_policy.group_for(imported_module)
         if imported_group is None:
             continue
@@ -296,7 +281,7 @@ def _module_name(root: Path, package: str, source_path: Path) -> str:
     return ".".join((package, *parts))
 
 
-def _iter_imported_modules(ctx: _ImportContext) -> cabc.Iterator[str]:
+def _iter_imported_modules(ctx: _ModuleContext) -> cabc.Iterator[str]:
     tree = ast.parse(
         ctx.source_path.read_text(encoding="utf-8"), filename=str(ctx.source_path)
     )
@@ -313,7 +298,7 @@ def _iter_direct_imports(node: ast.Import, package: str) -> cabc.Iterator[str]:
             yield alias.name
 
 
-def _iter_from_imports(node: ast.ImportFrom, ctx: _ImportContext) -> cabc.Iterator[str]:
+def _iter_from_imports(node: ast.ImportFrom, ctx: _ModuleContext) -> cabc.Iterator[str]:
     imported_module = _resolve_import_from(
         node, ctx.source_path, ctx.package, ctx.module_name
     )
@@ -335,22 +320,33 @@ def _build_reexport_index(root: Path, package: str) -> dict[str, str]:
         tree = ast.parse(
             source_path.read_text(encoding="utf-8"), filename=str(source_path)
         )
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom):
-                continue
-            imported_module = _resolve_import_from(
-                node, source_path, package, module_name
-            )
-            if imported_module is None:
-                continue
-            for alias in node.names:
-                if alias.name == "*":
-                    continue
-                exported_name = alias.asname or alias.name
-                reexport_index[f"{module_name}.{exported_name}"] = (
-                    f"{imported_module}.{alias.name}"
-                )
+        reexport_index.update(
+            _collect_reexports_from_tree(tree, source_path, package, module_name)
+        )
     return reexport_index
+
+
+def _collect_reexports_from_tree(
+    tree: ast.AST,
+    source_path: Path,
+    package: str,
+    module_name: str,
+) -> dict[str, str]:
+    reexports: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        imported_module = _resolve_import_from(node, source_path, package, module_name)
+        if imported_module is None:
+            continue
+        for alias in node.names:
+            if alias.name == "*":
+                continue
+            exported_name = alias.asname or alias.name
+            reexports[f"{module_name}.{exported_name}"] = (
+                f"{imported_module}.{alias.name}"
+            )
+    return reexports
 
 
 def _resolve_import_from(

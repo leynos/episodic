@@ -5,55 +5,11 @@ from pathlib import Path
 import pytest
 
 from episodic.architecture import (
-    ArchitecturePolicy,
-    ModuleGroup,
     check_architecture,
 )
+from episodic.architecture.checker import fixture_policy
 
 FIXTURE_ROOT = Path("tests/fixtures/architecture")
-
-
-def _fixture_policy(package_name: str) -> ArchitecturePolicy:
-    package = f"tests.fixtures.architecture.{package_name}"
-    return ArchitecturePolicy(
-        groups=(
-            ModuleGroup(
-                name="domain",
-                module_prefixes=(f"{package}.domain",),
-                allowed_groups=frozenset({"domain"}),
-            ),
-            ModuleGroup(
-                name="application",
-                module_prefixes=(f"{package}.service",),
-                allowed_groups=frozenset({"domain", "application"}),
-            ),
-            ModuleGroup(
-                name="inbound_adapter",
-                module_prefixes=(f"{package}.api",),
-                allowed_groups=frozenset({
-                    "domain",
-                    "application",
-                    "inbound_adapter",
-                }),
-            ),
-            ModuleGroup(
-                name="outbound_adapter",
-                module_prefixes=(f"{package}.storage",),
-                allowed_groups=frozenset({"domain", "application", "outbound_adapter"}),
-            ),
-            ModuleGroup(
-                name="composition_root",
-                module_prefixes=(f"{package}.runtime",),
-                allowed_groups=frozenset({
-                    "domain",
-                    "application",
-                    "inbound_adapter",
-                    "outbound_adapter",
-                    "composition_root",
-                }),
-            ),
-        )
-    )
 
 
 @pytest.mark.parametrize(
@@ -90,10 +46,12 @@ def test_checker_reports_fixture_boundary_violations(
     expected_message_parts: tuple[str, ...],
 ) -> None:
     """Forbidden fixture imports produce stable architecture diagnostics."""
+    package = f"tests.fixtures.architecture.{package_name}"
+
     result = check_architecture(
         package_root=FIXTURE_ROOT / package_name,
-        package=f"tests.fixtures.architecture.{package_name}",
-        policy=_fixture_policy(package_name),
+        package=package,
+        policy=fixture_policy(package),
     )
 
     assert not result.ok
@@ -105,11 +63,12 @@ def test_checker_reports_fixture_boundary_violations(
 def test_checker_accepts_allowed_fixture_graph() -> None:
     """Allowed fixture imports do not produce architecture violations."""
     package_name = "allowed_case"
+    package = f"tests.fixtures.architecture.{package_name}"
 
     result = check_architecture(
         package_root=FIXTURE_ROOT / package_name,
-        package=f"tests.fixtures.architecture.{package_name}",
-        policy=_fixture_policy(package_name),
+        package=package,
+        policy=fixture_policy(package),
     )
 
     assert result.ok
@@ -118,11 +77,12 @@ def test_checker_accepts_allowed_fixture_graph() -> None:
 def test_checker_accepts_composition_root_fixture_wiring() -> None:
     """Composition roots can wire concrete inbound and outbound adapters."""
     package_name = "composition_root_allows_wiring"
+    package = f"tests.fixtures.architecture.{package_name}"
 
     result = check_architecture(
         package_root=FIXTURE_ROOT / package_name,
-        package=f"tests.fixtures.architecture.{package_name}",
-        policy=_fixture_policy(package_name),
+        package=package,
+        policy=fixture_policy(package),
     )
 
     assert result.ok

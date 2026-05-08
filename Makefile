@@ -65,9 +65,8 @@ check-fmt: build ## Verify formatting
 	$(UV_ENV) $(UV) run ruff format --check
 	# mdformat-all doesn't currently do checking
 
-lint: build ## Run linters
+lint: check-architecture ## Run linters
 	$(UV_ENV) $(UV) run ruff check
-	$(MAKE) check-architecture
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run python -m episodic.architecture

@@ -31,12 +31,16 @@ async def test_sqlalchemy_unit_of_work_satisfies_canonical_port(
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
-        assert isinstance(uow, CanonicalUnitOfWork)
-        assert inspect.iscoroutinefunction(uow.commit)
-        assert inspect.iscoroutinefunction(uow.rollback)
-        assert inspect.iscoroutinefunction(uow.flush)
-        assert uow.series_profiles is not None
-        assert uow.reference_bindings is not None
+        assert isinstance(uow, CanonicalUnitOfWork), "uow must be a CanonicalUnitOfWork"
+        assert inspect.iscoroutinefunction(uow.commit), "uow.commit must be a coroutine"
+        assert inspect.iscoroutinefunction(uow.rollback), (
+            "uow.rollback must be a coroutine"
+        )
+        assert inspect.iscoroutinefunction(uow.flush), "uow.flush must be a coroutine"
+        assert uow.series_profiles is not None, "uow.series_profiles must be exposed"
+        assert uow.reference_bindings is not None, (
+            "uow.reference_bindings must be exposed"
+        )
 
 
 def test_ingestion_adapters_satisfy_public_ports() -> None:
@@ -45,12 +49,22 @@ def test_ingestion_adapters_satisfy_public_ports() -> None:
     weighting_strategy = DefaultWeightingStrategy(min_parallel_items=999_999)
     resolver = HighestWeightConflictResolver()
 
-    assert isinstance(normalizer, SourceNormalizer)
-    assert inspect.iscoroutinefunction(normalizer.normalize)
-    assert isinstance(weighting_strategy, WeightingStrategy)
-    assert inspect.iscoroutinefunction(weighting_strategy.compute_weights)
-    assert isinstance(resolver, ConflictResolver)
-    assert inspect.iscoroutinefunction(resolver.resolve)
+    assert isinstance(normalizer, SourceNormalizer), (
+        "normalizer must be a SourceNormalizer"
+    )
+    assert inspect.iscoroutinefunction(normalizer.normalize), (
+        "normalizer.normalize must be a coroutine"
+    )
+    assert isinstance(weighting_strategy, WeightingStrategy), (
+        "weighting_strategy must be a WeightingStrategy"
+    )
+    assert inspect.iscoroutinefunction(weighting_strategy.compute_weights), (
+        "weighting_strategy.compute_weights must be a coroutine"
+    )
+    assert isinstance(resolver, ConflictResolver), "resolver must be a ConflictResolver"
+    assert inspect.iscoroutinefunction(resolver.resolve), (
+        "resolver.resolve must be a coroutine"
+    )
 
 
 @pytest.mark.asyncio
@@ -68,5 +82,7 @@ async def test_openai_compatible_adapter_satisfies_llm_port() -> None:
             client=client,
         )
 
-        assert isinstance(adapter, LLMPort)
-        assert inspect.iscoroutinefunction(adapter.generate)
+        assert isinstance(adapter, LLMPort), "adapter must be an LLMPort"
+        assert inspect.iscoroutinefunction(adapter.generate), (
+            "adapter.generate must be a coroutine"
+        )
