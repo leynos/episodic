@@ -338,6 +338,21 @@ def _build_reexport_index(root: Path, package: str) -> dict[str, str]:
     return reexport_index
 
 
+def _reexports_from_import_node(
+    node: ast.ImportFrom,
+    imported_module: str,
+    module_name: str,
+) -> dict[str, str]:
+    """Return the re-export mapping contributed by a single ``from … import`` node."""
+    reexports: dict[str, str] = {}
+    for alias in node.names:
+        if alias.name == "*":
+            continue
+        exported_name = alias.asname or alias.name
+        reexports[f"{module_name}.{exported_name}"] = f"{imported_module}.{alias.name}"
+    return reexports
+
+
 def _collect_reexports_from_tree(
     tree: ast.AST,
     source_path: Path,
@@ -348,26 +363,16 @@ def _collect_reexports_from_tree(
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom):
             continue
+        if (
+            imported_module := _resolve_import_from(
+                node, source_path, package, module_name
+            )
+        ) is None:
+            continue
         reexports.update(
-            _iter_reexports_from_importfrom(node, source_path, package, module_name)
+            _reexports_from_import_node(node, imported_module, module_name)
         )
     return reexports
-
-
-def _iter_reexports_from_importfrom(
-    node: ast.ImportFrom,
-    source_path: Path,
-    package: str,
-    module_name: str,
-) -> cabc.Iterator[tuple[str, str]]:
-    imported_module = _resolve_import_from(node, source_path, package, module_name)
-    if imported_module is None:
-        return
-    for alias in node.names:
-        if alias.name == "*":
-            continue
-        exported_name = alias.asname or alias.name
-        yield f"{module_name}.{exported_name}", f"{imported_module}.{alias.name}"
 
 
 def _resolve_import_from(
