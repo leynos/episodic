@@ -77,6 +77,14 @@ def _fixture_policy(package_name: str) -> ArchitecturePolicy:
                 "tests.fixtures.architecture.api_imports_outbound_adapter.storage",
             ),
         ),
+        (
+            "api_imports_reexported_outbound_adapter",
+            (
+                "ARCH001",
+                "tests.fixtures.architecture.api_imports_reexported_outbound_adapter.api",
+                "tests.fixtures.architecture.api_imports_reexported_outbound_adapter.storage",
+            ),
+        ),
     ],
 )
 def test_checker_reports_fixture_boundary_violations(

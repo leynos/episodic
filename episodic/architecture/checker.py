@@ -220,6 +220,15 @@ class _ModuleContext:
     source_path: Path
     package: str
     module_name: str
+    reexport_index: dict[str, str]
+
+
+@dataclasses.dataclass(frozen=True)
+class _ImportContext:
+    source_path: Path
+    package: str
+    module_name: str
+    reexport_index: dict[str, str]
 
 
 def _violations_for_module(
@@ -229,9 +238,12 @@ def _violations_for_module(
 ) -> list[ArchitectureViolation]:
     violations: list[ArchitectureViolation] = []
     for imported_module in _iter_imported_modules(
-        ctx.source_path,
-        ctx.package,
-        ctx.module_name,
+        _ImportContext(
+            source_path=ctx.source_path,
+            package=ctx.package,
+            module_name=ctx.module_name,
+            reexport_index=ctx.reexport_index,
+        )
     ):
         imported_group = active_policy.group_for(imported_module)
         if imported_group is None:
@@ -259,6 +271,7 @@ def check_architecture(
     """Check import directions under one package root."""
     root = Path(package_root)
     active_policy = default_policy() if policy is None else policy
+    reexport_index = _build_reexport_index(root, package)
     violations: list[ArchitectureViolation] = []
     for source_path in sorted(root.rglob("*.py")):
         module_name = _module_name(root, package, source_path)
@@ -269,6 +282,7 @@ def check_architecture(
             source_path=source_path,
             package=package,
             module_name=module_name,
+            reexport_index=reexport_index,
         )
         violations.extend(_violations_for_module(ctx, importer_group, active_policy))
     return ArchitectureCheckResult(violations=tuple(violations))
@@ -282,17 +296,15 @@ def _module_name(root: Path, package: str, source_path: Path) -> str:
     return ".".join((package, *parts))
 
 
-def _iter_imported_modules(
-    source_path: Path,
-    package: str,
-    module_name: str,
-) -> typ.Iterator[str]:
-    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+def _iter_imported_modules(ctx: _ImportContext) -> typ.Iterator[str]:
+    tree = ast.parse(
+        ctx.source_path.read_text(encoding="utf-8"), filename=str(ctx.source_path)
+    )
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            yield from _iter_direct_imports(node, package)
+            yield from _iter_direct_imports(node, ctx.package)
         elif isinstance(node, ast.ImportFrom):
-            yield from _iter_from_imports(node, source_path, package, module_name)
+            yield from _iter_from_imports(node, ctx)
 
 
 def _iter_direct_imports(node: ast.Import, package: str) -> typ.Iterator[str]:
@@ -301,19 +313,44 @@ def _iter_direct_imports(node: ast.Import, package: str) -> typ.Iterator[str]:
             yield alias.name
 
 
-def _iter_from_imports(
-    node: ast.ImportFrom,
-    source_path: Path,
-    package: str,
-    module_name: str,
-) -> typ.Iterator[str]:
-    imported_module = _resolve_import_from(node, source_path, package, module_name)
+def _iter_from_imports(node: ast.ImportFrom, ctx: _ImportContext) -> typ.Iterator[str]:
+    imported_module = _resolve_import_from(
+        node, ctx.source_path, ctx.package, ctx.module_name
+    )
     if imported_module is None:
         return
     yield imported_module
     for alias in node.names:
         if alias.name != "*":
-            yield f"{imported_module}.{alias.name}"
+            imported_symbol = f"{imported_module}.{alias.name}"
+            yield imported_symbol
+            if resolved_reexport := ctx.reexport_index.get(imported_symbol):
+                yield resolved_reexport
+
+
+def _build_reexport_index(root: Path, package: str) -> dict[str, str]:
+    reexport_index: dict[str, str] = {}
+    for source_path in sorted(root.rglob("__init__.py")):
+        module_name = _module_name(root, package, source_path)
+        tree = ast.parse(
+            source_path.read_text(encoding="utf-8"), filename=str(source_path)
+        )
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            imported_module = _resolve_import_from(
+                node, source_path, package, module_name
+            )
+            if imported_module is None:
+                continue
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                exported_name = alias.asname or alias.name
+                reexport_index[f"{module_name}.{exported_name}"] = (
+                    f"{imported_module}.{alias.name}"
+                )
+    return reexport_index
 
 
 def _resolve_import_from(

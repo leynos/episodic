@@ -187,6 +187,9 @@ Implementation approval rule:
   complete.
 - [x] (2026-04-30 22:42Z) Stage F: run the full validation gates and update
   this ExecPlan with the delivery outcome.
+- [x] (2026-05-08 00:00Z) Fixed a post-delivery false negative where imports
+  through package `__init__` re-exports could hide concrete outbound adapters
+  from the architecture checker.
 
 ## Surprises & Discoveries
 
@@ -249,6 +252,13 @@ Implementation approval rule:
   resolves `UV` once, falling back to that absolute path, and all `uv`
   invocations use `$(UV)`.
 
+- Observation: Application and inbound modules can import concrete adapters
+  through package barrels such as `from episodic.llm import
+  OpenAICompatibleLLMAdapter`. The original checker only emitted
+  `episodic.llm` and `episodic.llm.OpenAICompatibleLLMAdapter`, neither of
+  which matched the outbound adapter prefixes. Impact: package `__init__`
+  re-exports must be resolved before dependency groups are classified.
+
 ## Decision Log
 
 - Decision: implement architecture import enforcement as a repo-local checker
@@ -286,6 +296,12 @@ Implementation approval rule:
   `1.5.4`, so Vidai Mock remains unnecessary until future behaviour tests
   exercise inference-backed orchestration. Date/Author: 2026-04-30 / Codex.
 
+- Decision: build a static re-export index from package `__init__.py` files
+  and emit the concrete re-export target during `from ... import ...` scanning.
+  Rationale: this catches common public barrel imports without importing the
+  application at lint time or requiring runtime introspection. Date/Author:
+  2026-05-08 / Codex.
+
 ## Outcomes & Retrospective
 
 Implementation began after explicit approval on 2026-04-30. The delivery adds
@@ -316,6 +332,15 @@ Validation outcome:
   invocation reports pre-existing MD013 line-length findings across older
   documentation files that are outside this change. The committed files pass
   the configured Markdown and formatting gates above.
+
+Post-delivery barrel-import fix validation:
+
+- `make check-fmt` passed.
+- `make lint` passed, including `make check-architecture`.
+- `make typecheck` passed.
+- Focused architecture and port-contract tests passed: 12 passed.
+- `make test` passed: 451 passed, 3 skipped.
+- `make markdownlint` passed with zero errors.
 
 ## Context and orientation
 
