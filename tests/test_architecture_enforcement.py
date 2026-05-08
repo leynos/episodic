@@ -47,6 +47,14 @@ FIXTURE_ROOT = Path("tests/fixtures/architecture")
                 "tests.fixtures.architecture.api_imports_star_reexported_outbound_adapter.storage",
             ),
         ),
+        (
+            "api_imports_nested_star_reexported_outbound_adapter",
+            (
+                "ARCH001",
+                "tests.fixtures.architecture.api_imports_nested_star_reexported_outbound_adapter.api",
+                "tests.fixtures.architecture.api_imports_nested_star_reexported_outbound_adapter.storage",
+            ),
+        ),
     ],
 )
 def test_checker_reports_fixture_boundary_violations(
