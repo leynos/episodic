@@ -13,6 +13,7 @@ Accepted decision records:
 - [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
 - [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
 - [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
+- [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
 
 ## Overview
 
@@ -533,6 +534,15 @@ In the current worker scaffold, representative Celery tasks use injected
 callable seams instead of importing concrete adapters directly. Future task
 implementations should preserve this pattern by resolving storage, LLM, and
 other infrastructure through ports or composition-root-owned dependencies.
+
+The first durable content-generation checkpoint implementation stores
+`WorkflowCheckpoint` records in `workflow_checkpoints`. The graph persists the
+planner result and routing metadata before the first side-effecting execution
+step, returns a `SuspendedWorkflowResult`, and later accepts a
+`ResumeWorkflowCommand` through `TaskResumePort` to aggregate the final
+generation result. Checkpoint payloads contain orchestration state and
+provider-neutral DTO fields only; canonical episode artefacts remain in their
+own repositories.
 
 #### Inference strategy and tool integration
 

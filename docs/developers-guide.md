@@ -665,7 +665,12 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 - `episodic/orchestration/_show_notes_executor.py` contains the concrete
   `ShowNotesToolExecutor` implementation.
 - `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
-  used for `plan -> execute -> finish`.
+  used for `plan -> execute -> finish` and the checkpointing path that pauses
+  after planning.
+- `episodic/orchestration/checkpoints.py` contains the in-memory checkpoint
+  adapter used by fast tests.
+- `episodic/canonical/storage/workflow_checkpoints.py` contains the SQLAlchemy
+  adapter for durable checkpoint persistence.
 
 ### Maintainer rules
 
@@ -676,6 +681,11 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 - Keep LangGraph nodes dependent on ports and orchestration DTOs only. Tool
   implementations may call generation services, but the graph should see only
   `ToolExecutorPort`.
+- Persist suspend state through `CheckpointPort` and resume external task
+  results through `TaskResumePort`. Do not import SQLAlchemy, Celery, Falcon,
+  or provider adapters into graph nodes.
+- Build idempotency keys with `build_workflow_step_idempotency_key(...)` from
+  workflow id, workflow type, step name, action id, and retry attempt.
 - Treat `ShowNotesToolExecutor` as the first tool adapter, not as a special
   case that other orchestration code may import around.
 
@@ -694,6 +704,9 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   responses from one OpenAI-compatible endpoint: the first for structured
   planning, and the second for the show-notes tool call. Keep that fixture
   model-driven so prompt wording can evolve without breaking the scenario.
+- Durable checkpoint coverage lives in
+  `tests/canonical_storage/test_workflow_checkpoints.py` and uses py-pglite via
+  the migrated SQLAlchemy fixtures.
 
 ## LLM adapter boundary
 

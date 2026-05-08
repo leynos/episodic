@@ -97,6 +97,16 @@ Table: Show-notes model configuration settings.
 Both model names must reference endpoints available through the configured LLM
 provider.
 
+
+##### Resumable orchestration
+
+Generation workflows now persist an internal checkpoint before a suspendable
+execution step runs. If the same workflow step is retried with the same
+idempotency key, Episodic reuses the existing checkpoint instead of dispatching
+the side-effecting execution step twice. Operators do not need to manage these
+checkpoints directly in this release; public generation-run checkpoint APIs are
+planned for a later roadmap item.
+
 ##### Failure behaviour
 
 If either stage returns a response that does not match the expected structured

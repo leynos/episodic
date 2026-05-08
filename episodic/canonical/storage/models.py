@@ -76,6 +76,49 @@ REFERENCE_BINDING_TARGET_KIND = sa.Enum(
 )
 
 
+class WorkflowCheckpointRecord(Base):
+    """SQLAlchemy model for resumable orchestration checkpoints."""
+
+    __tablename__ = "workflow_checkpoints"
+
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workflow_id: orm.Mapped[str] = orm.mapped_column(
+        sa.String(160),
+        nullable=False,
+        index=True,
+    )
+    workflow_type: orm.Mapped[str] = orm.mapped_column(sa.String(120), nullable=False)
+    step_name: orm.Mapped[str] = orm.mapped_column(sa.String(120), nullable=False)
+    idempotency_key: orm.Mapped[str] = orm.mapped_column(
+        sa.String(512),
+        nullable=False,
+        unique=True,
+    )
+    payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        postgresql.JSONB,
+        nullable=False,
+    )
+    status: orm.Mapped[str] = orm.mapped_column(
+        sa.String(80),
+        nullable=False,
+        server_default="suspended",
+    )
+    created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+    updated_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+    )
+
+
 class SeriesProfileRecord(Base):
     """SQLAlchemy model for series profiles.
 

@@ -1,5 +1,7 @@
 """Typed DTOs, protocols, and validation helpers for generation orchestration."""
 
+from __future__ import annotations
+
 import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
@@ -11,6 +13,8 @@ from episodic.llm import (
 )
 
 if typ.TYPE_CHECKING:
+    import datetime as dt
+
     from episodic.generation import ShowNotesResult
 
 from ._types import (
@@ -396,3 +400,94 @@ class GenerationOrchestrationResult:
                 )
                 raise TypeError(msg)
         object.__setattr__(self, "action_results", action_results)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class WorkflowCheckpoint:
+    """Durable orchestration state saved when a generation workflow pauses."""
+
+    checkpoint_id: str
+    workflow_id: str
+    workflow_type: str
+    step_name: str
+    idempotency_key: str
+    payload: dict[str, object]
+    status: str = "suspended"
+    created_at: dt.datetime | None = None
+    updated_at: dt.datetime | None = None
+
+    def __post_init__(self) -> None:
+        """Validate checkpoint identity fields and freeze the payload mapping."""
+        _normalize_string_fields(
+            self,
+            (
+                "checkpoint_id",
+                "workflow_id",
+                "workflow_type",
+                "step_name",
+                "idempotency_key",
+                "status",
+            ),
+        )
+        if not isinstance(self.payload, dict):
+            msg = "payload must be a mapping object."
+            raise TypeError(msg)
+        object.__setattr__(self, "payload", dict(self.payload))
+
+
+@dc.dataclass(frozen=True, slots=True)
+class SuspendedWorkflowResult:
+    """Typed result returned when a graph pauses before external work resumes it."""
+
+    checkpoint_id: str
+    workflow_id: str
+    step_name: str
+    idempotency_key: str
+
+    def __post_init__(self) -> None:
+        """Reject blank suspend metadata."""
+        _normalize_string_fields(
+            self,
+            ("checkpoint_id", "workflow_id", "step_name", "idempotency_key"),
+        )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class ResumeWorkflowCommand:
+    """Input for resuming a suspended workflow from a durable checkpoint."""
+
+    checkpoint_id: str
+    result: ActionExecutionResult
+
+    def __post_init__(self) -> None:
+        """Validate resume identity and result shape."""
+        object.__setattr__(
+            self,
+            "checkpoint_id",
+            _normalize_non_empty_text(self.checkpoint_id, "checkpoint_id"),
+        )
+        if not isinstance(self.result, ActionExecutionResult):
+            msg = "result must be an ActionExecutionResult."
+            raise TypeError(msg)
+
+
+def build_workflow_step_idempotency_key(  # noqa: PLR0913
+    *,
+    workflow_id: str,
+    workflow_type: str,
+    step_name: str,
+    action_id: str,
+    attempt: int = 0,
+) -> str:
+    """Build the deterministic idempotency key for a suspendable workflow step."""
+    if attempt < 0:
+        msg = "attempt must be greater than or equal to zero."
+        raise ValueError(msg)
+    parts = (
+        _normalize_non_empty_text(workflow_id, "workflow_id"),
+        _normalize_non_empty_text(workflow_type, "workflow_type"),
+        _normalize_non_empty_text(step_name, "step_name"),
+        _normalize_non_empty_text(action_id, "action_id"),
+        str(attempt),
+    )
+    return ":".join(parts)

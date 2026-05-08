@@ -31,6 +31,7 @@ from .repositories import (
     SqlAlchemySourceDocumentRepository,
     SqlAlchemyTeiHeaderRepository,
 )
+from .workflow_checkpoints import SqlAlchemyWorkflowCheckpointStore
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -108,6 +109,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             SqlAlchemyReferenceDocumentRevisionRepository(self._session)
         )
         self.reference_bindings = SqlAlchemyReferenceBindingRepository(self._session)
+        self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(self._session)
         return self
 
     async def __aexit__(

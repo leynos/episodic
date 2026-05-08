@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -151,19 +151,55 @@ Success is observable in these behaviours:
 - [x] (2026-05-08 00:04Z) Ran planning-change validation gates:
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie` all passed.
-- [ ] Await explicit approval before implementing the feature.
-- [ ] Stage A: add fail-first tests for checkpoint DTOs, idempotency keys,
+- [x] (2026-05-08 00:20Z) Received explicit implementation approval and moved
+  this ExecPlan from draft to in-progress execution.
+- [x] (2026-05-08 00:36Z) Stage A partial: added focused unit tests for graph
+  suspension, idempotency reuse, resume aggregation, and a Hypothesis property
+  test for deterministic step keys. The focused graph and property pytest
+  command passed with `15 passed`.
+- [x] (2026-05-08 01:16Z) Stage A complete: the implementation is covered by
+  unit tests, py-pglite storage tests, a Vidai Mock behavioural test, and a
+  Hypothesis idempotency-key invariant.
+- [x] Stage A: add fail-first tests for checkpoint DTOs, idempotency keys,
   persistence, graph suspension, graph resumption, Vidai Mock behaviour, and
   Hypothesis invariants.
-- [ ] Stage B: implement orchestration DTOs and ports for checkpoint persistence
+- [x] (2026-05-08 00:36Z) Stage B partial: added
+  `WorkflowCheckpoint`, `SuspendedWorkflowResult`, `ResumeWorkflowCommand`,
+  `CheckpointPort`, `TaskResumePort`, and deterministic idempotency-key
+  construction under the orchestration boundary.
+- [x] Stage B: implement orchestration DTOs and ports for checkpoint persistence
   and task resumption.
-- [ ] Stage C: implement the in-memory adapter used by fast unit tests.
-- [ ] Stage D: implement the durable SQLAlchemy checkpoint adapter and wire it
+- [x] (2026-05-08 00:36Z) Stage C: implemented
+  `InMemoryCheckpointStore` for fast suspend/resume unit tests.
+- [x] (2026-05-08 00:47Z) Stage D: added
+  `workflow_checkpoints`, an Alembic migration,
+  `SqlAlchemyWorkflowCheckpointStore`, unit-of-work wiring, and
+  py-pglite-backed tests. The focused graph, property, and storage pytest
+  command passed with `17 passed`.
+- [x] (2026-05-08 00:52Z) Stage E partial: added a Vidai Mock-backed BDD
+  suspend/resume scenario. The focused generation orchestration BDD pytest
+  command passed with `4 passed`.
+- [x] Stage D: implement the durable SQLAlchemy checkpoint adapter and wire it
   through composition roots without leaking adapter types into graph nodes.
-- [ ] Stage E: update LangGraph orchestration to suspend, persist checkpoints,
+- [x] Stage E: update LangGraph orchestration to suspend, persist checkpoints,
   resume from saved state, and deduplicate repeated step invocations.
-- [ ] Stage F: update design, user, developer, and ADR documentation.
-- [ ] Stage G: run all validation gates, mark roadmap item `2.4.2` done, and
+- [x] (2026-05-08 01:16Z) Stage F: updated
+  `docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`,
+  `docs/developers-guide.md`, and added
+  `docs/adr/adr-007-durable-generation-checkpoints.md`.
+- [x] Stage F: update design, user, developer, and ADR documentation.
+- [x] (2026-05-08 01:27Z) Stage G: final validation passed after marking
+  roadmap item `2.4.2` done: `make check-fmt`, `make typecheck`,
+  `make lint`, `make test`, `make markdownlint`, and `make nixie`. `make test`
+  reported `446 passed, 3 skipped`.
+- [x] (2026-05-08 01:27Z) Formatting note: `make fmt` still reports the
+  repository-wide legacy MD013 formatter issue in unrelated documents after
+  leaving Python files unchanged. The explicit required gates pass.
+- [x] (2026-05-08 01:16Z) Stage G partial: `make check-fmt`,
+  `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
+  `make nixie` passed before marking the roadmap item done. `make test`
+  reported `446 passed, 3 skipped`.
+- [x] Stage G: run all validation gates, mark roadmap item `2.4.2` done, and
   commit the implementation.
 
 ## Surprises & Discoveries
@@ -206,6 +242,20 @@ Success is observable in these behaviours:
   rely on the explicit gate commands unless the formatter target is repaired in
   a separate change.
 
+- Observation: the minimal graph can support `2.4.2` by adding a checkpointing
+  branch that stops after `plan` and persists the first executable action,
+  while the non-checkpointed path remains unchanged. Evidence:
+  `tests/test_generation_orchestration_langgraph.py` passed both the existing
+  full execution test and the new suspend/resume tests. Impact: no redesign of
+  the existing planner or tool executor ports is needed.
+
+- Observation: repeated suspend invocations still re-run planning in the current
+  graph but reuse the existing checkpoint before dispatching the external
+  execution step. Evidence: the BDD scenario records two planning model calls
+  and one execution model call. Impact: this satisfies step idempotency for the
+  suspendable side-effecting execution step without expanding `2.4.2` into
+  plan-result caching.
+
 ## Decision Log
 
 - Decision: Treat this document as a pre-implementation draft and do not begin
@@ -232,11 +282,30 @@ Success is observable in these behaviours:
   of any one LangGraph persistence implementation. Date/Author: 2026-05-07,
   Codex.
 
+- Decision: Resume accepts a `ResumeWorkflowCommand` carrying the external
+  action result and uses a `TaskResumePort` before rebuilding the final
+  `GenerationOrchestrationResult`. Rationale: this keeps later queue and human
+  approval adapters outside the graph while proving the suspend/resume state
+  transition today. Date/Author: 2026-05-08, Codex.
+
 ## Outcomes & Retrospective
 
-This section is intentionally empty while the plan remains in draft. Update it
-after each implementation milestone with the behaviour achieved, validation
-evidence, gaps, and follow-up work.
+Roadmap item `2.4.2` now has durable suspend-and-resume orchestration for the
+structured generation graph. The graph can persist a checkpoint before the
+side-effecting execution step, return a typed suspended result, reuse the first
+checkpoint for repeated idempotency keys, and resume by accepting an external
+action result through `TaskResumePort`.
+
+The implementation stayed within the planned boundary: no public API exposes
+LangGraph internals, no Celery queue routing or cost-ledger persistence was
+added, and graph nodes depend on orchestration ports rather than SQLAlchemy or
+provider adapters. Documentation now records the user-visible checkpoint
+behaviour, developer practices, and ADR-007.
+
+Final validation passed with `make check-fmt`, `make typecheck`, `make lint`,
+`make test`, `make markdownlint`, and `make nixie`. `make fmt` remains affected
+by a pre-existing repository-wide Markdown line-length formatter issue; no
+unrelated formatter output was retained.
 
 ## Context and orientation
 

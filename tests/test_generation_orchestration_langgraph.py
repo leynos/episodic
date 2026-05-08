@@ -10,9 +10,11 @@ from episodic.orchestration import (
     ActionKind,
     ExecutionPlan,
     GenerationOrchestrationRequest,
+    InMemoryCheckpointStore,
     ModelTier,
     PlannedAction,
     PlannerResult,
+    ResumeWorkflowCommand,
 )
 from episodic.orchestration.langgraph import (
     GenerationGraphState,
@@ -20,6 +22,7 @@ from episodic.orchestration.langgraph import (
     _finish_node,
     _plan_node,
     build_generation_orchestration_graph,
+    resume_generation_orchestration,
 )
 
 
@@ -46,6 +49,9 @@ class _FakeToolExecutor:
     """Return one canned execution result."""
 
     result: ActionExecutionResult
+    calls: list[tuple[PlannedAction, GenerationOrchestrationRequest]] = dc.field(
+        default_factory=list
+    )
 
     async def execute(
         self,
@@ -61,7 +67,23 @@ class _FakeToolExecutor:
             "expected correlation_id to be 'corr-graph', got: "
             f"{context.correlation_id!r}"
         )
+        self.calls.append((action, context))
         return self.result
+
+
+@dc.dataclass(slots=True)
+class _FakeResumePort:
+    """Return the externally supplied action result for resume tests."""
+
+    calls: list[ResumeWorkflowCommand] = dc.field(default_factory=list)
+
+    async def resume(
+        self,
+        command: ResumeWorkflowCommand,
+    ) -> ActionExecutionResult:
+        """Record and return the command result."""
+        self.calls.append(command)
+        return command.result
 
 
 def _request() -> GenerationOrchestrationRequest:
@@ -132,6 +154,73 @@ class TestGenerationOrchestrationGraph:
             "expected first action result model to be 'gpt-4o-mini', got: "
             f"{orchestration_result.action_results[0].model!r}"
         )
+
+    @pytest.mark.asyncio
+    async def test_generation_graph_suspends_before_tool_execution(self) -> None:
+        """Checkpointing graph should persist a suspend result before execution."""
+        checkpoint_store = InMemoryCheckpointStore()
+        tool_executor = _FakeToolExecutor(_action_result())
+        graph = build_generation_orchestration_graph(
+            planner=_FakePlanner(_planner_result()),
+            tool_executor=tool_executor,
+            checkpoint_port=checkpoint_store,
+        )
+
+        state = await graph.ainvoke(GenerationGraphState(request=_request()))
+
+        suspended_result = state["suspended_result"]
+        assert suspended_result.workflow_id == "corr-graph"
+        assert suspended_result.step_name == "execute"
+        checkpoint = await checkpoint_store.get(suspended_result.checkpoint_id)
+        assert checkpoint is not None
+        assert checkpoint.idempotency_key == suspended_result.idempotency_key
+        assert tool_executor.calls == []
+
+    @pytest.mark.asyncio
+    async def test_generation_graph_reuses_checkpoint_for_same_step_key(self) -> None:
+        """Repeated suspend calls must return the first checkpoint for a step."""
+        checkpoint_store = InMemoryCheckpointStore()
+        graph = build_generation_orchestration_graph(
+            planner=_FakePlanner(_planner_result()),
+            tool_executor=_FakeToolExecutor(_action_result()),
+            checkpoint_port=checkpoint_store,
+        )
+
+        first_state = await graph.ainvoke(GenerationGraphState(request=_request()))
+        second_state = await graph.ainvoke(GenerationGraphState(request=_request()))
+
+        assert (
+            second_state["suspended_result"].checkpoint_id
+            == first_state["suspended_result"].checkpoint_id
+        )
+
+    @pytest.mark.asyncio
+    async def test_resume_generation_orchestration_finishes_from_checkpoint(
+        self,
+    ) -> None:
+        """Resume should rebuild checkpointed plan state and aggregate a result."""
+        checkpoint_store = InMemoryCheckpointStore()
+        graph = build_generation_orchestration_graph(
+            planner=_FakePlanner(_planner_result()),
+            tool_executor=_FakeToolExecutor(_action_result()),
+            checkpoint_port=checkpoint_store,
+        )
+        state = await graph.ainvoke(GenerationGraphState(request=_request()))
+        command = ResumeWorkflowCommand(
+            checkpoint_id=state["suspended_result"].checkpoint_id,
+            result=_action_result(),
+        )
+        resume_port = _FakeResumePort()
+
+        result = await resume_generation_orchestration(
+            checkpoint_port=checkpoint_store,
+            resume_port=resume_port,
+            command=command,
+        )
+
+        assert result.total_usage.total_tokens == 38
+        assert result.action_results == (_action_result(),)
+        assert resume_port.calls == [command]
 
 
 class TestLangGraphNodeValidation:

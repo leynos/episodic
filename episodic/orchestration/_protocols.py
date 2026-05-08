@@ -9,6 +9,8 @@ if typ.TYPE_CHECKING:
         GenerationOrchestrationRequest,
         PlannedAction,
         PlannerResult,
+        ResumeWorkflowCommand,
+        WorkflowCheckpoint,
     )
 
 
@@ -31,6 +33,29 @@ class PlannerPort(typ.Protocol):
         request: GenerationOrchestrationRequest,
     ) -> PlannerResult:
         """Return a typed execution plan for the supplied generation request."""
+
+
+class CheckpointPort(typ.Protocol):
+    """Persistence port for suspended generation workflow checkpoints."""
+
+    async def get(self, checkpoint_id: str) -> WorkflowCheckpoint | None:
+        """Return a checkpoint by identifier, or None when it is unknown."""
+
+    async def get_by_idempotency_key(
+        self,
+        idempotency_key: str,
+    ) -> WorkflowCheckpoint | None:
+        """Return the checkpoint recorded for a suspendable step key."""
+
+    async def save(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
+        """Persist a checkpoint or return the existing record for its key."""
+
+
+class TaskResumePort(typ.Protocol):
+    """Application-level port for resuming suspended workflow tasks."""
+
+    async def resume(self, command: ResumeWorkflowCommand) -> ActionExecutionResult:
+        """Return the externally supplied result for a suspended task."""
 
 
 class _ShowNotesGeneratorPort(typ.Protocol):

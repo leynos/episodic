@@ -28,6 +28,7 @@ from episodic.orchestration import (
     StructuredGenerationPlanner,
     UnsupportedActionError,
     build_generation_orchestration_graph,
+    build_workflow_step_idempotency_key,
 )
 from tests._orchestration_fakes import (
     _config,
@@ -91,6 +92,56 @@ _token_inputs_strategy: st.SearchStrategy[_PropTokenInputs] = st.builds(
     action_input=st.integers(min_value=0, max_value=10_000),
     action_output=st.integers(min_value=0, max_value=10_000),
 )
+
+
+@given(
+    workflow_id=st.text(
+        min_size=1,
+        max_size=32,
+        alphabet=string.ascii_letters + string.digits + "-",
+    ),
+    workflow_type=st.text(
+        min_size=1,
+        max_size=32,
+        alphabet=string.ascii_letters + string.digits + "_",
+    ),
+    step_name=st.text(
+        min_size=1,
+        max_size=32,
+        alphabet=string.ascii_letters + string.digits + "_",
+    ),
+    action_id=st.text(
+        min_size=1,
+        max_size=32,
+        alphabet=string.ascii_letters + string.digits + "-",
+    ),
+    attempt=st.integers(min_value=0, max_value=100),
+)
+@settings(max_examples=50)
+def test_step_idempotency_keys_are_deterministic(
+    workflow_id: str,
+    workflow_type: str,
+    step_name: str,
+    action_id: str,
+    attempt: int,
+) -> None:
+    """Property test: identical workflow step inputs produce identical keys."""
+    first = build_workflow_step_idempotency_key(
+        workflow_id=workflow_id,
+        workflow_type=workflow_type,
+        step_name=step_name,
+        action_id=action_id,
+        attempt=attempt,
+    )
+    second = build_workflow_step_idempotency_key(
+        workflow_id=workflow_id,
+        workflow_type=workflow_type,
+        step_name=step_name,
+        action_id=action_id,
+        attempt=attempt,
+    )
+    assert second == first
+    assert first.endswith(f":{attempt}")
 
 
 @given(st.lists(st.sampled_from(_ACTION_KIND_SAMPLES), min_size=1, max_size=48))
