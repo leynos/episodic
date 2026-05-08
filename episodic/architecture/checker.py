@@ -82,7 +82,7 @@ _ALL_GROUPS: frozenset[str] = frozenset({
 
 
 def _composition_root_group() -> ModuleGroup:
-    """Return the group allowed to wire all architecture layers together."""
+    """Return the composition-root ModuleGroup."""
     return ModuleGroup(
         name="composition_root",
         module_prefixes=(
@@ -94,7 +94,7 @@ def _composition_root_group() -> ModuleGroup:
 
 
 def _domain_ports_group() -> ModuleGroup:
-    """Return the group for domain models and public port contracts."""
+    """Return the domain-ports ModuleGroup."""
     return ModuleGroup(
         name="domain_ports",
         module_prefixes=(
@@ -110,7 +110,7 @@ def _domain_ports_group() -> ModuleGroup:
 
 
 def _application_group() -> ModuleGroup:
-    """Return the group for application services and workflows."""
+    """Return the application ModuleGroup."""
     return ModuleGroup(
         name="application",
         module_prefixes=(
@@ -125,7 +125,7 @@ def _application_group() -> ModuleGroup:
 
 
 def _inbound_adapter_group() -> ModuleGroup:
-    """Return the group for API, worker task, and topology adapters."""
+    """Return the inbound-adapter ModuleGroup."""
     return ModuleGroup(
         name="inbound_adapter",
         module_prefixes=(
@@ -142,7 +142,7 @@ def _inbound_adapter_group() -> ModuleGroup:
 
 
 def _outbound_adapter_group() -> ModuleGroup:
-    """Return the group for concrete persistence and provider adapters."""
+    """Return the outbound-adapter ModuleGroup."""
     return ModuleGroup(
         name="outbound_adapter",
         module_prefixes=(
@@ -222,7 +222,7 @@ def fixture_policy(package: str) -> ArchitecturePolicy:
 
 @dc.dataclass(frozen=True, slots=True)
 class _ModuleContext:
-    """Store source path, package, module name, and re-export index for a module."""
+    """Bundled per-module context for violation scanning."""
 
     source_path: Path
     package: str
@@ -235,7 +235,7 @@ def _violations_for_module(
     importer_group: ModuleGroup,
     active_policy: ArchitecturePolicy,
 ) -> list[ArchitectureViolation]:
-    """Collect violations for one module against the policy."""
+    """Return all boundary violations for one module's imports."""
     violations: list[ArchitectureViolation] = []
     for imported_module in _iter_imported_modules(ctx):
         imported_group = active_policy.group_for(imported_module)
@@ -291,7 +291,7 @@ def _module_name(root: Path, package: str, source_path: Path) -> str:
 
 
 def _iter_imported_modules(ctx: _ModuleContext) -> cabc.Iterator[str]:
-    """Yield package-local imports discovered in one source file."""
+    """Yield every imported module name found in one source file."""
     tree = ast.parse(
         ctx.source_path.read_text(encoding="utf-8"), filename=str(ctx.source_path)
     )
@@ -303,14 +303,14 @@ def _iter_imported_modules(ctx: _ModuleContext) -> cabc.Iterator[str]:
 
 
 def _iter_direct_imports(node: ast.Import, package: str) -> cabc.Iterator[str]:
-    """Yield scoped module names from an ``import ...`` node."""
+    """Yield scoped module names from a bare ``import`` statement."""
     for alias in node.names:
         if alias.name == package or alias.name.startswith(f"{package}."):
             yield alias.name
 
 
 def _iter_from_imports(node: ast.ImportFrom, ctx: _ModuleContext) -> cabc.Iterator[str]:
-    """Yield scoped modules and symbols from a ``from ... import ...`` node."""
+    """Yield scoped module names from a ``from … import`` statement."""
     imported_module = _resolve_import_from(
         node, ctx.source_path, ctx.package, ctx.module_name
     )
@@ -330,7 +330,7 @@ def _iter_from_imports(node: ast.ImportFrom, ctx: _ModuleContext) -> cabc.Iterat
 def _iter_star_reexports(
     imported_module: str, reexport_index: dict[str, str]
 ) -> cabc.Iterator[str]:
-    """Yield re-exported symbols exposed by a scoped star import."""
+    """Yield all re-export origins for a star import of one module."""
     prefix = f"{imported_module}."
     for exported_symbol, resolved_reexport in reexport_index.items():
         if exported_symbol.startswith(prefix):
@@ -339,7 +339,7 @@ def _iter_star_reexports(
 
 
 def _build_reexport_index(root: Path, package: str) -> dict[str, str]:
-    """Build package-barrel symbol mappings for ``__init__.py`` files."""
+    """Build a map of re-exported symbols to their origin modules."""
     reexport_index: dict[str, str] = {}
     for source_path in sorted(root.rglob("__init__.py")):
         module_name = _module_name(root, package, source_path)
@@ -373,7 +373,7 @@ def _collect_reexports_from_tree(
     package: str,
     module_name: str,
 ) -> dict[str, str]:
-    """Collect re-export mappings declared by one parsed module tree."""
+    """Collect re-export mappings from one parsed ``__init__`` tree."""
     reexports: dict[str, str] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom):
@@ -396,7 +396,7 @@ def _resolve_import_from(
     package: str,
     module_name: str,
 ) -> str | None:
-    """Resolve the scoped module targeted by an ``ImportFrom`` node."""
+    """Resolve an ``ImportFrom`` node to an absolute module name."""
     if node.level:
         module_name = _relative_import_base(node, source_path, module_name)
         if node.module:
@@ -412,7 +412,7 @@ def _resolve_import_from(
 def _relative_import_base(
     node: ast.ImportFrom, source_path: Path, module_name: str
 ) -> str:
-    """Resolve the absolute module base for a relative ``from`` import."""
+    """Compute the base module for a relative import."""
     parent_parts = module_name.split(".")
     if source_path.name == "__init__.py":
         module_parts = parent_parts
