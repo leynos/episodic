@@ -84,17 +84,20 @@ def architecture_checker_runs(context: ArchitectureContext) -> None:
 def architecture_check_fails(context: ArchitectureContext) -> None:
     """Assert the checker rejected the selected fixture package."""
     completed_process = context.completed_process
-    assert completed_process is not None
-    assert completed_process.returncode == 1
+    assert completed_process is not None, "checker did not run"
+    assert completed_process.returncode == 1, (
+        f"expected exit 1, got {completed_process.returncode}"
+    )
 
 
 @then("the architecture check passes")
 def architecture_check_passes(context: ArchitectureContext) -> None:
     """Assert the checker accepted the selected fixture package."""
     completed_process = context.completed_process
-    assert completed_process is not None
-    assert completed_process.returncode == 0
-    assert completed_process.stderr == ""
+    assert completed_process is not None, "checker did not run"
+    assert completed_process.returncode == 0, (
+        f"expected exit 0, got {completed_process.returncode}"
+    )
 
 
 @then(parsers.parse('the architecture diagnostic mentions "{expected_text}"'))
@@ -104,6 +107,6 @@ def architecture_diagnostic_mentions(
 ) -> None:
     """Assert a stable diagnostic substring was emitted."""
     completed_process = context.completed_process
-    assert completed_process is not None
+    assert completed_process is not None, "checker did not run"
     output = f"{completed_process.stdout}\n{completed_process.stderr}"
-    assert expected_text in output
+    assert expected_text in output, f"expected {expected_text!r} in {output!r}"

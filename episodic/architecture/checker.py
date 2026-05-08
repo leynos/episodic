@@ -1,14 +1,14 @@
 """Static import checker for hexagonal architecture boundaries."""
 
-from __future__ import annotations
-
 import argparse
 import ast
-import dataclasses
 import dataclasses as dc
 import sys
 import typing as typ
 from pathlib import Path
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -215,7 +215,7 @@ def fixture_policy(package: str) -> ArchitecturePolicy:
     )
 
 
-@dataclasses.dataclass(frozen=True)
+@dc.dataclass(frozen=True)
 class _ModuleContext:
     source_path: Path
     package: str
@@ -223,7 +223,7 @@ class _ModuleContext:
     reexport_index: dict[str, str]
 
 
-@dataclasses.dataclass(frozen=True)
+@dc.dataclass(frozen=True)
 class _ImportContext:
     source_path: Path
     package: str
@@ -296,7 +296,7 @@ def _module_name(root: Path, package: str, source_path: Path) -> str:
     return ".".join((package, *parts))
 
 
-def _iter_imported_modules(ctx: _ImportContext) -> typ.Iterator[str]:
+def _iter_imported_modules(ctx: _ImportContext) -> cabc.Iterator[str]:
     tree = ast.parse(
         ctx.source_path.read_text(encoding="utf-8"), filename=str(ctx.source_path)
     )
@@ -307,13 +307,13 @@ def _iter_imported_modules(ctx: _ImportContext) -> typ.Iterator[str]:
             yield from _iter_from_imports(node, ctx)
 
 
-def _iter_direct_imports(node: ast.Import, package: str) -> typ.Iterator[str]:
+def _iter_direct_imports(node: ast.Import, package: str) -> cabc.Iterator[str]:
     for alias in node.names:
         if alias.name == package or alias.name.startswith(f"{package}."):
             yield alias.name
 
 
-def _iter_from_imports(node: ast.ImportFrom, ctx: _ImportContext) -> typ.Iterator[str]:
+def _iter_from_imports(node: ast.ImportFrom, ctx: _ImportContext) -> cabc.Iterator[str]:
     imported_module = _resolve_import_from(
         node, ctx.source_path, ctx.package, ctx.module_name
     )

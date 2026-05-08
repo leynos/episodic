@@ -2,7 +2,7 @@ MDLINT ?= npx -y markdownlint-cli2
 NIXIE ?= nixie
 MDFORMAT_ALL ?= mdformat-all
 export PATH := $(HOME)/.local/bin:$(HOME)/.bun/bin:$(PATH)
-UV ?= $(shell command -v uv 2>/dev/null || printf '/home/leynos/.local/bin/uv')
+UV ?= $(shell command -v uv 2>/dev/null || printf '%s/.local/bin/uv' "$$HOME")
 TOOLS = $(MDFORMAT_ALL)
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
@@ -65,8 +65,9 @@ check-fmt: build ## Verify formatting
 	$(UV_ENV) $(UV) run ruff format --check
 	# mdformat-all doesn't currently do checking
 
-lint: build check-architecture ## Run linters
+lint: build ## Run linters
 	$(UV_ENV) $(UV) run ruff check
+	$(MAKE) check-architecture
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run python -m episodic.architecture

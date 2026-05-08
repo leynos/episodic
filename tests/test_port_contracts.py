@@ -1,7 +1,5 @@
 """Architecture tests for concrete adapter port conformance."""
 
-from __future__ import annotations
-
 import inspect
 import typing as typ
 

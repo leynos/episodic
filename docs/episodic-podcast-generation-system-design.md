@@ -12,7 +12,7 @@ Accepted decision records:
 - [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
 - [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
 - [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
-- [ADR 005: Hexagonal architecture enforcement](adr/adr-005-hexagonal-architecture-enforcement.md)
+- [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
 
 ## Overview
 
