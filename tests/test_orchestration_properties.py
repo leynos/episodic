@@ -27,6 +27,7 @@ from episodic.orchestration import (
     ShowNotesToolExecutor,
     StructuredGenerationPlanner,
     UnsupportedActionError,
+    WorkflowStepIdentity,
     build_generation_orchestration_graph,
     build_workflow_step_idempotency_key,
 )
@@ -93,51 +94,34 @@ _token_inputs_strategy: st.SearchStrategy[_PropTokenInputs] = st.builds(
     action_output=st.integers(min_value=0, max_value=10_000),
 )
 
-
-@given(
-    workflow_id=st.text(
-        min_size=1,
-        max_size=32,
-        alphabet=string.ascii_letters + string.digits + "-",
-    ),
-    workflow_type=st.text(
-        min_size=1,
-        max_size=32,
-        alphabet=string.ascii_letters + string.digits + "_",
-    ),
-    step_name=st.text(
-        min_size=1,
-        max_size=32,
-        alphabet=string.ascii_letters + string.digits + "_",
-    ),
-    action_id=st.text(
-        min_size=1,
-        max_size=32,
-        alphabet=string.ascii_letters + string.digits + "-",
-    ),
-    attempt=st.integers(min_value=0, max_value=100),
+_non_empty_text = st.text(
+    min_size=1,
+    max_size=32,
+    alphabet=string.ascii_letters + string.digits + "-_",
 )
+
+step_identity_strategy = st.builds(
+    WorkflowStepIdentity,
+    workflow_id=_non_empty_text,
+    workflow_type=_non_empty_text,
+    step_name=_non_empty_text,
+    action_id=_non_empty_text,
+)
+
+
+@given(step=step_identity_strategy, attempt=st.integers(min_value=0))
 @settings(max_examples=50)
 def test_step_idempotency_keys_are_deterministic(
-    workflow_id: str,
-    workflow_type: str,
-    step_name: str,
-    action_id: str,
+    step: WorkflowStepIdentity,
     attempt: int,
 ) -> None:
     """Property test: identical workflow step inputs produce identical keys."""
     first = build_workflow_step_idempotency_key(
-        workflow_id=workflow_id,
-        workflow_type=workflow_type,
-        step_name=step_name,
-        action_id=action_id,
+        step,
         attempt=attempt,
     )
     second = build_workflow_step_idempotency_key(
-        workflow_id=workflow_id,
-        workflow_type=workflow_type,
-        step_name=step_name,
-        action_id=action_id,
+        step,
         attempt=attempt,
     )
     assert second == first

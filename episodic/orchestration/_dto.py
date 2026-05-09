@@ -471,12 +471,28 @@ class ResumeWorkflowCommand:
             raise TypeError(msg)
 
 
-def build_workflow_step_idempotency_key(  # noqa: PLR0913
+@dc.dataclass(frozen=True, slots=True)
+class WorkflowStepIdentity:
+    """Stable identity fields for one resumable workflow step."""
+
+    workflow_id: str
+    workflow_type: str
+    step_name: str
+    action_id: str
+
+    def __post_init__(self) -> None:
+        """Normalise identity fields eagerly."""
+        for field_name in ("workflow_id", "workflow_type", "step_name", "action_id"):
+            object.__setattr__(
+                self,
+                field_name,
+                _normalize_non_empty_text(getattr(self, field_name), field_name),
+            )
+
+
+def build_workflow_step_idempotency_key(
+    step: WorkflowStepIdentity,
     *,
-    workflow_id: str,
-    workflow_type: str,
-    step_name: str,
-    action_id: str,
     attempt: int = 0,
 ) -> str:
     """Build the deterministic idempotency key for a suspendable workflow step."""
@@ -484,10 +500,10 @@ def build_workflow_step_idempotency_key(  # noqa: PLR0913
         msg = "attempt must be greater than or equal to zero."
         raise ValueError(msg)
     parts = (
-        _normalize_non_empty_text(workflow_id, "workflow_id"),
-        _normalize_non_empty_text(workflow_type, "workflow_type"),
-        _normalize_non_empty_text(step_name, "step_name"),
-        _normalize_non_empty_text(action_id, "action_id"),
+        step.workflow_id,
+        step.workflow_type,
+        step.step_name,
+        step.action_id,
         str(attempt),
     )
     return ":".join(parts)

@@ -23,6 +23,7 @@ from episodic.orchestration.generation import (
     ToolExecutorPort,
     UnsupportedActionError,
     WorkflowCheckpoint,
+    WorkflowStepIdentity,
     build_generation_result,
     build_workflow_step_idempotency_key,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "ToolExecutorPort",
     "UnsupportedActionError",
     "WorkflowCheckpoint",
+    "WorkflowStepIdentity",
     "build_generation_orchestration_graph",
     "build_generation_result",
     "build_workflow_step_idempotency_key",

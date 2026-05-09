@@ -21,6 +21,7 @@ from ._dto import (
     ResumeWorkflowCommand,
     SuspendedWorkflowResult,
     WorkflowCheckpoint,
+    WorkflowStepIdentity,
     _coerce_action_kind,
     _coerce_action_kinds,
     _coerce_model_tier,
@@ -65,6 +66,7 @@ __all__ = [
     "ToolExecutorPort",
     "UnsupportedActionError",
     "WorkflowCheckpoint",
+    "WorkflowStepIdentity",
     "build_generation_result",
     "build_workflow_step_idempotency_key",
 ]

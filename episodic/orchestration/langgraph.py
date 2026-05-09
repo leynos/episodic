@@ -308,10 +308,12 @@ async def _suspend_execute_node(
     action = planner_result.plan.steps[0]
     workflow_id = request.correlation_id
     idempotency_key = dto.build_workflow_step_idempotency_key(
-        workflow_id=workflow_id,
-        workflow_type=workflow_type,
-        step_name="execute",
-        action_id=action.action_id,
+        dto.WorkflowStepIdentity(
+            workflow_id=workflow_id,
+            workflow_type=workflow_type,
+            step_name="execute",
+            action_id=action.action_id,
+        )
     )
     existing = await checkpoint_port.get_by_idempotency_key(idempotency_key)
     if existing is None:
