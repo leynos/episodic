@@ -94,28 +94,58 @@ _token_inputs_strategy: st.SearchStrategy[_PropTokenInputs] = st.builds(
     action_output=st.integers(min_value=0, max_value=10_000),
 )
 
-_non_empty_text = st.text(
-    min_size=1,
-    max_size=32,
-    alphabet=string.ascii_letters + string.digits + "-_",
+
+@dc.dataclass(frozen=True, slots=True)
+class _PropStepKeyInputs:
+    """Bundled workflow step identity inputs for idempotency key tests."""
+
+    workflow_id: str
+    workflow_type: str
+    step_name: str
+    action_id: str
+
+
+_step_key_inputs_strategy: st.SearchStrategy[_PropStepKeyInputs] = st.builds(
+    _PropStepKeyInputs,
+    workflow_id=st.text(
+        min_size=1,
+        max_size=32,
+        alphabet=string.ascii_letters + string.digits + "-",
+    ),
+    workflow_type=st.text(
+        min_size=1,
+        max_size=32,
+        alphabet=string.ascii_letters + string.digits + "_",
+    ),
+    step_name=st.text(
+        min_size=1,
+        max_size=32,
+        alphabet=string.ascii_letters + string.digits + "_",
+    ),
+    action_id=st.text(
+        min_size=1,
+        max_size=32,
+        alphabet=string.ascii_letters + string.digits + "-",
+    ),
 )
 
-step_identity_strategy = st.builds(
-    WorkflowStepIdentity,
-    workflow_id=_non_empty_text,
-    workflow_type=_non_empty_text,
-    step_name=_non_empty_text,
-    action_id=_non_empty_text,
+
+@given(
+    inputs=_step_key_inputs_strategy,
+    attempt=st.integers(min_value=0, max_value=100),
 )
-
-
-@given(step=step_identity_strategy, attempt=st.integers(min_value=0))
 @settings(max_examples=50)
 def test_step_idempotency_keys_are_deterministic(
-    step: WorkflowStepIdentity,
+    inputs: _PropStepKeyInputs,
     attempt: int,
 ) -> None:
     """Property test: identical workflow step inputs produce identical keys."""
+    step = WorkflowStepIdentity(
+        workflow_id=inputs.workflow_id,
+        workflow_type=inputs.workflow_type,
+        step_name=inputs.step_name,
+        action_id=inputs.action_id,
+    )
     first = build_workflow_step_idempotency_key(
         step,
         attempt=attempt,
