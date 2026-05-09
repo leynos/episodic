@@ -86,38 +86,40 @@ def _application_group() -> ModuleGroup:
     )
 
 
+def _make_adapter_group(
+    name: str,
+    module_prefixes: tuple[str, ...],
+) -> ModuleGroup:
+    """Return an adapter ModuleGroup allowing domain_ports, application, and self."""
+    return ModuleGroup(
+        name=name,
+        module_prefixes=module_prefixes,
+        allowed_groups=frozenset({"domain_ports", "application", name}),
+    )
+
+
 def _inbound_adapter_group() -> ModuleGroup:
     """Return the inbound-adapter ModuleGroup."""
-    return ModuleGroup(
-        name="inbound_adapter",
-        module_prefixes=(
+    return _make_adapter_group(
+        "inbound_adapter",
+        (
             "episodic.api",
             "episodic.worker.tasks",
             "episodic.worker.topology",
         ),
-        allowed_groups=frozenset({
-            "domain_ports",
-            "application",
-            "inbound_adapter",
-        }),
     )
 
 
 def _outbound_adapter_group() -> ModuleGroup:
     """Return the outbound-adapter ModuleGroup."""
-    return ModuleGroup(
-        name="outbound_adapter",
-        module_prefixes=(
+    return _make_adapter_group(
+        "outbound_adapter",
+        (
             "episodic.canonical.adapters",
             "episodic.canonical.storage",
             "episodic.llm.openai_adapter",
             "episodic.llm.openai_client",
         ),
-        allowed_groups=frozenset({
-            "domain_ports",
-            "application",
-            "outbound_adapter",
-        }),
     )
 
 
