@@ -49,13 +49,14 @@ def _reexports_from_import_node(
     node: ast.ImportFrom,
     imported_module: str,
     ctx: _ReexportScanContext,
+    seen_modules: frozenset[str] | None = None,
 ) -> dict[str, str]:
     """Return the re-export mapping contributed by a single ``from … import`` node."""
     reexports: dict[str, str] = {}
     for alias in node.names:
         if alias.name == "*":
             for exported_name, origin in _exported_symbols_from_module(
-                ctx.root, ctx.package, imported_module
+                ctx.root, ctx.package, imported_module, seen_modules
             ).items():
                 reexports[f"{ctx.module_name}.{exported_name}"] = origin
             continue
@@ -74,16 +75,29 @@ def _exported_names_from_module(
 
 
 def _exported_symbols_from_module(
-    root: Path, package: str, module_name: str
+    root: Path,
+    package: str,
+    module_name: str,
+    seen_modules: frozenset[str] | None = None,
 ) -> dict[str, str]:
     """Return exported symbol names mapped to their origin modules."""
+    if seen_modules is None:
+        seen_modules = frozenset()
+    if module_name in seen_modules:
+        return {}
+    seen_modules |= {module_name}
+
     source_path = _source_path_for_module(root, package, module_name)
     if source_path is None:
         return {}
-    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
-    public_symbols = _fallback_public_symbols_from_tree(
-        tree, root, package, module_name
+    ctx = _ReexportScanContext(
+        root=root,
+        source_path=source_path,
+        package=package,
+        module_name=module_name,
     )
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+    public_symbols = _fallback_public_symbols_from_tree(tree, ctx, seen_modules)
     explicit_exports = _explicit_all_exports(tree)
     if explicit_exports is not None:
         return {
@@ -159,24 +173,31 @@ def _string_sequence_values(node: ast.AST | None) -> tuple[str, ...] | None:
 
 
 def _fallback_public_symbols_from_tree(
-    tree: ast.AST, root: Path, package: str, module_name: str
+    tree: ast.AST,
+    ctx: _ReexportScanContext,
+    seen_modules: frozenset[str] | None = None,
 ) -> dict[str, str]:
     """Return public symbols, expanding module-level star imports."""
-    public_symbols = _public_symbols_from_tree(tree, root, package, module_name)
     if not isinstance(tree, ast.Module):
-        return public_symbols
-    source_path = _source_path_for_module(root, package, module_name)
-    if source_path is None:
-        return public_symbols
+        return {}
+
+    public_symbols: dict[str, str] = {}
     for node in tree.body:
         if isinstance(node, ast.ImportFrom) and _has_star_alias(node):
             imported_module = _resolve_import_from(
-                node, source_path, package, module_name
+                node, ctx.source_path, ctx.package, ctx.module_name
             )
             if imported_module is not None:
                 public_symbols.update(
-                    _exported_symbols_from_module(root, package, imported_module)
+                    _exported_symbols_from_module(
+                        ctx.root, ctx.package, imported_module, seen_modules
+                    )
                 )
+        public_symbols.update(
+            _public_symbols_from_node(
+                node, ctx.source_path, ctx.package, ctx.module_name
+            )
+        )
     return public_symbols
 
 
@@ -301,7 +322,11 @@ def _collect_reexports_from_tree(
             )
         ) is None:
             continue
-        reexports.update(_reexports_from_import_node(node, imported_module, ctx))
+        reexports.update(
+            _reexports_from_import_node(
+                node, imported_module, ctx, frozenset({ctx.module_name})
+            )
+        )
     return reexports
 
 
