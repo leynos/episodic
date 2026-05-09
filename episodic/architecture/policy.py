@@ -136,6 +136,20 @@ def default_policy() -> ArchitecturePolicy:
     )
 
 
+def _make_fixture_group(
+    package: str,
+    name: str,
+    suffix: str,
+    allowed_groups: frozenset[str],
+) -> ModuleGroup:
+    """Return one fixture ModuleGroup for a package suffix."""
+    return ModuleGroup(
+        name=name,
+        module_prefixes=(f"{package}.{suffix}",),
+        allowed_groups=allowed_groups,
+    )
+
+
 def fixture_policy(package: str) -> ArchitecturePolicy:
     """Return the generic fixture policy used by behavioural tests."""
     all_groups = frozenset({
@@ -147,34 +161,39 @@ def fixture_policy(package: str) -> ArchitecturePolicy:
     })
     return ArchitecturePolicy(
         groups=(
-            ModuleGroup(
-                name="composition_root",
-                module_prefixes=(f"{package}.runtime",),
-                allowed_groups=all_groups,
+            _make_fixture_group(
+                package,
+                "composition_root",
+                "runtime",
+                all_groups,
             ),
-            ModuleGroup(
-                name="domain",
-                module_prefixes=(f"{package}.domain",),
-                allowed_groups=frozenset({"domain"}),
+            _make_fixture_group(
+                package,
+                "domain",
+                "domain",
+                frozenset({"domain"}),
             ),
-            ModuleGroup(
-                name="application",
-                module_prefixes=(f"{package}.service",),
-                allowed_groups=frozenset({"domain", "application"}),
+            _make_fixture_group(
+                package,
+                "application",
+                "service",
+                frozenset({"domain", "application"}),
             ),
-            ModuleGroup(
-                name="inbound_adapter",
-                module_prefixes=(f"{package}.api",),
-                allowed_groups=frozenset({
+            _make_fixture_group(
+                package,
+                "inbound_adapter",
+                "api",
+                frozenset({
                     "domain",
                     "application",
                     "inbound_adapter",
                 }),
             ),
-            ModuleGroup(
-                name="outbound_adapter",
-                module_prefixes=(f"{package}.storage",),
-                allowed_groups=frozenset({
+            _make_fixture_group(
+                package,
+                "outbound_adapter",
+                "storage",
+                frozenset({
                     "domain",
                     "application",
                     "outbound_adapter",

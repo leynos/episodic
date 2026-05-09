@@ -84,7 +84,8 @@ def _exported_symbols_from_module(
     public_symbols = _fallback_public_symbols_from_tree(
         tree, root, package, module_name
     )
-    if explicit_exports := _explicit_all_exports(tree):
+    explicit_exports = _explicit_all_exports(tree)
+    if explicit_exports is not None:
         return {
             exported_name: public_symbols.get(
                 exported_name, f"{module_name}.{exported_name}"
@@ -117,14 +118,14 @@ def _source_path_for_module(root: Path, package: str, module_name: str) -> Path 
     return None
 
 
-def _explicit_all_exports(tree: ast.AST) -> tuple[str, ...]:
+def _explicit_all_exports(tree: ast.AST) -> tuple[str, ...] | None:
     """Return literal string exports assigned to ``__all__``."""
     for node in tree.body if isinstance(tree, ast.Module) else ():
-        if _is_all_assign(node):
-            return _string_sequence_values(node.value)
-        if _is_all_ann_assign(node):
-            return _string_sequence_values(node.value)
-    return ()
+        if _is_all_assign(node) or _is_all_ann_assign(node):
+            values = _string_sequence_values(node.value)
+            if values is not None:
+                return values
+    return None
 
 
 def _is_all_assign(node: ast.stmt) -> typ.TypeIs[ast.Assign]:
@@ -145,16 +146,16 @@ def _is_all_name(node: ast.AST) -> typ.TypeIs[ast.Name]:
     return isinstance(node, ast.Name) and node.id == "__all__"
 
 
-def _string_sequence_values(node: ast.AST | None) -> tuple[str, ...]:
+def _string_sequence_values(node: ast.AST | None) -> tuple[str, ...] | None:
     """Return literal string values from a list or tuple node."""
     if not isinstance(node, ast.List | ast.Tuple):
-        return ()
+        return None
     values = tuple(
         element.value
         for element in node.elts
         if isinstance(element, ast.Constant) and isinstance(element.value, str)
     )
-    return values if len(values) == len(node.elts) else ()
+    return values if len(values) == len(node.elts) else None
 
 
 def _fallback_public_symbols_from_tree(
@@ -209,6 +210,57 @@ def _public_names_from_node(node: ast.stmt) -> set[str]:
     return set(_public_symbols_from_node(node, None, "", ""))
 
 
+def _public_from_class_or_func(
+    node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
+    module_name: str,
+) -> dict[str, str]:
+    """Return the public symbol bound by a class or function definition."""
+    return {node.name: f"{module_name}.{node.name}"}
+
+
+def _public_from_assign(node: ast.Assign, module_name: str) -> dict[str, str]:
+    """Return public symbols bound by a simple assignment."""
+    return {
+        target.id: f"{module_name}.{target.id}"
+        for target in node.targets
+        if isinstance(target, ast.Name) and target.id != "__all__"
+    }
+
+
+def _public_from_annassign(node: ast.AnnAssign, module_name: str) -> dict[str, str]:
+    """Return the public symbol bound by an annotated assignment."""
+    if isinstance(node.target, ast.Name) and node.target.id != "__all__":
+        return {node.target.id: f"{module_name}.{node.target.id}"}
+    return {}
+
+
+def _public_from_import(node: ast.Import) -> dict[str, str]:
+    """Return public symbols bound by a bare import."""
+    return {
+        alias.asname or alias.name.split(".", maxsplit=1)[0]: alias.name
+        for alias in node.names
+    }
+
+
+def _public_from_importfrom(
+    node: ast.ImportFrom,
+    source_path: Path | None,
+    package: str,
+    module_name: str,
+) -> dict[str, str]:
+    """Return public symbols bound by an import-from statement."""
+    if source_path is None:
+        return {}
+    imported_module = _resolve_import_from(node, source_path, package, module_name)
+    if imported_module is None:
+        return {}
+    return {
+        alias.asname or alias.name: f"{imported_module}.{alias.name}"
+        for alias in node.names
+        if alias.name != "*"
+    }
+
+
 def _public_symbols_from_node(
     node: ast.stmt,
     source_path: Path | None,
@@ -216,32 +268,17 @@ def _public_symbols_from_node(
     module_name: str,
 ) -> dict[str, str]:
     """Return public symbols bound by one module-level statement."""
-    public_symbols: dict[str, str] = {}
     if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
-        public_symbols = {node.name: f"{module_name}.{node.name}"}
-    elif isinstance(node, ast.Assign):
-        public_symbols = {
-            target.id: f"{module_name}.{target.id}"
-            for target in node.targets
-            if isinstance(target, ast.Name) and target.id != "__all__"
-        }
-    elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-        if node.target.id != "__all__":
-            public_symbols = {node.target.id: f"{module_name}.{node.target.id}"}
-    elif isinstance(node, ast.Import):
-        public_symbols = {
-            alias.asname or alias.name.split(".", maxsplit=1)[0]: alias.name
-            for alias in node.names
-        }
-    elif isinstance(node, ast.ImportFrom) and source_path is not None:
-        imported_module = _resolve_import_from(node, source_path, package, module_name)
-        if imported_module is not None:
-            public_symbols = {
-                alias.asname or alias.name: f"{imported_module}.{alias.name}"
-                for alias in node.names
-                if alias.name != "*"
-            }
-    return public_symbols
+        return _public_from_class_or_func(node, module_name)
+    if isinstance(node, ast.Assign):
+        return _public_from_assign(node, module_name)
+    if isinstance(node, ast.AnnAssign):
+        return _public_from_annassign(node, module_name)
+    if isinstance(node, ast.Import):
+        return _public_from_import(node)
+    if isinstance(node, ast.ImportFrom):
+        return _public_from_importfrom(node, source_path, package, module_name)
+    return {}
 
 
 def _has_star_alias(node: ast.ImportFrom) -> bool:
@@ -255,7 +292,7 @@ def _collect_reexports_from_tree(
 ) -> dict[str, str]:
     """Collect re-export mappings from one parsed ``__init__`` tree."""
     reexports: dict[str, str] = {}
-    for node in ast.walk(tree):
+    for node in tree.body if isinstance(tree, ast.Module) else ():
         if not isinstance(node, ast.ImportFrom):
             continue
         if (
