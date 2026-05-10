@@ -79,3 +79,30 @@ class InMemoryCheckpointStore:
                 idempotency_key=stored.idempotency_key,
             )
             return stored
+
+    async def mark_resumed(self, checkpoint_id: str) -> WorkflowCheckpoint:
+        """Mark a stored checkpoint as resumed and return the updated record."""
+        async with self._lock:
+            existing = self._by_id.get(checkpoint_id)
+            if existing is None:
+                msg = f"unknown checkpoint: {checkpoint_id}"
+                raise ValueError(msg)
+            resumed = WorkflowCheckpoint(
+                checkpoint_id=existing.checkpoint_id,
+                workflow_id=existing.workflow_id,
+                workflow_type=existing.workflow_type,
+                step_name=existing.step_name,
+                idempotency_key=existing.idempotency_key,
+                payload=existing.payload,
+                status="resumed",
+                created_at=existing.created_at,
+                updated_at=self.time_provider(),
+            )
+            self._by_id[checkpoint_id] = resumed
+            _log_event(
+                "debug",
+                "checkpoint_store.in_memory.mark_resumed",
+                checkpoint_id=resumed.checkpoint_id,
+                idempotency_key=resumed.idempotency_key,
+            )
+            return resumed

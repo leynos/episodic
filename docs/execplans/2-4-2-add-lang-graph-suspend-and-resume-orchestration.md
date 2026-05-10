@@ -67,8 +67,8 @@ Success is observable in these behaviours:
   idempotency-key and state-transition invariants.
 - Update `docs/episodic-podcast-generation-system-design.md`,
   `docs/users-guide.md`, and `docs/developers-guide.md` for the implemented
-  behaviour. Add or update an ADR in `docs/adr/` for the durable design
-  decision if the existing ADR does not already cover it.
+  behaviour. Add or update an Architecture Decision Record (ADR) in `docs/adr/`
+  for the durable design decision if the existing ADR does not already cover it.
 - Do not mark `docs/roadmap.md` item `2.4.2` done until the implementation,
   documentation, and validation gates all pass.
 - Run validation commands sequentially, not in parallel:
@@ -189,9 +189,9 @@ Success is observable in these behaviours:
   `docs/adr/adr-007-durable-generation-checkpoints.md`.
 - [x] Stage F: update design, user, developer, and ADR documentation.
 - [x] (2026-05-08 01:27Z) Stage G: final validation passed after marking
-  roadmap item `2.4.2` done: `make check-fmt`, `make typecheck`,
-  `make lint`, `make test`, `make markdownlint`, and `make nixie`. `make test`
-  reported `446 passed, 3 skipped`.
+  roadmap item `2.4.2` done: `make check-fmt`, `make typecheck`, `make lint`,
+  `make test`, `make markdownlint`, and `make nixie`. `make test` reported
+  `446 passed, 3 skipped`.
 - [x] (2026-05-08 01:27Z) Formatting note: `make fmt` still reports the
   repository-wide legacy MD013 formatter issue in unrelated documents after
   leaving Python files unchanged. The explicit required gates pass.
@@ -402,24 +402,29 @@ Add ports to `episodic/orchestration/_protocols.py`:
 
 ```python
 class CheckpointPort(typ.Protocol):
-    async def reserve_or_get(
-        self,
-        checkpoint: WorkflowCheckpoint,
-    ) -> WorkflowCheckpoint:
-        """Persist a checkpoint or return the existing idempotent record."""
-
     async def get(
         self,
         checkpoint_id: str,
     ) -> WorkflowCheckpoint | None:
         """Load a checkpoint by identifier."""
 
+    async def get_by_idempotency_key(
+        self,
+        idempotency_key: str,
+    ) -> WorkflowCheckpoint | None:
+        """Load a checkpoint by workflow-step idempotency key."""
+
+    async def save(
+        self,
+        checkpoint: WorkflowCheckpoint,
+    ) -> WorkflowCheckpoint:
+        """Persist a checkpoint or return the existing idempotent record."""
+
     async def mark_resumed(
         self,
         checkpoint_id: str,
-        resume_payload: dict[str, object],
     ) -> WorkflowCheckpoint:
-        """Record the payload that resumed a checkpoint."""
+        """Mark a checkpoint as resumed."""
 ```
 
 ```python
@@ -631,24 +636,29 @@ The implementation must leave these interfaces available to application code:
 
 ```python
 class CheckpointPort(typ.Protocol):
-    async def reserve_or_get(
-        self,
-        checkpoint: WorkflowCheckpoint,
-    ) -> WorkflowCheckpoint:
-        """Persist a checkpoint or return the existing idempotent record."""
-
     async def get(
         self,
         checkpoint_id: str,
     ) -> WorkflowCheckpoint | None:
         """Load a checkpoint by identifier."""
 
+    async def get_by_idempotency_key(
+        self,
+        idempotency_key: str,
+    ) -> WorkflowCheckpoint | None:
+        """Load a checkpoint by workflow-step idempotency key."""
+
+    async def save(
+        self,
+        checkpoint: WorkflowCheckpoint,
+    ) -> WorkflowCheckpoint:
+        """Persist a checkpoint or return the existing idempotent record."""
+
     async def mark_resumed(
         self,
         checkpoint_id: str,
-        resume_payload: dict[str, object],
     ) -> WorkflowCheckpoint:
-        """Record the payload that resumed a checkpoint."""
+        """Mark a checkpoint as resumed."""
 ```
 
 ```python
@@ -677,9 +687,20 @@ implementation sequence, but it gives the next implementer the exact branch
 gate status and a known documentation tooling caveat.
 
 Revision note 2026-05-10: Follow-up review fixes added richer suspend/resume
-module documentation, documented `resume_generation_orchestration` error
-paths, injected the in-memory checkpoint clock, serialised in-memory
-checkpoint saves with an `asyncio.Lock`, and changed the SQLAlchemy checkpoint
-adapter to insert first and query only after duplicate-key conflicts. Added
-missing unknown-checkpoint, concurrent in-memory save, checkpoint payload
-property, and checkpoint payload snapshot coverage.
+module documentation, documented `resume_generation_orchestration` error paths,
+injected the in-memory checkpoint clock, serialised in-memory checkpoint saves
+with an `asyncio.Lock`, and changed the SQLAlchemy checkpoint adapter to insert
+first and query only after duplicate-key conflicts. Added missing
+unknown-checkpoint, concurrent in-memory save, checkpoint payload property, and
+checkpoint payload snapshot coverage.
+
+Revision note 2026-05-10: Code review follow-up made checkpoint planner payload
+deserialisation symmetric for optional planner usage, added the explicit
+`CheckpointPort.mark_resumed()` status transition after successful resume,
+fixed the SQLAlchemy checkpoint store runtime annotation, and covered negative
+idempotency attempts plus SQL not-found checkpoint lookups.
+
+Revision note 2026-05-10: Validation for the code review follow-up passed with
+`make check-fmt`, `make typecheck`, `make lint`, `make markdownlint`,
+`make nixie`, and `make test`. The full test suite reported 456 passed and
+3 skipped tests.

@@ -224,6 +224,9 @@ class TestGenerationOrchestrationGraph:
         assert result.total_usage.total_tokens == 38
         assert result.action_results == (_action_result(),)
         assert resume_port.calls == [command]
+        checkpoint = await checkpoint_store.get(command.checkpoint_id)
+        assert checkpoint is not None
+        assert checkpoint.status == "resumed"
 
     @pytest.mark.asyncio
     async def test_resume_generation_orchestration_raises_on_missing_checkpoint(

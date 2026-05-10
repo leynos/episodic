@@ -52,39 +52,63 @@ def _usage_to_payload(usage: LLMUsage | None) -> dict[str, int] | None:
     }
 
 
-def _as_object_payload(payload: object, field_name: str) -> dict[str, object]:
+def _as_object_payload(payload: object, context: str) -> dict[str, object]:
     """Return payload as a string-keyed object."""
     if not isinstance(payload, dict):
-        msg = f"checkpoint {field_name} payload must be an object."
+        msg = f"checkpoint {context} payload must be an object."
         raise TypeError(msg)
     return typ.cast("dict[str, object]", payload)
 
 
-def _required_int(payload: dict[str, object], field_name: str) -> int:
+def _require_field[FieldT](
+    payload: dict[str, object],
+    field_name: str,
+    expected_type: type[FieldT],
+    *,
+    context: str,
+) -> FieldT:
+    """Return a required typed checkpoint payload field."""
+    try:
+        value = payload[field_name]
+    except KeyError as exc:
+        msg = f"checkpoint {context} missing required field: {field_name}"
+        raise KeyError(msg) from exc
+    if not isinstance(value, expected_type):
+        msg = (
+            f"checkpoint {context} field {field_name} must be a "
+            f"{expected_type.__name__}."
+        )
+        raise TypeError(msg)
+    return value
+
+
+def _required_int(
+    payload: dict[str, object],
+    field_name: str,
+    *,
+    context: str,
+) -> int:
     """Return an integer field from a checkpoint payload."""
-    value = payload[field_name]
-    if not isinstance(value, int):
-        msg = f"checkpoint {field_name} must be an integer."
-        raise TypeError(msg)
-    return value
+    return _require_field(payload, field_name, int, context=context)
 
 
-def _required_string(payload: dict[str, object], field_name: str) -> str:
+def _required_string(
+    payload: dict[str, object],
+    field_name: str,
+    *,
+    context: str,
+) -> str:
     """Return a string field from a checkpoint payload."""
-    value = payload[field_name]
-    if not isinstance(value, str):
-        msg = f"checkpoint {field_name} must be a string."
-        raise TypeError(msg)
-    return value
+    return _require_field(payload, field_name, str, context=context)
 
 
 def _usage_from_payload(payload: object) -> LLMUsage:
     """Return LLMUsage from a checkpoint payload."""
     usage_payload = _as_object_payload(payload, "usage")
     return LLMUsage(
-        input_tokens=_required_int(usage_payload, "input_tokens"),
-        output_tokens=_required_int(usage_payload, "output_tokens"),
-        total_tokens=_required_int(usage_payload, "total_tokens"),
+        input_tokens=_required_int(usage_payload, "input_tokens", context="usage"),
+        output_tokens=_required_int(usage_payload, "output_tokens", context="usage"),
+        total_tokens=_required_int(usage_payload, "total_tokens", context="usage"),
     )
 
 
@@ -115,21 +139,31 @@ def _plan_from_payload(payload: object) -> dto.ExecutionPlan:
         msg = "checkpoint plan steps must be a list."
         raise TypeError(msg)
     return dto.ExecutionPlan(
-        plan_version=_required_string(plan_payload, "plan_version"),
+        plan_version=_required_string(
+            plan_payload,
+            "plan_version",
+            context="plan",
+        ),
         selected_planning_model=_required_string(
             plan_payload,
             "selected_planning_model",
+            context="plan",
         ),
         selected_execution_model=_required_string(
             plan_payload,
             "selected_execution_model",
+            context="plan",
         ),
         steps=tuple(
             dto.PlannedAction(
-                action_id=_required_string(step, "action_id"),
-                action_kind=dto.ActionKind(_required_string(step, "action_kind")),
-                rationale=_required_string(step, "rationale"),
-                model_tier=dto.ModelTier(_required_string(step, "model_tier")),
+                action_id=_required_string(step, "action_id", context="plan step"),
+                action_kind=dto.ActionKind(
+                    _required_string(step, "action_kind", context="plan step")
+                ),
+                rationale=_required_string(step, "rationale", context="plan step"),
+                model_tier=dto.ModelTier(
+                    _required_string(step, "model_tier", context="plan step")
+                ),
                 required_inputs=tuple(
                     str(item)
                     for item in typ.cast(
@@ -159,13 +193,25 @@ def _planner_result_from_payload(payload: object) -> dto.PlannerResult:
     planner_payload = _as_object_payload(payload, "planner_result")
     return dto.PlannerResult(
         plan=_plan_from_payload(planner_payload["plan"]),
-        usage=_usage_from_payload(planner_payload["usage"]),
-        model=_required_string(planner_payload, "model"),
-        provider_response_id=_required_string(planner_payload, "provider_response_id"),
+        usage=(
+            None
+            if planner_payload.get("usage") is None
+            else _usage_from_payload(planner_payload["usage"])
+        ),
+        model=_required_string(planner_payload, "model", context="planner_result"),
+        provider_response_id=_required_string(
+            planner_payload,
+            "provider_response_id",
+            context="planner_result",
+        ),
         finish_reason=(
             None
             if planner_payload.get("finish_reason") is None
-            else _required_string(planner_payload, "finish_reason")
+            else _required_string(
+                planner_payload,
+                "finish_reason",
+                context="planner_result",
+            )
         ),
     )
 
@@ -186,11 +232,17 @@ def _action_result_from_payload(payload: object) -> dto.ActionExecutionResult:
     """Return an ActionExecutionResult from a checkpoint payload."""
     action_payload = _as_object_payload(payload, "action_result")
     return dto.ActionExecutionResult(
-        action_id=_required_string(action_payload, "action_id"),
-        action_kind=dto.ActionKind(_required_string(action_payload, "action_kind")),
-        model_tier=dto.ModelTier(_required_string(action_payload, "model_tier")),
-        model=_required_string(action_payload, "model"),
-        summary=_required_string(action_payload, "summary"),
+        action_id=_required_string(
+            action_payload, "action_id", context="action_result"
+        ),
+        action_kind=dto.ActionKind(
+            _required_string(action_payload, "action_kind", context="action_result")
+        ),
+        model_tier=dto.ModelTier(
+            _required_string(action_payload, "model_tier", context="action_result")
+        ),
+        model=_required_string(action_payload, "model", context="action_result"),
+        summary=_required_string(action_payload, "summary", context="action_result"),
         usage=(
             None
             if action_payload.get("usage") is None
@@ -294,6 +346,37 @@ async def _execute_node(
     return result
 
 
+def _build_execute_step_identity(
+    *,
+    request: dto.GenerationOrchestrationRequest,
+    action: dto.PlannedAction,
+    workflow_type: str,
+) -> dto.WorkflowStepIdentity:
+    """Return the idempotency identity for the execute workflow step."""
+    return dto.WorkflowStepIdentity(
+        workflow_id=request.correlation_id,
+        workflow_type=workflow_type,
+        step_name="execute",
+        action_id=action.action_id,
+    )
+
+
+def _build_checkpoint_payload(
+    *,
+    request: dto.GenerationOrchestrationRequest,
+    planner_result: dto.PlannerResult,
+) -> dict[str, object]:
+    """Return the persisted suspend payload for generation resume."""
+    return {
+        "request": {
+            "correlation_id": request.correlation_id,
+            "script_tei_xml": request.script_tei_xml,
+            "template_structure": request.template_structure,
+        },
+        "planner_result": _planner_result_to_payload(planner_result),
+    }
+
+
 async def _suspend_execute_node(
     state: GenerationGraphState,
     *,
@@ -314,23 +397,22 @@ async def _suspend_execute_node(
         raise ValueError(msg)
 
     action = planner_result.plan.steps[0]
-    workflow_id = request.correlation_id
+    identity = _build_execute_step_identity(
+        request=request,
+        action=action,
+        workflow_type=workflow_type,
+    )
     idempotency_key = dto.build_workflow_step_idempotency_key(
-        dto.WorkflowStepIdentity(
-            workflow_id=workflow_id,
-            workflow_type=workflow_type,
-            step_name="execute",
-            action_id=action.action_id,
-        )
+        identity,
     )
     _log_event(
         "debug",
         "generation_graph.suspend_execute_node.start",
         correlation_id=request.correlation_id,
-        workflow_id=workflow_id,
-        workflow_type=workflow_type,
-        step_name="execute",
-        action_id=action.action_id,
+        workflow_id=identity.workflow_id,
+        workflow_type=identity.workflow_type,
+        step_name=identity.step_name,
+        action_id=identity.action_id,
         idempotency_key=idempotency_key,
     )
     existing = await checkpoint_port.get_by_idempotency_key(idempotency_key)
@@ -339,18 +421,14 @@ async def _suspend_execute_node(
         existing = await checkpoint_port.save(
             dto.WorkflowCheckpoint(
                 checkpoint_id=str(uuid.uuid4()),
-                workflow_id=workflow_id,
-                workflow_type=workflow_type,
-                step_name="execute",
+                workflow_id=identity.workflow_id,
+                workflow_type=identity.workflow_type,
+                step_name=identity.step_name,
                 idempotency_key=idempotency_key,
-                payload={
-                    "request": {
-                        "correlation_id": request.correlation_id,
-                        "script_tei_xml": request.script_tei_xml,
-                        "template_structure": request.template_structure,
-                    },
-                    "planner_result": _planner_result_to_payload(planner_result),
-                },
+                payload=_build_checkpoint_payload(
+                    request=request,
+                    planner_result=planner_result,
+                ),
             )
         )
     _log_event(
@@ -402,11 +480,13 @@ async def resume_generation_orchestration(
     planner_result = _planner_result_from_payload(payload["planner_result"])
     action_result = await resume_port.resume(command)
     result = build_generation_result(planner_result, (action_result,))
+    resumed_checkpoint = await checkpoint_port.mark_resumed(checkpoint.checkpoint_id)
     _log_event(
         "debug",
         "generation_graph.resume.finish",
-        checkpoint_id=checkpoint.checkpoint_id,
-        idempotency_key=checkpoint.idempotency_key,
+        checkpoint_id=resumed_checkpoint.checkpoint_id,
+        idempotency_key=resumed_checkpoint.idempotency_key,
+        status=resumed_checkpoint.status,
     )
     return result
 
@@ -477,9 +557,9 @@ def build_generation_orchestration_graph(
         """Async entry point for the execute graph node."""
         return await _execute_node(state, tool_executor=tool_executor)
 
-    graph.add_node("plan", _run_plan_node)
     if checkpoint_port is None:
-        graph.add_node("execute", _run_execute_node)
+        execute_node = _run_execute_node
+        execute_target = "finish"
     else:
 
         async def _run_suspend_execute_node(
@@ -491,13 +571,14 @@ def build_generation_orchestration_graph(
                 checkpoint_port=checkpoint_port,
             )
 
-        graph.add_node("execute", _run_suspend_execute_node)
+        execute_node = _run_suspend_execute_node
+        execute_target = END
+
+    graph.add_node("plan", _run_plan_node)
+    graph.add_node("execute", execute_node)
     graph.add_node("finish", _finish_node)
     graph.add_edge(START, "plan")
     graph.add_edge("plan", "execute")
-    if checkpoint_port is None:
-        graph.add_edge("execute", "finish")
-    else:
-        graph.add_edge("execute", END)
+    graph.add_edge("execute", execute_target)
     graph.add_edge("finish", END)
     return graph.compile()

@@ -341,7 +341,7 @@ class PlannerResult:
     """Planner output plus normalized provider metadata."""
 
     plan: ExecutionPlan
-    usage: LLMUsage
+    usage: LLMUsage | None
     model: str
     provider_response_id: str
     finish_reason: str | None
@@ -394,7 +394,7 @@ class GenerationOrchestrationResult:
 
     plan: ExecutionPlan
     action_results: tuple[ActionExecutionResult, ...]
-    planner_usage: LLMUsage
+    planner_usage: LLMUsage | None
     total_usage: LLMUsage
 
     def __post_init__(self) -> None:

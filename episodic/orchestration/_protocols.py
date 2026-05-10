@@ -59,6 +59,9 @@ class CheckpointPort(typ.Protocol):
     async def save(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
         """Persist a checkpoint or return the existing record for its key."""
 
+    async def mark_resumed(self, checkpoint_id: str) -> WorkflowCheckpoint:
+        """Mark a checkpoint as resumed and return the updated record."""
+
 
 class TaskResumePort(typ.Protocol):
     """Application-level port for resuming suspended workflow tasks."""

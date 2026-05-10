@@ -8,6 +8,8 @@ to make repeated suspend attempts converge on the first persisted checkpoint.
 It does not import graph code, LLM adapters, or Celery concerns.
 """
 
+from __future__ import annotations
+
 import typing as typ
 import uuid
 
@@ -88,4 +90,18 @@ class SqlAlchemyWorkflowCheckpointStore:
             if existing is not None:
                 return existing
             raise
+        return _map_checkpoint(record)
+
+    async def mark_resumed(self, checkpoint_id: str) -> WorkflowCheckpoint:
+        """Mark a checkpoint as resumed and return the updated record."""
+        record = await self._session.get(
+            WorkflowCheckpointRecord,
+            uuid.UUID(checkpoint_id),
+        )
+        if record is None:
+            msg = f"unknown checkpoint: {checkpoint_id}"
+            raise ValueError(msg)
+        record.status = "resumed"
+        await self._session.flush()
+        await self._session.refresh(record)
         return _map_checkpoint(record)

@@ -1,5 +1,4 @@
 # ADR-007: Durable generation checkpoints
-
 ## Status
 
 Accepted
@@ -30,9 +29,12 @@ state from the checkpoint, and aggregates a `GenerationOrchestrationResult`.
 
 Idempotency keys are deterministic strings built from workflow id, workflow
 type, step name, action id, and retry attempt. The key fields are grouped in
-`WorkflowStepIdentity` so step identity validation stays explicit without
-long argument lists. `CheckpointPort.save(...)` preserves the first checkpoint
-recorded for a key and returns it to repeated callers.
+`WorkflowStepIdentity` so step identity validation stays explicit without long
+argument lists. `CheckpointPort.save(...)` preserves the first checkpoint
+recorded for a key and returns it to repeated callers. After a successful
+resume, `CheckpointPort.mark_resumed(...)` moves the checkpoint status from
+`suspended` to `resumed` so cleanup and monitoring code can distinguish active
+work from completed resume handoffs.
 
 The in-memory adapter serialises `save(...)` mutations with an `asyncio.Lock`
 and uses an injected clock. The durable SQLAlchemy adapter lets the database
@@ -60,5 +62,7 @@ hits the idempotency-key constraint.
 - Implementation — `episodic/orchestration/langgraph.py`,
   `episodic/orchestration/checkpoints.py`,
   `episodic/canonical/storage/workflow_checkpoints.py`
+
+# ADR-007: Durable generation checkpoints
 
 # ADR-007: Durable generation checkpoints

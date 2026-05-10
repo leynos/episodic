@@ -546,7 +546,9 @@ own repositories. Durable checkpoint writes rely on the database uniqueness
 constraint for idempotency and query the existing checkpoint only after a
 duplicate-key conflict. The in-memory checkpoint adapter models the same
 first-write-wins contract for tests with an `asyncio.Lock` and an injected
-clock, but remains unbounded and process-local.
+clock, but remains unbounded and process-local. Successful resume calls mark
+the stored checkpoint as `resumed` through `CheckpointPort` after the action
+result has been folded into the generation result.
 
 ```mermaid
 sequenceDiagram
@@ -596,6 +598,8 @@ sequenceDiagram
         ResumePort-->>Orchestrator: ActionExecutionResult
 
         Orchestrator->>Orchestrator: build_generation_result(PlannerResult, ActionExecutionResult)
+        Orchestrator->>Checkpoints: mark_resumed(checkpoint_id)
+        Checkpoints-->>Orchestrator: WorkflowCheckpoint
         Orchestrator-->>Client: GenerationOrchestrationResult
     end
 ```

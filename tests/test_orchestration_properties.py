@@ -170,7 +170,7 @@ _execution_plan_strategy = st.builds(
 _planner_result_strategy = st.builds(
     PlannerResult,
     plan=_execution_plan_strategy,
-    usage=_usage_strategy,
+    usage=st.one_of(st.none(), _usage_strategy),
     model=_prop_text,
     provider_response_id=_prop_text,
     finish_reason=st.one_of(st.none(), _prop_text),
@@ -185,6 +185,19 @@ _action_result_strategy = st.builds(
     summary=_prop_text,
     usage=st.one_of(st.none(), _usage_strategy),
 )
+
+
+def test_step_idempotency_key_negative_attempt_raises_value_error() -> None:
+    """Negative attempts should be rejected before building a step key."""
+    step = WorkflowStepIdentity(
+        workflow_id="workflow-id",
+        workflow_type="workflow-type",
+        step_name="step-name",
+        action_id="action-id",
+    )
+
+    with pytest.raises(ValueError, match="attempt must be greater than or equal"):
+        build_workflow_step_idempotency_key(step, attempt=-1)
 
 
 @given(
