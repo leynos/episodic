@@ -54,19 +54,39 @@ def prepare_request() -> ChronoBDDContext:
 @when("Chrono estimates the spoken runtime")
 def estimate_runtime(chrono_context: ChronoBDDContext) -> None:
     """Run Chrono over the local deterministic estimator."""
-    request = typ.cast("ChronoEvaluationRequest", chrono_context.request)
-    chrono_context.result = ChronoRuntimeEstimator().estimate(request)
+    assert chrono_context.request is not None, (
+        "Chrono request must be prepared before runtime estimation"
+    )
+    chrono_context.result = ChronoRuntimeEstimator().estimate(chrono_context.request)
 
 
 @then("Chrono returns estimated seconds and estimator metadata")
 def assert_result(chrono_context: ChronoBDDContext) -> None:
     """Assert the runtime estimate and metadata survive the behaviour path."""
-    result = typ.cast("ChronoRuntimeEstimate", chrono_context.result)
-    request = typ.cast("ChronoEvaluationRequest", chrono_context.request)
+    assert chrono_context.result is not None, (
+        "Chrono result must be available after runtime estimation"
+    )
+    assert chrono_context.request is not None, (
+        "Chrono request must be available for metadata checks"
+    )
+    result = chrono_context.result
+    request = chrono_context.request
 
-    assert result.estimated_seconds == 4
-    assert result.metadata.estimator_name == "chrono-naive-word-count"
-    assert result.metadata.estimator_version == "1"
-    assert result.metadata.spoken_word_count == 10
-    assert result.metadata.words_per_minute == 150
-    assert result.metadata.input_character_count == len(request.script_tei_xml)
+    assert result.estimated_seconds == 4, (
+        "Expected 10 spoken words at 150 WPM to round to 4 seconds"
+    )
+    assert result.metadata.estimator_name == "chrono-naive-word-count", (
+        "Estimator name must remain stable"
+    )
+    assert result.metadata.estimator_version == "1", (
+        "Estimator version must remain stable"
+    )
+    assert result.metadata.spoken_word_count == 10, (
+        "Spoken word count should match dialogue tokens"
+    )
+    assert result.metadata.words_per_minute == 150, (
+        "Default WPM metadata must be preserved"
+    )
+    assert result.metadata.input_character_count == len(request.script_tei_xml), (
+        "Input character count metadata must match the request payload length"
+    )
