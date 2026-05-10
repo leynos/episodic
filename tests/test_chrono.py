@@ -56,12 +56,12 @@ def test_chrono_config_rejects_non_positive_words_per_minute(
         ("estimator_version", "   "),
     ],
 )
-def test_chrono_metadata_validation(
+def test_chrono_metadata_rejects_invalid_field(
     field_name: str,
-    field_value: int | str,
+    field_value: object,
 ) -> None:
-    """Reject invalid metadata identity and numeric values."""
-    kwargs = {
+    """Reject invalid metadata field values at the contract boundary."""
+    kwargs: dict[str, object] = {
         "estimator_name": "chrono-naive-word-count",
         "estimator_version": "1",
         "input_character_count": 10,

@@ -53,8 +53,7 @@ def _extract_spoken_text(script_tei_xml: str) -> str:
         root = ElementTree.fromstring(script_tei_xml)  # noqa: S314
     except ElementTree.ParseError as exc:
         _log.warning(
-            "Malformed TEI XML, falling back to raw text: %s",
-            exc,
+            "Chrono: XML parse failed; falling back to plain-text word count",
             extra={"payload_prefix": script_tei_xml[:120], "error": str(exc)},
         )
         return script_tei_xml
@@ -157,10 +156,8 @@ class ChronoRuntimeEstimator:
         spoken_word_count = _count_spoken_words(spoken_text)
         if spoken_word_count == 0:
             _log.debug(
-                "Zero-word estimate produced for input_character_count=%s, "
-                "estimator=%s",
-                len(request.script_tei_xml),
-                self.config.estimator_name,
+                "Chrono: no spoken words found",
+                extra={"input_character_count": len(request.script_tei_xml)},
             )
         estimated_seconds = 0
         if spoken_word_count > 0:
