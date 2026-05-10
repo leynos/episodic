@@ -167,7 +167,7 @@ the required gates pass: `make check-fmt`, `make typecheck`, `make lint`, and
 - [x] (2026-05-08 20:35Z) Implemented `episodic.qa.chrono` and
   `episodic.qa.chrono_langgraph`, exported the Chrono public QA surface, and
   confirmed the focused Chrono suite passes with 18 tests.
-- [x] (2026-05-08 20:50Z) Updated the system design, users guide, developers
+- [x] (2026-05-08 20:50Z) Updated the system design, users' guide, developers'
   guide, and roadmap for the initial Chrono behaviour.
 - [x] (2026-05-08 21:10Z) Ran final gates. `make check-fmt`, `make typecheck`,
   `make lint`, `make test`, `make markdownlint`, and `make nixie` all passed.
