@@ -1,5 +1,7 @@
 """Unit tests for the Chrono spoken-runtime estimator."""
 
+import asyncio
+
 import pytest
 
 from episodic.qa.chrono import (
@@ -198,3 +200,51 @@ async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
 
     assert async_result.estimated_seconds == sync_result.estimated_seconds
     assert async_result.metadata == sync_result.metadata
+
+
+def test_chrono_estimator_falls_back_for_malformed_xml() -> None:
+    """Malformed XML must fall back to plain-text word counting."""
+    raw = "hello world this is not xml <<<"
+    request = ChronoEvaluationRequest(script_tei_xml=raw)
+    result = ChronoRuntimeEstimator().estimate(request)
+    assert result.metadata.spoken_word_count > 0, (
+        "fallback must count words from raw text; got spoken_word_count=0"
+    )
+
+
+@pytest.mark.parametrize(
+    ("tag", "content", "expected_words"),
+    [
+        ("ab", "one two three", 3),
+        ("seg", "four five", 2),
+        ("l", "six", 1),
+    ],
+)
+def test_chrono_estimator_counts_alternative_tei_elements(
+    tag: str,
+    content: str,
+    expected_words: int,
+) -> None:
+    """Chrono must extract spoken text from <ab>, <seg>, and <l> elements."""
+    xml = f"<TEI><text><body><{tag}>{content}</{tag}></body></text></TEI>"
+    result = ChronoRuntimeEstimator().estimate(
+        ChronoEvaluationRequest(script_tei_xml=xml)
+    )
+    assert result.metadata.spoken_word_count == expected_words, (
+        f"expected {expected_words} words from <{tag}> element, "
+        f"got {result.metadata.spoken_word_count}"
+    )
+
+
+def test_chrono_async_evaluate_returns_same_result_as_estimate() -> None:
+    """The async evaluate() adapter must return the same result as estimate()."""
+    request = ChronoEvaluationRequest(
+        script_tei_xml="<TEI><text><body><p>one two three</p></body></text></TEI>"
+    )
+    estimator = ChronoRuntimeEstimator()
+    sync_result = estimator.estimate(request)
+    async_result = asyncio.run(estimator.evaluate(request))
+    assert async_result == sync_result, (
+        "evaluate() must delegate to estimate() without mutation; "
+        f"sync={sync_result}, async={async_result}"
+    )

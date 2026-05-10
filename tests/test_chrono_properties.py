@@ -12,6 +12,7 @@ from episodic.qa.chrono import (
 
 _SIMPLE_WORDS = st.lists(
     st.from_regex(SPOKEN_WORD_REGEX, fullmatch=True),
+    min_size=1,
     max_size=50,
 )
 
