@@ -134,12 +134,13 @@ def _source_path_for_module(root: Path, package: str, module_name: str) -> Path 
 
 def _explicit_all_exports(tree: ast.AST) -> tuple[str, ...] | None:
     """Return literal string exports assigned to ``__all__``."""
-    for node in reversed(tree.body) if isinstance(tree, ast.Module) else ():
+    last_exports: tuple[str, ...] | None = None
+    for node in tree.body if isinstance(tree, ast.Module) else ():
         if _is_all_assign(node) or _is_all_ann_assign(node):
             values = _string_sequence_values(node.value)
             if values is not None:
-                return values
-    return None
+                last_exports = values
+    return last_exports
 
 
 def _is_all_assign(node: ast.stmt) -> typ.TypeIs[ast.Assign]:
