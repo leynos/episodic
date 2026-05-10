@@ -68,7 +68,6 @@ This guide will cover:
 - Persisting `guardrails` on series profiles and episode templates so
   generation requests carry stable editorial instructions as system prompts
 
-
 #### Show notes and chapter markers
 
 Show notes are the episode summaries and topic lists that appear alongside a
