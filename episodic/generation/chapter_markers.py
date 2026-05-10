@@ -178,7 +178,7 @@ def _require_non_empty_string(value: object, field_name: str) -> str:
         value,
         field_name,
         error_cls=ChapterMarkersResponseFormatError,
-    )
+    ).strip()
 
 
 def _require_optional_string(value: object, field_name: str) -> str | None:

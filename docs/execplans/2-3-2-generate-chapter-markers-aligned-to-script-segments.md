@@ -152,6 +152,10 @@ roadmap item 2.3.2 as done only after all quality gates pass.
   snapshots, and chapter-marker concurrency/cancellation coverage.
 - [x] (2026-05-10 00:00Z) Centralized shared TEI payload and response-shape
   validation primitives used by both show-notes and chapter-marker enrichment.
+- [x] (2026-05-10 00:00Z) Addressed inline review cleanups for contiguous ADR
+  footnote markup, machine-agnostic execplan steps, trimmed parsed chapter
+  titles, BDD runner usage, inline lint justifications, and focused
+  chapter-marker test modules under 400 lines.
 
 ## Surprises & discoveries
 
@@ -305,6 +309,13 @@ between show-notes and chapter-marker modules, so
 `episodic/generation/tei_payload.py` now owns mapping/list/string validation
 plus body block and div detection helpers.
 
+Inline follow-up review was verified against the current branch before
+editing. The users' guide configuration note and empty-result equality test
+were already present. Remaining work split the large chapter-marker test module
+into DTO, generator/parser, and TEI enrichment files; removed the private
+pytest-asyncio runner dependency from the chapter-marker BDD step; and kept the
+ADR ExecPlan footnote marker contiguous for GitHub rendering.
+
 The full gate sequence was then rerun on the segment-alignment follow-up tree.
 An initial `make test` run hit a transient async fixture timeout in
 `tests/test_profile_template_service.py::TestEpisodeTemplateService::test_update_episode_template_revision_conflict_raises`;
@@ -423,11 +434,7 @@ imperative commit message using the repository's commit-message rules.
 
 ## Concrete steps
 
-Work from the repository root:
-
-```plaintext
-<episodic repository root>
-```
+Work from the repository root of the active checkout.
 
 First confirm the branch is not the main branch:
 
@@ -435,11 +442,7 @@ First confirm the branch is not the main branch:
 git branch --show-current
 ```
 
-Expected output for this plan draft:
-
-```plaintext
-feat/chapter-marker-plan
-```
+Expected output: the current non-`main` feature branch name.
 
 Use Leta for code navigation when looking for definitions and references:
 

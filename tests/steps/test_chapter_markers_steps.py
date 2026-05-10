@@ -73,11 +73,10 @@ class _RecordingLLMPort:
 
 
 def _run_async_step(
-    runner: asyncio.Runner,
-    step_fn: cabc.Callable[[], cabc.Awaitable[None]],
+    step_fn: cabc.Callable[[], cabc.Coroutine[object, object, None]],
 ) -> None:
-    """Execute an async BDD step via the provided runner."""
-    runner.run(step_fn())
+    """Execute an async BDD step through the public asyncio runner API."""
+    asyncio.run(step_fn())
 
 
 @pytest.fixture
@@ -235,7 +234,7 @@ def _start_vidaimock_process(
     last_error: RuntimeError | None = None
     for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
         port = _find_free_port()
-        process = subprocess.Popen(  # noqa: S603
+        process = subprocess.Popen(  # noqa: S603 - fixed trusted local binary.
             [
                 vidaimock_path,
                 "--host",
@@ -304,7 +303,6 @@ def prepare_chapter_marker_request(
 
 @when("the chapter-marker generator processes the script")
 def run_chapter_marker_generation(
-    _function_scoped_runner: asyncio.Runner,
     chapter_markers_context: ChapterMarkersBDDContext,
 ) -> None:
     """Call the chapter-marker generator with a live LLM adapter."""
@@ -335,7 +333,7 @@ def run_chapter_marker_generation(
             async with recording_port.lock:
                 chapter_markers_context.request_payload = recording_port.requests[0]
 
-    _run_async_step(_function_scoped_runner, _generate_chapter_markers)
+    _run_async_step(_generate_chapter_markers)
 
 
 @then("the generator returns structured chapter markers")
