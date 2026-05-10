@@ -487,7 +487,7 @@ sequenceDiagram
     end
 ```
 
-_Figure: default weighting strategy executor-selection and dispatch sequence._
+_Figure 2: Default weighting strategy executor-selection and dispatch sequence._
 
 #### Execution patterns for long-running tasks
 
@@ -1167,7 +1167,7 @@ erDiagram
     EPISODES ||--o{ APPROVAL_EVENTS : records
 ```
 
-_Figure 7: Canonical content schema relationships._
+_Figure 3: Canonical content schema relationships._
 
 The diagram below details the series profile, episode template, and immutable
 revision-history tables used by the current profile-template management flows.
@@ -1222,7 +1222,7 @@ erDiagram
     EPISODE_TEMPLATES ||--o{ EPISODE_TEMPLATE_HISTORY : has_template_history
 ```
 
-_Figure 8: Series profile, episode template, and history-table relationships._
+_Figure 4: Series profile, episode template, and history-table relationships._
 
 ### Reusable reference-document model
 
@@ -1312,7 +1312,7 @@ erDiagram
     REFERENCE_DOCUMENT_REVISIONS ||--o{ SOURCE_DOCUMENTS : snapshot
 ```
 
-_Figure 9: Approved reusable reference material and profile schema._
+_Figure 5: Approved reusable reference material and profile schema._
 
 ### Reference-document glossary
 

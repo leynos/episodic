@@ -151,8 +151,9 @@ def _explicit_all_exports(tree: ast.AST) -> tuple[str, ...] | None:
     for node in tree.body if isinstance(tree, ast.Module) else ():
         if _is_all_assign(node) or _is_all_ann_assign(node):
             values = _string_sequence_values(node.value)
-            if values is not None:
-                last_exports = values
+            if values is None:
+                return None
+            last_exports = values
     return last_exports
 
 
