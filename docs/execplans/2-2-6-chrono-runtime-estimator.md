@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: COMPLETE
+Status: IN PROGRESS
 
 ## Purpose and big picture
 
@@ -16,8 +16,8 @@ evaluators it does not call a Large Language Model (LLM). The first
 implementation should use a deterministic, naive local heuristic and record
 enough metadata to compare later estimators against it.
 
-After this change, application code can pass a canonical Text Encoding
-Initiative (TEI) script to Chrono and receive a typed runtime estimate that
+After this change, application code can pass a valid canonical Text Encoding
+Initiative (TEI) P5 script to Chrono and receive a typed runtime estimate that
 includes:
 
 1. the predicted spoken duration;
@@ -25,20 +25,38 @@ includes:
 3. the estimator name and version; and
 4. local heuristic metadata, such as the words-per-minute setting.
 
-Success is observable when unit tests prove the heuristic is deterministic and
-well validated, property tests prove core invariants across generated inputs,
-pytest-bdd (behaviour-driven development) behavioural tests prove the evaluator
-can run in the same QA workflow style as the other evaluators, and LangGraph
-seam tests show Chrono results can be carried through graph state without
-introducing an LLM charge. The feature is complete only after documentation is
-updated, roadmap item `2.2.6` is marked done, and the required gates pass:
-`make check-fmt`, `make typecheck`, `make lint`, and `make test`.
+Success is observable when Chrono rejects malformed TEI, extracts spoken text
+through the shared `tei-rapporteur` TEI P5 model rather than local XML
+heuristics, and has a ratified Architectural Decision Record (ADR) that defines
+which TEI elements count as spoken dialogue across Episodic. The initial local
+heuristic and metadata contract are already implemented, but this ExecPlan is
+reopened because the current implementation treats malformed XML as raw text
+and encodes spoken-element semantics locally. The feature is complete only
+after the `tei-rapporteur` change requests are prioritised, the ADR is merged,
+Chrono uses the `tei-rapporteur` surface, documentation is updated, roadmap
+item `2.2.6` remains done only if the stricter TEI contract is implemented, and
+the required gates pass: `make check-fmt`, `make typecheck`, `make lint`, and
+`make test`.
 
 ## Constraints
 
 - Preserve the hexagonal architecture dependency rule. Domain-level Chrono
   types and heuristic policy must not import Falcon, SQLAlchemy, LangGraph,
   Celery, Vidai Mock, HTTP clients, or database infrastructure.
+- Chrono must consume valid TEI P5 XML. Malformed XML is not accepted input and
+  must produce a deterministic validation error rather than falling back to raw
+  text.
+- Document fragments used in tests or fixtures must still be valid TEI P5
+  documents according to `tei-rapporteur`. Minimal XML that bypasses the TEI
+  header or document model is not an acceptable interchange example.
+- `tei-rapporteur` must be the least-friction path for working with TEI P5 in
+  Episodic. If Chrono cannot use it directly, record the missing API in this
+  plan, raise the corresponding `tei-rapporteur` change request, and stop
+  before adding more local TEI semantics.
+- Spoken-text semantics for Chrono must be ratified in an ADR before further
+  production behaviour is added. Uncertainty over whether elements such as `p`,
+  `ab`, `seg`, `l`, `u`, `sp`, or inline descendants count as spoken text is a
+  hard stop, not an implementation detail.
 - Keep Chrono local and deterministic for this roadmap item. Do not call an
   LLM, network service, or provider adapter from the estimator.
 - Keep canonical script input TEI-first. JSON may be used only as a projection
@@ -68,6 +86,11 @@ updated, roadmap item `2.2.6` is marked done, and the required gates pass:
   public Pedante request/result types or existing LLM port contracts.
 - Dependencies: stop and escalate if a new runtime dependency is required for
   the naive estimator.
+- TEI semantics: stop and escalate if the ADR does not settle the spoken-text
+  element mapping, nested inline handling, and malformed-input policy.
+- Upstream tooling: stop and escalate if `tei-rapporteur` cannot expose a
+  spoken-text iterator or equivalent structured projection without broad
+  changes outside this feature branch.
 - Persistence: stop and escalate if implementation appears to require database
   schema changes or migrations.
 - Orchestration: stop and escalate if integrating Chrono into the existing
@@ -82,10 +105,21 @@ updated, roadmap item `2.2.6` is marked done, and the required gates pass:
 
 ## Risks
 
-- Risk: TEI parsing may be heavier than the naive estimator needs. Severity:
-  medium. Likelihood: medium. Mitigation: start with a small helper that
-  extracts spoken text from common TEI dialogue elements and strips tags using
-  structured XML parsing from the Python standard library where possible.
+- Risk: `tei-rapporteur` does not yet expose the exact spoken-text extraction
+  surface Chrono needs. Severity: high. Likelihood: high. Mitigation:
+  prioritise `tei-rapporteur` change requests before changing Chrono further.
+  Required behaviour is documented in this ExecPlan under "Required
+  `tei-rapporteur` behaviour".
+
+- Risk: Episodic currently lacks a ratified ADR for which TEI P5 elements are
+  spoken dialogue for runtime estimation. Severity: high. Likelihood: high.
+  Mitigation: write and merge an ADR before implementing new Chrono parsing
+  behaviour. Treat unresolved semantics as a hard stop.
+
+- Risk: the existing Chrono implementation and tests accept malformed XML and
+  minimal TEI-shaped snippets. Severity: high. Likelihood: high. Mitigation:
+  replace fallback tests with valid TEI P5 fixtures and validation-error tests
+  after the ADR and `tei-rapporteur` API are available.
 
 - Risk: the repository currently has a Pedante-specific QA graph rather than a
   general multi-evaluator QA graph. Severity: medium. Likelihood: high.
@@ -145,6 +179,19 @@ updated, roadmap item `2.2.6` is marked done, and the required gates pass:
   pass.
 - [x] Stage H: run final validation, update this ExecPlan with evidence, and
   commit the completed feature.
+- [x] (2026-05-10 00:00Z) Reopened the ExecPlan after product direction
+  clarified that valid TEI P5 is an enforced interchange format, malformed XML
+  fallback is unacceptable, and Chrono must prioritise `tei-rapporteur` gaps
+  rather than local XML semantics.
+- [ ] Stage I: write the Episodic ADR that ratifies spoken-text TEI semantics
+  for runtime estimation and marks unresolved semantics as a hard stop.
+- [ ] Stage J: raise and prioritise `tei-rapporteur` change requests for a
+  Chrono-ready spoken-text extraction API.
+- [ ] Stage K: replace Chrono's local `ElementTree` extraction and malformed
+  XML fallback with the ratified `tei-rapporteur` API and strict validation
+  behaviour.
+- [ ] Stage L: update tests, documentation, and final gates for the stricter
+  TEI P5 contract.
 
 ## Surprises & Discoveries
 
@@ -170,14 +217,28 @@ updated, roadmap item `2.2.6` is marked done, and the required gates pass:
 - Observation: implementation started on the existing
   `docs/execplans/2-2-6-chrono-runtime-estimator` branch after explicit user
   instruction to proceed. Evidence: branch and status checks on 2026-05-08.
-  Impact: the ExecPlan approval gate is satisfied and the status is now
-  `COMPLETE`.
+  Impact: the ExecPlan approval gate was satisfied for the first implementation
+  slice.
 
 - Observation: Chrono behavioural coverage does not need Vidai Mock because
   the estimator has no inference-service boundary. Evidence:
   `tests/steps/test_chrono_steps.py` exercises the BDD path entirely in-process
   with `ChronoRuntimeEstimator`. Impact: Vidai Mock remains reserved for
   LLM-backed evaluators and adapters.
+
+- Observation: the current Chrono implementation uses `xml.etree.ElementTree`
+  and explicitly falls back to raw text on parse failure. Evidence:
+  `episodic/qa/chrono.py` catches `ElementTree.ParseError` in
+  `_extract_spoken_text(...)`. Impact: this violates the clarified invariant
+  that valid TEI P5 XML is the enforced interchange format and must be replaced.
+
+- Observation: `tei-rapporteur` already exposes `parse_xml`, `to_dict`,
+  `to_msgpack`, and `iter_parse`, but the current Episodic docs do not define a
+  Chrono-specific spoken-text iterator contract. Evidence:
+  `docs/tei-rapporteur-users-guide.md` documents paragraph, utterance, and div
+  events, plus inline tagged nodes, but no runtime-estimation extraction API.
+  Impact: Chrono should not invent local TEI semantics; the required behaviour
+  must move upstream into `tei-rapporteur`.
 
 ## Decision Log
 
@@ -203,6 +264,18 @@ updated, roadmap item `2.2.6` is marked done, and the required gates pass:
   add a runtime dependency outside the roadmap slice. Date/Author: 2026-05-08 /
   Codex.
 
+- Decision: supersede the local `ElementTree` extraction decision. Chrono must
+  use `tei-rapporteur` for TEI P5 parsing and must not accept malformed XML as
+  raw text. Rationale: valid TEI P5 XML is the enforced Episodic interchange
+  format, and `tei-rapporteur` is expected to be the least-friction TEI P5
+  interface. Date/Author: 2026-05-10 / User and Codex.
+
+- Decision: treat spoken-element semantics as an ADR-gated domain decision.
+  Rationale: Episodic cannot leave core domain semantics uncertain inside one
+  evaluator. The ADR must define what counts as spoken dialogue for Chrono and
+  any other component that consumes script dialogue. Date/Author: 2026-05-10 /
+  User and Codex.
+
 ## Outcomes & Retrospective
 
 Chrono now exposes a deterministic typed spoken-runtime estimate for TEI
@@ -212,9 +285,15 @@ estimated seconds. `episodic.qa.chrono_langgraph` provides a narrow graph seam
 for running Chrono inside QA orchestration without adding `LLMUsage`.
 
 Unit tests, property tests, LangGraph seam tests, and pytest-bdd behavioural
-coverage are in place. Documentation explains the initial heuristic, the lack
-of LLM charges, maintainer boundaries, and test locations. Roadmap item `2.2.6`
-is marked done.
+coverage are in place for the initial local heuristic. Documentation explains
+the initial heuristic, the lack of LLM charges, maintainer boundaries, and test
+locations. Roadmap item `2.2.6` is marked done.
+
+This outcome is now incomplete against the clarified architecture. The current
+implementation remains useful as a metadata and orchestration slice, but its
+TEI parsing policy must be revised. Completion now requires `tei-rapporteur`
+spoken-text extraction support, strict TEI P5 validation, and an ADR ratifying
+spoken-dialogue semantics.
 
 The main implementation lesson is that keeping Chrono separate from the Pedante
 graph avoided unnecessary generalization while still preserving a consistent
@@ -242,6 +321,13 @@ Chrono should follow the same local clarity: typed contracts in `episodic/qa/`,
 tests in `tests/`, and documentation in `docs/`. It should differ from Pedante
 in one important way: Chrono must not use `episodic.llm.LLMPort`, because it is
 not an LLM evaluator.
+
+Chrono must also differ from ad hoc XML-processing helpers: it must not own TEI
+P5 parsing semantics. `tei-rapporteur` is the shared TEI P5 parser and
+projection library used elsewhere in Episodic. Chrono may own runtime-estimator
+policy, such as words per minute and metadata shape, but it must delegate
+document validation and spoken-text extraction to `tei-rapporteur` once the
+required API exists.
 
 The roadmap and design documents relevant to this feature are:
 
@@ -366,15 +452,16 @@ shape that best matches the QA graph port without adding fake asynchrony to the
 domain policy. Keep XML parsing and word counting as pure functions in the same
 module unless size demands extraction.
 
-The initial heuristic should:
+The original initial heuristic used the Python standard library XML parser and
+raw-text fallback. That behaviour is superseded. The revised heuristic should:
 
-- extract spoken text from the TEI XML using the Python standard library XML
-  parser when possible;
-- fall back to treating the input as plain text only if parsing fails and tests
-  define that policy explicitly;
+- parse and validate the script as TEI P5 through `tei-rapporteur`;
+- reject malformed XML or invalid TEI P5 with a deterministic validation error;
+- extract spoken text through a `tei-rapporteur` API ratified by the Episodic
+  ADR;
 - count simple word tokens deterministically;
 - compute seconds as `ceil(spoken_word_count / words_per_minute * 60)`; and
-- preserve zero words as zero seconds.
+- preserve valid TEI documents with zero spoken words as zero seconds.
 
 Update `episodic/qa/__init__.py` to export Chrono contracts and the estimator.
 
@@ -435,6 +522,94 @@ and then rerun the full gate sequence.
 
 Commit the implementation only after all gates pass. Keep refactors separate
 from the feature commit if post-commit review identifies unrelated cleanup.
+
+### Stage I: ratify spoken-text semantics in an ADR
+
+Add a new ADR under `docs/adr/` before changing Chrono parsing behaviour. The
+ADR must define, in Episodic domain language, what counts as spoken script text
+for runtime estimation. It must be explicit about:
+
+- whether `sp`, `u`, `p`, `ab`, `seg`, `l`, and inline descendants are spoken
+  containers, spoken leaves, grouping elements, or non-spoken markup;
+- how speaker labels, stage directions, notes, lists, headings, references,
+  citations, and show-note blocks are excluded;
+- how nested spoken elements are handled so text is counted exactly once;
+- how whitespace, punctuation, pauses, emphasis, and inline annotations are
+  normalised before word tokenisation;
+- whether non-English scripts, numbers, contractions, and hyphenated words are
+  in scope for the naive estimator; and
+- the failure policy for malformed XML or TEI that does not validate against
+  the Episodic TEI P5 profile.
+
+Go/no-go: do not proceed to Stage J or K until the ADR is accepted. If the ADR
+cannot settle a semantic question, record that as a hard stop and ask for
+product/editorial direction.
+
+### Stage J: prioritise `tei-rapporteur` change requests
+
+Before rewriting Chrono, raise the missing `tei-rapporteur` work as upstream
+change requests. The goal is to make `tei-rapporteur` the least-friction TEI P5
+interface for Chrono rather than forcing every Episodic component to re-encode
+TEI semantics locally.
+
+Required `tei-rapporteur` behaviour:
+
+- Provide a Python-callable API that accepts TEI P5 XML and validates it using
+  the same parser/profile as `parse_xml(...)`.
+- Return a stable ordered stream or list of spoken text segments suitable for
+  runtime estimation. A segment should include the normalised text and enough
+  location/provenance to diagnose where it came from, such as an XPath-like
+  locator, `xml:id`, or event path.
+- Count each spoken text node exactly once even when TEI uses nested inline
+  structures such as `<p>Hello <seg>there</seg></p>`.
+- Exclude non-dialogue content ratified by the ADR, including speaker labels,
+  notes, headings, metadata, show-note blocks, citations, and stage directions
+  unless the ADR explicitly says otherwise.
+- Preserve document order.
+- Expose structured error types or deterministic `ValueError` messages for
+  malformed XML and invalid TEI P5 so Chrono can report a domain error without
+  pattern-matching unstable strings.
+- Provide Python type information for the new API so `make typecheck` can
+  validate Chrono without local `Any` shims.
+- Include tests in `tei-rapporteur` for `p`, `ab`, `seg`, `l`, nested inline
+  content, utterance-style dialogue, non-spoken exclusions, malformed XML, and
+  invalid TEI documents.
+
+Go/no-go: do not add more local XML traversal to Chrono to compensate for a
+missing `tei-rapporteur` API. If the API cannot be delivered in the dependency
+pin used by this branch, keep Chrono blocked and update this plan with the
+upstream status.
+
+### Stage K: replace local Chrono TEI parsing
+
+After the ADR and `tei-rapporteur` API are available, update
+`episodic/qa/chrono.py` so `_extract_spoken_text(...)` delegates TEI validation
+and spoken-text extraction to `tei-rapporteur`. Remove the raw-text fallback.
+Update tests so malformed XML and invalid TEI assert validation failure instead
+of word counting. Replace minimal TEI-like test strings with valid TEI P5
+fixtures accepted by `tei-rapporteur`.
+
+Chrono should still own:
+
+- `ChronoEvaluationRequest`, `ChronoEstimatorConfig`,
+  `ChronoEstimatorMetadata`, and `ChronoRuntimeEstimate`;
+- simple word-token counting for the initial estimator, unless the ADR assigns
+  tokenisation to `tei-rapporteur`; and
+- words-per-minute configuration and estimated seconds calculation.
+
+Chrono should not own:
+
+- TEI document validation;
+- the definition of which TEI elements are spoken dialogue; or
+- XML traversal rules for nested TEI content.
+
+### Stage L: documentation and final gates for the strict TEI contract
+
+Update `docs/episodic-podcast-generation-system-design.md`,
+`docs/developers-guide.md`, and `docs/users-guide.md` to remove any implication
+that Chrono accepts malformed XML or local TEI-shaped fragments. Link the new
+ADR from the developer-facing Chrono section. Update this ExecPlan's outcomes
+and validation evidence after the implementation passes the gates.
 
 ## Concrete steps
 
@@ -518,6 +693,34 @@ git commit -F "$COMMIT_MSG_FILE"
 Create the commit message in a temporary file from `mktemp -d`, then commit
 with `git commit -F`; do not pass the message with `git commit -m`.
 
+For the reopened strict TEI P5 work, first create the ADR and upstream
+`tei-rapporteur` requests before changing Chrono:
+
+```bash
+rg -n "tei_rapporteur|tei-rapporteur|Chrono|spoken" episodic tests docs
+rg -n "ADR|Architectural Decision" docs
+```
+
+Expected result before Chrono rewrite:
+
+```plaintext
+The ADR file and tei-rapporteur spoken-text API are absent or incomplete.
+```
+
+After the ADR is accepted and the `tei-rapporteur` API is available in this
+branch, replace the local XML extraction and run focused validation:
+
+```bash
+uv run pytest tests/test_chrono.py tests/test_chrono_properties.py
+uv run pytest tests/test_chrono_langgraph.py tests/steps/test_chrono_steps.py
+```
+
+Expected result after the strict TEI P5 rewrite:
+
+```plaintext
+Malformed XML and invalid TEI P5 are rejected; valid TEI P5 fixtures pass.
+```
+
 ## Validation and acceptance
 
 The implemented feature is accepted when all of the following are true:
@@ -526,12 +729,20 @@ The implemented feature is accepted when all of the following are true:
   metadata contracts.
 - Unit tests prove the default heuristic returns a predictable duration for
   known TEI dialogue.
+- Unit tests prove malformed XML and invalid TEI P5 are rejected instead of
+  being counted as raw text.
+- Unit and behavioural fixtures use valid TEI P5 documents accepted by
+  `tei-rapporteur`, including any compact examples used in tests.
 - Property tests prove non-negative estimates and monotonic estimates for a
   fixed heuristic over generated simple spoken text.
 - LangGraph seam tests prove Chrono can run as a QA graph node and propagate
   typed metadata without `LLMUsage`.
 - pytest-bdd behavioural tests prove an editor-facing QA workflow can obtain a
   Chrono spoken-runtime estimate from a TEI script.
+- A merged ADR defines the Episodic spoken-text semantics used by Chrono and
+  any other script-dialogue consumer.
+- The required `tei-rapporteur` spoken-text extraction API exists, is covered
+  by its own tests, and is used by Chrono for TEI P5 validation and extraction.
 - `docs/episodic-podcast-generation-system-design.md` records the initial
   heuristic and metadata.
 - `docs/users-guide.md` explains the user-visible internal QA behaviour.
@@ -559,9 +770,11 @@ are not tracked.
 
 ## Interfaces and dependencies
 
-Use only the Python standard library for the initial estimator. In particular,
-use `dataclasses`, `math`, `re`, and `xml.etree.ElementTree` as needed. Do not
-add runtime dependencies.
+Use the existing `tei-rapporteur` dependency as Chrono's TEI P5 parsing and
+spoken-text extraction boundary. Do not add a second XML or TEI parser for
+Chrono, and do not keep a local `xml.etree.ElementTree` traversal path once the
+`tei-rapporteur` API is available. The standard library remains appropriate for
+estimator-local concerns such as `dataclasses`, `math`, `re`, and logging.
 
 The target public Python surface after implementation should include these
 exports from `episodic.qa`:
@@ -581,6 +794,12 @@ If the implementation uses a separate graph module, export graph helpers from
 The initial heuristic should default to `150` words per minute. If product or
 editorial documentation later defines a different default, update this plan and
 the decision log before changing code.
+
+The required `tei-rapporteur` Python surface should expose a typed function or
+method that validates a TEI P5 document and returns ordered spoken text
+segments with normalised text and locator/provenance metadata. Chrono should
+depend on that surface instead of depending on lower-level parser events unless
+the ADR explicitly chooses an event-level integration.
 
 ## Artifacts and notes
 
@@ -614,3 +833,10 @@ including Chrono contracts, test-first milestones, documentation, roadmap
 completion, and quality gates. The plan was later executed after explicit user
 approval, and the completed implementation was validated with the required
 Python and Markdown gates.
+
+The 2026-05-10 revision reopens the plan because valid TEI P5 is the enforced
+interchange format in Episodic. Raw-text fallback for malformed XML is invalid,
+minimal TEI-shaped snippets are not acceptable fixtures unless they validate as
+TEI P5 documents, and Chrono must not own TEI spoken-dialogue semantics. The
+remaining work is gated by an ADR and by prioritised `tei-rapporteur` changes
+that provide the spoken-text extraction contract Chrono needs.
