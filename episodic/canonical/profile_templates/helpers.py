@@ -17,7 +17,7 @@ import uuid
 
 from sqlalchemy.exc import IntegrityError
 
-from episodic.canonical.storage.models import REVISION_CONSTRAINT_NAMES
+from episodic.canonical.constraints import REVISION_CONSTRAINT_NAMES
 
 from .types import (
     AuditMetadata,

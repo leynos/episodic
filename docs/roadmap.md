@@ -145,12 +145,12 @@ Completion enables feature development within enforced boundaries.
   - Define allowed dependency directions between layers.
   - See
     [Hexagonal architecture enforcement](episodic-podcast-generation-system-design.md#hexagonal-architecture-enforcement).
-- [ ] 1.5.4. Implement architectural enforcement checks for hexagonal
+- [x] 1.5.4. Implement architectural enforcement checks for hexagonal
   boundaries.
-  - Add lint rules to flag forbidden import directions.
-  - Add architecture tests to validate port contract adherence.
-  - Gate CI pipelines on enforcement check pass.
-  - Note: Ruff linting configured; dedicated architecture tests pending.
+  - Added `make check-architecture` and wired it into `make lint`.
+  - Added architecture tests and BDD fixtures for dependency-direction checks.
+  - Added port contract tests for the current concrete adapters.
+  - CI exposes architecture enforcement as a named gate.
 
 ## 2. Intelligent content generation and quality assurance (QA)
 

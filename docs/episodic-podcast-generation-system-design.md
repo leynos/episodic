@@ -12,6 +12,7 @@ Accepted decision records:
 - [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
 - [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
 - [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
+- [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
 
 ## Overview
 
@@ -106,23 +107,102 @@ Boundary rules:
   domain and ports, but never on outbound adapter implementations.
 - **Outbound adapters** (database, object storage, message broker, LLM/TTS
   vendors) depend on the domain and ports, but never on inbound adapters.
-- **Orchestration code** (LangGraph nodes and Celery tasks) depends on domain
-  services and ports only; direct adapter access is forbidden.
+- **Orchestration code** (LangGraph nodes and Celery tasks) will depend on
+  domain services and ports only; direct adapter access is reserved for the
+  later orchestration-specific enforcement slice.
 - **Cross-adapter imports** are forbidden; interactions happen through ports or
   well-defined message schemas.
-- **Checkpoint payloads** hold orchestration metadata; canonical domain state
-  is persisted through repositories rather than state blobs.
+- **Checkpoint payloads** should hold orchestration metadata; canonical domain
+  state is persisted through repositories rather than state blobs. Dedicated
+  checkpoint audits are part of the later orchestration enforcement slice.
+
+For screen readers: The following class diagram shows the module categories
+used by the architecture checker, the allowed dependency directions between
+them, and the conceptual forbidden adapter and composition-root dependencies
+that the checker reports as diagnostics.
+
+```mermaid
+classDiagram
+  class DomainModule {
+    +str name
+    +list imports
+  }
+
+  class PortModule {
+    +str name
+    +list imports
+  }
+
+  class ApplicationServiceModule {
+    +str name
+    +list imports
+  }
+
+  class InboundAdapterModule {
+    +str name
+    +list imports
+  }
+
+  class OutboundAdapterModule {
+    +str name
+    +list imports
+  }
+
+  class CompositionRootModule {
+    +str name
+    +list imports
+  }
+
+  class ArchitectureChecker {
+    +run_check(paths)
+    +classify_module(module_path)
+    +validate_dependency(importer_kind, imported_kind)
+    +emit_diagnostic(rule_id, importer, imported, reason)
+  }
+
+  %% Allowed dependency directions
+  DomainModule --> PortModule : may depend on
+  ApplicationServiceModule --> DomainModule : may depend on
+  ApplicationServiceModule --> PortModule : may depend on
+  InboundAdapterModule --> DomainModule : may depend on
+  InboundAdapterModule --> ApplicationServiceModule : may depend on
+  InboundAdapterModule --> PortModule : may depend on
+  CompositionRootModule --> InboundAdapterModule : wires
+  CompositionRootModule --> OutboundAdapterModule : wires
+  CompositionRootModule --> DomainModule : may depend on
+  CompositionRootModule --> ApplicationServiceModule : may depend on
+  CompositionRootModule --> PortModule : may depend on
+
+  %% Forbidden directions (conceptual, enforced by checker)
+  ArchitectureChecker --> DomainModule : forbid imports from
+  ArchitectureChecker --> InboundAdapterModule : forbid imports from
+  ArchitectureChecker --> OutboundAdapterModule : forbid imports from
+  ArchitectureChecker --> CompositionRootModule : forbid imports from
+
+  ArchitectureChecker ..> DomainModule : classifies
+  ArchitectureChecker ..> PortModule : classifies
+  ArchitectureChecker ..> ApplicationServiceModule : classifies
+  ArchitectureChecker ..> InboundAdapterModule : classifies
+  ArchitectureChecker ..> OutboundAdapterModule : classifies
+  ArchitectureChecker ..> CompositionRootModule : classifies
+```
+
+_Figure 1: Hexagonal architecture module categories, allowed dependency
+directions, and checker-enforced forbidden dependency concepts._
 
 Enforcement mechanisms:
 
-- Lint rules and import conventions flag forbidden dependency direction
-  (e.g. inbound or outbound modules importing each other).
+- `make check-architecture` runs the repo-local architecture checker in
+  `episodic.architecture`, and `make lint` includes that gate after Ruff.
 - Architecture tests validate the allowed dependency graph and port contract
   adherence as part of `make test`.
-- Architecture tests cover LangGraph node and Celery task imports, enforcing
-  port-only dependencies for orchestration code.
+- The current checker covers canonical domain and port modules, application
+  services, Falcon and worker adapter seams, SQLAlchemy and LLM outbound
+  adapters, and explicit composition roots.
 - Contract tests exercise port behaviour against adapter implementations, so
   adapters are verified without coupling to infrastructure in the domain.
+- Roadmap item `2.4.5` extends the same mechanism to LangGraph-node-specific
+  imports, Celery task policies, and checkpoint payload boundaries.
 - Code review checklists enforce idempotency keys, single-responsibility task
   scope, and checkpoint payload audits for orchestration changes.
 
@@ -407,7 +487,7 @@ sequenceDiagram
     end
 ```
 
-_Figure: default weighting strategy executor-selection and dispatch sequence._
+_Figure 2: Default weighting strategy executor-selection and dispatch sequence._
 
 #### Execution patterns for long-running tasks
 
@@ -1087,7 +1167,7 @@ erDiagram
     EPISODES ||--o{ APPROVAL_EVENTS : records
 ```
 
-_Figure 7: Canonical content schema relationships._
+_Figure 3: Canonical content schema relationships._
 
 The diagram below details the series profile, episode template, and immutable
 revision-history tables used by the current profile-template management flows.
@@ -1142,7 +1222,7 @@ erDiagram
     EPISODE_TEMPLATES ||--o{ EPISODE_TEMPLATE_HISTORY : has_template_history
 ```
 
-_Figure 8: Series profile, episode template, and history-table relationships._
+_Figure 4: Series profile, episode template, and history-table relationships._
 
 ### Reusable reference-document model
 
@@ -1232,7 +1312,7 @@ erDiagram
     REFERENCE_DOCUMENT_REVISIONS ||--o{ SOURCE_DOCUMENTS : snapshot
 ```
 
-_Figure 9: Approved reusable reference material and profile schema._
+_Figure 5: Approved reusable reference material and profile schema._
 
 ### Reference-document glossary
 
