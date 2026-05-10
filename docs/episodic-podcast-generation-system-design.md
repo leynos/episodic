@@ -116,6 +116,80 @@ Boundary rules:
   state is persisted through repositories rather than state blobs. Dedicated
   checkpoint audits are part of the later orchestration enforcement slice.
 
+For screen readers: The following class diagram shows the module categories
+used by the architecture checker, the allowed dependency directions between
+them, and the conceptual forbidden adapter and composition-root dependencies
+that the checker reports as diagnostics.
+
+```mermaid
+classDiagram
+  class DomainModule {
+    +str name
+    +list imports
+  }
+
+  class PortModule {
+    +str name
+    +list imports
+  }
+
+  class ApplicationServiceModule {
+    +str name
+    +list imports
+  }
+
+  class InboundAdapterModule {
+    +str name
+    +list imports
+  }
+
+  class OutboundAdapterModule {
+    +str name
+    +list imports
+  }
+
+  class CompositionRootModule {
+    +str name
+    +list imports
+  }
+
+  class ArchitectureChecker {
+    +run_check(paths)
+    +classify_module(module_path)
+    +validate_dependency(importer_kind, imported_kind)
+    +emit_diagnostic(rule_id, importer, imported, reason)
+  }
+
+  %% Allowed dependency directions
+  DomainModule --> PortModule : may depend on
+  ApplicationServiceModule --> DomainModule : may depend on
+  ApplicationServiceModule --> PortModule : may depend on
+  InboundAdapterModule --> DomainModule : may depend on
+  InboundAdapterModule --> ApplicationServiceModule : may depend on
+  InboundAdapterModule --> PortModule : may depend on
+  CompositionRootModule --> InboundAdapterModule : wires
+  CompositionRootModule --> OutboundAdapterModule : wires
+  CompositionRootModule --> DomainModule : may depend on
+  CompositionRootModule --> ApplicationServiceModule : may depend on
+  CompositionRootModule --> PortModule : may depend on
+
+  %% Forbidden directions (conceptual, enforced by checker)
+  ArchitectureChecker --> DomainModule : forbid imports from
+  ArchitectureChecker --> InboundAdapterModule : forbid imports from
+  ArchitectureChecker --> OutboundAdapterModule : forbid imports from
+  ArchitectureChecker --> CompositionRootModule : forbid imports from
+
+  ArchitectureChecker ..> DomainModule : classifies
+  ArchitectureChecker ..> PortModule : classifies
+  ArchitectureChecker ..> ApplicationServiceModule : classifies
+  ArchitectureChecker ..> InboundAdapterModule : classifies
+  ArchitectureChecker ..> OutboundAdapterModule : classifies
+  ArchitectureChecker ..> CompositionRootModule : classifies
+```
+
+_Figure 1: Hexagonal architecture module categories, allowed dependency
+directions, and checker-enforced forbidden dependency concepts._
+
 Enforcement mechanisms:
 
 - `make check-architecture` runs the repo-local architecture checker in
