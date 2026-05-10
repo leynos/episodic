@@ -1,4 +1,17 @@
-"""Package barrel re-export discovery for architecture checks."""
+"""Resolve package barrel re-exports for architecture checks.
+
+This module discovers symbols exposed from package ``__init__`` files and maps
+those package-level imports back to their concrete origin modules. Callers
+should import the resolver API from ``episodic.architecture.reexports`` and use
+``_build_reexport_index(root, package)`` with a package root and dotted package
+name to receive a mapping of exported symbol paths to origin symbol paths.
+``episodic.architecture.checker`` relies on that mapping when validating
+package-level imports for ``make check-architecture``.
+
+The resolver handles explicit ``from … import name`` re-exports, star
+re-exports, nested package barrels, and literal ``__all__`` declarations without
+importing application modules or executing package code.
+"""
 
 import ast
 import dataclasses as dc

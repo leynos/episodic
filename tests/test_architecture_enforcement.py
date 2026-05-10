@@ -63,6 +63,14 @@ FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "architecture"
                 "tests.fixtures.architecture.api_imports_cyclic_star_reexported_outbound_adapter.storage",
             ),
         ),
+        (
+            "explicit_empty_all",
+            (
+                "ARCH001",
+                "tests.fixtures.architecture.explicit_empty_all.api",
+                "tests.fixtures.architecture.explicit_empty_all.storage",
+            ),
+        ),
     ],
 )
 def test_checker_reports_fixture_boundary_violations(
