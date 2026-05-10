@@ -1,6 +1,7 @@
 """Unit tests for the Chrono spoken-runtime estimator."""
 
 import asyncio
+import typing as typ
 
 import pytest
 
@@ -33,7 +34,7 @@ def test_chrono_config_rejects_blank_identity(field_name: str) -> None:
     kwargs[field_name] = "   "
 
     with pytest.raises(ValueError, match=field_name):
-        ChronoEstimatorConfig(**kwargs)
+        ChronoEstimatorConfig(**typ.cast("typ.Any", kwargs))
 
 
 @pytest.mark.parametrize("words_per_minute", [0, -1])
@@ -71,7 +72,7 @@ def test_chrono_metadata_rejects_invalid_field(
     kwargs[field_name] = field_value
 
     with pytest.raises(ValueError, match=field_name):
-        ChronoEstimatorMetadata(**kwargs)
+        ChronoEstimatorMetadata(**typ.cast("typ.Any", kwargs))
 
 
 def test_chrono_runtime_estimate_rejects_negative_duration() -> None:
