@@ -55,9 +55,12 @@ import typing as typ
 import tei_rapporteur as tei
 
 from episodic.generation.tei_payload import (
+    body_blocks_payload,
     build_text_inline,
-    require_payload_list,
-    require_payload_object,
+    is_div_payload,
+    require_mapping,
+    require_non_empty_str_value,
+    require_sequence,
 )
 from episodic.llm import (
     LLMPort,
@@ -212,18 +215,20 @@ class ShowNotesResponseFormatError(ValueError):
 
 def _decode_object(value: object, field_name: str) -> dict[str, object]:
     """Decode a JSON value as a dictionary or raise a format error."""
-    if not isinstance(value, dict):
-        msg = f"{field_name} must be an object."
-        raise ShowNotesResponseFormatError(msg)
-    return typ.cast("dict[str, object]", value)
+    return require_mapping(
+        value,
+        field_name,
+        error_cls=ShowNotesResponseFormatError,
+    )
 
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
     """Require a non-empty string value or raise a format error."""
-    if not isinstance(value, str) or value.strip() == "":
-        msg = f"{field_name} must be a non-empty string."
-        raise ShowNotesResponseFormatError(msg)
-    return value
+    return require_non_empty_str_value(
+        value,
+        field_name,
+        error_cls=ShowNotesResponseFormatError,
+    )
 
 
 def _require_optional_string(value: object, field_name: str) -> str | None:
@@ -239,10 +244,11 @@ def _require_optional_string(value: object, field_name: str) -> str | None:
 
 def _require_list(value: object, field_name: str) -> list[object]:
     """Require a list value or raise a format error."""
-    if not isinstance(value, list):
-        msg = f"{field_name} must be a list."
-        raise ShowNotesResponseFormatError(msg)
-    return typ.cast("list[object]", value)
+    return require_sequence(
+        value,
+        field_name,
+        error_cls=ShowNotesResponseFormatError,
+    )
 
 
 def _parse_entry(raw: dict[str, object]) -> ShowNotesEntry:
@@ -414,21 +420,6 @@ def _build_notes_div_payload(entries: tuple[ShowNotesEntry, ...]) -> dict[str, o
     }
 
 
-def _body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
-    """Return the mutable TEI body blocks list from a document payload."""
-    text_payload = require_payload_object(document_payload.get("text"), "text")
-    body_payload = require_payload_object(text_payload.get("body"), "text.body")
-    return require_payload_list(body_payload.get("blocks"), "text.body.blocks")
-
-
-def _is_notes_div_payload(value: object) -> bool:
-    """Return True when a body block payload is the canonical show-notes div."""
-    if not isinstance(value, dict):
-        return False
-    payload = typ.cast("dict[str, object]", value)
-    return payload.get("type") == "div" and payload.get("div_type") == "notes"
-
-
 def enrich_tei_with_show_notes(
     tei_xml: str,
     result: ShowNotesResult,
@@ -468,11 +459,11 @@ def enrich_tei_with_show_notes(
 
     document = tei.parse_xml(tei_xml)
     document_payload = typ.cast("dict[str, object]", tei.to_dict(document))
-    body_blocks = _body_blocks_payload(document_payload)
+    body_blocks = body_blocks_payload(document_payload)
     body_blocks[:] = [
         body_block
         for body_block in body_blocks
-        if not _is_notes_div_payload(body_block)
+        if not is_div_payload(body_block, "notes")
     ]
     body_blocks.append(_build_notes_div_payload(result.entries))
     enriched_document = tei.from_dict(document_payload)

@@ -150,6 +150,8 @@ roadmap item 2.3.2 as done only after all quality gates pass.
   user-facing configuration accuracy, generic execplan paths, ADR footnote
   formatting, stronger empty-result assertions, complete TEI replacement
   snapshots, and chapter-marker concurrency/cancellation coverage.
+- [x] (2026-05-10 00:00Z) Centralized shared TEI payload and response-shape
+  validation primitives used by both show-notes and chapter-marker enrichment.
 
 ## Surprises & discoveries
 
@@ -294,6 +296,14 @@ generated one additional syrupy snapshot, and reran the full gate sequence. The
 first `make test` run hit a transient timeout in an unrelated profile-template
 service fixture; the exact timed-out test passed when rerun alone, and the full
 `make test` rerun then passed with 488 tests and 3 skipped.
+
+The TEI payload review was verified against the current branch before editing.
+Duration wording, omitted segment metadata tests, malformed top-level response
+tests, missing TEI payload tests, and the data transfer object acronym in
+ADR-006 were already present. The remaining valid issue was helper duplication
+between show-notes and chapter-marker modules, so
+`episodic/generation/tei_payload.py` now owns mapping/list/string validation
+plus body block and div detection helpers.
 
 The full gate sequence was then rerun on the segment-alignment follow-up tree.
 An initial `make test` run hit a transient async fixture timeout in

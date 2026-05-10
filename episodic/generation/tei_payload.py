@@ -3,20 +3,83 @@
 import typing as typ
 
 
+def require_mapping(
+    value: object,
+    field_name: str,
+    *,
+    error_cls: type[Exception],
+    prefix: str = "",
+) -> dict[str, object]:
+    """Require an object value with caller-selected error semantics."""
+    if not isinstance(value, dict):
+        qualifier = f"{prefix} " if prefix else ""
+        msg = f"{qualifier}{field_name} must be an object."
+        raise error_cls(msg)
+    return typ.cast("dict[str, object]", value)
+
+
+def require_sequence(
+    value: object,
+    field_name: str,
+    *,
+    error_cls: type[Exception],
+    prefix: str = "",
+) -> list[object]:
+    """Require a list value with caller-selected error semantics."""
+    if not isinstance(value, list):
+        qualifier = f"{prefix} " if prefix else ""
+        msg = f"{qualifier}{field_name} must be a list."
+        raise error_cls(msg)
+    return typ.cast("list[object]", value)
+
+
+def require_non_empty_str_value(
+    value: object,
+    field_name: str,
+    *,
+    error_cls: type[Exception],
+    message: str = "must be a non-empty string.",
+) -> str:
+    """Require a non-empty string value with caller-selected error semantics."""
+    if not isinstance(value, str) or value.strip() == "":
+        msg = f"{field_name} {message}"
+        raise error_cls(msg)
+    return value
+
+
 def require_payload_object(value: object, field_name: str) -> dict[str, object]:
     """Require a mapping inside a TEI payload or raise ValueError."""
-    if not isinstance(value, dict):
-        msg = f"TEI payload field {field_name} must be an object."
-        raise ValueError(msg)  # noqa: TRY004
-    return typ.cast("dict[str, object]", value)
+    return require_mapping(
+        value,
+        field_name,
+        error_cls=ValueError,
+        prefix="TEI payload field",
+    )
 
 
 def require_payload_list(value: object, field_name: str) -> list[object]:
     """Require a list inside a TEI payload or raise ValueError."""
-    if not isinstance(value, list):
-        msg = f"TEI payload field {field_name} must be a list."
-        raise ValueError(msg)  # noqa: TRY004
-    return typ.cast("list[object]", value)
+    return require_sequence(
+        value,
+        field_name,
+        error_cls=ValueError,
+        prefix="TEI payload field",
+    )
+
+
+def body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
+    """Return the mutable TEI body blocks list from a document payload."""
+    text_payload = require_payload_object(document_payload.get("text"), "text")
+    body_payload = require_payload_object(text_payload.get("body"), "text.body")
+    return require_payload_list(body_payload.get("blocks"), "text.body.blocks")
+
+
+def is_div_payload(value: object, div_type: str) -> bool:
+    """Return True when a body block is a TEI div payload of *div_type*."""
+    if not isinstance(value, dict):
+        return False
+    payload = typ.cast("dict[str, object]", value)
+    return payload.get("type") == "div" and payload.get("div_type") == div_type
 
 
 def build_text_inline(text: str) -> list[dict[str, str]]:

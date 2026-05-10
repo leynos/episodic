@@ -14,9 +14,12 @@ import typing as typ
 import tei_rapporteur as tei
 
 from episodic.generation.tei_payload import (
+    body_blocks_payload,
     build_text_inline,
-    require_payload_list,
-    require_payload_object,
+    is_div_payload,
+    require_mapping,
+    require_non_empty_str_value,
+    require_sequence,
 )
 from episodic.llm import (
     LLMPort,
@@ -73,23 +76,9 @@ def _duration_to_seconds(duration: str, field_name: str) -> int:
     return (hours * 3600) + (minutes * 60) + seconds
 
 
-def _require_non_empty_str_value(
-    value: object,
-    field_name: str,
-    *,
-    error_cls: type[Exception],
-    message: str = "must be a non-empty string.",
-) -> str:
-    """Require a non-empty string value with caller-selected error semantics."""
-    if not isinstance(value, str) or value.strip() == "":
-        msg = f"{field_name} {message}"
-        raise error_cls(msg)
-    return value
-
-
 def _ensure_non_empty_field(instance: object, field_name: str) -> None:
     """Reject blank or whitespace-only string fields on a dataclass instance."""
-    _require_non_empty_str_value(
+    require_non_empty_str_value(
         getattr(instance, field_name),
         field_name,
         error_cls=ValueError,
@@ -176,7 +165,7 @@ class ChapterMarkersGeneratorConfig:
 
 def _decode_object(value: object, field_name: str) -> dict[str, object]:
     """Decode a JSON value as a dictionary or raise a format error."""
-    return _require_mapping(
+    return require_mapping(
         value,
         field_name,
         error_cls=ChapterMarkersResponseFormatError,
@@ -185,7 +174,7 @@ def _decode_object(value: object, field_name: str) -> dict[str, object]:
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
     """Require a non-empty string value or raise a format error."""
-    return _require_non_empty_str_value(
+    return require_non_empty_str_value(
         value,
         field_name,
         error_cls=ChapterMarkersResponseFormatError,
@@ -202,37 +191,11 @@ def _require_optional_string(value: object, field_name: str) -> str | None:
 
 def _require_list(value: object, field_name: str) -> list[object]:
     """Require a list value or raise a format error."""
-    return _require_sequence(
+    return require_sequence(
         value,
         field_name,
         error_cls=ChapterMarkersResponseFormatError,
     )
-
-
-def _require_mapping(
-    value: object,
-    field_name: str,
-    *,
-    error_cls: type[Exception],
-) -> dict[str, object]:
-    """Require an object value with caller-selected error semantics."""
-    if not isinstance(value, dict):
-        msg = f"{field_name} must be an object."
-        raise error_cls(msg)
-    return typ.cast("dict[str, object]", value)
-
-
-def _require_sequence(
-    value: object,
-    field_name: str,
-    *,
-    error_cls: type[Exception],
-) -> list[object]:
-    """Require a list value with caller-selected error semantics."""
-    if not isinstance(value, list):
-        msg = f"{field_name} must be a list."
-        raise error_cls(msg)
-    return typ.cast("list[object]", value)
 
 
 def _parse_chapter(raw: dict[str, object]) -> ChapterMarker:
@@ -460,21 +423,6 @@ def _build_chapters_div_payload(
     }
 
 
-def _body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
-    """Return the mutable TEI body blocks list from a document payload."""
-    text_payload = require_payload_object(document_payload.get("text"), "text")
-    body_payload = require_payload_object(text_payload.get("body"), "text.body")
-    return require_payload_list(body_payload.get("blocks"), "text.body.blocks")
-
-
-def _is_chapters_div_payload(value: object) -> bool:
-    """Return True when a body block is the canonical chapters div."""
-    if not isinstance(value, dict):
-        return False
-    payload = typ.cast("dict[str, object]", value)
-    return payload.get("type") == "div" and payload.get("div_type") == "chapters"
-
-
 def enrich_tei_with_chapter_markers(
     tei_xml: str,
     result: ChapterMarkersResult,
@@ -482,12 +430,12 @@ def enrich_tei_with_chapter_markers(
     """Insert chapter-marker metadata into a TEI document body."""
     document = tei.parse_xml(tei_xml)
     document_payload = typ.cast("dict[str, object]", tei.to_dict(document))
-    body_blocks = _body_blocks_payload(document_payload)
+    body_blocks = body_blocks_payload(document_payload)
     original_block_count = len(body_blocks)
     body_blocks[:] = [
         body_block
         for body_block in body_blocks
-        if not _is_chapters_div_payload(body_block)
+        if not is_div_payload(body_block, "chapters")
     ]
     removed_block_count = original_block_count - len(body_blocks)
     if result.chapters:
