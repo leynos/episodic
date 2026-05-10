@@ -1,4 +1,13 @@
-"""Protocol definitions for generation orchestration boundaries."""
+"""Protocol definitions for generation orchestration boundaries.
+
+The generation graph is deliberately written against these ports so domain
+policy remains independent from LangGraph, SQLAlchemy, Celery, and LLM
+provider adapters. `PlannerPort` and `ToolExecutorPort` drive the normal
+plan/execute flow. `CheckpointPort` and `TaskResumePort` define the
+suspend/resume seam: graph nodes persist typed checkpoint DTOs before
+side-effecting work and later consume externally supplied action results
+without knowing which queue, worker, or user interface produced them.
+"""
 
 import typing as typ
 

@@ -31,6 +31,48 @@
   }
   '''
 # ---
+# name: test_checkpoint_payload_snapshot
+  dict({
+    'action_result': dict({
+      'action_id': 'a1',
+      'action_kind': 'generate_show_notes',
+      'model': 'gpt-4o-mini',
+      'model_tier': 'execution',
+      'summary': 'test',
+      'usage': dict({
+        'input_tokens': 10,
+        'output_tokens': 20,
+        'total_tokens': 30,
+      }),
+    }),
+    'planner_result': dict({
+      'finish_reason': 'stop',
+      'model': 'gpt-4.1',
+      'plan': dict({
+        'plan_version': '1',
+        'selected_execution_model': 'gpt-4o-mini',
+        'selected_planning_model': 'gpt-4.1',
+        'steps': list([
+          dict({
+            'action_id': 'a1',
+            'action_kind': 'generate_show_notes',
+            'model_tier': 'execution',
+            'rationale': 'test',
+            'required_inputs': list([
+              'script_tei_xml',
+            ]),
+          }),
+        ]),
+      }),
+      'provider_response_id': 'planner-1',
+      'usage': dict({
+        'input_tokens': 1,
+        'output_tokens': 2,
+        'total_tokens': 3,
+      }),
+    }),
+  })
+# ---
 # name: test_execution_plan_serialisation_snapshot
   dict({
     'plan_version': '1',

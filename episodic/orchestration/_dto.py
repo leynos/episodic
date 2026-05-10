@@ -1,11 +1,21 @@
-"""Typed DTOs, protocols, and validation helpers for generation orchestration."""
+"""Typed DTOs and validation helpers for generation orchestration.
 
-from __future__ import annotations
+These immutable dataclasses are the application-level contracts shared by the
+planner, tool executors, LangGraph wrapper, checkpoint ports, and API-facing
+service code. The checkpoint DTOs in this module carry only resumable workflow
+state: stable workflow identity, the idempotency key for the paused step, and a
+JSON-shaped payload that the graph can reconstruct during resume. Persistence
+adapters map these DTOs to storage records without leaking database models back
+into orchestration policy.
+"""
 
 import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
+from episodic.generation import (
+    ShowNotesResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
+)
 from episodic.llm import (
     LLMProviderOperation,
     LLMTokenBudget,
@@ -14,8 +24,6 @@ from episodic.llm import (
 
 if typ.TYPE_CHECKING:
     import datetime as dt
-
-    from episodic.generation import ShowNotesResult
 
 from ._types import (
     ActionKind,
@@ -404,7 +412,13 @@ class GenerationOrchestrationResult:
 
 @dc.dataclass(frozen=True, slots=True)
 class WorkflowCheckpoint:
-    """Durable orchestration state saved when a generation workflow pauses."""
+    """Durable orchestration state saved when a generation workflow pauses.
+
+    `CheckpointPort` implementations persist this DTO before the graph crosses
+    an external boundary. `workflow_id`, `workflow_type`, `step_name`, and
+    `idempotency_key` identify the resumable step; `payload` stores the
+    JSON-shaped graph state needed by `resume_generation_orchestration`.
+    """
 
     checkpoint_id: str
     workflow_id: str
@@ -437,7 +451,12 @@ class WorkflowCheckpoint:
 
 @dc.dataclass(frozen=True, slots=True)
 class SuspendedWorkflowResult:
-    """Typed result returned when a graph pauses before external work resumes it."""
+    """Typed result returned when a graph pauses before external work resumes it.
+
+    API handlers and worker dispatchers can use this value to expose the
+    checkpoint identifier and idempotency key without depending on LangGraph
+    state internals or storage adapter records.
+    """
 
     checkpoint_id: str
     workflow_id: str
@@ -454,7 +473,12 @@ class SuspendedWorkflowResult:
 
 @dc.dataclass(frozen=True, slots=True)
 class ResumeWorkflowCommand:
-    """Input for resuming a suspended workflow from a durable checkpoint."""
+    """Input for resuming a suspended workflow from a durable checkpoint.
+
+    The command combines the checkpoint identifier with the externally produced
+    action result. `TaskResumePort` implementations validate or transform that
+    result before the graph aggregates the final orchestration outcome.
+    """
 
     checkpoint_id: str
     result: ActionExecutionResult

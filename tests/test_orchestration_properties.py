@@ -31,6 +31,14 @@ from episodic.orchestration import (
     build_generation_orchestration_graph,
     build_workflow_step_idempotency_key,
 )
+from episodic.orchestration.langgraph import (
+    _action_result_from_payload,
+    _action_result_to_payload,
+    _plan_from_payload,
+    _plan_to_payload,
+    _planner_result_from_payload,
+    _planner_result_to_payload,
+)
 from tests._orchestration_fakes import (
     _config,
     _FakeLLMPort,
@@ -129,6 +137,55 @@ _step_key_inputs_strategy: st.SearchStrategy[_PropStepKeyInputs] = st.builds(
     ),
 )
 
+_prop_text = st.text(
+    min_size=1,
+    max_size=32,
+    alphabet=string.ascii_letters + string.digits + "-_ .",
+).filter(lambda value: bool(value.strip()))
+
+_usage_strategy = st.builds(
+    LLMUsage,
+    input_tokens=st.integers(min_value=0, max_value=10_000),
+    output_tokens=st.integers(min_value=0, max_value=10_000),
+    total_tokens=st.integers(min_value=0, max_value=20_000),
+)
+
+_planned_action_strategy = st.builds(
+    PlannedAction,
+    action_id=_prop_text,
+    action_kind=st.just(ActionKind.GENERATE_SHOW_NOTES),
+    rationale=_prop_text,
+    model_tier=st.just(ModelTier.EXECUTION),
+    required_inputs=st.lists(_prop_text, max_size=4).map(tuple),
+)
+
+_execution_plan_strategy = st.builds(
+    ExecutionPlan,
+    plan_version=_prop_text,
+    selected_planning_model=_prop_text,
+    selected_execution_model=_prop_text,
+    steps=st.lists(_planned_action_strategy, min_size=1, max_size=4).map(tuple),
+)
+
+_planner_result_strategy = st.builds(
+    PlannerResult,
+    plan=_execution_plan_strategy,
+    usage=_usage_strategy,
+    model=_prop_text,
+    provider_response_id=_prop_text,
+    finish_reason=st.one_of(st.none(), _prop_text),
+)
+
+_action_result_strategy = st.builds(
+    ActionExecutionResult,
+    action_id=_prop_text,
+    action_kind=st.just(ActionKind.GENERATE_SHOW_NOTES),
+    model_tier=st.just(ModelTier.EXECUTION),
+    model=_prop_text,
+    summary=_prop_text,
+    usage=st.one_of(st.none(), _usage_strategy),
+)
+
 
 @given(
     inputs=_step_key_inputs_strategy,
@@ -156,6 +213,33 @@ def test_step_idempotency_keys_are_deterministic(
     )
     assert second == first
     assert first.endswith(f":{attempt}")
+
+
+@given(plan=_execution_plan_strategy)
+@settings(max_examples=50)
+def test_execution_plan_checkpoint_payload_round_trips(
+    plan: ExecutionPlan,
+) -> None:
+    """Property test: checkpoint plan payloads preserve execution plans."""
+    assert _plan_from_payload(_plan_to_payload(plan)) == plan
+
+
+@given(result=_planner_result_strategy)
+@settings(max_examples=50)
+def test_planner_result_checkpoint_payload_round_trips(
+    result: PlannerResult,
+) -> None:
+    """Property test: checkpoint planner payloads preserve planner results."""
+    assert _planner_result_from_payload(_planner_result_to_payload(result)) == result
+
+
+@given(result=_action_result_strategy)
+@settings(max_examples=50)
+def test_action_result_checkpoint_payload_round_trips(
+    result: ActionExecutionResult,
+) -> None:
+    """Property test: checkpoint action payloads preserve action results."""
+    assert _action_result_from_payload(_action_result_to_payload(result)) == result
 
 
 @given(st.lists(st.sampled_from(_ACTION_KIND_SAMPLES), min_size=1, max_size=48))

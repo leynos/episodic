@@ -657,11 +657,14 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 ### Package structure
 
 - `episodic/orchestration/_dto.py` contains the orchestration DTOs and shared
-  port protocols.
+  checkpoint DTOs.
+- `episodic/orchestration/_protocols.py` contains the planner, executor,
+  checkpoint, and resume ports that keep graph policy independent from storage,
+  queue, and provider adapters.
 - `episodic/orchestration/generation.py` implements and exports
   `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`, and the
-  orchestration result builder. It also re-exports `ToolExecutorPort` from the
-  DTO module.
+  orchestration result builder. It also re-exports the orchestration ports and
+  checkpoint DTOs.
 - `episodic/orchestration/_show_notes_executor.py` contains the concrete
   `ShowNotesToolExecutor` implementation.
 - `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
@@ -685,7 +688,14 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   results through `TaskResumePort`. Do not import SQLAlchemy, Celery, Falcon,
   or provider adapters into graph nodes.
 - Build idempotency keys with `build_workflow_step_idempotency_key(...)` from
-  workflow id, workflow type, step name, action id, and retry attempt.
+  a `WorkflowStepIdentity` and retry attempt.
+- In-memory checkpoints are for tests only. They use an injected clock and an
+  `asyncio.Lock` to model first-write-wins idempotency, but they do not evict
+  entries or coordinate across processes.
+- Durable checkpoints rely on the `workflow_checkpoints.idempotency_key`
+  uniqueness constraint. The SQLAlchemy adapter attempts the insert first and
+  falls back to loading the existing row only when the database reports a
+  duplicate key.
 - Treat `ShowNotesToolExecutor` as the first tool adapter, not as a special
   case that other orchestration code may import around.
 

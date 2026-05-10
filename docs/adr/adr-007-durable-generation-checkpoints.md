@@ -29,9 +29,16 @@ obtains the external task result through `TaskResumePort`, rebuilds the planner
 state from the checkpoint, and aggregates a `GenerationOrchestrationResult`.
 
 Idempotency keys are deterministic strings built from workflow id, workflow
-type, step name, action id, and retry attempt. `CheckpointPort.save(...)`
-preserves the first checkpoint recorded for a key and returns it to repeated
-callers.
+type, step name, action id, and retry attempt. The key fields are grouped in
+`WorkflowStepIdentity` so step identity validation stays explicit without
+long argument lists. `CheckpointPort.save(...)` preserves the first checkpoint
+recorded for a key and returns it to repeated callers.
+
+The in-memory adapter serialises `save(...)` mutations with an `asyncio.Lock`
+and uses an injected clock. The durable SQLAlchemy adapter lets the database
+unique constraint arbitrate concurrency: it attempts to insert the checkpoint
+inside a savepoint, then loads the existing checkpoint only when the insert
+hits the idempotency-key constraint.
 
 ## Consequences
 
@@ -42,6 +49,8 @@ callers.
   future Celery callbacks will use.
 - Planning may run again on repeated suspend attempts in this slice, but the
   side-effecting execution step is deduplicated by the checkpoint key.
+- The in-memory adapter is suitable for tests and local demos only. It has no
+  eviction policy and no cross-process coordination.
 
 ## References
 
@@ -51,3 +60,5 @@ callers.
 - Implementation — `episodic/orchestration/langgraph.py`,
   `episodic/orchestration/checkpoints.py`,
   `episodic/canonical/storage/workflow_checkpoints.py`
+
+# ADR-007: Durable generation checkpoints

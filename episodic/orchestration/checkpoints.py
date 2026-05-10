@@ -1,17 +1,36 @@
-"""Checkpoint adapters and helpers for resumable generation orchestration."""
+"""Checkpoint adapters for resumable generation orchestration.
 
+The orchestration graph depends on the `CheckpointPort` protocol rather than a
+database implementation. This module supplies the lightweight in-memory adapter
+used by unit and behavioural tests to exercise the same suspend/resume contract
+without SQLAlchemy. It preserves first-write-wins idempotency for workflow-step
+keys and injects its clock so tests can make timestamp behaviour deterministic.
+
+`InMemoryCheckpointStore` is intentionally process-local and unbounded. It is
+not suitable for production services without eviction, persistence, and
+cross-process coordination; production code should use the canonical storage
+adapter instead.
+"""
+
+import asyncio
 import dataclasses as dc
 import datetime as dt
+import typing as typ
 
 from episodic.orchestration._dto import WorkflowCheckpoint
+from episodic.orchestration._types import _log_event
+
+TimeProvider = typ.Callable[[], dt.datetime]
 
 
 @dc.dataclass(slots=True)
 class InMemoryCheckpointStore:
-    """In-memory checkpoint adapter for fast orchestration tests."""
+    """In-memory `CheckpointPort` adapter with atomic first-write semantics."""
 
+    time_provider: TimeProvider = lambda: dt.datetime.now(dt.UTC)
     _by_id: dict[str, WorkflowCheckpoint] = dc.field(default_factory=dict)
     _by_key: dict[str, str] = dc.field(default_factory=dict)
+    _lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
 
     async def get(self, checkpoint_id: str) -> WorkflowCheckpoint | None:
         """Return a checkpoint by identifier."""
@@ -29,21 +48,34 @@ class InMemoryCheckpointStore:
 
     async def save(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
         """Persist a checkpoint, preserving the first record for a key."""
-        existing = await self.get_by_idempotency_key(checkpoint.idempotency_key)
-        if existing is not None:
-            return existing
-        now = dt.datetime.now(dt.UTC)
-        stored = WorkflowCheckpoint(
-            checkpoint_id=checkpoint.checkpoint_id,
-            workflow_id=checkpoint.workflow_id,
-            workflow_type=checkpoint.workflow_type,
-            step_name=checkpoint.step_name,
-            idempotency_key=checkpoint.idempotency_key,
-            payload=checkpoint.payload,
-            status=checkpoint.status,
-            created_at=checkpoint.created_at or now,
-            updated_at=checkpoint.updated_at or now,
-        )
-        self._by_id[stored.checkpoint_id] = stored
-        self._by_key[stored.idempotency_key] = stored.checkpoint_id
-        return stored
+        async with self._lock:
+            existing = await self.get_by_idempotency_key(checkpoint.idempotency_key)
+            if existing is not None:
+                _log_event(
+                    "debug",
+                    "checkpoint_store.in_memory.save.reuse",
+                    checkpoint_id=existing.checkpoint_id,
+                    idempotency_key=existing.idempotency_key,
+                )
+                return existing
+            now = self.time_provider()
+            stored = WorkflowCheckpoint(
+                checkpoint_id=checkpoint.checkpoint_id,
+                workflow_id=checkpoint.workflow_id,
+                workflow_type=checkpoint.workflow_type,
+                step_name=checkpoint.step_name,
+                idempotency_key=checkpoint.idempotency_key,
+                payload=checkpoint.payload,
+                status=checkpoint.status,
+                created_at=checkpoint.created_at or now,
+                updated_at=checkpoint.updated_at or now,
+            )
+            self._by_id[stored.checkpoint_id] = stored
+            self._by_key[stored.idempotency_key] = stored.checkpoint_id
+            _log_event(
+                "debug",
+                "checkpoint_store.in_memory.save.created",
+                checkpoint_id=stored.checkpoint_id,
+                idempotency_key=stored.idempotency_key,
+            )
+            return stored

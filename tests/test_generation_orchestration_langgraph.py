@@ -1,6 +1,8 @@
 """Unit tests for the structured generation LangGraph seam."""
 
+import asyncio
 import dataclasses as dc
+import uuid
 
 import pytest
 
@@ -15,6 +17,7 @@ from episodic.orchestration import (
     PlannedAction,
     PlannerResult,
     ResumeWorkflowCommand,
+    WorkflowCheckpoint,
 )
 from episodic.orchestration.langgraph import (
     GenerationGraphState,
@@ -221,6 +224,54 @@ class TestGenerationOrchestrationGraph:
         assert result.total_usage.total_tokens == 38
         assert result.action_results == (_action_result(),)
         assert resume_port.calls == [command]
+
+    @pytest.mark.asyncio
+    async def test_resume_generation_orchestration_raises_on_missing_checkpoint(
+        self,
+    ) -> None:
+        """Resume should fail loudly when the checkpoint identifier is unknown."""
+        command = ResumeWorkflowCommand(
+            checkpoint_id=str(uuid.uuid4()),
+            result=_action_result(),
+        )
+
+        with pytest.raises(ValueError, match="unknown checkpoint"):
+            await resume_generation_orchestration(
+                checkpoint_port=InMemoryCheckpointStore(),
+                resume_port=_FakeResumePort(),
+                command=command,
+            )
+
+    @pytest.mark.asyncio
+    async def test_in_memory_checkpoint_store_reuses_concurrent_step_key(
+        self,
+    ) -> None:
+        """Concurrent saves with one step key should return one checkpoint."""
+        checkpoint_store = InMemoryCheckpointStore()
+        key = "corr-graph:generation_orchestration:execute:action-1:0"
+        first = WorkflowCheckpoint(
+            checkpoint_id=str(uuid.uuid4()),
+            workflow_id="corr-graph",
+            workflow_type="generation_orchestration",
+            step_name="execute",
+            idempotency_key=key,
+            payload={"planner_result": {}},
+        )
+        duplicate = WorkflowCheckpoint(
+            checkpoint_id=str(uuid.uuid4()),
+            workflow_id="corr-graph",
+            workflow_type="generation_orchestration",
+            step_name="execute",
+            idempotency_key=key,
+            payload={"planner_result": {}},
+        )
+
+        stored_first, stored_second = await asyncio.gather(
+            checkpoint_store.save(first),
+            checkpoint_store.save(duplicate),
+        )
+
+        assert stored_second.checkpoint_id == stored_first.checkpoint_id
 
 
 class TestLangGraphNodeValidation:

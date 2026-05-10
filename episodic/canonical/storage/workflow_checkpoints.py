@@ -1,4 +1,12 @@
-"""SQLAlchemy checkpoint adapter for resumable orchestration workflows."""
+"""SQLAlchemy checkpoint adapter for resumable orchestration workflows.
+
+This adapter implements the orchestration-layer `CheckpointPort` at the
+canonical storage boundary. LangGraph nodes hand it typed
+`WorkflowCheckpoint` DTOs; the adapter maps those DTOs to the
+`workflow_checkpoints` table and relies on the table's unique idempotency key
+to make repeated suspend attempts converge on the first persisted checkpoint.
+It does not import graph code, LLM adapters, or Celery concerns.
+"""
 
 import typing as typ
 import uuid
@@ -30,7 +38,7 @@ def _map_checkpoint(record: WorkflowCheckpointRecord) -> WorkflowCheckpoint:
 
 
 class SqlAlchemyWorkflowCheckpointStore:
-    """SQLAlchemy implementation of the orchestration CheckpointPort."""
+    """Durable SQLAlchemy implementation of the orchestration `CheckpointPort`."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -62,9 +70,6 @@ class SqlAlchemyWorkflowCheckpointStore:
 
     async def save(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
         """Persist a checkpoint or return the existing record for its key."""
-        existing = await self.get_by_idempotency_key(checkpoint.idempotency_key)
-        if existing is not None:
-            return existing
         record = WorkflowCheckpointRecord(
             id=uuid.UUID(checkpoint.checkpoint_id),
             workflow_id=checkpoint.workflow_id,
@@ -74,11 +79,11 @@ class SqlAlchemyWorkflowCheckpointStore:
             payload=checkpoint.payload,
             status=checkpoint.status,
         )
-        self._session.add(record)
         try:
-            await self._session.flush()
+            async with self._session.begin_nested():
+                self._session.add(record)
+                await self._session.flush()
         except IntegrityError:
-            await self._session.rollback()
             existing = await self.get_by_idempotency_key(checkpoint.idempotency_key)
             if existing is not None:
                 return existing

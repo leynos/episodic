@@ -427,8 +427,8 @@ class TaskResumePort(typ.Protocol):
     async def resume(
         self,
         command: ResumeWorkflowCommand,
-    ) -> GenerationOrchestrationResult | SuspendedWorkflowResult:
-        """Resume a suspended generation workflow from a checkpoint."""
+    ) -> ActionExecutionResult:
+        """Return the externally supplied result for a suspended task."""
 ```
 
 The exact signatures may evolve during implementation, but the key boundary is
@@ -656,8 +656,8 @@ class TaskResumePort(typ.Protocol):
     async def resume(
         self,
         command: ResumeWorkflowCommand,
-    ) -> GenerationOrchestrationResult | SuspendedWorkflowResult:
-        """Resume a suspended generation workflow from a checkpoint."""
+    ) -> ActionExecutionResult:
+        """Return the externally supplied result for a suspended task."""
 ```
 
 The exact method names may change if the implementation discovers a cleaner
@@ -675,3 +675,11 @@ Revision note 2026-05-08: Added validation evidence for the planning-only
 change and recorded the formatter-target discovery. This does not change the
 implementation sequence, but it gives the next implementer the exact branch
 gate status and a known documentation tooling caveat.
+
+Revision note 2026-05-10: Follow-up review fixes added richer suspend/resume
+module documentation, documented `resume_generation_orchestration` error
+paths, injected the in-memory checkpoint clock, serialised in-memory
+checkpoint saves with an `asyncio.Lock`, and changed the SQLAlchemy checkpoint
+adapter to insert first and query only after duplicate-key conflicts. Added
+missing unknown-checkpoint, concurrent in-memory save, checkpoint payload
+property, and checkpoint payload snapshot coverage.

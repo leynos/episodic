@@ -542,7 +542,11 @@ step, returns a `SuspendedWorkflowResult`, and later accepts a
 `ResumeWorkflowCommand` through `TaskResumePort` to aggregate the final
 generation result. Checkpoint payloads contain orchestration state and
 provider-neutral DTO fields only; canonical episode artefacts remain in their
-own repositories.
+own repositories. Durable checkpoint writes rely on the database uniqueness
+constraint for idempotency and query the existing checkpoint only after a
+duplicate-key conflict. The in-memory checkpoint adapter models the same
+first-write-wins contract for tests with an `asyncio.Lock` and an injected
+clock, but remains unbounded and process-local.
 
 #### Inference strategy and tool integration
 

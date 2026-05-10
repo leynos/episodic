@@ -1,4 +1,12 @@
-"""LangGraph wrapper for structured generation orchestration."""
+"""LangGraph wrapper for structured generation orchestration.
+
+This module owns the in-process graph topology for structured content
+generation. The default graph plans, executes, and aggregates results. When a
+`CheckpointPort` is supplied, the graph switches to a suspend path that
+persists the planned state before the side-effecting execution step and returns
+a `SuspendedWorkflowResult`; `resume_generation_orchestration` later rebuilds
+the saved planner state and folds in an externally supplied action result.
+"""
 
 import dataclasses as dc
 import importlib
@@ -292,7 +300,7 @@ async def _suspend_execute_node(
     checkpoint_port: protocols.CheckpointPort,
     workflow_type: str = "generation_orchestration",
 ) -> dict[str, dto.SuspendedWorkflowResult]:
-    """Persist a checkpoint before executing the first action."""
+    """Persist or reuse a checkpoint before executing the first action."""
     request = state.request
     if request is None:
         msg = "missing required state value: request"
@@ -315,7 +323,18 @@ async def _suspend_execute_node(
             action_id=action.action_id,
         )
     )
+    _log_event(
+        "debug",
+        "generation_graph.suspend_execute_node.start",
+        correlation_id=request.correlation_id,
+        workflow_id=workflow_id,
+        workflow_type=workflow_type,
+        step_name="execute",
+        action_id=action.action_id,
+        idempotency_key=idempotency_key,
+    )
     existing = await checkpoint_port.get_by_idempotency_key(idempotency_key)
+    reused_checkpoint = existing is not None
     if existing is None:
         existing = await checkpoint_port.save(
             dto.WorkflowCheckpoint(
@@ -334,6 +353,14 @@ async def _suspend_execute_node(
                 },
             )
         )
+    _log_event(
+        "debug",
+        "generation_graph.suspend_execute_node.finish",
+        correlation_id=request.correlation_id,
+        checkpoint_id=existing.checkpoint_id,
+        idempotency_key=existing.idempotency_key,
+        reused_checkpoint=reused_checkpoint,
+    )
     suspended_result = dto.SuspendedWorkflowResult(
         checkpoint_id=existing.checkpoint_id,
         workflow_id=existing.workflow_id,
@@ -349,15 +376,39 @@ async def resume_generation_orchestration(
     resume_port: protocols.TaskResumePort,
     command: dto.ResumeWorkflowCommand,
 ) -> dto.GenerationOrchestrationResult:
-    """Resume a suspended generation workflow and return the final result."""
+    """Resume a suspended generation workflow and return the final result.
+
+    Raises
+    ------
+        ValueError: If the command references an unknown checkpoint.
+        TypeError: If the stored checkpoint payload cannot be deserialised into
+            the expected planner-result shape.
+    """
+    _log_event(
+        "debug",
+        "generation_graph.resume.start",
+        checkpoint_id=command.checkpoint_id,
+    )
     checkpoint = await checkpoint_port.get(command.checkpoint_id)
     if checkpoint is None:
+        _log_event(
+            "error",
+            "generation_graph.resume.unknown_checkpoint",
+            checkpoint_id=command.checkpoint_id,
+        )
         msg = f"unknown checkpoint: {command.checkpoint_id}"
         raise ValueError(msg)
     payload = checkpoint.payload
     planner_result = _planner_result_from_payload(payload["planner_result"])
     action_result = await resume_port.resume(command)
-    return build_generation_result(planner_result, (action_result,))
+    result = build_generation_result(planner_result, (action_result,))
+    _log_event(
+        "debug",
+        "generation_graph.resume.finish",
+        checkpoint_id=checkpoint.checkpoint_id,
+        idempotency_key=checkpoint.idempotency_key,
+    )
+    return result
 
 
 def _finish_node(
