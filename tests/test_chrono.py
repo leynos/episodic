@@ -50,40 +50,17 @@ def test_chrono_config_rejects_non_positive_words_per_minute(
     [
         ("input_character_count", -1),
         ("spoken_word_count", -1),
-    ],
-)
-def test_chrono_metadata_rejects_negative_counts(
-    field_name: str,
-    field_value: int,
-) -> None:
-    """Reject impossible metadata counts."""
-    kwargs = {
-        "estimator_name": "chrono-naive-word-count",
-        "estimator_version": "1",
-        "input_character_count": 10,
-        "spoken_word_count": 3,
-        "words_per_minute": 150,
-    }
-    kwargs[field_name] = field_value
-
-    with pytest.raises(ValueError, match=field_name):
-        ChronoEstimatorMetadata(**kwargs)
-
-
-@pytest.mark.parametrize(
-    ("field_name", "field_value"),
-    [
         ("estimator_name", ""),
         ("estimator_name", "   "),
         ("estimator_version", ""),
         ("estimator_version", "   "),
     ],
 )
-def test_chrono_metadata_rejects_blank_identity(
+def test_chrono_metadata_validation(
     field_name: str,
-    field_value: str,
+    field_value: int | str,
 ) -> None:
-    """Reject blank metadata identity fields."""
+    """Reject invalid metadata identity and numeric values."""
     kwargs = {
         "estimator_name": "chrono-naive-word-count",
         "estimator_version": "1",
@@ -202,28 +179,37 @@ async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
     assert async_result.metadata == sync_result.metadata
 
 
-def test_chrono_estimator_falls_back_for_malformed_xml() -> None:
+def test_chrono_estimator_handles_malformed_xml_fallback() -> None:
     """Malformed XML must fall back to plain-text word counting."""
-    raw = "hello world this is not xml <<<"
-    request = ChronoEvaluationRequest(script_tei_xml=raw)
-    result = ChronoRuntimeEstimator().estimate(request)
-    assert result.metadata.spoken_word_count > 0, (
-        "fallback must count words from raw text; got spoken_word_count=0"
+    script_tei_xml = "hello world broken <p"
+    request = ChronoEvaluationRequest(script_tei_xml=script_tei_xml)
+    estimator = ChronoRuntimeEstimator()
+
+    result = estimator.estimate(request)
+    async_result = asyncio.run(estimator.evaluate(request))
+
+    assert result.metadata.spoken_word_count == 4, (
+        "fallback must count words from raw text; "
+        f"got spoken_word_count={result.metadata.spoken_word_count}"
     )
+    assert result.estimated_seconds == 2
+    assert result.metadata.input_character_count == len(script_tei_xml)
+    assert async_result == result
 
 
 @pytest.mark.parametrize(
-    ("tag", "content", "expected_words"),
+    ("tag", "content", "expected_words", "expected_seconds"),
     [
-        ("ab", "one two three", 3),
-        ("seg", "four five", 2),
-        ("l", "six", 1),
+        ("ab", "one two three", 3, 2),
+        ("seg", "four five", 2, 1),
+        ("l", "six", 1, 1),
     ],
 )
-def test_chrono_estimator_counts_alternative_tei_elements(
+def test_chrono_estimator_counts_alternate_spoken_tags(
     tag: str,
     content: str,
     expected_words: int,
+    expected_seconds: int,
 ) -> None:
     """Chrono must extract spoken text from <ab>, <seg>, and <l> elements."""
     xml = f"<TEI><text><body><{tag}>{content}</{tag}></body></text></TEI>"
@@ -234,6 +220,7 @@ def test_chrono_estimator_counts_alternative_tei_elements(
         f"expected {expected_words} words from <{tag}> element, "
         f"got {result.metadata.spoken_word_count}"
     )
+    assert result.estimated_seconds == expected_seconds
 
 
 def test_chrono_async_evaluate_returns_same_result_as_estimate() -> None:
