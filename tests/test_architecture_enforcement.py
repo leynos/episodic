@@ -9,7 +9,7 @@ from episodic.architecture import (
 )
 from episodic.architecture.checker import fixture_policy
 
-FIXTURE_ROOT = Path("tests/fixtures/architecture")
+FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "architecture"
 
 
 @pytest.mark.parametrize(
