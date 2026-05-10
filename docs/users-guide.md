@@ -95,14 +95,17 @@ and segment metadata:
 No manual intervention is required; the split is handled automatically.
 Configuration is provided through the provider settings file:
 
-| Setting                | Purpose                                                                                                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `planning_model`       | Name of the model used for the planning pass                                                                                                                   |
-| `execution_model`      | Name of the model used to generate the show-notes payload                                                                                                      |
-| `chapter_marker_model` | Optional future alias for the model used to title and summarize chapter markers; until this setting exists, chapter markers use the configured execution model |
+| Setting           | Purpose                                                   |
+| ----------------- | --------------------------------------------------------- |
+| `planning_model`  | Name of the model used for the planning pass              |
+| `execution_model` | Name of the model used to generate the show-notes payload |
 
 Both model names must reference endpoints available through the configured LLM
 provider.
+
+Chapter markers currently use the configured execution model. A dedicated
+`chapter_marker_model` setting is planned for a future release, but is not a
+live configuration option yet.
 
 ##### Resumable orchestration
 

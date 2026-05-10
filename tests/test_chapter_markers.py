@@ -14,6 +14,7 @@ pytest-bdd Vidai Mock scenario in `tests/steps/test_chapter_markers_steps.py`.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import typing as typ
 
@@ -47,6 +48,20 @@ class _FakeLLMPort:
         """Return the canned response and capture the request."""
         self.requests.append(request)
         return self.response
+
+
+class _BlockingLLMPort:
+    """LLM fake that blocks until cancelled by the caller."""
+
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+
+    async def generate(self, request: LLMRequest) -> LLMResponse:
+        """Block indefinitely so timeout and cancellation behaviour is visible."""
+        _ = request
+        self.started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
 
 
 def _valid_llm_response(text: str) -> LLMResponse:
@@ -268,6 +283,43 @@ def test_result_from_response_raises_on_invalid_json() -> None:
         generator._result_from_response(response)
 
 
+@pytest.mark.asyncio
+async def test_generate_supports_concurrent_calls() -> None:
+    """Concurrent generation calls remain independent and record every request."""
+    llm = _FakeLLMPort(
+        _valid_llm_response(
+            json.dumps({"chapters": [{"title": "Intro", "start": "PT0S"}]})
+        )
+    )
+    generator = ChapterMarkersGenerator(
+        llm=llm,
+        config=ChapterMarkersGeneratorConfig(model="test-model"),
+    )
+
+    results = await asyncio.gather(
+        generator.generate(_minimal_tei()),
+        generator.generate(_minimal_tei()),
+    )
+
+    assert [result.chapters[0].title for result in results] == ["Intro", "Intro"]
+    assert len(llm.requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_generate_propagates_timeout_cancellation() -> None:
+    """Caller-managed timeouts cancel the pending LLM call cleanly."""
+    llm = _BlockingLLMPort()
+    generator = ChapterMarkersGenerator(
+        llm=llm,
+        config=ChapterMarkersGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(TimeoutError):
+        await asyncio.wait_for(generator.generate(_minimal_tei()), timeout=0.01)
+
+    assert llm.started.is_set()
+
+
 def test_build_prompt_includes_tei_and_segment_structure() -> None:
     """The prompt embeds the TEI script and segment-transition metadata."""
     segment_structure: dict[str, object] = {
@@ -422,7 +474,9 @@ def test_enrich_tei_with_chapter_markers(snapshot: SnapshotAssertion) -> None:
     assert enriched_xml == snapshot
 
 
-def test_enrich_tei_replaces_existing_chapters_div() -> None:
+def test_enrich_tei_replaces_existing_chapters_div(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Repeated enrichment should keep a single canonical chapters container."""
     enriched_xml = enrich_tei_with_chapter_markers(
         _tei_with_existing_chapters(),
@@ -432,12 +486,15 @@ def test_enrich_tei_replaces_existing_chapters_div() -> None:
     assert enriched_xml.count('type="chapters"') == 1
     assert "Old summary" not in enriched_xml
     assert "<label>New</label>" in enriched_xml
+    assert enriched_xml == snapshot
 
 
 def test_enrich_tei_with_empty_result_returns_original() -> None:
     """When the result has no chapters, return the original TEI unchanged."""
-    enriched_xml = enrich_tei_with_chapter_markers(_minimal_tei(), _result())
+    original_xml = _minimal_tei()
+    enriched_xml = enrich_tei_with_chapter_markers(original_xml, _result())
 
+    assert enriched_xml == original_xml
     assert "<div" not in enriched_xml
 
 
@@ -487,6 +544,22 @@ def test_enrich_tei_is_idempotent_for_same_result() -> None:
 
     assert twice == once
     assert twice.count('type="chapters"') == 1
+
+
+@pytest.mark.asyncio
+async def test_enrich_tei_is_idempotent_across_concurrent_calls() -> None:
+    """Concurrent enrichment of the same inputs yields the same canonical XML."""
+    result = _result(
+        ChapterMarker(title="Introduction", start="PT0S", summary="Opening context.")
+    )
+    base_xml = enrich_tei_with_chapter_markers(_minimal_tei(), result)
+
+    enriched_documents = await asyncio.gather(
+        asyncio.to_thread(enrich_tei_with_chapter_markers, base_xml, result),
+        asyncio.to_thread(enrich_tei_with_chapter_markers, base_xml, result),
+    )
+
+    assert enriched_documents == [base_xml, base_xml]
 
 
 def test_enrich_tei_with_missing_body_raises_value_error() -> None:

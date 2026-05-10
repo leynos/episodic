@@ -146,6 +146,10 @@ roadmap item 2.3.2 as done only after all quality gates pass.
   clarifying the integer-only duration subset, covering omitted prompt segment
   metadata and malformed response payloads, and sharing TEI payload helpers
   with show-notes enrichment.
+- [x] (2026-05-10 00:00Z) Addressed post-rebase review findings for
+  user-facing configuration accuracy, generic execplan paths, ADR footnote
+  formatting, stronger empty-result assertions, complete TEI replacement
+  snapshots, and chapter-marker concurrency/cancellation coverage.
 
 ## Surprises & discoveries
 
@@ -285,6 +289,12 @@ passed:
 uv run pytest tests/test_chapter_markers.py tests/test_show_notes.py
 ```
 
+Post-rebase review follow-up validation added focused chapter-marker tests,
+generated one additional syrupy snapshot, and reran the full gate sequence. The
+first `make test` run hit a transient timeout in an unrelated profile-template
+service fixture; the exact timed-out test passed when rerun alone, and the full
+`make test` rerun then passed with 488 tests and 3 skipped.
+
 The full gate sequence was then rerun on the segment-alignment follow-up tree.
 An initial `make test` run hit a transient async fixture timeout in
 `tests/test_profile_template_service.py::TestEpisodeTemplateService::test_update_episode_template_revision_conflict_raises`;
@@ -406,7 +416,7 @@ imperative commit message using the repository's commit-message rules.
 Work from the repository root:
 
 ```plaintext
-/home/leynos/.lody/repos/github---leynos---episodic/worktrees/cbe87d01-860a-4df8-8bbd-3e0a82dd2a13
+<episodic repository root>
 ```
 
 First confirm the branch is not the main branch:
@@ -424,7 +434,7 @@ feat/chapter-marker-plan
 Use Leta for code navigation when looking for definitions and references:
 
 ```bash
-leta workspace add /home/leynos/.lody/repos/github---leynos---episodic/worktrees/cbe87d01-860a-4df8-8bbd-3e0a82dd2a13
+leta workspace add <episodic repository root>
 leta show ShowNotesGenerator
 leta refs ShowNotesGenerator
 ```

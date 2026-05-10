@@ -90,9 +90,9 @@ milestone.
 
 ## References
 
-Roadmap item `2.3.2` in `docs/roadmap.md`.[^1] ExecPlan:
-`docs/execplans/2-3-2-generate-chapter-markers-aligned-to-script-segments.md`.[
-^2] Implementation: `episodic/generation/chapter_markers.py`.[^3] Tests:
+Roadmap item `2.3.2` in `docs/roadmap.md`.[^1] The implementation plan is
+recorded in the ExecPlan.[^2] Implementation:
+`episodic/generation/chapter_markers.py`.[^3] Tests:
 `tests/test_chapter_markers.py`, `tests/features/chapter_markers.feature`,
 `tests/steps/test_chapter_markers_steps.py`.[^4]
 
