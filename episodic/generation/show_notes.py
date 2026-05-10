@@ -54,6 +54,11 @@ import typing as typ
 
 import tei_rapporteur as tei
 
+from episodic.generation.tei_payload import (
+    build_text_inline,
+    require_payload_list,
+    require_payload_object,
+)
 from episodic.llm import (
     LLMPort,
     LLMProviderOperation,
@@ -382,32 +387,11 @@ class ShowNotesGenerator:
         return self._result_from_response(response)
 
 
-def _require_payload_object(value: object, field_name: str) -> dict[str, object]:
-    """Require a mapping inside a TEI payload or raise ValueError."""
-    if not isinstance(value, dict):
-        msg = f"TEI payload field {field_name} must be an object."
-        raise ValueError(msg)  # noqa: TRY004
-    return typ.cast("dict[str, object]", value)
-
-
-def _require_payload_list(value: object, field_name: str) -> list[object]:
-    """Require a list inside a TEI payload or raise ValueError."""
-    if not isinstance(value, list):
-        msg = f"TEI payload field {field_name} must be a list."
-        raise ValueError(msg)  # noqa: TRY004
-    return typ.cast("list[object]", value)
-
-
-def _build_text_inline(text: str) -> list[dict[str, str]]:
-    """Build a plain-text inline payload for tei_rapporteur."""
-    return [{"type": "text", "value": text}]
-
-
 def _build_item_payload(entry: ShowNotesEntry) -> dict[str, object]:
     """Build one list-item payload from a `ShowNotesEntry`."""
     item_payload: dict[str, object] = {
-        "label": {"content": _build_text_inline(entry.topic)},
-        "content": _build_text_inline(entry.summary),
+        "label": {"content": build_text_inline(entry.topic)},
+        "content": build_text_inline(entry.summary),
     }
     if entry.timestamp is not None:
         item_payload["n"] = entry.timestamp
@@ -432,9 +416,9 @@ def _build_notes_div_payload(entries: tuple[ShowNotesEntry, ...]) -> dict[str, o
 
 def _body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
     """Return the mutable TEI body blocks list from a document payload."""
-    text_payload = _require_payload_object(document_payload.get("text"), "text")
-    body_payload = _require_payload_object(text_payload.get("body"), "text.body")
-    return _require_payload_list(body_payload.get("blocks"), "text.body.blocks")
+    text_payload = require_payload_object(document_payload.get("text"), "text")
+    body_payload = require_payload_object(text_payload.get("body"), "text.body")
+    return require_payload_list(body_payload.get("blocks"), "text.body.blocks")
 
 
 def _is_notes_div_payload(value: object) -> bool:

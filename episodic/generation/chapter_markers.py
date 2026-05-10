@@ -13,6 +13,11 @@ import typing as typ
 
 import tei_rapporteur as tei
 
+from episodic.generation.tei_payload import (
+    build_text_inline,
+    require_payload_list,
+    require_payload_object,
+)
 from episodic.llm import (
     LLMPort,
     LLMProviderOperation,
@@ -32,8 +37,15 @@ _DEFAULT_SYSTEM_PROMPT = (
     "podcast script and segment-transition metadata, create playback chapter "
     "markers aligned to segment starts. Return JSON only with key "
     '"chapters". Each chapter must include "title" and "start". The "start" '
-    "value must be a non-negative ISO 8601 duration such as PT0S, PT5M30S, or "
-    "PT1H2M3S. Optional fields: summary, end, duration, and tei_locator."
+    "value must be a non-negative ISO 8601-style duration in the form "
+    "PT#H#M#S with integer hours, minutes, and seconds only (for example: "
+    "PT0S, PT5M30S, PT1H2M3S). Days and fractional units are not allowed. "
+    "Optional fields: summary, end, duration, and tei_locator."
+)
+
+_SUPPORTED_DURATION_MESSAGE = (
+    "must be a non-negative ISO 8601-style duration in the form PT#H#M#S "
+    "with integer hours, minutes, and seconds only."
 )
 
 _ISO_8601_DURATION_PATTERN = re.compile(
@@ -47,13 +59,13 @@ class ChapterMarkersResponseFormatError(ValueError):
 
 
 def _duration_to_seconds(duration: str, field_name: str) -> int:
-    """Return a supported ISO 8601 duration as seconds."""
+    """Return a supported integer PT#H#M#S duration as seconds."""
     if not isinstance(duration, str):
-        msg = f"{field_name} must be a non-negative ISO 8601 duration."
+        msg = f"{field_name} {_SUPPORTED_DURATION_MESSAGE}"
         raise TypeError(msg)
     match = _ISO_8601_DURATION_PATTERN.fullmatch(duration)
     if match is None:
-        msg = f"{field_name} must be a non-negative ISO 8601 duration."
+        msg = f"{field_name} {_SUPPORTED_DURATION_MESSAGE}"
         raise ValueError(msg)
     hours = int(match.group("hours") or "0")
     minutes = int(match.group("minutes") or "0")
@@ -61,12 +73,28 @@ def _duration_to_seconds(duration: str, field_name: str) -> int:
     return (hours * 3600) + (minutes * 60) + seconds
 
 
+def _require_non_empty_str_value(
+    value: object,
+    field_name: str,
+    *,
+    error_cls: type[Exception],
+    message: str = "must be a non-empty string.",
+) -> str:
+    """Require a non-empty string value with caller-selected error semantics."""
+    if not isinstance(value, str) or value.strip() == "":
+        msg = f"{field_name} {message}"
+        raise error_cls(msg)
+    return value
+
+
 def _ensure_non_empty_field(instance: object, field_name: str) -> None:
     """Reject blank or whitespace-only string fields on a dataclass instance."""
-    value = getattr(instance, field_name)
-    if not isinstance(value, str) or value.strip() == "":
-        msg = f"{field_name} must be non-empty."
-        raise ValueError(msg)
+    _require_non_empty_str_value(
+        getattr(instance, field_name),
+        field_name,
+        error_cls=ValueError,
+        message="must be non-empty.",
+    )
 
 
 def _normalize_optional_string(value: object, field_name: str) -> str | None:
@@ -148,18 +176,20 @@ class ChapterMarkersGeneratorConfig:
 
 def _decode_object(value: object, field_name: str) -> dict[str, object]:
     """Decode a JSON value as a dictionary or raise a format error."""
-    if not isinstance(value, dict):
-        msg = f"{field_name} must be an object."
-        raise ChapterMarkersResponseFormatError(msg)
-    return typ.cast("dict[str, object]", value)
+    return _require_mapping(
+        value,
+        field_name,
+        error_cls=ChapterMarkersResponseFormatError,
+    )
 
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
     """Require a non-empty string value or raise a format error."""
-    if not isinstance(value, str) or value.strip() == "":
-        msg = f"{field_name} must be a non-empty string."
-        raise ChapterMarkersResponseFormatError(msg)
-    return value
+    return _require_non_empty_str_value(
+        value,
+        field_name,
+        error_cls=ChapterMarkersResponseFormatError,
+    )
 
 
 def _require_optional_string(value: object, field_name: str) -> str | None:
@@ -172,9 +202,36 @@ def _require_optional_string(value: object, field_name: str) -> str | None:
 
 def _require_list(value: object, field_name: str) -> list[object]:
     """Require a list value or raise a format error."""
+    return _require_sequence(
+        value,
+        field_name,
+        error_cls=ChapterMarkersResponseFormatError,
+    )
+
+
+def _require_mapping(
+    value: object,
+    field_name: str,
+    *,
+    error_cls: type[Exception],
+) -> dict[str, object]:
+    """Require an object value with caller-selected error semantics."""
+    if not isinstance(value, dict):
+        msg = f"{field_name} must be an object."
+        raise error_cls(msg)
+    return typ.cast("dict[str, object]", value)
+
+
+def _require_sequence(
+    value: object,
+    field_name: str,
+    *,
+    error_cls: type[Exception],
+) -> list[object]:
+    """Require a list value with caller-selected error semantics."""
     if not isinstance(value, list):
         msg = f"{field_name} must be a list."
-        raise ChapterMarkersResponseFormatError(msg)
+        raise error_cls(msg)
     return typ.cast("list[object]", value)
 
 
@@ -197,6 +254,105 @@ def _parse_chapter(raw: dict[str, object]) -> ChapterMarker:
         )
     except (TypeError, ValueError) as exc:
         raise ChapterMarkersResponseFormatError(str(exc)) from exc
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _SegmentTransition:
+    """One explicit segment transition supplied to the chapter generator."""
+
+    start: str
+    locator_keys: frozenset[str]
+
+
+def _locator_keys_for_segment(raw: dict[str, object]) -> frozenset[str]:
+    """Return locator keys by which a chapter may refer to a segment."""
+    keys: set[str] = set()
+    for field_name in ("id", "xml_id", "xml:id", "tei_locator", "locator"):
+        value = raw.get(field_name)
+        if isinstance(value, str) and value.strip():
+            locator = value.strip()
+            keys.add(locator)
+            keys.add(locator.removeprefix("#"))
+            keys.add(f"#{locator.removeprefix('#')}")
+    return frozenset(keys)
+
+
+def _segment_transitions_from_value(value: object) -> tuple[_SegmentTransition, ...]:
+    """Extract explicit segment starts from nested segment metadata."""
+    transitions: list[_SegmentTransition] = []
+    if isinstance(value, dict):
+        mapping = typ.cast("dict[str, object]", value)
+        start = mapping.get("start")
+        if isinstance(start, str) and start.strip():
+            transitions.append(
+                _SegmentTransition(
+                    start=start.strip(),
+                    locator_keys=_locator_keys_for_segment(mapping),
+                )
+            )
+        for nested_value in mapping.values():
+            transitions.extend(_segment_transitions_from_value(nested_value))
+    elif isinstance(value, list):
+        for item in value:
+            transitions.extend(_segment_transitions_from_value(item))
+    return tuple(transitions)
+
+
+def _validate_chapters_align_to_segments(
+    result: ChapterMarkersResult,
+    segment_structure: JsonMapping | None,
+) -> None:
+    """Validate generated chapter markers against explicit segment starts."""
+    if segment_structure is None:
+        return
+    transitions = _segment_transitions_from_value(segment_structure)
+    if not transitions:
+        return
+
+    for transition in transitions:
+        try:
+            _duration_to_seconds(transition.start, "segment start")
+        except (TypeError, ValueError) as exc:
+            raise ChapterMarkersResponseFormatError(str(exc)) from exc
+
+    starts = {transition.start for transition in transitions}
+    starts_by_locator = {
+        locator_key: transition.start
+        for transition in transitions
+        for locator_key in transition.locator_keys
+    }
+    for chapter in result.chapters:
+        _validate_chapter_aligns_to_segments(chapter, starts, starts_by_locator)
+
+
+def _validate_chapter_aligns_to_segments(
+    chapter: ChapterMarker,
+    starts: set[str],
+    starts_by_locator: dict[str, str],
+) -> None:
+    """Validate one generated chapter against explicit segment metadata."""
+    if chapter.start not in starts:
+        msg = (
+            "chapter starts must align to supplied segment starts; "
+            f"{chapter.start} is not a segment transition."
+        )
+        raise ChapterMarkersResponseFormatError(msg)
+    if chapter.tei_locator is None:
+        return
+    segment_start = starts_by_locator.get(chapter.tei_locator)
+    if segment_start is None:
+        msg = (
+            "chapter locators must resolve to supplied segment metadata; "
+            f"{chapter.tei_locator} is not a known segment locator."
+        )
+        raise ChapterMarkersResponseFormatError(msg)
+    if chapter.start != segment_start:
+        msg = (
+            "chapter locators must align to supplied segment starts; "
+            f"{chapter.tei_locator} starts at {segment_start}, not "
+            f"{chapter.start}."
+        )
+        raise ChapterMarkersResponseFormatError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -270,36 +426,17 @@ class ChapterMarkersGenerator:
         )
         logger.info("chapter_markers_generation_requested")
         response = await self.llm.generate(request)
-        return self._result_from_response(response)
-
-
-def _require_payload_object(value: object, field_name: str) -> dict[str, object]:
-    """Require a mapping inside a TEI payload or raise ValueError."""
-    if not isinstance(value, dict):
-        msg = f"TEI payload field {field_name} must be an object."
-        raise ValueError(msg)  # noqa: TRY004
-    return typ.cast("dict[str, object]", value)
-
-
-def _require_payload_list(value: object, field_name: str) -> list[object]:
-    """Require a list inside a TEI payload or raise ValueError."""
-    if not isinstance(value, list):
-        msg = f"TEI payload field {field_name} must be a list."
-        raise ValueError(msg)  # noqa: TRY004
-    return typ.cast("list[object]", value)
-
-
-def _build_text_inline(text: str) -> list[dict[str, str]]:
-    """Build a plain-text inline payload for tei_rapporteur."""
-    return [{"type": "text", "value": text}]
+        result = self._result_from_response(response)
+        _validate_chapters_align_to_segments(result, segment_structure)
+        return result
 
 
 def _build_item_payload(chapter: ChapterMarker) -> dict[str, object]:
     """Build one list-item payload from a `ChapterMarker`."""
     content = chapter.summary or chapter.title
     item_payload: dict[str, object] = {
-        "label": {"content": _build_text_inline(chapter.title)},
-        "content": _build_text_inline(content),
+        "label": {"content": build_text_inline(chapter.title)},
+        "content": build_text_inline(content),
         "n": chapter.start,
     }
     if chapter.tei_locator is not None:
@@ -325,9 +462,9 @@ def _build_chapters_div_payload(
 
 def _body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
     """Return the mutable TEI body blocks list from a document payload."""
-    text_payload = _require_payload_object(document_payload.get("text"), "text")
-    body_payload = _require_payload_object(text_payload.get("body"), "text.body")
-    return _require_payload_list(body_payload.get("blocks"), "text.body.blocks")
+    text_payload = require_payload_object(document_payload.get("text"), "text")
+    body_payload = require_payload_object(text_payload.get("body"), "text.body")
+    return require_payload_list(body_payload.get("blocks"), "text.body.blocks")
 
 
 def _is_chapters_div_payload(value: object) -> bool:

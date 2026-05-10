@@ -287,8 +287,8 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Treats chapter-marker generation as the matching segment-aligned enrichment
   service: `episodic/generation/chapter_markers.py` accepts a TEI script plus
   segment-transition metadata, asks the configured provider for structured
-  chapter entries, validates ordered ISO 8601 starts, and enriches the
-  canonical TEI body with
+  chapter entries, validates ordered integer-only ISO 8601-style starts against
+  supplied segment transitions, and enriches the canonical TEI body with
   `<div type="chapters"><list><item n="...">...</item></list></div>` output.
   This TEI representation is defined in
   [ADR 006: Chapter-marker TEI representation](adr/adr-006-chapter-marker-tei-representation.md).

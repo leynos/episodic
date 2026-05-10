@@ -75,11 +75,11 @@ Show notes are the episode summaries and topic lists that appear alongside a
 podcast episode, helping listeners decide whether to tune in.
 
 Chapter markers are separate navigational playback boundaries. They are aligned
-to script segment transitions and carry required ISO 8601 start times such as
-`PT0S`, `PT5M30S`, and `PT1H2M3S`. When a source segment has a TEI locator, the
-chapter marker records that link so later audio publishing steps can project
-the canonical timing data into player-specific chapter formats.
-
+to script segment transitions and carry required integer-only ISO 8601-style
+start times in the `PT#H#M#S` form, such as `PT0S`, `PT5M30S`, and `PT1H2M3S`.
+Days and fractional units are not accepted. When a source segment has a TEI
+locator, the chapter marker records that link so later audio publishing steps
+can project the canonical timing data into player-specific chapter formats.
 
 ##### Generation configuration
 

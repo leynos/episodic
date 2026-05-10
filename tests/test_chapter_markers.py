@@ -98,7 +98,7 @@ def test_chapter_marker_rejects_blank_title() -> None:
 
 
 def test_chapter_marker_rejects_invalid_start() -> None:
-    """Reject start values that are not ISO 8601 durations."""
+    """Reject start values outside the supported duration subset."""
     with pytest.raises(ValueError, match="ISO 8601"):
         ChapterMarker(title="Introduction", start="00:00")
 
@@ -127,7 +127,7 @@ def test_chapter_marker_normalizes_blank_optional_fields() -> None:
 
 @pytest.mark.parametrize("field_name", ["summary", "end", "duration", "tei_locator"])
 def test_chapter_marker_rejects_non_string_optional_fields(field_name: str) -> None:
-    """Optional text fields must fail with `ValueError`, not `AttributeError`."""
+    """Optional text fields must fail with `TypeError`, not `AttributeError`."""
     kwargs: dict[str, object] = {
         "title": "Introduction",
         "start": "PT0S",
@@ -140,7 +140,7 @@ def test_chapter_marker_rejects_non_string_optional_fields(field_name: str) -> N
 
 @pytest.mark.parametrize("field_name", ["end", "duration"])
 def test_chapter_marker_rejects_invalid_optional_duration(field_name: str) -> None:
-    """Optional timing fields must also be ISO 8601 durations."""
+    """Optional timing fields must also use the supported duration subset."""
     kwargs = {"title": "Introduction", "start": "PT0S", field_name: "1:00"}
 
     with pytest.raises(ValueError, match="ISO 8601"):
@@ -194,6 +194,33 @@ def test_result_from_response_parses_valid_json() -> None:
     assert result.chapters[0].tei_locator == "#seg-intro"
     assert result.chapters[1].duration == "PT10M"
     assert result.usage.total_tokens == 15
+
+
+@pytest.mark.parametrize("payload", ['"just a string"', "[]", "42", "null", "true"])
+def test_result_from_response_rejects_non_object_top_level_json(
+    payload: str,
+) -> None:
+    """Non-object top-level JSON payloads must be rejected."""
+    response = _valid_llm_response(payload)
+    generator = ChapterMarkersGenerator(
+        llm=typ.cast("typ.Any", None),
+        config=ChapterMarkersGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ChapterMarkersResponseFormatError, match="response"):
+        generator._result_from_response(response)
+
+
+def test_result_from_response_requires_chapters_key() -> None:
+    """Objects without a `chapters` key must be rejected."""
+    response = _valid_llm_response(json.dumps({"not_chapters": []}))
+    generator = ChapterMarkersGenerator(
+        llm=typ.cast("typ.Any", None),
+        config=ChapterMarkersGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ChapterMarkersResponseFormatError, match="chapters"):
+        generator._result_from_response(response)
 
 
 @pytest.mark.parametrize(
@@ -261,6 +288,22 @@ def test_build_prompt_includes_tei_and_segment_structure() -> None:
     }
 
 
+def test_build_prompt_omits_segment_structure_when_not_provided() -> None:
+    """The prompt omits segment metadata when callers do not provide it."""
+    prompt_without_segment_structure = ChapterMarkersGenerator.build_prompt(
+        _minimal_tei(),
+    )
+    prompt_with_none_segment_structure = ChapterMarkersGenerator.build_prompt(
+        _minimal_tei(),
+        segment_structure=None,
+    )
+
+    assert prompt_without_segment_structure == prompt_with_none_segment_structure
+    assert json.loads(prompt_without_segment_structure) == {
+        "script_tei_xml": _minimal_tei()
+    }
+
+
 @pytest.mark.asyncio
 async def test_generate_calls_llm_and_returns_result() -> None:
     """The generate method calls the LLM and parses chapter markers."""
@@ -283,6 +326,69 @@ async def test_generate_calls_llm_and_returns_result() -> None:
     assert len(result.chapters) == 1
     assert result.chapters[0].title == "Introduction"
     assert fake_llm.requests[0].model == "test-model"
+
+
+@pytest.mark.asyncio
+async def test_generate_rejects_chapters_not_aligned_to_segment_starts() -> None:
+    """Explicit segment starts constrain generated chapter starts."""
+    fake_llm = _FakeLLMPort(
+        _valid_llm_response(
+            json.dumps({
+                "chapters": [
+                    {"title": "Introduction", "start": "PT1S"},
+                    {"title": "Main", "start": "PT2M"},
+                ]
+            })
+        )
+    )
+    generator = ChapterMarkersGenerator(
+        llm=fake_llm,
+        config=ChapterMarkersGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ChapterMarkersResponseFormatError, match="segment starts"):
+        await generator.generate(
+            _minimal_tei(),
+            segment_structure={
+                "segments": [
+                    {"id": "seg-intro", "title": "Introduction", "start": "PT0S"},
+                    {"id": "seg-main", "title": "Main", "start": "PT5M30S"},
+                ]
+            },
+        )
+
+
+@pytest.mark.asyncio
+async def test_generate_rejects_locator_with_mismatched_segment_start() -> None:
+    """Chapter locators must resolve to the same supplied segment transition."""
+    fake_llm = _FakeLLMPort(
+        _valid_llm_response(
+            json.dumps({
+                "chapters": [
+                    {
+                        "title": "Introduction",
+                        "start": "PT5M30S",
+                        "tei_locator": "#seg-intro",
+                    }
+                ]
+            })
+        )
+    )
+    generator = ChapterMarkersGenerator(
+        llm=fake_llm,
+        config=ChapterMarkersGeneratorConfig(model="test-model"),
+    )
+
+    with pytest.raises(ChapterMarkersResponseFormatError, match="#seg-intro"):
+        await generator.generate(
+            _minimal_tei(),
+            segment_structure={
+                "segments": [
+                    {"id": "seg-intro", "title": "Introduction", "start": "PT0S"},
+                    {"id": "seg-main", "title": "Main", "start": "PT5M30S"},
+                ]
+            },
+        )
 
 
 def test_enrich_tei_with_chapter_markers(snapshot: SnapshotAssertion) -> None:
@@ -395,6 +501,23 @@ def test_enrich_tei_with_missing_body_raises_value_error() -> None:
     with pytest.raises(ValueError, match=r"XML processing error|TEI payload field"):
         enrich_tei_with_chapter_markers(
             malformed_tei_xml,
+            _result(ChapterMarker(title="Intro", start="PT0S")),
+        )
+
+
+def test_enrich_tei_with_missing_payload_fields_raises_value_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Structurally valid TEI missing payload fields should raise ValueError."""
+    monkeypatch.setattr(
+        tei,
+        "to_dict",
+        lambda _document: {"text": {"body": {}}},
+    )
+
+    with pytest.raises(ValueError, match=r"TEI payload field"):
+        enrich_tei_with_chapter_markers(
+            _minimal_tei(),
             _result(ChapterMarker(title="Intro", start="PT0S")),
         )
 

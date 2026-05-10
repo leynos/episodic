@@ -43,9 +43,10 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 - Keep public signatures in `episodic/llm/ports.py`,
   `episodic/canonical/domain.py`, and `episodic/canonical/ports.py` stable
   unless the implementer stops and escalates.
-- Timing metadata must use ISO 8601 durations such as `PT0S`, `PT5M30S`, and
-  `PT1H2M3S`. Internally, validation may convert durations to seconds, but the
-  public DTO and TEI representation must preserve ISO 8601 duration strings.
+- Timing metadata must use integer-only ISO 8601-style `PT#H#M#S` durations
+  such as `PT0S`, `PT5M30S`, and `PT1H2M3S`. Internally, validation may convert
+  durations to seconds, but the public DTO and TEI representation must preserve
+  those duration strings.
 - Chapter starts must be ordered, non-negative, and aligned to segment
   transitions. Duplicate, descending, or negative starts are invalid.
 - Use Vidai Mock for behavioural testing of inference services.
@@ -96,10 +97,10 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 - Risk: podcast players use several chapter formats, including MP4 chapter
   atoms, ID3 chapters, and sidecar JSON. This milestone can overreach if it
   tries to generate every downstream format. Severity: medium. Likelihood:
-  medium. Mitigation: store canonical chapter metadata in TEI with ISO 8601
-  starts and optional durations. Leave audio-file embedding to the later audio
-  synthesis pipeline, where mastering can project TEI chapters into
-  player-specific formats.
+  medium. Mitigation: store canonical chapter metadata in TEI with integer-only
+  ISO 8601-style starts and optional durations. Leave audio-file embedding to
+  the later audio synthesis pipeline, where mastering can project TEI chapters
+  into player-specific formats.
 
 - Risk: LLM-generated timestamps may drift from the source segment order.
   Severity: medium. Likelihood: medium. Mitigation: validate LLM output
@@ -140,6 +141,11 @@ roadmap item 2.3.2 as done only after all quality gates pass.
   chapter enrichment, optional-field type validation, stronger prompt and TEI
   tests, syrupy XML snapshots, BDD TEI enrichment, process-cleanup reuse,
   README and guide signposting, and chapter-generator usage documentation.
+- [x] (2026-05-10 00:00Z) Addressed follow-up review comments for validating
+  generated chapter starts and locators against explicit segment metadata,
+  clarifying the integer-only duration subset, covering omitted prompt segment
+  metadata and malformed response payloads, and sharing TEI payload helpers
+  with show-notes enrichment.
 
 ## Surprises & discoveries
 
@@ -177,6 +183,20 @@ roadmap item 2.3.2 as done only after all quality gates pass.
   canonical chapter blocks. It appends a new block only when chapters are
   present, and returns the original TEI only when there was nothing to remove.
 
+- Observation: `generate(...)` previously validated monotonic starts but not
+  alignment to supplied segment-transition starts. Evidence: review feedback
+  supplied a counterexample with segment starts at `PT0S` and `PT5M30S` and LLM
+  output at `PT1S` and `PT2M`. Impact: generated chapters are now checked
+  against explicit segment starts before returning, and locators must resolve
+  to the same supplied transition start.
+
+- Observation: the chapter-marker parser intentionally accepts only
+  integer-only `PT#H#M#S` durations, while earlier wording said generic ISO
+  8601 durations. Evidence: review feedback noted rejected valid ISO 8601 forms
+  such as fractional seconds and day-based durations. Impact: prompts, errors,
+  and documentation now describe the supported ISO 8601-style subset instead of
+  implying full ISO 8601 duration support.
+
 ## Decision log
 
 - Decision: model chapter markers as content enrichment in
@@ -186,11 +206,12 @@ roadmap item 2.3.2 as done only after all quality gates pass.
   enrichment services that use `LLMPort` and emit TEI metadata. Date/Author:
   2026-05-08 / ExecPlan.
 
-- Decision: store canonical chapter timing in TEI as ISO 8601 durations rather
-  than player-specific chapter payloads. Rationale: TEI remains the canonical
-  authoring model. Player-specific projections belong to the audio mastering
-  pipeline, while this task only needs portable timing metadata for later
-  podcast-player compatibility. Date/Author: 2026-05-08 / ExecPlan.
+- Decision: store canonical chapter timing in TEI as integer-only
+  ISO 8601-style `PT#H#M#S` durations rather than player-specific chapter
+  payloads. Rationale: TEI remains the canonical authoring model.
+  Player-specific projections belong to the audio mastering pipeline, while
+  this task only needs portable timing metadata for later podcast-player
+  compatibility. Date/Author: 2026-05-08 / ExecPlan.
 
 - Decision: require property tests for timing rules.
   Rationale: chapter timing introduces invariants over arbitrary ordered and
@@ -226,8 +247,9 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 
 The implementation delivered a chapter-marker enrichment service, tests,
 documentation, ADR, and roadmap update. The feature keeps inference behind the
-existing `LLMPort`, stores canonical chapter starts as ISO 8601 durations in
-TEI `@n`, and validates ordering before enrichment.
+existing `LLMPort`, stores canonical chapter starts as integer-only ISO
+8601-style durations in TEI `@n`, and validates ordering and supplied segment
+alignment before enrichment.
 
 Validation on the final tree passed:
 
@@ -252,6 +274,27 @@ sequence was then rerun on the review follow-up tree and passed:
 - `make typecheck`
 - `make lint`
 - `make test` with 475 passed and 3 skipped
+- `make markdownlint`
+- `make nixie`
+
+Segment-alignment review follow-up validation added explicit checks that LLM
+chapter starts and locators match supplied segment metadata. Focused validation
+passed:
+
+```bash
+uv run pytest tests/test_chapter_markers.py tests/test_show_notes.py
+```
+
+The full gate sequence was then rerun on the segment-alignment follow-up tree.
+An initial `make test` run hit a transient async fixture timeout in
+`tests/test_profile_template_service.py::TestEpisodeTemplateService::test_update_episode_template_revision_conflict_raises`;
+ that single test passed when rerun directly. A subsequent full `make test` run
+passed with 485 tests and 3 skipped. Final validation passed:
+
+- `make check-fmt`
+- `make typecheck`
+- `make lint`
+- `make test` with 485 passed and 3 skipped
 - `make markdownlint`
 - `make nixie`
 
@@ -280,8 +323,9 @@ The terms used in this plan are:
   boundaries to transitions between these segments.
 - Chapter marker: a navigational playback boundary with a title, start time,
   optional end time or duration, optional summary, and optional source locator.
-- ISO 8601 duration: a standard text format for elapsed time, such as `PT45S`
-  or `PT7M30S`.
+- Supported duration: an integer-only ISO 8601-style `PT#H#M#S` text format
+  for elapsed time, such as `PT45S` or `PT7M30S`. Days and fractional units are
+  outside this milestone's parser.
 - Vidai Mock: the local LLM provider simulator used by behavioural tests.
 
 ## Plan of work
@@ -508,10 +552,10 @@ is:
 ```
 
 This is intentionally parallel to show notes. The `@n` attribute stores the
-chapter start time as an ISO 8601 duration, and `@corresp` points back to the
-source segment or transition. If `tei_rapporteur` cannot preserve this shape,
-document the failure in `Surprises & Discoveries`, record a decision, and stop
-before changing the dependency pin.
+chapter start time as an integer-only ISO 8601-style duration, and `@corresp`
+points back to the source segment or transition. If `tei_rapporteur` cannot
+preserve this shape, document the failure in `Surprises & Discoveries`, record
+a decision, and stop before changing the dependency pin.
 
 ## Interfaces and dependencies
 

@@ -671,9 +671,11 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   segment starts and identifiers.
 - `ChapterMarker` carries a title, required `start` time, optional summary,
   optional `end`, optional `duration`, and optional `tei_locator`. Start, end,
-  and duration values must be non-negative ISO 8601 durations. A
-  `ChapterMarkersResult` rejects duplicate or descending starts so chapter
-  order remains suitable for podcast-player projection.
+  and duration values must be non-negative integer-only ISO 8601-style
+  `PT#H#M#S` durations. Days and fractional units are not accepted. A
+  `ChapterMarkersResult` rejects duplicate or descending starts, and
+  `ChapterMarkersGenerator.generate(...)` rejects outputs that do not align to
+  explicit starts and locators in supplied `segment_structure` metadata.
 - `enrich_tei_with_chapter_markers(...)` inserts a
   `<div type="chapters">` element into the TEI body using the representation
   defined by

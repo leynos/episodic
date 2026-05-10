@@ -42,15 +42,17 @@ The representation rules are:
 - Use one `<item>` per generated chapter marker.
 - Use `<label>` inside `<item>` for the chapter title.
 - Store the optional chapter summary as inline text after `<label>`.
-- Store the chapter start time in required `@n` using an ISO 8601 duration.
+- Store the chapter start time in required `@n` using an integer-only
+  ISO 8601-style `PT#H#M#S` duration. Days and fractional units are not
+  accepted by this milestone's parser.
 - Store source-segment locators in optional `@corresp`.
 - Replace an existing `<div type="chapters">` block during enrichment so the
   operation is idempotent.
 
-The generator DTO also validates optional `end` and `duration` fields returned
-by an LLM. Those fields are not emitted into TEI in this milestone because the
-current `tei_rapporteur` payload model does not preserve an attempted `dur`
-attribute on `<item>`.
+The generator data transfer object (DTO) also validates optional `end` and
+`duration` fields returned by an LLM. Those fields are not emitted into TEI in
+this milestone because the current `tei_rapporteur` payload model does not
+preserve an attempted `dur` attribute on `<item>`.
 
 ## Rationale
 
@@ -69,7 +71,8 @@ milestone.
 ### Positive
 
 - Chapter markers remain inside the canonical TEI document.
-- Chapter starts are explicitly ordered, non-negative ISO 8601 durations.
+- Chapter starts are explicitly ordered, non-negative integer-only
+  ISO 8601-style `PT#H#M#S` durations.
 - The representation reuses the established enrichment convention.
 - Re-running enrichment replaces the existing chapter block rather than
   appending duplicates.
