@@ -548,6 +548,61 @@ duplicate-key conflict. The in-memory checkpoint adapter models the same
 first-write-wins contract for tests with an `asyncio.Lock` and an injected
 clock, but remains unbounded and process-local.
 
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Orchestrator as StructuredPlanningOrchestrator
+    participant LangGraph as GenerationGraph
+    participant Planner as PlannerPort
+    participant Checkpoints as CheckpointPort
+
+    Client->>Orchestrator: start_generation(request)
+    Orchestrator->>LangGraph: run(request, checkpoint_port)
+
+    LangGraph->>Planner: plan(request)
+    Planner-->>LangGraph: PlannerResult
+
+    LangGraph->>Checkpoints: get_by_idempotency_key(step_idempotency_key)
+    Checkpoints-->>LangGraph: WorkflowCheckpoint | None
+
+    alt checkpoint does not exist
+        LangGraph->>Checkpoints: save(WorkflowCheckpoint)
+        Checkpoints-->>LangGraph: WorkflowCheckpoint
+    end
+
+    LangGraph-->>Orchestrator: SuspendedWorkflowResult
+    Orchestrator-->>Client: SuspendedWorkflowResult
+```
+
+Figure: Suspend flow for a generation workflow that persists or reuses a
+checkpoint before side-effecting execution.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Orchestrator as GenerationOrchestrationLayer
+    participant Checkpoints as CheckpointPort
+    participant ResumePort as TaskResumePort
+
+    Client->>Orchestrator: resume_generation(ResumeWorkflowCommand)
+
+    Orchestrator->>Checkpoints: get(checkpoint_id)
+    Checkpoints-->>Orchestrator: WorkflowCheckpoint | None
+
+    alt checkpoint unknown
+        Orchestrator-->>Client: ValueError
+    else checkpoint found
+        Orchestrator->>ResumePort: resume(ResumeWorkflowCommand)
+        ResumePort-->>Orchestrator: ActionExecutionResult
+
+        Orchestrator->>Orchestrator: build_generation_result(PlannerResult, ActionExecutionResult)
+        Orchestrator-->>Client: GenerationOrchestrationResult
+    end
+```
+
+Figure: Resume flow for a suspended generation workflow that either rejects an
+unknown checkpoint or aggregates the resumed action result.
+
 #### Inference strategy and tool integration
 
 Planning uses structured output to produce a task plan with explicit
