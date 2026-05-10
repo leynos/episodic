@@ -21,8 +21,11 @@ from episodic.llm import (
     LLMTokenBudget,
     LLMUsage,
 )
+from episodic.logging import get_logger
 
 type JsonMapping = dict[str, object]
+
+logger = get_logger(__name__)
 
 _DEFAULT_SYSTEM_PROMPT = (
     "The assistant acts as a podcast chapter-marker generator. Given a TEI P5 "
@@ -45,6 +48,9 @@ class ChapterMarkersResponseFormatError(ValueError):
 
 def _duration_to_seconds(duration: str, field_name: str) -> int:
     """Return a supported ISO 8601 duration as seconds."""
+    if not isinstance(duration, str):
+        msg = f"{field_name} must be a non-negative ISO 8601 duration."
+        raise TypeError(msg)
     match = _ISO_8601_DURATION_PATTERN.fullmatch(duration)
     if match is None:
         msg = f"{field_name} must be a non-negative ISO 8601 duration."
@@ -63,10 +69,13 @@ def _ensure_non_empty_field(instance: object, field_name: str) -> None:
         raise ValueError(msg)
 
 
-def _normalize_optional_string(value: str | None) -> str | None:
+def _normalize_optional_string(value: object, field_name: str) -> str | None:
     """Normalize blank optional strings to None and strip surrounding whitespace."""
     if value is None:
         return None
+    if not isinstance(value, str):
+        msg = f"{field_name} must be a string or null."
+        raise TypeError(msg)
     normalized = value.strip()
     if normalized == "":
         return None
@@ -88,10 +97,13 @@ class ChapterMarker:
         """Validate required chapter fields and normalize optional metadata."""
         _ensure_non_empty_field(self, "title")
         _duration_to_seconds(self.start, "start")
+        if not isinstance(self.summary, str):
+            msg = "summary must be a string."
+            raise TypeError(msg)
         object.__setattr__(self, "summary", self.summary.strip())
-        end = _normalize_optional_string(self.end)
-        duration = _normalize_optional_string(self.duration)
-        tei_locator = _normalize_optional_string(self.tei_locator)
+        end = _normalize_optional_string(self.end, "end")
+        duration = _normalize_optional_string(self.duration, "duration")
+        tei_locator = _normalize_optional_string(self.tei_locator, "tei_locator")
         if end is not None:
             _duration_to_seconds(end, "end")
         if duration is not None:
@@ -183,11 +195,11 @@ def _parse_chapter(raw: dict[str, object]) -> ChapterMarker:
             duration=duration,
             tei_locator=tei_locator,
         )
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
         raise ChapterMarkersResponseFormatError(str(exc)) from exc
 
 
-@dc.dataclass(slots=True)
+@dc.dataclass(frozen=True, slots=True)
 class ChapterMarkersGenerator:
     """Chapter-marker generator service backed by an LLM."""
 
@@ -213,6 +225,7 @@ class ChapterMarkersGenerator:
             payload = json.loads(response.text)
         except json.JSONDecodeError as exc:
             msg = "LLM response is not valid JSON."
+            logger.warning("chapter_markers_response_invalid_json")
             raise ChapterMarkersResponseFormatError(msg) from exc
 
         payload_dict = _decode_object(payload, "response")
@@ -222,7 +235,7 @@ class ChapterMarkersGenerator:
             for chapter in chapters_raw
         )
         try:
-            return ChapterMarkersResult(
+            result = ChapterMarkersResult(
                 chapters=chapters,
                 usage=response.usage,
                 model=response.model,
@@ -230,7 +243,12 @@ class ChapterMarkersGenerator:
                 finish_reason=response.finish_reason,
             )
         except ValueError as exc:
+            logger.warning("chapter_markers_response_invalid_timing")
             raise ChapterMarkersResponseFormatError(str(exc)) from exc
+        logger.info(
+            f"chapter_markers_response_parsed chapter_count={len(result.chapters)}"
+        )
+        return result
 
     async def generate(
         self,
@@ -250,6 +268,7 @@ class ChapterMarkersGenerator:
             provider_operation=self.config.provider_operation,
             token_budget=self.config.token_budget,
         )
+        logger.info("chapter_markers_generation_requested")
         response = await self.llm.generate(request)
         return self._result_from_response(response)
 
@@ -324,17 +343,24 @@ def enrich_tei_with_chapter_markers(
     result: ChapterMarkersResult,
 ) -> str:
     """Insert chapter-marker metadata into a TEI document body."""
-    if not result.chapters:
-        return tei_xml
-
     document = tei.parse_xml(tei_xml)
     document_payload = typ.cast("dict[str, object]", tei.to_dict(document))
     body_blocks = _body_blocks_payload(document_payload)
+    original_block_count = len(body_blocks)
     body_blocks[:] = [
         body_block
         for body_block in body_blocks
         if not _is_chapters_div_payload(body_block)
     ]
-    body_blocks.append(_build_chapters_div_payload(result.chapters))
+    removed_block_count = original_block_count - len(body_blocks)
+    if result.chapters:
+        body_blocks.append(_build_chapters_div_payload(result.chapters))
+    elif removed_block_count == 0:
+        return tei_xml
+    logger.info(
+        "chapter_markers_tei_enriched "
+        f"chapter_count={len(result.chapters)} "
+        f"removed_chapter_blocks={removed_block_count}"
+    )
     enriched_document = tei.from_dict(document_payload)
     return tei.emit_xml(enriched_document)

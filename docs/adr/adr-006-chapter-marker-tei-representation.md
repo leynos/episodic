@@ -6,8 +6,8 @@ Accepted
 
 ## Context
 
-Roadmap item `2.3.2` requires the generation pipeline to create chapter
-markers aligned to script segments and to include timing metadata suitable for
+Roadmap item `2.3.2` requires the generation pipeline to create chapter markers
+aligned to script segments and to include timing metadata suitable for
 podcast-player projection. Episodic keeps generated content inside the
 canonical Text Encoding Initiative (TEI) document, so chapter markers must be
 represented as TEI body metadata rather than as a separate sidecar format.
@@ -88,8 +88,8 @@ milestone.
 ## References
 
 Roadmap item `2.3.2` in `docs/roadmap.md`.[^1] ExecPlan:
-`docs/execplans/2-3-2-generate-chapter-markers-aligned-to-script-segments.md`.[^2]
-Implementation: `episodic/generation/chapter_markers.py`.[^3] Tests:
+`docs/execplans/2-3-2-generate-chapter-markers-aligned-to-script-segments.md`.[
+^2] Implementation: `episodic/generation/chapter_markers.py`.[^3] Tests:
 `tests/test_chapter_markers.py`, `tests/features/chapter_markers.feature`,
 `tests/steps/test_chapter_markers_steps.py`.[^4]
 

@@ -28,8 +28,8 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 ## Constraints
 
 - Preserve hexagonal architecture boundaries. Domain and generation policy
-  logic must depend on the existing `LLMPort` contract and TEI helpers only.
-  It must not import Falcon, SQLAlchemy, Celery, LangGraph, or concrete HTTP
+  logic must depend on the existing `LLMPort` contract and TEI helpers only. It
+  must not import Falcon, SQLAlchemy, Celery, LangGraph, or concrete HTTP
   client adapters.
 - Keep chapter markers inside the canonical TEI document. Prompt JSON is
   allowed only as a projection of TEI-backed content, not as a second canonical
@@ -87,19 +87,19 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 ## Risks
 
 - Risk: the existing TEI scripts may not have a dedicated segment element or
-  consistent segment locator convention.
-  Severity: medium. Likelihood: medium. Mitigation: inspect existing TEI
-  fixtures and `tei_rapporteur` payload support first. If no segment type is
-  established, define the smallest local convention in an ADR and keep the
-  generator accepting explicit segment metadata as an optional prompt input.
+  consistent segment locator convention. Severity: medium. Likelihood: medium.
+  Mitigation: inspect existing TEI fixtures and `tei_rapporteur` payload
+  support first. If no segment type is established, define the smallest local
+  convention in an ADR and keep the generator accepting explicit segment
+  metadata as an optional prompt input.
 
 - Risk: podcast players use several chapter formats, including MP4 chapter
   atoms, ID3 chapters, and sidecar JSON. This milestone can overreach if it
-  tries to generate every downstream format.
-  Severity: medium. Likelihood: medium. Mitigation: store canonical chapter
-  metadata in TEI with ISO 8601 starts and optional durations. Leave audio-file
-  embedding to the later audio synthesis pipeline, where mastering can project
-  TEI chapters into player-specific formats.
+  tries to generate every downstream format. Severity: medium. Likelihood:
+  medium. Mitigation: store canonical chapter metadata in TEI with ISO 8601
+  starts and optional durations. Leave audio-file embedding to the later audio
+  synthesis pipeline, where mastering can project TEI chapters into
+  player-specific formats.
 
 - Risk: LLM-generated timestamps may drift from the source segment order.
   Severity: medium. Likelihood: medium. Mitigation: validate LLM output
@@ -107,16 +107,14 @@ roadmap item 2.3.2 as done only after all quality gates pass.
   invariants.
 
 - Risk: Vidai Mock behavioural tests can become brittle if they assert exact
-  prompt wording.
-  Severity: low. Likelihood: medium. Mitigation: assert structural facts about
-  the outbound request, such as the presence of TEI XML, segment identifiers,
-  and chapter schema instructions.
+  prompt wording. Severity: low. Likelihood: medium. Mitigation: assert
+  structural facts about the outbound request, such as the presence of TEI XML,
+  segment identifiers, and chapter schema instructions.
 
 - Risk: chapter markers overlap with show notes, because the user guide
-  currently describes show notes as including chapter markers.
-  Severity: low. Likelihood: high. Mitigation: document the distinction:
-  show notes are topic summaries, while chapter markers are navigational
-  playback boundaries.
+  currently describes show notes as including chapter markers. Severity: low.
+  Likelihood: high. Mitigation: document the distinction: show notes are topic
+  summaries, while chapter markers are navigational playback boundaries.
 
 ## Progress
 
@@ -138,52 +136,61 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 - [x] (2026-05-08 00:00Z) Stage F: ran all required gates sequentially on the
   final tree. `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie` passed.
+- [x] (2026-05-10 00:00Z) Addressed review follow-ups for idempotent empty
+  chapter enrichment, optional-field type validation, stronger prompt and TEI
+  tests, syrupy XML snapshots, BDD TEI enrichment, process-cleanup reuse,
+  README and guide signposting, and chapter-generator usage documentation.
 
 ## Surprises & discoveries
 
 - Observation: profile-template and API fixtures store segment structure as
   JSON-like metadata such as `{"segments": ["intro", "main", "outro"]}`, while
   current TEI fixtures mostly use paragraphs and optional `xml:id` values
-  rather than a dedicated segment element.
-  Evidence: `tests/test_profile_template_service.py`,
-  `tests/test_profile_template_api.py`, and `tests/test_show_notes.py`.
-  Impact: the chapter generator will accept explicit `segment_structure`
-  metadata and will use `tei_locator`/`@corresp` to align generated chapters
-  back to segment transitions without requiring a new TEI segment element.
+  rather than a dedicated segment element. Evidence:
+  `tests/test_profile_template_service.py`,
+  `tests/test_profile_template_api.py`, and `tests/test_show_notes.py`. Impact:
+  the chapter generator will accept explicit `segment_structure` metadata and
+  will use `tei_locator`/`@corresp` to align generated chapters back to segment
+  transitions without requiring a new TEI segment element.
 
 - Observation: the show-notes TEI representation already proves that
-  `tei_rapporteur` preserves `<div type="...">`, `<list>`, `<item>`,
-  `<label>`, `@n`, and `@corresp`.
-  Evidence: `episodic/generation/show_notes.py` and
-  `docs/adr/adr-004-show-notes-tei-representation.md`.
-  Impact: chapter markers can reuse the same canonical container pattern with
-  `div_type="chapters"` and avoid dependency or parser changes.
+  `tei_rapporteur` preserves `<div type="...">`, `<list>`, `<item>`, `<label>`,
+  `@n`, and `@corresp`. Evidence: `episodic/generation/show_notes.py` and
+  `docs/adr/adr-004-show-notes-tei-representation.md`. Impact: chapter markers
+  can reuse the same canonical container pattern with `div_type="chapters"` and
+  avoid dependency or parser changes.
 
 - Observation: `tei_rapporteur` does not preserve attempted `dur` payload
   metadata on `<item>`, and it rejects list items with empty inline content.
   Evidence: focused test run logged in
-  `/tmp/test-episodic-2-3-2-chapter-markers-focused.out`.
-  Impact: canonical TEI stores the required player timing in `@n` and source
-  alignment in `@corresp`. Optional `duration` and `end` remain DTO fields for
-  LLM validation but are not emitted into TEI until the TEI tooling exposes a
-  supported attribute. When no summary exists, TEI inline content falls back to
-  the chapter title so the document remains valid.
+  `/tmp/test-episodic-2-3-2-chapter-markers-focused.out`. Impact: canonical TEI
+  stores the required player timing in `@n` and source alignment in `@corresp`.
+  Optional `duration` and `end` remain DTO fields for LLM validation but are
+  not emitted into TEI until the TEI tooling exposes a supported attribute.
+  When no summary exists, TEI inline content falls back to the chapter title so
+  the document remains valid.
+
+- Observation: the original empty-result path returned the input TEI before
+  removing an existing chapter block. Evidence: review feedback requested
+  `test_enrich_tei_with_empty_result_removes_existing_chapters`. Impact:
+  `enrich_tei_with_chapter_markers(...)` now always parses and filters existing
+  canonical chapter blocks. It appends a new block only when chapters are
+  present, and returns the original TEI only when there was nothing to remove.
 
 ## Decision log
 
 - Decision: model chapter markers as content enrichment in
-  `episodic/generation/`, not as QA or persistence infrastructure.
-  Rationale: roadmap 2.3 is content enrichment and TEI body generation. The
-  existing show-notes service already establishes `episodic/generation/` as the
-  home for enrichment services that use `LLMPort` and emit TEI metadata.
-  Date/Author: 2026-05-08 / ExecPlan.
+  `episodic/generation/`, not as QA or persistence infrastructure. Rationale:
+  roadmap 2.3 is content enrichment and TEI body generation. The existing
+  show-notes service already establishes `episodic/generation/` as the home for
+  enrichment services that use `LLMPort` and emit TEI metadata. Date/Author:
+  2026-05-08 / ExecPlan.
 
 - Decision: store canonical chapter timing in TEI as ISO 8601 durations rather
-  than player-specific chapter payloads.
-  Rationale: TEI remains the canonical authoring model. Player-specific
-  projections belong to the audio mastering pipeline, while this task only
-  needs portable timing metadata for later podcast-player compatibility.
-  Date/Author: 2026-05-08 / ExecPlan.
+  than player-specific chapter payloads. Rationale: TEI remains the canonical
+  authoring model. Player-specific projections belong to the audio mastering
+  pipeline, while this task only needs portable timing metadata for later
+  podcast-player compatibility. Date/Author: 2026-05-08 / ExecPlan.
 
 - Decision: require property tests for timing rules.
   Rationale: chapter timing introduces invariants over arbitrary ordered and
@@ -193,21 +200,27 @@ roadmap item 2.3.2 as done only after all quality gates pass.
 
 - Decision: align chapters through explicit `segment_structure` metadata and
   optional TEI locators rather than inventing a dedicated TEI segment element
-  in this milestone.
-  Rationale: existing code consistently treats segment layouts as template
-  structure metadata, while current TEI examples do not establish a separate
-  segment element convention. The generator can therefore align chapter
-  boundaries to segment transitions without widening the canonical TEI model.
-  Date/Author: 2026-05-08 / Implementation.
+  in this milestone. Rationale: existing code consistently treats segment
+  layouts as template structure metadata, while current TEI examples do not
+  establish a separate segment element convention. The generator can therefore
+  align chapter boundaries to segment transitions without widening the
+  canonical TEI model. Date/Author: 2026-05-08 / Implementation.
 
 - Decision: emit only `@n` and `@corresp` timing/alignment attributes in the
-  canonical TEI chapter block for this milestone.
-  Rationale: `@n` carries the required ISO 8601 chapter start time, which is
-  the player-compatible boundary needed by roadmap item 2.3.2.
-  `tei_rapporteur` drops an attempted `dur` payload field, so forcing
-  unsupported optional duration metadata into TEI would create false
-  persistence expectations.
-  Date/Author: 2026-05-08 / Implementation.
+  canonical TEI chapter block for this milestone. Rationale: `@n` carries the
+  required ISO 8601 chapter start time, which is the player-compatible boundary
+  needed by roadmap item 2.3.2. `tei_rapporteur` drops an attempted `dur`
+  payload field, so forcing unsupported optional duration metadata into TEI
+  would create false persistence expectations. Date/Author: 2026-05-08 /
+  Implementation.
+
+- Decision: keep observability lightweight by logging bounded lifecycle events
+  and parser failures from the chapter-marker service, without adding a metrics
+  or tracing dependency in this milestone. Rationale: the repository has a
+  logging facade but no local metrics/tracing port for generation services yet.
+  Adding only bounded log messages avoids sensitive TEI or prompt leakage and
+  stays within the no-new-dependency constraint. Date/Author: 2026-05-10 /
+  Review follow-up.
 
 ## Outcomes & retrospective
 
@@ -221,7 +234,24 @@ Validation on the final tree passed:
 - `make check-fmt`
 - `make typecheck`
 - `make lint`
-- `make test` with 465 passed and 3 skipped
+- `make test` with 475 passed and 3 skipped
+- `make markdownlint`
+- `make nixie`
+
+Review follow-up validation started with focused chapter-marker coverage:
+
+```bash
+uv run pytest tests/test_chapter_markers.py \
+  tests/steps/test_chapter_markers_steps.py --snapshot-update
+```
+
+It passed with 36 tests and generated two syrupy snapshots. The full gate
+sequence was then rerun on the review follow-up tree and passed:
+
+- `make check-fmt`
+- `make typecheck`
+- `make lint`
+- `make test` with 475 passed and 3 skipped
 - `make markdownlint`
 - `make nixie`
 
@@ -232,8 +262,7 @@ enrichment and TEI body generation". Item 2.3.1, show-notes generation, is
 already complete and provides the closest implementation pattern. The current
 show-notes service lives in `episodic/generation/show_notes.py`, exports
 dataclasses and a generator through `episodic/generation/__init__.py`, uses
-`LLMPort` from `episodic/llm/ports.py`, and enriches TEI via
-`tei_rapporteur`.
+`LLMPort` from `episodic/llm/ports.py`, and enriches TEI via `tei_rapporteur`.
 
 The design document `docs/episodic-podcast-generation-system-design.md` says
 the Content Generation Orchestrator produces structured drafts, show notes,
@@ -259,25 +288,27 @@ The terms used in this plan are:
 
 Stage A is discovery. Inspect `episodic/generation/show_notes.py`,
 `tests/test_show_notes.py`, `tests/features/show_notes.feature`,
-`tests/steps/test_show_notes_steps.py`, `docs/adr/adr-004-show-notes-tei-representation.md`,
-and representative TEI fixtures in tests. Confirm how script segments are
-represented today. If there is no segment convention, choose a narrow one for
-this feature and record it in a new ADR before implementing code. A likely
-canonical shape is a TEI `<div type="chapters">` metadata block containing one
-`<list>` of `<item>` children, where each item uses `<label>` for the chapter
-title, inline text for the summary, `@n` for the start time, and `@corresp` for
-the source segment locator. If end time or duration is required, prefer an
-attribute already supported by `tei_rapporteur`; otherwise stop and document
-the tooling gap before changing dependencies.
+`tests/steps/test_show_notes_steps.py`,
+`docs/adr/adr-004-show-notes-tei-representation.md`, and representative TEI
+fixtures in tests. Confirm how script segments are represented today. If there
+is no segment convention, choose a narrow one for this feature and record it in
+a new ADR before implementing code. A likely canonical shape is a TEI
+`<div type="chapters">` metadata block containing one `<list>` of `<item>`
+children, where each item uses `<label>` for the chapter title, inline text for
+the summary, `@n` for the start time, and `@corresp` for the source segment
+locator. If end time or duration is required, prefer an attribute already
+supported by `tei_rapporteur`; otherwise stop and document the tooling gap
+before changing dependencies.
 
-Stage B is fail-first tests. Add `tests/test_chapter_markers.py` for unit
-tests covering `ChapterMarker`, `ChapterMarkersResult`,
+Stage B is fail-first tests. Add `tests/test_chapter_markers.py` for unit tests
+covering `ChapterMarker`, `ChapterMarkersResult`,
 `ChapterMarkersGeneratorConfig`, strict JSON response parsing, prompt
 construction, empty results, malformed LLM responses, TEI escaping, replacement
 of an existing chapters div, and validation of invalid timing. Add Hypothesis
-tests in the same file, or in a focused `tests/test_chapter_marker_properties.py`
-if the file becomes too large, for non-negative and monotonic timing
-invariants. Add `tests/features/chapter_markers.feature` and
+tests in the same file, or in a focused
+`tests/test_chapter_marker_properties.py` if the file becomes too large, for
+non-negative and monotonic timing invariants. Add
+`tests/features/chapter_markers.feature` and
 `tests/steps/test_chapter_markers_steps.py` for the Vidai Mock scenario.
 
 Stage C is implementation. Add `episodic/generation/chapter_markers.py` with
@@ -430,8 +461,8 @@ The feature is accepted when all of the following are true:
 No end-to-end test is required if the implementation remains a standalone
 generation service with no new external API, persistence contract, command-line
 behaviour, network boundary, or user interface flow. If the implementation
-wires chapter markers into an externally observable workflow, add an
-end-to-end test for that workflow before marking the roadmap item done.
+wires chapter markers into an externally observable workflow, add an end-to-end
+test for that workflow before marking the roadmap item done.
 
 ## Idempotence and recovery
 
@@ -524,7 +555,7 @@ result = await generator.generate(
 enriched_xml = enrich_tei_with_chapter_markers(script_tei_xml, result)
 ```
 
-Revision note: initial draft created on 2026-05-08 from roadmap item 2.3.2,
-the completed show-notes plan and implementation, and the current architecture
+Revision note: initial draft created on 2026-05-08 from roadmap item 2.3.2, the
+completed show-notes plan and implementation, and the current architecture
 guidance. It establishes implementation stages, validation gates, and the
 proposed TEI representation for review before code work begins.

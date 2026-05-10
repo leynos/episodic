@@ -50,6 +50,7 @@ planned features.
 ### 🤖 AI Orchestration
 
 - LLM-based script generation with retry and guardrails
+- Segment-aligned chapter marker generation with canonical TEI metadata
 - Multi-layer quality assurance (factuality, tone, style)
 - Brand guideline compliance checking
 - Structured output planning with model tiering for cost control

@@ -5,3 +5,4 @@ Feature: Chapter marker generation aligned to script segments
     When the chapter-marker generator processes the script
     Then the generator returns structured chapter markers
     And the chapter-marker prompt includes the TEI script and segment metadata
+    And the generated chapter markers enrich the TEI idempotently

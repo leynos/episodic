@@ -678,7 +678,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `<div type="chapters">` element into the TEI body using the representation
   defined by
   [`adr-006-chapter-marker-tei-representation.md`](adr/adr-006-chapter-marker-tei-representation.md).
-  The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
+   The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
   `@n` stores the required start time, and `@corresp` stores an optional source
   locator. Optional DTO `end` and `duration` values are validated but not
   emitted into TEI until the TEI tooling exposes supported attributes.
@@ -687,6 +687,45 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   contain a `chapters` list, when a chapter entry is not an object, when
   required fields are absent or blank, when optional fields are not strings or
   null, or when timing values fail validation.
+
+Standalone chapter-marker usage pattern:
+
+```python
+from episodic.generation import (
+    ChapterMarkersGenerator,
+    ChapterMarkersGeneratorConfig,
+    ChapterMarkersResponseFormatError,
+    enrich_tei_with_chapter_markers,
+)
+from episodic.llm.ports import LLMTokenBudget
+
+chapter_config = ChapterMarkersGeneratorConfig(
+    model="gpt-4o-mini",
+    token_budget=LLMTokenBudget(
+        max_input_tokens=4096,
+        max_output_tokens=1024,
+        max_total_tokens=5120,
+    ),
+)
+
+
+async def enrich_with_chapters(llm_port, script_tei_xml: str) -> str:
+    generator = ChapterMarkersGenerator(llm=llm_port, config=chapter_config)
+    try:
+        result = await generator.generate(
+            script_tei_xml,
+            segment_structure={
+                "segments": [
+                    {"id": "seg-intro", "title": "Introduction", "start": "PT0S"},
+                    {"id": "seg-main", "title": "Main", "start": "PT5M30S"},
+                ]
+            },
+        )
+    except ChapterMarkersResponseFormatError:
+        # handle malformed LLM response
+        raise
+    return enrich_tei_with_chapter_markers(script_tei_xml, result)
+```
 
 ### Testing content generation services
 

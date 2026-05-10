@@ -80,9 +80,12 @@ to script segment transitions and carry required ISO 8601 start times such as
 chapter marker records that link so later audio publishing steps can project
 the canonical timing data into player-specific chapter formats.
 
-##### Two-stage generation
 
-Generating show notes uses two successive calls to different language models:
+##### Generation configuration
+
+Generating show notes uses two successive calls to different language models,
+while chapter markers use the execution model directly against the TEI script
+and segment metadata:
 
 1. A **planning model** reads the episode script and decides which enrichment
    tasks to run. Using a capable model here ensures the right work is selected.
@@ -93,12 +96,11 @@ Generating show notes uses two successive calls to different language models:
 No manual intervention is required; the split is handled automatically.
 Configuration is provided through the provider settings file:
 
-Table: Show-notes model configuration settings.
-
-| Setting           | Purpose                                                   |
-| ----------------- | --------------------------------------------------------- |
-| `planning_model`  | Name of the model used for the planning pass              |
-| `execution_model` | Name of the model used to generate the show-notes payload |
+| Setting                | Purpose                                                                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `planning_model`       | Name of the model used for the planning pass                                                                                                                   |
+| `execution_model`      | Name of the model used to generate the show-notes payload                                                                                                      |
+| `chapter_marker_model` | Optional future alias for the model used to title and summarize chapter markers; until this setting exists, chapter markers use the configured execution model |
 
 Both model names must reference endpoints available through the configured LLM
 provider.
@@ -121,8 +123,8 @@ intentional — a clear error is easier to diagnose and correct than silent data
 loss.
 
 Chapter markers apply the same fail-fast rule. Blank titles, invalid durations,
-negative starts, duplicate starts, and descending starts are rejected before the
-canonical TEI document is enriched.
+negative starts, duplicate starts, and descending starts are rejected before
+the canonical TEI document is enriched.
 
 ### Reusable Reference Documents
 

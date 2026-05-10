@@ -1,7 +1,19 @@
-"""Behavioural tests for the chapter-marker generator."""
+"""Behavioural tests for live chapter-marker inference.
+
+This module verifies the adapter-facing path that unit tests intentionally
+avoid. It starts Vidai Mock with an OpenAI-compatible chat-completion template,
+uses the real `OpenAICompatibleLLMAdapter`, records the outbound `LLMRequest`,
+and drives `ChapterMarkersGenerator` through pytest-bdd steps.
+
+The scenario proves the component relationships across the generation service,
+LLM port, OpenAI-compatible adapter, Vidai Mock test server, and TEI enrichment
+helper. The local server is process-scoped to the fixture and cleaned up
+through the same termination helper used when startup retries fail.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses as dc
 import json
 import shutil
@@ -17,6 +29,7 @@ from episodic.generation import (
     ChapterMarkersGenerator,
     ChapterMarkersGeneratorConfig,
     ChapterMarkersResult,
+    enrich_tei_with_chapter_markers,
 )
 from episodic.llm import LLMProviderOperation, LLMTokenBudget
 from episodic.llm.openai_adapter import (
@@ -25,7 +38,6 @@ from episodic.llm.openai_adapter import (
 )
 
 if typ.TYPE_CHECKING:
-    import asyncio
     import collections.abc as cabc
     from pathlib import Path
 
@@ -42,6 +54,7 @@ class ChapterMarkersBDDContext:
     segment_structure: dict[str, object] | None = None
     result: ChapterMarkersResult | None = None
     request_payload: LLMRequest | None = None
+    enriched_tei_xml: str = ""
 
 
 @dc.dataclass(slots=True)
@@ -50,10 +63,12 @@ class _RecordingLLMPort:
 
     wrapped: LLMPort
     requests: list[LLMRequest] = dc.field(default_factory=list)
+    lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """Record and forward the request."""
-        self.requests.append(request)
+        async with self.lock:
+            self.requests.append(request)
         return await self.wrapped.generate(request)
 
 
@@ -71,12 +86,7 @@ def chapter_markers_context() -> cabc.Iterator[ChapterMarkersBDDContext]:
     ctx = ChapterMarkersBDDContext()
     yield ctx
     if ctx.process is not None:
-        ctx.process.terminate()
-        try:
-            ctx.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            ctx.process.kill()
-            ctx.process.wait(timeout=5)
+        _terminate_process_gracefully(ctx.process)
 
 
 @scenario(
@@ -322,7 +332,8 @@ def run_chapter_marker_generation(
                 segment_structure=chapter_markers_context.segment_structure,
             )
             chapter_markers_context.result = result
-            chapter_markers_context.request_payload = recording_port.requests[0]
+            async with recording_port.lock:
+                chapter_markers_context.request_payload = recording_port.requests[0]
 
     _run_async_step(_function_scoped_runner, _generate_chapter_markers)
 
@@ -359,3 +370,24 @@ def assert_prompt_contains_tei_script_and_segments(
     assert "segment_structure" in request.prompt
     assert "seg-intro" in request.prompt
     assert "PT5M30S" in request.prompt
+
+
+@then("the generated chapter markers enrich the TEI idempotently")
+def assert_chapter_markers_enrich_tei_idempotently(
+    chapter_markers_context: ChapterMarkersBDDContext,
+) -> None:
+    """Verify generated chapters produce one repeatable TEI chapter block."""
+    result = chapter_markers_context.result
+    assert result is not None, "Expected generated chapter markers."
+
+    enriched_once = enrich_tei_with_chapter_markers(
+        chapter_markers_context.script_tei_xml,
+        result,
+    )
+    enriched_twice = enrich_tei_with_chapter_markers(enriched_once, result)
+
+    assert enriched_twice == enriched_once
+    assert enriched_once.count('type="chapters"') == 1
+    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_once
+    assert '<item n="PT5M30S" corresp="#seg-main">' in enriched_once
+    chapter_markers_context.enriched_tei_xml = enriched_once
