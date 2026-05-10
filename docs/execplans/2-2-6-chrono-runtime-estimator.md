@@ -185,6 +185,10 @@ the required gates pass: `make check-fmt`, `make typecheck`, `make lint`, and
   rather than local XML semantics.
 - [ ] Stage I: write the Episodic ADR that ratifies spoken-text TEI semantics
   for runtime estimation and marks unresolved semantics as a hard stop.
+- [x] (2026-05-10 00:00Z) Drafted proposed ADR-006 under `docs/adr/` with the
+  spoken-container mapping, exclusion rules, normalisation policy, tokenisation
+  scope, validation failure policy, and required `tei-rapporteur` extraction
+  contract. Stage I remains blocked until the ADR is accepted.
 - [ ] Stage J: raise and prioritise `tei-rapporteur` change requests for a
   Chrono-ready spoken-text extraction API.
 - [ ] Stage K: replace Chrono's local `ElementTree` extraction and malformed
@@ -275,6 +279,11 @@ the required gates pass: `make check-fmt`, `make typecheck`, `make lint`, and
   evaluator. The ADR must define what counts as spoken dialogue for Chrono and
   any other component that consumes script dialogue. Date/Author: 2026-05-10 /
   User and Codex.
+
+- Decision: draft ADR-006 as `Proposed`, not `Accepted`. Rationale: the ADR
+  records a concrete proposed contract, but Stage J and Stage K must remain
+  blocked until project acceptance ratifies the semantics. Date/Author:
+  2026-05-10 / Codex.
 
 ## Outcomes & Retrospective
 
@@ -826,6 +835,14 @@ make markdownlint ... passed; Summary: 0 error(s)
 make nixie ... passed; All diagrams validated successfully!
 ```
 
+ADR-006 draft validation:
+
+```plaintext
+make fmt ... passed; 278 files left unchanged; Summary: 0 error(s)
+make markdownlint ... passed; Summary: 0 error(s)
+make nixie ... passed; All diagrams validated successfully!
+```
+
 ## Revision note
 
 Initial draft defined the implementation sequence for roadmap item `2.2.6`,
@@ -840,3 +857,7 @@ minimal TEI-shaped snippets are not acceptable fixtures unless they validate as
 TEI P5 documents, and Chrono must not own TEI spoken-dialogue semantics. The
 remaining work is gated by an ADR and by prioritised `tei-rapporteur` changes
 that provide the spoken-text extraction contract Chrono needs.
+
+The next 2026-05-10 revision adds proposed ADR-006 as the Stage I draft. The
+ADR is intentionally not yet accepted, so Stage J and Stage K remain blocked
+until reviewers ratify or revise the proposed TEI P5 spoken-text semantics.
