@@ -687,8 +687,10 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 - Persist suspend state through `CheckpointPort` and resume external task
   results through `TaskResumePort`. Do not import SQLAlchemy, Celery, Falcon,
   or provider adapters into graph nodes.
-- Build idempotency keys with `build_workflow_step_idempotency_key(...)` from
-  a `WorkflowStepIdentity` and retry attempt.
+- Build idempotency keys by constructing a `WorkflowStepIdentity` containing
+  the workflow id, workflow type, step name, and action id, then passing that
+  identity plus a separate `attempt` retry count to
+  `build_workflow_step_idempotency_key(...)`.
 - In-memory checkpoints are for tests only. They use an injected clock and an
   `asyncio.Lock` to model first-write-wins idempotency, but they do not evict
   entries or coordinate across processes.

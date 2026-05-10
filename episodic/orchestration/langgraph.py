@@ -456,6 +456,12 @@ async def resume_generation_orchestration(
 ) -> dto.GenerationOrchestrationResult:
     """Resume a suspended generation workflow and return the final result.
 
+    `resume_generation_orchestration` currently assumes one suspended action
+    per checkpoint: `resume_port.resume(command)` returns one action result, and
+    `build_generation_result(planner_result, (action_result,))` finalises that
+    single result. Any future model that allows one checkpoint to cover
+    multiple `planner_result.plan.steps` entries must update this code path.
+
     Raises
     ------
         ValueError: If the command references an unknown checkpoint.
@@ -478,6 +484,12 @@ async def resume_generation_orchestration(
         raise ValueError(msg)
     payload = checkpoint.payload
     planner_result = _planner_result_from_payload(payload["planner_result"])
+    if len(planner_result.plan.steps) != 1:
+        msg = (
+            "resume_generation_orchestration currently supports exactly one "
+            "planned step per suspended checkpoint."
+        )
+        raise ValueError(msg)
     action_result = await resume_port.resume(command)
     result = build_generation_result(planner_result, (action_result,))
     resumed_checkpoint = await checkpoint_port.mark_resumed(checkpoint.checkpoint_id)

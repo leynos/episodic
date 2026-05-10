@@ -119,6 +119,31 @@ def _planner_result() -> PlannerResult:
     )
 
 
+def _multi_step_planner_result() -> PlannerResult:
+    """Return a planner result that exposes unsupported multi-step resume."""
+    result = _planner_result()
+    first_step = result.plan.steps[0]
+    second_step = PlannedAction(
+        action_id="action-2",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        rationale="Need a second pass.",
+        model_tier=ModelTier.EXECUTION,
+        required_inputs=("script_tei_xml",),
+    )
+    return PlannerResult(
+        plan=ExecutionPlan(
+            plan_version=result.plan.plan_version,
+            selected_planning_model=result.plan.selected_planning_model,
+            selected_execution_model=result.plan.selected_execution_model,
+            steps=(first_step, second_step),
+        ),
+        usage=result.usage,
+        model=result.model,
+        provider_response_id=result.provider_response_id,
+        finish_reason=result.finish_reason,
+    )
+
+
 def _action_result() -> ActionExecutionResult:
     return ActionExecutionResult(
         action_id="action-1",
@@ -227,6 +252,33 @@ class TestGenerationOrchestrationGraph:
         checkpoint = await checkpoint_store.get(command.checkpoint_id)
         assert checkpoint is not None
         assert checkpoint.status == "resumed"
+
+    @pytest.mark.asyncio
+    async def test_resume_generation_orchestration_rejects_multi_step_checkpoint(
+        self,
+    ) -> None:
+        """Resume should not silently drop later planned actions."""
+        checkpoint_store = InMemoryCheckpointStore()
+        graph = build_generation_orchestration_graph(
+            planner=_FakePlanner(_multi_step_planner_result()),
+            tool_executor=_FakeToolExecutor(_action_result()),
+            checkpoint_port=checkpoint_store,
+        )
+        state = await graph.ainvoke(GenerationGraphState(request=_request()))
+        command = ResumeWorkflowCommand(
+            checkpoint_id=state["suspended_result"].checkpoint_id,
+            result=_action_result(),
+        )
+        resume_port = _FakeResumePort()
+
+        with pytest.raises(ValueError, match="exactly one planned step"):
+            await resume_generation_orchestration(
+                checkpoint_port=checkpoint_store,
+                resume_port=resume_port,
+                command=command,
+            )
+
+        assert resume_port.calls == []
 
     @pytest.mark.asyncio
     async def test_resume_generation_orchestration_raises_on_missing_checkpoint(

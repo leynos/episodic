@@ -531,7 +531,7 @@ PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv run pytest \
   tests/test_orchestration_checkpointing.py \
   tests/test_orchestration_resume.py \
   tests/test_orchestration_properties.py \
-  tests/steps/test_generation_suspend_resume_steps.py \
+  tests/steps/test_generation_orchestration_steps.py \
   2>&1 | tee /tmp/test-episodic-2-4-2-focused.out
 ```
 
@@ -704,3 +704,14 @@ Revision note 2026-05-10: Validation for the code review follow-up passed with
 `make check-fmt`, `make typecheck`, `make lint`, `make markdownlint`,
 `make nixie`, and `make test`. The full test suite reported 456 passed and
 3 skipped tests.
+
+Revision note 2026-05-10: Review follow-up verified that SQL checkpoint saves
+already use a nested transaction savepoint for duplicate idempotency keys, so
+no whole-unit-of-work rollback fix was needed. Multi-step suspended checkpoints
+now fail explicitly during `resume_generation_orchestration` instead of
+silently finalising only the first externally supplied action result.
+
+Revision note 2026-05-10: Validation for the multi-step resume follow-up
+passed with `make check-fmt`, `make typecheck`, `make lint`,
+`make markdownlint`, `make nixie`, and `make test`. The full test suite
+reported 457 passed and 3 skipped tests.
