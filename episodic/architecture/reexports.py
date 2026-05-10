@@ -231,16 +231,16 @@ def _public_names_from_node(node: ast.stmt) -> set[str]:
     return set(_public_symbols_from_node(node, None, "", ""))
 
 
-def _public_from_class_or_func(
+def _symbols_from_definition(
     node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
     module_name: str,
 ) -> dict[str, str]:
-    """Return the public symbol bound by a class or function definition."""
+    """Return the symbol introduced by a class or function definition."""
     return {node.name: f"{module_name}.{node.name}"}
 
 
-def _public_from_assign(node: ast.Assign, module_name: str) -> dict[str, str]:
-    """Return public symbols bound by a simple assignment."""
+def _symbols_from_assign(node: ast.Assign, module_name: str) -> dict[str, str]:
+    """Return public symbols introduced by a simple assignment statement."""
     return {
         target.id: f"{module_name}.{target.id}"
         for target in node.targets
@@ -248,30 +248,28 @@ def _public_from_assign(node: ast.Assign, module_name: str) -> dict[str, str]:
     }
 
 
-def _public_from_annassign(node: ast.AnnAssign, module_name: str) -> dict[str, str]:
-    """Return the public symbol bound by an annotated assignment."""
+def _symbols_from_ann_assign(node: ast.AnnAssign, module_name: str) -> dict[str, str]:
+    """Return the public symbol introduced by an annotated assignment, if any."""
     if isinstance(node.target, ast.Name) and node.target.id != "__all__":
         return {node.target.id: f"{module_name}.{node.target.id}"}
     return {}
 
 
-def _public_from_import(node: ast.Import) -> dict[str, str]:
-    """Return public symbols bound by a bare import."""
+def _symbols_from_import(node: ast.Import) -> dict[str, str]:
+    """Return public symbols introduced by a bare import statement."""
     return {
         alias.asname or alias.name.split(".", maxsplit=1)[0]: alias.name
         for alias in node.names
     }
 
 
-def _public_from_importfrom(
+def _symbols_from_import_from(
     node: ast.ImportFrom,
-    source_path: Path | None,
+    source_path: Path,
     package: str,
     module_name: str,
 ) -> dict[str, str]:
-    """Return public symbols bound by an import-from statement."""
-    if source_path is None:
-        return {}
+    """Return public symbols introduced by a ``from … import`` statement."""
     imported_module = _resolve_import_from(node, source_path, package, module_name)
     if imported_module is None:
         return {}
@@ -290,15 +288,15 @@ def _public_symbols_from_node(
 ) -> dict[str, str]:
     """Return public symbols bound by one module-level statement."""
     if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
-        return _public_from_class_or_func(node, module_name)
+        return _symbols_from_definition(node, module_name)
     if isinstance(node, ast.Assign):
-        return _public_from_assign(node, module_name)
+        return _symbols_from_assign(node, module_name)
     if isinstance(node, ast.AnnAssign):
-        return _public_from_annassign(node, module_name)
+        return _symbols_from_ann_assign(node, module_name)
     if isinstance(node, ast.Import):
-        return _public_from_import(node)
-    if isinstance(node, ast.ImportFrom):
-        return _public_from_importfrom(node, source_path, package, module_name)
+        return _symbols_from_import(node)
+    if isinstance(node, ast.ImportFrom) and source_path is not None:
+        return _symbols_from_import_from(node, source_path, package, module_name)
     return {}
 
 
