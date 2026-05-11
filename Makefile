@@ -10,7 +10,6 @@ PYTEST_XDIST_WORKERS ?= 1
 PYLINT_PYTHON ?= pypy
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
 PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) --from 'pylint==4.*' python tools/pylint_pypy.py
-PYLINT_ENABLE = logging-unsupported-format,logging-format-truncated,logging-too-many-args,logging-too-few-args,logging-not-lazy,logging-format-interpolation,logging-fstring-interpolation,bare-name-capture-pattern,invalid-match-args-definition,too-many-positional-sub-patterns,multiple-class-sub-patterns,match-class-bind-self,match-class-positional-attributes,consider-merging-isinstance,too-many-nested-blocks,simplifiable-if-statement,redefined-argument-from-local,no-else-return,consider-using-ternary,trailing-comma-tuple,stop-iteration-return,simplify-boolean-expression,inconsistent-return-statements,useless-return,consider-swap-variables,consider-using-join,consider-using-in,consider-using-get,chained-comparison,consider-using-dict-comprehension,consider-using-set-comprehension,simplifiable-if-expression,no-else-raise,unnecessary-comprehension,consider-using-sys-exit,no-else-break,no-else-continue,super-with-arguments,simplifiable-condition,condition-evals-to-constant,consider-using-generator,use-a-generator,consider-using-min-builtin,consider-using-max-builtin,consider-using-with,unnecessary-dict-index-lookup,use-list-literal,use-dict-literal,unnecessary-list-index-lookup,use-yield-from,unnecessary-negation,consider-using-enumerate,consider-iterating-dictionary,consider-using-dict-items,use-maxsplit-arg,use-sequence-for-iteration,consider-using-f-string,use-implicit-booleaness-not-len,use-implicit-booleaness-not-comparison,use-implicit-booleaness-not-comparison-to-string,use-implicit-booleaness-not-comparison-to-zero,unnecessary-dunder-call,unnecessary-ellipsis,invalid-envvar-value,singledispatch-method,singledispatchmethod-function,bad-open-mode,boolean-datetime,redundant-unittest-assert,bad-thread-instantiation,shallow-copy-environ,invalid-envvar-default,subprocess-popen-preexec-fn,subprocess-run-check,unspecified-encoding,forgotten-debug-statement,method-cache-max-size-none,deprecated-method,deprecated-argument,deprecated-class,deprecated-decorator,deprecated-attribute,too-many-lines,trailing-whitespace,missing-final-newline,trailing-newlines,superfluous-parens,mixed-line-endings,unexpected-line-ending-format,modified-iterating-dict,modified-iterating-set,modified-iterating-list,too-many-public-methods,too-many-branches,too-many-arguments,too-many-locals,too-many-statements,too-many-boolean-expressions,too-many-positional-arguments
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie test typecheck check-migrations $(TOOLS) $(VENV_TOOLS)
@@ -71,7 +70,7 @@ check-fmt: build ## Verify formatting
 
 lint: check-architecture ## Run linters
 	$(UV_ENV) $(UV) run ruff check
-	$(PYLINT) --disable=all --enable=$(PYLINT_ENABLE) --disable=syntax-error --max-locals=20 $(PYLINT_TARGETS)
+	$(PYLINT) $(PYLINT_TARGETS)
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run python -m episodic.architecture
