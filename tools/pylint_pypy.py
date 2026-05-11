@@ -1,4 +1,4 @@
-# ruff: noqa: PLR0911, PLR0913, S101, TC003
+# ruff: noqa: PLR0911, S101, TC003
 """Run Pylint under PyPy with the local Astroid compatibility patch."""
 
 from __future__ import annotations
@@ -115,13 +115,25 @@ def _build_child_node(
     node: nodes.Module | nodes.ClassDef,
     member: object,
     alias: str,
-    *,
-    pypy__class_getitem__: bool,
 ) -> nodes.NodeNG | object:
     """Dispatch member conversion to the matching Astroid child builder."""
-    if pypy__class_getitem__:
+    if inspect.isbuiltin(member):
         return _build_builtin_child(self, node, member, alias)
-    return _dispatch_member_to_child(self, node, member, alias)
+    if inspect.isclass(member):
+        return _build_class_child(self, node, member, alias)
+    if inspect.ismethoddescriptor(member):
+        return object_build_methoddescriptor(node, member)
+    if inspect.isdatadescriptor(member):
+        return object_build_datadescriptor(node, member)
+    if isinstance(member, tuple(node_classes.CONST_CLS)):
+        return _build_const_child(node, member, alias)
+    if inspect.isroutine(member):
+        return _build_from_function(node, member, self._module)
+    if _safe_has_attribute(member, "__all__"):
+        child = build_module(alias)
+        self.object_build(child, member)
+        return child
+    return build_dummy(member)
 
 
 def _object_build_without_pypy_descriptor_aliases(
@@ -140,13 +152,10 @@ def _object_build_without_pypy_descriptor_aliases(
         if member is _GET_MEMBER_FAILED:
             attach_dummy_node(node, alias)
             continue
-        child = _build_child_node(
-            self,
-            node,
-            member,
-            alias,
-            pypy__class_getitem__=pypy__class_getitem__,
-        )
+        if pypy__class_getitem__:
+            child = _build_builtin_child(self, node, member, alias)
+        else:
+            child = _build_child_node(self, node, member, alias)
         if child is _SKIP:
             continue
         if child not in node.locals.get(alias, ()):
