@@ -72,7 +72,7 @@ class SeriesProfileRepository(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def get(self, profile_id: uuid.UUID) -> SeriesProfile | None:
         """Fetch a series profile by identifier.
@@ -87,7 +87,7 @@ class SeriesProfileRepository(typ.Protocol):
         SeriesProfile | None
             The matching series profile, or ``None`` if no match exists.
         """
-        ...
+        raise NotImplementedError
 
     async def get_by_slug(self, slug: str) -> SeriesProfile | None:
         """Fetch a series profile by slug.
@@ -102,7 +102,7 @@ class SeriesProfileRepository(typ.Protocol):
         SeriesProfile | None
             The matching series profile, or ``None`` if no match exists.
         """
-        ...
+        raise NotImplementedError
 
     async def list(self) -> typ.Sequence[SeriesProfile]:
         """List all series profiles.
@@ -112,7 +112,7 @@ class SeriesProfileRepository(typ.Protocol):
         list[SeriesProfile]
             Series profiles ordered by ``created_at``.
         """
-        ...
+        raise NotImplementedError
 
     async def update(self, profile: SeriesProfile) -> None:
         """Persist changes to an existing series profile.
@@ -122,7 +122,7 @@ class SeriesProfileRepository(typ.Protocol):
         profile : SeriesProfile
             Updated series profile entity.
         """
-        ...
+        raise NotImplementedError
 
 
 class TeiHeaderRepository(typ.Protocol):
@@ -148,7 +148,7 @@ class TeiHeaderRepository(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def get(self, header_id: uuid.UUID) -> TeiHeader | None:
         """Fetch a TEI header by identifier.
@@ -163,7 +163,7 @@ class TeiHeaderRepository(typ.Protocol):
         TeiHeader | None
             The matching TEI header, or ``None`` if no match exists.
         """
-        ...
+        raise NotImplementedError
 
 
 class EpisodeRepository(typ.Protocol):
@@ -189,7 +189,7 @@ class EpisodeRepository(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def get(self, episode_id: uuid.UUID) -> CanonicalEpisode | None:
         """Fetch a canonical episode by identifier.
@@ -204,7 +204,7 @@ class EpisodeRepository(typ.Protocol):
         CanonicalEpisode | None
             The matching canonical episode, or ``None`` if no match exists.
         """
-        ...
+        raise NotImplementedError
 
     async def list_by_ids(
         self, episode_ids: cabc.Collection[uuid.UUID]
@@ -221,7 +221,7 @@ class EpisodeRepository(typ.Protocol):
         list[CanonicalEpisode]
             The matching episodes (order not guaranteed).
         """
-        ...
+        raise NotImplementedError
 
 
 class IngestionJobRepository(typ.Protocol):
@@ -247,7 +247,7 @@ class IngestionJobRepository(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
         """Fetch an ingestion job by identifier.
@@ -262,7 +262,7 @@ class IngestionJobRepository(typ.Protocol):
         IngestionJob | None
             The matching ingestion job, or ``None`` if no match exists.
         """
-        ...
+        raise NotImplementedError
 
 
 class SourceDocumentRepository(typ.Protocol):
@@ -288,7 +288,7 @@ class SourceDocumentRepository(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:
         """List source documents for an ingestion job.
@@ -303,7 +303,7 @@ class SourceDocumentRepository(typ.Protocol):
         list[SourceDocument]
             Source documents associated with the ingestion job.
         """
-        ...
+        raise NotImplementedError
 
 
 class ApprovalEventRepository(typ.Protocol):
@@ -329,7 +329,7 @@ class ApprovalEventRepository(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def list_for_episode(
         self,
@@ -347,7 +347,7 @@ class ApprovalEventRepository(typ.Protocol):
         list[ApprovalEvent]
             Approval events associated with the canonical episode.
         """
-        ...
+        raise NotImplementedError
 
 
 class ReferenceDocumentRepository(typ.Protocol):
@@ -355,11 +355,11 @@ class ReferenceDocumentRepository(typ.Protocol):
 
     async def add(self, document: ReferenceDocument) -> None:
         """Persist a reusable reference document."""
-        ...
+        raise NotImplementedError
 
     async def get(self, document_id: uuid.UUID) -> ReferenceDocument | None:
         """Fetch a reusable reference document by identifier."""
-        ...
+        raise NotImplementedError
 
     async def list_for_series(
         self,
@@ -370,18 +370,18 @@ class ReferenceDocumentRepository(typ.Protocol):
         offset: int = 0,
     ) -> list[ReferenceDocument]:
         """List reusable reference documents owned by one series profile."""
-        ...
+        raise NotImplementedError
 
     async def list_by_ids(
         self,
         document_ids: cabc.Collection[uuid.UUID],
     ) -> list[ReferenceDocument]:
         """List reusable reference documents by identifiers."""
-        ...
+        raise NotImplementedError
 
     async def update(self, document: ReferenceDocument) -> None:
         """Persist changes to an existing reusable reference document."""
-        ...
+        raise NotImplementedError
 
     async def update_with_optimistic_lock(
         self,
@@ -390,7 +390,7 @@ class ReferenceDocumentRepository(typ.Protocol):
         expected_lock_version: int,
     ) -> bool:
         """Update with optimistic locking and return whether the row matched."""
-        ...
+        raise NotImplementedError
 
 
 class ReferenceDocumentRevisionRepository(typ.Protocol):
@@ -398,14 +398,14 @@ class ReferenceDocumentRevisionRepository(typ.Protocol):
 
     async def add(self, revision: ReferenceDocumentRevision) -> None:
         """Persist a reusable reference document revision."""
-        ...
+        raise NotImplementedError
 
     async def get(
         self,
         revision_id: uuid.UUID,
     ) -> ReferenceDocumentRevision | None:
         """Fetch a reusable reference document revision by identifier."""
-        ...
+        raise NotImplementedError
 
     async def list_for_document(
         self,
@@ -415,21 +415,21 @@ class ReferenceDocumentRevisionRepository(typ.Protocol):
         offset: int = 0,
     ) -> list[ReferenceDocumentRevision]:
         """List immutable revisions for one reusable reference document."""
-        ...
+        raise NotImplementedError
 
     async def list_by_ids(
         self,
         revision_ids: cabc.Collection[uuid.UUID],
     ) -> list[ReferenceDocumentRevision]:
         """List reusable reference document revisions by identifiers."""
-        ...
+        raise NotImplementedError
 
     async def get_latest_for_document(
         self,
         document_id: uuid.UUID,
     ) -> ReferenceDocumentRevision | None:
         """Fetch the latest immutable revision for a reference document."""
-        ...
+        raise NotImplementedError
 
 
 class ReferenceBindingRepository(typ.Protocol):
@@ -437,11 +437,11 @@ class ReferenceBindingRepository(typ.Protocol):
 
     async def add(self, binding: ReferenceBinding) -> None:
         """Persist a reusable reference binding."""
-        ...
+        raise NotImplementedError
 
     async def get(self, binding_id: uuid.UUID) -> ReferenceBinding | None:
         """Fetch a reusable reference binding by identifier."""
-        ...
+        raise NotImplementedError
 
     async def list_for_target(
         self,
@@ -452,7 +452,7 @@ class ReferenceBindingRepository(typ.Protocol):
         offset: int = 0,
     ) -> list[ReferenceBinding]:
         """List bindings for one target context."""
-        ...
+        raise NotImplementedError
 
 
 class EpisodeTemplateRepository(typ.Protocol):
@@ -460,18 +460,18 @@ class EpisodeTemplateRepository(typ.Protocol):
 
     async def add(self, template: EpisodeTemplate) -> None:
         """Persist an episode template."""
-        ...
+        raise NotImplementedError
 
     async def get(self, template_id: uuid.UUID) -> EpisodeTemplate | None:
         """Fetch an episode template by identifier."""
-        ...
+        raise NotImplementedError
 
     async def list(
         self,
         series_profile_id: uuid.UUID | None,
     ) -> typ.Sequence[EpisodeTemplate]:
         """List episode templates, optionally filtered by series profile."""
-        ...
+        raise NotImplementedError
 
     async def get_by_slug(
         self,
@@ -479,11 +479,11 @@ class EpisodeTemplateRepository(typ.Protocol):
         slug: str,
     ) -> EpisodeTemplate | None:
         """Fetch an episode template by series profile and slug."""
-        ...
+        raise NotImplementedError
 
     async def update(self, template: EpisodeTemplate) -> None:
         """Persist changes to an existing episode template."""
-        ...
+        raise NotImplementedError
 
 
 class SeriesProfileHistoryRepository(typ.Protocol):
@@ -491,28 +491,28 @@ class SeriesProfileHistoryRepository(typ.Protocol):
 
     async def add(self, entry: SeriesProfileHistoryEntry) -> None:
         """Persist a profile history entry."""
-        ...
+        raise NotImplementedError
 
     async def list_for_profile(
         self,
         profile_id: uuid.UUID,
     ) -> list[SeriesProfileHistoryEntry]:
         """List history entries for a series profile."""
-        ...
+        raise NotImplementedError
 
     async def get_latest_for_profile(
         self,
         profile_id: uuid.UUID,
     ) -> SeriesProfileHistoryEntry | None:
         """Fetch the most recent history entry for a series profile."""
-        ...
+        raise NotImplementedError
 
     async def get_latest_revisions_for_profiles(
         self,
         profile_ids: cabc.Collection[uuid.UUID],
     ) -> dict[uuid.UUID, int]:
         """Fetch latest revisions for a set of series profiles."""
-        ...
+        raise NotImplementedError
 
 
 class EpisodeTemplateHistoryRepository(typ.Protocol):
@@ -520,28 +520,28 @@ class EpisodeTemplateHistoryRepository(typ.Protocol):
 
     async def add(self, entry: EpisodeTemplateHistoryEntry) -> None:
         """Persist an episode template history entry."""
-        ...
+        raise NotImplementedError
 
     async def list_for_template(
         self,
         template_id: uuid.UUID,
     ) -> list[EpisodeTemplateHistoryEntry]:
         """List history entries for an episode template."""
-        ...
+        raise NotImplementedError
 
     async def get_latest_for_template(
         self,
         template_id: uuid.UUID,
     ) -> EpisodeTemplateHistoryEntry | None:
         """Fetch the most recent history entry for an episode template."""
-        ...
+        raise NotImplementedError
 
     async def get_latest_revisions_for_templates(
         self,
         template_ids: cabc.Collection[uuid.UUID],
     ) -> dict[uuid.UUID, int]:
         """Fetch latest revisions for a set of episode templates."""
-        ...
+        raise NotImplementedError
 
 
 @typ.runtime_checkable
@@ -597,7 +597,7 @@ class CanonicalUnitOfWork(typ.Protocol):
         CanonicalUnitOfWork
             The active unit-of-work instance.
         """
-        ...
+        raise NotImplementedError
 
     async def __aexit__(
         self,
@@ -620,7 +620,7 @@ class CanonicalUnitOfWork(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def commit(self) -> None:
         """Commit the current unit-of-work transaction.
@@ -629,7 +629,7 @@ class CanonicalUnitOfWork(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def flush(self) -> None:
         """Flush pending changes without committing.
@@ -638,7 +638,7 @@ class CanonicalUnitOfWork(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError
 
     async def rollback(self) -> None:
         """Roll back the current unit-of-work transaction.
@@ -647,4 +647,4 @@ class CanonicalUnitOfWork(typ.Protocol):
         -------
         None
         """
-        ...
+        raise NotImplementedError

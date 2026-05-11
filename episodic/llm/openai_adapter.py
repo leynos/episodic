@@ -48,7 +48,7 @@ def _estimate_token_count(*parts: str | None) -> int:
     tokenizer or configurable chars-per-token ratio.
     """
     combined = "".join(part for part in parts if part is not None)
-    if combined == "":
+    if not combined:
         return 0
     return math.ceil(len(combined) / 4)
 

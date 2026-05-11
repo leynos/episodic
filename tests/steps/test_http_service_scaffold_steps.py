@@ -121,7 +121,7 @@ def _read_granian_listening_ports(
     lsof_path: str,
 ) -> list[int]:
     """Inspect a Granian process and return any listening TCP ports."""
-    result = subprocess.run(  # noqa: S603 - trusted local diagnostic command
+    result = subprocess.run(  # noqa: S603
         [
             lsof_path,
             "-Pan",
@@ -202,7 +202,7 @@ def given_granian_service_running(
         **os.environ,
         "DATABASE_URL": http_service_scaffold_context.database_url,
     }
-    http_service_scaffold_context.process = subprocess.Popen(  # noqa: S603
+    http_service_scaffold_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
         [
             granian_path,
             "episodic.api.runtime:create_app_from_env",

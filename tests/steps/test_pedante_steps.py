@@ -205,7 +205,7 @@ def _start_vidaimock_process(
         raise RuntimeError(msg)
 
     pedante_context.base_url = f"http://127.0.0.1:{port}/v1"
-    pedante_context.process = subprocess.Popen(  # noqa: S603
+    pedante_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
         [
             vidaimock_path,
             "--host",

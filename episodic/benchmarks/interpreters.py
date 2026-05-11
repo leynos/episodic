@@ -42,7 +42,7 @@ def count_primes(task: PrimeTask) -> int:
         is_prime = True
         divisor = 2
         while divisor * divisor <= candidate:
-            if candidate % divisor == 0:
+            if not candidate % divisor:
                 is_prime = False
                 break
             divisor += 1

@@ -58,6 +58,7 @@ def run_act(*, artifact_dir: Path) -> tuple[int, str]:
         text=True,
         capture_output=True,
         env=env,
+        check=False,
     )
     logs = completed.stdout + "\n" + completed.stderr
     return completed.returncode, logs
@@ -77,7 +78,7 @@ def read_artifact_json(artifact_dir: Path, filename: str, logs: str) -> dict[str
             if filename in zf.namelist():
                 return json.loads(zf.read(filename).decode())
 
-    pytest.fail(f"{filename} missing in artifact zips. Logs:\n{logs}")
+    raise AssertionError(f"{filename} missing in artifact zips. Logs:\n{logs}")  # noqa: TRY003
 
 
 @pytest.mark.act
@@ -85,7 +86,7 @@ def test_bootstrap_gitops_repo_workflow(tmp_path: Path) -> None:
     """Assert that the bootstrap workflow produces a success result."""
     artifact_dir = tmp_path / "act-artifacts"
     code, logs = run_act(artifact_dir=artifact_dir)
-    assert code == 0, f"act failed:\n{logs}"
+    assert not code, f"act failed:\n{logs}"
 
     data = read_artifact_json(artifact_dir, "bootstrap-result.json", logs)
     assert data["status"] == "ok"

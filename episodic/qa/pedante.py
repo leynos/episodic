@@ -78,7 +78,7 @@ def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
     """Reject blank or whitespace-only string fields on a dataclass instance."""
     for field_name in field_names:
         value = getattr(instance, field_name)
-        if not isinstance(value, str) or value.strip() == "":
+        if not isinstance(value, str) or not value.strip():
             msg = f"{field_name} must be non-empty."
             raise ValueError(msg)
 
@@ -158,10 +158,10 @@ class PedanteEvaluationRequest:
 
     def __post_init__(self) -> None:
         """Reject blank TEI payloads and empty source lists."""
-        if self.script_tei_xml.strip() == "":
+        if not self.script_tei_xml.strip():
             msg = "script_tei_xml must be non-empty."
             raise ValueError(msg)
-        if len(self.sources) == 0:
+        if not self.sources:
             msg = "sources must contain at least one source packet."
             raise ValueError(msg)
 
@@ -185,7 +185,7 @@ class PedanteFinding:
             self, "claim_id", "claim_text", "summary", "remediation"
         )
         for source_id in self.cited_source_ids:
-            if source_id.strip() == "":
+            if not source_id.strip():
                 msg = "cited_source_ids must not contain blank values."
                 raise ValueError(msg)
 
@@ -344,7 +344,7 @@ def _decode_object(payload: str) -> dict[str, object]:
 def _require_non_empty_string(payload: dict[str, object], field_name: str) -> str:
     """Read one required non-empty string field."""
     value = payload.get(field_name)
-    if not isinstance(value, str) or value.strip() == "":
+    if not isinstance(value, str) or not value.strip():
         msg = f"Pedante response field {field_name!r} must be a non-empty string."
         raise PedanteResponseFormatError(msg)
     return value
@@ -423,7 +423,7 @@ def _coerce_string_tuple(
         raise PedanteResponseFormatError(msg)
     values: list[str] = []
     for item in raw_value:
-        if not isinstance(item, str) or item.strip() == "":
+        if not isinstance(item, str) or not item.strip():
             msg = (
                 f"Pedante response field {field_name!r} must contain non-empty strings."
             )

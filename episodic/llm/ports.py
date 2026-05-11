@@ -129,4 +129,4 @@ class LLMPort(typ.Protocol):
         LLMResponse
             Normalized provider response and usage details.
         """
-        ...
+        raise NotImplementedError

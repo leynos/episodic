@@ -33,7 +33,7 @@ class CpuTaskExecutor(typ.Protocol):
         items: tuple[_InputT, ...],
     ) -> list[_OutputT]:
         """Apply ``task`` to ``items`` and preserve input ordering."""
-        ...
+        raise NotImplementedError
 
 
 def _parse_optional_positive_int(value: str | None) -> int | None:

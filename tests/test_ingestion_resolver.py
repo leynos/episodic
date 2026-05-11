@@ -52,7 +52,7 @@ async def test_conflict_resolver_single_source_no_conflict(
     assert outcome.preferred_sources[0].source.title == "Only Source", (
         "Expected only source to be selected as preferred."
     )
-    assert len(outcome.rejected_sources) == 0, (
+    assert not outcome.rejected_sources, (
         "Expected no rejected sources for single-source input."
     )
 

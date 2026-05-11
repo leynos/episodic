@@ -22,7 +22,7 @@ class PedanteEvaluatorPort(typ.Protocol):
         request: PedanteEvaluationRequest,
     ) -> PedanteEvaluationResult:
         """Evaluate a script and return claim-level findings."""
-        ...
+        raise NotImplementedError
 
 
 @dc.dataclass(slots=True)
