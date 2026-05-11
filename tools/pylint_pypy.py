@@ -1,4 +1,4 @@
-# ruff: noqa: S101, TC003
+# ruff: noqa: PLR0911, PLR0913, S101, TC003
 """Run Pylint under PyPy with the local Astroid compatibility patch."""
 
 from __future__ import annotations
@@ -29,14 +29,18 @@ _SKIP = object()
 def _get_member(
     obj: types.ModuleType | type,
     alias: str,
-) -> object:
-    """Return a member from ``obj`` or a sentinel for ignored lookup failures."""
+) -> tuple[object, bool]:
+    """Return a member from ``obj`` with its PyPy descriptor context."""
+    pypy__class_getitem__ = IS_PYPY and alias == "__class_getitem__"
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            return getattr(obj, alias)
+            member = getattr(obj, alias)
     except _IGNORED_GETATTR_ERRORS:
-        return _GET_MEMBER_FAILED
+        return _GET_MEMBER_FAILED, pypy__class_getitem__
+    if inspect.ismethod(member) and not pypy__class_getitem__:
+        member = member.__func__
+    return member, pypy__class_getitem__
 
 
 def _build_builtin_child(
@@ -80,7 +84,33 @@ def _build_const_child(
     return nodes.const_factory(member)
 
 
-def _build_child_node(  # noqa: PLR0913
+def _dispatch_member_to_child(
+    self: raw_building.InspectBuilder,
+    node: nodes.Module | nodes.ClassDef,
+    member: object,
+    alias: str,
+) -> nodes.NodeNG | object:
+    """Dispatch non-PyPy-special members to the matching Astroid builder."""
+    if inspect.isbuiltin(member):
+        return _build_builtin_child(self, node, member, alias)
+    if inspect.isclass(member):
+        return _build_class_child(self, node, member, alias)
+    if inspect.ismethoddescriptor(member):
+        return object_build_methoddescriptor(node, member)
+    if inspect.isdatadescriptor(member):
+        return object_build_datadescriptor(node, member)
+    if isinstance(member, tuple(node_classes.CONST_CLS)):
+        return _build_const_child(node, member, alias)
+    if inspect.isroutine(member):
+        return _build_from_function(node, member, self._module)
+    if _safe_has_attribute(member, "__all__"):
+        child = build_module(alias)
+        self.object_build(child, member)
+        return child
+    return build_dummy(member)
+
+
+def _build_child_node(
     self: raw_building.InspectBuilder,
     node: nodes.Module | nodes.ClassDef,
     member: object,
@@ -89,24 +119,9 @@ def _build_child_node(  # noqa: PLR0913
     pypy__class_getitem__: bool,
 ) -> nodes.NodeNG | object:
     """Dispatch member conversion to the matching Astroid child builder."""
-    if inspect.isbuiltin(member) or pypy__class_getitem__:
-        child = _build_builtin_child(self, node, member, alias)
-    elif inspect.isclass(member):
-        child = _build_class_child(self, node, member, alias)
-    elif inspect.ismethoddescriptor(member):
-        child = object_build_methoddescriptor(node, member)
-    elif inspect.isdatadescriptor(member):
-        child = object_build_datadescriptor(node, member)
-    elif isinstance(member, tuple(node_classes.CONST_CLS)):
-        child = _build_const_child(node, member, alias)
-    elif inspect.isfunction(member) or inspect.isroutine(member):
-        child = _build_from_function(node, member, self._module)
-    elif _safe_has_attribute(member, "__all__"):
-        child = build_module(alias)
-        self.object_build(child, member)
-    else:
-        child = build_dummy(member)
-    return child
+    if pypy__class_getitem__:
+        return _build_builtin_child(self, node, member, alias)
+    return _dispatch_member_to_child(self, node, member, alias)
 
 
 def _object_build_without_pypy_descriptor_aliases(
@@ -121,13 +136,10 @@ def _object_build_without_pypy_descriptor_aliases(
     for alias in dir(obj):
         if type(alias) is not str:
             continue
-        pypy__class_getitem__ = IS_PYPY and alias == "__class_getitem__"
-        member = _get_member(obj, alias)
+        member, pypy__class_getitem__ = _get_member(obj, alias)
         if member is _GET_MEMBER_FAILED:
             attach_dummy_node(node, alias)
             continue
-        if inspect.ismethod(member) and not pypy__class_getitem__:
-            member = member.__func__
         child = _build_child_node(
             self,
             node,
