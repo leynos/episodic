@@ -292,11 +292,17 @@ def _validate_segment_transition_starts(
 
 def _build_segment_start_lookups(
     transitions: tuple[_SegmentTransition, ...],
-) -> tuple[set[str], dict[str, str]]:
+) -> tuple[set[int], dict[str, tuple[int, str]]]:
     """Build a start-value set and a locator-to-start mapping from transitions."""
-    starts = {transition.start for transition in transitions}
+    starts = {
+        _duration_to_seconds(transition.start, "segment start")
+        for transition in transitions
+    }
     starts_by_locator = {
-        locator_key: transition.start
+        locator_key: (
+            _duration_to_seconds(transition.start, "segment start"),
+            transition.start,
+        )
         for transition in transitions
         for locator_key in transition.locator_keys
     }
@@ -321,11 +327,12 @@ def _validate_chapters_align_to_segments(
 
 def _validate_chapter_aligns_to_segments(
     chapter: ChapterMarker,
-    starts: set[str],
-    starts_by_locator: dict[str, str],
+    starts: set[int],
+    starts_by_locator: dict[str, tuple[int, str]],
 ) -> None:
     """Validate one generated chapter against explicit segment metadata."""
-    if chapter.start not in starts:
+    chapter_start = _duration_to_seconds(chapter.start, "start")
+    if chapter_start not in starts:
         msg = (
             "chapter starts must align to supplied segment starts; "
             f"{chapter.start} is not a segment transition."
@@ -333,17 +340,18 @@ def _validate_chapter_aligns_to_segments(
         raise ChapterMarkersResponseFormatError(msg)
     if chapter.tei_locator is None:
         return
-    segment_start = starts_by_locator.get(chapter.tei_locator)
-    if segment_start is None:
+    segment_start_entry = starts_by_locator.get(chapter.tei_locator)
+    if segment_start_entry is None:
         msg = (
             "chapter locators must resolve to supplied segment metadata; "
             f"{chapter.tei_locator} is not a known segment locator."
         )
         raise ChapterMarkersResponseFormatError(msg)
-    if chapter.start != segment_start:
+    segment_start, segment_start_text = segment_start_entry
+    if chapter_start != segment_start:
         msg = (
             "chapter locators must align to supplied segment starts; "
-            f"{chapter.tei_locator} starts at {segment_start}, not "
+            f"{chapter.tei_locator} starts at {segment_start_text}, not "
             f"{chapter.start}."
         )
         raise ChapterMarkersResponseFormatError(msg)

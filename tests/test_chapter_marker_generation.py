@@ -242,6 +242,33 @@ async def test_generate_calls_llm_and_returns_result() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_accepts_equivalent_duration_spellings() -> None:
+    """Segment alignment compares elapsed time, not raw duration spelling."""
+    fake_llm = _FakeLLMPort(
+        _valid_llm_response(
+            json.dumps({
+                "chapters": [
+                    {
+                        "title": "Main",
+                        "start": "PT5M30S",
+                        "tei_locator": "#seg-main",
+                    }
+                ]
+            })
+        )
+    )
+
+    result = await _make_generator(fake_llm).generate(
+        _minimal_tei(),
+        segment_structure={
+            "segments": [{"id": "seg-main", "title": "Main", "start": "PT330S"}]
+        },
+    )
+
+    assert result.chapters[0].start == "PT5M30S"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("chapters_payload", "expected_match"),
     [
