@@ -119,8 +119,8 @@ def pylint_pypy_module(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
         "pylint_pypy_under_test",
         _PYLINT_PYPY_PATH,
     )
-    assert spec is not None, "module spec should not be None"
-    assert spec.loader is not None, "module spec loader should not be None"
+    assert spec is not None, f"Could not create module spec from {_PYLINT_PYPY_PATH}"
+    assert spec.loader is not None, f"Module spec for {_PYLINT_PYPY_PATH} has no loader"
     module = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
@@ -140,10 +140,14 @@ def test_resolve_member_unwraps_bound_methods(
     )
 
     assert member is _ClassWithClassMethod.__dict__["member"].__func__, (
-        "expected member to be unwrapped bound method"
+        "bound method must be unwrapped to its underlying __func__"
     )
-    assert is_pypy_class_getitem is False, "expected class-getitem flag to be false"
-    assert should_skip is False, "expected resolved member not to be skipped"
+    assert is_pypy_class_getitem is False, (
+        "alias 'member' must not be flagged as pypy__class_getitem__"
+    )
+    assert should_skip is False, (
+        "_resolve_member must not signal skip for a resolvable alias"
+    )
 
 
 def test_resolve_member_keeps_pypy_class_getitem_bound(
@@ -160,19 +164,25 @@ def test_resolve_member_keeps_pypy_class_getitem_bound(
         "__class_getitem__",
     )
 
-    assert inspect.ismethod(member), "expected PyPy class-getitem member to stay bound"
+    assert inspect.ismethod(member), (
+        "__class_getitem__ must remain a bound method when IS_PYPY is True"
+    )
     assert (
         member.__func__ is _ClassWithClassGetItem.__dict__["__class_getitem__"].__func__
-    ), "expected bound member to reference original class-getitem function"
-    assert is_pypy_class_getitem is True, "expected class-getitem flag to be true"
-    assert should_skip is False, "expected PyPy class-getitem member not to be skipped"
+    ), "__func__ must point to the underlying classmethod function"
+    assert is_pypy_class_getitem is True, (
+        "alias '__class_getitem__' must be flagged when IS_PYPY is True"
+    )
+    assert should_skip is False, (
+        "_resolve_member must not signal skip for resolvable __class_getitem__"
+    )
 
 
-def test_resolve_member_attaches_dummy_when_getattr_fails(
+def test_resolve_member_signals_skip_when_getattr_fails(
     monkeypatch: pytest.MonkeyPatch,
     pylint_pypy_module: types.ModuleType,
 ) -> None:
-    """Getattr failures attach Astroid's dummy node and signal skip."""
+    """Getattr failures return a skip signal without side effects."""
     node = _FakeNode()
     calls: list[tuple[object, str]] = []
 
@@ -191,12 +201,14 @@ def test_resolve_member_attaches_dummy_when_getattr_fails(
         "missing",
     )
 
-    assert member is None, "expected failed member lookup to return None"
-    assert is_pypy_class_getitem is False, (
-        "expected missing member not to be class-getitem"
+    assert member is None, (
+        "_resolve_member must return None as member when getattr fails"
     )
-    assert should_skip is True, "expected failed member lookup to signal skip"
-    assert calls == [(node, "missing")], "expected failed lookup to attach dummy node"
+    assert is_pypy_class_getitem is False, (
+        "alias 'missing' must not be flagged as pypy__class_getitem__"
+    )
+    assert should_skip is True, "_resolve_member must signal skip when getattr raises"
+    assert not calls, "_resolve_member must not attach dummy nodes directly"
 
 
 def test_dispatch_member_to_child_routes_builtins(
@@ -214,10 +226,10 @@ def test_dispatch_member_to_child_routes_builtins(
         member_arg: object,
         alias_arg: str,
     ) -> object:
-        assert builder_arg is builder, "expected dispatch to pass builder through"
-        assert node_arg is node, "expected dispatch to pass node through"
-        assert member_arg is len, "expected dispatch to pass builtin member through"
-        assert alias_arg == "len", "expected dispatch to pass builtin alias through"
+        assert builder_arg is builder, "builder argument must be forwarded unchanged"
+        assert node_arg is node, "node argument must be forwarded unchanged"
+        assert member_arg is len, "member argument must be forwarded unchanged"
+        assert alias_arg == "len", "alias argument must be forwarded unchanged"
         return child
 
     monkeypatch.setattr(
@@ -228,7 +240,9 @@ def test_dispatch_member_to_child_routes_builtins(
 
     result = pylint_pypy_module._dispatch_member_to_child(builder, node, len, "len")
 
-    assert result is child, "expected builtin dispatch to return builder child"
+    assert result is child, (
+        "_dispatch_member_to_child must return the value from _build_builtin_child"
+    )
 
 
 def test_attach_child_node_avoids_duplicate_locals(
@@ -241,7 +255,9 @@ def test_attach_child_node_avoids_duplicate_locals(
     pylint_pypy_module._attach_child_node(node, "child", child)
     pylint_pypy_module._attach_child_node(node, "child", child)
 
-    assert node.locals["child"] == [child], "expected duplicate child not to be added"
+    assert node.locals["child"] == [child], (
+        "_attach_child_node must not duplicate an already-attached child"
+    )
 
 
 def test_object_build_routes_pypy_class_getitem_at_call_site(
@@ -256,16 +272,18 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
     ordinary_child = object()
 
     def fake_dir(obj: object) -> list[object]:
-        assert obj is target, "expected object builder to call dir on target object"
-        return ["__class_getitem__", object(), "ordinary"]
+        assert obj is target, "obj passed to fake_dir must be the target object"
+        return ["__class_getitem__", object(), "missing", "ordinary"]
 
     def fake_resolve_member(
         node_arg: object,
         obj: object,
         alias: str,
     ) -> tuple[object, bool, bool]:
-        assert node_arg is node, "expected resolver to receive target node"
-        assert obj is target, "expected resolver to receive target object"
+        assert node_arg is node, "node argument must be forwarded unchanged"
+        assert obj is target, "obj argument must be forwarded unchanged"
+        if alias == "missing":
+            return None, False, True
         return object(), alias == "__class_getitem__", False
 
     def fake_build_builtin_child(
@@ -274,9 +292,11 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
         member: object,
         alias: str,
     ) -> object:
-        assert builder_arg is builder, "expected builtin builder to receive builder"
-        assert node_arg is node, "expected builtin builder to receive node"
-        assert alias == "__class_getitem__", "expected PyPy alias to use builtin branch"
+        assert builder_arg is builder, "builder argument must be forwarded unchanged"
+        assert node_arg is node, "node argument must be forwarded unchanged"
+        assert alias == "__class_getitem__", (
+            "_build_builtin_child must only be called for __class_getitem__"
+        )
         return pypy_child
 
     def fake_dispatch_member_to_child(
@@ -285,10 +305,17 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
         member: object,
         alias: str,
     ) -> object:
-        assert builder_arg is builder, "expected dispatcher to receive builder"
-        assert node_arg is node, "expected dispatcher to receive node"
-        assert alias == "ordinary", "expected ordinary alias to use dispatcher"
+        assert builder_arg is builder, "builder argument must be forwarded unchanged"
+        assert node_arg is node, "node argument must be forwarded unchanged"
+        assert alias == "ordinary", (
+            "_dispatch_member_to_child must only be called for ordinary aliases"
+        )
         return ordinary_child
+
+    dummy_calls: list[tuple[object, str]] = []
+
+    def fake_attach_dummy_node(node_arg: object, alias: str) -> None:
+        dummy_calls.append((node_arg, alias))
 
     monkeypatch.setattr(builtins, "dir", fake_dir)
     monkeypatch.setattr(pylint_pypy_module, "_resolve_member", fake_resolve_member)
@@ -302,6 +329,7 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
         "_dispatch_member_to_child",
         fake_dispatch_member_to_child,
     )
+    monkeypatch.setattr(pylint_pypy_module, "attach_dummy_node", fake_attach_dummy_node)
 
     pylint_pypy_module._object_build_without_pypy_descriptor_aliases(
         builder,
@@ -312,4 +340,7 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
     assert node.locals == {
         "__class_getitem__": [pypy_child],
         "ordinary": [ordinary_child],
-    }, "expected object builder to attach PyPy and ordinary children"
+    }, "locals must contain exactly the two children from their respective builders"
+    assert dummy_calls == [(node, "missing")], (
+        "object builder must attach a dummy node for skipped aliases"
+    )
