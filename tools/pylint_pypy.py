@@ -94,17 +94,13 @@ def _attach_child_node(
         node.add_local_node(child, alias)
 
 
-def _dispatch_member_to_child(  # noqa: PLR0913
+def _dispatch_member_to_child(
     self: raw_building.InspectBuilder,
     node: nodes.Module | nodes.ClassDef,
     member: object,
     alias: str,
-    *,
-    pypy__class_getitem__: bool = False,
 ) -> nodes.NodeNG | object:
     """Dispatch members to the matching Astroid builder."""
-    if pypy__class_getitem__:
-        return _build_builtin_child(self, node, member, alias)
     if inspect.isbuiltin(member):
         return _build_builtin_child(self, node, member, alias)
     if inspect.isclass(member):
@@ -199,11 +195,13 @@ def _object_build_without_pypy_descriptor_aliases(
         member, pypy__class_getitem__, skip = _resolve_member(node, obj, alias)
         if skip:
             continue
-        child = _build_child_for_member(
-            self, node, member, alias, pypy__class_getitem__
-        )
-        if child is not None and child not in node.locals.get(alias, ()):
-            node.add_local_node(child, alias)
+        if pypy__class_getitem__:
+            child = _build_builtin_child(self, node, member, alias)
+        else:
+            child = _dispatch_member_to_child(self, node, member, alias)
+        if child is _SKIP:
+            continue
+        _attach_child_node(node, alias, child)
 
 
 def main() -> None:
