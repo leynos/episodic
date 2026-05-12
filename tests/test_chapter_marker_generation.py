@@ -65,6 +65,21 @@ def _minimal_tei() -> str:
     )
 
 
+_SEGMENT_STRUCTURE: dict[str, object] = {
+    "segments": [
+        {"id": "seg-intro", "title": "Introduction", "start": "PT0S"},
+        {"id": "seg-main", "title": "Main", "start": "PT5M30S"},
+    ]
+}
+
+
+def _make_generator(fake_llm: object = None) -> ChapterMarkersGenerator:
+    return ChapterMarkersGenerator(
+        llm=typ.cast("typ.Any", fake_llm),
+        config=ChapterMarkersGeneratorConfig(model="test-model"),
+    )
+
+
 def test_result_from_response_parses_valid_json() -> None:
     """Parse a well-formed JSON response into a ChapterMarkersResult."""
     response = _valid_llm_response(
@@ -84,12 +99,8 @@ def test_result_from_response_parses_valid_json() -> None:
             ]
         })
     )
-    generator = ChapterMarkersGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
 
-    result = generator._result_from_response(response)
+    result = _make_generator()._result_from_response(response)
 
     assert len(result.chapters) == 2
     assert result.chapters[0].title == "Introduction"
@@ -99,76 +110,42 @@ def test_result_from_response_parses_valid_json() -> None:
     assert result.usage.total_tokens == 15
 
 
-@pytest.mark.parametrize("payload", ['"just a string"', "[]", "42", "null", "true"])
-def test_result_from_response_rejects_non_object_top_level_json(
-    payload: str,
-) -> None:
-    """Non-object top-level JSON payloads must be rejected."""
-    response = _valid_llm_response(payload)
-    generator = ChapterMarkersGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
-
-    with pytest.raises(ChapterMarkersResponseFormatError, match="response"):
-        generator._result_from_response(response)
-
-
-def test_result_from_response_requires_chapters_key() -> None:
-    """Objects without a `chapters` key must be rejected."""
-    response = _valid_llm_response(json.dumps({"not_chapters": []}))
-    generator = ChapterMarkersGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
-
-    with pytest.raises(ChapterMarkersResponseFormatError, match="chapters"):
-        generator._result_from_response(response)
-
-
 @pytest.mark.parametrize(
-    ("json_payload", "expected_match"),
+    ("response_text", "expected_match"),
     [
-        ({"chapters": {}}, "chapters"),
-        ({"chapters": ["not-an-object"]}, "chapter"),
-        ({"chapters": [{"start": "PT0S"}]}, "title"),
-        ({"chapters": [{"title": "Intro"}]}, "start"),
-        ({"chapters": [{"title": "Intro", "start": 0}]}, "start"),
+        ("not valid json {", "valid JSON"),
+        ('"just a string"', "response"),
+        ("[]", "response"),
+        ("42", "response"),
+        ("null", "response"),
+        ("true", "response"),
+        (json.dumps({"not_chapters": []}), "chapters"),
+        (json.dumps({"chapters": {}}), "chapters"),
+        (json.dumps({"chapters": ["not-an-object"]}), "chapter"),
+        (json.dumps({"chapters": [{"start": "PT0S"}]}), "title"),
+        (json.dumps({"chapters": [{"title": "Intro"}]}), "start"),
+        (json.dumps({"chapters": [{"title": "Intro", "start": 0}]}), "start"),
         (
-            {"chapters": [{"title": "Intro", "start": "PT0S", "summary": 42}]},
+            json.dumps({
+                "chapters": [{"title": "Intro", "start": "PT0S", "summary": 42}]
+            }),
             "summary",
         ),
         (
-            {"chapters": [{"title": "Intro", "start": "PT0S", "tei_locator": 42}]},
+            json.dumps({
+                "chapters": [{"title": "Intro", "start": "PT0S", "tei_locator": 42}]
+            }),
             "tei_locator",
         ),
     ],
 )
-def test_result_from_response_rejects_malformed_chapters(
-    json_payload: dict[str, object],
+def test_result_from_response_rejects_bad_input(
+    response_text: str,
     expected_match: str,
 ) -> None:
-    """Raise ChapterMarkersResponseFormatError for malformed chapter shapes."""
-    response = _valid_llm_response(json.dumps(json_payload))
-    generator = ChapterMarkersGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
-
+    """Raise ChapterMarkersResponseFormatError for any malformed LLM response."""
     with pytest.raises(ChapterMarkersResponseFormatError, match=expected_match):
-        generator._result_from_response(response)
-
-
-def test_result_from_response_raises_on_invalid_json() -> None:
-    """Raise ChapterMarkersResponseFormatError when response text is not JSON."""
-    response = _valid_llm_response("not valid json {")
-    generator = ChapterMarkersGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
-
-    with pytest.raises(ChapterMarkersResponseFormatError, match="valid JSON"):
-        generator._result_from_response(response)
+        _make_generator()._result_from_response(_valid_llm_response(response_text))
 
 
 @pytest.mark.asyncio
@@ -252,12 +229,8 @@ async def test_generate_calls_llm_and_returns_result() -> None:
             json.dumps({"chapters": [{"title": "Introduction", "start": "PT0S"}]})
         )
     )
-    generator = ChapterMarkersGenerator(
-        llm=fake_llm,
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
 
-    result = await generator.generate(
+    result = await _make_generator(fake_llm).generate(
         _minimal_tei(),
         segment_structure={"segments": [{"id": "seg-intro", "start": "PT0S"}]},
     )
@@ -269,63 +242,39 @@ async def test_generate_calls_llm_and_returns_result() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_rejects_chapters_not_aligned_to_segment_starts() -> None:
-    """Explicit segment starts constrain generated chapter starts."""
+@pytest.mark.parametrize(
+    ("chapters_payload", "expected_match"),
+    [
+        (
+            [
+                {"title": "Introduction", "start": "PT1S"},
+                {"title": "Main", "start": "PT2M"},
+            ],
+            "segment starts",
+        ),
+        (
+            [
+                {
+                    "title": "Introduction",
+                    "start": "PT5M30S",
+                    "tei_locator": "#seg-intro",
+                }
+            ],
+            "#seg-intro",
+        ),
+    ],
+)
+async def test_generate_rejects_misaligned_chapters(
+    chapters_payload: list[dict[str, object]],
+    expected_match: str,
+) -> None:
+    """Chapters that violate segment-start or locator constraints are rejected."""
     fake_llm = _FakeLLMPort(
-        _valid_llm_response(
-            json.dumps({
-                "chapters": [
-                    {"title": "Introduction", "start": "PT1S"},
-                    {"title": "Main", "start": "PT2M"},
-                ]
-            })
-        )
-    )
-    generator = ChapterMarkersGenerator(
-        llm=fake_llm,
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
+        _valid_llm_response(json.dumps({"chapters": chapters_payload}))
     )
 
-    with pytest.raises(ChapterMarkersResponseFormatError, match="segment starts"):
-        await generator.generate(
+    with pytest.raises(ChapterMarkersResponseFormatError, match=expected_match):
+        await _make_generator(fake_llm).generate(
             _minimal_tei(),
-            segment_structure={
-                "segments": [
-                    {"id": "seg-intro", "title": "Introduction", "start": "PT0S"},
-                    {"id": "seg-main", "title": "Main", "start": "PT5M30S"},
-                ]
-            },
-        )
-
-
-@pytest.mark.asyncio
-async def test_generate_rejects_locator_with_mismatched_segment_start() -> None:
-    """Chapter locators must resolve to the same supplied segment transition."""
-    fake_llm = _FakeLLMPort(
-        _valid_llm_response(
-            json.dumps({
-                "chapters": [
-                    {
-                        "title": "Introduction",
-                        "start": "PT5M30S",
-                        "tei_locator": "#seg-intro",
-                    }
-                ]
-            })
-        )
-    )
-    generator = ChapterMarkersGenerator(
-        llm=fake_llm,
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
-
-    with pytest.raises(ChapterMarkersResponseFormatError, match="#seg-intro"):
-        await generator.generate(
-            _minimal_tei(),
-            segment_structure={
-                "segments": [
-                    {"id": "seg-intro", "title": "Introduction", "start": "PT0S"},
-                    {"id": "seg-main", "title": "Main", "start": "PT5M30S"},
-                ]
-            },
+            segment_structure=_SEGMENT_STRUCTURE,
         )
