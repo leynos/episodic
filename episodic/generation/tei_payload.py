@@ -1,4 +1,16 @@
-"""Shared helpers for TEI payload enrichment modules."""
+"""Shared helpers for TEI payload enrichment modules.
+
+Use these utilities when an enrichment module needs to inspect or mutate the
+`tei_rapporteur` dictionary payload produced from a TEI document. The helpers
+validate mapping and list shapes, locate mutable body blocks, identify typed
+`div` payloads, and build plain-text inline payloads consistently across
+enrichment features.
+
+Example:
+    payload = {"text": {"body": {"blocks": []}}}
+    blocks = body_blocks_payload(payload)
+    blocks.append({"type": "div", "content": build_text_inline("Notes")})
+"""
 
 import typing as typ
 

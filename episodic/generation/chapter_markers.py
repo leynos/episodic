@@ -435,10 +435,9 @@ class ChapterMarkersGenerator:
 
 def _build_item_payload(chapter: ChapterMarker) -> dict[str, object]:
     """Build one list-item payload from a `ChapterMarker`."""
-    content = chapter.summary or chapter.title
     item_payload: dict[str, object] = {
         "label": {"content": build_text_inline(chapter.title)},
-        "content": build_text_inline(content),
+        "content": build_text_inline(chapter.summary or "."),
         "n": chapter.start,
     }
     if chapter.tei_locator is not None:

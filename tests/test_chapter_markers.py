@@ -149,6 +149,19 @@ def test_enrich_tei_escapes_xml_unsafe_characters() -> None:
     assert "&lt;" in enriched_xml or "<tags>" not in enriched_xml
 
 
+def test_enrich_tei_omits_content_when_summary_is_blank() -> None:
+    """Blank chapter summaries should not duplicate the title as item content."""
+    enriched_xml = enrich_tei_with_chapter_markers(
+        _minimal_tei(),
+        _result(ChapterMarker(title="Introduction", start="PT0S")),
+    )
+
+    document = tei.parse_xml(enriched_xml)
+    document.validate()
+    assert "<label>Introduction</label>Introduction" not in enriched_xml
+    assert '<item n="PT0S"><label>Introduction</label>.</item>' in enriched_xml
+
+
 def test_enrich_tei_is_idempotent_for_same_result() -> None:
     """Applying the same chapter result twice leaves one canonical chapter div."""
     result = _result(

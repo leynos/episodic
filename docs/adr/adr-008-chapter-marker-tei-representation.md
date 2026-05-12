@@ -1,4 +1,4 @@
-# ADR-006: Chapter-marker TEI representation
+# ADR-008: Chapter-marker TEI representation
 
 ## Status
 

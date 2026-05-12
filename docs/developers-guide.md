@@ -679,7 +679,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
 - `enrich_tei_with_chapter_markers(...)` inserts a
   `<div type="chapters">` element into the TEI body using the representation
   defined by
-  [`adr-006-chapter-marker-tei-representation.md`](adr/adr-006-chapter-marker-tei-representation.md).
+  [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md).
    The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
   `@n` stores the required start time, and `@corresp` stores an optional source
   locator. Optional DTO `end` and `duration` values are validated but not

@@ -418,7 +418,7 @@ outbound request includes the TEI script plus segment information. Keep prompt
 assertions structural.
 
 Stage E is documentation. Add a new ADR, likely
-`docs/adr/adr-006-chapter-marker-tei-representation.md`, unless ADR 005 is
+`docs/adr/adr-008-chapter-marker-tei-representation.md`, unless ADR 005 is
 already taken by the current branch. Update
 `docs/episodic-podcast-generation-system-design.md` to mention the chapter
 marker service next to show notes. Update `docs/developers-guide.md` with the
