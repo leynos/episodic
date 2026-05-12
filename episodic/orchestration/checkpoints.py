@@ -46,14 +46,14 @@ class InMemoryCheckpointStore:
             return None
         return self._by_id[checkpoint_id]
 
-    async def save(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
+    async def save_or_reuse(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
         """Persist a checkpoint, preserving the first record for a key."""
         async with self._lock:
             existing = await self.get_by_idempotency_key(checkpoint.idempotency_key)
             if existing is not None:
                 _log_event(
                     "debug",
-                    "checkpoint_store.in_memory.save.reuse",
+                    "checkpoint_store.in_memory.save_or_reuse.reuse",
                     checkpoint_id=existing.checkpoint_id,
                     idempotency_key=existing.idempotency_key,
                 )
@@ -74,7 +74,7 @@ class InMemoryCheckpointStore:
             self._by_key[stored.idempotency_key] = stored.checkpoint_id
             _log_event(
                 "debug",
-                "checkpoint_store.in_memory.save.created",
+                "checkpoint_store.in_memory.save_or_reuse.created",
                 checkpoint_id=stored.checkpoint_id,
                 idempotency_key=stored.idempotency_key,
             )

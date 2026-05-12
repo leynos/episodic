@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from episodic.orchestration import WorkflowCheckpoint
+from episodic.orchestration._types import _log_event
 
 from .models import WorkflowCheckpointRecord
 
@@ -51,6 +52,12 @@ class SqlAlchemyWorkflowCheckpointStore:
             WorkflowCheckpointRecord,
             uuid.UUID(checkpoint_id),
         )
+        _log_event(
+            "debug",
+            "sql_checkpoint_store.get",
+            checkpoint_id=checkpoint_id,
+            found=record is not None,
+        )
         if record is None:
             return None
         return _map_checkpoint(record)
@@ -66,11 +73,17 @@ class SqlAlchemyWorkflowCheckpointStore:
             )
         )
         record = result.scalar_one_or_none()
+        _log_event(
+            "debug",
+            "sql_checkpoint_store.get_by_idempotency_key",
+            idempotency_key=idempotency_key,
+            found=record is not None,
+        )
         if record is None:
             return None
         return _map_checkpoint(record)
 
-    async def save(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
+    async def save_or_reuse(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
         """Persist a checkpoint or return the existing record for its key."""
         record = WorkflowCheckpointRecord(
             id=uuid.UUID(checkpoint.checkpoint_id),
@@ -85,7 +98,18 @@ class SqlAlchemyWorkflowCheckpointStore:
             async with self._session.begin_nested():
                 self._session.add(record)
                 await self._session.flush()
+                _log_event(
+                    "debug",
+                    "sql_checkpoint_store.save_or_reuse.persisted",
+                    checkpoint_id=checkpoint.checkpoint_id,
+                    idempotency_key=checkpoint.idempotency_key,
+                )
         except IntegrityError:
+            _log_event(
+                "warning",
+                "sql_checkpoint_store.save_or_reuse.idempotency_conflict",
+                idempotency_key=checkpoint.idempotency_key,
+            )
             existing = await self.get_by_idempotency_key(checkpoint.idempotency_key)
             if existing is not None:
                 return existing
@@ -103,5 +127,10 @@ class SqlAlchemyWorkflowCheckpointStore:
             raise ValueError(msg)
         record.status = "resumed"
         await self._session.flush()
+        _log_event(
+            "debug",
+            "sql_checkpoint_store.mark_resumed",
+            checkpoint_id=checkpoint_id,
+        )
         await self._session.refresh(record)
         return _map_checkpoint(record)

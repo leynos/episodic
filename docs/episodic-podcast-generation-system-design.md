@@ -564,13 +564,8 @@ sequenceDiagram
     LangGraph->>Planner: plan(request)
     Planner-->>LangGraph: PlannerResult
 
-    LangGraph->>Checkpoints: get_by_idempotency_key(step_idempotency_key)
-    Checkpoints-->>LangGraph: WorkflowCheckpoint | None
-
-    alt checkpoint does not exist
-        LangGraph->>Checkpoints: save(WorkflowCheckpoint)
-        Checkpoints-->>LangGraph: WorkflowCheckpoint
-    end
+    LangGraph->>Checkpoints: save_or_reuse(WorkflowCheckpoint)
+    Checkpoints-->>LangGraph: WorkflowCheckpoint
 
     LangGraph-->>Orchestrator: SuspendedWorkflowResult
     Orchestrator-->>Client: SuspendedWorkflowResult

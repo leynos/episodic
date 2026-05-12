@@ -303,7 +303,7 @@ class TestGenerationOrchestrationGraph:
     ) -> None:
         """Resume should map malformed checkpoint payloads to TypeError."""
         checkpoint_store = InMemoryCheckpointStore()
-        checkpoint = await checkpoint_store.save(
+        checkpoint = await checkpoint_store.save_or_reuse(
             WorkflowCheckpoint(
                 checkpoint_id=str(uuid.uuid4()),
                 workflow_id="corr-graph",
@@ -323,6 +323,32 @@ class TestGenerationOrchestrationGraph:
                 checkpoint_port=checkpoint_store,
                 resume_port=_FakeResumePort(),
                 command=command,
+            )
+
+    @pytest.mark.asyncio
+    async def test_resume_generation_orchestration_raises_on_invalid_payload(
+        self,
+    ) -> None:
+        """resume_generation_orchestration raises TypeError for a malformed payload."""
+        store = InMemoryCheckpointStore()
+        bad_checkpoint = WorkflowCheckpoint(
+            checkpoint_id=str(uuid.uuid4()),
+            workflow_id="wf-1",
+            workflow_type="generation_orchestration",
+            step_name="execute",
+            idempotency_key="wf-1:generation_orchestration:execute:a1:0",
+            payload={"planner_result": {"bad": "shape"}},
+        )
+        await store.save_or_reuse(bad_checkpoint)
+
+        with pytest.raises(TypeError):
+            await resume_generation_orchestration(
+                checkpoint_port=store,
+                resume_port=_FakeResumePort(),
+                command=ResumeWorkflowCommand(
+                    checkpoint_id=bad_checkpoint.checkpoint_id,
+                    result=_action_result(),
+                ),
             )
 
     @pytest.mark.asyncio
@@ -350,11 +376,21 @@ class TestGenerationOrchestrationGraph:
         )
 
         stored_first, stored_second = await asyncio.gather(
-            checkpoint_store.save(first),
-            checkpoint_store.save(duplicate),
+            checkpoint_store.save_or_reuse(first),
+            checkpoint_store.save_or_reuse(duplicate),
         )
 
         assert stored_second.checkpoint_id == stored_first.checkpoint_id
+
+    @pytest.mark.asyncio
+    async def test_in_memory_checkpoint_store_mark_resumed_raises_for_unknown_id(
+        self,
+    ) -> None:
+        """`InMemoryCheckpointStore.mark_resumed` rejects an unknown id."""
+        store = InMemoryCheckpointStore()
+
+        with pytest.raises(ValueError, match="unknown checkpoint"):
+            await store.mark_resumed(str(uuid.uuid4()))
 
 
 class TestLangGraphNodeValidation:

@@ -414,11 +414,11 @@ class CheckpointPort(typ.Protocol):
     ) -> WorkflowCheckpoint | None:
         """Load a checkpoint by workflow-step idempotency key."""
 
-    async def save(
+    async def save_or_reuse(
         self,
         checkpoint: WorkflowCheckpoint,
     ) -> WorkflowCheckpoint:
-        """Persist a checkpoint or return the existing idempotent record."""
+        """Persist a checkpoint or return the first record for its key."""
 
     async def mark_resumed(
         self,
@@ -648,11 +648,11 @@ class CheckpointPort(typ.Protocol):
     ) -> WorkflowCheckpoint | None:
         """Load a checkpoint by workflow-step idempotency key."""
 
-    async def save(
+    async def save_or_reuse(
         self,
         checkpoint: WorkflowCheckpoint,
     ) -> WorkflowCheckpoint:
-        """Persist a checkpoint or return the existing idempotent record."""
+        """Persist a checkpoint or return the first record for its key."""
 
     async def mark_resumed(
         self,
@@ -702,8 +702,8 @@ idempotency attempts plus SQL not-found checkpoint lookups.
 
 Revision note 2026-05-10: Validation for the code review follow-up passed with
 `make check-fmt`, `make typecheck`, `make lint`, `make markdownlint`,
-`make nixie`, and `make test`. The full test suite reported 456 passed and
-3 skipped tests.
+`make nixie`, and `make test`. The full test suite reported 456 passed and 3
+skipped tests.
 
 Revision note 2026-05-10: Review follow-up verified that SQL checkpoint saves
 already use a nested transaction savepoint for duplicate idempotency keys, so
@@ -711,14 +711,30 @@ no whole-unit-of-work rollback fix was needed. Multi-step suspended checkpoints
 now fail explicitly during `resume_generation_orchestration` instead of
 silently finalizing only the first externally supplied action result.
 
-Revision note 2026-05-10: Validation for the multi-step resume follow-up
-passed with `make check-fmt`, `make typecheck`, `make lint`,
-`make markdownlint`, `make nixie`, and `make test`. The full test suite
-reported 457 passed and 3 skipped tests.
+Revision note 2026-05-10: Validation for the multi-step resume follow-up passed
+with `make check-fmt`, `make typecheck`, `make lint`, `make markdownlint`,
+`make nixie`, and `make test`. The full test suite reported 457 passed and 3
+skipped tests.
 
-Revision note 2026-05-12: Review follow-up converted missing
-`planner_result` checkpoint payloads from `KeyError` to the documented
-`TypeError` path, updated the developer guide wording, and normalized revision
-note spelling. Validation passed with `make check-fmt`, `make typecheck`,
-`make lint`, `make markdownlint`, `make nixie`, and `make test`; the full test
-suite reported 458 passed and 3 skipped tests.
+Revision note 2026-05-12: Review follow-up converted missing `planner_result`
+checkpoint payloads from `KeyError` to the documented `TypeError` path, updated
+the developer guide wording, and normalized revision note spelling. Validation
+passed with `make check-fmt`, `make typecheck`, `make lint`,
+`make markdownlint`, `make nixie`, and `make test`; the full test suite
+reported 458 passed and 3 skipped tests.
+
+Revision note 2026-05-12: Checkpoint persistence was renamed from `save()` to
+`save_or_reuse()` across the port, adapters, call sites, and tests so the
+first-write-wins contract is explicit. Suspend now writes unconditionally
+through `save_or_reuse()` and derives checkpoint reuse from the returned
+checkpoint identifier, keeping duplicate-key arbitration in the store. The
+SQLAlchemy checkpoint store now emits observability events for reads, inserts,
+duplicate-key reuse, and resume marking. Added malformed resume payload and
+unknown `mark_resumed()` tests for in-memory and SQL-backed stores. Validation
+passed with `make check-fmt`, `make typecheck`, `make lint`,
+`make markdownlint`, `make nixie`, and `make test`; the full test suite
+reported 461 passed and 3 skipped tests. An earlier `make test` run hit a
+single setup timeout in
+`tests/test_snapshot_sources.py::test_snapshot_resolved_bindings_persists_reference_source_documents[explicit_created_at]`;
+ the isolated test rerun passed both parametrisations before the clean full
+rerun.

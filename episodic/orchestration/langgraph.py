@@ -191,8 +191,13 @@ def _planner_result_to_payload(result: dto.PlannerResult) -> dict[str, object]:
 def _planner_result_from_payload(payload: object) -> dto.PlannerResult:
     """Return a PlannerResult from a checkpoint payload."""
     planner_payload = _as_object_payload(payload, "planner_result")
+    try:
+        plan_payload = planner_payload["plan"]
+    except KeyError as exc:
+        msg = "checkpoint planner_result missing required field: plan"
+        raise TypeError(msg) from exc
     return dto.PlannerResult(
-        plan=_plan_from_payload(planner_payload["plan"]),
+        plan=_plan_from_payload(plan_payload),
         usage=(
             None
             if planner_payload.get("usage") is None
@@ -415,22 +420,21 @@ async def _suspend_execute_node(
         action_id=identity.action_id,
         idempotency_key=idempotency_key,
     )
-    existing = await checkpoint_port.get_by_idempotency_key(idempotency_key)
-    reused_checkpoint = existing is not None
-    if existing is None:
-        existing = await checkpoint_port.save(
-            dto.WorkflowCheckpoint(
-                checkpoint_id=str(uuid.uuid4()),
-                workflow_id=identity.workflow_id,
-                workflow_type=identity.workflow_type,
-                step_name=identity.step_name,
-                idempotency_key=idempotency_key,
-                payload=_build_checkpoint_payload(
-                    request=request,
-                    planner_result=planner_result,
-                ),
-            )
+    fresh_id = str(uuid.uuid4())
+    existing = await checkpoint_port.save_or_reuse(
+        dto.WorkflowCheckpoint(
+            checkpoint_id=fresh_id,
+            workflow_id=identity.workflow_id,
+            workflow_type=identity.workflow_type,
+            step_name=identity.step_name,
+            idempotency_key=idempotency_key,
+            payload=_build_checkpoint_payload(
+                request=request,
+                planner_result=planner_result,
+            ),
         )
+    )
+    reused_checkpoint = existing.checkpoint_id != fresh_id
     _log_event(
         "debug",
         "generation_graph.suspend_execute_node.finish",

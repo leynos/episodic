@@ -56,8 +56,12 @@ class CheckpointPort(typ.Protocol):
     ) -> WorkflowCheckpoint | None:
         """Return the checkpoint recorded for a suspendable step key."""
 
-    async def save(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
-        """Persist a checkpoint or return the existing record for its key."""
+    async def save_or_reuse(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
+        """Persist the checkpoint if the idempotency key is new.
+
+        Return the existing record unchanged if the key was already written
+        (first-write-wins).
+        """
 
     async def mark_resumed(self, checkpoint_id: str) -> WorkflowCheckpoint:
         """Mark a checkpoint as resumed and return the updated record."""

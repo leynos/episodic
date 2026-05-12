@@ -38,7 +38,7 @@ async def test_checkpoint_store_persists_across_unit_of_work(
     checkpoint = _checkpoint()
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
-        stored = await uow.workflow_checkpoints.save(checkpoint)
+        stored = await uow.workflow_checkpoints.save_or_reuse(checkpoint)
         await uow.commit()
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
@@ -87,8 +87,8 @@ async def test_checkpoint_store_reuses_idempotency_key(
     duplicate = _checkpoint(checkpoint_id=str(uuid.uuid4()))
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
-        first = await uow.workflow_checkpoints.save(checkpoint)
-        second = await uow.workflow_checkpoints.save(duplicate)
+        first = await uow.workflow_checkpoints.save_or_reuse(checkpoint)
+        second = await uow.workflow_checkpoints.save_or_reuse(duplicate)
         await uow.commit()
 
     assert second.checkpoint_id == first.checkpoint_id
@@ -103,7 +103,7 @@ async def test_checkpoint_store_marks_checkpoint_resumed(
     checkpoint = _checkpoint()
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
-        stored = await uow.workflow_checkpoints.save(checkpoint)
+        stored = await uow.workflow_checkpoints.save_or_reuse(checkpoint)
         resumed = await uow.workflow_checkpoints.mark_resumed(stored.checkpoint_id)
         await uow.commit()
 
@@ -113,3 +113,15 @@ async def test_checkpoint_store_marks_checkpoint_resumed(
     assert resumed.status == "resumed"
     assert fetched is not None
     assert fetched.status == "resumed"
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_store_mark_resumed_raises_for_unknown_checkpoint_id(
+    session_factory: object,
+) -> None:
+    """`mark_resumed` on an unknown id must raise ValueError."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        with pytest.raises(ValueError, match="unknown checkpoint"):
+            await uow.workflow_checkpoints.mark_resumed(str(uuid.uuid4()))
