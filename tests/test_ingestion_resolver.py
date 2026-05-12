@@ -52,7 +52,7 @@ async def test_conflict_resolver_single_source_no_conflict(
     assert outcome.preferred_sources[0].source.title == "Only Source", (
         "Expected only source to be selected as preferred."
     )
-    assert not outcome.rejected_sources, (
+    assert outcome.rejected_sources == [], (  # pylint: disable=use-implicit-booleaness-not-comparison
         "Expected no rejected sources for single-source input."
     )
 

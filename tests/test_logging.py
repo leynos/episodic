@@ -248,7 +248,7 @@ def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
     ):
         episodic_logging.log_info(logger, "Loaded %s documents for %s", 3)
 
-    assert not logger.calls
+    assert logger.calls == []  # pylint: disable=use-implicit-booleaness-not-comparison
 
 
 def test_log_wrappers_fall_back_to_logger_log_when_needed() -> None:
