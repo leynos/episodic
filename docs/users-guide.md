@@ -97,7 +97,6 @@ Table: Show-notes model configuration settings.
 Both model names must reference endpoints available through the configured LLM
 provider.
 
-
 ##### Resumable orchestration
 
 Generation workflows now persist an internal checkpoint before a suspendable

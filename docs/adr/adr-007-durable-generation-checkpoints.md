@@ -1,4 +1,5 @@
 # ADR-007: Durable generation checkpoints
+
 ## Status
 
 Accepted
@@ -62,8 +63,3 @@ insert hits the idempotency-key constraint.
 - Implementation — `episodic/orchestration/langgraph.py`,
   `episodic/orchestration/checkpoints.py`,
   `episodic/canonical/storage/workflow_checkpoints.py`
-
-# ADR-007: Durable generation checkpoints
-# ADR-007: Durable generation checkpoints
-
-# ADR-007: Durable generation checkpoints
