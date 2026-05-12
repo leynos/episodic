@@ -90,7 +90,8 @@ milestone.
 
 ## References
 
-Roadmap item `2.3.2` in `docs/roadmap.md`.[^1] ExecPlan: `docs/execplans/2-3-2-generate-chapter-markers-aligned-to-script-segments.md`.[^2]
+Roadmap item `2.3.2` in `docs/roadmap.md`.[^1] ExecPlan:
+`docs/execplans/2-3-2-generate-chapter-markers-aligned-to-script-segments.md`.[^2]
 Implementation: `episodic/generation/chapter_markers.py`.[^3] Tests:
 `tests/test_chapter_markers.py`, `tests/features/chapter_markers.feature`,
 `tests/steps/test_chapter_markers_steps.py`.[^4]
@@ -102,3 +103,5 @@ Implementation: `episodic/generation/chapter_markers.py`.[^3] Tests:
 [^4]: Tests: `tests/test_chapter_markers.py`,
   `tests/features/chapter_markers.feature`,
   `tests/steps/test_chapter_markers_steps.py`
+
+# ADR-008: Chapter-marker TEI representation

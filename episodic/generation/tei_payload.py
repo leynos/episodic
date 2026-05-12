@@ -19,6 +19,16 @@ Example:
 import typing as typ
 
 
+def _format_type_error_message(
+    field_name: str,
+    expected_type: str,
+    prefix: str,
+) -> str:
+    """Build a consistent type mismatch message for payload validators."""
+    qualifier = f"{prefix} " if prefix else ""
+    return f"{qualifier}{field_name} must be a {expected_type}."
+
+
 def require_mapping(
     value: object,
     field_name: str,
@@ -28,9 +38,7 @@ def require_mapping(
 ) -> dict[str, object]:
     """Require an object value with caller-selected error semantics."""
     if not isinstance(value, dict):
-        qualifier = f"{prefix} " if prefix else ""
-        msg = f"{qualifier}{field_name} must be an object."
-        raise error_cls(msg)
+        raise error_cls(_format_type_error_message(field_name, "object", prefix))
     return typ.cast("dict[str, object]", value)
 
 
@@ -43,9 +51,7 @@ def require_sequence(
 ) -> list[object]:
     """Require a list value with caller-selected error semantics."""
     if not isinstance(value, list):
-        qualifier = f"{prefix} " if prefix else ""
-        msg = f"{qualifier}{field_name} must be a list."
-        raise error_cls(msg)
+        raise error_cls(_format_type_error_message(field_name, "list", prefix))
     return typ.cast("list[object]", value)
 
 
