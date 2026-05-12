@@ -72,7 +72,7 @@ def _require_field[FieldT](
         value = payload[field_name]
     except KeyError as exc:
         msg = f"checkpoint {context} missing required field: {field_name}"
-        raise KeyError(msg) from exc
+        raise TypeError(msg) from exc
     if not isinstance(value, expected_type):
         msg = (
             f"checkpoint {context} field {field_name} must be a "
