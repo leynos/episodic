@@ -22,7 +22,6 @@ from astroid.raw_building import (  # ty: ignore[unresolved-import]
 )
 
 _IGNORED_GETATTR_ERRORS = (AttributeError, TypeError)
-_GET_MEMBER_FAILED = object()
 _SKIP = object()
 
 
