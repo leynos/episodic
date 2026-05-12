@@ -261,6 +261,30 @@ def _segment_transitions_from_value(value: object) -> tuple[_SegmentTransition, 
     return tuple(transitions)
 
 
+def _validate_segment_transition_starts(
+    transitions: tuple[_SegmentTransition, ...],
+) -> None:
+    """Raise if any transition start is unparseable."""
+    for transition in transitions:
+        try:
+            _duration_to_seconds(transition.start, "segment start")
+        except (TypeError, ValueError) as exc:
+            raise ChapterMarkersResponseFormatError(str(exc)) from exc
+
+
+def _build_segment_start_lookups(
+    transitions: tuple[_SegmentTransition, ...],
+) -> tuple[set[str], dict[str, str]]:
+    """Build a start-value set and a locator-to-start mapping from transitions."""
+    starts = {transition.start for transition in transitions}
+    starts_by_locator = {
+        locator_key: transition.start
+        for transition in transitions
+        for locator_key in transition.locator_keys
+    }
+    return starts, starts_by_locator
+
+
 def _validate_chapters_align_to_segments(
     result: ChapterMarkersResult,
     segment_structure: JsonMapping | None,
@@ -271,19 +295,8 @@ def _validate_chapters_align_to_segments(
     transitions = _segment_transitions_from_value(segment_structure)
     if not transitions:
         return
-
-    for transition in transitions:
-        try:
-            _duration_to_seconds(transition.start, "segment start")
-        except (TypeError, ValueError) as exc:
-            raise ChapterMarkersResponseFormatError(str(exc)) from exc
-
-    starts = {transition.start for transition in transitions}
-    starts_by_locator = {
-        locator_key: transition.start
-        for transition in transitions
-        for locator_key in transition.locator_keys
-    }
+    _validate_segment_transition_starts(transitions)
+    starts, starts_by_locator = _build_segment_start_lookups(transitions)
     for chapter in result.chapters:
         _validate_chapter_aligns_to_segments(chapter, starts, starts_by_locator)
 
