@@ -64,10 +64,7 @@ _SKIP = object()
 
 def _cached_child_type_error(member: object, child: object) -> str:
     """Describe a cached Astroid child type invariant failure."""
-    return (
-        f"_done entry for {member!r} must be a ClassDef, "
-        f"got {type(child).__name__}"
-    )
+    return f"_done entry for {member!r} must be a ClassDef, got {type(child).__name__}"
 
 
 def _build_builtin_child(
