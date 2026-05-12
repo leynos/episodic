@@ -150,6 +150,10 @@ max-args = 4
 max-bool-expr = 2
 max-locals = 10
 
+[tool.pylint.main]
+# Expand directory targets like alembic and tests even when they are not packages.
+recursive = true
+
 [tool.pylint.design]
 # The new Pylint gate complements Ruff's stricter PLR0914 threshold without
 # forcing broad refactors while introducing the additional rule families below.
