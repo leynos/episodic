@@ -178,7 +178,7 @@ def _object_build_without_pypy_descriptor_aliases(
         return
     self._done[obj] = node
     for alias in dir(obj):
-        if type(alias) is not str:
+        if not isinstance(alias, str):
             continue
         member, pypy__class_getitem__, skip = _resolve_member(node, obj, alias)
         if skip:
@@ -193,11 +193,21 @@ def _object_build_without_pypy_descriptor_aliases(
         _attach_child_node(node, alias, child)
 
 
+def _patch_astroid_object_build() -> None:
+    """Install the PyPy object-build patch after validating Astroid's shape."""
+    builder_type = raw_building.InspectBuilder
+    assert isinstance(builder_type, type), (  # noqa: S101 - fail loudly if Astroid internals drift.
+        f"InspectBuilder must be a type, got {type(builder_type).__name__}"
+    )
+    assert callable(getattr(builder_type, "object_build", None)), (  # noqa: S101 - fail loudly if Astroid internals drift.
+        "InspectBuilder.object_build must be callable"
+    )
+    builder_type.object_build = _object_build_without_pypy_descriptor_aliases
+
+
 def main() -> None:
     """Patch Astroid and delegate to Pylint."""
-    raw_building.InspectBuilder.object_build = (
-        _object_build_without_pypy_descriptor_aliases
-    )
+    _patch_astroid_object_build()
     from pylint.lint import Run  # ty: ignore[unresolved-import]
 
     Run(sys.argv[1:])

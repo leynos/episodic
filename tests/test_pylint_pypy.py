@@ -344,3 +344,52 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
     assert dummy_calls == [(node, "missing")], (
         "object builder must attach a dummy node for skipped aliases"
     )
+
+
+def test_object_build_ignores_non_string_dir_entries(
+    monkeypatch: pytest.MonkeyPatch,
+    pylint_pypy_module: types.ModuleType,
+) -> None:
+    """Non-string ``dir()`` entries are ignored before member resolution."""
+    builder = _FakeBuilder()
+    node = _FakeNode()
+    target = object()
+    resolved_aliases: list[str] = []
+
+    class _Alias(str):  # noqa: FURB189 - str subclass handling is under test.
+        """String subclass used to prove str-like aliases are accepted."""
+
+    def fake_dir(obj: object) -> list[object]:
+        assert obj is target, "obj passed to fake_dir must be the target object"
+        return [object(), 123, _Alias("child")]
+
+    def fake_resolve_member(
+        node_arg: object,
+        obj: object,
+        alias: str,
+    ) -> tuple[object, bool, bool]:
+        assert node_arg is node, "node argument must be forwarded unchanged"
+        assert obj is target, "obj argument must be forwarded unchanged"
+        resolved_aliases.append(alias)
+        return object(), False, False
+
+    monkeypatch.setattr(builtins, "dir", fake_dir)
+    monkeypatch.setattr(pylint_pypy_module, "_resolve_member", fake_resolve_member)
+    monkeypatch.setattr(
+        pylint_pypy_module,
+        "_dispatch_member_to_child",
+        lambda builder_arg, node_arg, member, alias: object(),
+    )
+
+    pylint_pypy_module._object_build_without_pypy_descriptor_aliases(
+        builder,
+        node,
+        target,
+    )
+
+    assert resolved_aliases == ["child"], (
+        "object builder must resolve only string and str-subclass aliases"
+    )
+    assert list(node.locals) == ["child"], (
+        "object builder must not attach locals for non-string aliases"
+    )

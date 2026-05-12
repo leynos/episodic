@@ -288,8 +288,6 @@ enable = [
     "use-implicit-booleaness-not-comparison",
     # Prefer direct string truthiness over comparison to an empty string.
     "use-implicit-booleaness-not-comparison-to-string",
-    # Prefer direct integer truthiness over comparison to zero.
-    "use-implicit-booleaness-not-comparison-to-zero",
     # Prefer operators and builtins over direct dunder calls.
     "unnecessary-dunder-call",
     # Avoid placeholder ellipses when a concrete stub body is clearer.
