@@ -144,7 +144,7 @@ def _assert_reference_document_list(
     items = typ.cast("list[dict[str, object]]", payload["items"])
     assert isinstance(items, list), f"expected items list in payload: {payload}"
     assert payload["limit"] == 10, f"expected limit 10 in payload: {payload}"
-    assert not payload["offset"], f"expected offset 0 in payload: {payload}"
+    assert payload["offset"] == 0, f"expected offset 0 in payload: {payload}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
     return items
 
 
@@ -197,7 +197,7 @@ def _assert_reference_revision_history(
     payload = typ.cast("dict[str, object]", response.json)
     items = typ.cast("list[dict[str, object]]", payload["items"])
     assert payload["limit"] == 10, f"expected limit 10, got {payload['limit']}"
-    assert not payload["offset"], f"expected offset 0, got {payload['offset']}"
+    assert payload["offset"] == 0, f"expected offset 0, got {payload['offset']}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
     return items
 
 
@@ -354,7 +354,7 @@ def _assert_binding_list_workflow(
     assert bindings_payload["limit"] == 10, (
         f"expected limit 10 in bindings payload: {bindings_payload}"
     )
-    assert not bindings_payload["offset"], (
+    assert bindings_payload["offset"] == 0, (  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
         f"expected offset 0 in bindings payload: {bindings_payload}"
     )
     assert len(bindings_items) == 1, (

@@ -56,11 +56,8 @@ jobs:
       - name: Check formatting
         run: make check-fmt
 
-      - name: Run ruff
-        run: ruff check
-
-      - name: Run architecture checks
-        run: make check-architecture
+      - name: Run lint
+        run: make lint
 
       - name: Run typechecker
         run: make typecheck

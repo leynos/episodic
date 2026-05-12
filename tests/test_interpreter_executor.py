@@ -107,7 +107,7 @@ async def test_interpreter_executor_handles_empty_input(
         executor.shutdown()
 
     assert results == [], "Expected empty workloads to return an empty result list."
-    assert not created_pools["count"], (
+    assert created_pools["count"] == 0, (  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
         "Expected no interpreter pool to be created for empty workloads."
     )
 

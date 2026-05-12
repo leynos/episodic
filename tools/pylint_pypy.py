@@ -1,11 +1,7 @@
-# ruff: noqa: PLR0911, S101, TC003
 """Run Pylint under PyPy with the local Astroid compatibility patch."""
-
-from __future__ import annotations
 
 import inspect
 import sys
-import types
 import warnings
 
 from astroid import node_classes, nodes, raw_building  # ty: ignore[unresolved-import]
@@ -48,7 +44,8 @@ def _build_class_child(
         return _SKIP
     if member in self._done:
         child = self._done[member]
-        assert isinstance(child, nodes.ClassDef)
+        if not isinstance(child, nodes.ClassDef):
+            raise AssertionError
         return child
     child = object_build_class(node, member)
     self.object_build(child, member)
@@ -76,7 +73,7 @@ def _attach_child_node(
         node.add_local_node(child, alias)
 
 
-def _dispatch_member_to_child(
+def _dispatch_member_to_child(  # noqa: PLR0911
     self: raw_building.InspectBuilder,
     node: nodes.Module | nodes.ClassDef,
     member: object,
@@ -104,7 +101,7 @@ def _dispatch_member_to_child(
 
 def _resolve_member(
     node: nodes.Module | nodes.ClassDef,
-    obj: types.ModuleType | type,
+    obj: object,
     alias: str,
 ) -> tuple[object, bool, bool]:
     """Resolve *alias* from *obj* and report whether the caller should skip it."""
@@ -124,7 +121,7 @@ def _resolve_member(
 def _object_build_without_pypy_descriptor_aliases(
     self: raw_building.InspectBuilder,
     node: nodes.Module | nodes.ClassDef,
-    obj: types.ModuleType | type,
+    obj: object,
 ) -> None:
     """Build Astroid nodes while ignoring non-string PyPy ``dir()`` entries."""
     if obj in self._done:
