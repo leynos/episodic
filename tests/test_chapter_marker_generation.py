@@ -141,7 +141,10 @@ def test_result_from_response_rejects_bad_input(
     response_text: str,
     expected_match: str,
 ) -> None:
-    """Raise ChapterMarkersResponseFormatError for any malformed LLM response."""
+    """Raise ChapterMarkersResponseFormatError.
+
+    Any malformed or invalid LLM response is rejected.
+    """
     with pytest.raises(ChapterMarkersResponseFormatError, match=expected_match):
         _make_generator()._result_from_response(_valid_llm_response(response_text))
 
@@ -287,7 +290,10 @@ async def test_generate_rejects_misaligned_chapters(
     chapters_payload: list[dict[str, object]],
     expected_match: str,
 ) -> None:
-    """Chapters that violate segment-start or locator constraints are rejected."""
+    """Reject misaligned chapters.
+
+    Chapter starts or locators violating segment-transition constraints fail.
+    """
     fake_llm = _FakeLLMPort(
         _valid_llm_response(json.dumps({"chapters": chapters_payload}))
     )
