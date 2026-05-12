@@ -294,18 +294,19 @@ def _build_segment_start_lookups(
     transitions: tuple[_SegmentTransition, ...],
 ) -> tuple[set[int], dict[str, tuple[int, str]]]:
     """Build a start-value set and a locator-to-start mapping from transitions."""
-    starts = {
-        _duration_to_seconds(transition.start, "segment start")
-        for transition in transitions
-    }
-    starts_by_locator = {
-        locator_key: (
-            _duration_to_seconds(transition.start, "segment start"),
-            transition.start,
-        )
-        for transition in transitions
-        for locator_key in transition.locator_keys
-    }
+    starts: set[int] = set()
+    starts_by_locator: dict[str, tuple[int, str]] = {}
+    for transition in transitions:
+        start_secs = _duration_to_seconds(transition.start, "segment start")
+        starts.add(start_secs)
+        locator_value = (start_secs, transition.start)
+        for locator_key in transition.locator_keys:
+            existing_value = starts_by_locator.get(locator_key)
+            if existing_value is not None and existing_value != locator_value:
+                raise ChapterMarkersResponseFormatError(  # noqa: TRY003 - include the conflicting locator key.
+                    f"Conflicting locator reuse for {locator_key!r}."
+                )
+            starts_by_locator[locator_key] = locator_value
     return starts, starts_by_locator
 
 

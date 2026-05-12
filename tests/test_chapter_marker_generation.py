@@ -264,6 +264,30 @@ async def test_generate_accepts_equivalent_duration_spellings() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_rejects_conflicting_segment_locator_reuse() -> None:
+    """Segment metadata cannot reuse a locator for different starts."""
+    fake_llm = _FakeLLMPort(
+        _valid_llm_response(
+            json.dumps({"chapters": [{"title": "Introduction", "start": "PT0S"}]})
+        )
+    )
+
+    with pytest.raises(
+        ChapterMarkersResponseFormatError,
+        match="Conflicting locator reuse",
+    ):
+        await _make_generator(fake_llm).generate(
+            _minimal_tei(),
+            segment_structure={
+                "segments": [
+                    {"id": "seg-intro", "title": "Introduction", "start": "PT0S"},
+                    {"id": "seg-intro", "title": "Repeat", "start": "PT5M30S"},
+                ]
+            },
+        )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("chapters_payload", "expected_match"),
     [
