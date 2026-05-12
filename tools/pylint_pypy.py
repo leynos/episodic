@@ -1,4 +1,4 @@
-# ruff: noqa: PLR0911, S101, TC003
+# ruff: noqa: C901, PLR0911, S101, TC003
 """Run Pylint under PyPy with the local Astroid compatibility patch."""
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ def _attach_child_node(
         node.add_local_node(child, alias)
 
 
-def _dispatch_member_to_child(  # noqa: C901, PLR0913
+def _dispatch_member_to_child(  # noqa: PLR0913
     self: raw_building.InspectBuilder,
     node: nodes.Module | nodes.ClassDef,
     member: object,
@@ -124,6 +124,66 @@ def _dispatch_member_to_child(  # noqa: C901, PLR0913
     return build_dummy(member)
 
 
+def _resolve_member(
+    node: nodes.Module | nodes.ClassDef,
+    obj: types.ModuleType | type,
+    alias: str,
+) -> tuple[object, bool, bool]:
+    """Resolve *alias* from *obj* and report whether the caller should skip it."""
+    pypy__class_getitem__ = IS_PYPY and alias == "__class_getitem__"
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            member = getattr(obj, alias)
+    except _IGNORED_GETATTR_ERRORS:
+        attach_dummy_node(node, alias)
+        return None, pypy__class_getitem__, True
+    if inspect.ismethod(member) and not pypy__class_getitem__:
+        member = member.__func__
+    return member, pypy__class_getitem__, False
+
+
+def _build_child_for_member(  # noqa: PLR0913, PLR0917
+    builder: raw_building.InspectBuilder,
+    node: nodes.Module | nodes.ClassDef,
+    member: object,
+    alias: str,
+    pypy__class_getitem__: bool,  # noqa: FBT001
+) -> nodes.NodeNG | None:
+    """Build an Astroid child for *member* or return None when it should skip."""
+    if inspect.isfunction(member):
+        return _build_from_function(node, member, builder._module)
+    if inspect.isbuiltin(member) or pypy__class_getitem__:
+        if builder.imported_member(node, member, alias):
+            return None
+        return object_build_methoddescriptor(node, member)
+    if inspect.isclass(member):
+        if builder.imported_member(node, member, alias):
+            return None
+        if member in builder._done:
+            child = builder._done[member]
+            assert isinstance(child, nodes.ClassDef)
+            return child
+        child = object_build_class(node, member)
+        builder.object_build(child, member)
+        return child
+    if inspect.ismethoddescriptor(member):
+        return object_build_methoddescriptor(node, member)
+    if inspect.isdatadescriptor(member):
+        return object_build_datadescriptor(node, member)
+    if isinstance(member, tuple(node_classes.CONST_CLS)):
+        if alias in node.special_attributes:
+            return None
+        return nodes.const_factory(member)
+    if inspect.isroutine(member):
+        return _build_from_function(node, member, builder._module)
+    if _safe_has_attribute(member, "__all__"):
+        child = build_module(alias)
+        builder.object_build(child, member)
+        return child
+    return build_dummy(member)
+
+
 def _object_build_without_pypy_descriptor_aliases(
     self: raw_building.InspectBuilder,
     node: nodes.Module | nodes.ClassDef,
@@ -136,16 +196,14 @@ def _object_build_without_pypy_descriptor_aliases(
     for alias in dir(obj):
         if type(alias) is not str:
             continue
-        member, pypy__class_getitem__ = _get_member(obj, alias)
-        if member is _GET_MEMBER_FAILED:
-            attach_dummy_node(node, alias)
+        member, pypy__class_getitem__, skip = _resolve_member(node, obj, alias)
+        if skip:
             continue
-        child = _dispatch_member_to_child(
-            self, node, member, alias, pypy__class_getitem__=pypy__class_getitem__
+        child = _build_child_for_member(
+            self, node, member, alias, pypy__class_getitem__
         )
-        if child is _SKIP:
-            continue
-        _attach_child_node(node, alias, child)
+        if child is not None and child not in node.locals.get(alias, ()):
+            node.add_local_node(child, alias)
 
 
 def main() -> None:
