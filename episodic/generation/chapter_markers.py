@@ -240,25 +240,43 @@ def _locator_keys_for_segment(raw: dict[str, object]) -> frozenset[str]:
     return frozenset(keys)
 
 
+def _transitions_from_dict(
+    mapping: dict[str, object],
+) -> tuple[_SegmentTransition, ...]:
+    """Yield transitions rooted at a dict node, then recurse into its values."""
+    transitions: list[_SegmentTransition] = []
+    start = mapping.get("start")
+    if isinstance(start, str) and start.strip():
+        transitions.append(
+            _SegmentTransition(
+                start=start.strip(),
+                locator_keys=_locator_keys_for_segment(mapping),
+            )
+        )
+    for nested_value in mapping.values():
+        transitions.extend(_segment_transitions_from_value(nested_value))
+    return tuple(transitions)
+
+
+def _transitions_from_sequence(
+    items: list[object],
+) -> tuple[_SegmentTransition, ...]:
+    """Recurse into each element of a list node."""
+    transitions: list[_SegmentTransition] = []
+    for item in items:
+        transitions.extend(_segment_transitions_from_value(item))
+    return tuple(transitions)
+
+
 def _segment_transitions_from_value(value: object) -> tuple[_SegmentTransition, ...]:
     """Extract explicit segment starts from nested segment metadata."""
-    transitions: list[_SegmentTransition] = []
     if isinstance(value, dict):
         mapping = typ.cast("dict[str, object]", value)
-        start = mapping.get("start")
-        if isinstance(start, str) and start.strip():
-            transitions.append(
-                _SegmentTransition(
-                    start=start.strip(),
-                    locator_keys=_locator_keys_for_segment(mapping),
-                )
-            )
-        for nested_value in mapping.values():
-            transitions.extend(_segment_transitions_from_value(nested_value))
-    elif isinstance(value, list):
-        for item in value:
-            transitions.extend(_segment_transitions_from_value(item))
-    return tuple(transitions)
+        return _transitions_from_dict(mapping)
+    if isinstance(value, list):
+        items = typ.cast("list[object]", value)
+        return _transitions_from_sequence(items)
+    return ()
 
 
 def _validate_segment_transition_starts(
