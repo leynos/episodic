@@ -45,7 +45,7 @@ that lives in `tools/pylint_pypy.py`.
 Pylint's message selection is allow-listed in `pyproject.toml` with
 `disable = ["all"]` and explicit `enable` entries for the logging, match,
 refactoring, standard-library, and modified-iteration checks this repository
-cares about. Keep rule rationale comments beside those entries so future lint
+cares about. Keep rule rationale comments beside those entries, so future lint
 changes explain why a rule is enabled instead of only recording its name.
 
 The wrapper disables Pylint's `syntax-error` message for this pass because the

@@ -19,6 +19,7 @@ from astroid.raw_building import (  # ty: ignore[unresolved-import]
 
 _IGNORED_GETATTR_ERRORS = (AttributeError, TypeError)
 _SKIP = object()
+_CACHED_CHILD_TYPE_ERROR = "cached child must be ClassDef"
 
 
 def _build_builtin_child(
@@ -45,7 +46,7 @@ def _build_class_child(
     if member in self._done:
         child = self._done[member]
         if not isinstance(child, nodes.ClassDef):
-            raise AssertionError
+            raise AssertionError(_CACHED_CHILD_TYPE_ERROR)
         return child
     child = object_build_class(node, member)
     self.object_build(child, member)
@@ -73,7 +74,7 @@ def _attach_child_node(
         node.add_local_node(child, alias)
 
 
-def _dispatch_member_to_child(  # noqa: PLR0911
+def _dispatch_member_to_child(  # noqa: PLR0911 - distinct Astroid member kinds require separate builder exits.
     self: raw_building.InspectBuilder,
     node: nodes.Module | nodes.ClassDef,
     member: object,
@@ -103,7 +104,7 @@ def _resolve_member(
     node: nodes.Module | nodes.ClassDef,
     obj: object,
     alias: str,
-) -> tuple[object, bool, bool]:
+) -> tuple[object | None, bool, bool]:
     """Resolve *alias* from *obj* and report whether the caller should skip it."""
     pypy__class_getitem__ = IS_PYPY and alias == "__class_getitem__"
     try:
