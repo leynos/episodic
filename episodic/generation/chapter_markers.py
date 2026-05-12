@@ -29,7 +29,7 @@ from episodic.llm import (
     LLMTokenBudget,
     LLMUsage,
 )
-from episodic.logging import get_logger
+from episodic.logging import get_logger, log_info
 
 type JsonMapping = dict[str, object]
 
@@ -259,7 +259,7 @@ def _transitions_from_dict(
 
 
 def _transitions_from_sequence(
-    items: list[object],
+    items: typ.Sequence[object],
 ) -> tuple[_SegmentTransition, ...]:
     """Recurse into each element of a list node."""
     transitions: list[_SegmentTransition] = []
@@ -274,7 +274,7 @@ def _segment_transitions_from_value(value: object) -> tuple[_SegmentTransition, 
         mapping = typ.cast("dict[str, object]", value)
         return _transitions_from_dict(mapping)
     if isinstance(value, list):
-        items = typ.cast("list[object]", value)
+        items = typ.cast("typ.Sequence[object]", value)
         return _transitions_from_sequence(items)
     return ()
 
@@ -403,8 +403,10 @@ class ChapterMarkersGenerator:
         except ValueError as exc:
             logger.warning("chapter_markers_response_invalid_timing")
             raise ChapterMarkersResponseFormatError(str(exc)) from exc
-        logger.info(
-            f"chapter_markers_response_parsed chapter_count={len(result.chapters)}"
+        log_info(
+            logger,
+            "chapter_markers_response_parsed chapter_count=%s",
+            len(result.chapters),
         )
         return result
 
@@ -480,10 +482,11 @@ def enrich_tei_with_chapter_markers(
         body_blocks.append(_build_chapters_div_payload(result.chapters))
     elif removed_block_count == 0:
         return tei_xml
-    logger.info(
-        "chapter_markers_tei_enriched "
-        f"chapter_count={len(result.chapters)} "
-        f"removed_chapter_blocks={removed_block_count}"
+    log_info(
+        logger,
+        "chapter_markers_tei_enriched chapter_count=%s removed_chapter_blocks=%s",
+        len(result.chapters),
+        removed_block_count,
     )
     enriched_document = tei.from_dict(document_payload)
     return tei.emit_xml(enriched_document)

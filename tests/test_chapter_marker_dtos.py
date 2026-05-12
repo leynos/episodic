@@ -1,7 +1,5 @@
 """Unit and property tests for chapter-marker DTO validation."""
 
-from __future__ import annotations
-
 import typing as typ
 
 import hypothesis.strategies as st

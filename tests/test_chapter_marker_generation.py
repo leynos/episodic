@@ -1,7 +1,5 @@
 """Tests for chapter-marker prompt building and LLM response parsing."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 import typing as typ
@@ -156,10 +154,7 @@ async def test_generate_supports_concurrent_calls() -> None:
             json.dumps({"chapters": [{"title": "Intro", "start": "PT0S"}]})
         )
     )
-    generator = ChapterMarkersGenerator(
-        llm=llm,
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
+    generator = _make_generator(llm)
 
     results = await asyncio.gather(
         generator.generate(_minimal_tei()),
@@ -174,10 +169,7 @@ async def test_generate_supports_concurrent_calls() -> None:
 async def test_generate_propagates_timeout_cancellation() -> None:
     """Caller-managed timeouts cancel the pending LLM call cleanly."""
     llm = _BlockingLLMPort()
-    generator = ChapterMarkersGenerator(
-        llm=llm,
-        config=ChapterMarkersGeneratorConfig(model="test-model"),
-    )
+    generator = _make_generator(llm)
 
     with pytest.raises(TimeoutError):
         await asyncio.wait_for(generator.generate(_minimal_tei()), timeout=0.01)
