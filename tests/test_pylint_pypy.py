@@ -1,6 +1,7 @@
 """Unit tests for the PyPy-backed Pylint wrapper helpers."""
 
 import builtins
+import dataclasses
 import importlib.util
 import inspect
 import sys
@@ -83,6 +84,20 @@ class _ObjectBuildScenario:
         self.target = object()
         self.pypy_child = object()
         self.ordinary_child = object()
+
+
+@dataclasses.dataclass
+class _RoutingSpies:
+    """Spy callables and call logs for object-builder routing tests."""
+
+    fake_dir: object
+    fake_resolve_member: object
+    fake_build_builtin_child: object
+    fake_dispatch_member_to_child: object
+    fake_attach_child_node: object
+    builtin_calls: list[str]
+    dispatch_calls: list[str]
+    attach_calls: list[tuple[object, str]]
 
 
 def _build_fake_astroid_modules() -> dict[str, types.ModuleType]:
@@ -271,17 +286,20 @@ def test_attach_child_node_avoids_duplicate_locals(
     )
 
 
-def setup_fake_dependencies(
-    monkeypatch: pytest.MonkeyPatch,
-    pylint_pypy_module: types.ModuleType,
-    scenario: _ObjectBuildScenario,
-) -> list[tuple[object, str]]:
-    """Register fake object-builder dependencies and return dummy calls."""
+def _make_routing_spies(
+    node: object,
+    builder: object,
+    target: object,
+    pypy_child: object,
+    ordinary_child: object,
+) -> _RoutingSpies:
+    """Build spy callables for routing verification."""
+    builtin_calls: list[str] = []
+    dispatch_calls: list[str] = []
+    attach_calls: list[tuple[object, str]] = []
 
     def fake_dir(obj: object) -> list[object]:
-        assert obj is scenario.target, (
-            "obj passed to fake_dir must be the target object"
-        )
+        assert obj is target, "obj passed to fake_dir must be the target object"
         return ["__class_getitem__", object(), "missing", "ordinary"]
 
     def fake_resolve_member(
@@ -289,8 +307,8 @@ def setup_fake_dependencies(
         obj: object,
         alias: str,
     ) -> tuple[object, bool, bool]:
-        assert node_arg is scenario.node, "node argument must be forwarded unchanged"
-        assert obj is scenario.target, "obj argument must be forwarded unchanged"
+        assert node_arg is node, "node argument must be forwarded unchanged"
+        assert obj is target, "obj argument must be forwarded unchanged"
         if alias == "missing":
             return None, False, True
         return object(), alias == "__class_getitem__", False
@@ -301,14 +319,13 @@ def setup_fake_dependencies(
         member: object,
         alias: str,
     ) -> object:
-        assert builder_arg is scenario.builder, (
-            "builder argument must be forwarded unchanged"
-        )
-        assert node_arg is scenario.node, "node argument must be forwarded unchanged"
+        assert builder_arg is builder, "builder argument must be forwarded unchanged"
+        assert node_arg is node, "node argument must be forwarded unchanged"
         assert alias == "__class_getitem__", (
             "_build_builtin_child must only be called for __class_getitem__"
         )
-        return scenario.pypy_child
+        builtin_calls.append(alias)
+        return pypy_child
 
     def fake_dispatch_member_to_child(
         builder_arg: object,
@@ -316,34 +333,52 @@ def setup_fake_dependencies(
         member: object,
         alias: str,
     ) -> object:
-        assert builder_arg is scenario.builder, (
-            "builder argument must be forwarded unchanged"
-        )
-        assert node_arg is scenario.node, "node argument must be forwarded unchanged"
+        assert builder_arg is builder, "builder argument must be forwarded unchanged"
+        assert node_arg is node, "node argument must be forwarded unchanged"
         assert alias == "ordinary", (
             "_dispatch_member_to_child must only be called for ordinary aliases"
         )
-        return scenario.ordinary_child
+        dispatch_calls.append(alias)
+        return ordinary_child
 
-    dummy_calls: list[tuple[object, str]] = []
+    def fake_attach_child_node(node_arg: object, alias: str) -> None:
+        attach_calls.append((node_arg, alias))
 
-    def fake_attach_dummy_node(node_arg: object, alias: str) -> None:
-        dummy_calls.append((node_arg, alias))
+    return _RoutingSpies(
+        fake_dir=fake_dir,
+        fake_resolve_member=fake_resolve_member,
+        fake_build_builtin_child=fake_build_builtin_child,
+        fake_dispatch_member_to_child=fake_dispatch_member_to_child,
+        fake_attach_child_node=fake_attach_child_node,
+        builtin_calls=builtin_calls,
+        dispatch_calls=dispatch_calls,
+        attach_calls=attach_calls,
+    )
 
-    monkeypatch.setattr(builtins, "dir", fake_dir)
-    monkeypatch.setattr(pylint_pypy_module, "_resolve_member", fake_resolve_member)
+
+def setup_fake_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    pylint_pypy_module: types.ModuleType,
+    spies: _RoutingSpies,
+) -> None:
+    """Register fake object-builder dependencies."""
+    monkeypatch.setattr(builtins, "dir", spies.fake_dir)
+    monkeypatch.setattr(
+        pylint_pypy_module, "_resolve_member", spies.fake_resolve_member
+    )
     monkeypatch.setattr(
         pylint_pypy_module,
         "_build_builtin_child",
-        fake_build_builtin_child,
+        spies.fake_build_builtin_child,
     )
     monkeypatch.setattr(
         pylint_pypy_module,
         "_dispatch_member_to_child",
-        fake_dispatch_member_to_child,
+        spies.fake_dispatch_member_to_child,
     )
-    monkeypatch.setattr(pylint_pypy_module, "attach_dummy_node", fake_attach_dummy_node)
-    return dummy_calls
+    monkeypatch.setattr(
+        pylint_pypy_module, "attach_dummy_node", spies.fake_attach_child_node
+    )
 
 
 def run_object_builder(
@@ -362,14 +397,14 @@ def run_object_builder(
 
 def assert_builder_outcome(
     scenario: _ObjectBuildScenario,
-    dummy_calls: list[tuple[object, str]],
+    spies: _RoutingSpies,
 ) -> None:
     """Verify child attachment and skipped-alias dummy handling."""
     assert scenario.node.locals == {
         "__class_getitem__": [scenario.pypy_child],
         "ordinary": [scenario.ordinary_child],
     }, "locals must contain exactly the two children from their respective builders"
-    assert dummy_calls == [(scenario.node, "missing")], (
+    assert spies.attach_calls == [(scenario.node, "missing")], (
         "object builder must attach a dummy node for skipped aliases"
     )
 
@@ -380,10 +415,17 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
 ) -> None:
     """The object builder keeps PyPy class-getitem handling outside dispatch."""
     scenario = _ObjectBuildScenario()
-    dummy_calls = setup_fake_dependencies(
+    spies = _make_routing_spies(
+        scenario.node,
+        scenario.builder,
+        scenario.target,
+        scenario.pypy_child,
+        scenario.ordinary_child,
+    )
+    setup_fake_dependencies(
         monkeypatch,
         pylint_pypy_module,
-        scenario,
+        spies,
     )
 
     run_object_builder(
@@ -393,7 +435,7 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
         scenario.target,
     )
 
-    assert_builder_outcome(scenario, dummy_calls)
+    assert_builder_outcome(scenario, spies)
 
 
 def test_object_build_ignores_non_string_dir_entries(
