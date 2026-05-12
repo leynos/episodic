@@ -6,8 +6,6 @@ in focused neighbouring modules so TEI snapshot failures stay local to this
 file.
 """
 
-from __future__ import annotations
-
 import asyncio
 import typing as typ
 
