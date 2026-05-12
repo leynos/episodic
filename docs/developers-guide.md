@@ -659,7 +659,7 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 - `episodic/orchestration/_dto.py` contains the orchestration DTOs and shared
   checkpoint DTOs.
 - `episodic/orchestration/_protocols.py` contains the planner, executor,
-  checkpoint, and resume ports that keep graph policy independent from storage,
+  checkpoint, and resume ports that keep graph policy independent of storage,
   queue, and provider adapters.
 - `episodic/orchestration/generation.py` implements and exports
   `StructuredGenerationPlanner`, `StructuredPlanningOrchestrator`, and the

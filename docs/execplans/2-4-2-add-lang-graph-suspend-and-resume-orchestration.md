@@ -688,14 +688,14 @@ gate status and a known documentation tooling caveat.
 
 Revision note 2026-05-10: Follow-up review fixes added richer suspend/resume
 module documentation, documented `resume_generation_orchestration` error paths,
-injected the in-memory checkpoint clock, serialised in-memory checkpoint saves
+injected the in-memory checkpoint clock, serialized in-memory checkpoint saves
 with an `asyncio.Lock`, and changed the SQLAlchemy checkpoint adapter to insert
 first and query only after duplicate-key conflicts. Added missing
 unknown-checkpoint, concurrent in-memory save, checkpoint payload property, and
 checkpoint payload snapshot coverage.
 
 Revision note 2026-05-10: Code review follow-up made checkpoint planner payload
-deserialisation symmetric for optional planner usage, added the explicit
+deserialization symmetric for optional planner usage, added the explicit
 `CheckpointPort.mark_resumed()` status transition after successful resume,
 fixed the SQLAlchemy checkpoint store runtime annotation, and covered negative
 idempotency attempts plus SQL not-found checkpoint lookups.
@@ -709,9 +709,16 @@ Revision note 2026-05-10: Review follow-up verified that SQL checkpoint saves
 already use a nested transaction savepoint for duplicate idempotency keys, so
 no whole-unit-of-work rollback fix was needed. Multi-step suspended checkpoints
 now fail explicitly during `resume_generation_orchestration` instead of
-silently finalising only the first externally supplied action result.
+silently finalizing only the first externally supplied action result.
 
 Revision note 2026-05-10: Validation for the multi-step resume follow-up
 passed with `make check-fmt`, `make typecheck`, `make lint`,
 `make markdownlint`, `make nixie`, and `make test`. The full test suite
 reported 457 passed and 3 skipped tests.
+
+Revision note 2026-05-12: Review follow-up converted missing
+`planner_result` checkpoint payloads from `KeyError` to the documented
+`TypeError` path, updated the developer guide wording, and normalized revision
+note spelling. Validation passed with `make check-fmt`, `make typecheck`,
+`make lint`, `make markdownlint`, `make nixie`, and `make test`; the full test
+suite reported 458 passed and 3 skipped tests.

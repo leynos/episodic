@@ -298,6 +298,34 @@ class TestGenerationOrchestrationGraph:
             )
 
     @pytest.mark.asyncio
+    async def test_resume_generation_orchestration_raises_on_missing_plan_payload(
+        self,
+    ) -> None:
+        """Resume should map malformed checkpoint payloads to TypeError."""
+        checkpoint_store = InMemoryCheckpointStore()
+        checkpoint = await checkpoint_store.save(
+            WorkflowCheckpoint(
+                checkpoint_id=str(uuid.uuid4()),
+                workflow_id="corr-graph",
+                workflow_type="generation_orchestration",
+                step_name="execute",
+                idempotency_key="corr-graph:generation_orchestration:execute:a1:0",
+                payload={},
+            )
+        )
+        command = ResumeWorkflowCommand(
+            checkpoint_id=checkpoint.checkpoint_id,
+            result=_action_result(),
+        )
+
+        with pytest.raises(TypeError, match="planner_result"):
+            await resume_generation_orchestration(
+                checkpoint_port=checkpoint_store,
+                resume_port=_FakeResumePort(),
+                command=command,
+            )
+
+    @pytest.mark.asyncio
     async def test_in_memory_checkpoint_store_reuses_concurrent_step_key(
         self,
     ) -> None:

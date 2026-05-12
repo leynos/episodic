@@ -483,7 +483,12 @@ async def resume_generation_orchestration(
         msg = f"unknown checkpoint: {command.checkpoint_id}"
         raise ValueError(msg)
     payload = checkpoint.payload
-    planner_result = _planner_result_from_payload(payload["planner_result"])
+    try:
+        planner_result_payload = payload["planner_result"]
+    except KeyError as exc:
+        msg = "checkpoint payload missing required field: planner_result"
+        raise TypeError(msg) from exc
+    planner_result = _planner_result_from_payload(planner_result_payload)
     if len(planner_result.plan.steps) != 1:
         msg = (
             "resume_generation_orchestration currently supports exactly one "
