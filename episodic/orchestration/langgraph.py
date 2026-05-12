@@ -168,7 +168,12 @@ def _plan_from_payload(payload: object) -> dto.ExecutionPlan:
                     str(item)
                     for item in typ.cast(
                         "list[object]",
-                        step["required_inputs"],
+                        _require_field(
+                            step,
+                            "required_inputs",
+                            list,
+                            context="plan step",
+                        ),
                     )
                 ),
             )

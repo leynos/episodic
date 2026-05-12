@@ -8,14 +8,13 @@ to make repeated suspend attempts converge on the first persisted checkpoint.
 It does not import graph code, LLM adapters, or Celery concerns.
 """
 
-from __future__ import annotations
-
 import typing as typ
 import uuid
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from episodic.canonical.domain import WorkflowCheckpointStatus
 from episodic.orchestration import WorkflowCheckpoint
 from episodic.orchestration._types import _log_event
 
@@ -34,7 +33,7 @@ def _map_checkpoint(record: WorkflowCheckpointRecord) -> WorkflowCheckpoint:
         step_name=record.step_name,
         idempotency_key=record.idempotency_key,
         payload=record.payload,
-        status=record.status,
+        status=str(record.status),
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -43,7 +42,7 @@ def _map_checkpoint(record: WorkflowCheckpointRecord) -> WorkflowCheckpoint:
 class SqlAlchemyWorkflowCheckpointStore:
     """Durable SQLAlchemy implementation of the orchestration `CheckpointPort`."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: "AsyncSession") -> None:  # noqa: UP037
         self._session = session
 
     async def get(self, checkpoint_id: str) -> WorkflowCheckpoint | None:
@@ -92,7 +91,7 @@ class SqlAlchemyWorkflowCheckpointStore:
             step_name=checkpoint.step_name,
             idempotency_key=checkpoint.idempotency_key,
             payload=checkpoint.payload,
-            status=checkpoint.status,
+            status=WorkflowCheckpointStatus(checkpoint.status),
         )
         try:
             async with self._session.begin_nested():
@@ -125,7 +124,7 @@ class SqlAlchemyWorkflowCheckpointStore:
         if record is None:
             msg = f"unknown checkpoint: {checkpoint_id}"
             raise ValueError(msg)
-        record.status = "resumed"
+        record.status = WorkflowCheckpointStatus.RESUMED
         await self._session.flush()
         _log_event(
             "debug",

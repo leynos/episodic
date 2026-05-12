@@ -391,7 +391,7 @@ Stage B defines the internal contracts. Add DTOs to
   `workflow_type`, `step_name`, `action_id`, `idempotency_key`, `status`,
   `state_payload`, `external_task_id`, `resume_payload`, `created_at`,
   `updated_at`, and `expires_at`;
-- `WorkflowCheckpointStatus` with values such as `pending`, `resumed`,
+- `WorkflowCheckpointStatus` with values such as `suspended`, `resumed`,
   `expired`, and `failed`;
 - `SuspendedWorkflowResult` with the checkpoint identifier, idempotency key,
   waiting reason, and optional task envelope;
@@ -463,7 +463,7 @@ shape is:
 - `created_at`, `updated_at`, `expires_at`: timezone-aware timestamps.
 
 Add repository methods through a port-owned adapter. The repository must make
-`reserve_or_get(...)` atomic using a uniqueness constraint on
+`save_or_reuse(...)` atomic using a uniqueness constraint on
 `idempotency_key`, so two concurrent retries converge on one record. Use
 py-pglite-backed tests that create a checkpoint, open a fresh unit of work,
 fetch the checkpoint, and resume it.
@@ -746,3 +746,15 @@ remaining missing required checkpoint field helper now normalises missing
 payload keys to the documented `TypeError` contract. Validation passed with
 focused orchestration tests, `make check-fmt`, `make typecheck`, `make lint`,
 and `make test`; the full test suite reported 461 passed and 3 skipped tests.
+
+Revision note 2026-05-13: Review follow-up verified and fixed the remaining
+checkpoint persistence issues: the migration now creates a DB-side
+`updated_at` trigger, checkpoint status is backed by the
+`WorkflowCheckpointStatus` enum in the domain and SQLAlchemy model, plan
+payload required-input deserialization now uses the shared `TypeError`
+contract, and redundant future annotations imports were removed from the new
+checkpoint storage files. Stale checkpoint-store API references were updated to
+the final `save_or_reuse(...)` API, and screen-reader descriptions now precede
+the suspend and resume sequence diagrams. The snapshot import comment was
+already resolved in the current code and required no change. Focused checkpoint,
+migration-drift, and malformed-payload tests passed.

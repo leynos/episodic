@@ -73,6 +73,13 @@ class ReferenceBindingTargetKind(enum.StrEnum):
     INGESTION_JOB = "ingestion_job"
 
 
+class WorkflowCheckpointStatus(enum.StrEnum):
+    """Lifecycle states for resumable orchestration checkpoints."""
+
+    SUSPENDED = "suspended"
+    RESUMED = "resumed"
+
+
 @dc.dataclass(frozen=True)
 class SeriesProfile:
     """Series metadata required for canonical ingestion."""

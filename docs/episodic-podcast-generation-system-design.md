@@ -550,6 +550,9 @@ clock, but remains unbounded and process-local. Successful resume calls mark
 the stored checkpoint as `resumed` through `CheckpointPort` after the action
 result has been folded into the generation result.
 
+Screen reader description: Suspend flow that persists or reuses a checkpoint
+before side-effecting execution.
+
 ```mermaid
 sequenceDiagram
     actor Client
@@ -573,6 +576,10 @@ sequenceDiagram
 
 Figure: Suspend flow for a generation workflow that persists or reuses a
 checkpoint before side-effecting execution.
+
+Screen reader description: Resume path where checkpoint lookup rejects unknown
+IDs, known checkpoints resume through `TaskResumePort`, and the final
+generation result is built before marking the checkpoint resumed.
 
 ```mermaid
 sequenceDiagram

@@ -24,6 +24,7 @@ from episodic.canonical.domain import (
     ReferenceBindingTargetKind,
     ReferenceDocumentKind,
     ReferenceDocumentLifecycleState,
+    WorkflowCheckpointStatus,
 )
 
 if typ.TYPE_CHECKING:
@@ -74,10 +75,37 @@ REFERENCE_BINDING_TARGET_KIND = sa.Enum(
     name="reference_binding_target_kind",
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )
+WORKFLOW_CHECKPOINT_STATUS = sa.Enum(
+    WorkflowCheckpointStatus,
+    name="workflow_checkpoint_status",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
 
 
 class WorkflowCheckpointRecord(Base):
-    """SQLAlchemy model for resumable orchestration checkpoints."""
+    """SQLAlchemy model for resumable orchestration checkpoints.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the checkpoint record.
+    workflow_id : str
+        Indexed workflow correlation identifier used to group checkpoints.
+    workflow_type : str
+        Non-null orchestration workflow category.
+    step_name : str
+        Non-null name of the suspended workflow step.
+    idempotency_key : str
+        Unique key that enforces first-write-wins checkpoint persistence.
+    payload : dict[str, object]
+        Non-null JSONB checkpoint payload containing resumable graph state.
+    status : WorkflowCheckpointStatus
+        Non-null enum status with a default of ``suspended``.
+    created_at : datetime.datetime
+        Timestamp when the checkpoint was created.
+    updated_at : datetime.datetime
+        Timestamp when the checkpoint was last updated.
+    """
 
     __tablename__ = "workflow_checkpoints"
 
@@ -101,10 +129,10 @@ class WorkflowCheckpointRecord(Base):
         postgresql.JSONB,
         nullable=False,
     )
-    status: orm.Mapped[str] = orm.mapped_column(
-        sa.String(80),
+    status: orm.Mapped[WorkflowCheckpointStatus] = orm.mapped_column(
+        WORKFLOW_CHECKPOINT_STATUS,
         nullable=False,
-        server_default="suspended",
+        server_default=WorkflowCheckpointStatus.SUSPENDED.value,
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
