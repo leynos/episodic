@@ -299,14 +299,15 @@ def _build_segment_start_lookups(
     for transition in transitions:
         start_secs = _duration_to_seconds(transition.start, "segment start")
         starts.add(start_secs)
-        locator_value = (start_secs, transition.start)
         for locator_key in transition.locator_keys:
             existing_value = starts_by_locator.get(locator_key)
-            if existing_value is not None and existing_value != locator_value:
+            if existing_value is not None and existing_value[0] != start_secs:
                 raise ChapterMarkersResponseFormatError(  # noqa: TRY003 - include the conflicting locator key.
-                    f"Conflicting locator reuse for {locator_key!r}."
+                    "Conflicting locator reuse for "
+                    f"{locator_key!r}: {existing_value[1]!r} and "
+                    f"{transition.start!r}."
                 )
-            starts_by_locator[locator_key] = locator_value
+            starts_by_locator[locator_key] = (start_secs, transition.start)
     return starts, starts_by_locator
 
 

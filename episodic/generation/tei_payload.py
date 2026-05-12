@@ -9,7 +9,11 @@ enrichment features.
 Example:
     payload = {"text": {"body": {"blocks": []}}}
     blocks = body_blocks_payload(payload)
-    blocks.append({"type": "div", "content": build_text_inline("Notes")})
+    blocks.append({
+        "type": "div",
+        "div_type": "notes",
+        "content": build_text_inline("Notes"),
+    })
 """
 
 import typing as typ
