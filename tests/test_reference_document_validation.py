@@ -3,7 +3,8 @@
 import typing as typ
 
 import pytest
-import test_reference_document_api_support as support
+
+import tests.test_reference_document_api_support as support
 
 if typ.TYPE_CHECKING:
     from falcon import testing
@@ -73,11 +74,11 @@ if typ.TYPE_CHECKING:
 def test_reference_document_api_rejects_invalid_pagination_params(
     canonical_api_client: testing.TestClient,
     path_template: str,
-    params_builder: typ.Callable[[support._ApiFixture], dict[str, str]],
+    params_builder: typ.Callable[[support.ApiFixture], dict[str, str]],
     description: str,
 ) -> None:
     """Reference-document list endpoints should reject invalid pagination values."""
-    fixture = support._build_api_fixture(canonical_api_client)
+    fixture = support.build_api_fixture(canonical_api_client)
     support._seed_reference_binding(canonical_api_client, fixture)
     path = path_template.format(profile_id=fixture.primary_profile_id)
     response = canonical_api_client.simulate_get(path, params=params_builder(fixture))
@@ -88,7 +89,7 @@ def test_reference_document_api_rejects_missing_required_binding_params(
     canonical_api_client: testing.TestClient,
 ) -> None:
     """Binding list endpoint should reject requests missing required query params."""
-    fixture = support._build_api_fixture(canonical_api_client)
+    fixture = support.build_api_fixture(canonical_api_client)
     support._seed_reference_binding(canonical_api_client, fixture)
 
     missing_target_kind = canonical_api_client.simulate_get(
@@ -114,7 +115,7 @@ def test_reference_document_api_rejects_invalid_uuids(
     canonical_api_client: testing.TestClient,
 ) -> None:
     """Reference-document endpoints should reject syntactically invalid UUIDs."""
-    fixture = support._build_api_fixture(canonical_api_client)
+    fixture = support.build_api_fixture(canonical_api_client)
 
     invalid_document_id = canonical_api_client.simulate_get(
         f"/series-profiles/{fixture.primary_profile_id}/reference-documents/not-a-valid-uuid"

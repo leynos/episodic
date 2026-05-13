@@ -83,6 +83,10 @@ def upgrade() -> None:
             "revision",
             name="uq_series_profile_history_revision",
         ),
+        sa.CheckConstraint(
+            "revision >= 1",
+            name="ck_series_profile_history_revision_positive",
+        ),
     )
     op.create_index(
         "ix_series_profile_history_series_profile_id",
@@ -113,6 +117,10 @@ def upgrade() -> None:
             "episode_template_id",
             "revision",
             name="uq_episode_template_history_revision",
+        ),
+        sa.CheckConstraint(
+            "revision >= 1",
+            name="ck_episode_template_history_revision_positive",
         ),
     )
     op.create_index(

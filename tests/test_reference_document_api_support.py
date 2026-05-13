@@ -2,21 +2,21 @@
 
 import typing as typ
 
-import api_fixtures
+from tests import api_fixtures
 
 if typ.TYPE_CHECKING:
     from falcon import testing
 
-_ApiFixture = api_fixtures.ApiFixture
-_RevisionRequest = api_fixtures.RevisionRequest
-_post_and_return_id = api_fixtures.post_and_return_id
-_profile_body = api_fixtures.profile_body
-_build_api_fixture = api_fixtures.build_api_fixture
-_create_reference_document = api_fixtures.create_reference_document
-_assert_reference_document_list = api_fixtures.assert_reference_document_list
-_create_reference_document_revision = api_fixtures.create_reference_document_revision
-_assert_reference_revision_history = api_fixtures.assert_reference_revision_history
-_create_reference_binding = api_fixtures.create_reference_binding
+ApiFixture = api_fixtures.ApiFixture
+RevisionRequest = api_fixtures.RevisionRequest
+post_and_return_id = api_fixtures.post_and_return_id
+profile_body = api_fixtures.profile_body
+build_api_fixture = api_fixtures.build_api_fixture
+create_reference_document = api_fixtures.create_reference_document
+assert_reference_document_list = api_fixtures.assert_reference_document_list
+create_reference_document_revision = api_fixtures.create_reference_document_revision
+assert_reference_revision_history = api_fixtures.assert_reference_revision_history
+create_reference_binding = api_fixtures.create_reference_binding
 
 
 def _assert_document_get_and_optimistic_lock(
@@ -72,25 +72,25 @@ def _assert_revision_and_binding_workflow(
     template_id: str,
 ) -> None:
     """Assert revision history and binding workflow endpoints."""
-    first_revision_id = _create_reference_document_revision(
+    first_revision_id = create_reference_document_revision(
         client,
         profile_id=profile_id,
         document_id=document_id,
-        revision=_RevisionRequest(
+        revision=RevisionRequest(
             summary="first revision",
             content_hash="api-reference-hash-1",
         ),
     )
-    second_revision_id = _create_reference_document_revision(
+    second_revision_id = create_reference_document_revision(
         client,
         profile_id=profile_id,
         document_id=document_id,
-        revision=_RevisionRequest(
+        revision=RevisionRequest(
             summary="second revision",
             content_hash="api-reference-hash-2",
         ),
     )
-    revisions_items = _assert_reference_revision_history(
+    revisions_items = assert_reference_revision_history(
         client,
         profile_id=profile_id,
         document_id=document_id,
@@ -121,7 +121,7 @@ def _assert_binding_list_workflow(
     template_id: str,
 ) -> None:
     """Create a binding, verify it via GET, and assert the binding list response."""
-    binding_id = _create_reference_binding(
+    binding_id = create_reference_binding(
         client,
         revision_id=second_revision_id,
         template_id=template_id,
@@ -178,7 +178,7 @@ def _assert_bad_request_error(
 
 
 def _binding_list_params(
-    fixture: _ApiFixture,
+    fixture: ApiFixture,
     **extra_params: str,
 ) -> dict[str, str]:
     """Build list-binding query params while preserving a valid target."""
@@ -191,25 +191,25 @@ def _binding_list_params(
 
 def _seed_reference_binding(
     client: testing.TestClient,
-    fixture: _ApiFixture,
+    fixture: ApiFixture,
 ) -> None:
     """Create one document, revision, and binding for negative-path list tests."""
-    document_id = _create_reference_document(
+    document_id = create_reference_document(
         client,
         profile_id=fixture.primary_profile_id,
         kind="host_profile",
         name="Host API Validation",
     )
-    revision_id = _create_reference_document_revision(
+    revision_id = create_reference_document_revision(
         client,
         profile_id=fixture.primary_profile_id,
         document_id=document_id,
-        revision=_RevisionRequest(
+        revision=RevisionRequest(
             summary="validation revision",
             content_hash="api-reference-validation-hash",
         ),
     )
-    _create_reference_binding(
+    create_reference_binding(
         client,
         revision_id=revision_id,
         template_id=fixture.template_id,

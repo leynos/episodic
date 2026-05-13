@@ -5,9 +5,9 @@ import typing as typ
 import uuid
 
 import pytest
-import test_reference_document_api_support as reference_support
 
 import tests.test_binding_resolution_support as binding_support
+import tests.test_reference_document_api_support as reference_support
 
 if typ.TYPE_CHECKING:
     import asyncio
@@ -22,7 +22,7 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Resolved-bindings endpoint should return document, revision, and binding data."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
+    fixture = reference_support.build_api_fixture(canonical_api_client)
 
     episode_id = _function_scoped_runner.run(
         binding_support.create_episode(
@@ -60,7 +60,7 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
             content_hash="resolved-bindings-template",
         ),
     )
-    reference_support._create_reference_binding(
+    reference_support.create_reference_binding(
         canonical_api_client,
         revision_id=template_revision_id,
         template_id=fixture.template_id,
@@ -108,7 +108,7 @@ def test_resolved_bindings_endpoint_rejects_bad_episode_id(
     expected_description: str,
 ) -> None:
     """Resolved-bindings endpoint should reject malformed or absent episode_id."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
+    fixture = reference_support.build_api_fixture(canonical_api_client)
     response = canonical_api_client.simulate_get(
         f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
         params=params,
@@ -143,7 +143,7 @@ def test_endpoint_returns_404_for_episode_not_in_profile(
     endpoint: str,
 ) -> None:
     """Both endpoints return 404 when episode_id belongs to a different profile."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
+    fixture = reference_support.build_api_fixture(canonical_api_client)
     episode_id = _function_scoped_runner.run(
         binding_support.create_episode(
             session_factory,
@@ -173,7 +173,7 @@ def test_resolved_bindings_endpoint_returns_404_for_invalid_template(
     use_secondary_template: object,
 ) -> None:
     """Resolved-bindings endpoint returns 404 for missing or cross-profile templates."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
+    fixture = reference_support.build_api_fixture(canonical_api_client)
     episode_id = _function_scoped_runner.run(
         binding_support.create_episode(
             session_factory,

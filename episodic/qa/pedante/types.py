@@ -90,9 +90,15 @@ class PedanteEvaluationRequest:
 
     def __post_init__(self) -> None:
         """Reject blank TEI payloads and empty source lists."""
+        if not isinstance(self.script_tei_xml, str):
+            msg = "script_tei_xml must be a string."
+            raise TypeError(msg)
         if not self.script_tei_xml.strip():
             msg = "script_tei_xml must be non-empty."
             raise ValueError(msg)
+        if not isinstance(self.sources, tuple):
+            msg = "sources must be a tuple of source packets."
+            raise TypeError(msg)
         if not self.sources:
             msg = "sources must contain at least one source packet."
             raise ValueError(msg)

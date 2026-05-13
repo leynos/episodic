@@ -4,9 +4,27 @@ import asyncio
 import typing as typ
 
 if typ.TYPE_CHECKING:
-    from httpx._transports.asgi import _ASGIApp
+    import collections.abc as cabc
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+
+    type ASGIReceive = cabc.Callable[
+        [], cabc.Awaitable[cabc.MutableMapping[str, typ.Any]]
+    ]
+    type ASGISend = cabc.Callable[
+        [cabc.MutableMapping[str, typ.Any]], cabc.Awaitable[None]
+    ]
+    type ASGIApp = cabc.Callable[
+        [
+            cabc.MutableMapping[str, typ.Any],
+            ASGIReceive,
+            ASGISend,
+        ],
+        cabc.Awaitable[None],
+    ]
+
+else:
+    ASGIApp = typ.Any
 
 
 class LifespanEvent(typ.TypedDict):
@@ -39,7 +57,7 @@ def unexpected_uow_factory() -> CanonicalUnitOfWork:
 
 
 async def run_asgi_lifespan(
-    app: _ASGIApp,
+    app: ASGIApp,
     event_sequence: tuple[LifespanEvent, ...],
 ) -> list[LifespanEvent]:
     """Simulate ASGI lifespan protocol for testing shutdown/startup hooks."""
@@ -59,13 +77,20 @@ async def run_asgi_lifespan(
         sent_events.append(LifespanEvent(type=str(message["type"])))
         await asyncio.sleep(0)
 
-    await app(
-        {
-            "type": "lifespan",
-            "asgi": {"spec_version": "2.0", "version": "3.0"},
-        },
-        receive,
-        send,
-    )
+    try:
+        await asyncio.wait_for(
+            app(
+                {
+                    "type": "lifespan",
+                    "asgi": {"spec_version": "2.0", "version": "3.0"},
+                },
+                receive,
+                send,
+            ),
+            timeout=5.0,
+        )
+    except TimeoutError as exc:
+        msg = "ASGI lifespan simulation timed out."
+        raise AssertionError(msg) from exc
 
     return sent_events

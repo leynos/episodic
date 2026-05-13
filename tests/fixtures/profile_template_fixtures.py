@@ -30,6 +30,7 @@ from episodic.canonical.profile_templates import (
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import datetime as dt
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,7 +59,7 @@ class BaseProfileWithTemplateFixture:
 
 @pytest_asyncio.fixture
 async def base_profile(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
 ) -> BaseProfileFixture:
     """Create a reusable base series profile fixture."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -84,7 +85,7 @@ async def base_profile(
 
 @pytest_asyncio.fixture
 async def base_profile_with_template(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     base_profile: BaseProfileFixture,
 ) -> BaseProfileWithTemplateFixture:
     """Create a reusable base profile fixture with one episode template."""

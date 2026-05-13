@@ -1,8 +1,5 @@
 """Reference-document SQLAlchemy repositories for canonical persistence."""
 
-# Repository query methods expose domain filters as keyword parameters.
-# pylint: disable=too-many-arguments
-
 import typing as typ
 
 import sqlalchemy as sa
@@ -57,7 +54,7 @@ class SqlAlchemyReferenceDocumentRepository(
             _reference_document_from_record,
         )
 
-    async def list_for_series(
+    async def list_for_series(  # pylint: disable=too-many-arguments  # domain query exposes independent filters
         self,
         series_profile_id: uuid.UUID,
         *,
@@ -158,7 +155,7 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
             _reference_document_revision_from_record,
         )
 
-    async def list_for_document(
+    async def list_for_document(  # pylint: disable=too-many-arguments  # repository API mirrors pagination filters
         self,
         document_id: uuid.UUID,
         *,
@@ -236,7 +233,7 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
             _reference_binding_from_record,
         )
 
-    async def list_for_target(
+    async def list_for_target(  # pylint: disable=too-many-arguments  # target and pagination filters are public contract
         self,
         *,
         target_kind: ReferenceBindingTargetKind,

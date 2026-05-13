@@ -22,6 +22,8 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from tests.test_uuid_assertions import assert_uuid7
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import SeriesProfile
@@ -48,11 +50,27 @@ class TeiHeaderProvenanceRecord(typ.TypedDict):
     reviewer_identities: list[str]
 
 
+class _WeightedSourceDocument(typ.Protocol):
+    """Source-document shape needed for weight assertions."""
+
+    id: uuid.UUID
+    weight: float
+
+
+class _SnapshotSourceDocument(typ.Protocol):
+    """Source-document shape needed for reference snapshot assertions."""
+
+    source_type: str
+    reference_document_revision_id: uuid.UUID | None
+    source_uri: str
+    metadata: dict[str, object]
+
+
 @dataclasses.dataclass(frozen=True)
 class IngestionTestContext:
     """Test fixtures for multi-source ingestion error tests."""
 
-    session_factory: typ.Callable[[], AsyncSession]
+    session_factory: cabc.Callable[[], AsyncSession]
     profile: SeriesProfile
     ingestion_pipeline: IngestionPipeline
 
@@ -93,7 +111,7 @@ def verify_provenance_metadata(
 
 
 def verify_source_documents(
-    documents: list[typ.Any],
+    documents: cabc.Sequence[_WeightedSourceDocument],
     expected_count: int,
 ) -> None:
     """Verify persisted source document count and weight bounds."""
@@ -111,7 +129,7 @@ def verify_source_documents(
 
 
 async def create_reference_fixtures(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     profile: SeriesProfile,
 ) -> tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding]:
     """Persist the reference document fixtures used by snapshotting tests."""
@@ -194,7 +212,7 @@ def make_reference_ingestion_request(profile: SeriesProfile) -> MultiSourceReque
 
 
 def assert_reference_snapshot(
-    documents: list[typ.Any],
+    documents: cabc.Sequence[_SnapshotSourceDocument],
     reference_document: ReferenceDocument,
     reference_revision: ReferenceDocumentRevision,
     reference_binding: ReferenceBinding,
@@ -221,7 +239,7 @@ def assert_reference_snapshot(
 
 
 async def get_job_record_for_episode(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     episode_id: uuid.UUID,
 ) -> IngestionJobRecord:
     """Return the ingestion job record created for an episode."""

@@ -13,10 +13,10 @@ if typ.TYPE_CHECKING:
 
 def run_async_step(
     runner: asyncio.Runner,
-    step_fn: cabc.Callable[[], typ.Awaitable[None]],
+    step_fn: cabc.Callable[[], cabc.Awaitable[None]],
 ) -> None:
     """Execute an async BDD step via the provided runner."""
-    coro = typ.cast("typ.Coroutine[object, object, None]", step_fn())
+    coro = typ.cast("cabc.Coroutine[object, object, None]", step_fn())
     runner.run(coro)
 
 

@@ -22,6 +22,7 @@ from episodic.canonical.ingestion import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import contextvars as cv
 
 
@@ -54,7 +55,7 @@ def recording_task_factory() -> typ.Iterator[list[dict[str, object]]]:
 
     def _factory(
         running_loop: asyncio.AbstractEventLoop,
-        coro: typ.Coroutine[object, object, object],
+        coro: cabc.Coroutine[object, object, object],
         **task_kwargs: object,
     ) -> asyncio.Task[object]:
         task_kwargs_dict = dict(task_kwargs)
@@ -189,8 +190,8 @@ class TestResolver:
 def make_fake_ingest_sources(
     profile_id: uuid.UUID,
     captured_sources: list[SourceDocumentInput],
-) -> typ.Callable[
-    [object, SeriesProfile, IngestionRequest], typ.Awaitable[CanonicalEpisode]
+) -> cabc.Callable[
+    [object, SeriesProfile, IngestionRequest], cabc.Awaitable[CanonicalEpisode]
 ]:
     """Create a fake ingest function that records persisted sources."""
 

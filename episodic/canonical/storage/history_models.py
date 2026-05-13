@@ -67,6 +67,10 @@ class SeriesProfileHistoryRecord(Base):
             "revision",
             name=UQ_SERIES_PROFILE_HISTORY_REVISION,
         ),
+        sa.CheckConstraint(
+            "revision >= 1",
+            name="ck_series_profile_history_revision_positive",
+        ),
     )
 
 
@@ -121,5 +125,9 @@ class EpisodeTemplateHistoryRecord(Base):
             "episode_template_id",
             "revision",
             name=UQ_EPISODE_TEMPLATE_HISTORY_REVISION,
+        ),
+        sa.CheckConstraint(
+            "revision >= 1",
+            name="ck_episode_template_history_revision_positive",
         ),
     )

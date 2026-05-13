@@ -2,7 +2,6 @@
 
 import json
 import os
-import socket
 import subprocess  # noqa: S404
 import typing as typ
 from shutil import which
@@ -17,10 +16,18 @@ if typ.TYPE_CHECKING:
 
 
 def artifact_server_port() -> str:
-    """Reserve a free local port for the act artifact server."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return str(sock.getsockname()[1])
+    """Ask act to bind the artifact server to an ephemeral local port."""
+    return "0"
+
+
+def _ensure_string_dict(value: object, filename: str) -> dict[str, str]:
+    """Validate workflow artifact JSON shape before returning it."""
+    if isinstance(value, dict) and all(
+        isinstance(key, str) and isinstance(item, str) for key, item in value.items()
+    ):
+        return typ.cast("dict[str, str]", value)
+    msg = f"{filename} must contain a JSON object with string keys and values."
+    raise AssertionError(msg)
 
 
 def run_act(
@@ -74,7 +81,10 @@ def read_artifact_json(artifact_dir: Path, filename: str, logs: str) -> dict[str
     """Load JSON from a workflow artifact file or the artifact zip."""
     json_files = list(artifact_dir.rglob(filename))
     if json_files:
-        return json.loads(json_files[0].read_text())
+        return _ensure_string_dict(
+            json.loads(json_files[0].read_text(encoding="utf-8")),
+            filename,
+        )
 
     zip_files = list(artifact_dir.rglob("*.zip"))
     if not zip_files:
@@ -84,7 +94,10 @@ def read_artifact_json(artifact_dir: Path, filename: str, logs: str) -> dict[str
     for zip_path in zip_files:
         with ZipFile(zip_path) as zf:
             if filename in zf.namelist():
-                return json.loads(zf.read(filename).decode())
+                return _ensure_string_dict(
+                    json.loads(zf.read(filename).decode(encoding="utf-8")),
+                    filename,
+                )
 
     msg = f"{filename} missing in artifact zips. Logs:\n{logs}"
     raise AssertionError(msg)

@@ -29,6 +29,8 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from tests.fixtures import profile_template_fixtures
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import EpisodeTemplateHistoryEntry
@@ -50,7 +52,7 @@ class TestEpisodeTemplateService:
     @pytest.mark.asyncio
     async def test_update_episode_template_revision_conflict_raises(
         self,
-        session_factory: typ.Callable[[], AsyncSession],
+        session_factory: cabc.Callable[[], AsyncSession],
         base_profile_with_template: BaseProfileWithTemplateFixture,
     ) -> None:
         """Updating a template with a stale revision raises conflict."""
@@ -99,7 +101,7 @@ class TestEpisodeTemplateService:
     @pytest.mark.asyncio
     async def test_create_episode_template_creates_history_and_brief(
         self,
-        session_factory: typ.Callable[[], AsyncSession],
+        session_factory: cabc.Callable[[], AsyncSession],
         base_profile_with_template: BaseProfileWithTemplateFixture,
     ) -> None:
         """Creating a template records history and is retrievable in brief output."""
@@ -151,7 +153,7 @@ class TestEpisodeTemplateService:
     @pytest.mark.asyncio
     async def test_update_episode_template_preserves_existing_guardrails(
         self,
-        session_factory: typ.Callable[[], AsyncSession],
+        session_factory: cabc.Callable[[], AsyncSession],
         base_profile_with_template: BaseProfileWithTemplateFixture,
     ) -> None:
         """Partial guardrail updates must merge with persisted template rules."""
@@ -185,7 +187,7 @@ class TestEpisodeTemplateService:
     @pytest.mark.asyncio
     async def test_build_series_brief_rejects_cross_series_reference_documents(
         self,
-        session_factory: typ.Callable[[], AsyncSession],
+        session_factory: cabc.Callable[[], AsyncSession],
         base_profile_with_template: BaseProfileWithTemplateFixture,
     ) -> None:
         """Brief generation should reject references owned by another series."""
@@ -256,7 +258,7 @@ class TestEpisodeTemplateService:
     @pytest.mark.asyncio
     async def test_build_series_brief_rejects_cross_series_resolved_bindings(
         self,
-        session_factory: typ.Callable[[], AsyncSession],
+        session_factory: cabc.Callable[[], AsyncSession],
         base_profile_with_template: BaseProfileWithTemplateFixture,
     ) -> None:
         """Episode-aware brief generation should reject foreign resolved bindings."""

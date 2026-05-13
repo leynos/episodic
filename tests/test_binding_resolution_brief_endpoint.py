@@ -3,9 +3,8 @@
 import typing as typ
 import uuid
 
-import test_reference_document_api_support as reference_support
-
 import tests.test_binding_resolution_support as binding_support
+import tests.test_reference_document_api_support as reference_support
 
 if typ.TYPE_CHECKING:
     import asyncio
@@ -45,7 +44,7 @@ def test_brief_endpoint_returns_404_for_invalid_episode(
     canonical_api_client: testing.TestClient,
 ) -> None:
     """Brief endpoint should return 404 when episode_id does not exist."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
+    fixture = reference_support.build_api_fixture(canonical_api_client)
     nonexistent_episode_id = str(uuid.uuid4())
     response = canonical_api_client.simulate_get(
         f"/series-profiles/{fixture.primary_profile_id}/brief",

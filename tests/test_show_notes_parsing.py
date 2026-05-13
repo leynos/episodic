@@ -2,6 +2,7 @@
 
 import json
 import typing as typ
+from unittest import mock
 
 import pytest
 
@@ -12,6 +13,16 @@ from episodic.generation.show_notes import (
     ShowNotesResponseFormatError,
 )
 from tests import show_notes_support
+
+if typ.TYPE_CHECKING:
+    from episodic.llm import LLMPort
+
+
+@pytest.fixture
+def show_notes_generator() -> ShowNotesGenerator:
+    """Create a generator for response-parsing tests."""
+    config = ShowNotesGeneratorConfig(model="test-model")
+    return ShowNotesGenerator(llm=typ.cast("LLMPort", mock.Mock()), config=config)
 
 
 def test_show_notes_entry_rejects_empty_topic() -> None:
@@ -52,7 +63,9 @@ def test_show_notes_entry_accepts_optional_locator() -> None:
     assert entry.tei_locator == "#p1"
 
 
-def test_result_from_response_parses_valid_json() -> None:
+def test_result_from_response_parses_valid_json(
+    show_notes_generator: ShowNotesGenerator,
+) -> None:
     """Parse a well-formed JSON response into a ShowNotesResult."""
     json_text = json.dumps({
         "entries": [
@@ -62,9 +75,7 @@ def test_result_from_response_parses_valid_json() -> None:
     })
     response = show_notes_support.valid_llm_response(json_text)
 
-    config = ShowNotesGeneratorConfig(model="test-model")
-    generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
-    result = generator._result_from_response(response)
+    result = show_notes_generator._result_from_response(response)
 
     assert len(result.entries) == 2
     assert result.entries[0].topic == "Topic 1"
@@ -88,55 +99,50 @@ def test_result_from_response_parses_valid_json() -> None:
 def test_result_from_response_rejects_malformed_entries(
     json_payload: dict[str, object],
     expected_match: str | None,
+    show_notes_generator: ShowNotesGenerator,
 ) -> None:
     """Raise ShowNotesResponseFormatError for every malformed entry shape."""
     response = show_notes_support.valid_llm_response(json.dumps(json_payload))
-    generator = ShowNotesGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ShowNotesGeneratorConfig(model="test-model"),
-    )
     with pytest.raises(ShowNotesResponseFormatError, match=expected_match):
-        generator._result_from_response(response)
+        show_notes_generator._result_from_response(response)
 
 
-def test_result_from_response_raises_on_missing_entries_key() -> None:
+def test_result_from_response_raises_on_missing_entries_key(
+    show_notes_generator: ShowNotesGenerator,
+) -> None:
     """Raise ShowNotesResponseFormatError when the entries key is missing."""
     json_text = json.dumps({"summary": "No entries key"})
     response = show_notes_support.valid_llm_response(json_text)
 
-    config = ShowNotesGeneratorConfig(model="test-model")
-    generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
-
     with pytest.raises(ShowNotesResponseFormatError, match="entries"):
-        generator._result_from_response(response)
+        show_notes_generator._result_from_response(response)
 
 
-def test_result_from_response_raises_on_invalid_json() -> None:
+def test_result_from_response_raises_on_invalid_json(
+    show_notes_generator: ShowNotesGenerator,
+) -> None:
     """Raise ShowNotesResponseFormatError when response text is not JSON."""
     response = show_notes_support.valid_llm_response("not valid json {")
 
-    config = ShowNotesGeneratorConfig(model="test-model")
-    generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
-
     with pytest.raises(ShowNotesResponseFormatError):
-        generator._result_from_response(response)
+        show_notes_generator._result_from_response(response)
 
 
-def test_result_from_response_raises_on_empty_topic() -> None:
+def test_result_from_response_raises_on_empty_topic(
+    show_notes_generator: ShowNotesGenerator,
+) -> None:
     """Raise ShowNotesResponseFormatError when an entry has an empty topic."""
     json_text = json.dumps({"entries": [{"topic": "  ", "summary": "Valid summary"}]})
     response = show_notes_support.valid_llm_response(json_text)
 
-    config = ShowNotesGeneratorConfig(model="test-model")
-    generator = ShowNotesGenerator(llm=typ.cast("typ.Any", None), config=config)
-
     with pytest.raises(ShowNotesResponseFormatError):
-        generator._result_from_response(response)
+        show_notes_generator._result_from_response(response)
 
 
 @pytest.mark.parametrize("timestamp", ["5:30", "   "])
 def test_result_from_response_rejects_non_iso8601_timestamp_strings(
     timestamp: str,
+    show_notes_generator: ShowNotesGenerator,
 ) -> None:
     """Raise when `timestamp` is a string but not an ISO 8601 duration."""
     response = show_notes_support.valid_llm_response(
@@ -150,13 +156,8 @@ def test_result_from_response_rejects_non_iso8601_timestamp_strings(
             ]
         })
     )
-    generator = ShowNotesGenerator(
-        llm=typ.cast("typ.Any", None),
-        config=ShowNotesGeneratorConfig(model="test-model"),
-    )
-
     with pytest.raises(ShowNotesResponseFormatError, match="ISO 8601"):
-        generator._result_from_response(response)
+        show_notes_generator._result_from_response(response)
 
 
 def test_show_notes_entry_normalizes_blank_locator_to_none() -> None:

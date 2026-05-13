@@ -20,4 +20,5 @@ def test_build_prompt_includes_template_structure() -> None:
     )
 
     assert "Test script." in prompt
-    assert '"sections"' in prompt or '"intro"' in prompt
+    assert '"sections"' in prompt
+    assert '"intro"' in prompt

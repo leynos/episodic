@@ -8,9 +8,9 @@ import uuid
 
 import pytest
 import sqlalchemy as sa
-import test_reference_document_api_support as reference_support
 from pytest_bdd import given, scenario, then, when
 
+import tests.test_reference_document_api_support as reference_support
 from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
 from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
 from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
@@ -80,7 +80,7 @@ def binding_resolution_fixtures(
     context: BindingResolutionContext,
 ) -> None:
     """Create a profile and template used by the resolution scenario."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
+    fixture = reference_support.build_api_fixture(canonical_api_client)
     context["profile_id"] = fixture.primary_profile_id
     context["template_id"] = fixture.template_id
 
@@ -142,28 +142,26 @@ def create_binding_resolution_bindings(
     profile_id = context["profile_id"]
     template_id = context["template_id"]
 
-    series_document_id = reference_support._create_reference_document(
+    series_document_id = reference_support.create_reference_document(
         canonical_api_client,
         profile_id=profile_id,
         kind="style_guide",
         name="BDD style guide",
     )
-    context["early_revision_id"] = (
-        reference_support._create_reference_document_revision(
-            canonical_api_client,
-            profile_id=profile_id,
-            document_id=series_document_id,
-            revision=reference_support._RevisionRequest(
-                summary="BDD early style guide",
-                content_hash="bdd-binding-resolution-early",
-            ),
-        )
-    )
-    context["late_revision_id"] = reference_support._create_reference_document_revision(
+    context["early_revision_id"] = reference_support.create_reference_document_revision(
         canonical_api_client,
         profile_id=profile_id,
         document_id=series_document_id,
-        revision=reference_support._RevisionRequest(
+        revision=reference_support.RevisionRequest(
+            summary="BDD early style guide",
+            content_hash="bdd-binding-resolution-early",
+        ),
+    )
+    context["late_revision_id"] = reference_support.create_reference_document_revision(
+        canonical_api_client,
+        profile_id=profile_id,
+        document_id=series_document_id,
+        revision=reference_support.RevisionRequest(
             summary="BDD late style guide",
             content_hash="bdd-binding-resolution-late",
         ),
@@ -183,24 +181,24 @@ def create_binding_resolution_bindings(
         )
         assert response.status_code == 201
 
-    template_document_id = reference_support._create_reference_document(
+    template_document_id = reference_support.create_reference_document(
         canonical_api_client,
         profile_id=profile_id,
         kind="guest_profile",
         name="BDD template guest",
     )
     context["template_revision_id"] = (
-        reference_support._create_reference_document_revision(
+        reference_support.create_reference_document_revision(
             canonical_api_client,
             profile_id=profile_id,
             document_id=template_document_id,
-            revision=reference_support._RevisionRequest(
+            revision=reference_support.RevisionRequest(
                 summary="BDD template guest",
                 content_hash="bdd-binding-resolution-template",
             ),
         )
     )
-    reference_support._create_reference_binding(
+    reference_support.create_reference_binding(
         canonical_api_client,
         revision_id=context["template_revision_id"],
         template_id=template_id,

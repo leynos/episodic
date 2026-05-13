@@ -162,7 +162,7 @@ def _source_document_from_record(
         source_uri=record.source_uri,
         weight=record.weight,
         content_hash=record.content_hash,
-        metadata=record.metadata_payload,
+        metadata=copy.deepcopy(record.metadata_payload),
         created_at=record.created_at,
     )
 
@@ -178,7 +178,7 @@ def _source_document_to_record(document: SourceDocument) -> SourceDocumentRecord
         source_uri=document.source_uri,
         weight=document.weight,
         content_hash=document.content_hash,
-        metadata_payload=document.metadata,
+        metadata_payload=copy.deepcopy(document.metadata),
         created_at=document.created_at,
     )
 

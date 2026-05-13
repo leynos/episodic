@@ -66,7 +66,7 @@ def test_enrich_tei_with_empty_result_returns_original() -> None:
 
     enriched_xml = enrich_tei_with_show_notes(minimal_tei_xml, empty_result)
 
-    assert "<div" not in enriched_xml
+    assert enriched_xml == minimal_tei_xml
 
 
 def test_enrich_tei_with_missing_body_raises_value_error() -> None:
@@ -112,7 +112,8 @@ def test_enrich_tei_escapes_xml_unsafe_characters() -> None:
     document.validate()
 
     assert "&amp;" in enriched_xml
-    assert "&lt;" in enriched_xml or "<tags>" not in enriched_xml
+    assert "&lt;tags&gt;" in enriched_xml
+    assert "<tags>" not in enriched_xml
 
 
 def test_enrich_tei_replaces_existing_notes_div() -> None:

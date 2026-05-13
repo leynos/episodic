@@ -12,6 +12,8 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from tests.test_uuid_assertions import assert_uuid7
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import SeriesProfile
@@ -20,7 +22,7 @@ if typ.TYPE_CHECKING:
 
 @pytest.mark.asyncio
 async def test_ingest_multi_source_end_to_end(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
     ingestion_pipeline: IngestionPipeline,
 ) -> None:
@@ -94,7 +96,7 @@ async def test_ingest_multi_source_end_to_end(
 
 @pytest.mark.asyncio
 async def test_ingest_multi_source_preserves_all_sources(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
     ingestion_pipeline: IngestionPipeline,
 ) -> None:
@@ -159,7 +161,7 @@ async def test_ingest_multi_source_preserves_all_sources(
 
 @pytest.mark.asyncio
 async def test_ingest_multi_source_records_conflict_metadata(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
     ingestion_pipeline: IngestionPipeline,
 ) -> None:
@@ -234,7 +236,7 @@ async def test_ingest_multi_source_records_conflict_metadata(
 
 @pytest.mark.asyncio
 async def test_ingest_multi_source_snapshots_resolved_reference_bindings(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
     ingestion_pipeline: IngestionPipeline,
 ) -> None:

@@ -5,8 +5,7 @@ import datetime as dt
 import typing as typ
 import uuid
 
-import test_reference_document_api_support as reference_support
-
+import tests.test_reference_document_api_support as reference_support
 from episodic.canonical.domain import (
     ApprovalState,
     CanonicalEpisode,
@@ -122,17 +121,17 @@ def create_document_with_revision(
     spec: DocumentSpec,
 ) -> tuple[str, str]:
     """Create a reference document and its first revision; return ids."""
-    document_id = reference_support._create_reference_document(
+    document_id = reference_support.create_reference_document(
         client,
         profile_id=profile_id,
         kind=spec.kind,
         name=spec.name,
     )
-    revision_id = reference_support._create_reference_document_revision(
+    revision_id = reference_support.create_reference_document_revision(
         client,
         profile_id=profile_id,
         document_id=document_id,
-        revision=reference_support._RevisionRequest(
+        revision=reference_support.RevisionRequest(
             summary=spec.summary,
             content_hash=spec.content_hash,
         ),
@@ -182,11 +181,11 @@ def create_style_guide_bindings(
             content_hash="binding-resolution-api-early",
         ),
     )
-    revision_late_id = reference_support._create_reference_document_revision(
+    revision_late_id = reference_support.create_reference_document_revision(
         client,
         profile_id=profile_id,
         document_id=document_id,
-        revision=reference_support._RevisionRequest(
+        revision=reference_support.RevisionRequest(
             summary="Late style guide",
             content_hash="binding-resolution-api-late",
         ),
@@ -220,7 +219,7 @@ def create_template_guest_binding(
             content_hash="binding-resolution-api-template",
         ),
     )
-    reference_support._create_reference_binding(
+    reference_support.create_reference_binding(
         client,
         revision_id=template_revision_id,
         template_id=template_id,
@@ -234,7 +233,7 @@ def setup_brief_filter_fixture(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> BriefFilterFixture:
     """Create the series/template bindings used by brief filter assertions."""
-    fixture = reference_support._build_api_fixture(canonical_api_client)
+    fixture = reference_support.build_api_fixture(canonical_api_client)
     profile_id = fixture.primary_profile_id
     template_id = fixture.template_id
     early_episode_id, late_episode_id = create_episode_pair(
