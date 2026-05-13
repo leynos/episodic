@@ -240,8 +240,13 @@ def _locator_keys_for_segment(raw: dict[str, object]) -> frozenset[str]:
     return frozenset(keys)
 
 
+_MAX_SEGMENT_TRAVERSAL_DEPTH: int = 20
+
+
 def _transitions_from_dict(
     mapping: dict[str, object],
+    *,
+    depth: int,
 ) -> tuple[_SegmentTransition, ...]:
     """Yield transitions rooted at a dict node, then recurse into its values."""
     transitions: list[_SegmentTransition] = []
@@ -253,29 +258,40 @@ def _transitions_from_dict(
                 locator_keys=_locator_keys_for_segment(mapping),
             )
         )
-    for nested_value in mapping.values():
-        transitions.extend(_segment_transitions_from_value(nested_value))
+    if depth > 0:
+        for nested_value in mapping.values():
+            transitions.extend(
+                _segment_transitions_from_value(nested_value, depth=depth - 1)
+            )
     return tuple(transitions)
 
 
 def _transitions_from_sequence(
     items: typ.Sequence[object],
+    *,
+    depth: int,
 ) -> tuple[_SegmentTransition, ...]:
     """Recurse into each element of a list node."""
+    if depth <= 0:
+        return ()
     transitions: list[_SegmentTransition] = []
     for item in items:
-        transitions.extend(_segment_transitions_from_value(item))
+        transitions.extend(_segment_transitions_from_value(item, depth=depth - 1))
     return tuple(transitions)
 
 
-def _segment_transitions_from_value(value: object) -> tuple[_SegmentTransition, ...]:
+def _segment_transitions_from_value(
+    value: object,
+    *,
+    depth: int = _MAX_SEGMENT_TRAVERSAL_DEPTH,
+) -> tuple[_SegmentTransition, ...]:
     """Extract explicit segment starts from nested segment metadata."""
     if isinstance(value, dict):
         mapping = typ.cast("dict[str, object]", value)
-        return _transitions_from_dict(mapping)
+        return _transitions_from_dict(mapping, depth=depth)
     if isinstance(value, list):
         items = typ.cast("typ.Sequence[object]", value)
-        return _transitions_from_sequence(items)
+        return _transitions_from_sequence(items, depth=depth)
     return ()
 
 
