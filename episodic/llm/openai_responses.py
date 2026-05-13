@@ -20,18 +20,33 @@ _EMPTY_RESPONSES_CONTENT_MESSAGE = (
 )
 
 
+def _get_output_text_item(
+    item: object,
+) -> cabc.Mapping[str, object] | None:
+    """Return *item* as a mapping when it is a non-empty output_text entry."""
+    if not _is_string_keyed_mapping(item):
+        return None
+    item_mapping = typ.cast("cabc.Mapping[str, object]", item)
+    if item_mapping.get("type") != "output_text":
+        return None
+    if not _is_non_empty_string(item_mapping.get("text")):
+        return None
+    return item_mapping
+
+
 def _has_output_text_in_content(content: list[object]) -> bool:
     """Check whether content contains a non-empty ``output_text`` item."""
-    for item in content:
-        if not _is_string_keyed_mapping(item):
-            continue
-        item_mapping = typ.cast("cabc.Mapping[str, object]", item)
-        if item_mapping.get("type") != "output_text":
-            continue
-        text = item_mapping.get("text")
-        if _is_non_empty_string(text):
-            return True
-    return False
+    return any(_get_output_text_item(item) is not None for item in content)
+
+
+def _get_content_list(
+    mapping: cabc.Mapping[str, object],
+) -> list[object] | None:
+    """Return the ``content`` list from *mapping*, or ``None`` when absent or empty."""
+    content = mapping.get("content")
+    if not isinstance(content, list) or not content:
+        return None
+    return typ.cast("list[object]", content)
 
 
 def _find_output_item_with_text(
@@ -41,10 +56,9 @@ def _find_output_item_with_text(
     if not _is_string_keyed_mapping(item):
         return None
     item_mapping = typ.cast("cabc.Mapping[str, object]", item)
-    content = item_mapping.get("content")
-    if not isinstance(content, list) or not content:
+    content_items = _get_content_list(item_mapping)
+    if content_items is None:
         return None
-    content_items = typ.cast("list[object]", content)
     if _has_output_text_in_content(content_items):
         return item_mapping
     return None
@@ -68,23 +82,18 @@ def _extract_output_content_list(
     output_mapping: cabc.Mapping[str, object],
 ) -> list[object]:
     """Validate and return the content list from an output item mapping."""
-    content = output_mapping.get("content")
-    if not isinstance(content, list) or not content:
+    content = _get_content_list(output_mapping)
+    if content is None:
         raise OpenAIResponseValidationError(_INVALID_RESPONSES_PAYLOAD_MESSAGE)
-    return typ.cast("list[object]", content)
+    return content
 
 
 def _find_output_text_in_content(content: list[object]) -> str:
     """Return the stripped text of the first output_text item in content."""
     for item in content:
-        if not _is_string_keyed_mapping(item):
-            continue
-        item_mapping = typ.cast("cabc.Mapping[str, object]", item)
-        if item_mapping.get("type") != "output_text":
-            continue
-        text = item_mapping.get("text")
-        if _is_non_empty_string(text):
-            return typ.cast("str", text).strip()
+        mapping = _get_output_text_item(item)
+        if mapping is not None:
+            return typ.cast("str", mapping.get("text")).strip()
     raise OpenAIResponseValidationError(_EMPTY_RESPONSES_CONTENT_MESSAGE)
 
 
