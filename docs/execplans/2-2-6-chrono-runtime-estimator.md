@@ -505,8 +505,8 @@ class ChronoRuntimeEstimate:
 Add `ChronoRuntimeEstimator` with an async `evaluate(...)` method or a
 synchronous `estimate(...)` method plus an async adapter method. Prefer the
 shape that best matches the QA graph port without adding fake asynchrony to the
-domain policy. Keep XML parsing and word counting as pure functions in the same
-module unless size demands extraction.
+domain policy. Keep word counting as estimator-local policy, but delegate TEI P5
+parsing and spoken-text extraction to `tei-rapporteur`.
 
 The original initial heuristic used the Python standard library XML parser and
 raw-text fallback. Stage K replaced it with this `tei-rapporteur`-backed
@@ -761,16 +761,16 @@ rg -n "tei_rapporteur|tei-rapporteur|Chrono|spoken" episodic tests docs
 rg -n "ADR|Architectural Decision" docs
 ```
 
-Expected result before Chrono rewrite:
+Expected result after the Chrono Stage K rewrite:
 
 ```plaintext
-ADR-006 is proposed, and the tei-rapporteur spoken-text API is absent or
-incomplete.
+ADR-006 is proposed. Stage K has pinned tei-rapporteur and Chrono now uses
+spoken_text_segments(...). The remaining follow-on items are ADR-006 acceptance
+and strict contract enforcement.
 ```
 
-For the follow-on strict TEI P5 roadmap item, after the ADR is accepted and the
-`tei-rapporteur` API is available, replace the local XML extraction and run
-focused validation:
+For the follow-on strict TEI P5 roadmap item, after ADR-006 is accepted, enforce
+the accepted strict contract and run focused validation:
 
 ```bash
 uv run pytest tests/test_chrono.py tests/test_chrono_properties.py
@@ -827,14 +827,14 @@ are not tracked.
 
 ## Interfaces and dependencies
 
-For the completed `2.2.6` slice, use the standard library for estimator-local
-concerns such as `dataclasses`, `math`, `re`, XML parsing, and logging.
+For the completed `2.2.6` slice, estimator-local Chrono concerns such as
+`dataclasses`, `math`, `re`, logging, and metadata policy remain
+standard-library-only.
 
-For the follow-on strict TEI P5 migration, use the existing `tei-rapporteur`
-dependency as Chrono's TEI P5 parsing and spoken-text extraction boundary. Do
-not add a second XML or TEI parser for Chrono, and do not keep a local
-`xml.etree.ElementTree` traversal path once the `tei-rapporteur` API is
-available.
+Chrono delegates TEI P5 parsing and spoken-text extraction to the existing
+`tei-rapporteur` dependency through `spoken_text_segments(...)`. Do not add a
+second XML or TEI parser for Chrono, and do not keep a local
+`xml.etree.ElementTree` traversal path.
 
 The target public Python surface after implementation should include these
 exports from `episodic.qa`:
