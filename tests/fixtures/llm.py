@@ -1,8 +1,5 @@
 """OpenAI-compatible LLM adapter test fixtures."""
 
-# Adapter factory fixtures expose the provider knobs used across tests.
-# pylint: disable=too-many-arguments
-
 import contextlib
 import json
 import typing as typ
@@ -120,7 +117,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
     """Build async context managers yielding configured OpenAI adapters."""
 
     @contextlib.asynccontextmanager
-    async def _build_adapter(  # noqa: PLR0913, TD001, TD002  # FIXME: https://github.com/leynos/episodic/pull/49 — narrow PLR0913 suppression; see ticket to refactor helper signature
+    async def _build_adapter(  # noqa: PLR0913, TD001, TD002  # pylint: disable=too-many-arguments  # FIXME: https://github.com/leynos/episodic/pull/49 - narrow suppression pending helper signature refactor
         *,
         transport: httpx.AsyncBaseTransport,
         provider_operation: str | LLMProviderOperation = "chat_completions",

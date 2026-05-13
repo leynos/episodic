@@ -4,7 +4,9 @@ This module validates and normalizes OpenAI chat completion payloads at the
 adapter boundary before converting them into provider-agnostic DTOs.
 """
 
-# Provider payload parsing is intentionally centralised at the adapter boundary.
+# Provider payload parsing is intentionally centralized at the adapter boundary.
+# FIXME: https://github.com/leynos/episodic/issues/92 - split chat and responses  # noqa: E501, TD001, TD002
+# adapters into focused modules.
 # pylint: disable=too-many-lines
 
 from __future__ import annotations

@@ -14,6 +14,8 @@ Build a structured brief for one profile and optional template filter:
 """
 
 # Structured-brief assembly keeps ownership checks and payload shaping together.
+# FIXME: https://github.com/leynos/episodic/issues/92 - decompose this module to  # noqa: E501, TD001, TD002
+# comply with the 400-line limit.
 # pylint: disable=too-many-lines
 
 import typing as typ

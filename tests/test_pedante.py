@@ -403,7 +403,10 @@ def test_pedante_parse_result_allows_empty_findings_list() -> None:
     result = PedanteEvaluationResult.from_json(payload, usage=LLMUsage(10, 5, 15))
 
     # Keep the tuple contract explicit; truthiness would allow list regressions.
-    assert result.findings == ()  # pylint: disable=use-implicit-booleaness-not-comparison
+    assert result.findings == (), (  # pylint: disable=use-implicit-booleaness-not-comparison
+        f"expected empty tuple for findings, got {result.findings!r} "
+        f"({type(result.findings).__name__})"
+    )
     assert result.requires_revision is False
 
 

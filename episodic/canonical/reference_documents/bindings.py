@@ -1,7 +1,9 @@
 """Binding-focused reusable reference-document services."""
 
 # Service rules for bindings are kept together to preserve their shared
-# validation context until this domain area is split by workflow.
+# validation context until this domain area is split by workflow. Track the
+# validation, creation, and list-operation split in
+# https://github.com/leynos/episodic/issues/92.
 # pylint: disable=too-many-lines
 
 import dataclasses as dc
