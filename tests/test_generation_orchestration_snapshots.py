@@ -14,7 +14,12 @@ from episodic.orchestration import (
     GenerationOrchestrationResult,
     ModelTier,
     PlannedAction,
+    PlannerResult,
     StructuredGenerationPlanner,
+)
+from episodic.orchestration.langgraph import (
+    _action_result_to_payload,
+    _planner_result_to_payload,
 )
 
 
@@ -92,3 +97,39 @@ def test_generation_orchestration_result_snapshot(
     )
     serialised = dataclasses.asdict(result)
     assert serialised == snapshot
+
+
+def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
+    planned = PlannedAction(
+        action_id="a1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        rationale="test",
+        model_tier=ModelTier.EXECUTION,
+        required_inputs=("script_tei_xml",),
+    )
+    plan = ExecutionPlan(
+        plan_version="1",
+        selected_planning_model="gpt-4.1",
+        selected_execution_model="gpt-4o-mini",
+        steps=(planned,),
+    )
+    planner_result = PlannerResult(
+        plan=plan,
+        usage=LLMUsage(input_tokens=1, output_tokens=2, total_tokens=3),
+        model="gpt-4.1",
+        provider_response_id="planner-1",
+        finish_reason="stop",
+    )
+    action_result = ActionExecutionResult(
+        action_id="a1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        model_tier=ModelTier.EXECUTION,
+        model="gpt-4o-mini",
+        summary="test",
+        usage=LLMUsage(input_tokens=10, output_tokens=20, total_tokens=30),
+    )
+
+    assert {
+        "planner_result": _planner_result_to_payload(planner_result),
+        "action_result": _action_result_to_payload(action_result),
+    } == snapshot

@@ -1,5 +1,6 @@
 """Structured planning and tool execution for generation orchestration."""
 
+from episodic.orchestration.checkpoints import InMemoryCheckpointStore
 from episodic.orchestration.generation import (
     ActionExecutionResult,
     ActionKind,
@@ -12,18 +13,24 @@ from episodic.orchestration.generation import (
     PlannerPort,
     PlannerResult,
     PlanningResponseFormatError,
+    ResumeWorkflowCommand,
     ShowNotesFormatError,
     ShowNotesToolExecutor,
     StructuredGenerationPlanner,
     StructuredPlanningOrchestrator,
+    SuspendedWorkflowResult,
     ToolExecutionError,
     ToolExecutorPort,
     UnsupportedActionError,
+    WorkflowCheckpoint,
+    WorkflowStepIdentity,
     build_generation_result,
+    build_workflow_step_idempotency_key,
 )
 from episodic.orchestration.langgraph import (
     GenerationGraphState,
     build_generation_orchestration_graph,
+    resume_generation_orchestration,
 )
 
 __all__ = [
@@ -34,18 +41,25 @@ __all__ = [
     "GenerationOrchestrationConfig",
     "GenerationOrchestrationRequest",
     "GenerationOrchestrationResult",
+    "InMemoryCheckpointStore",
     "ModelTier",
     "PlannedAction",
     "PlannerPort",
     "PlannerResult",
     "PlanningResponseFormatError",
+    "ResumeWorkflowCommand",
     "ShowNotesFormatError",
     "ShowNotesToolExecutor",
     "StructuredGenerationPlanner",
     "StructuredPlanningOrchestrator",
+    "SuspendedWorkflowResult",
     "ToolExecutionError",
     "ToolExecutorPort",
     "UnsupportedActionError",
+    "WorkflowCheckpoint",
+    "WorkflowStepIdentity",
     "build_generation_orchestration_graph",
     "build_generation_result",
+    "build_workflow_step_idempotency_key",
+    "resume_generation_orchestration",
 ]

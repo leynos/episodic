@@ -24,6 +24,7 @@ from episodic.canonical.domain import (
     ReferenceBindingTargetKind,
     ReferenceDocumentKind,
     ReferenceDocumentLifecycleState,
+    WorkflowCheckpointStatus,
 )
 
 if typ.TYPE_CHECKING:
@@ -74,6 +75,76 @@ REFERENCE_BINDING_TARGET_KIND = sa.Enum(
     name="reference_binding_target_kind",
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )
+WORKFLOW_CHECKPOINT_STATUS = sa.Enum(
+    WorkflowCheckpointStatus,
+    name="workflow_checkpoint_status",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+
+
+class WorkflowCheckpointRecord(Base):
+    """SQLAlchemy model for resumable orchestration checkpoints.
+
+    Attributes
+    ----------
+    id : uuid.UUID
+        Primary key for the checkpoint record.
+    workflow_id : str
+        Indexed workflow correlation identifier used to group checkpoints.
+    workflow_type : str
+        Non-null orchestration workflow category.
+    step_name : str
+        Non-null name of the suspended workflow step.
+    idempotency_key : str
+        Unique key that enforces first-write-wins checkpoint persistence.
+    payload : dict[str, object]
+        Non-null JSONB checkpoint payload containing resumable graph state.
+    status : WorkflowCheckpointStatus
+        Non-null enum status with a default of ``suspended``.
+    created_at : datetime.datetime
+        Timestamp when the checkpoint was created.
+    updated_at : datetime.datetime
+        Timestamp when the checkpoint was last updated.
+    """
+
+    __tablename__ = "workflow_checkpoints"
+
+    id: orm.Mapped[uuid.UUID] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        primary_key=True,
+    )
+    workflow_id: orm.Mapped[str] = orm.mapped_column(
+        sa.String(160),
+        nullable=False,
+        index=True,
+    )
+    workflow_type: orm.Mapped[str] = orm.mapped_column(sa.String(120), nullable=False)
+    step_name: orm.Mapped[str] = orm.mapped_column(sa.String(120), nullable=False)
+    idempotency_key: orm.Mapped[str] = orm.mapped_column(
+        sa.String(512),
+        nullable=False,
+        unique=True,
+    )
+    payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
+        postgresql.JSONB,
+        nullable=False,
+    )
+    status: orm.Mapped[WorkflowCheckpointStatus] = orm.mapped_column(
+        WORKFLOW_CHECKPOINT_STATUS,
+        nullable=False,
+        server_default=WorkflowCheckpointStatus.SUSPENDED.value,
+    )
+    created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    )
+    updated_at: orm.Mapped[dt.datetime] = orm.mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+    )
 
 
 class SeriesProfileRecord(Base):

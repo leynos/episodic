@@ -18,6 +18,10 @@ from ._dto import (
     GenerationOrchestrationResult,
     PlannedAction,
     PlannerResult,
+    ResumeWorkflowCommand,
+    SuspendedWorkflowResult,
+    WorkflowCheckpoint,
+    WorkflowStepIdentity,
     _coerce_action_kind,
     _coerce_action_kinds,
     _coerce_model_tier,
@@ -25,6 +29,7 @@ from ._dto import (
     _require_object,
     _require_optional_string_list,
     _require_plan_step_list,
+    build_workflow_step_idempotency_key,
 )
 from ._protocols import PlannerPort, ToolExecutorPort
 from ._show_notes_executor import ShowNotesToolExecutor
@@ -51,14 +56,19 @@ __all__ = [
     "PlannerPort",
     "PlannerResult",
     "PlanningResponseFormatError",
+    "ResumeWorkflowCommand",
     "ShowNotesFormatError",
     "ShowNotesToolExecutor",
     "StructuredGenerationPlanner",
     "StructuredPlanningOrchestrator",
+    "SuspendedWorkflowResult",
     "ToolExecutionError",
     "ToolExecutorPort",
     "UnsupportedActionError",
+    "WorkflowCheckpoint",
+    "WorkflowStepIdentity",
     "build_generation_result",
+    "build_workflow_step_idempotency_key",
 ]
 
 

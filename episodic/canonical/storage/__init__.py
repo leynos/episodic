@@ -27,6 +27,7 @@ from .models import (
     SeriesProfileRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
+    WorkflowCheckpointRecord,
 )
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
@@ -43,6 +44,7 @@ from .repositories import (
     SqlAlchemyTeiHeaderRepository,
 )
 from .uow import SqlAlchemyUnitOfWork
+from .workflow_checkpoints import SqlAlchemyWorkflowCheckpointStore
 
 __all__ = (
     "ApprovalEventRecord",
@@ -70,6 +72,8 @@ __all__ = (
     "SqlAlchemySourceDocumentRepository",
     "SqlAlchemyTeiHeaderRepository",
     "SqlAlchemyUnitOfWork",
+    "SqlAlchemyWorkflowCheckpointStore",
     "TeiHeaderRecord",
+    "WorkflowCheckpointRecord",
     "detect_schema_drift",
 )

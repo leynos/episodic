@@ -13,6 +13,7 @@ Accepted decision records:
 - [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
 - [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
 - [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
+- [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
 
 ## Overview
 
@@ -533,6 +534,80 @@ In the current worker scaffold, representative Celery tasks use injected
 callable seams instead of importing concrete adapters directly. Future task
 implementations should preserve this pattern by resolving storage, LLM, and
 other infrastructure through ports or composition-root-owned dependencies.
+
+The first durable content-generation checkpoint implementation stores
+`WorkflowCheckpoint` records in `workflow_checkpoints`. The graph persists the
+planner result and routing metadata before the first side-effecting execution
+step, returns a `SuspendedWorkflowResult`, and later accepts a
+`ResumeWorkflowCommand` through `TaskResumePort` to aggregate the final
+generation result. Checkpoint payloads contain orchestration state and
+provider-neutral DTO fields only; canonical episode artefacts remain in their
+own repositories. Durable checkpoint writes rely on the database uniqueness
+constraint for idempotency and query the existing checkpoint only after a
+duplicate-key conflict. The in-memory checkpoint adapter models the same
+first-write-wins contract for tests with an `asyncio.Lock` and an injected
+clock, but remains unbounded and process-local. Successful resume calls mark
+the stored checkpoint as `resumed` through `CheckpointPort` after the action
+result has been folded into the generation result.
+
+Screen reader description: Suspend flow that persists or reuses a checkpoint
+before side-effecting execution.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Orchestrator as StructuredPlanningOrchestrator
+    participant LangGraph as GenerationGraph
+    participant Planner as PlannerPort
+    participant Checkpoints as CheckpointPort
+
+    Client->>Orchestrator: start_generation(request)
+    Orchestrator->>LangGraph: run(request, checkpoint_port)
+
+    LangGraph->>Planner: plan(request)
+    Planner-->>LangGraph: PlannerResult
+
+    LangGraph->>Checkpoints: save_or_reuse(WorkflowCheckpoint)
+    Checkpoints-->>LangGraph: WorkflowCheckpoint
+
+    LangGraph-->>Orchestrator: SuspendedWorkflowResult
+    Orchestrator-->>Client: SuspendedWorkflowResult
+```
+
+Figure: Suspend flow for a generation workflow that persists or reuses a
+checkpoint before side-effecting execution.
+
+Screen reader description: Resume path where checkpoint lookup rejects unknown
+IDs, known checkpoints resume through `TaskResumePort`, and the final
+generation result is built before marking the checkpoint resumed.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Orchestrator as GenerationOrchestrationLayer
+    participant Checkpoints as CheckpointPort
+    participant ResumePort as TaskResumePort
+
+    Client->>Orchestrator: resume_generation(ResumeWorkflowCommand)
+
+    Orchestrator->>Checkpoints: get(checkpoint_id)
+    Checkpoints-->>Orchestrator: WorkflowCheckpoint | None
+
+    alt checkpoint unknown
+        Orchestrator-->>Client: ValueError
+    else checkpoint found
+        Orchestrator->>ResumePort: resume(ResumeWorkflowCommand)
+        ResumePort-->>Orchestrator: ActionExecutionResult
+
+        Orchestrator->>Orchestrator: build_generation_result(PlannerResult, ActionExecutionResult)
+        Orchestrator->>Checkpoints: mark_resumed(checkpoint_id)
+        Checkpoints-->>Orchestrator: WorkflowCheckpoint
+        Orchestrator-->>Client: GenerationOrchestrationResult
+    end
+```
+
+Figure: Resume flow for a suspended generation workflow that either rejects an
+unknown checkpoint or aggregates the resumed action result.
 
 #### Inference strategy and tool integration
 

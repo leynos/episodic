@@ -21,11 +21,16 @@ from episodic.llm.openai_adapter import (
 )
 from episodic.orchestration import (
     ActionKind,
+    GenerationGraphState,
     GenerationOrchestrationConfig,
     GenerationOrchestrationRequest,
+    InMemoryCheckpointStore,
+    ResumeWorkflowCommand,
     ShowNotesToolExecutor,
     StructuredGenerationPlanner,
     StructuredPlanningOrchestrator,
+    build_generation_orchestration_graph,
+    resume_generation_orchestration,
 )
 
 if typ.TYPE_CHECKING:
@@ -33,7 +38,11 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
-    from episodic.orchestration import GenerationOrchestrationResult
+    from episodic.orchestration import (
+        ActionExecutionResult,
+        GenerationOrchestrationResult,
+        SuspendedWorkflowResult,
+    )
 
 
 @dc.dataclass(slots=True)
@@ -45,6 +54,8 @@ class OrchestrationBDDContext:
     request: GenerationOrchestrationRequest | None = None
     result: GenerationOrchestrationResult | None = None
     requests: list[LLMRequest] = dc.field(default_factory=list)
+    suspended_result: SuspendedWorkflowResult | None = None
+    repeated_suspended_result: SuspendedWorkflowResult | None = None
 
 
 @dc.dataclass(slots=True)
@@ -58,6 +69,18 @@ class _RecordingLLMPort:
         """Record and forward the request."""
         self.requests.append(request)
         return await self.wrapped.generate(request)
+
+
+@dc.dataclass(slots=True)
+class _BDDResumePort:
+    """Return the action result supplied by the behavioural resume command."""
+
+    async def resume(
+        self,
+        command: ResumeWorkflowCommand,
+    ) -> ActionExecutionResult:
+        """Return the externally supplied action result."""
+        return command.result
 
 
 def _run_async_step(
@@ -88,6 +111,14 @@ def orchestration_context() -> cabc.Iterator[OrchestrationBDDContext]:
 )
 def test_generation_orchestration_behaviour() -> None:
     """Run the structured generation orchestration scenario."""
+
+
+@scenario(
+    "../features/generation_orchestration.feature",
+    "LangGraph suspends and resumes a structured generation run",
+)
+def test_generation_orchestration_suspend_resume_behaviour() -> None:
+    """Run the resumable generation orchestration scenario."""
 
 
 def _find_free_port() -> int:
@@ -339,6 +370,70 @@ def run_orchestration(
     _run_async_step(_function_scoped_runner, _orchestrate)
 
 
+@when(
+    "the LangGraph orchestration service suspends before execution and resumes "
+    "the request"
+)
+def run_suspend_resume_orchestration(
+    _function_scoped_runner: asyncio.Runner,
+    orchestration_context: OrchestrationBDDContext,
+) -> None:
+    """Call the checkpointing LangGraph flow with a live LLM adapter."""
+
+    async def _orchestrate() -> None:  # noqa: PLR0914
+        request = orchestration_context.request
+        if request is None:
+            msg = "generation request was not prepared"
+            raise AssertionError(msg)
+
+        async with OpenAICompatibleLLMAdapter(
+            config=OpenAICompatibleLLMConfig(
+                base_url=orchestration_context.base_url,
+                api_key="test-key",
+            ),
+        ) as adapter:
+            recording_port = _RecordingLLMPort(wrapped=adapter)
+            config = GenerationOrchestrationConfig(
+                planning_model="gpt-4.1",
+                execution_model="gpt-4o-mini",
+            )
+            planner = StructuredGenerationPlanner(llm=recording_port, config=config)
+            tool_executor = ShowNotesToolExecutor(llm=recording_port, config=config)
+            checkpoint_store = InMemoryCheckpointStore()
+            graph = build_generation_orchestration_graph(
+                planner=planner,
+                tool_executor=tool_executor,
+                checkpoint_port=checkpoint_store,
+            )
+
+            first_state = await graph.ainvoke(GenerationGraphState(request=request))
+            second_state = await graph.ainvoke(GenerationGraphState(request=request))
+            suspended_result = first_state["suspended_result"]
+            checkpoint = await checkpoint_store.get(suspended_result.checkpoint_id)
+            if checkpoint is None:
+                msg = "checkpoint was not persisted"
+                raise AssertionError(msg)
+
+            planner_result = first_state["planner_result"]
+            action = planner_result.plan.steps[0]
+            action_result = await tool_executor.execute(action, request)
+            orchestration_context.result = await resume_generation_orchestration(
+                checkpoint_port=checkpoint_store,
+                resume_port=_BDDResumePort(),
+                command=ResumeWorkflowCommand(
+                    checkpoint_id=suspended_result.checkpoint_id,
+                    result=action_result,
+                ),
+            )
+            orchestration_context.suspended_result = suspended_result
+            orchestration_context.repeated_suspended_result = second_state[
+                "suspended_result"
+            ]
+            orchestration_context.requests = recording_port.requests
+
+    _run_async_step(_function_scoped_runner, _orchestrate)
+
+
 @then("the orchestration result includes a structured plan and show-notes output")
 def assert_result(orchestration_context: OrchestrationBDDContext) -> None:
     """Verify the orchestration result exposes the plan and action output."""
@@ -355,6 +450,20 @@ def assert_result(orchestration_context: OrchestrationBDDContext) -> None:
 def assert_requests(orchestration_context: OrchestrationBDDContext) -> None:
     """Verify the planner call happens before the execution-stage tool call."""
     requests = orchestration_context.requests
-    assert [request.model for request in requests] == ["gpt-4.1", "gpt-4o-mini"]
+    expected_models = ["gpt-4.1", "gpt-4o-mini"]
+    if orchestration_context.suspended_result is not None:
+        expected_models = ["gpt-4.1", "gpt-4.1", "gpt-4o-mini"]
+    assert [request.model for request in requests] == expected_models
     assert "enabled_action_kinds" in requests[0].prompt
-    assert "script_tei_xml" in requests[1].prompt
+    assert "script_tei_xml" in requests[-1].prompt
+
+
+@then("the orchestration checkpoint is reused for the repeated workflow step")
+def assert_checkpoint_reused(orchestration_context: OrchestrationBDDContext) -> None:
+    """Verify repeated suspend calls return the original checkpoint."""
+    first = orchestration_context.suspended_result
+    second = orchestration_context.repeated_suspended_result
+    assert first is not None
+    assert second is not None
+    assert second.checkpoint_id == first.checkpoint_id
+    assert second.idempotency_key == first.idempotency_key

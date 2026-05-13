@@ -48,6 +48,7 @@ async def test_planner_returns_typed_plan_and_uses_planning_model() -> None:
             required_inputs=("script_tei_xml", "template_structure"),
         ),
     )
+    assert result.usage is not None
     assert result.usage.total_tokens == 52
 
     request = llm.requests[0]
