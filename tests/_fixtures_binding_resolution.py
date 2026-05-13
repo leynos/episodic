@@ -7,6 +7,7 @@ import uuid
 import pytest_asyncio
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import datetime as dt
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -322,7 +323,7 @@ async def binding_snapshot_reference_binding(
 @pytest_asyncio.fixture
 async def uow_with_binding_fixtures(
     session_factory: async_sessionmaker[AsyncSession],
-) -> typ.AsyncIterator[BindingFixtures]:
+) -> cabc.AsyncIterator[BindingFixtures]:
     """Provide UOW with series, episodes, reference documents, and revisions."""
     import datetime as dt
 

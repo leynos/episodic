@@ -29,6 +29,7 @@ from .services import get_entity_with_revision, list_entities_with_revisions
 from .types import EntityNotFoundError
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from episodic.canonical.domain import (
@@ -203,7 +204,7 @@ async def _load_revisions_by_id(
 async def _load_documents_by_id(
     *,
     uow: CanonicalUnitOfWork,
-    revisions: typ.Iterable[ReferenceDocumentRevision],
+    revisions: cabc.Iterable[ReferenceDocumentRevision],
 ) -> dict[uuid.UUID, ReferenceDocument]:
     """Load documents referenced by revisions and fail on missing identifiers."""
     document_ids = {revision.reference_document_id for revision in revisions}

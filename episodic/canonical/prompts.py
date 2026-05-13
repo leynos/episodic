@@ -14,6 +14,8 @@ import typing as typ
 from string.templatelib import Template, convert
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from .domain import JsonMapping
 
 
@@ -114,7 +116,7 @@ def _coerce_string(
 def render_template(
     template: Template,
     *,
-    escape_interpolation: typ.Callable[[str], str] | None = None,
+    escape_interpolation: cabc.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
     """Render a template into text with interpolation audit metadata.
 
@@ -265,7 +267,7 @@ def render_series_guardrail_prompt(
     brief: JsonMapping,
     *,
     active_template_id: str | None = None,
-    escape_interpolation: typ.Callable[[str], str] | None = None,
+    escape_interpolation: cabc.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
     """Render the standard guardrail prompt scaffold for a structured brief."""
     return render_template(
@@ -280,7 +282,7 @@ def render_series_guardrail_prompt(
 def render_series_brief_prompt(
     brief: JsonMapping,
     *,
-    escape_interpolation: typ.Callable[[str], str] | None = None,
+    escape_interpolation: cabc.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
     """Render the standard prompt scaffold for a structured series brief.
 

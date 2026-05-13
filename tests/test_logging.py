@@ -8,6 +8,9 @@ import pytest
 
 from episodic import logging as episodic_logging
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 
 class _SpyLogger:
     """Collect low-level log calls emitted by the compatibility wrappers."""
@@ -125,7 +128,7 @@ class _SupportsFlushHandlers(typ.Protocol):
 
 
 @pytest.fixture
-def isolated_femtologging() -> typ.Generator[None]:
+def isolated_femtologging() -> cabc.Generator[None]:
     """Reset the femtologging global manager before and after each test."""
     import femtologging
 

@@ -37,8 +37,8 @@ class HistoryRepositoryConfig[HistoryEntryT, HistoryRecordT]:
 
     record_type: type[HistoryRecordT]
     parent_id_field: str
-    mapper: typ.Callable[[HistoryRecordT], HistoryEntryT]
-    record_builder: typ.Callable[[HistoryEntryT], HistoryRecordT]
+    mapper: cabc.Callable[[HistoryRecordT], HistoryEntryT]
+    record_builder: cabc.Callable[[HistoryEntryT], HistoryRecordT]
 
 
 class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):

@@ -108,7 +108,7 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
             _series_profile_from_record,
         )
 
-    async def list(self) -> typ.Sequence[SeriesProfile]:
+    async def list(self) -> cabc.Sequence[SeriesProfile]:
         """List all series profiles."""
         return await self._list_where(
             SeriesProfileRecord,
@@ -306,7 +306,7 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
     async def list(
         self,
         series_profile_id: uuid.UUID | None,
-    ) -> typ.Sequence[EpisodeTemplate]:
+    ) -> cabc.Sequence[EpisodeTemplate]:
         """List episode templates, optionally by series profile."""
         where_clause: typ.Any = sa.true()
         if series_profile_id is not None:

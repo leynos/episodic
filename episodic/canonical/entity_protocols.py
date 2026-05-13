@@ -32,7 +32,7 @@ class SeriesProfileRepository(typ.Protocol):
         """Fetch a series profile by slug."""
         raise NotImplementedError
 
-    async def list(self) -> typ.Sequence[SeriesProfile]:
+    async def list(self) -> cabc.Sequence[SeriesProfile]:
         """List all series profiles."""
         raise NotImplementedError
 
@@ -124,7 +124,7 @@ class EpisodeTemplateRepository(typ.Protocol):
     async def list(
         self,
         series_profile_id: uuid.UUID | None,
-    ) -> typ.Sequence[EpisodeTemplate]:
+    ) -> cabc.Sequence[EpisodeTemplate]:
         """List episode templates, optionally filtered by series profile."""
         raise NotImplementedError
 

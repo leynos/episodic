@@ -3,7 +3,7 @@
 import enum
 import json
 import typing as typ
-from typing import Type, TypeVar  # noqa: UP035, ICN003
+from typing import TypeVar  # noqa: ICN003
 
 from .types import (
     ClaimKind,
@@ -101,7 +101,7 @@ _TEnum = TypeVar("_TEnum", bound=enum.StrEnum)
 
 
 def _coerce_enum(  # noqa: UP047
-    enum_type: Type[_TEnum],  # noqa: UP006
+    enum_type: type[_TEnum],
     raw_value: object,
     *,
     field_name: str,

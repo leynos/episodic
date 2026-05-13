@@ -20,6 +20,8 @@ from .types import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
@@ -157,7 +159,7 @@ class _BindingTargetAlignment:
     document_owner_series_id: uuid.UUID
 
 
-def _exception_chain(exc: object) -> typ.Iterator[object]:
+def _exception_chain(exc: object) -> cabc.Iterator[object]:
     """Yield exc and its chained causes/contexts, then `orig`, de-duplicated."""
     seen: set[int] = set()
     roots = (exc, getattr(exc, "orig", exc))

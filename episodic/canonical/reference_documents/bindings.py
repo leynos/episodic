@@ -41,6 +41,8 @@ from .types import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
@@ -102,7 +104,7 @@ _INGESTION_JOB_CHECK = _EntityAlignmentCheck(
 
 async def _validate_entity_series_alignment(
     entity_id: uuid.UUID | None,
-    fetcher: typ.Callable[[uuid.UUID], typ.Awaitable[_SeriesOwnedEntity | None]],
+    fetcher: cabc.Callable[[uuid.UUID], cabc.Awaitable[_SeriesOwnedEntity | None]],
     check: _EntityAlignmentCheck,
     document_owner_series_id: uuid.UUID,
 ) -> None:

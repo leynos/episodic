@@ -24,6 +24,8 @@ from episodic.canonical.reference_documents import (
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import (
@@ -42,7 +44,7 @@ class ServiceFixture(typ.TypedDict):
 
 @pytest_asyncio.fixture
 async def service_fixture(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
 ) -> ServiceFixture:
     """Create two profiles and one template for service tests."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -94,7 +96,7 @@ async def service_fixture(
 
 
 async def _create_binding_test_revision(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
     *,
     content_hash: str,
@@ -126,7 +128,7 @@ async def _create_binding_test_revision(
 
 
 async def _create_host_and_guest_documents(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> tuple[ReferenceDocument, ReferenceDocument]:
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
@@ -152,7 +154,7 @@ async def _create_host_and_guest_documents(
 
 
 async def _create_revisions_for_host_and_guest(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
     host_document: ReferenceDocument,
     guest_document: ReferenceDocument,
@@ -184,7 +186,7 @@ async def _create_revisions_for_host_and_guest(
 
 
 async def _list_documents_and_bind(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
     host_revision: ReferenceDocumentRevision,
 ) -> tuple[list[ReferenceDocument], list[ReferenceDocument]]:

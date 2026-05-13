@@ -8,6 +8,8 @@ import uuid
 import pytest_asyncio
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
@@ -20,7 +22,7 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 @pytest_asyncio.fixture
 async def series_profile_for_ingestion(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
 ) -> SeriesProfile:
     """Create and persist a series profile for ingestion integration tests.
 

@@ -9,6 +9,8 @@ import tests.test_ingestion_integration_support as ingestion_support
 from episodic.canonical.ingestion import MultiSourceRequest
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import SeriesProfile
@@ -23,7 +25,7 @@ def test_raw_source_helper_rejects_unknown_overrides() -> None:
 
 @pytest.fixture
 def ingestion_test_context(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
     ingestion_pipeline: IngestionPipeline,
 ) -> ingestion_support.IngestionTestContext:

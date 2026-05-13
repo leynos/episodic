@@ -19,6 +19,9 @@ from tests.fixtures.async_task_factory import (
     select_captured_task_kwargs,
 )
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 _UNKNOWN_TASK_KWARGS: typ.Final = typ.cast(
     "TaskCreateKwargs", {"unsupported_kwarg": "value"}
 )
@@ -106,7 +109,7 @@ async def test_create_task_in_group_forwards_task_factory_kwargs() -> None:
 
 def test_create_task_rejects_unsupported_metadata_key() -> None:
     """Unsupported metadata keys are rejected with a clear error."""
-    coro: typ.Coroutine[object, object, object] | None = None
+    coro: cabc.Coroutine[object, object, object] | None = None
     try:
         with pytest.raises(ValueError, match="Unsupported task metadata keys"):
             create_task(
@@ -148,7 +151,7 @@ def test_create_task_rejects_unsupported_metadata_keys_with_mixed_types() -> Non
     ids=["create_task", "create_task_in_group"],
 )
 def test_task_creation_rejects_unknown_task_kwargs(
-    make_call: typ.Callable[..., object],
+    make_call: cabc.Callable[..., object],
 ) -> None:
     """Unknown task kwargs are rejected instead of being silently ignored."""
     coro = asyncio.sleep(0)

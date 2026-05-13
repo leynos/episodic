@@ -7,6 +7,8 @@ import pytest
 import tests.test_reference_document_api_support as support
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from falcon import testing
 
 
@@ -74,7 +76,7 @@ if typ.TYPE_CHECKING:
 def test_reference_document_api_rejects_invalid_pagination_params(
     canonical_api_client: testing.TestClient,
     path_template: str,
-    params_builder: typ.Callable[[support.ApiFixture], dict[str, str]],
+    params_builder: cabc.Callable[[support.ApiFixture], dict[str, str]],
     description: str,
 ) -> None:
     """Reference-document list endpoints should reject invalid pagination values."""

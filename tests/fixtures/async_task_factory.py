@@ -47,7 +47,7 @@ def extract_task_constructor_kwargs(
 
 
 @contextlib.contextmanager
-def recording_task_factory() -> typ.Iterator[list[dict[str, object]]]:
+def recording_task_factory() -> cabc.Iterator[list[dict[str, object]]]:
     """Install a task factory that records kwargs for every created task."""
     loop = asyncio.get_running_loop()
     previous_factory = loop.get_task_factory()

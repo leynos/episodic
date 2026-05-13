@@ -10,6 +10,8 @@ import pytest
 os.environ.setdefault("PSYCOPG_IMPL", "python")
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    import contextlib
     import datetime as dt
     import uuid
 
@@ -27,13 +29,13 @@ pytest_plugins: list[str] = [
 
 
 @pytest.fixture
-def _function_scoped_runner() -> typ.Iterator[asyncio.Runner]:
+def _function_scoped_runner() -> cabc.Iterator[asyncio.Runner]:
     """Provide a function-scoped asyncio.Runner for sync BDD steps."""
     with asyncio.Runner() as runner:
         yield runner
 
 
-def temporary_drift_table() -> typ.ContextManager[sa.Table]:
+def temporary_drift_table() -> contextlib.AbstractContextManager[sa.Table]:
     """Compatibility wrapper for tests importing this helper from conftest."""
     from tests.fixtures.database import temporary_drift_table as _temporary_drift_table
 

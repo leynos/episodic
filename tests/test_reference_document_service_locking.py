@@ -15,6 +15,8 @@ from episodic.canonical.reference_documents import (
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -24,7 +26,7 @@ ServiceFixture = support.ServiceFixture
 
 @pytest.mark.asyncio
 async def test_update_reference_document_rejects_stale_lock_version(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> None:
     """Updating with a stale expected lock version should raise conflict."""

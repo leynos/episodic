@@ -14,6 +14,7 @@ from episodic.canonical.storage.alembic_helpers import apply_migrations
 from episodic.canonical.storage.models import Base
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     from pathlib import Path
 
     from py_pglite.sqlalchemy.manager_async import (  # type: ignore[import-untyped]
@@ -79,7 +80,7 @@ async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
 @contextlib.asynccontextmanager
 async def _pglite_sqlalchemy_manager(
     tmp_path: Path,
-) -> typ.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
+) -> cabc.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
     """Start a helper-backed py-pglite manager for SQLAlchemy tests."""
     if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
         msg = "py-pglite is not available for test fixtures."
@@ -101,7 +102,7 @@ async def _pglite_sqlalchemy_manager(
 
 
 @contextlib.contextmanager
-def temporary_drift_table() -> typ.Iterator[sa.Table]:
+def temporary_drift_table() -> cabc.Iterator[sa.Table]:
     """Add a temporary table to Base.metadata and remove it on exit.
 
     This helper is shared between the unit tests and BDD steps that
@@ -121,7 +122,7 @@ def temporary_drift_table() -> typ.Iterator[sa.Table]:
 @pytest_asyncio.fixture
 async def pglite_sqlalchemy_manager(
     tmp_path: Path,
-) -> typ.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
+) -> cabc.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
     """Yield the function-scoped py-pglite SQLAlchemy manager.
 
     This is the shared py-pglite entry point for SQLAlchemy-backed tests in
@@ -138,7 +139,7 @@ async def pglite_sqlalchemy_manager(
 @pytest_asyncio.fixture
 async def pglite_engine(
     pglite_sqlalchemy_manager: SQLAlchemyAsyncPGliteManager,
-) -> typ.AsyncIterator[AsyncEngine]:
+) -> cabc.AsyncIterator[AsyncEngine]:
     """Yield an async SQLAlchemy engine provided by py-pglite's helper manager."""
     await asyncio.sleep(0)
     yield typ.cast("AsyncEngine", pglite_sqlalchemy_manager.get_engine())
@@ -147,14 +148,14 @@ async def pglite_engine(
 @pytest_asyncio.fixture
 async def migrated_engine(
     pglite_engine: AsyncEngine,
-) -> typ.AsyncIterator[AsyncEngine]:
+) -> cabc.AsyncIterator[AsyncEngine]:
     """Yield a py-pglite engine with migrations applied."""
     await apply_migrations(pglite_engine)
     yield pglite_engine
 
 
 @pytest_asyncio.fixture
-async def migrated_database_url(tmp_path: Path) -> typ.AsyncIterator[str]:
+async def migrated_database_url(tmp_path: Path) -> cabc.AsyncIterator[str]:
     """Yield a migrated ephemeral database URL for runtime process tests."""
     if not _should_use_pglite():
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
@@ -186,7 +187,7 @@ async def migrated_database_url(tmp_path: Path) -> typ.AsyncIterator[str]:
 @pytest_asyncio.fixture
 async def pglite_session(
     migrated_engine: AsyncEngine,
-) -> typ.AsyncIterator[AsyncSession]:
+) -> cabc.AsyncIterator[AsyncSession]:
     """Yield an async SQLAlchemy session bound to py-pglite."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 

@@ -7,6 +7,8 @@ import pytest
 import pytest_asyncio
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from falcon import testing
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -41,7 +43,7 @@ def canonical_api_dependencies(
 @pytest_asyncio.fixture
 async def canonical_api_async_client(
     canonical_api_dependencies: ApiDependencies,
-) -> typ.AsyncIterator[httpx.AsyncClient]:
+) -> cabc.AsyncIterator[httpx.AsyncClient]:
     """Yield an async HTTP client bound to the Falcon ASGI app."""
     from episodic.api import create_app
 

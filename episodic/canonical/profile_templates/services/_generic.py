@@ -24,9 +24,15 @@ from episodic.canonical.profile_templates.types import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+
+    type _RevisionFetcher = cabc.Callable[
+        [uuid.UUID],
+        cabc.Awaitable[_RevisionedEntry | None],
+    ]
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -34,19 +40,19 @@ class _KindDispatch:
     """Repository callables and labels for one entity kind."""
 
     human_label: str
-    entity_get: typ.Callable[[uuid.UUID], typ.Awaitable[object | None]]
-    fetch_latest: typ.Callable[
+    entity_get: cabc.Callable[[uuid.UUID], cabc.Awaitable[object | None]]
+    fetch_latest: cabc.Callable[
         [uuid.UUID],
-        typ.Awaitable[_RevisionedEntry | None],
+        cabc.Awaitable[_RevisionedEntry | None],
     ]
-    list_history_for_parent: typ.Callable[[uuid.UUID], typ.Awaitable[list[object]]]
-    list_entities: typ.Callable[
+    list_history_for_parent: cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]
+    list_entities: cabc.Callable[
         [uuid.UUID | None],
-        typ.Awaitable[typ.Sequence[object]],
+        cabc.Awaitable[cabc.Sequence[object]],
     ]
-    get_latest_revisions: typ.Callable[
-        [typ.Collection[uuid.UUID]],
-        typ.Awaitable[dict[uuid.UUID, int]],
+    get_latest_revisions: cabc.Callable[
+        [cabc.Collection[uuid.UUID]],
+        cabc.Awaitable[dict[uuid.UUID, int]],
     ]
 
 
@@ -63,21 +69,21 @@ def _get_repos_for_kind(
                 uow.series_profile_history,
             )
 
-            async def _list_profiles(_: uuid.UUID | None) -> typ.Sequence[object]:
-                return typ.cast("typ.Sequence[object]", await profile_repo.list())
+            async def _list_profiles(_: uuid.UUID | None) -> cabc.Sequence[object]:
+                return typ.cast("cabc.Sequence[object]", await profile_repo.list())
 
             return _KindDispatch(
                 human_label="Series profile",
                 entity_get=typ.cast(
-                    "typ.Callable[[uuid.UUID], typ.Awaitable[object | None]]",
+                    "cabc.Callable[[uuid.UUID], cabc.Awaitable[object | None]]",
                     profile_repo.get,
                 ),
                 fetch_latest=typ.cast(
-                    "typ.Callable[[uuid.UUID], typ.Awaitable[_RevisionedEntry | None]]",
+                    "_RevisionFetcher",
                     profile_history_repo.get_latest_for_profile,
                 ),
                 list_history_for_parent=typ.cast(
-                    "typ.Callable[[uuid.UUID], typ.Awaitable[list[object]]]",
+                    "cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]",
                     profile_history_repo.list_for_profile,
                 ),
                 list_entities=_list_profiles,
@@ -94,24 +100,24 @@ def _get_repos_for_kind(
 
             async def _list_templates(
                 series_profile_id: uuid.UUID | None,
-            ) -> typ.Sequence[object]:
+            ) -> cabc.Sequence[object]:
                 return typ.cast(
-                    "typ.Sequence[object]",
+                    "cabc.Sequence[object]",
                     await template_repo.list(series_profile_id),
                 )
 
             return _KindDispatch(
                 human_label="Episode template",
                 entity_get=typ.cast(
-                    "typ.Callable[[uuid.UUID], typ.Awaitable[object | None]]",
+                    "cabc.Callable[[uuid.UUID], cabc.Awaitable[object | None]]",
                     template_repo.get,
                 ),
                 fetch_latest=typ.cast(
-                    "typ.Callable[[uuid.UUID], typ.Awaitable[_RevisionedEntry | None]]",
+                    "_RevisionFetcher",
                     template_history_repo.get_latest_for_template,
                 ),
                 list_history_for_parent=typ.cast(
-                    "typ.Callable[[uuid.UUID], typ.Awaitable[list[object]]]",
+                    "cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]",
                     template_history_repo.list_for_template,
                 ),
                 list_entities=_list_templates,
@@ -156,7 +162,7 @@ async def get_entity_with_revision(
         entity_id=entity_id,
         entity_label=dispatch.human_label,
         get_entity=typ.cast(
-            "typ.Callable[[uuid.UUID], typ.Awaitable[_VersionedEntity | None]]",
+            "cabc.Callable[[uuid.UUID], cabc.Awaitable[_VersionedEntity | None]]",
             dispatch.entity_get,
         ),
         fetch_latest=dispatch.fetch_latest,
@@ -224,7 +230,7 @@ async def list_entities_with_revisions(
     dispatch = _get_repos_for_kind(uow, kind)
     entities = await dispatch.list_entities(series_profile_id)
     items = await _with_latest_revisions(
-        typ.cast("typ.Sequence[_VersionedEntity]", entities),
+        typ.cast("cabc.Sequence[_VersionedEntity]", entities),
         dispatch.get_latest_revisions,
     )
     return typ.cast("list[tuple[object, int]]", items)

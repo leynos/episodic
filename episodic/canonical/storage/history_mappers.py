@@ -9,6 +9,9 @@ from episodic.canonical.domain import (
 
 from .history_models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 
 def _history_entry_from_record(
     record: SeriesProfileHistoryRecord | EpisodeTemplateHistoryRecord,
@@ -18,7 +21,7 @@ def _history_entry_from_record(
     """Map a history record to a history entry entity."""
     parent_id = getattr(record, parent_id_field)
     constructor = typ.cast(
-        "typ.Callable[..., SeriesProfileHistoryEntry | EpisodeTemplateHistoryEntry]",
+        "cabc.Callable[..., SeriesProfileHistoryEntry | EpisodeTemplateHistoryEntry]",
         entity_class,
     )
     return constructor(
