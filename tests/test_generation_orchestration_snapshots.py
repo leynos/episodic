@@ -44,6 +44,42 @@ class _UnusedLLMPort:
         )
         raise RuntimeError(msg)
 
+def make_show_notes_entry(
+    *,
+    topic: str = "Structured planning",
+    summary: str = "The episode explains typed orchestration DTOs.",
+    timestamp: str | None = "PT5M30S",
+    tei_locator: str | None = "#segment-structured-planning",
+) -> ShowNotesEntry:
+    return ShowNotesEntry(
+        topic=topic,
+        summary=summary,
+        timestamp=timestamp,
+        tei_locator=tei_locator,
+    )
+
+def make_show_notes_result(
+    *,
+    entries: tuple[ShowNotesEntry, ...] | None = None,
+) -> ShowNotesResult:
+    if entries is None:
+        entries = (
+            make_show_notes_entry(),
+            make_show_notes_entry(
+                topic="Snapshot coverage",
+                summary="The episode covers regression snapshots for DTO output.",
+                timestamp=None,
+                tei_locator=None,
+            ),
+        )
+    return ShowNotesResult(
+        entries=entries,
+        usage=LLMUsage(input_tokens=40, output_tokens=25, total_tokens=65),
+        model="gpt-4o-mini",
+        provider_response_id="show-notes-001",
+        finish_reason="stop",
+    )
+
 
 def _valid_plan_payload() -> dict[str, object]:
     """Return one raw planner payload used as the basis for error snapshots."""
@@ -134,42 +170,21 @@ def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> N
         selected_execution_model="gpt-4o-mini",
         steps=(planned,),
     )
+    # `asdict` is the canonical nested DTO serialisation path under snapshot.
     serialised = dataclasses.asdict(plan)
     assert serialised == snapshot
 
 def test_show_notes_entry_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
-    entry = ShowNotesEntry(
-        topic="Structured planning",
-        summary="The episode explains typed orchestration DTOs.",
-        timestamp="PT5M30S",
-        tei_locator="#segment-structured-planning",
-    )
+    entry = make_show_notes_entry()
     serialised = dataclasses.asdict(entry)
     assert serialised == snapshot
 
 def test_show_notes_result_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
-    result = ShowNotesResult(
-        entries=(
-            ShowNotesEntry(
-                topic="Structured planning",
-                summary="The episode explains typed orchestration DTOs.",
-                timestamp="PT5M30S",
-                tei_locator="#segment-structured-planning",
-            ),
-            ShowNotesEntry(
-                topic="Snapshot coverage",
-                summary="The episode covers regression snapshots for DTO output.",
-            ),
-        ),
-        usage=LLMUsage(input_tokens=40, output_tokens=25, total_tokens=65),
-        model="gpt-4o-mini",
-        provider_response_id="show-notes-001",
-        finish_reason="stop",
-    )
+    result = make_show_notes_result()
     serialised = dataclasses.asdict(result)
     assert serialised == snapshot
 def test_generation_orchestration_result_snapshot(
@@ -221,19 +236,8 @@ def test_generation_orchestration_result_with_show_notes_snapshot(
         selected_execution_model="gpt-4o-mini",
         steps=(planned,),
     )
-    show_notes = ShowNotesResult(
-        entries=(
-            ShowNotesEntry(
-                topic="Structured planning",
-                summary="The episode explains typed orchestration DTOs.",
-                timestamp="PT5M30S",
-                tei_locator="#segment-structured-planning",
-            ),
-        ),
-        usage=LLMUsage(input_tokens=40, output_tokens=25, total_tokens=65),
-        model="gpt-4o-mini",
-        provider_response_id="show-notes-001",
-        finish_reason="stop",
+    show_notes = make_show_notes_result(
+        entries=(make_show_notes_entry(),),
     )
     action_done = ActionExecutionResult(
         action_id="a1",
