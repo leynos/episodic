@@ -4,6 +4,9 @@ This module validates and normalizes OpenAI chat completion payloads at the
 adapter boundary before converting them into provider-agnostic DTOs.
 """
 
+# Provider payload parsing is intentionally centralised at the adapter boundary.
+# pylint: disable=too-many-lines
+
 from __future__ import annotations
 
 import collections.abc as cabc

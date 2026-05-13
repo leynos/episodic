@@ -1,5 +1,8 @@
 """OpenAI-compatible LLM adapter test fixtures."""
 
+# Adapter factory fixtures expose the provider knobs used across tests.
+# pylint: disable=too-many-arguments
+
 import contextlib
 import json
 import typing as typ

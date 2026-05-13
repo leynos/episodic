@@ -1,5 +1,8 @@
 """Unit tests for show notes generation and TEI enrichment."""
 
+# Show-notes tests cover parsing, prompting, generation, and TEI enrichment.
+# pylint: disable=too-many-lines
+
 import json
 import typing as typ
 

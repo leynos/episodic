@@ -1,5 +1,8 @@
 """Tests for episodic logging integration and femtologging compatibility."""
 
+# Logger spy methods mirror stdlib/femtologging call signatures under test.
+# pylint: disable=too-many-arguments
+
 import logging
 import time
 import typing as typ

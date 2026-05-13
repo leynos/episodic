@@ -18,6 +18,10 @@ Implement a repository that satisfies the protocol:
 ...         self._items[profile.id] = profile
 """
 
+# Port protocols are intentionally colocated to expose the persistence boundary
+# in one place; several method signatures mirror domain query parameters.
+# pylint: disable=too-many-lines,too-many-arguments
+
 import typing as typ
 
 if typ.TYPE_CHECKING:

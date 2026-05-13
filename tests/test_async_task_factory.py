@@ -1,5 +1,8 @@
 """Tests for asyncio task-factory keyword propagation utilities."""
 
+# Async task-factory tests cover one cross-cutting contract with many cases.
+# pylint: disable=too-many-lines
+
 from __future__ import annotations
 
 import asyncio

@@ -1,5 +1,8 @@
 """Unit tests for the Pedante factuality evaluator contract."""
 
+# Pedante contract tests keep parsing and evaluation scenarios together.
+# pylint: disable=too-many-lines
+
 import json
 import typing as typ
 

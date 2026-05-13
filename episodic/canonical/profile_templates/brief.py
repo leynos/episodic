@@ -13,6 +13,9 @@ Build a structured brief for one profile and optional template filter:
 >>> brief["episode_templates"]  # list[dict[str, object]]
 """
 
+# Structured-brief assembly keeps ownership checks and payload shaping together.
+# pylint: disable=too-many-lines
+
 import typing as typ
 from itertools import starmap
 

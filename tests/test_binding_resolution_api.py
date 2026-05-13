@@ -1,5 +1,8 @@
 """Integration tests for reference-binding resolution API flows."""
 
+# Binding-resolution endpoint cases share setup state and response assertions.
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import datetime as dt
 import typing as typ

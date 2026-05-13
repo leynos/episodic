@@ -1,5 +1,8 @@
 """Integration tests for the multi-source ingestion service."""
 
+# End-to-end ingestion scenarios share setup helpers and assertions in one file.
+# pylint: disable=too-many-lines
+
 import dataclasses
 import datetime as dt
 import typing as typ

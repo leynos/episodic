@@ -11,6 +11,9 @@ Convert a record to a domain entity:
 >>> entity = _series_profile_from_record(record)
 """
 
+# Mapping functions stay colocated with their record/domain pairs for now.
+# pylint: disable=too-many-lines
+
 import copy
 import typing as typ
 

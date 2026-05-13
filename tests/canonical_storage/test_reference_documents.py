@@ -1,5 +1,8 @@
 """Storage tests for reusable reference-document repositories."""
 
+# Repository storage tests exercise one persistence contract end to end.
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import datetime as dt
 import typing as typ

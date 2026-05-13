@@ -1,5 +1,8 @@
 """Shared helpers for reference-document API tests."""
 
+# API support helpers remain colocated so endpoint tests share one payload DSL.
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import typing as typ
 

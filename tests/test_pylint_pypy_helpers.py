@@ -141,20 +141,16 @@ def load_pylint_pypy_module(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType
     return module
 
 
-def make_routing_spies(
-    node: object,
-    builder: object,
-    target: object,
-    pypy_child: object,
-    ordinary_child: object,
-) -> RoutingSpies:
+def make_routing_spies(scenario: ObjectBuildScenario) -> RoutingSpies:
     """Build spy callables for routing verification."""
     builtin_calls: list[str] = []
     dispatch_calls: list[str] = []
     attach_calls: list[tuple[object, str]] = []
 
     def fake_dir(obj: object) -> list[object]:
-        assert obj is target, "obj passed to fake_dir must be the target object"
+        assert obj is scenario.target, (
+            "obj passed to fake_dir must be the target object"
+        )
         return ["__class_getitem__", object(), "missing", "ordinary"]
 
     def fake_resolve_member(
@@ -162,8 +158,8 @@ def make_routing_spies(
         obj: object,
         alias: str,
     ) -> tuple[object, bool, bool]:
-        assert node_arg is node, "node argument must be forwarded unchanged"
-        assert obj is target, "obj argument must be forwarded unchanged"
+        assert node_arg is scenario.node, "node argument must be forwarded unchanged"
+        assert obj is scenario.target, "obj argument must be forwarded unchanged"
         if alias == "missing":
             return None, False, True
         return object(), alias == "__class_getitem__", False
@@ -174,13 +170,15 @@ def make_routing_spies(
         member: object,
         alias: str,
     ) -> object:
-        assert builder_arg is builder, "builder argument must be forwarded unchanged"
-        assert node_arg is node, "node argument must be forwarded unchanged"
+        assert builder_arg is scenario.builder, (
+            "builder argument must be forwarded unchanged"
+        )
+        assert node_arg is scenario.node, "node argument must be forwarded unchanged"
         assert alias == "__class_getitem__", (
             "_build_builtin_child must only be called for __class_getitem__"
         )
         builtin_calls.append(alias)
-        return pypy_child
+        return scenario.pypy_child
 
     def fake_dispatch_member_to_child(
         builder_arg: object,
@@ -188,13 +186,15 @@ def make_routing_spies(
         member: object,
         alias: str,
     ) -> object:
-        assert builder_arg is builder, "builder argument must be forwarded unchanged"
-        assert node_arg is node, "node argument must be forwarded unchanged"
+        assert builder_arg is scenario.builder, (
+            "builder argument must be forwarded unchanged"
+        )
+        assert node_arg is scenario.node, "node argument must be forwarded unchanged"
         assert alias == "ordinary", (
             "_dispatch_member_to_child must only be called for ordinary aliases"
         )
         dispatch_calls.append(alias)
-        return ordinary_child
+        return scenario.ordinary_child
 
     def fake_attach_child_node(node_arg: object, alias: str) -> None:
         attach_calls.append((node_arg, alias))

@@ -1,5 +1,8 @@
 """Reference-document SQLAlchemy repositories for canonical persistence."""
 
+# Repository query methods expose domain filters as keyword parameters.
+# pylint: disable=too-many-arguments
+
 import typing as typ
 
 import sqlalchemy as sa

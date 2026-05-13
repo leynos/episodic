@@ -7,6 +7,9 @@ Run the multi-source ingestion BDD scenarios:
 >>> pytest tests/steps/test_multi_source_ingestion_steps.py -v
 """
 
+# Behavioural step coverage is kept together for one feature workflow.
+# pylint: disable=too-many-lines
+
 from __future__ import annotations
 
 import datetime as dt

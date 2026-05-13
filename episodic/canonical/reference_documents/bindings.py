@@ -1,5 +1,9 @@
 """Binding-focused reusable reference-document services."""
 
+# Service rules for bindings are kept together to preserve their shared
+# validation context until this domain area is split by workflow.
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import datetime as dt
 import typing as typ

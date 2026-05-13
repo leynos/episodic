@@ -18,6 +18,9 @@ Example
 >>> pytest tests/test_profile_template_service.py -q
 """
 
+# Profile/template service tests share revision and persistence fixtures.
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import datetime as dt
 import itertools

@@ -153,11 +153,21 @@ max-locals = 10
 [tool.pylint.main]
 # Expand directory targets like alembic and tests even when they are not packages.
 recursive = true
+# Match the project file-size ceiling enforced during review.
+max-module-lines = 400
 
 [tool.pylint.design]
+# Keep function call surfaces small enough to understand without memorising
+# positional argument order.
+max-args = 4
 # The new Pylint gate complements Ruff's stricter PLR0914 threshold without
 # forcing broad refactors while introducing the additional rule families below.
 max-locals = 20
+# Use Pylint's statement-count proxy for function length; Pylint 4 does not
+# expose a distinct physical-lines-per-function option.
+max-statements = 70
+# Keep positional call surfaces aligned with Ruff's existing argument limit.
+max-positional-arguments = 4
 
 [tool.pylint."messages control"]
 # Keep this Pylint pass focused on the explicitly selected messages.

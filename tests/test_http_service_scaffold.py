@@ -1,5 +1,8 @@
 """Tests for the Falcon-on-Granian HTTP service scaffold."""
 
+# Scaffold tests keep related app, readiness, and lifecycle cases together.
+# pylint: disable=too-many-lines
+
 import asyncio
 import typing as typ
 

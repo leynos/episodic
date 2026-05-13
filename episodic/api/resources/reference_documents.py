@@ -1,5 +1,8 @@
 """Falcon resources for reusable reference-document endpoints."""
 
+# Falcon resource method signatures are dictated by route parameters.
+# pylint: disable=too-many-arguments,too-many-positional-arguments
+
 import typing as typ
 
 import falcon

@@ -5,6 +5,10 @@ canonical content schema. The models are used by repositories and Alembic
 migrations to describe the database structure.
 """
 
+# ORM metadata is colocated so Alembic can inspect a single declarative model
+# surface for this schema.
+# pylint: disable=too-many-lines
+
 import datetime as dt  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
 import typing as typ
 import uuid  # noqa: TC003  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy evaluates annotations.
@@ -717,26 +721,44 @@ _REFERENCE_MODEL_EXPORT_NAMES: tuple[str, ...] = (
 )
 
 
-@typ.overload
-def __getattr__(
-    name: typ.Literal["ReferenceBindingRecord"],
-) -> type[ReferenceBindingRecord]: ...
+def __getattr__(name: str) -> object:
+    """Lazily re-export reference-record ORM models from ``reference_models``."""
+    if name in _REFERENCE_MODEL_EXPORT_NAMES:
+        from . import reference_models
+
+        return getattr(reference_models, name)
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 
-@typ.overload
-def __getattr__(
-    name: typ.Literal["ReferenceDocumentRecord"],
-) -> type[ReferenceDocumentRecord]: ...
+def __getattr__(name: str) -> object:
+    """Lazily re-export reference-record ORM models from ``reference_models``."""
+    if name in _REFERENCE_MODEL_EXPORT_NAMES:
+        from . import reference_models
+
+        return getattr(reference_models, name)
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 
-@typ.overload
-def __getattr__(
-    name: typ.Literal["ReferenceDocumentRevisionRecord"],
-) -> type[ReferenceDocumentRevisionRecord]: ...
+def __getattr__(name: str) -> object:
+    """Lazily re-export reference-record ORM models from ``reference_models``."""
+    if name in _REFERENCE_MODEL_EXPORT_NAMES:
+        from . import reference_models
+
+        return getattr(reference_models, name)
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 
-@typ.overload
-def __getattr__(name: str) -> object: ...
+def __getattr__(name: str) -> object:
+    """Lazily re-export reference-record ORM models from ``reference_models``."""
+    if name in _REFERENCE_MODEL_EXPORT_NAMES:
+        from . import reference_models
+
+        return getattr(reference_models, name)
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 
 def __getattr__(name: str) -> object:

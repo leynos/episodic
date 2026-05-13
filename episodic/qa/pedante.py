@@ -58,6 +58,9 @@ Constraints:
 - Token budgets are enforced; requests exceeding configured limits will fail.
 """
 
+# Pedante's DTOs and parser helpers remain together to preserve contract context.
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import enum
 import json

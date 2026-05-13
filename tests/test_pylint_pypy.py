@@ -181,13 +181,7 @@ def test_object_build_routes_pypy_class_getitem_at_call_site(
 ) -> None:
     """The object builder keeps PyPy class-getitem handling outside dispatch."""
     scenario = ObjectBuildScenario()
-    spies = make_routing_spies(
-        scenario.node,
-        scenario.builder,
-        scenario.target,
-        scenario.pypy_child,
-        scenario.ordinary_child,
-    )
+    spies = make_routing_spies(scenario)
     setup_fake_dependencies(
         monkeypatch,
         pylint_pypy_module,
