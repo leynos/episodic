@@ -4,7 +4,9 @@ import asyncio
 import json
 import typing as typ
 
+import hypothesis.strategies as st
 import pytest
+from hypothesis import given, settings
 
 from episodic.generation.chapter_markers import (
     ChapterMarkersGenerator,
@@ -76,6 +78,19 @@ def _make_generator(fake_llm: object = None) -> ChapterMarkersGenerator:
         llm=typ.cast("typ.Any", fake_llm),
         config=ChapterMarkersGeneratorConfig(model="test-model"),
     )
+
+
+def _iso_duration(seconds: int) -> str:
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    parts = ["PT"]
+    if hours:
+        parts.append(f"{hours}H")
+    if minutes:
+        parts.append(f"{minutes}M")
+    if secs or seconds == 0:
+        parts.append(f"{secs}S")
+    return "".join(parts)
 
 
 def test_result_from_response_parses_valid_json() -> None:
@@ -327,3 +342,72 @@ async def test_generate_rejects_misaligned_chapters(
             _minimal_tei(),
             segment_structure=_SEGMENT_STRUCTURE,
         )
+
+
+@given(
+    segment_seconds=st.lists(
+        st.integers(min_value=0, max_value=3_600),
+        min_size=1,
+        max_size=5,
+        unique=True,
+    )
+)
+@settings(max_examples=30)
+def test_aligned_chapters_pass_segment_validation(
+    segment_seconds: list[int],
+) -> None:
+    """Accept chapters that exactly match all segment-transition starts."""
+    sorted_seconds = sorted(segment_seconds)
+    segment_structure: dict[str, object] = {
+        "segments": [
+            {"id": f"seg-{i}", "start": _iso_duration(s)}
+            for i, s in enumerate(sorted_seconds)
+        ]
+    }
+    chapters_payload = [
+        {"title": f"Chapter {i}", "start": _iso_duration(s)}
+        for i, s in enumerate(sorted_seconds)
+    ]
+    fake_llm = _FakeLLMPort(
+        _valid_llm_response(json.dumps({"chapters": chapters_payload}))
+    )
+
+    result = asyncio.run(
+        _make_generator(fake_llm).generate(
+            _minimal_tei(),
+            segment_structure=segment_structure,
+        )
+    )
+
+    assert len(result.chapters) == len(sorted_seconds)
+    for chapter, seconds in zip(result.chapters, sorted_seconds, strict=True):
+        assert chapter.start == _iso_duration(seconds)
+
+
+@given(start_secs=st.integers(min_value=0, max_value=3_600))
+@settings(max_examples=30)
+def test_repeated_locator_with_same_start_passes_validation(
+    start_secs: int,
+) -> None:
+    """Segment metadata may reuse a locator key when it resolves to the same start."""
+    duration = _iso_duration(start_secs)
+    # Both "seg-a" and "#seg-a" are generated from the id field by
+    # _locator_keys_for_segment; they must both resolve to start_secs without
+    # raising a conflicting-locator error.
+    segment_structure: dict[str, object] = {
+        "segments": [{"id": "seg-a", "start": duration}]
+    }
+    chapters_payload = [{"title": "Intro", "start": duration, "tei_locator": "#seg-a"}]
+    fake_llm = _FakeLLMPort(
+        _valid_llm_response(json.dumps({"chapters": chapters_payload}))
+    )
+
+    result = asyncio.run(
+        _make_generator(fake_llm).generate(
+            _minimal_tei(),
+            segment_structure=segment_structure,
+        )
+    )
+
+    assert len(result.chapters) == 1
+    assert result.chapters[0].tei_locator == "#seg-a"
