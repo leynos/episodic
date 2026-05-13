@@ -237,7 +237,9 @@ async def test_chrono_estimator_handles_concurrent_evaluations() -> None:
     estimator = ChronoRuntimeEstimator()
     requests = [
         ChronoEvaluationRequest(
-            script_tei_xml=_tei_document(f"<sp><p>request {index} words</p></sp>")
+            script_tei_xml=_tei_document(
+                f"<sp><p>{' '.join(['word'] * (index + 1))}</p></sp>"
+            )
         )
         for index in range(5)
     ]

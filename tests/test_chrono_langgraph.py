@@ -184,7 +184,9 @@ async def test_chrono_graph_handles_concurrent_invocations() -> None:
     graph = build_chrono_graph(evaluator)
     requests = [
         ChronoEvaluationRequest(
-            script_tei_xml=_tei_document(f"<sp><p>request {index} words</p></sp>")
+            script_tei_xml=_tei_document(
+                f"<sp><p>{' '.join(['word'] * (index + 1))}</p></sp>"
+            )
         )
         for index in range(5)
     ]
