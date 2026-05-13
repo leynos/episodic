@@ -500,53 +500,46 @@ def _build_chapters_div_payload(
     }
 
 
-def _patch_chapter_item_sentinel(item: object) -> None:
-    """Replace an empty-summary sentinel flag with the sentinel content string."""
-    item_payload = require_mapping(
-        item,
-        "chapters.content[].items[]",
-        error_cls=ValueError,
-    )
-    if item_payload.pop("_empty_chapter_summary", False):
-        item_payload["content"] = build_text_inline(_EMPTY_CHAPTER_SUMMARY_SENTINEL)
-
-
-def _patch_list_items_for_rapporteur(list_payload: dict[str, object]) -> None:
-    """Patch sentinel flags in all items of a chapter list payload."""
-    if list_payload.get("type") != "list":
-        return
-    for item in require_sequence(
-        list_payload.get("items"),
-        "chapters.content[].items",
-        error_cls=ValueError,
-    ):
-        _patch_chapter_item_sentinel(item)
-
-
-def _patch_chapters_block_for_rapporteur(block_payload: dict[str, object]) -> None:
-    """Patch sentinel flags across all list payloads inside a chapters div block."""
-    for block_content in require_sequence(
-        block_payload.get("content"),
-        "chapters.content",
-        error_cls=ValueError,
-    ):
-        list_payload = require_mapping(
-            block_content,
-            "chapters.content[]",
+def _iter_chapter_item_payloads(
+    document_payload: dict[str, object],
+) -> typ.Iterator[dict[str, object]]:
+    """Yield list-item payloads inside chapter div blocks."""
+    body_blocks = body_blocks_payload(document_payload)
+    for body_block in body_blocks:
+        if not is_div_payload(body_block, "chapters"):
+            continue
+        block_payload = typ.cast("dict[str, object]", body_block)
+        for block_content in require_sequence(
+            block_payload.get("content"),
+            "chapters.content",
             error_cls=ValueError,
-        )
-        _patch_list_items_for_rapporteur(list_payload)
+        ):
+            list_payload = require_mapping(
+                block_content,
+                "chapters.content[]",
+                error_cls=ValueError,
+            )
+            if list_payload.get("type") != "list":
+                continue
+            for item in require_sequence(
+                list_payload.get("items"),
+                "chapters.content[].items",
+                error_cls=ValueError,
+            ):
+                yield require_mapping(
+                    item,
+                    "chapters.content[].items[]",
+                    error_cls=ValueError,
+                )
 
 
 def _prepare_empty_chapter_summaries_for_tei_rapporteur(
     document_payload: dict[str, object],
 ) -> None:
     """Bridge optional chapter summaries to tei_rapporteur's required item content."""
-    body_blocks = body_blocks_payload(document_payload)
-    for body_block in body_blocks:
-        if not is_div_payload(body_block, "chapters"):
-            continue
-        _patch_chapters_block_for_rapporteur(typ.cast("dict[str, object]", body_block))
+    for item_payload in _iter_chapter_item_payloads(document_payload):
+        if item_payload.pop("_empty_chapter_summary", False):
+            item_payload["content"] = build_text_inline(_EMPTY_CHAPTER_SUMMARY_SENTINEL)
 
 
 def enrich_tei_with_chapter_markers(
