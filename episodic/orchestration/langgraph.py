@@ -385,13 +385,14 @@ def _build_checkpoint_payload(
     }
 
 
-async def _suspend_execute_node(
+def _validate_suspend_preconditions(
     state: GenerationGraphState,
-    *,
-    checkpoint_port: protocols.CheckpointPort,
-    workflow_type: str = "generation_orchestration",
-) -> dict[str, dto.SuspendedWorkflowResult]:
-    """Persist or reuse a checkpoint before executing the first action."""
+) -> tuple[
+    dto.GenerationOrchestrationRequest,
+    dto.PlannerResult,
+    dto.PlannedAction,
+]:
+    """Validate and extract required state fields for a suspend checkpoint."""
     request = state.request
     if request is None:
         msg = "missing required state value: request"
@@ -408,8 +409,17 @@ async def _suspend_execute_node(
                 "one planned step per suspended checkpoint."
             )
         raise ValueError(msg)
+    return request, planner_result, planner_result.plan.steps[0]
 
-    action = planner_result.plan.steps[0]
+
+async def _suspend_execute_node(
+    state: GenerationGraphState,
+    *,
+    checkpoint_port: protocols.CheckpointPort,
+    workflow_type: str = "generation_orchestration",
+) -> dict[str, dto.SuspendedWorkflowResult]:
+    """Persist or reuse a checkpoint before executing the first action."""
+    request, planner_result, action = _validate_suspend_preconditions(state)
     identity = _build_execute_step_identity(
         request=request,
         action=action,
