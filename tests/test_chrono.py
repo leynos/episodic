@@ -1,6 +1,5 @@
 """Unit tests for the Chrono spoken-runtime estimator."""
 
-import asyncio
 import typing as typ
 
 import pytest
@@ -179,8 +178,9 @@ async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
     sync_result = estimator.estimate(request)
     async_result = await estimator.evaluate(request)
 
-    assert async_result.estimated_seconds == sync_result.estimated_seconds
-    assert async_result.metadata == sync_result.metadata
+    assert async_result == sync_result, (
+        "evaluate() must delegate to estimate() and return an identical result"
+    )
 
 
 def test_chrono_estimator_handles_malformed_xml_fallback() -> None:
@@ -190,7 +190,6 @@ def test_chrono_estimator_handles_malformed_xml_fallback() -> None:
     estimator = ChronoRuntimeEstimator()
 
     result = estimator.estimate(request)
-    async_result = asyncio.run(estimator.evaluate(request))
 
     assert result.metadata.spoken_word_count == 4, (
         "fallback must count words from raw text; "
@@ -198,7 +197,6 @@ def test_chrono_estimator_handles_malformed_xml_fallback() -> None:
     )
     assert result.estimated_seconds == 2
     assert result.metadata.input_character_count == len(script_tei_xml)
-    assert async_result == result
 
 
 @pytest.mark.parametrize(
