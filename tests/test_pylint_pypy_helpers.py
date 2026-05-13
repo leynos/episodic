@@ -89,6 +89,10 @@ class RoutingSpies:
 
 def build_fake_astroid_modules() -> dict[str, types.ModuleType]:
     """Create the small Astroid surface needed to import the wrapper."""
+
+    class FreshFakeBuilder(FakeBuilder):
+        """Fresh InspectBuilder stand-in for import-time monkeypatch isolation."""
+
     astroid = typ.cast("typ.Any", types.ModuleType("astroid"))
     node_classes = typ.cast("typ.Any", types.ModuleType("astroid.node_classes"))
     nodes = typ.cast("typ.Any", types.ModuleType("astroid.nodes"))
@@ -101,7 +105,7 @@ def build_fake_astroid_modules() -> dict[str, types.ModuleType]:
     nodes.Const = FakeConst
     nodes.const_factory = FakeConst
     raw_building.IS_PYPY = False
-    raw_building.InspectBuilder = FakeBuilder
+    raw_building.InspectBuilder = FreshFakeBuilder
     raw_building._build_from_function = lambda node, member, module: object()
     raw_building._safe_has_attribute = hasattr
     raw_building.attach_dummy_node = lambda node, alias: None
