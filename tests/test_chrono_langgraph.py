@@ -34,6 +34,20 @@ class _FakeChronoEvaluator:
         return self.result
 
 
+@dc.dataclass(slots=True)
+class _FailingChronoEvaluator:
+    """Raise a canned exception for graph observability tests."""
+
+    error: Exception
+
+    async def evaluate(
+        self,
+        request: ChronoEvaluationRequest,
+    ) -> ChronoRuntimeEstimate:
+        """Raise the canned error."""
+        raise self.error
+
+
 def _request() -> ChronoEvaluationRequest:
     return ChronoEvaluationRequest(
         script_tei_xml=(
@@ -74,6 +88,35 @@ async def test_chrono_node_requires_chrono_request() -> None:
 
 
 @pytest.mark.asyncio
+async def test_chrono_node_logs_missing_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Graph node should log context before raising for missing input."""
+    evaluator = _FakeChronoEvaluator(_result())
+    graph = build_chrono_graph(evaluator)
+    errors: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    def capture_error(
+        msg: str,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        errors.append((msg, args, kwargs))
+
+    monkeypatch.setattr("episodic.qa.chrono_langgraph._log.error", capture_error)
+    with pytest.raises(KeyError, match="chrono_request"):
+        await graph.ainvoke(ChronoGraphState())
+
+    assert errors == [
+        (
+            "Chrono graph node missing required request; has_chrono_result=%s",
+            (False,),
+            {"extra": {"has_chrono_result": False}},
+        )
+    ]
+
+
+@pytest.mark.asyncio
 async def test_chrono_node_calls_evaluator_and_stores_result() -> None:
     """The graph node should call the evaluator and return a result delta."""
     request = _request()
@@ -100,6 +143,38 @@ async def test_chrono_graph_propagates_result_and_metadata() -> None:
     assert chrono_result.metadata.estimator_name == "chrono-naive-word-count"
     assert chrono_result.metadata.spoken_word_count == 3
     assert not hasattr(chrono_result, "usage")
+
+
+@pytest.mark.asyncio
+async def test_chrono_node_logs_evaluation_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Graph node should log context before propagating evaluator failures."""
+    graph = build_chrono_graph(_FailingChronoEvaluator(ValueError("bad TEI")))
+    request = _request()
+    exceptions: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    def capture_exception(
+        msg: str,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        exceptions.append((msg, args, kwargs))
+
+    monkeypatch.setattr(
+        "episodic.qa.chrono_langgraph._log.exception",
+        capture_exception,
+    )
+    with pytest.raises(ValueError, match="bad TEI"):
+        await graph.ainvoke(ChronoGraphState(chrono_request=request))
+
+    assert exceptions == [
+        (
+            "Chrono graph node evaluation failed; input_character_count=%s",
+            (len(request.script_tei_xml),),
+            {"extra": {"input_character_count": len(request.script_tei_xml)}},
+        )
+    ]
 
 
 @pytest.mark.asyncio

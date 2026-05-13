@@ -4,6 +4,7 @@ from .chrono import (
     ChronoEstimatorConfig,
     ChronoEstimatorMetadata,
     ChronoEvaluationRequest,
+    ChronoMetricsPort,
     ChronoRuntimeEstimate,
     ChronoRuntimeEstimator,
 )
@@ -26,6 +27,7 @@ __all__: list[str] = [
     "ChronoEstimatorConfig",
     "ChronoEstimatorMetadata",
     "ChronoEvaluationRequest",
+    "ChronoMetricsPort",
     "ChronoRuntimeEstimate",
     "ChronoRuntimeEstimator",
     "ClaimKind",

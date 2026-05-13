@@ -1,6 +1,7 @@
 """Unit tests for the Chrono spoken-runtime estimator."""
 
 import asyncio
+import dataclasses as dc
 import typing as typ
 
 import pytest
@@ -12,6 +13,33 @@ from episodic.qa.chrono import (
     ChronoRuntimeEstimate,
     ChronoRuntimeEstimator,
 )
+
+
+@dc.dataclass(slots=True)
+class _FakeChronoMetrics:
+    """Capture Chrono metrics for unit assertions."""
+
+    counters: list[tuple[str, dict[str, str]]] = dc.field(default_factory=list)
+    latencies: list[tuple[str, float, dict[str, str]]] = dc.field(default_factory=list)
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        labels: typ.Mapping[str, str],
+    ) -> None:
+        """Capture a counter increment."""
+        self.counters.append((name, dict(labels)))
+
+    def observe_latency_ms(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: typ.Mapping[str, str],
+    ) -> None:
+        """Capture a latency observation."""
+        self.latencies.append((name, value, dict(labels)))
 
 
 def _tei_document(body: str) -> str:
@@ -118,6 +146,25 @@ def test_chrono_estimator_returns_predictable_default_runtime() -> None:
     assert result.metadata.input_character_count == len(request.script_tei_xml)
 
 
+def test_chrono_estimator_records_success_metrics() -> None:
+    """Record bounded success metrics around runtime estimation."""
+    metrics = _FakeChronoMetrics()
+    request = ChronoEvaluationRequest(
+        script_tei_xml=_tei_document("<sp><p>Hello there.</p></sp>")
+    )
+
+    ChronoRuntimeEstimator(metrics=metrics).estimate(request)
+
+    assert metrics.counters == [
+        ("chrono.runtime_estimator.evaluations", {"outcome": "success"})
+    ]
+    assert len(metrics.latencies) == 1
+    latency_name, latency_ms, labels = metrics.latencies[0]
+    assert latency_name == "chrono.runtime_estimator.latency_ms"
+    assert latency_ms >= 0
+    assert labels == {"outcome": "success"}
+
+
 def test_chrono_estimator_ignores_markup_only_script() -> None:
     """Markup without spoken text should produce a zero-second estimate."""
     request = ChronoEvaluationRequest(
@@ -221,12 +268,42 @@ async def test_chrono_estimator_handles_concurrent_evaluations() -> None:
 def test_chrono_estimator_propagates_tei_validation_errors(
     script_tei_xml: str,
     message: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Malformed or unsupported TEI should fail instead of being counted."""
     request = ChronoEvaluationRequest(script_tei_xml=script_tei_xml)
+    metrics = _FakeChronoMetrics()
+    warnings: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
 
+    def capture_warning(
+        msg: str,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        warnings.append((msg, args, kwargs))
+
+    monkeypatch.setattr("episodic.qa.chrono._log.warning", capture_warning)
     with pytest.raises(ValueError, match=message):
-        ChronoRuntimeEstimator().estimate(request)
+        ChronoRuntimeEstimator(metrics=metrics).estimate(request)
+
+    assert warnings == [
+        (
+            "Chrono TEI validation failed; input_character_count=%s",
+            (len(script_tei_xml),),
+            {"exc_info": True},
+        )
+    ]
+    assert metrics.counters == [
+        (
+            "chrono.runtime_estimator.evaluations",
+            {"outcome": "error", "error_type": "ValueError"},
+        )
+    ]
+    assert len(metrics.latencies) == 1
+    latency_name, latency_ms, labels = metrics.latencies[0]
+    assert latency_name == "chrono.runtime_estimator.latency_ms"
+    assert latency_ms >= 0
+    assert labels == {"outcome": "error", "error_type": "ValueError"}
 
 
 @pytest.mark.parametrize(

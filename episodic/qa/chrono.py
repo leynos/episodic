@@ -4,6 +4,8 @@ import dataclasses as dc
 import logging
 import math
 import re
+import time
+import typing as typ
 
 import tei_rapporteur as _tei
 
@@ -13,6 +15,53 @@ _WORD_PATTERN = re.compile(SPOKEN_WORD_REGEX)
 _DEFAULT_ESTIMATOR_NAME = "chrono-naive-word-count"
 _DEFAULT_ESTIMATOR_VERSION = "1"
 _DEFAULT_WORDS_PER_MINUTE = 150
+_METRIC_EVALUATIONS = "chrono.runtime_estimator.evaluations"
+_METRIC_LATENCY_MS = "chrono.runtime_estimator.latency_ms"
+
+
+class ChronoMetricsPort(typ.Protocol):
+    """Bounded-cardinality metrics sink for Chrono runtime estimation."""
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        labels: typ.Mapping[str, str],
+    ) -> None:
+        """Increment a bounded-cardinality counter."""
+        ...
+
+    def observe_latency_ms(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: typ.Mapping[str, str],
+    ) -> None:
+        """Observe a latency measurement in milliseconds."""
+        ...
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _NoopChronoMetrics:
+    """Default metrics sink used when no backend is wired."""
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        labels: typ.Mapping[str, str],
+    ) -> None:
+        """Ignore counter increments."""
+
+    def observe_latency_ms(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: typ.Mapping[str, str],
+    ) -> None:
+        """Ignore latency observations."""
 
 
 def _ensure_non_empty_string(value: str, field_name: str) -> None:
@@ -122,10 +171,28 @@ class ChronoRuntimeEstimator:
     """
 
     config: ChronoEstimatorConfig = dc.field(default_factory=ChronoEstimatorConfig)
+    metrics: ChronoMetricsPort = dc.field(default_factory=_NoopChronoMetrics)
 
     def estimate(self, request: ChronoEvaluationRequest) -> ChronoRuntimeEstimate:
         """Return a deterministic spoken-runtime estimate and metadata."""
-        spoken_text = _extract_spoken_text(request.script_tei_xml)
+        started = time.perf_counter()
+        try:
+            spoken_text = _extract_spoken_text(request.script_tei_xml)
+        except ValueError:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            labels = {"outcome": "error", "error_type": "ValueError"}
+            _log.warning(
+                "Chrono TEI validation failed; input_character_count=%s",
+                len(request.script_tei_xml),
+                exc_info=True,
+            )
+            self.metrics.increment_counter(_METRIC_EVALUATIONS, labels=labels)
+            self.metrics.observe_latency_ms(
+                _METRIC_LATENCY_MS,
+                elapsed_ms,
+                labels=labels,
+            )
+            raise
         spoken_word_count = _count_spoken_words(spoken_text)
         if spoken_word_count == 0:
             _log.debug(
@@ -144,6 +211,10 @@ class ChronoRuntimeEstimator:
             spoken_word_count=spoken_word_count,
             words_per_minute=self.config.words_per_minute,
         )
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        labels = {"outcome": "success"}
+        self.metrics.increment_counter(_METRIC_EVALUATIONS, labels=labels)
+        self.metrics.observe_latency_ms(_METRIC_LATENCY_MS, elapsed_ms, labels=labels)
         return ChronoRuntimeEstimate(
             estimated_seconds=estimated_seconds,
             metadata=metadata,

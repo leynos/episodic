@@ -1,9 +1,12 @@
 """LangGraph seam for the Chrono spoken-runtime estimator."""
 
 import dataclasses as dc
+import logging
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
+
+_log = logging.getLogger(__name__)
 
 if typ.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -44,9 +47,25 @@ def build_chrono_graph(
         state: ChronoGraphState,
     ) -> dict[str, ChronoRuntimeEstimate]:
         if state.chrono_request is None:
+            _log.error(
+                "Chrono graph node missing required request; has_chrono_result=%s",
+                state.chrono_result is not None,
+                extra={"has_chrono_result": state.chrono_result is not None},
+            )
             msg = "chrono_request"
             raise KeyError(msg)
-        return {"chrono_result": await evaluator.evaluate(state.chrono_request)}
+        try:
+            result = await evaluator.evaluate(state.chrono_request)
+        except Exception:
+            _log.exception(
+                "Chrono graph node evaluation failed; input_character_count=%s",
+                len(state.chrono_request.script_tei_xml),
+                extra={
+                    "input_character_count": len(state.chrono_request.script_tei_xml)
+                },
+            )
+            raise
+        return {"chrono_result": result}
 
     graph.add_node("chrono", chrono_node)
     graph.add_edge(START, "chrono")

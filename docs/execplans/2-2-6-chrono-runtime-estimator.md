@@ -197,6 +197,9 @@ XML and unsupported TEI body markup.
 - [x] (2026-05-13 13:45Z) Added `asyncio.gather(...)` coverage for shared
   Chrono estimator and graph invocations so concurrent calls preserve
   per-request results and metadata. Validation reported `470 passed, 3 skipped`.
+- [x] (2026-05-13 14:10Z) Added Chrono observability for TEI validation
+  failures, graph-node failures, and bounded-cardinality estimator metrics for
+  success/error counts and latency. Validation reported `473 passed, 3 skipped`.
 
 Follow-on roadmap entry: close ADR-006 by accepting or revising the
 spoken-text semantics, then update documentation if the accepted semantics
@@ -884,7 +887,7 @@ Final implementation validation:
 make check-fmt ... passed; 277 files already formatted
 make typecheck ... passed; ty check: All checks passed!
 make lint ... passed; ruff check: All checks passed!
-make test ... passed; 470 passed, 3 skipped
+make test ... passed; 473 passed, 3 skipped
 make markdownlint ... passed; Summary: 0 error(s)
 make nixie ... passed; All diagrams validated successfully!
 ```

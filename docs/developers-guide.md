@@ -578,6 +578,9 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   estimator name, estimator version, input character count, spoken word count,
   and words-per-minute setting are the comparison baseline for later
   implementations.
+- Wire Chrono operational metrics through `ChronoMetricsPort`. Keep labels
+  bounded to outcome and error class, and record estimator latency without
+  including script text or other high-cardinality payload data.
 
 ### Testing the evaluator
 
