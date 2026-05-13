@@ -202,6 +202,7 @@ class TestGenerationOrchestrationGraph:
         checkpoint = await checkpoint_store.get(suspended_result.checkpoint_id)
         assert checkpoint is not None
         assert checkpoint.idempotency_key == suspended_result.idempotency_key
+        assert checkpoint.payload["request"] == {"correlation_id": "corr-graph"}
         assert tool_executor.calls == []
 
     @pytest.mark.asyncio
@@ -264,21 +265,8 @@ class TestGenerationOrchestrationGraph:
             tool_executor=_FakeToolExecutor(_action_result()),
             checkpoint_port=checkpoint_store,
         )
-        state = await graph.ainvoke(GenerationGraphState(request=_request()))
-        command = ResumeWorkflowCommand(
-            checkpoint_id=state["suspended_result"].checkpoint_id,
-            result=_action_result(),
-        )
-        resume_port = _FakeResumePort()
-
         with pytest.raises(ValueError, match="exactly one planned step"):
-            await resume_generation_orchestration(
-                checkpoint_port=checkpoint_store,
-                resume_port=resume_port,
-                command=command,
-            )
-
-        assert resume_port.calls == []
+            await graph.ainvoke(GenerationGraphState(request=_request()))
 
     @pytest.mark.asyncio
     async def test_resume_generation_orchestration_raises_on_missing_checkpoint(

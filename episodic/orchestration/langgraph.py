@@ -380,8 +380,6 @@ def _build_checkpoint_payload(
     return {
         "request": {
             "correlation_id": request.correlation_id,
-            "script_tei_xml": request.script_tei_xml,
-            "template_structure": request.template_structure,
         },
         "planner_result": _planner_result_to_payload(planner_result),
     }
@@ -402,8 +400,13 @@ async def _suspend_execute_node(
     if planner_result is None:
         msg = "missing required state value: planner_result"
         raise ValueError(msg)
-    if not planner_result.plan.steps:
+    if len(planner_result.plan.steps) != 1:
         msg = "cannot suspend a workflow with no planned steps"
+        if planner_result.plan.steps:
+            msg = (
+                "suspend_generation_orchestration currently supports exactly "
+                "one planned step per suspended checkpoint."
+            )
         raise ValueError(msg)
 
     action = planner_result.plan.steps[0]

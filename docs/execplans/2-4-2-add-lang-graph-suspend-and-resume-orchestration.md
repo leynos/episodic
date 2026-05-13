@@ -747,7 +747,7 @@ payload keys to the documented `TypeError` contract. Validation passed with
 focused orchestration tests, `make check-fmt`, `make typecheck`, `make lint`,
 and `make test`; the full test suite reported 461 passed and 3 skipped tests.
 
-Revision note 2026-05-13: Review follow-up verified and fixed the remaining
+Revision note 2026-05-12: Review follow-up verified and fixed the remaining
 checkpoint persistence issues: the migration now creates a DB-side
 `updated_at` trigger, checkpoint status is backed by the
 `WorkflowCheckpointStatus` enum in the domain and SQLAlchemy model, plan
