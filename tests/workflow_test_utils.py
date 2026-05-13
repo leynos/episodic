@@ -20,14 +20,21 @@ def artifact_server_port() -> str:
     return "0"
 
 
-def _ensure_string_dict(value: object, filename: str) -> dict[str, str]:
-    """Validate workflow artifact JSON shape before returning it."""
-    if isinstance(value, dict) and all(
-        isinstance(key, str) and isinstance(item, str) for key, item in value.items()
-    ):
-        return typ.cast("dict[str, str]", value)
-    msg = f"{filename} must contain a JSON object with string keys and values."
-    raise AssertionError(msg)
+def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:
+    """Return a mapping with str keys and str values, or raise with diagnostics."""
+    if not isinstance(value, dict):
+        msg = f"Expected a mapping[str, str], got {type(value).__name__}"
+        raise AssertionError(msg)  # noqa: TRY004 - test helper assertion contract.
+    result: dict[str, str] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            msg = f"Expected a string key, got {type(key).__name__}"
+            raise AssertionError(msg)  # noqa: TRY004 - test helper assertion contract.
+        if not isinstance(item, str):
+            msg = f"Expected a string value for key {key!r}, got {type(item).__name__}"
+            raise AssertionError(msg)  # noqa: TRY004 - test helper assertion contract.
+        result[key] = item
+    return result
 
 
 def run_act(
