@@ -20,8 +20,8 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
-    """Apply schema changes."""
+def _create_episode_templates_table() -> None:
+    """Create the episode templates table and indexes."""
     op.create_table(
         "episode_templates",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -59,6 +59,9 @@ def upgrade() -> None:
         ["series_profile_id"],
     )
 
+
+def _create_series_profile_history_table() -> None:
+    """Create the series profile history table and indexes."""
     op.create_table(
         "series_profile_history",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -94,6 +97,9 @@ def upgrade() -> None:
         ["series_profile_id"],
     )
 
+
+def _create_episode_template_history_table() -> None:
+    """Create the episode template history table and indexes."""
     op.create_table(
         "episode_template_history",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -130,22 +136,42 @@ def upgrade() -> None:
     )
 
 
-def downgrade() -> None:
-    """Revert schema changes."""
+def _drop_episode_template_history_table() -> None:
+    """Drop the episode template history table and indexes."""
     op.drop_index(
         "ix_episode_template_history_episode_template_id",
         table_name="episode_template_history",
     )
     op.drop_table("episode_template_history")
 
+
+def _drop_series_profile_history_table() -> None:
+    """Drop the series profile history table and indexes."""
     op.drop_index(
         "ix_series_profile_history_series_profile_id",
         table_name="series_profile_history",
     )
     op.drop_table("series_profile_history")
 
+
+def _drop_episode_templates_table() -> None:
+    """Drop the episode templates table and indexes."""
     op.drop_index(
         "ix_episode_templates_series_profile_id",
         table_name="episode_templates",
     )
     op.drop_table("episode_templates")
+
+
+def upgrade() -> None:
+    """Apply schema changes."""
+    _create_episode_templates_table()
+    _create_series_profile_history_table()
+    _create_episode_template_history_table()
+
+
+def downgrade() -> None:
+    """Revert schema changes."""
+    _drop_episode_template_history_table()
+    _drop_series_profile_history_table()
+    _drop_episode_templates_table()
