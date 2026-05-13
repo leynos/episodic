@@ -32,8 +32,8 @@ is updated, and the required gates pass: `make check-fmt`, `make typecheck`,
 
 The stricter TEI P5 contract is follow-on roadmap work, not a completion gate
 for `2.2.6`. That follow-on item should ratify the spoken-text Architectural
-Decision Record (ADR), add the required `tei-rapporteur` extraction surface,
-and migrate Chrono away from local XML heuristics.
+Decision Record (ADR), remove the current malformed-input fallback, and enforce
+validation failure for malformed XML and invalid TEI P5.
 
 ## Constraints
 
@@ -60,8 +60,8 @@ and migrate Chrono away from local XML heuristics.
   developer documentation when the implementation pins behaviour.
 - Mark `docs/roadmap.md` item `2.2.6` done only after implementation,
   documentation, and quality gates pass.
-- Track strict TEI P5 validation, ADR acceptance, and `tei-rapporteur`
-  extraction migration as separate follow-on roadmap work.
+- Track strict TEI P5 validation and ADR acceptance as separate follow-on
+  roadmap work.
 
 ## Tolerances
 
@@ -169,9 +169,10 @@ and migrate Chrono away from local XML heuristics.
   spoken-container mapping, exclusion rules, normalization policy, tokenization
   scope, validation failure policy, and required `tei-rapporteur` extraction
   contract.
-- [x] (2026-05-10 00:00Z) Recorded the strict TEI P5 validation and
-  `tei-rapporteur` extraction migration as follow-on roadmap work rather than a
-  `2.2.6` completion gate.
+- [x] (2026-05-10 00:00Z) Recorded the strict TEI P5 validation and initial
+  `tei-rapporteur` extraction gap as follow-on roadmap work rather than a
+  `2.2.6` completion gate. The extraction gap was closed later in Stage K;
+  strict validation and ADR closure remain follow-on work.
 - [x] (2026-05-13 11:10Z) Updated `tei-rapporteur` to
   `89fc86ef3952ecfde0bb7f653cde217e2651b895` and refreshed the vendored
   users' guide from the same revision. The guide now documents
@@ -192,11 +193,9 @@ and migrate Chrono away from local XML heuristics.
   The first invocation stalled during sandbox setup; the bounded rerun with
   `timeout 600 coderabbit review --agent` completed with 0 findings.
 
-Follow-on roadmap entry: migrate Chrono to ratified TEI P5 spoken-text
-semantics by accepting or revising ADR-006, adding the Chrono-ready
-`tei-rapporteur` extraction API, replacing local XML traversal, rejecting
-malformed XML and invalid TEI P5, updating tests and documentation, and running
-the full quality gates.
+Follow-on roadmap entry: close ADR-006 and tighten Chrono's validation
+contract by rejecting malformed XML and invalid TEI P5, updating tests and
+documentation, and running the full quality gates.
 
 ## Surprises & Discoveries
 
@@ -237,13 +236,13 @@ the full quality gates.
   `_extract_spoken_text(...)`. Impact: this violates the clarified invariant
   that valid TEI P5 XML is the enforced interchange format and must be replaced.
 
-- Observation: `tei-rapporteur` already exposes `parse_xml`, `to_dict`,
-  `to_msgpack`, and `iter_parse`, but the current Episodic docs do not define a
-  Chrono-specific spoken-text iterator contract. Evidence:
-  `docs/tei-rapporteur-users-guide.md` documents paragraph, utterance, and div
-  events, plus inline tagged nodes, but no runtime-estimation extraction API.
-  Impact: Chrono should not invent local TEI semantics; the required behaviour
-  must move upstream into `tei-rapporteur`.
+- Observation: the initial `tei-rapporteur` pin exposed `parse_xml`, `to_dict`,
+  `to_msgpack`, and `iter_parse`, but not the Chrono-specific spoken-text
+  extraction contract. Evidence: the earlier `docs/tei-rapporteur-users-guide.md`
+  documented paragraph, utterance, and div events, plus inline tagged nodes,
+  but no runtime-estimation extraction API. Impact: Chrono could not safely own
+  local TEI semantics, so the required behaviour moved upstream into
+  `tei-rapporteur` before Stage K.
 
 - Observation: after updating `tei-rapporteur` to
   `89fc86ef3952ecfde0bb7f653cde217e2651b895`, `iter_parse(...)` returns
@@ -340,9 +339,8 @@ locations. Roadmap item `2.2.6` is marked done.
 
 The stricter TEI P5 parsing policy remains follow-on roadmap work. The current
 implementation is complete for `2.2.6` as the deterministic metadata and
-orchestration slice; a later item should add `tei-rapporteur` spoken-text
-extraction support, strict TEI P5 validation, and accepted spoken-dialogue
-semantics.
+orchestration slice; a later item should close ADR-006 and make malformed XML
+or invalid TEI P5 a validation failure.
 
 Stage K now removes Chrono's local `ElementTree` parser and tag traversal.
 Chrono delegates TEI P5 spoken-text extraction to
@@ -636,9 +634,9 @@ Required `tei-rapporteur` behaviour:
   invalid TEI documents.
 
 Go/no-go: do not add more local XML traversal to Chrono to compensate for a
-missing `tei-rapporteur` API. If the API cannot be delivered in the dependency
-pin used by this branch, keep Chrono blocked and update this plan with the
-upstream status.
+missing `tei-rapporteur` API. This gate was satisfied when the branch pinned
+`tei-rapporteur` revision `89fc86ef3952ecfde0bb7f653cde217e2651b895`, which
+provides `spoken_text_segments(...)`.
 
 ### Follow-on Stage K: replace local Chrono TEI parsing
 
@@ -805,9 +803,9 @@ The implemented feature is accepted when all of the following are true:
 - `docs/roadmap.md` marks only item `2.2.6` done.
 - `make check-fmt`, `make typecheck`, `make lint`, and `make test` pass.
 - Markdown gates pass for changed docs: `make markdownlint` and `make nixie`.
-- A separate follow-on roadmap entry tracks ADR acceptance, the
-  `tei-rapporteur` spoken-text extraction API, strict TEI P5 validation, and
-  Chrono migration away from local XML traversal.
+- A separate follow-on roadmap entry tracks ADR acceptance and strict TEI P5
+  validation. Chrono already delegates spoken-text extraction to
+  `tei-rapporteur`.
 
 ## Idempotence and recovery
 
@@ -911,11 +909,12 @@ gated by an ADR and by prioritized `tei-rapporteur` changes that provide the
 spoken-text extraction contract Chrono needs.
 
 The next 2026-05-10 revision adds proposed ADR-006 as the Stage I draft. The
-ADR is intentionally not yet accepted, so the follow-on `tei-rapporteur`
-migration remains blocked until reviewers ratify or revise the proposed TEI P5
-spoken-text semantics.
+ADR is intentionally not yet accepted, so strict TEI P5 validation remains
+blocked until reviewers ratify or revise the proposed TEI P5 spoken-text
+semantics.
 
 The latest 2026-05-10 revision keeps `Status: COMPLETE` authoritative for
-roadmap item `2.2.6`. The deterministic local Chrono slice is complete, while
-strict TEI P5 validation, ADR acceptance, and `tei-rapporteur` extraction are
-tracked as separate follow-on roadmap work.
+roadmap item `2.2.6`. The deterministic local Chrono slice and
+`tei-rapporteur` spoken-text extraction migration are complete, while strict
+TEI P5 validation and ADR acceptance are tracked as separate follow-on roadmap
+work.

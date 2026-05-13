@@ -1,6 +1,7 @@
 """Deterministic spoken-runtime estimation for TEI scripts."""
 
 import dataclasses as dc
+import hashlib
 import logging
 import math
 import re
@@ -30,10 +31,14 @@ def _extract_spoken_text(script_tei_xml: str) -> str:
             stripped = segment.text.strip()
             if stripped:
                 chunks.append(stripped)
-    except ValueError:
+    except ValueError as exc:
+        payload_digest = hashlib.sha256(script_tei_xml.encode()).hexdigest()
         _log.warning(
-            "TEI parse failed; falling back to plain-text word count. input_prefix=%r",
-            script_tei_xml[:200],
+            "TEI parse failed; falling back to plain-text word count. "
+            "input_length=%s input_sha256=%s error=%s",
+            len(script_tei_xml),
+            payload_digest,
+            exc,
         )
         return script_tei_xml
     return " ".join(chunks)

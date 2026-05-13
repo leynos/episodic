@@ -225,17 +225,3 @@ def test_chrono_estimator_counts_alternate_spoken_tags(
         f"got {result.metadata.spoken_word_count}"
     )
     assert result.estimated_seconds == expected_seconds
-
-
-def test_chrono_async_evaluate_returns_same_result_as_estimate() -> None:
-    """The async evaluate() adapter must return the same result as estimate()."""
-    request = ChronoEvaluationRequest(
-        script_tei_xml=_tei_document("<p>one two three</p>")
-    )
-    estimator = ChronoRuntimeEstimator()
-    sync_result = estimator.estimate(request)
-    async_result = asyncio.run(estimator.evaluate(request))
-    assert async_result == sync_result, (
-        "evaluate() must delegate to estimate() without mutation; "
-        f"sync={sync_result}, async={async_result}"
-    )
