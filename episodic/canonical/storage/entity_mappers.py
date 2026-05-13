@@ -1,4 +1,26 @@
-"""Record-to-domain mappers for core canonical entities."""
+"""Record-to-domain mappers for core canonical entities.
+
+The ``entity_mappers`` module translates SQLAlchemy records from the canonical
+storage layer into immutable domain objects, and translates domain objects back
+into records before persistence. Repository classes call these helpers during
+load/save operations so database details such as compressed text columns,
+``metadata_payload`` naming, and mutable JSON payload copying stay outside the
+domain model.
+
+The exported integration points are the private mapper functions used by the
+repository layer, including ``_series_profile_from_record``,
+``_series_profile_to_record``, ``_source_document_from_record``,
+``_source_document_to_record``, ``_episode_template_from_record``, and
+``_episode_template_to_record``. They remain in this compatibility module so
+repositories can import one mapper surface while storage models are split
+across focused modules.
+
+Typical usage maps a stored record before domain consumption:
+
+>>> profile = _series_profile_from_record(profile_record)
+>>> profile.slug
+'example-series'
+"""
 
 import copy
 

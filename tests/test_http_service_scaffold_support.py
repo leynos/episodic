@@ -74,7 +74,11 @@ async def run_asgi_lifespan(
         return await receive_queue.get()
 
     async def send(message: cabc.MutableMapping[str, typ.Any]) -> None:
-        sent_events.append(LifespanEvent(type=str(message["type"])))
+        message_type = message["type"]
+        assert isinstance(message_type, str), (
+            f"ASGI message type must be a string, got {type(message_type).__name__}."
+        )
+        sent_events.append(LifespanEvent(type=message_type))
         await asyncio.sleep(0)
 
     try:

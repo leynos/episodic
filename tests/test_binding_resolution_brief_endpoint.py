@@ -15,7 +15,7 @@ if typ.TYPE_CHECKING:
 
 def test_structured_brief_filters_series_bindings_by_episode(
     canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019 - pytest fixture runner.
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Brief endpoint should resolve series bindings when `episode_id` is provided."""

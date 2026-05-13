@@ -124,7 +124,7 @@ def test_result_from_response_raises_on_invalid_json(
     """Raise ShowNotesResponseFormatError when response text is not JSON."""
     response = show_notes_support.valid_llm_response("not valid json {")
 
-    with pytest.raises(ShowNotesResponseFormatError):
+    with pytest.raises(ShowNotesResponseFormatError, match="not valid JSON"):
         show_notes_generator._result_from_response(response)
 
 
@@ -135,7 +135,7 @@ def test_result_from_response_raises_on_empty_topic(
     json_text = json.dumps({"entries": [{"topic": "  ", "summary": "Valid summary"}]})
     response = show_notes_support.valid_llm_response(json_text)
 
-    with pytest.raises(ShowNotesResponseFormatError):
+    with pytest.raises(ShowNotesResponseFormatError, match="topic"):
         show_notes_generator._result_from_response(response)
 
 
