@@ -145,9 +145,9 @@ Within Python, `tei_rapporteur.Document` constructs a validated TEI document by
 wrapping the Rust `TeiDocument`. The class exposes a `.title` property and an
 `emit_title_markup()` method that mirrors the Rust helper. The module also
 offers a top-level `emit_title_markup(title: str)` so scripting callers can
-work without instantiating a document. CI now builds the wheel on Ubuntu,
-installs it via `pip`, and imports the module to ensure the PyO3 glue remains
-healthy.
+work without instantiating a document. Continuous Integration (CI) now builds
+the wheel on Ubuntu, installs it via `pip`, and imports the module to ensure
+the PyO3 glue remains healthy.
 
 Python data classes now live in `tei_rapporteur.structs`. The submodule defines
 `msgspec.Struct` projections (`Episode`, `TeiHeader`, `FileDesc`, `Paragraph`,
@@ -330,7 +330,7 @@ enabling incremental validation of draft documents.
 `@corresp` values follow TEI pointer semantics. A value beginning with `#` is
 an internal pointer and must resolve to an `xml:id` in the same TEI document.
 Use this form only when the referenced node is materialized in the document.
-Validation rejects unresolved internal pointers so callers do not accidentally
+Validation rejects unresolved internal pointers, so callers do not accidentally
 ship dangling local references.
 
 External identifiers such as `urn:...`, `tag:...`, or `https://...` may be used
@@ -675,6 +675,8 @@ Results are written to `target/criterion/` with HTML reports available at
 
 Benchmarks measure throughput (bytes/second) and latency for documents of
 varying sizes:
+
+Table: Dataset sizes and example transcripts
 
 | Size       | Utterances | Paragraphs | Description                         |
 | ---------- | ---------- | ---------- | ----------------------------------- |
