@@ -37,6 +37,13 @@ def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:
     return result
 
 
+def _timeout_output_part_to_text(part: bytes | str) -> str:
+    """Decode one partial subprocess timeout output fragment."""
+    if isinstance(part, bytes):
+        return part.decode(encoding="utf-8", errors="replace")
+    return part
+
+
 def run_act(
     *,
     job_name: str,
@@ -72,28 +79,41 @@ def run_act(
     ]
     env = os.environ.copy()
     env["DOCKER_HOST"] = socket_uri
-    # Act invocation uses controlled workflow test arguments.
-    completed = subprocess.run(  # noqa: S603
-        cmd,
-        text=True,
-        capture_output=True,
-        env=env,
-        check=False,
-    )
+    try:
+        # Act invocation uses controlled workflow test arguments.
+        completed = subprocess.run(  # noqa: S603
+            cmd,
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired as exc:
+        partial_output = "\n".join(
+            _timeout_output_part_to_text(part)
+            for part in (exc.output, exc.stderr)
+            if part is not None
+        )
+        msg = (
+            f"act timed out after {exc.timeout} seconds for command {cmd!r}.\n"
+            f"Partial output:\n{partial_output}"
+        )
+        raise AssertionError(msg) from exc
     logs = completed.stdout + "\n" + completed.stderr
     return completed.returncode, logs
 
 
 def read_artifact_json(artifact_dir: Path, filename: str, logs: str) -> dict[str, str]:
     """Load JSON from a workflow artifact file or the artifact zip."""
-    json_files = list(artifact_dir.rglob(filename))
+    json_files = sorted(artifact_dir.rglob(filename))
     if json_files:
         return _ensure_string_dict(
             json.loads(json_files[0].read_text(encoding="utf-8")),
             filename,
         )
 
-    zip_files = list(artifact_dir.rglob("*.zip"))
+    zip_files = sorted(artifact_dir.rglob("*.zip"))
     if not zip_files:
         msg = f"artifact zip missing. Logs:\n{logs}"
         raise AssertionError(msg)
