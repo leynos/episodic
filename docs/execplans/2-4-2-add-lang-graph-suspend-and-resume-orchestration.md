@@ -753,7 +753,7 @@ the domain and SQLAlchemy model, plan payload required-input deserialization
 now uses the shared `TypeError` contract, and redundant future annotations
 imports were removed from the new checkpoint storage files. Stale
 checkpoint-store API references were updated to the final `save_or_reuse(...)`
-API, and screen-reader descriptions now precede the suspend and resume sequence
+API, and screen-reader descriptions now precede the suspend-and-resume sequence
 diagrams. The snapshot import comment was already resolved in the current code
 and required no change. Focused checkpoint, migration-drift, and
 malformed-payload tests passed.
