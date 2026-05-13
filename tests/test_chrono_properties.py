@@ -1,5 +1,7 @@
 """Property tests for Chrono spoken-runtime invariants."""
 
+import math
+
 import hypothesis.strategies as st
 from hypothesis import given
 
@@ -70,4 +72,37 @@ def test_reported_word_count_matches_naive_tokenizer(words: list[str]) -> None:
     assert result.metadata.spoken_word_count == expected_word_count, (
         "expected reported spoken_word_count to match tokenizer count: "
         f"reported={result.metadata.spoken_word_count}, expected={expected_word_count}"
+    )
+
+
+@given(words=_SIMPLE_WORDS)
+def test_estimate_is_deterministic(words: list[str]) -> None:
+    """Repeated calls with the same input must produce identical results."""
+    script = _script_from_words(words)
+    estimator = ChronoRuntimeEstimator()
+    request = ChronoEvaluationRequest(script_tei_xml=script)
+
+    first = estimator.estimate(request)
+    second = estimator.estimate(request)
+
+    assert first == second, (
+        f"estimate must be deterministic; got {first!r} then {second!r} "
+        f"for words={words}"
+    )
+
+
+@given(words=_SIMPLE_WORDS)
+def test_formula_correctness(words: list[str]) -> None:
+    """estimated_seconds must equal ceil(spoken_word_count / wpm * 60)."""
+    script = _script_from_words(words)
+    result = ChronoRuntimeEstimator().estimate(
+        ChronoEvaluationRequest(script_tei_xml=script)
+    )
+    word_count = result.metadata.spoken_word_count
+    wpm = result.metadata.words_per_minute
+    expected = math.ceil(word_count / wpm * 60) if word_count > 0 else 0
+
+    assert result.estimated_seconds == expected, (
+        f"expected estimated_seconds={expected} "
+        f"(ceil({word_count}/{wpm}*60)), got {result.estimated_seconds}"
     )

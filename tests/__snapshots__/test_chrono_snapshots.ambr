@@ -1,0 +1,25 @@
+# serializer version: 1
+# name: test_chrono_estimate_snapshot
+  dict({
+    'estimated_seconds': 2,
+    'metadata': dict({
+      'estimator_name': 'chrono-naive-word-count',
+      'estimator_version': '1',
+      'input_character_count': 177,
+      'spoken_word_count': 4,
+      'words_per_minute': 150,
+    }),
+  })
+# ---
+# name: test_chrono_graph_snapshot
+  dict({
+    'estimated_seconds': 2,
+    'metadata': dict({
+      'estimator_name': 'chrono-naive-word-count',
+      'estimator_version': '1',
+      'input_character_count': 177,
+      'spoken_word_count': 4,
+      'words_per_minute': 150,
+    }),
+  })
+# ---

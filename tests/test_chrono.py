@@ -237,24 +237,22 @@ async def test_chrono_estimator_handles_concurrent_evaluations() -> None:
     estimator = ChronoRuntimeEstimator()
     requests = [
         ChronoEvaluationRequest(
-            script_tei_xml=_tei_document(
-                f"<sp><p>{' '.join(['word'] * (index + 1))}</p></sp>"
-            )
+            script_tei_xml=_tei_document(f"<sp><p>{'token ' * (index + 1)}</p></sp>")
         )
         for index in range(5)
     ]
-    expected_results = [estimator.estimate(request) for request in requests]
+    expected_word_counts = list(range(1, 6))
 
     results = await asyncio.gather(
         *(estimator.evaluate(request) for request in requests)
     )
 
-    assert results == expected_results, (
+    assert [r.metadata.spoken_word_count for r in results] == expected_word_counts, (
+        "concurrent evaluate() calls must preserve per-request word counts"
+    )
+    assert results == [estimator.estimate(request) for request in requests], (
         "concurrent evaluate() calls must match independent sync estimates"
     )
-    assert [result.metadata.input_character_count for result in results] == [
-        len(request.script_tei_xml) for request in requests
-    ], "concurrent results must preserve per-request metadata"
 
 
 @pytest.mark.parametrize(

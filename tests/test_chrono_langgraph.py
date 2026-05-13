@@ -184,12 +184,11 @@ async def test_chrono_graph_handles_concurrent_invocations() -> None:
     graph = build_chrono_graph(evaluator)
     requests = [
         ChronoEvaluationRequest(
-            script_tei_xml=_tei_document(
-                f"<sp><p>{' '.join(['word'] * (index + 1))}</p></sp>"
-            )
+            script_tei_xml=_tei_document(f"<sp><p>{'token ' * (index + 1)}</p></sp>")
         )
         for index in range(5)
     ]
+    expected_word_counts = list(range(1, 6))
 
     states = await asyncio.gather(
         *(
@@ -201,9 +200,9 @@ async def test_chrono_graph_handles_concurrent_invocations() -> None:
         typ.cast("ChronoRuntimeEstimate", state["chrono_result"]) for state in states
     ]
 
+    assert [r.metadata.spoken_word_count for r in results] == expected_word_counts, (
+        "concurrent graph invocations must preserve per-request spoken word counts"
+    )
     assert results == [evaluator.estimate(request) for request in requests], (
         "concurrent graph invocations must match direct estimator results"
     )
-    assert [result.metadata.input_character_count for result in results] == [
-        len(request.script_tei_xml) for request in requests
-    ], "concurrent graph invocations must preserve per-request metadata"
