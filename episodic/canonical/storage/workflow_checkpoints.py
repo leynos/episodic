@@ -83,7 +83,21 @@ class SqlAlchemyWorkflowCheckpointStore:
         return _map_checkpoint(record)
 
     async def save_or_reuse(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
-        """Persist a checkpoint or return the existing record for its key."""
+        """Persist a checkpoint or return the existing record for its key.
+
+        The insert runs inside a SQL savepoint via ``begin_nested()`` so a
+        unique-constraint conflict on ``idempotency_key`` rolls back only the
+        attempted insert, not the caller's outer unit-of-work transaction.
+        This gives first-write-wins semantics: concurrent callers racing on
+        one idempotency key converge on the existing checkpoint instead of
+        surfacing an ``IntegrityError``.
+
+        This method flushes but does not commit. Durability belongs to the
+        caller's unit of work. If the conflict path cannot find the existing
+        checkpoint after the unique constraint fires, the original
+        ``IntegrityError`` is re-raised; that path should be unreachable while
+        the database constraint and lookup use the same key.
+        """
         record = WorkflowCheckpointRecord(
             id=uuid.UUID(checkpoint.checkpoint_id),
             workflow_id=checkpoint.workflow_id,
@@ -116,7 +130,18 @@ class SqlAlchemyWorkflowCheckpointStore:
         return _map_checkpoint(record)
 
     async def mark_resumed(self, checkpoint_id: str) -> WorkflowCheckpoint:
-        """Mark a checkpoint as resumed and return the updated record."""
+        """Mark a checkpoint as resumed and return the updated record.
+
+        This method flushes the status update but does not commit it.
+        Durability belongs to the caller's unit of work. If the outer
+        transaction rolls back after the flush, the checkpoint remains in the
+        ``suspended`` state on disk, which is non-destructive and safe for a
+        later retry.
+
+        Raises
+        ------
+            ValueError: If ``checkpoint_id`` does not identify a checkpoint.
+        """
         record = await self._session.get(
             WorkflowCheckpointRecord,
             uuid.UUID(checkpoint_id),

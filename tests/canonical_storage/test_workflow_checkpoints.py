@@ -1,11 +1,13 @@
 """SQLAlchemy checkpoint adapter tests."""
 
+import asyncio
 import typing as typ
 import uuid
 
 import pytest
+import sqlalchemy as sa
 
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage import SqlAlchemyUnitOfWork, WorkflowCheckpointRecord
 from episodic.orchestration import WorkflowCheckpoint
 
 if typ.TYPE_CHECKING:
@@ -93,6 +95,60 @@ async def test_checkpoint_store_reuses_idempotency_key(
 
 
 @pytest.mark.asyncio
+async def test_checkpoint_store_reuses_concurrent_idempotency_key(
+    session_factory: object,
+) -> None:
+    """Concurrent saves with one step key should persist one checkpoint."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    key = "corr-storage:generation_orchestration:execute:action-2:0"
+    first = WorkflowCheckpoint(
+        checkpoint_id=str(uuid.uuid4()),
+        workflow_id="corr-storage",
+        workflow_type="generation_orchestration",
+        step_name="execute",
+        idempotency_key=key,
+        payload={"planner_result": {}},
+    )
+    duplicate = WorkflowCheckpoint(
+        checkpoint_id=str(uuid.uuid4()),
+        workflow_id="corr-storage",
+        workflow_type="generation_orchestration",
+        step_name="execute",
+        idempotency_key=key,
+        payload={"planner_result": {}},
+    )
+
+    async def save_checkpoint(
+        checkpoint: WorkflowCheckpoint,
+    ) -> WorkflowCheckpoint:
+        async with SqlAlchemyUnitOfWork(factory) as uow:
+            stored = await uow.workflow_checkpoints.save_or_reuse(checkpoint)
+            await uow.commit()
+            return stored
+
+    stored_first, stored_second = await asyncio.gather(
+        save_checkpoint(first),
+        save_checkpoint(duplicate),
+    )
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        persisted = await uow.workflow_checkpoints.get_by_idempotency_key(key)
+
+    async with factory() as session:
+        persisted_count = await session.scalar(
+            sa
+            .select(sa.func.count())
+            .select_from(WorkflowCheckpointRecord)
+            .where(WorkflowCheckpointRecord.idempotency_key == key)
+        )
+
+    assert stored_second.checkpoint_id == stored_first.checkpoint_id
+    assert persisted is not None
+    assert persisted.checkpoint_id == stored_first.checkpoint_id
+    assert persisted_count == 1
+
+
+@pytest.mark.asyncio
 async def test_checkpoint_store_marks_checkpoint_resumed(
     session_factory: object,
 ) -> None:
@@ -111,6 +167,30 @@ async def test_checkpoint_store_marks_checkpoint_resumed(
     assert resumed.status == "resumed"
     assert fetched is not None
     assert fetched.status == "resumed"
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_store_mark_resumed_rollback_leaves_suspended(
+    session_factory: object,
+) -> None:
+    """Rolled-back resume markers should leave checkpoints retryable."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    checkpoint = _checkpoint()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        stored = await uow.workflow_checkpoints.save_or_reuse(checkpoint)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        resumed = await uow.workflow_checkpoints.mark_resumed(stored.checkpoint_id)
+        await uow.rollback()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        fetched = await uow.workflow_checkpoints.get(stored.checkpoint_id)
+
+    assert resumed.status == "resumed"
+    assert fetched is not None
+    assert fetched.status == "suspended"
 
 
 @pytest.mark.asyncio

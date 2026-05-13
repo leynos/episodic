@@ -97,7 +97,19 @@ async def _suspend_execute_node(
     checkpoint_port: protocols.CheckpointPort,
     workflow_type: str = "generation_orchestration",
 ) -> dict[str, dto.SuspendedWorkflowResult]:
-    """Persist or reuse a checkpoint before executing the first action."""
+    """Persist or reuse a checkpoint before executing the first action.
+
+    The suspend path deliberately performs no pre-save lookup. It always asks
+    the checkpoint port to ``save_or_reuse`` a fresh checkpoint and derives
+    reuse from the returned checkpoint id. The database-backed port enforces
+    the idempotency boundary with the unique ``idempotency_key`` constraint, so
+    concurrent invocations for the same workflow step converge on one
+    checkpoint without a time-of-check/time-of-use window.
+
+    The returned ``SuspendedWorkflowResult`` is valid whether this invocation
+    created the checkpoint or reused a checkpoint created by a concurrent
+    caller.
+    """
     request, planner_result, action = _validate_suspend_preconditions(state)
     identity = _build_execute_step_identity(
         request=request,
@@ -162,6 +174,13 @@ async def resume_generation_orchestration(
     `build_generation_result(planner_result, (action_result,))` finalises that
     single result. Any future model that allows one checkpoint to cover
     multiple `planner_result.plan.steps` entries must update this code path.
+
+    The resume action executes before the checkpoint is marked ``resumed``. If
+    the action completes and `checkpoint_port.mark_resumed` fails or the caller
+    rolls back the unit of work, the checkpoint remains ``suspended``. That
+    partial failure is non-destructive, but retry safety then depends on the
+    concrete `TaskResumePort` adapter treating duplicate resume commands
+    idempotently.
 
     Raises
     ------
