@@ -51,6 +51,7 @@ def make_show_notes_entry(
     timestamp: str | None = "PT5M30S",
     tei_locator: str | None = "#segment-structured-planning",
 ) -> ShowNotesEntry:
+    """Build the canonical show-notes entry used by serialisation snapshots."""
     return ShowNotesEntry(
         topic=topic,
         summary=summary,
@@ -62,6 +63,7 @@ def make_show_notes_result(
     *,
     entries: tuple[ShowNotesEntry, ...] | None = None,
 ) -> ShowNotesResult:
+    """Build the canonical show-notes result used by nested DTO snapshots."""
     if entries is None:
         entries = (
             make_show_notes_entry(),
