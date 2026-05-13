@@ -12,6 +12,7 @@ import typing as typ
 
 from syrupy.assertion import SnapshotAssertion
 
+from episodic.generation.show_notes import ShowNotesEntry, ShowNotesResult
 from episodic.llm import LLMRequest, LLMResponse, LLMUsage
 from episodic.orchestration import (
     ActionExecutionResult,
@@ -125,6 +126,7 @@ def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> N
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
         rationale="test",
         model_tier=ModelTier.EXECUTION,
+        required_inputs=("script_tei_xml",),
     )
     plan = ExecutionPlan(
         plan_version="1",
@@ -135,7 +137,41 @@ def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> N
     serialised = dataclasses.asdict(plan)
     assert serialised == snapshot
 
+def test_show_notes_entry_serialisation_snapshot(
+    snapshot: SnapshotAssertion,
+) -> None:
+    entry = ShowNotesEntry(
+        topic="Structured planning",
+        summary="The episode explains typed orchestration DTOs.",
+        timestamp="PT5M30S",
+        tei_locator="#segment-structured-planning",
+    )
+    serialised = dataclasses.asdict(entry)
+    assert serialised == snapshot
 
+def test_show_notes_result_serialisation_snapshot(
+    snapshot: SnapshotAssertion,
+) -> None:
+    result = ShowNotesResult(
+        entries=(
+            ShowNotesEntry(
+                topic="Structured planning",
+                summary="The episode explains typed orchestration DTOs.",
+                timestamp="PT5M30S",
+                tei_locator="#segment-structured-planning",
+            ),
+            ShowNotesEntry(
+                topic="Snapshot coverage",
+                summary="The episode covers regression snapshots for DTO output.",
+            ),
+        ),
+        usage=LLMUsage(input_tokens=40, output_tokens=25, total_tokens=65),
+        model="gpt-4o-mini",
+        provider_response_id="show-notes-001",
+        finish_reason="stop",
+    )
+    serialised = dataclasses.asdict(result)
+    assert serialised == snapshot
 def test_generation_orchestration_result_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
@@ -169,7 +205,53 @@ def test_generation_orchestration_result_snapshot(
     serialised = dataclasses.asdict(result)
     assert serialised == snapshot
 
-
+def test_generation_orchestration_result_with_show_notes_snapshot(
+    snapshot: SnapshotAssertion,
+) -> None:
+    planned = PlannedAction(
+        action_id="a1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        rationale="Generate listener-facing notes from canonical TEI.",
+        model_tier=ModelTier.EXECUTION,
+        required_inputs=("script_tei_xml",),
+    )
+    plan = ExecutionPlan(
+        plan_version="1",
+        selected_planning_model="gpt-4.1",
+        selected_execution_model="gpt-4o-mini",
+        steps=(planned,),
+    )
+    show_notes = ShowNotesResult(
+        entries=(
+            ShowNotesEntry(
+                topic="Structured planning",
+                summary="The episode explains typed orchestration DTOs.",
+                timestamp="PT5M30S",
+                tei_locator="#segment-structured-planning",
+            ),
+        ),
+        usage=LLMUsage(input_tokens=40, output_tokens=25, total_tokens=65),
+        model="gpt-4o-mini",
+        provider_response_id="show-notes-001",
+        finish_reason="stop",
+    )
+    action_done = ActionExecutionResult(
+        action_id="a1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        model_tier=ModelTier.EXECUTION,
+        model="gpt-4o-mini",
+        summary="Generated one show-notes entry.",
+        usage=show_notes.usage,
+        show_notes_result=show_notes,
+    )
+    result = GenerationOrchestrationResult(
+        plan=plan,
+        action_results=(action_done,),
+        planner_usage=LLMUsage(input_tokens=12, output_tokens=8, total_tokens=20),
+        total_usage=LLMUsage(input_tokens=52, output_tokens=33, total_tokens=85),
+    )
+    serialised = dataclasses.asdict(result)
+    assert serialised == snapshot
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
     """Snapshot checkpoint payload conversion for planner and action results."""
     planned = PlannedAction(
