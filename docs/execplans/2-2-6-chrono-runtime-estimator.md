@@ -881,7 +881,7 @@ Final implementation validation:
 make check-fmt ... passed; 277 files already formatted
 make typecheck ... passed; ty check: All checks passed!
 make lint ... passed; ruff check: All checks passed!
-make test ... passed; 457 passed, 3 skipped
+make test ... passed; 468 passed, 3 skipped
 make markdownlint ... passed; Summary: 0 error(s)
 make nixie ... passed; All diagrams validated successfully!
 ```
