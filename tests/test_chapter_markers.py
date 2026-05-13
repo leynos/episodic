@@ -157,7 +157,7 @@ def test_enrich_tei_omits_content_when_summary_is_blank() -> None:
     document = tei.parse_xml(enriched_xml)
     document.validate()
     assert "<label>Introduction</label>Introduction" not in enriched_xml
-    assert '<item n="PT0S"><label>Introduction</label>.</item>' in enriched_xml
+    assert '<item n="PT0S"><label>Introduction</label></item>' in enriched_xml
 
 
 def test_enrich_tei_is_idempotent_for_same_result() -> None:

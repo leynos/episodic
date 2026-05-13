@@ -51,6 +51,8 @@ _SUPPORTED_DURATION_MESSAGE = (
     "with integer hours, minutes, and seconds only."
 )
 
+_EMPTY_CHAPTER_SUMMARY_SENTINEL = "__EPISODIC_EMPTY_CHAPTER_SUMMARY__"
+
 _ISO_8601_DURATION_PATTERN = re.compile(
     r"^P(?=.*\d[HMS])T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?"
     r"(?:(?P<seconds>\d+)S)?$"
@@ -105,7 +107,7 @@ class ChapterMarker:
 
     title: str
     start: str
-    summary: str = ""
+    summary: str | None = None
     end: str | None = None
     duration: str | None = None
     tei_locator: str | None = None
@@ -114,10 +116,7 @@ class ChapterMarker:
         """Validate required chapter fields and normalize optional metadata."""
         _ensure_non_empty_field(self, "title")
         _duration_to_seconds(self.start, "start")
-        if not isinstance(self.summary, str):
-            msg = "summary must be a string."
-            raise TypeError(msg)
-        object.__setattr__(self, "summary", self.summary.strip())
+        summary = _normalize_optional_string(self.summary, "summary")
         end = _normalize_optional_string(self.end, "end")
         duration = _normalize_optional_string(self.duration, "duration")
         tei_locator = _normalize_optional_string(self.tei_locator, "tei_locator")
@@ -125,6 +124,7 @@ class ChapterMarker:
             _duration_to_seconds(end, "end")
         if duration is not None:
             _duration_to_seconds(duration, "duration")
+        object.__setattr__(self, "summary", summary)
         object.__setattr__(self, "end", end)
         object.__setattr__(self, "duration", duration)
         object.__setattr__(self, "tei_locator", tei_locator)
@@ -202,7 +202,7 @@ def _parse_chapter(raw: dict[str, object]) -> ChapterMarker:
     """Parse a single chapter marker from a JSON payload."""
     title = _require_non_empty_string(raw.get("title"), "title")
     start = _require_non_empty_string(raw.get("start"), "start")
-    summary = _require_optional_string(raw.get("summary"), "summary") or ""
+    summary = _require_optional_string(raw.get("summary"), "summary")
     end = _require_optional_string(raw.get("end"), "end")
     duration = _require_optional_string(raw.get("duration"), "duration")
     tei_locator = _require_optional_string(raw.get("tei_locator"), "tei_locator")
@@ -461,9 +461,10 @@ def _build_item_payload(chapter: ChapterMarker) -> dict[str, object]:
     """Build one list-item payload from a `ChapterMarker`."""
     item_payload: dict[str, object] = {
         "label": {"content": build_text_inline(chapter.title)},
-        "content": build_text_inline(chapter.summary or "."),
         "n": chapter.start,
     }
+    if chapter.summary:
+        item_payload["content"] = build_text_inline(chapter.summary)
     if chapter.tei_locator is not None:
         item_payload["corresp"] = [chapter.tei_locator]
     return item_payload
@@ -473,13 +474,17 @@ def _build_chapters_div_payload(
     chapters: tuple[ChapterMarker, ...],
 ) -> dict[str, object]:
     """Build the structured TEI payload for the chapters div."""
+    items = [_build_item_payload(chapter) for chapter in chapters]
+    for item in items:
+        if "content" not in item:
+            item["content"] = build_text_inline(_EMPTY_CHAPTER_SUMMARY_SENTINEL)
     return {
         "type": "div",
         "div_type": "chapters",
         "content": [
             {
                 "type": "list",
-                "items": [_build_item_payload(chapter) for chapter in chapters],
+                "items": items,
             }
         ],
     }
@@ -511,4 +516,4 @@ def enrich_tei_with_chapter_markers(
         removed_block_count,
     )
     enriched_document = tei.from_dict(document_payload)
-    return tei.emit_xml(enriched_document)
+    return tei.emit_xml(enriched_document).replace(_EMPTY_CHAPTER_SUMMARY_SENTINEL, "")

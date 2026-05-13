@@ -84,6 +84,7 @@ def test_chapter_marker_normalizes_blank_optional_fields() -> None:
         tei_locator="   ",
     )
 
+    assert marker.summary is None
     assert marker.end is None
     assert marker.duration is None
     assert marker.tei_locator is None
