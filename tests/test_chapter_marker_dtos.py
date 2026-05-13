@@ -1,4 +1,29 @@
-"""Unit and property tests for chapter-marker DTO validation."""
+"""Unit and property tests for ChapterMarker and ChapterMarkersResult DTO validation.
+
+These tests verify the invariants enforced by ``ChapterMarker.__post_init__`` and
+``ChapterMarkersResult.__post_init__`` in ``episodic.generation.chapter_markers``:
+
+- ``ChapterMarker`` rejects blank or whitespace-only ``title`` values.
+- ``ChapterMarker`` rejects ``start`` values that are not a supported
+  ISO 8601-style ``PT#H#M#S`` integer-only duration.
+- Blank optional string fields (``summary``, ``end``, ``duration``,
+  ``tei_locator``) are normalised to ``None``.
+- Non-string optional fields raise ``TypeError``; invalid optional duration
+  strings raise ``ValueError``.
+- ``ChapterMarkersResult`` enforces that chapter ``start`` times are strictly
+  increasing.
+
+Hypothesis property tests validate:
+
+- ISO 8601 ``PT#H#M#S`` duration round-tripping through ``ChapterMarker.start``.
+- Rejection of blank or whitespace-only titles.
+- Normalisation of blank locators to ``None``.
+- Rejection of duplicate or descending start sequences.
+
+Run with::
+
+    pytest -v tests/test_chapter_marker_dtos.py
+"""
 
 import typing as typ
 
