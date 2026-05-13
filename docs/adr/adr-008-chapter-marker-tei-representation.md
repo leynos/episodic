@@ -103,5 +103,3 @@ Implementation: `episodic/generation/chapter_markers.py`.[^3] Tests:
 [^4]: Tests: `tests/test_chapter_markers.py`,
   `tests/features/chapter_markers.feature`,
   `tests/steps/test_chapter_markers_steps.py`
-
-# ADR-008: Chapter-marker TEI representation
