@@ -7,7 +7,7 @@ from episodic.canonical.domain import (
     SeriesProfileHistoryEntry,
 )
 
-from .models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
+from .history_models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
 
 
 def _history_entry_from_record(

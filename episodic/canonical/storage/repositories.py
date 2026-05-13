@@ -44,19 +44,18 @@ from .entity_mappers import (
     _tei_header_from_record,
     _tei_header_to_record,
 )
+from .entity_models import (
+    ApprovalEventRecord,
+    EpisodeRecord,
+    IngestionJobRecord,
+    SourceDocumentRecord,
+    TeiHeaderRecord,
+)
 from .history_repositories import (
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemySeriesProfileHistoryRepository,
 )
-from .models import (
-    ApprovalEventRecord,
-    EpisodeRecord,
-    EpisodeTemplateRecord,
-    IngestionJobRecord,
-    SeriesProfileRecord,
-    SourceDocumentRecord,
-    TeiHeaderRecord,
-)
+from .profile_models import EpisodeTemplateRecord, SeriesProfileRecord
 from .reference_repositories import (
     SqlAlchemyReferenceBindingRepository,
     SqlAlchemyReferenceDocumentRepository,

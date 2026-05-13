@@ -13,15 +13,14 @@ from episodic.canonical.domain import (
 )
 
 from .compression import decode_text_from_storage, encode_text_for_storage
-from .models import (
+from .entity_models import (
     ApprovalEventRecord,
     EpisodeRecord,
-    EpisodeTemplateRecord,
     IngestionJobRecord,
-    SeriesProfileRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
 )
+from .profile_models import EpisodeTemplateRecord, SeriesProfileRecord
 
 
 def _series_profile_from_record(record: SeriesProfileRecord) -> SeriesProfile:

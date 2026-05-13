@@ -6,7 +6,7 @@ from episodic.canonical.domain import (
     ReferenceDocumentRevision,
 )
 
-from .models import (
+from .reference_models import (
     ReferenceBindingRecord,
     ReferenceDocumentRecord,
     ReferenceDocumentRevisionRecord,

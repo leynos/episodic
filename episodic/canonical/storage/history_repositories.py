@@ -20,7 +20,7 @@ from .history_mappers import (
     _series_profile_history_from_record,
     _series_profile_history_to_record,
 )
-from .models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
+from .history_models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
 from .repository_base import _RepositoryBase
 
 if typ.TYPE_CHECKING:
