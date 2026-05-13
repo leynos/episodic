@@ -30,10 +30,10 @@ Chrono slice is implemented, the metadata contract is recorded, documentation
 is updated, and the required gates pass: `make check-fmt`, `make typecheck`,
 `make lint`, and `make test`.
 
-The stricter TEI P5 contract is follow-on roadmap work, not a completion gate
-for `2.2.6`. That follow-on item should ratify the spoken-text Architectural
-Decision Record (ADR), remove the current malformed-input fallback, and enforce
-validation failure for malformed XML and invalid TEI P5.
+The remaining TEI P5 contract follow-on work is to ratify the spoken-text
+Architectural Decision Record (ADR). Chrono now delegates spoken-text
+extraction to `tei-rapporteur` and propagates validation failures for malformed
+XML and unsupported TEI body markup.
 
 ## Constraints
 
@@ -60,8 +60,7 @@ validation failure for malformed XML and invalid TEI P5.
   developer documentation when the implementation pins behaviour.
 - Mark `docs/roadmap.md` item `2.2.6` done only after implementation,
   documentation, and quality gates pass.
-- Track strict TEI P5 validation and ADR acceptance as separate follow-on
-  roadmap work.
+- Track ADR acceptance as separate follow-on roadmap work.
 
 ## Tolerances
 
@@ -96,10 +95,10 @@ validation failure for malformed XML and invalid TEI P5.
   Mitigation: write and merge an ADR before implementing new Chrono parsing
   behaviour. Treat unresolved semantics as a hard stop.
 
-- Risk: the existing Chrono implementation and tests accept malformed XML and
-  minimal TEI-shaped snippets. Severity: high. Likelihood: high. Mitigation:
-  replace fallback tests with valid TEI P5 fixtures and validation-error tests
-  after the ADR and `tei-rapporteur` API are available.
+- Risk: future Chrono tests could drift back to minimal TEI-shaped snippets
+  rather than valid TEI documents. Severity: medium. Likelihood: medium.
+  Mitigation: keep normal-path fixtures wrapped in valid TEI headers and assert
+  validation errors for malformed XML or unsupported body markup.
 
 - Risk: the repository currently has a Pedante-specific QA graph rather than a
   general multi-evaluator QA graph. Severity: medium. Likelihood: high.
@@ -183,8 +182,7 @@ validation failure for malformed XML and invalid TEI P5.
   spoken-text extraction surface, keeping the naive word-count and metadata
   policy inside Chrono.
 - [x] (2026-05-13 12:15Z) Updated Chrono fixtures to valid TEI documents with
-  headers, retained malformed-input fallback coverage for the current public
-  contract, and confirmed the focused Chrono suite passes with 29 tests.
+  headers and confirmed the focused Chrono suite passes with 29 tests.
 - [x] (2026-05-13 12:35Z) Ran repository gates after the migration:
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie` all passed. `make test` reported 468
@@ -192,10 +190,14 @@ validation failure for malformed XML and invalid TEI P5.
 - [x] (2026-05-13 12:45Z) Ran `coderabbit review --agent` for the milestone.
   The first invocation stalled during sandbox setup; the bounded rerun with
   `timeout 600 coderabbit review --agent` completed with 0 findings.
+- [x] (2026-05-13 13:20Z) Removed Chrono's raw-text fallback when
+  `tei_rapporteur.spoken_text_segments(...)` raises `ValueError`. Malformed XML
+  and unsupported TEI body markup now propagate validation errors instead of
+  producing audit metadata from raw XML.
 
-Follow-on roadmap entry: close ADR-006 and tighten Chrono's validation
-contract by rejecting malformed XML and invalid TEI P5, updating tests and
-documentation, and running the full quality gates.
+Follow-on roadmap entry: close ADR-006 by accepting or revising the
+spoken-text semantics, then update documentation if the accepted semantics
+change Chrono's supported inputs.
 
 ## Surprises & Discoveries
 
@@ -318,11 +320,12 @@ documentation, and running the full quality gates.
   normalized segment text in one shared TEI domain surface. Date/Author:
   2026-05-13 / Codex.
 
-- Decision: keep Chrono's existing parse-failure fallback for this migration
-  while removing all direct XML parsing. Rationale: the implementation request
-  supplied the fallback behaviour in the target extraction helper; the change
-  here is to delegate parsing to `tei_rapporteur`, not to widen the public error
-  contract in the same milestone. Date/Author: 2026-05-13 / Codex.
+- Decision: propagate `tei_rapporteur.spoken_text_segments(...)` validation
+  failures instead of falling back to raw-text counting. Rationale:
+  `tei-rapporteur` documents malformed XML and unsupported body markup as
+  `ValueError` cases and never falls back to raw-text counting; Chrono should
+  not create plausible runtime metadata from invalid scripts. Date/Author:
+  2026-05-13 / User and Codex.
 
 ## Outcomes & Retrospective
 
@@ -337,17 +340,16 @@ coverage are in place for the initial local heuristic. Documentation explains
 the initial heuristic, the lack of LLM charges, maintainer boundaries, and test
 locations. Roadmap item `2.2.6` is marked done.
 
-The stricter TEI P5 parsing policy remains follow-on roadmap work. The current
-implementation is complete for `2.2.6` as the deterministic metadata and
-orchestration slice; a later item should close ADR-006 and make malformed XML
-or invalid TEI P5 a validation failure.
+The remaining TEI P5 follow-on work is ADR-006 closure. Chrono already
+delegates spoken-text extraction to `tei-rapporteur` and propagates validation
+failures for malformed XML and unsupported TEI body markup.
 
 Stage K now removes Chrono's local `ElementTree` parser and tag traversal.
 Chrono delegates TEI P5 spoken-text extraction to
 `tei_rapporteur.spoken_text_segments(...)`, then applies only the local word
 tokenization, words-per-minute calculation, and metadata policy. Tests now use
-valid TEI documents with headers for normal Chrono paths and keep the existing
-malformed-input fallback test as the current public estimator contract.
+valid TEI documents with headers for normal Chrono paths and assert validation
+failure for malformed XML and unsupported TEI body markup.
 
 The main implementation lesson is that keeping Chrono separate from the Pedante
 graph avoided unnecessary generalization while still preserving a consistent
@@ -507,8 +509,8 @@ domain policy. Keep XML parsing and word counting as pure functions in the same
 module unless size demands extraction.
 
 The original initial heuristic used the Python standard library XML parser and
-raw-text fallback. For the follow-on strict TEI P5 migration, the revised
-heuristic should:
+raw-text fallback. Stage K replaced it with this `tei-rapporteur`-backed
+heuristic:
 
 - parse and validate the script as TEI P5 through `tei-rapporteur`;
 - reject malformed XML or invalid TEI P5 with a deterministic validation error;
@@ -638,14 +640,14 @@ missing `tei-rapporteur` API. This gate was satisfied when the branch pinned
 `tei-rapporteur` revision `89fc86ef3952ecfde0bb7f653cde217e2651b895`, which
 provides `spoken_text_segments(...)`.
 
-### Follow-on Stage K: replace local Chrono TEI parsing
+### Stage K: replace local Chrono TEI parsing
 
-After the ADR and `tei-rapporteur` API are available, update
-`episodic/qa/chrono.py` so `_extract_spoken_text(...)` delegates TEI validation
-and spoken-text extraction to `tei-rapporteur`. Remove the raw-text fallback.
-Update tests so malformed XML and invalid TEI assert validation failure instead
-of word counting. Replace minimal TEI-like test strings with valid TEI P5
-fixtures accepted by `tei-rapporteur`.
+After the `tei-rapporteur` API is available, update `episodic/qa/chrono.py` so
+`_extract_spoken_text(...)` delegates TEI validation and spoken-text extraction
+to `tei-rapporteur`. Remove the raw-text fallback. Update tests so malformed
+XML and invalid TEI assert validation failure instead of word counting. Replace
+minimal TEI-like test strings with valid TEI P5 fixtures accepted by
+`tei-rapporteur`.
 
 Chrono should still own:
 
@@ -902,9 +904,10 @@ Python and Markdown gates.
 
 The 2026-05-10 revision records follow-on strict TEI P5 work because valid TEI
 P5 is the enforced interchange format in Episodic. Raw-text fallback for
-malformed XML is invalid for the future contract, minimal TEI-shaped snippets
-are not acceptable fixtures unless they validate as TEI P5 documents, and
-Chrono should not own TEI spoken-dialogue semantics. That remaining work is
+malformed XML was invalid for the future contract and has since been removed;
+minimal TEI-shaped snippets are not acceptable fixtures unless they validate as
+TEI P5 documents, and Chrono should not own TEI spoken-dialogue semantics. That
+remaining work is
 gated by an ADR and by prioritized `tei-rapporteur` changes that provide the
 spoken-text extraction contract Chrono needs.
 
@@ -913,8 +916,8 @@ ADR is intentionally not yet accepted, so strict TEI P5 validation remains
 blocked until reviewers ratify or revise the proposed TEI P5 spoken-text
 semantics.
 
-The latest 2026-05-10 revision keeps `Status: COMPLETE` authoritative for
-roadmap item `2.2.6`. The deterministic local Chrono slice and
-`tei-rapporteur` spoken-text extraction migration are complete, while strict
-TEI P5 validation and ADR acceptance are tracked as separate follow-on roadmap
-work.
+The latest 2026-05-13 revision keeps `Status: COMPLETE` authoritative for
+roadmap item `2.2.6`. The deterministic local Chrono slice,
+`tei-rapporteur` spoken-text extraction migration, and validation-error
+propagation are complete, while ADR acceptance is tracked as separate follow-on
+roadmap work.

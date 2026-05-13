@@ -183,20 +183,25 @@ async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
     )
 
 
-def test_chrono_estimator_handles_malformed_xml_fallback() -> None:
-    """Malformed XML must fall back to plain-text word counting."""
-    script_tei_xml = "hello world broken <p"
+@pytest.mark.parametrize(
+    ("script_tei_xml", "message"),
+    [
+        ("hello world broken <p", "syntax error"),
+        (
+            _tei_document("<foo>bad</foo>"),
+            "unsupported TEI body element",
+        ),
+    ],
+)
+def test_chrono_estimator_propagates_tei_validation_errors(
+    script_tei_xml: str,
+    message: str,
+) -> None:
+    """Malformed or unsupported TEI should fail instead of being counted."""
     request = ChronoEvaluationRequest(script_tei_xml=script_tei_xml)
-    estimator = ChronoRuntimeEstimator()
 
-    result = estimator.estimate(request)
-
-    assert result.metadata.spoken_word_count == 4, (
-        "fallback must count words from raw text; "
-        f"got spoken_word_count={result.metadata.spoken_word_count}"
-    )
-    assert result.estimated_seconds == 2
-    assert result.metadata.input_character_count == len(script_tei_xml)
+    with pytest.raises(ValueError, match=message):
+        ChronoRuntimeEstimator().estimate(request)
 
 
 @pytest.mark.parametrize(
