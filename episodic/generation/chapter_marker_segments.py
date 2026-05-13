@@ -38,6 +38,26 @@ def _locator_keys_for_segment(raw: dict[str, object]) -> frozenset[str]:
 _MAX_SEGMENT_TRAVERSAL_DEPTH: int = 20
 
 
+def _make_segment_transition_if_present(
+    mapping: dict[str, object],
+) -> _SegmentTransition | None:
+    """Return a SegmentTransition for a mapping that contains a start field, or None."""
+    start = mapping.get("start")
+    if isinstance(start, str) and start.strip():
+        return _SegmentTransition(
+            start=start.strip(),
+            locator_keys=_locator_keys_for_segment(mapping),
+        )
+    return None
+
+
+def _check_traversal_depth(depth: int, caller: str) -> None:
+    """Raise ChapterMarkersResponseFormatError when the traversal depth is exhausted."""
+    if depth <= 0:
+        msg = f"{caller} traversal depth exhausted: depth={depth}."
+        raise ChapterMarkersResponseFormatError(msg)
+
+
 def _transitions_from_dict(
     mapping: dict[str, object],
     *,
@@ -45,20 +65,13 @@ def _transitions_from_dict(
 ) -> tuple[_SegmentTransition, ...]:
     """Yield transitions rooted at a dict node, then recurse into its values."""
     transitions: list[_SegmentTransition] = []
-    start = mapping.get("start")
-    if isinstance(start, str) and start.strip():
-        transitions.append(
-            _SegmentTransition(
-                start=start.strip(),
-                locator_keys=_locator_keys_for_segment(mapping),
-            )
-        )
+    transition = _make_segment_transition_if_present(mapping)
+    if transition is not None:
+        transitions.append(transition)
     for nested_value in mapping.values():
         if not isinstance(nested_value, dict | list):
             continue
-        if depth <= 0:
-            msg = f"_transitions_from_dict traversal depth exhausted: depth={depth}."
-            raise ChapterMarkersResponseFormatError(msg)
+        _check_traversal_depth(depth, "_transitions_from_dict")
         transitions.extend(
             _segment_transitions_from_value(nested_value, depth=depth - 1)
         )
@@ -71,9 +84,7 @@ def _transitions_from_sequence(
     depth: int,
 ) -> tuple[_SegmentTransition, ...]:
     """Recurse into each element of a list node."""
-    if depth <= 0:
-        msg = f"_transitions_from_sequence traversal depth exhausted: depth={depth}."
-        raise ChapterMarkersResponseFormatError(msg)
+    _check_traversal_depth(depth, "_transitions_from_sequence")
     transitions: list[_SegmentTransition] = []
     for item in items:
         transitions.extend(_segment_transitions_from_value(item, depth=depth - 1))
@@ -111,6 +122,20 @@ def _validate_segment_transition_starts(
             raise ChapterMarkersResponseFormatError(str(exc)) from exc
 
 
+def _check_locator_conflict(
+    locator_key: str,
+    existing: tuple[int, str] | None,
+    start_secs: int,
+    start_text: str,
+) -> None:
+    """Raise if a locator key maps to two different segment starts."""
+    if existing is not None and existing[0] != start_secs:
+        raise ChapterMarkersResponseFormatError(  # noqa: TRY003
+            f"Conflicting locator reuse for {locator_key!r}: "
+            f"{existing[1]!r} and {start_text!r}."
+        )
+
+
 def _build_segment_start_lookups(
     transitions: tuple[_SegmentTransition, ...],
 ) -> tuple[set[int], dict[str, tuple[int, str]]]:
@@ -121,13 +146,12 @@ def _build_segment_start_lookups(
         start_secs = _duration_to_seconds(transition.start, "segment start")
         starts.add(start_secs)
         for locator_key in transition.locator_keys:
-            existing_value = starts_by_locator.get(locator_key)
-            if existing_value is not None and existing_value[0] != start_secs:
-                raise ChapterMarkersResponseFormatError(  # noqa: TRY003 - include the conflicting locator key.
-                    "Conflicting locator reuse for "
-                    f"{locator_key!r}: {existing_value[1]!r} and "
-                    f"{transition.start!r}."
-                )
+            _check_locator_conflict(
+                locator_key,
+                starts_by_locator.get(locator_key),
+                start_secs,
+                transition.start,
+            )
             starts_by_locator[locator_key] = (start_secs, transition.start)
     return starts, starts_by_locator
 
@@ -148,22 +172,14 @@ def _validate_chapters_align_to_segments(
         _validate_chapter_aligns_to_segments(chapter, starts, starts_by_locator)
 
 
-def _validate_chapter_aligns_to_segments(
+def _validate_chapter_locator(
     chapter: ChapterMarker,
-    starts: set[int],
+    chapter_start: int,
     starts_by_locator: dict[str, tuple[int, str]],
 ) -> None:
-    """Validate one generated chapter against explicit segment metadata."""
-    chapter_start = _duration_to_seconds(chapter.start, "start")
-    if chapter_start not in starts:
-        msg = (
-            "chapter starts must align to supplied segment starts; "
-            f"{chapter.start} is not a segment transition."
-        )
-        raise ChapterMarkersResponseFormatError(msg)
-    if chapter.tei_locator is None:
-        return
-    segment_start_entry = starts_by_locator.get(chapter.tei_locator)
+    """Raise if the chapter's tei_locator does not align to its start time."""
+    locator = typ.cast("str", chapter.tei_locator)
+    segment_start_entry = starts_by_locator.get(locator)
     if segment_start_entry is None:
         msg = (
             "chapter locators must resolve to supplied segment metadata; "
@@ -178,3 +194,20 @@ def _validate_chapter_aligns_to_segments(
             f"{chapter.start}."
         )
         raise ChapterMarkersResponseFormatError(msg)
+
+
+def _validate_chapter_aligns_to_segments(
+    chapter: ChapterMarker,
+    starts: set[int],
+    starts_by_locator: dict[str, tuple[int, str]],
+) -> None:
+    """Validate one generated chapter against explicit segment metadata."""
+    chapter_start = _duration_to_seconds(chapter.start, "start")
+    if chapter_start not in starts:
+        msg = (
+            "chapter starts must align to supplied segment starts; "
+            f"{chapter.start} is not a segment transition."
+        )
+        raise ChapterMarkersResponseFormatError(msg)
+    if chapter.tei_locator is not None:
+        _validate_chapter_locator(chapter, chapter_start, starts_by_locator)
