@@ -20,6 +20,33 @@ branch_labels = None
 depends_on = None
 
 
+def _history_columns(parent_fk_col: str) -> list[sa.Column]:
+    """Build shared change-history table columns."""
+    parent_fk_targets = {
+        "series_profile_id": "series_profiles.id",
+        "episode_template_id": "episode_templates.id",
+    }
+    return [
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            parent_fk_col,
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey(parent_fk_targets[parent_fk_col]),
+            nullable=False,
+        ),
+        sa.Column("revision", sa.Integer(), nullable=False),
+        sa.Column("actor", sa.String(200), nullable=True),
+        sa.Column("note", sa.Text(), nullable=True),
+        sa.Column("snapshot", postgresql.JSONB(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+    ]
+
+
 def _create_episode_templates_table() -> None:
     """Create the episode templates table and indexes."""
     op.create_table(
@@ -64,23 +91,7 @@ def _create_series_profile_history_table() -> None:
     """Create the series profile history table and indexes."""
     op.create_table(
         "series_profile_history",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "series_profile_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("series_profiles.id"),
-            nullable=False,
-        ),
-        sa.Column("revision", sa.Integer(), nullable=False),
-        sa.Column("actor", sa.String(200), nullable=True),
-        sa.Column("note", sa.Text(), nullable=True),
-        sa.Column("snapshot", postgresql.JSONB(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
+        *_history_columns("series_profile_id"),
         sa.UniqueConstraint(
             "series_profile_id",
             "revision",
@@ -102,23 +113,7 @@ def _create_episode_template_history_table() -> None:
     """Create the episode template history table and indexes."""
     op.create_table(
         "episode_template_history",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "episode_template_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("episode_templates.id"),
-            nullable=False,
-        ),
-        sa.Column("revision", sa.Integer(), nullable=False),
-        sa.Column("actor", sa.String(200), nullable=True),
-        sa.Column("note", sa.Text(), nullable=True),
-        sa.Column("snapshot", postgresql.JSONB(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
+        *_history_columns("episode_template_id"),
         sa.UniqueConstraint(
             "episode_template_id",
             "revision",
