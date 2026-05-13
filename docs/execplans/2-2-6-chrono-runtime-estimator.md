@@ -200,7 +200,7 @@ XML and unsupported TEI body markup.
 - [x] (2026-05-13 14:10Z) Added Chrono observability for TEI validation
   failures, graph-node failures, and bounded-cardinality estimator metrics for
   success/error counts and latency. Validation reported `473 passed, 3 skipped`.
-- [x] (2026-05-14 12:10Z) Added Chrono determinism and formula property tests,
+- [x] (2026-05-13 12:10Z) Added Chrono determinism and formula property tests,
   Syrupy snapshots for estimator and graph artefacts, and distinct spoken-word
   counts in concurrent evaluator and graph fixtures. Validation reported
   `477 passed, 3 skipped`.
