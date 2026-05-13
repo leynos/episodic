@@ -58,6 +58,41 @@ def _build_chapters_div_payload(
     }
 
 
+def _iter_list_item_payloads(
+    list_payload: dict[str, object],
+) -> typ.Iterator[dict[str, object]]:
+    """Yield validated item payloads from a single list-type payload."""
+    for item in require_sequence(
+        list_payload.get("items"),
+        "chapters.content[].items",
+        error_cls=ValueError,
+    ):
+        yield require_mapping(
+            item,
+            "chapters.content[].items[]",
+            error_cls=ValueError,
+        )
+
+
+def _iter_chapter_block_item_payloads(
+    block_payload: dict[str, object],
+) -> typ.Iterator[dict[str, object]]:
+    """Yield item payloads from all list nodes inside a chapters div block."""
+    for block_content in require_sequence(
+        block_payload.get("content"),
+        "chapters.content",
+        error_cls=ValueError,
+    ):
+        list_payload = require_mapping(
+            block_content,
+            "chapters.content[]",
+            error_cls=ValueError,
+        )
+        if list_payload.get("type") != "list":
+            continue
+        yield from _iter_list_item_payloads(list_payload)
+
+
 def _iter_chapter_item_payloads(
     document_payload: dict[str, object],
 ) -> typ.Iterator[dict[str, object]]:
@@ -67,28 +102,7 @@ def _iter_chapter_item_payloads(
         if not is_div_payload(body_block, "chapters"):
             continue
         block_payload = typ.cast("dict[str, object]", body_block)
-        for block_content in require_sequence(
-            block_payload.get("content"),
-            "chapters.content",
-            error_cls=ValueError,
-        ):
-            list_payload = require_mapping(
-                block_content,
-                "chapters.content[]",
-                error_cls=ValueError,
-            )
-            if list_payload.get("type") != "list":
-                continue
-            for item in require_sequence(
-                list_payload.get("items"),
-                "chapters.content[].items",
-                error_cls=ValueError,
-            ):
-                yield require_mapping(
-                    item,
-                    "chapters.content[].items[]",
-                    error_cls=ValueError,
-                )
+        yield from _iter_chapter_block_item_payloads(block_payload)
 
 
 def _prepare_empty_chapter_summaries_for_tei_rapporteur(
