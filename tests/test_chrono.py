@@ -1,5 +1,6 @@
 """Unit tests for the Chrono spoken-runtime estimator."""
 
+import asyncio
 import typing as typ
 
 import pytest
@@ -181,6 +182,30 @@ async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
     assert async_result == sync_result, (
         "evaluate() must delegate to estimate() and return an identical result"
     )
+
+
+@pytest.mark.asyncio
+async def test_chrono_estimator_handles_concurrent_evaluations() -> None:
+    """A shared estimator should handle concurrent immutable requests."""
+    estimator = ChronoRuntimeEstimator()
+    requests = [
+        ChronoEvaluationRequest(
+            script_tei_xml=_tei_document(f"<sp><p>request {index} words</p></sp>")
+        )
+        for index in range(5)
+    ]
+    expected_results = [estimator.estimate(request) for request in requests]
+
+    results = await asyncio.gather(
+        *(estimator.evaluate(request) for request in requests)
+    )
+
+    assert results == expected_results, (
+        "concurrent evaluate() calls must match independent sync estimates"
+    )
+    assert [result.metadata.input_character_count for result in results] == [
+        len(request.script_tei_xml) for request in requests
+    ], "concurrent results must preserve per-request metadata"
 
 
 @pytest.mark.parametrize(

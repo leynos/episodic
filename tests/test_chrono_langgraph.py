@@ -1,5 +1,6 @@
 """Unit tests for Chrono's minimal LangGraph seam."""
 
+import asyncio
 import dataclasses as dc
 import typing as typ
 
@@ -9,6 +10,7 @@ from episodic.qa.chrono import (
     ChronoEstimatorMetadata,
     ChronoEvaluationRequest,
     ChronoRuntimeEstimate,
+    ChronoRuntimeEstimator,
 )
 from episodic.qa.chrono_langgraph import (
     ChronoGraphState,
@@ -37,6 +39,14 @@ def _request() -> ChronoEvaluationRequest:
         script_tei_xml=(
             "<TEI><text><body><sp><p>Hello from Chrono.</p></sp></body></text></TEI>"
         )
+    )
+
+
+def _tei_document(body: str) -> str:
+    """Wrap a TEI body fixture with the required document header."""
+    return (
+        "<TEI><teiHeader><fileDesc><title>Chrono graph test</title></fileDesc>"
+        f"</teiHeader><text><body>{body}</body></text></TEI>"
     )
 
 
@@ -90,3 +100,33 @@ async def test_chrono_graph_propagates_result_and_metadata() -> None:
     assert chrono_result.metadata.estimator_name == "chrono-naive-word-count"
     assert chrono_result.metadata.spoken_word_count == 3
     assert not hasattr(chrono_result, "usage")
+
+
+@pytest.mark.asyncio
+async def test_chrono_graph_handles_concurrent_invocations() -> None:
+    """A shared graph and evaluator should keep concurrent state isolated."""
+    evaluator = ChronoRuntimeEstimator()
+    graph = build_chrono_graph(evaluator)
+    requests = [
+        ChronoEvaluationRequest(
+            script_tei_xml=_tei_document(f"<sp><p>request {index} words</p></sp>")
+        )
+        for index in range(5)
+    ]
+
+    states = await asyncio.gather(
+        *(
+            graph.ainvoke(ChronoGraphState(chrono_request=request))
+            for request in requests
+        )
+    )
+    results = [
+        typ.cast("ChronoRuntimeEstimate", state["chrono_result"]) for state in states
+    ]
+
+    assert results == [evaluator.estimate(request) for request in requests], (
+        "concurrent graph invocations must match direct estimator results"
+    )
+    assert [result.metadata.input_character_count for result in results] == [
+        len(request.script_tei_xml) for request in requests
+    ], "concurrent graph invocations must preserve per-request metadata"
