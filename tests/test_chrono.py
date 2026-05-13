@@ -14,6 +14,9 @@ from episodic.qa.chrono import (
     ChronoRuntimeEstimator,
 )
 
+if typ.TYPE_CHECKING:
+    from collections import abc as cabc
+
 
 @dc.dataclass(slots=True)
 class _FakeChronoMetrics:
@@ -26,7 +29,7 @@ class _FakeChronoMetrics:
         self,
         name: str,
         *,
-        labels: typ.Mapping[str, str],
+        labels: cabc.Mapping[str, str],
     ) -> None:
         """Capture a counter increment."""
         self.counters.append((name, dict(labels)))
@@ -36,7 +39,7 @@ class _FakeChronoMetrics:
         name: str,
         value: float,
         *,
-        labels: typ.Mapping[str, str],
+        labels: cabc.Mapping[str, str],
     ) -> None:
         """Capture a latency observation."""
         self.latencies.append((name, value, dict(labels)))
