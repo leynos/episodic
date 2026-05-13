@@ -1,7 +1,7 @@
 """SQLAlchemy models for orchestration workflow checkpoints."""
 
-import datetime as dt
-import uuid
+import datetime as dt  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
+import uuid  # noqa: TC003  # SQLAlchemy evaluates annotations at runtime.
 
 import sqlalchemy as sa
 from sqlalchemy import orm
@@ -9,7 +9,7 @@ from sqlalchemy.dialects import postgresql
 
 from episodic.canonical.domain import WorkflowCheckpointStatus
 
-from .models_base import Base, WORKFLOW_CHECKPOINT_STATUS
+from .models_base import WORKFLOW_CHECKPOINT_STATUS, Base
 
 
 class WorkflowCheckpointRecord(Base):

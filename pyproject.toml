@@ -415,8 +415,9 @@ enable = [
 ]
 
 [tool.pytest.ini_options]
-# Tests automatically killed after seconds elapsed
-timeout = 30
+# Tests automatically killed after seconds elapsed. Full-suite database fixture
+# startup can exceed 30 seconds under shared CI or agent-host load.
+timeout = 60
 markers = [
     "act: integration tests that drive GitHub Actions via act",
     "slow: exercises that take longer or require heavyweight tooling",

@@ -13,14 +13,14 @@ adapter instead.
 """
 
 import asyncio
+import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
-import typing as typ
 
 from episodic.orchestration._dto import WorkflowCheckpoint
 from episodic.orchestration._types import _log_event
 
-TimeProvider = typ.Callable[[], dt.datetime]
+TimeProvider = cabc.Callable[[], dt.datetime]
 
 
 @dc.dataclass(slots=True)
