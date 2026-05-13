@@ -1,4 +1,25 @@
-"""Representative Celery task seams for the worker scaffold."""
+"""Representative Celery task seams for the worker scaffold.
+
+CPU-bound tasks run on the `episodic.cpu` queue in Celery `prefork` worker
+processes. Tasks whose inner work can be split into pure-Python items may also
+fan out inside one worker process through the optional interpreter-pool adapter:
+
+```python
+from episodic.concurrent_interpreters import (
+    build_cpu_task_executor_from_environment,
+)
+
+executor = build_cpu_task_executor_from_environment()
+results = await executor.map_ordered(pure_python_fn, items)
+```
+
+Set `EPISODIC_USE_INTERPRETER_POOL=1` to enable subinterpreter parallelism for
+that inner fan-out path, with the implementation and
+`EPISODIC_INTERPRETER_POOL_MAX_WORKERS` tuning knob documented in
+`episodic/concurrent_interpreters.py`. Callers that gate fan-out by batch size
+should keep that threshold as task-level policy, as
+`DefaultWeightingStrategy` does with `EPISODIC_INTERPRETER_POOL_MIN_ITEMS`.
+"""
 
 import collections.abc as cabc
 import dataclasses as dc

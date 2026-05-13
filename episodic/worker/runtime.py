@@ -26,7 +26,23 @@ class WorkerPool(enum.StrEnum):
 
 @dc.dataclass(frozen=True, slots=True)
 class WorkerRuntimeConfig:
-    """Runtime configuration required to boot the Celery worker scaffold."""
+    """Runtime configuration required to boot the Celery worker scaffold.
+
+    Notes
+    -----
+    This configuration governs Celery-level dispatch concerns: broker
+    connection settings, result backend configuration, worker pool selection,
+    and per-pool concurrency.
+
+    `EPISODIC_USE_INTERPRETER_POOL`,
+    `EPISODIC_INTERPRETER_POOL_MIN_ITEMS`, and
+    `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` are task-level companion variables
+    consumed by CPU-bound task implementations and related fan-out policy.
+    Task code should use `build_cpu_task_executor_from_environment()` for the
+    executor adapter. These variables are intentionally not surfaced here
+    because they control intra-task parallelism inside a prefork worker
+    process, not inter-task dispatch across Celery worker pools.
+    """
 
     broker_url: str
     result_backend: str | None = None
