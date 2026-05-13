@@ -120,6 +120,14 @@ def _coerce_enum(  # noqa: UP047
         raise PedanteResponseFormatError(msg) from exc
 
 
+def _require_non_empty_string_item(item: object, field_name: str) -> str:
+    """Validate that a single list element is a non-empty string."""
+    if not isinstance(item, str) or not item.strip():
+        msg = f"Pedante response field {field_name!r} must contain non-empty strings."
+        raise PedanteResponseFormatError(msg)
+    return item
+
+
 def _coerce_string_tuple(
     payload: dict[str, object],
     field_name: str,
@@ -129,12 +137,4 @@ def _coerce_string_tuple(
     if not isinstance(raw_value, list):
         msg = f"Pedante response field {field_name!r} must be a list of strings."
         raise PedanteResponseFormatError(msg)
-    values: list[str] = []
-    for item in raw_value:
-        if not isinstance(item, str) or not item.strip():
-            msg = (
-                f"Pedante response field {field_name!r} must contain non-empty strings."
-            )
-            raise PedanteResponseFormatError(msg)
-        values.append(item)
-    return tuple(values)
+    return tuple(_require_non_empty_string_item(item, field_name) for item in raw_value)
