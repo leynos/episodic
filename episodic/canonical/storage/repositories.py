@@ -28,11 +28,7 @@ from episodic.canonical.entity_protocols import (
     TeiHeaderRepository,
 )
 
-from .history_repositories import (
-    SqlAlchemyEpisodeTemplateHistoryRepository,
-    SqlAlchemySeriesProfileHistoryRepository,
-)
-from .mappers import (
+from .entity_mappers import (
     _approval_event_from_record,
     _approval_event_to_record,
     _episode_from_record,
@@ -47,6 +43,10 @@ from .mappers import (
     _source_document_to_record,
     _tei_header_from_record,
     _tei_header_to_record,
+)
+from .history_repositories import (
+    SqlAlchemyEpisodeTemplateHistoryRepository,
+    SqlAlchemySeriesProfileHistoryRepository,
 )
 from .models import (
     ApprovalEventRecord,

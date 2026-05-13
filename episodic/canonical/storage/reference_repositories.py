@@ -20,18 +20,18 @@ from episodic.canonical.reference_protocols import (
     ReferenceDocumentRevisionRepository,
 )
 
-from .mappers import (
+from .models import (
+    ReferenceBindingRecord,
+    ReferenceDocumentRecord,
+    ReferenceDocumentRevisionRecord,
+)
+from .reference_mappers import (
     _reference_binding_from_record,
     _reference_binding_to_record,
     _reference_document_from_record,
     _reference_document_revision_from_record,
     _reference_document_revision_to_record,
     _reference_document_to_record,
-)
-from .models import (
-    ReferenceBindingRecord,
-    ReferenceDocumentRecord,
-    ReferenceDocumentRevisionRecord,
 )
 from .repository_base import _RepositoryBase
 

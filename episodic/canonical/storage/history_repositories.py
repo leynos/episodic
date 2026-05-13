@@ -14,7 +14,7 @@ from episodic.canonical.history_protocols import (
     SeriesProfileHistoryRepository,
 )
 
-from .mappers import (
+from .history_mappers import (
     _episode_template_history_from_record,
     _episode_template_history_to_record,
     _series_profile_history_from_record,
