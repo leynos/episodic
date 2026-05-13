@@ -433,7 +433,11 @@ class ChapterMarkersGenerator:
         logger.info("chapter_markers_generation_requested")
         response = await self.llm.generate(request)
         result = self._result_from_response(response)
-        _validate_chapters_align_to_segments(result, segment_structure)
+        try:
+            _validate_chapters_align_to_segments(result, segment_structure)
+        except ChapterMarkersResponseFormatError:
+            logger.warning("chapter_markers_alignment_validation_failed")
+            raise
         return result
 
 
