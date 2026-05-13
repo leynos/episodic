@@ -258,11 +258,15 @@ def _transitions_from_dict(
                 locator_keys=_locator_keys_for_segment(mapping),
             )
         )
-    if depth > 0:
-        for nested_value in mapping.values():
-            transitions.extend(
-                _segment_transitions_from_value(nested_value, depth=depth - 1)
-            )
+    for nested_value in mapping.values():
+        if not isinstance(nested_value, dict | list):
+            continue
+        if depth <= 0:
+            msg = f"_transitions_from_dict traversal depth exhausted: depth={depth}."
+            raise ChapterMarkersResponseFormatError(msg)
+        transitions.extend(
+            _segment_transitions_from_value(nested_value, depth=depth - 1)
+        )
     return tuple(transitions)
 
 
@@ -273,7 +277,8 @@ def _transitions_from_sequence(
 ) -> tuple[_SegmentTransition, ...]:
     """Recurse into each element of a list node."""
     if depth <= 0:
-        return ()
+        msg = f"_transitions_from_sequence traversal depth exhausted: depth={depth}."
+        raise ChapterMarkersResponseFormatError(msg)
     transitions: list[_SegmentTransition] = []
     for item in items:
         transitions.extend(_segment_transitions_from_value(item, depth=depth - 1))
@@ -286,6 +291,11 @@ def _segment_transitions_from_value(
     depth: int = _MAX_SEGMENT_TRAVERSAL_DEPTH,
 ) -> tuple[_SegmentTransition, ...]:
     """Extract explicit segment starts from nested segment metadata."""
+    if depth < 0:
+        msg = (
+            f"_segment_transitions_from_value traversal depth exhausted: depth={depth}."
+        )
+        raise ChapterMarkersResponseFormatError(msg)
     if isinstance(value, dict):
         mapping = typ.cast("dict[str, object]", value)
         return _transitions_from_dict(mapping, depth=depth)
@@ -477,7 +487,7 @@ def _build_chapters_div_payload(
     items = [_build_item_payload(chapter) for chapter in chapters]
     for item in items:
         if "content" not in item:
-            item["content"] = build_text_inline(_EMPTY_CHAPTER_SUMMARY_SENTINEL)
+            item["_empty_chapter_summary"] = True
     return {
         "type": "div",
         "div_type": "chapters",
@@ -488,6 +498,43 @@ def _build_chapters_div_payload(
             }
         ],
     }
+
+
+def _prepare_empty_chapter_summaries_for_tei_rapporteur(
+    document_payload: dict[str, object],
+) -> None:
+    """Bridge optional chapter summaries to tei_rapporteur's required item content."""
+    body_blocks = body_blocks_payload(document_payload)
+    for body_block in body_blocks:
+        if not is_div_payload(body_block, "chapters"):
+            continue
+        block_payload = typ.cast("dict[str, object]", body_block)
+        for block_content in require_sequence(
+            block_payload.get("content"),
+            "chapters.content",
+            error_cls=ValueError,
+        ):
+            list_payload = require_mapping(
+                block_content,
+                "chapters.content[]",
+                error_cls=ValueError,
+            )
+            if list_payload.get("type") != "list":
+                continue
+            for item in require_sequence(
+                list_payload.get("items"),
+                "chapters.content[].items",
+                error_cls=ValueError,
+            ):
+                item_payload = require_mapping(
+                    item,
+                    "chapters.content[].items[]",
+                    error_cls=ValueError,
+                )
+                if item_payload.pop("_empty_chapter_summary", False):
+                    item_payload["content"] = build_text_inline(
+                        _EMPTY_CHAPTER_SUMMARY_SENTINEL
+                    )
 
 
 def enrich_tei_with_chapter_markers(
@@ -515,5 +562,6 @@ def enrich_tei_with_chapter_markers(
         len(result.chapters),
         removed_block_count,
     )
+    _prepare_empty_chapter_summaries_for_tei_rapporteur(document_payload)
     enriched_document = tei.from_dict(document_payload)
     return tei.emit_xml(enriched_document).replace(_EMPTY_CHAPTER_SUMMARY_SENTINEL, "")

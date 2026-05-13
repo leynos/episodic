@@ -210,13 +210,15 @@ def test_repeated_locator_with_same_start_passes_validation(
 ) -> None:
     """Segment metadata may reuse a locator key when it resolves to the same start."""
     duration = iso_duration(start_secs)
-    # Both "seg-a" and "#seg-a" are generated from the id field by
-    # _locator_keys_for_segment; they must both resolve to start_secs without
-    # raising a conflicting-locator error.
+    # Both transition entries expose "#shared" via their locator fields; they
+    # must resolve to start_secs without raising a conflicting-locator error.
     segment_structure: dict[str, object] = {
-        "segments": [{"id": "seg-a", "start": duration}]
+        "segments": [
+            {"id": "seg-a", "locator": "#shared", "start": duration},
+            {"id": "seg-b", "locator": "#shared", "start": duration},
+        ]
     }
-    chapters_payload = [{"title": "Intro", "start": duration, "tei_locator": "#seg-a"}]
+    chapters_payload = [{"title": "Intro", "start": duration, "tei_locator": "#shared"}]
     fake_llm = FakeLLMPort(
         valid_llm_response(json.dumps({"chapters": chapters_payload}))
     )
@@ -229,4 +231,4 @@ def test_repeated_locator_with_same_start_passes_validation(
     )
 
     assert len(result.chapters) == 1
-    assert result.chapters[0].tei_locator == "#seg-a"
+    assert result.chapters[0].tei_locator == "#shared"
