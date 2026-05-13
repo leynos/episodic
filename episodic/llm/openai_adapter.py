@@ -37,20 +37,20 @@ _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _HTTP_BAD_REQUEST_THRESHOLD = 400
 
 
-def _estimate_token_count(*parts: str | None) -> int:
-    """Estimate prompt tokens using a conservative ~4 chars/token heuristic.
+def _estimate_token_count(chars_per_token: float, *parts: str | None) -> int:
+    """Estimate prompt tokens using a configurable chars/token heuristic.
 
     This heuristic approximates OpenAI/tiktoken GPT-4-era tokenization by
-    returning ``ceil(len(text) / 4)`` for the combined non-``None`` prompt
-    parts. Actual token counts vary by text shape, language, and vocabulary,
-    so this remains a heuristic-only implementation. If other tokenizers need
-    support later, this function is the extension point for injecting a
-    tokenizer or configurable chars-per-token ratio.
+    returning ``ceil(len(text) / chars_per_token)`` for the combined
+    non-``None`` prompt parts. Actual token counts vary by text shape,
+    language, and vocabulary, so this remains a heuristic-only implementation.
+    If other tokenizers need support later, this function is the extension
+    point for injecting a tokenizer.
     """
     combined = "".join(part for part in parts if part is not None)
     if not combined:
         return 0
-    return math.ceil(len(combined) / 4)
+    return math.ceil(len(combined) / chars_per_token)
 
 
 def _coerce_operation(value: LLMProviderOperation | str) -> LLMProviderOperation:
@@ -67,10 +67,11 @@ def _coerce_operation(value: LLMProviderOperation | str) -> LLMProviderOperation
 def _validate_preflight_budget(
     request: LLMRequest,
     token_budget: LLMTokenBudget,
+    chars_per_token: float,
 ) -> None:
     """Reject requests that obviously cannot fit within the configured budget."""
     estimated_input_tokens = _estimate_token_count(
-        request.system_prompt, request.prompt
+        chars_per_token, request.system_prompt, request.prompt
     )
     if estimated_input_tokens > token_budget.max_input_tokens:
         msg = (
@@ -236,6 +237,7 @@ def _validate_llm_config(config: OpenAICompatibleLLMConfig) -> None:
         (config.max_attempts <= 0, "max_attempts must be greater than zero."),
         (config.retry_delay_seconds < 0, "retry_delay_seconds must be non-negative."),
         (config.timeout_seconds <= 0, "timeout_seconds must be greater than zero."),
+        (config.chars_per_token <= 0, "chars_per_token must be greater than zero."),
         (not config.base_url.strip(), "base_url must be non-empty."),
         (not config.api_key.strip(), "api_key must be non-empty."),
     ]
@@ -256,6 +258,7 @@ class OpenAICompatibleLLMConfig:
     max_attempts: int = 3
     retry_delay_seconds: float = 0.5
     timeout_seconds: float = 30.0
+    chars_per_token: float = 4.0
 
     def __post_init__(self) -> None:
         """Validate adapter configuration eagerly."""
@@ -279,6 +282,7 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         self._max_attempts = config.max_attempts
         self._retry_delay_seconds = config.retry_delay_seconds
         self._timeout_seconds = config.timeout_seconds
+        self._chars_per_token = config.chars_per_token
 
     async def __aenter__(self) -> OpenAICompatibleLLMAdapter:
         """Return the adapter for use as an async context manager."""
@@ -303,7 +307,7 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         """Generate text from an OpenAI-compatible provider."""
         token_budget = request.token_budget
         if token_budget is not None:
-            _validate_preflight_budget(request, token_budget)
+            _validate_preflight_budget(request, token_budget, self._chars_per_token)
 
         operation = _coerce_operation(
             self._provider_operation

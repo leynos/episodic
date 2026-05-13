@@ -84,6 +84,7 @@ def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
             "provider_operation",
             "retry_delay_seconds",
             "timeout_seconds",
+            "chars_per_token",
         }
         unexpected_keys = set(config_kwargs) - allowed_keys
         if unexpected_keys:
@@ -109,6 +110,9 @@ def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
             retry_delay_seconds=typ.cast(
                 "float", merged_config.get("retry_delay_seconds", 0.5)
             ),
+            chars_per_token=typ.cast(
+                "float", merged_config.get("chars_per_token", 4.0)
+            ),
         )
 
     return _build_invalid_config
@@ -126,6 +130,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
         max_attempts: int = 3,
         retry_delay_seconds: float = 0.5,
         timeout_seconds: float = 30.0,
+        chars_per_token: float = 4.0,
     ) -> cabc.AsyncIterator[OpenAICompatibleLLMAdapter]:
         async with httpx.AsyncClient(
             transport=transport,
@@ -139,6 +144,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
                     max_attempts=max_attempts,
                     retry_delay_seconds=retry_delay_seconds,
                     timeout_seconds=timeout_seconds,
+                    chars_per_token=chars_per_token,
                 ),
                 client=client,
             )

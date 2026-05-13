@@ -16,6 +16,8 @@ if typ.TYPE_CHECKING:
         ({"max_attempts": 0}, "max_attempts"),
         ({"retry_delay_seconds": -1}, "retry_delay_seconds"),
         ({"timeout_seconds": 0}, "timeout_seconds"),
+        ({"chars_per_token": 0}, "chars_per_token"),
+        ({"chars_per_token": -1.0}, "chars_per_token"),
         ({"base_url": "   "}, "base_url must be non-empty."),
         ({"api_key": "   "}, "api_key must be non-empty."),
         ({"base_url": "", "api_key": "k"}, "base_url must be non-empty."),

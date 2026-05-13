@@ -55,6 +55,32 @@ async def test_generate_rejects_prompt_that_exceeds_input_budget(
 
 
 @pytest.mark.asyncio
+async def test_generate_uses_configured_chars_per_token_for_preflight_budget(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+) -> None:
+    """Allow operators to tighten prompt preflight estimation per adapter."""
+    transport = httpx.MockTransport(lambda request: openai_json_response({}))
+    async with openai_adapter_factory(
+        transport=transport,
+        chars_per_token=2.0,
+    ) as adapter:
+        with pytest.raises(LLMTokenBudgetExceededError, match="input token budget"):
+            await adapter.generate(
+                LLMRequest(
+                    model="gpt-4o-mini",
+                    prompt="x" * 41,
+                    system_prompt=None,
+                    token_budget=LLMTokenBudget(
+                        max_input_tokens=20,
+                        max_output_tokens=10,
+                        max_total_tokens=40,
+                    ),
+                )
+            )
+
+
+@pytest.mark.asyncio
 async def test_generate_rejects_response_usage_that_exceeds_total_budget(
     openai_adapter_factory: _OpenAIAdapterFactory,
     openai_json_response: _OpenAIJsonResponseBuilder,

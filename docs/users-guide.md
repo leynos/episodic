@@ -333,6 +333,9 @@ jobs.
 - OpenAI-compatible generation requests now enforce token budgets before and
   after provider calls, and persisted profile/template `guardrails` shape the
   outbound system prompt used for generation
+- OpenAI-compatible preflight token estimates can tune the configured
+  `chars_per_token` ratio when a target model's tokenizer differs from the
+  default four-characters-per-token heuristic
 - Setting budget limits per user or organization
 - Monitoring spend and usage dashboards
 - Optimizing costs with model tiering
