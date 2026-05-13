@@ -9,6 +9,7 @@ the saved planner state and folds in an externally supplied action result.
 """
 
 import dataclasses as dc
+import enum
 import importlib
 import time
 import typing as typ
@@ -102,6 +103,25 @@ def _required_string(
     return _require_field(payload, field_name, str, context=context)
 
 
+def _required_enum[EnumT: enum.Enum](
+    payload: dict[str, object],
+    field_name: str,
+    enum_type: type[EnumT],
+    *,
+    context: str,
+) -> EnumT:
+    """Return an enum field from a checkpoint payload."""
+    value = _required_string(payload, field_name, context=context)
+    try:
+        return enum_type(value)
+    except ValueError as exc:
+        msg = (
+            f"checkpoint {context} field {field_name} must be a valid "
+            f"{enum_type.__name__}."
+        )
+        raise TypeError(msg) from exc
+
+
 def _usage_from_payload(payload: object) -> LLMUsage:
     """Return LLMUsage from a checkpoint payload."""
     usage_payload = _as_object_payload(payload, "usage")
@@ -157,12 +177,18 @@ def _plan_from_payload(payload: object) -> dto.ExecutionPlan:
         steps=tuple(
             dto.PlannedAction(
                 action_id=_required_string(step, "action_id", context="plan step"),
-                action_kind=dto.ActionKind(
-                    _required_string(step, "action_kind", context="plan step")
+                action_kind=_required_enum(
+                    step,
+                    "action_kind",
+                    dto.ActionKind,
+                    context="plan step",
                 ),
                 rationale=_required_string(step, "rationale", context="plan step"),
-                model_tier=dto.ModelTier(
-                    _required_string(step, "model_tier", context="plan step")
+                model_tier=_required_enum(
+                    step,
+                    "model_tier",
+                    dto.ModelTier,
+                    context="plan step",
                 ),
                 required_inputs=tuple(
                     str(item)
@@ -245,11 +271,17 @@ def _action_result_from_payload(payload: object) -> dto.ActionExecutionResult:
         action_id=_required_string(
             action_payload, "action_id", context="action_result"
         ),
-        action_kind=dto.ActionKind(
-            _required_string(action_payload, "action_kind", context="action_result")
+        action_kind=_required_enum(
+            action_payload,
+            "action_kind",
+            dto.ActionKind,
+            context="action_result",
         ),
-        model_tier=dto.ModelTier(
-            _required_string(action_payload, "model_tier", context="action_result")
+        model_tier=_required_enum(
+            action_payload,
+            "model_tier",
+            dto.ModelTier,
+            context="action_result",
         ),
         model=_required_string(action_payload, "model", context="action_result"),
         summary=_required_string(action_payload, "summary", context="action_result"),

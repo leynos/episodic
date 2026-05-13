@@ -1,4 +1,4 @@
-# ADR-007: Durable generation checkpoints
+# Architecture Decision Record (ADR)-007: Durable generation checkpoints
 
 ## Status
 
