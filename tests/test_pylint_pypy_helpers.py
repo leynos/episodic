@@ -1,7 +1,5 @@
 """Test doubles and orchestration helpers for PyPy-backed Pylint tests."""
 
-from __future__ import annotations
-
 import builtins
 import dataclasses
 import importlib.util

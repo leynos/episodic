@@ -1,7 +1,5 @@
 """Unit tests for the PyPy-backed Pylint wrapper helpers."""
 
-from __future__ import annotations
-
 import builtins
 import inspect
 import typing as typ
