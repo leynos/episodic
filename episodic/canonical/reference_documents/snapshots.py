@@ -8,7 +8,7 @@ import uuid
 from episodic.canonical.domain import SourceDocument
 
 if typ.TYPE_CHECKING:
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
     from .resolution import ResolvedBinding
 

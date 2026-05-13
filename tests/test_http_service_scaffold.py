@@ -13,7 +13,7 @@ if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
 
     from episodic.api.types import UowFactory
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 class _LifespanEvent(typ.TypedDict):

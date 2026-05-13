@@ -5,26 +5,30 @@ import typing as typ
 
 import pytest
 
+from episodic.canonical.entity_protocols import (
+    ApprovalEventRepository,
+    EpisodeRepository,
+    EpisodeTemplateRepository,
+    IngestionJobRepository,
+    SeriesProfileRepository,
+    SourceDocumentRepository,
+    TeiHeaderRepository,
+)
+from episodic.canonical.history_protocols import (
+    EpisodeTemplateHistoryRepository,
+    SeriesProfileHistoryRepository,
+)
 from episodic.canonical.ingestion_ports import (
     ConflictResolver,
     SourceNormalizer,
     WeightingStrategy,
 )
-from episodic.canonical.ports import (
-    ApprovalEventRepository,
-    CanonicalUnitOfWork,
-    EpisodeRepository,
-    EpisodeTemplateHistoryRepository,
-    EpisodeTemplateRepository,
-    IngestionJobRepository,
+from episodic.canonical.reference_protocols import (
     ReferenceBindingRepository,
     ReferenceDocumentRepository,
     ReferenceDocumentRevisionRepository,
-    SeriesProfileHistoryRepository,
-    SeriesProfileRepository,
-    SourceDocumentRepository,
-    TeiHeaderRepository,
 )
+from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.concurrent_interpreters import CpuTaskExecutor
 from episodic.llm.ports import LLMPort
 from episodic.qa.langgraph import PedanteEvaluatorPort

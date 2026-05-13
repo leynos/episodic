@@ -26,7 +26,7 @@ from episodic.canonical.profile_templates.types import (
 if typ.TYPE_CHECKING:
     import uuid
 
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 @dc.dataclass(frozen=True, slots=True)

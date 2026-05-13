@@ -21,7 +21,7 @@ if typ.TYPE_CHECKING:
         SeriesProfile,
         TeiHeader,
     )
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 def create_series_for_binding_tests(now: dt.datetime) -> SeriesProfile:

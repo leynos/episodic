@@ -14,7 +14,7 @@ Commit work in a single unit-of-work:
 
 import typing as typ
 
-from episodic.canonical.ports import CanonicalUnitOfWork
+from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.logging import get_logger
 
 from .repositories import (

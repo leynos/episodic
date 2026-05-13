@@ -14,8 +14,8 @@ from episodic.canonical.ingestion_ports import (
     SourceNormalizer,
     WeightingStrategy,
 )
-from episodic.canonical.ports import CanonicalUnitOfWork
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.llm import OpenAICompatibleLLMAdapter, OpenAICompatibleLLMConfig
 from episodic.llm.ports import LLMPort
 

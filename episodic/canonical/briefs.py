@@ -20,8 +20,8 @@ from .prompts import render_series_brief_prompt, render_series_guardrail_prompt
 if typ.TYPE_CHECKING:
     import uuid
 
-    from .ports import CanonicalUnitOfWork
     from .prompts import RenderedPrompt
+    from .unit_of_work_protocols import CanonicalUnitOfWork
 
 
 async def build_series_brief_prompt(

@@ -18,7 +18,7 @@ import typing as typ
 
 import sqlalchemy as sa
 
-from episodic.canonical.ports import (
+from episodic.canonical.entity_protocols import (
     ApprovalEventRepository,
     EpisodeRepository,
     EpisodeTemplateRepository,

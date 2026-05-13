@@ -41,7 +41,7 @@ from .tei import TeiHeaderPayload, parse_tei_header
 logger = get_logger(__name__)
 
 if typ.TYPE_CHECKING:
-    from .ports import CanonicalUnitOfWork
+    from .unit_of_work_protocols import CanonicalUnitOfWork
 
 
 def _new_storage_id() -> uuid.UUID:

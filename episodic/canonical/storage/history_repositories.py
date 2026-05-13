@@ -9,7 +9,7 @@ from episodic.canonical.domain import (
     EpisodeTemplateHistoryEntry,
     SeriesProfileHistoryEntry,
 )
-from episodic.canonical.ports import (
+from episodic.canonical.history_protocols import (
     EpisodeTemplateHistoryRepository,
     SeriesProfileHistoryRepository,
 )

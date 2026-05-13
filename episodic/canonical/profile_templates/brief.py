@@ -39,7 +39,7 @@ if typ.TYPE_CHECKING:
         ReferenceDocumentRevision,
         SeriesProfile,
     )
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 def _serialize_profile_for_brief(

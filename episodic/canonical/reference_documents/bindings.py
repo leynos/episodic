@@ -41,7 +41,7 @@ from .types import (
 )
 
 if typ.TYPE_CHECKING:
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 _BINDING_CONSTRAINT_NAMES = {

@@ -14,7 +14,7 @@ from episodic.canonical.domain import (
     ReferenceDocumentKind,
     ReferenceDocumentRevision,
 )
-from episodic.canonical.ports import (
+from episodic.canonical.reference_protocols import (
     ReferenceBindingRepository,
     ReferenceDocumentRepository,
     ReferenceDocumentRevisionRepository,
