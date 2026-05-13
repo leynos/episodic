@@ -15,6 +15,26 @@ def _ensure_non_empty_fields(instance: object, *field_names: str) -> None:
             raise ValueError(msg)
 
 
+def _require_non_empty_string_field(value: object, field_name: str) -> None:
+    """Reject non-string or blank string field values."""
+    if not isinstance(value, str):
+        msg = f"{field_name} must be a string."
+        raise TypeError(msg)
+    if not value.strip():
+        msg = f"{field_name} must be non-empty."
+        raise ValueError(msg)
+
+
+def _require_non_empty_tuple_field(value: object, field_name: str) -> None:
+    """Reject non-tuple or empty tuple field values."""
+    if not isinstance(value, tuple):
+        msg = f"{field_name} must be a tuple of source packets."
+        raise TypeError(msg)
+    if not value:
+        msg = f"{field_name} must contain at least one source packet."
+        raise ValueError(msg)
+
+
 class ClaimKind(enum.StrEnum):
     """Kinds of claims Pedante can evaluate."""
 
@@ -90,18 +110,8 @@ class PedanteEvaluationRequest:
 
     def __post_init__(self) -> None:
         """Reject blank TEI payloads and empty source lists."""
-        if not isinstance(self.script_tei_xml, str):
-            msg = "script_tei_xml must be a string."
-            raise TypeError(msg)
-        if not self.script_tei_xml.strip():
-            msg = "script_tei_xml must be non-empty."
-            raise ValueError(msg)
-        if not isinstance(self.sources, tuple):
-            msg = "sources must be a tuple of source packets."
-            raise TypeError(msg)
-        if not self.sources:
-            msg = "sources must contain at least one source packet."
-            raise ValueError(msg)
+        _require_non_empty_string_field(self.script_tei_xml, "script_tei_xml")
+        _require_non_empty_tuple_field(self.sources, "sources")
 
 
 @dc.dataclass(frozen=True, slots=True)
