@@ -1,8 +1,5 @@
 """Tests for episodic logging integration and femtologging compatibility."""
 
-# Logger spy methods mirror stdlib/femtologging call signatures under test.
-# pylint: disable=too-many-arguments
-
 import logging
 import time
 import typing as typ
@@ -21,6 +18,7 @@ class _SpyLogger:
             tuple[episodic_logging.LogLevel, str, object | None, bool]
         ] = []
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def _record(
         self,
         level: episodic_logging.LogLevel,
@@ -33,6 +31,7 @@ class _SpyLogger:
         """Append a normalised call tuple to the record list."""
         self.calls.append((level, message, exc_info, stack_info))
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def info(
         self,
         message: str,
@@ -49,6 +48,7 @@ class _SpyLogger:
             stack_info=stack_info,
         )
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def warning(
         self,
         message: str,
@@ -65,6 +65,7 @@ class _SpyLogger:
             stack_info=stack_info,
         )
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def error(
         self,
         message: str,
@@ -89,6 +90,7 @@ class _LogOnlySpyLogger:
         """Initialise an empty call record."""
         self.calls: list[tuple[int, str, object | None, bool]] = []
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def log(
         self,
         level: int | episodic_logging.LogLevel,
