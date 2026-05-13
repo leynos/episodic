@@ -46,6 +46,15 @@ def test_pedante_parse_result_rejects_invalid_top_level_fields(
         PedanteEvaluationResult.from_json(json.dumps(payload), usage=LLMUsage(1, 2, 3))
 
 
+def _assert_parse_rejects(payload: object, match: str) -> None:
+    """Assert that ``from_json`` raises ``PedanteResponseFormatError`` for *payload*."""
+    with pytest.raises(PedanteResponseFormatError, match=match):
+        PedanteEvaluationResult.from_json(
+            json.dumps(payload),
+            usage=LLMUsage(1, 2, 3),
+        )
+
+
 @pytest.mark.parametrize(
     "findings_value",
     ["not-a-list", 42, {"not": "a-list"}],
@@ -55,12 +64,10 @@ def test_pedante_parse_result_rejects_non_list_findings(
     findings_value: object,
 ) -> None:
     """Reject findings that are not a list."""
-    usage = LLMUsage(1, 2, 3)
-    with pytest.raises(PedanteResponseFormatError, match="findings"):
-        PedanteEvaluationResult.from_json(
-            json.dumps({"summary": "Summary.", "findings": findings_value}),
-            usage=usage,
-        )
+    _assert_parse_rejects(
+        {"summary": "Summary.", "findings": findings_value},
+        "findings",
+    )
 
 
 @pytest.mark.parametrize(
@@ -72,12 +79,10 @@ def test_pedante_parse_result_rejects_non_object_finding_items(
     item: object,
 ) -> None:
     """Reject findings list items that are not JSON objects."""
-    usage = LLMUsage(1, 2, 3)
-    with pytest.raises(PedanteResponseFormatError, match="finding must be a JSON"):
-        PedanteEvaluationResult.from_json(
-            json.dumps({"summary": "Summary.", "findings": [item]}),
-            usage=usage,
-        )
+    _assert_parse_rejects(
+        {"summary": "Summary.", "findings": [item]},
+        "finding must be a JSON",
+    )
 
 
 @pytest.mark.parametrize(
@@ -93,17 +98,12 @@ def test_pedante_parse_result_rejects_invalid_enum_values(
     bad_value: str,
 ) -> None:
     """Reject findings with invalid claim_kind, support_level, or severity values."""
-    with pytest.raises(PedanteResponseFormatError, match=field_name):
-        PedanteEvaluationResult.from_json(
-            json.dumps(
-                pedante_support.valid_result_payload(
-                    findings=[
-                        pedante_support.valid_finding_payload(**{field_name: bad_value})
-                    ]
-                )
-            ),
-            usage=LLMUsage(1, 2, 3),
-        )
+    _assert_parse_rejects(
+        pedante_support.valid_result_payload(
+            findings=[pedante_support.valid_finding_payload(**{field_name: bad_value})]
+        ),
+        field_name,
+    )
 
 
 @pytest.mark.parametrize(
@@ -127,15 +127,9 @@ def test_pedante_parse_result_rejects_invalid_cited_source_ids(
     bad_ids: object,
 ) -> None:
     """Reject findings with invalid cited_source_ids field."""
-    usage = LLMUsage(1, 2, 3)
-    with pytest.raises(PedanteResponseFormatError, match="cited_source_ids"):
-        PedanteEvaluationResult.from_json(
-            json.dumps(
-                pedante_support.valid_result_payload(
-                    findings=[
-                        pedante_support.valid_finding_payload(cited_source_ids=bad_ids)
-                    ]
-                )
-            ),
-            usage=usage,
-        )
+    _assert_parse_rejects(
+        pedante_support.valid_result_payload(
+            findings=[pedante_support.valid_finding_payload(cited_source_ids=bad_ids)]
+        ),
+        "cited_source_ids",
+    )
