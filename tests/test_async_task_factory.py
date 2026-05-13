@@ -2,6 +2,7 @@
 
 import asyncio
 import contextvars as cv
+import functools
 import typing as typ
 
 import pytest
@@ -16,6 +17,10 @@ from episodic.asyncio_tasks import (
 from tests.fixtures.async_task_factory import (
     recording_task_factory,
     select_captured_task_kwargs,
+)
+
+_UNKNOWN_TASK_KWARGS: typ.Final = typ.cast(
+    "TaskCreateKwargs", {"unsupported_kwarg": "value"}
 )
 
 
@@ -132,29 +137,24 @@ def test_create_task_rejects_unsupported_metadata_keys_with_mixed_types() -> Non
         coro.close()
 
 
-def test_create_task_rejects_unknown_task_kwargs() -> None:
+@pytest.mark.parametrize(
+    "make_call",
+    [
+        functools.partial(create_task, **_UNKNOWN_TASK_KWARGS),
+        lambda coro: create_task_in_group(
+            asyncio.TaskGroup(), coro, **_UNKNOWN_TASK_KWARGS
+        ),
+    ],
+    ids=["create_task", "create_task_in_group"],
+)
+def test_task_creation_rejects_unknown_task_kwargs(
+    make_call: typ.Callable[..., object],
+) -> None:
     """Unknown task kwargs are rejected instead of being silently ignored."""
     coro = asyncio.sleep(0)
     try:
         with pytest.raises(TypeError, match="unsupported_kwarg"):
-            create_task(
-                coro,
-                **typ.cast("TaskCreateKwargs", {"unsupported_kwarg": "value"}),
-            )
-    finally:
-        coro.close()
-
-
-def test_create_task_in_group_rejects_unknown_task_kwargs() -> None:
-    """Group task creation rejects unknown task kwargs."""
-    coro = asyncio.sleep(0)
-    try:
-        with pytest.raises(TypeError, match="unsupported_kwarg"):
-            create_task_in_group(
-                asyncio.TaskGroup(),
-                coro,
-                **typ.cast("TaskCreateKwargs", {"unsupported_kwarg": "value"}),
-            )
+            make_call(coro)
     finally:
         coro.close()
 
