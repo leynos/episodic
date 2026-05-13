@@ -14,6 +14,14 @@ from episodic.qa.chrono import (
 )
 
 
+def _tei_document(body: str) -> str:
+    """Wrap a TEI body fixture with the required document header."""
+    return (
+        "<TEI><teiHeader><fileDesc><title>Chrono test</title></fileDesc>"
+        f"</teiHeader><text><body>{body}</body></text></TEI>"
+    )
+
+
 def test_chrono_request_rejects_blank_script() -> None:
     """Reject blank TEI payloads at the contract boundary."""
     with pytest.raises(ValueError, match="script_tei_xml"):
@@ -92,11 +100,11 @@ def test_chrono_runtime_estimate_rejects_negative_duration() -> None:
 def test_chrono_estimator_returns_predictable_default_runtime() -> None:
     """Estimate spoken runtime from TEI dialogue using the default heuristic."""
     request = ChronoEvaluationRequest(
-        script_tei_xml=(
-            "<TEI><text><body><div type='script'>"
+        script_tei_xml=_tei_document(
+            "<div type='script'>"
             "<sp><speaker>Host</speaker><p>Hello there, welcome today.</p></sp>"
             "<sp><speaker>Guest</speaker><p>This is a short reply.</p></sp>"
-            "</div></body></text></TEI>"
+            "</div>"
         )
     )
 
@@ -113,7 +121,7 @@ def test_chrono_estimator_returns_predictable_default_runtime() -> None:
 def test_chrono_estimator_ignores_markup_only_script() -> None:
     """Markup without spoken text should produce a zero-second estimate."""
     request = ChronoEvaluationRequest(
-        script_tei_xml="<TEI><text><body><sp><speaker>Host</speaker></sp></body></text></TEI>"
+        script_tei_xml=_tei_document("<sp><speaker>Host</speaker></sp>")
     )
 
     result = ChronoRuntimeEstimator().estimate(request)
@@ -126,9 +134,8 @@ def test_chrono_estimator_ignores_markup_only_script() -> None:
 def test_chrono_estimator_does_not_double_count_nested_spoken_elements() -> None:
     """Nested spoken TEI elements should count only once."""
     request = ChronoEvaluationRequest(
-        script_tei_xml=(
-            "<TEI><text><body><sp><p>outer words "
-            "<seg>nested words</seg></p></sp></body></text></TEI>"
+        script_tei_xml=_tei_document(
+            "<sp><p>outer words <seg>nested words</seg></p></sp>"
         )
     )
 
@@ -146,9 +153,7 @@ def test_chrono_estimator_uses_custom_metadata() -> None:
         words_per_minute=60,
     )
     request = ChronoEvaluationRequest(
-        script_tei_xml=(
-            "<TEI><text><body><sp><p>one two three</p></sp></body></text></TEI>"
-        )
+        script_tei_xml=_tei_document("<sp><p>one two three</p></sp>")
     )
 
     result = ChronoRuntimeEstimator(config=config).estimate(request)
@@ -167,9 +172,7 @@ async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
         words_per_minute=60,
     )
     request = ChronoEvaluationRequest(
-        script_tei_xml=(
-            "<TEI><text><body><sp><p>one two three</p></sp></body></text></TEI>"
-        )
+        script_tei_xml=_tei_document("<sp><p>one two three</p></sp>")
     )
     estimator = ChronoRuntimeEstimator(config=config)
 
@@ -213,7 +216,7 @@ def test_chrono_estimator_counts_alternate_spoken_tags(
     expected_seconds: int,
 ) -> None:
     """Chrono must extract spoken text from <ab>, <seg>, and <l> elements."""
-    xml = f"<TEI><text><body><{tag}>{content}</{tag}></body></text></TEI>"
+    xml = _tei_document(f"<div type='script'><{tag}>{content}</{tag}></div>")
     result = ChronoRuntimeEstimator().estimate(
         ChronoEvaluationRequest(script_tei_xml=xml)
     )
@@ -227,7 +230,7 @@ def test_chrono_estimator_counts_alternate_spoken_tags(
 def test_chrono_async_evaluate_returns_same_result_as_estimate() -> None:
     """The async evaluate() adapter must return the same result as estimate()."""
     request = ChronoEvaluationRequest(
-        script_tei_xml="<TEI><text><body><p>one two three</p></body></text></TEI>"
+        script_tei_xml=_tei_document("<p>one two three</p>")
     )
     estimator = ChronoRuntimeEstimator()
     sync_result = estimator.estimate(request)

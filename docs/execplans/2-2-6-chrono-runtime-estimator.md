@@ -172,6 +172,25 @@ and migrate Chrono away from local XML heuristics.
 - [x] (2026-05-10 00:00Z) Recorded the strict TEI P5 validation and
   `tei-rapporteur` extraction migration as follow-on roadmap work rather than a
   `2.2.6` completion gate.
+- [x] (2026-05-13 11:10Z) Updated `tei-rapporteur` to
+  `89fc86ef3952ecfde0bb7f653cde217e2651b895` and refreshed the vendored
+  users' guide from the same revision. The guide now documents
+  `spoken_text_segments(...)`, strict validation, and streaming events for
+  spoken text.
+- [x] (2026-05-13 11:30Z) Resume Stage K by replacing Chrono's local
+  `ElementTree` traversal with the Chrono-ready `tei_rapporteur`
+  spoken-text extraction surface, keeping the naive word-count and metadata
+  policy inside Chrono.
+- [x] (2026-05-13 12:15Z) Updated Chrono fixtures to valid TEI documents with
+  headers, retained malformed-input fallback coverage for the current public
+  contract, and confirmed the focused Chrono suite passes with 29 tests.
+- [x] (2026-05-13 12:35Z) Ran repository gates after the migration:
+  `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+  `make markdownlint`, and `make nixie` all passed. `make test` reported 468
+  passed and 3 skipped.
+- [x] (2026-05-13 12:45Z) Ran `coderabbit review --agent` for the milestone.
+  The first invocation stalled during sandbox setup; the bounded rerun with
+  `timeout 600 coderabbit review --agent` completed with 0 findings.
 
 Follow-on roadmap entry: migrate Chrono to ratified TEI P5 spoken-text
 semantics by accepting or revising ADR-006, adding the Chrono-ready
@@ -226,6 +245,24 @@ the full quality gates.
   Impact: Chrono should not invent local TEI semantics; the required behaviour
   must move upstream into `tei-rapporteur`.
 
+- Observation: after updating `tei-rapporteur` to
+  `89fc86ef3952ecfde0bb7f653cde217e2651b895`, `iter_parse(...)` returns
+  `ParagraphEvent` and `UtteranceEvent` in its public event union, and it also
+  returns nested `Paragraph` and `Utterance` structs inside `DivEvent.content`
+  for script divisions. Evidence: local probing of `tei_rapporteur.iter_parse`
+  on 2026-05-13 with valid TEI containing `<sp><p>...` and `<u>...` payloads.
+  Impact: Chrono's extraction helper must consume both direct paragraph or
+  utterance events and paragraph or utterance content nested under div events,
+  while still taking only `InlineText` values.
+
+- Observation: the same `tei-rapporteur` revision exposes
+  `spoken_text_segments(...)`, which returns normalized spoken text for
+  paragraph, utterance, `ab`, standalone `seg`, `l`, and nested inline
+  structures without double-counting. Evidence: local probing on 2026-05-13
+  with valid TEI fixtures for each form. Impact: using this higher-level API
+  better preserves the ADR-required semantics than hand-selecting only the
+  event variants currently visible in `iter_parse(...)`.
+
 ## Decision Log
 
 - Decision: implement Chrono as a pure local QA evaluator with typed request,
@@ -268,6 +305,26 @@ the full quality gates.
   blocked until project acceptance ratifies the semantics. Date/Author:
   2026-05-10 / Codex.
 
+- Decision: proceed with Stage K now that `tei-rapporteur` revision
+  `89fc86ef3952ecfde0bb7f653cde217e2651b895` is pinned. Rationale: the user
+  explicitly directed Chrono to replace raw `ElementTree` parsing entirely with
+  `tei_rapporteur`, and the pinned dependency now exposes a spoken-text API for
+  the needed TEI P5 forms. Date/Author: 2026-05-13 / User and Codex.
+
+- Decision: use `tei_rapporteur.spoken_text_segments(...)` for Chrono's spoken
+  extraction rather than implementing a local event walker over
+  `iter_parse(...)`. Rationale: `spoken_text_segments(...)` is the upstream
+  Chrono-ready abstraction requested for `tei-rapporteur`; it handles `ab`,
+  standalone `seg`, `l`, utterance, paragraph, nested inline content, and
+  normalized segment text in one shared TEI domain surface. Date/Author:
+  2026-05-13 / Codex.
+
+- Decision: keep Chrono's existing parse-failure fallback for this migration
+  while removing all direct XML parsing. Rationale: the implementation request
+  supplied the fallback behaviour in the target extraction helper; the change
+  here is to delegate parsing to `tei_rapporteur`, not to widen the public error
+  contract in the same milestone. Date/Author: 2026-05-13 / Codex.
+
 ## Outcomes & Retrospective
 
 Chrono now exposes a deterministic typed spoken-runtime estimate for TEI
@@ -286,6 +343,13 @@ implementation is complete for `2.2.6` as the deterministic metadata and
 orchestration slice; a later item should add `tei-rapporteur` spoken-text
 extraction support, strict TEI P5 validation, and accepted spoken-dialogue
 semantics.
+
+Stage K now removes Chrono's local `ElementTree` parser and tag traversal.
+Chrono delegates TEI P5 spoken-text extraction to
+`tei_rapporteur.spoken_text_segments(...)`, then applies only the local word
+tokenization, words-per-minute calculation, and metadata policy. Tests now use
+valid TEI documents with headers for normal Chrono paths and keep the existing
+malformed-input fallback test as the current public estimator contract.
 
 The main implementation lesson is that keeping Chrono separate from the Pedante
 graph avoided unnecessary generalization while still preserving a consistent

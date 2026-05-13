@@ -549,7 +549,9 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 
 - `episodic/qa/chrono.py` contains `ChronoRuntimeEstimator`, typed
   request/result objects, estimator metadata, and the deterministic local
-  spoken-runtime heuristic.
+  spoken-runtime heuristic. The module delegates TEI P5 parsing and
+  spoken-text extraction to `tei-rapporteur`; it must not add a separate XML
+  parser or local TEI traversal path.
 - `episodic/qa/chrono_langgraph.py` contains the in-process LangGraph seam for
   running Chrono as a QA graph node without attaching Large Language Model
   (LLM) usage metadata.
@@ -569,8 +571,9 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 
 - Keep Chrono local and deterministic. The domain module must not import
   Falcon, SQLAlchemy, Celery, Vidai Mock, HTTP adapters, or LLM ports. Its
-  first heuristic extracts spoken prose from TEI, counts simple word tokens,
-  estimates duration at 150 words per minute, and rounds up to whole seconds.
+  first heuristic receives spoken prose from `tei-rapporteur`, counts simple
+  word tokens, estimates duration at 150 words per minute, and rounds up to
+  whole seconds.
 - Preserve Chrono metadata whenever results cross an orchestration boundary:
   estimator name, estimator version, input character count, spoken word count,
   and words-per-minute setting are the comparison baseline for later

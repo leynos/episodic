@@ -18,7 +18,10 @@ _SIMPLE_WORDS = st.lists(
 
 
 def _script_from_words(words: list[str]) -> str:
-    return f"<TEI><text><body><sp><p>{' '.join(words)}</p></sp></body></text></TEI>"
+    return (
+        "<TEI><teiHeader><fileDesc><title>Chrono property</title></fileDesc>"
+        f"</teiHeader><text><body><sp><p>{' '.join(words)}</p></sp></body></text></TEI>"
+    )
 
 
 @given(words=_SIMPLE_WORDS)

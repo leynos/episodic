@@ -4,7 +4,8 @@ import dataclasses as dc
 import logging
 import math
 import re
-from xml.etree import ElementTree  # noqa: S405
+
+import tei_rapporteur as _tei
 
 SPOKEN_WORD_REGEX = r"[A-Za-z][A-Za-z0-9'-]*"
 _log = logging.getLogger(__name__)
@@ -12,7 +13,6 @@ _WORD_PATTERN = re.compile(SPOKEN_WORD_REGEX)
 _DEFAULT_ESTIMATOR_NAME = "chrono-naive-word-count"
 _DEFAULT_ESTIMATOR_VERSION = "1"
 _DEFAULT_WORDS_PER_MINUTE = 150
-_SPOKEN_TEXT_ELEMENTS = frozenset({"p", "ab", "seg", "l"})
 
 
 def _ensure_non_empty_string(value: str, field_name: str) -> None:
@@ -22,42 +22,21 @@ def _ensure_non_empty_string(value: str, field_name: str) -> None:
         raise ValueError(msg)
 
 
-def _local_name(tag: str) -> str:
-    """Return an XML tag name without its namespace or Clark notation prefix."""
-    return tag.rsplit("}", maxsplit=1)[-1]
-
-
-def _extract_spoken_text_from_element(root: ElementTree.Element[str]) -> str:
-    """Extract text from TEI elements that conventionally hold spoken prose."""
-    chunks: list[str] = []
-
-    def _walk(element: ElementTree.Element[str], *, inside_spoken: bool) -> None:
-        is_spoken = _local_name(element.tag) in _SPOKEN_TEXT_ELEMENTS
-        if is_spoken and not inside_spoken:
-            text = " ".join(part.strip() for part in element.itertext() if part.strip())
-            if text:
-                chunks.append(text)
-            inside_spoken = True
-        if inside_spoken:
-            return
-        for child in element:
-            _walk(child, inside_spoken=False)
-
-    _walk(root, inside_spoken=False)
-    return " ".join(chunks)
-
-
 def _extract_spoken_text(script_tei_xml: str) -> str:
-    """Extract spoken text from parseable TEI, or plain text from malformed input."""
+    """Extract spoken text through tei-rapporteur, or raw text on parse failure."""
+    chunks: list[str] = []
     try:
-        root = ElementTree.fromstring(script_tei_xml)  # noqa: S314
-    except ElementTree.ParseError as exc:
+        for segment in _tei.spoken_text_segments(script_tei_xml):
+            stripped = segment.text.strip()
+            if stripped:
+                chunks.append(stripped)
+    except ValueError:
         _log.warning(
-            "Chrono: XML parse failed; falling back to plain-text word count",
-            extra={"payload_prefix": script_tei_xml[:120], "error": str(exc)},
+            "TEI parse failed; falling back to plain-text word count. input_prefix=%r",
+            script_tei_xml[:200],
         )
         return script_tei_xml
-    return _extract_spoken_text_from_element(root)
+    return " ".join(chunks)
 
 
 def tokenize_spoken_words(spoken_text: str) -> list[str]:
@@ -74,7 +53,8 @@ def _count_spoken_words(spoken_text: str) -> int:
 class ChronoEvaluationRequest:
     """Canonical Chrono request built from a TEI script.
 
-    Malformed XML is accepted by the estimator and treated as raw spoken text.
+    The estimator delegates TEI parsing and spoken-text extraction to
+    tei-rapporteur, then applies Chrono's local word-count heuristic.
     """
 
     script_tei_xml: str
@@ -144,8 +124,8 @@ class ChronoRuntimeEstimate:
 class ChronoRuntimeEstimator:
     """Estimate anticipated spoken duration from TEI using a local heuristic.
 
-    Parseable TEI is reduced to conventional spoken-text elements; malformed
-    XML falls back to raw-text tokenization instead of being rejected.
+    TEI validation and spoken-text extraction are delegated to tei-rapporteur.
+    Chrono owns only the deterministic word-count and duration calculation.
     """
 
     config: ChronoEstimatorConfig = dc.field(default_factory=ChronoEstimatorConfig)

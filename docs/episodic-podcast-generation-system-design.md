@@ -314,12 +314,13 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Caesura detects false endings where a script appears to wrap up but continues
   for another four minutes or more.
 - Chrono estimates spoken runtime for written dialogue. The initial
-  implementation is a deterministic local heuristic that extracts spoken prose
-  from common TEI dialogue elements, counts simple word tokens, and estimates
-  duration at 150 words per minute with the result rounded up to whole seconds.
-  The result records the estimator name, estimator version, input character
-  count, spoken word count, and words-per-minute setting so later estimators
-  can be compared against the first baseline.
+  implementation delegates TEI P5 parsing and spoken-text extraction to
+  `tei-rapporteur`, then applies a deterministic local heuristic that counts
+  simple word tokens and estimates duration at 150 words per minute with the
+  result rounded up to whole seconds. The result records the estimator name,
+  estimator version, input character count, spoken word count, and
+  words-per-minute setting so later estimators can be compared against the
+  first baseline.
 - Pedante, Bromide, Chiltern, Anthem, and Caesura initially execute as
   internal LangGraph evaluator nodes backed by structured `LLMPort` calls
   rather than separate network services.

@@ -42,7 +42,8 @@ def prepare_request() -> ChronoBDDContext:
     return ChronoBDDContext(
         request=ChronoEvaluationRequest(
             script_tei_xml=(
-                "<TEI><text><body>"
+                "<TEI><teiHeader><fileDesc><title>Chrono behaviour</title>"
+                "</fileDesc></teiHeader><text><body>"
                 "<sp><speaker>Host</speaker><p>Welcome to the show today.</p></sp>"
                 "<sp><speaker>Guest</speaker><p>Thank you for inviting me.</p></sp>"
                 "</body></text></TEI>"
