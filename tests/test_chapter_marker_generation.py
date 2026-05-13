@@ -1,4 +1,26 @@
-"""Async and property tests for ``ChapterMarkersGenerator.generate``."""
+"""Tests for ChapterMarkersGenerator prompt building and LLM response parsing.
+
+These tests exercise the full request/response lifecycle of
+``ChapterMarkersGenerator`` from ``episodic.generation.chapter_markers``:
+
+- ``build_prompt`` produces a well-formed JSON user payload that embeds
+  ``script_tei_xml`` and, when supplied, ``segment_structure``; it omits
+  ``segment_structure`` entirely when the argument is ``None`` or absent.
+- ``generate`` delegates to the injected ``LLMPort``, returns parsed chapter
+  markers, propagates cancellation from caller-managed timeouts, and supports
+  concurrent calls without shared state.
+- Segment-alignment validation rejects chapters whose ``start`` values or
+  ``tei_locator`` references do not correspond to the supplied
+  segment-transition metadata, and rejects segment metadata that reuses a
+  locator key for conflicting start times.
+
+Property-based tests (Hypothesis) validate segment-alignment and
+locator-consistency invariants across arbitrarily generated segment structures.
+
+Run with::
+
+    pytest -v tests/test_chapter_marker_generation.py
+"""
 
 import asyncio
 import json
