@@ -1,13 +1,24 @@
-"""Hypothesis property-based tests for orchestration invariants."""
+"""Hypothesis property-based tests for orchestration invariants.
+
+Issue #72 called out that the PR #69 orchestration suite had strong
+deterministic unit coverage but lacked generative exploration of boundary
+inputs. This module complements `test_orchestration_dto_validation.py`,
+`test_orchestration_planner.py`, `test_show_notes_executor.py`, and
+`test_generation_orchestration_langgraph.py` with property tests for enum
+normalisation, model-tier validation, planner JSON error preservation, and the
+LangGraph plan-execute-finish ordering contract.
+"""
 
 import dataclasses as dc
 import json
 import string
+import typing as typ
 
 import hypothesis.strategies as st
 import pytest
 from hypothesis import given, settings
 
+from episodic.generation import ShowNotesResult
 from episodic.llm import (
     LLMProviderOperation,
     LLMResponse,
@@ -17,6 +28,7 @@ from episodic.orchestration import (
     ActionExecutionResult,
     ActionKind,
     ExecutionPlan,
+    GenerationGraphState,
     GenerationOrchestrationConfig,
     GenerationOrchestrationRequest,
     ModelTier,
@@ -27,6 +39,7 @@ from episodic.orchestration import (
     StructuredGenerationPlanner,
     UnsupportedActionError,
     WorkflowStepIdentity,
+    build_generation_orchestration_graph,
     build_workflow_step_idempotency_key,
 )
 from episodic.orchestration.langgraph import (
@@ -50,36 +63,86 @@ _ACTION_KIND_SAMPLES: tuple[ActionKind | str, ...] = tuple(ActionKind) + tuple(
 _KNOWN_ACTION_KIND_STRINGS = {m.value for m in ActionKind}
 
 
+@dc.dataclass(slots=True)
+class _GraphEventRecorder:
+    """Collect explicitly injected graph-node events for ordering assertions."""
+
+    events: list[str] = dc.field(default_factory=list)
+
+    def record(self, event: str) -> None:
+        """Append one observed graph-node event."""
+        self.events.append(event)
+
+
 class _PropGraphPlanner:
     """Emit canned planner payloads for Hypothesis graph probes."""
 
-    def __init__(self, *, result: PlannerResult) -> None:
+    def __init__(
+        self,
+        *,
+        result: PlannerResult,
+        event_recorder: _GraphEventRecorder | None = None,
+    ) -> None:
         self._result = result
+        self._event_recorder = event_recorder
 
     async def plan(self, request: GenerationOrchestrationRequest) -> PlannerResult:
+        """Record the plan node when requested and return the canned result."""
         assert request.script_tei_xml.startswith("<TEI>"), (
             f"expected TEI input, got {request.script_tei_xml!r}"
         )
         assert request.correlation_id, "expected non-empty correlation_id"
+        if self._event_recorder is not None:
+            self._event_recorder.record("plan")
         return self._result
 
 
 class _PropGraphToolExecutor:
     """Emit canned tool payloads for Hypothesis graph probes."""
 
-    def __init__(self, result: ActionExecutionResult) -> None:
+    def __init__(
+        self,
+        result: ActionExecutionResult,
+        *,
+        event_recorder: _GraphEventRecorder | None = None,
+    ) -> None:
         self._result = result
+        self._event_recorder = event_recorder
 
     async def execute(
         self,
         action: PlannedAction,
         context: GenerationOrchestrationRequest,
     ) -> ActionExecutionResult:
+        """Record the execute node when requested and return the canned result."""
         assert context.script_tei_xml.startswith("<TEI>"), (
             f"expected TEI input, got {context.script_tei_xml!r}"
         )
         assert action.action_kind is ActionKind.GENERATE_SHOW_NOTES
+        if self._event_recorder is not None:
+            self._event_recorder.record("execute")
         return self._result
+
+
+class _PropShowNotesGenerator:
+    """Return an empty show-notes result for model-tier boundary probes."""
+
+    async def generate(
+        self,
+        script_tei_xml: str,
+        *,
+        template_structure: dict[str, object] | None = None,
+    ) -> ShowNotesResult:
+        """Return a minimal structured show-notes result."""
+        assert script_tei_xml.startswith("<TEI>")
+        assert template_structure is not None
+        return ShowNotesResult(
+            entries=(),
+            usage=LLMUsage(input_tokens=1, output_tokens=0, total_tokens=1),
+            model="prop-exec-model",
+            provider_response_id="prop-exec-response",
+            finish_reason="stop",
+        )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -185,6 +248,101 @@ _action_result_strategy = st.builds(
 )
 
 
+def _valid_plan_object() -> dict[str, object]:
+    """Return one valid raw planner object suitable for targeted corruption."""
+    return {
+        "plan_version": "1.0",
+        "steps": [
+            {
+                "action_id": "action-1",
+                "action_kind": ActionKind.GENERATE_SHOW_NOTES.value,
+                "rationale": "Generate publication-ready show notes.",
+                "model_tier": ModelTier.EXECUTION.value,
+                "required_inputs": ["script_tei_xml", "template_structure"],
+            }
+        ],
+    }
+
+
+def _invalid_plan_without_plan_version() -> str:
+    """Return JSON for a plan object with the required version field omitted."""
+    payload = _valid_plan_object()
+    payload = {key: value for key, value in payload.items() if key != "plan_version"}
+    return json.dumps(payload)
+
+
+def _invalid_plan_with_top_level_field(field_name: str, value: object) -> str:
+    """Return JSON for a plan object with one top-level field replaced."""
+    return json.dumps(_valid_plan_object() | {field_name: value})
+
+
+def _invalid_plan_with_step_field(field_name: str, value: object) -> str:
+    """Return JSON for a plan object with one first-step field replaced."""
+    step = typ.cast("list[dict[str, object]]", _valid_plan_object()["steps"])[0]
+    return json.dumps(_valid_plan_object() | {"steps": [step | {field_name: value}]})
+
+
+def _invalid_plan_without_step_field(field_name: str) -> str:
+    """Return JSON for a plan object with one required first-step field omitted."""
+    step = typ.cast("list[dict[str, object]]", _valid_plan_object()["steps"])[0]
+    narrowed_step = {key: value for key, value in step.items() if key != field_name}
+    return json.dumps(_valid_plan_object() | {"steps": [narrowed_step]})
+
+
+_unknown_action_kind_values = st.one_of(
+    st.none(),
+    st.integers(),
+    st.text(min_size=1, max_size=512).filter(
+        lambda value: value.strip() not in {kind.value for kind in ActionKind}
+    ),
+)
+
+_unknown_model_tier_values = st.one_of(
+    st.none(),
+    st.integers(),
+    st.text(min_size=1, max_size=512).filter(
+        lambda value: value.strip() not in {tier.value for tier in ModelTier}
+    ),
+)
+
+_invalid_required_inputs_values = st.one_of(
+    st.integers(),
+    st.lists(st.one_of(st.none(), st.integers(), st.just("")), min_size=1),
+)
+
+_invalid_plan_payloads = st.one_of(
+    st.just(_invalid_plan_without_plan_version()),
+    st.sampled_from(("", " ", "\t")).map(
+        lambda value: _invalid_plan_with_top_level_field("plan_version", value)
+    ),
+    st.one_of(
+        st.none(),
+        st.integers(),
+        st.text(max_size=512),
+        st.dictionaries(st.text(min_size=1, max_size=4), st.integers(), max_size=2),
+    ).map(lambda value: _invalid_plan_with_top_level_field("steps", value)),
+    st.one_of(st.none(), st.integers(), st.text(max_size=512)).map(
+        lambda value: _invalid_plan_with_top_level_field("steps", [value])
+    ),
+    st.just(_invalid_plan_without_step_field("action_id")),
+    st.sampled_from(("", " ", "\n")).map(
+        lambda value: _invalid_plan_with_step_field("action_id", value)
+    ),
+    _unknown_action_kind_values.map(
+        lambda value: _invalid_plan_with_step_field("action_kind", value)
+    ),
+    st.sampled_from(("", " ", "\r\n")).map(
+        lambda value: _invalid_plan_with_step_field("rationale", value)
+    ),
+    _unknown_model_tier_values.map(
+        lambda value: _invalid_plan_with_step_field("model_tier", value)
+    ),
+    _invalid_required_inputs_values.map(
+        lambda value: _invalid_plan_with_step_field("required_inputs", value)
+    ),
+)
+
+
 def test_step_idempotency_key_negative_attempt_raises_value_error() -> None:
     """Negative attempts should be rejected before building a step key."""
     step = WorkflowStepIdentity(
@@ -267,10 +425,11 @@ def test_config_normalises_arbitrary_string_and_enum_mixes(
         enabled_action_kinds=tuple(kinds),
     )
     assert all(isinstance(kind, ActionKind) for kind in cfg.enabled_action_kinds)
+    assert cfg.enabled_action_kinds == tuple(ActionKind(str(kind)) for kind in kinds)
 
 
 @given(
-    unknown=st.text(min_size=1).filter(
+    unknown=st.text(min_size=1, max_size=512).filter(
         lambda s: bool(s.strip()) and s.strip() not in _KNOWN_ACTION_KIND_STRINGS
     )
 )
@@ -287,13 +446,15 @@ def test_config_rejects_arbitrary_unknown_action_kind_strings(unknown: str) -> N
         )
 
 
-@given(model_tier=st.sampled_from([t for t in ModelTier if t != ModelTier.EXECUTION]))
-@settings(max_examples=len(ModelTier))
+@pytest.mark.parametrize(
+    "model_tier",
+    [tier for tier in ModelTier if tier is not ModelTier.EXECUTION],
+)
 @pytest.mark.asyncio
 async def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(
     model_tier: ModelTier,
 ) -> None:
-    """Property test: planner tiers besides execution never reach show-notes tool."""
+    """Every planner tier besides execution must be rejected by show-notes."""
     fake_llm = _FakeLLMPort([])
     tool_executor = ShowNotesToolExecutor(llm=fake_llm, config=_config())
     planning_tier_action = PlannedAction(
@@ -307,12 +468,35 @@ async def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(
         await tool_executor.execute(planning_tier_action, _request())
 
 
+@pytest.mark.asyncio
+async def test_planned_action_execution_model_tier_is_accepted() -> None:
+    """Boundary check: execution-tier actions are eligible for show-notes tooling."""
+    fake_llm = _FakeLLMPort([])
+    tool_executor = ShowNotesToolExecutor(
+        llm=fake_llm,
+        config=_config(),
+        generator=_PropShowNotesGenerator(),
+    )
+    action = PlannedAction(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        rationale="Hypothesis boundary check for execution tier.",
+        model_tier=ModelTier.EXECUTION,
+        required_inputs=("script_tei_xml",),
+    )
+
+    result = await tool_executor.execute(action, _request())
+
+    assert result.model_tier is ModelTier.EXECUTION
+    assert result.summary == "Generated 0 show-notes entries."
+
+
 @given(
     noise=st.one_of(
         st.integers(),
         st.floats(allow_nan=False, allow_infinity=False),
-        st.lists(st.text()),
-        st.text(),
+        st.lists(st.text(max_size=512), max_size=10),
+        st.text(max_size=512),
     )
 )
 @settings(max_examples=50)
@@ -343,3 +527,178 @@ async def test_planning_response_format_error_for_arbitrary_non_object_json(
         match=r"planner response must be an object",
     ):
         await planner.plan(request)
+
+
+@given(payload=_invalid_plan_payloads)
+@settings(max_examples=100)
+@pytest.mark.asyncio
+async def test_planning_response_format_error_for_invalid_plan_objects(
+    payload: str,
+) -> None:
+    """Property test: structurally invalid plan objects preserve format errors."""
+    response = LLMResponse(
+        text=payload,
+        model="gpt-4.1",
+        provider_response_id="hyp-invalid-plan-response",
+        finish_reason="stop",
+        usage=_usage(input_tokens=1, output_tokens=1),
+    )
+    planner = StructuredGenerationPlanner(
+        llm=_FakeLLMPort([response]),
+        config=_config(),
+    )
+
+    with pytest.raises(PlanningResponseFormatError):
+        await planner.plan(_request())
+
+
+@given(
+    tokens=_token_inputs_strategy,
+    correlation_id=st.text(
+        min_size=1,
+        max_size=48,
+        alphabet=string.ascii_letters + string.digits + "-",
+    ),
+)
+@settings(max_examples=50)
+@pytest.mark.asyncio
+async def test_langgraph_total_tokens_non_negative(
+    tokens: _PropTokenInputs,
+    correlation_id: str,
+) -> None:
+    """Property test: LangGraph rollups keep total token counts semiring-safe."""
+    planner_usage = LLMUsage(
+        tokens.planner_input,
+        tokens.planner_output,
+        tokens.planner_input + tokens.planner_output,
+    )
+    tool_usage = LLMUsage(
+        tokens.action_input,
+        tokens.action_output,
+        tokens.action_input + tokens.action_output,
+    )
+    planner_result = PlannerResult(
+        plan=ExecutionPlan(
+            plan_version="1.0",
+            selected_planning_model="prop-plan-model",
+            selected_execution_model="prop-exec-model",
+            steps=(
+                PlannedAction(
+                    action_id="action-1",
+                    action_kind=ActionKind.GENERATE_SHOW_NOTES,
+                    rationale="prop graph rationale",
+                    model_tier=ModelTier.EXECUTION,
+                    required_inputs=("script_tei_xml",),
+                ),
+            ),
+        ),
+        usage=planner_usage,
+        model="gpt-4.1",
+        provider_response_id="prop-planner",
+        finish_reason="stop",
+    )
+    tool_result = ActionExecutionResult(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        model_tier=ModelTier.EXECUTION,
+        model="prop-exec-model",
+        summary="prop graph synthesis",
+        usage=tool_usage,
+    )
+
+    graph = build_generation_orchestration_graph(
+        planner=_PropGraphPlanner(result=planner_result),
+        tool_executor=_PropGraphToolExecutor(result=tool_result),
+    )
+
+    request = GenerationOrchestrationRequest(
+        correlation_id=correlation_id,
+        script_tei_xml=(
+            "<TEI><text><body><p>Hypothesis-driven graph workload</p></body>"
+            "</text></TEI>"
+        ),
+        template_structure=None,
+    )
+    state = await graph.ainvoke(GenerationGraphState(request=request))
+    orchestration_result = state["orchestration_result"]
+    expected_total_tokens = planner_usage.total_tokens + tool_usage.total_tokens
+    assert orchestration_result.total_usage.input_tokens >= 0
+    assert orchestration_result.total_usage.output_tokens >= 0
+    assert orchestration_result.total_usage.total_tokens >= 0
+    assert orchestration_result.total_usage.total_tokens == expected_total_tokens
+    assert state["planner_result"] == planner_result
+    assert state["action_results"][0].model == "prop-exec-model"
+
+
+@given(
+    request=st.builds(
+        GenerationOrchestrationRequest,
+        correlation_id=st.text(
+            min_size=1,
+            max_size=48,
+            alphabet=string.ascii_letters + string.digits + "-",
+        ),
+        script_tei_xml=st.text(
+            min_size=1,
+            max_size=80,
+            alphabet=string.ascii_letters + string.digits + " .,_-",
+        ).map(lambda body: f"<TEI><text><body><p>{body}</p></body></text></TEI>"),
+        template_structure=st.one_of(
+            st.none(),
+            st.just({"sections": ["intro", "analysis"]}),
+        ),
+    )
+)
+@settings(max_examples=50)
+@pytest.mark.asyncio
+async def test_langgraph_respects_plan_execute_finish_order(
+    request: GenerationOrchestrationRequest,
+) -> None:
+    """Property test: valid requests always traverse plan, execute, then finish."""
+    event_recorder = _GraphEventRecorder()
+    planner = _PropGraphPlanner(
+        event_recorder=event_recorder,
+        result=PlannerResult(
+            plan=ExecutionPlan(
+                plan_version="1.0",
+                selected_planning_model="prop-plan-model",
+                selected_execution_model="prop-exec-model",
+                steps=(
+                    PlannedAction(
+                        action_id="action-1",
+                        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+                        rationale="prop graph rationale",
+                        model_tier=ModelTier.EXECUTION,
+                        required_inputs=("script_tei_xml",),
+                    ),
+                ),
+            ),
+            usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
+            model="prop-plan-model",
+            provider_response_id="prop-planner",
+            finish_reason="stop",
+        ),
+    )
+    tool_executor = _PropGraphToolExecutor(
+        ActionExecutionResult(
+            action_id="action-1",
+            action_kind=ActionKind.GENERATE_SHOW_NOTES,
+            model_tier=ModelTier.EXECUTION,
+            model="prop-exec-model",
+            summary="prop graph synthesis",
+            usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
+        ),
+        event_recorder=event_recorder,
+    )
+    graph = build_generation_orchestration_graph(
+        planner=planner,
+        tool_executor=tool_executor,
+    )
+
+    state = await graph.ainvoke(GenerationGraphState(request=request))
+    event_recorder.record("finish")
+
+    assert event_recorder.events == ["plan", "execute", "finish"]
+    assert state["planner_result"] is not None
+    assert state["action_results"]
+    assert state["orchestration_result"] is not None
