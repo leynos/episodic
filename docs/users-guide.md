@@ -226,15 +226,16 @@ Health endpoints:
 
 ### Logging
 
-`episodic.logging.LogLevel` accepts the configured log levels: `TRACE`,
-`DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`. `WARN` remains available
-as a deprecated alias for `WARNING`.
+`episodic.logging.LogLevel` accepts these string levels: `TRACE`, `DEBUG`,
+`INFO`, `WARNING`, `ERROR`, and `CRITICAL`. `WARN` remains available as a
+deprecated alias for `WARNING`.
 
 Use `configure_logging(level, ...)` to configure process logging. The `level`
-argument is case-insensitive, and the function returns a
-`tuple[LogLevel, bool]`: the normalized `LogLevel` value and a flag indicating
-whether the default (`INFO`) was substituted because the input was absent or
-unrecognized.
+argument accepts strings case-insensitively, so `debug`, `Debug`, and `DEBUG`
+all select `LogLevel.DEBUG`. The function returns a `tuple[LogLevel, bool]`:
+the normalized `LogLevel` value and a flag indicating whether the default
+`INFO` level was substituted. Substitution happens when no level is provided or
+when the provided string is not recognized.
 
 ### Worker runtime
 
