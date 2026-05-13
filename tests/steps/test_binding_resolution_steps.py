@@ -35,11 +35,10 @@ if typ.TYPE_CHECKING:
 
 def _run_async_step(
     runner: asyncio.Runner,
-    step_fn: cabc.Callable[[], cabc.Awaitable[None]],
+    step_fn: cabc.Callable[[], cabc.Coroutine[object, object, None]],
 ) -> None:
     """Execute an async BDD step via the provided runner."""
-    coro = typ.cast("cabc.Coroutine[object, object, None]", step_fn())
-    runner.run(coro)
+    runner.run(step_fn())
 
 
 class BindingResolutionContext(typ.TypedDict, total=False):

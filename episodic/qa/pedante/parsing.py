@@ -3,7 +3,6 @@
 import enum
 import json
 import typing as typ
-from typing import TypeVar  # noqa: ICN003
 
 from .types import (
     ClaimKind,
@@ -97,10 +96,10 @@ def _parse_finding(raw_finding: object) -> PedanteFinding:
     )
 
 
-_TEnum = TypeVar("_TEnum", bound=enum.StrEnum)
+_TEnum = typ.TypeVar("_TEnum", bound=enum.StrEnum)
 
 
-def _coerce_enum(  # noqa: UP047
+def _coerce_enum(  # noqa: UP047  # TODO(leynos): https://github.com/leynos/episodic/pull/49 - keep legacy TypeVar syntax for checker parity.
     enum_type: type[_TEnum],
     raw_value: object,
     *,
