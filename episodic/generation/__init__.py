@@ -12,6 +12,15 @@ from episodic.generation.chapter_markers import (
     ChapterMarkersResult,
     enrich_tei_with_chapter_markers,
 )
+from episodic.generation.guest_bios import (
+    GuestBioEntry,
+    GuestBiosGenerator,
+    GuestBiosGeneratorConfig,
+    GuestBioSource,
+    GuestBiosResponseFormatError,
+    GuestBiosResult,
+    enrich_tei_with_guest_bios,
+)
 from episodic.generation.show_notes import (
     ShowNotesEntry,
     ShowNotesGenerator,
@@ -27,11 +36,18 @@ __all__ = [
     "ChapterMarkersGeneratorConfig",
     "ChapterMarkersResponseFormatError",
     "ChapterMarkersResult",
+    "GuestBioEntry",
+    "GuestBioSource",
+    "GuestBiosGenerator",
+    "GuestBiosGeneratorConfig",
+    "GuestBiosResponseFormatError",
+    "GuestBiosResult",
     "ShowNotesEntry",
     "ShowNotesGenerator",
     "ShowNotesGeneratorConfig",
     "ShowNotesResponseFormatError",
     "ShowNotesResult",
     "enrich_tei_with_chapter_markers",
+    "enrich_tei_with_guest_bios",
     "enrich_tei_with_show_notes",
 ]

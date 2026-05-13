@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose and big picture
 
@@ -60,8 +60,8 @@ ExecPlan has been explicitly approved.
   before implementing each material behaviour.
 - Update user-facing and internal documentation when behaviour, interfaces, or
   conventions change. At minimum, inspect and update
-  `docs/episodic-podcast-generation-system-design.md`,
-  `docs/users-guide.md`, and `docs/developers-guide.md`.
+  `docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`,
+  and `docs/developers-guide.md`.
 - Record durable TEI representation decisions in an Architecture Decision
   Record (ADR), or update the relevant existing ADR if the decision is a direct
   extension of the show-notes representation.
@@ -102,8 +102,8 @@ ExecPlan has been explicitly approved.
 ## Risks
 
 - Risk: TEI offers a rich personography model, including `<person>`,
-  `<persName>`, `<occupation>`, `<affiliation>`, and `<note>`, while the roadmap
-  asks for TEI body enrichment. Severity: medium. Likelihood: medium.
+  `<persName>`, `<occupation>`, `<affiliation>`, and `<note>`, while the
+  roadmap asks for TEI body enrichment. Severity: medium. Likelihood: medium.
   Mitigation: use a body `<div type="guest-bios">` for episode-facing
   biographies, and document the choice against TEI prior art rather than
   inventing an opaque custom sidecar.
@@ -133,8 +133,8 @@ ExecPlan has been explicitly approved.
 ## Progress
 
 - [x] 2026-05-10: Loaded `execplans`, `hexagonal-architecture`,
-  `firecrawl-mcp`, `leta`, `vidai-mock`, `pr-creation`,
-  `en-gb-oxendict-style`, and `commit-message` skill guidance.
+  `firecrawl-mcp`, `leta`, `vidai-mock`, `pr-creation`, `en-gb-oxendict-style`,
+  and `commit-message` skill guidance.
 - [x] 2026-05-10: Used a Wyvern agent team for read-only planning research
   across design anchors, implementation shape, and test/documentation
   obligations.
@@ -143,33 +143,54 @@ ExecPlan has been explicitly approved.
 - [x] 2026-05-10: Renamed the local branch to
   `2-3-3-generate-guest-bios-from-reference-document-bindings`.
 - [x] 2026-05-10: Drafted this pre-implementation ExecPlan.
-- [ ] Await explicit approval before implementation.
-- [ ] After approval, implement milestone 1: representation decision and
+- [x] 2026-05-14: Received explicit approval to proceed with implementation
+  of the planned functionality.
+- [x] 2026-05-14: Re-read this ExecPlan, branch state, AGENTS.md, and the
+  `execplans`, `leta`, and `hexagonal-architecture` skill guidance before
+  starting implementation.
+- [x] 2026-05-14: Added `tests/test_guest_bios.py` fail-first coverage for
+  strict response parsing, canonical `<div type="guest-bios">` enrichment,
+  replacement of existing guest-bio blocks, and empty-result no-op behaviour.
+- [x] 2026-05-14: Implemented the initial
+  `episodic/generation/guest_bios.py` generator DTOs, strict response parser,
+  prompt builder, and TEI enrichment helper. Focused test command
+  `uv run pytest tests/test_guest_bios.py -q` now passes with 5 tests.
+- [x] 2026-05-14: Added
+  `docs/adr/adr-007-guest-bios-tei-representation.md` to record the
+  `<div type="guest-bios"><list><item corresp="...">` representation.
+- [x] 2026-05-14: Ran `coderabbit review --agent` for milestone 1. It raised
+  a missing expected-revision parser test and an ADR footnote wrapping concern;
+  both were accepted as valid and fixed before committing.
+- [x] 2026-05-14: Re-ran `coderabbit review --agent` after fixes. It raised
+  two narrow `noqa: TRY004` justification concerns in the TEI payload helpers
+  and one remaining ADR wrapping concern; all were fixed. A final review pass
+  completed with zero findings.
+- [x] Implement milestone 1: representation decision and
   fail-first unit tests.
-- [ ] After approval, implement milestone 2: guest profile projection and
+- [ ] Implement milestone 2: guest profile projection and
   generator service.
-- [ ] After approval, implement milestone 3: TEI body enrichment.
-- [ ] After approval, implement milestone 4: binding retrieval and
+- [ ] Implement milestone 3: TEI body enrichment.
+- [ ] Implement milestone 4: binding retrieval and
   orchestration integration.
-- [ ] After approval, implement milestone 5: behavioural, property, and
+- [ ] Implement milestone 5: behavioural, property, and
   end-to-end validation.
-- [ ] After approval, implement milestone 6: documentation, roadmap completion,
+- [ ] Implement milestone 6: documentation, roadmap completion,
   full validation, CodeRabbit review, commit, push, and PR update.
 
 ## Surprises & discoveries
 
 ### TEI personography is richer than the roadmap target
 
-Firecrawl research against the official TEI P5 guidelines found that
-`<person>` can describe identifiable people and can contain person-related
-children such as `<persName>`, `<occupation>`, `<affiliation>`, and `<note>`.
-That model is suitable for a formal personography or participant description,
-but the roadmap item asks for biographical summaries "within TEI body".
+Firecrawl research against the official TEI P5 guidelines found that `<person>`
+can describe identifiable people and can contain person-related children such
+as `<persName>`, `<occupation>`, `<affiliation>`, and `<note>`. That model is
+suitable for a formal personography or participant description, but the roadmap
+item asks for biographical summaries "within TEI body".
 
 The implementation should therefore define an episode-body enrichment block
 instead of moving the feature entirely into the TEI header. The ADR should
-acknowledge the TEI personography option and explain why the body representation
-is the accepted shape for episode-facing generated bios.
+acknowledge the TEI personography option and explain why the body
+representation is the accepted shape for episode-facing generated bios.
 
 ### Existing show-notes enrichment is the closest local pattern
 
@@ -185,6 +206,15 @@ follow that shape rather than creating a new generation framework.
 and template bindings with episode-aware precedence. The guest-bio feature
 should consume that service and filter the resolved set to
 `ReferenceDocumentKind.GUEST_PROFILE`.
+
+### `tei-rapporteur` now supports the target body shape
+
+The branch already pins `tei-rapporteur` to
+`89fc86ef3952ecfde0bb7f653cde217e2651b895`. A smoke probe before implementation
+confirmed that a `div type="guest-bios"` containing a list item with `@corresp`
+can be emitted, parsed, and emitted again through `tei_rapporteur`. The
+implementation can therefore proceed without changing the canonical TEI
+parser/emitter dependency.
 
 ## Decision log
 
@@ -208,6 +238,11 @@ should consume that service and filter the resolved set to
   Rationale: the user explicitly requires plan approval before implementation,
   so roadmap completion belongs to the future implementation branch state.
   Date/Author: 2026-05-10 / ExecPlan draft.
+- Decision: implementation can use `@corresp` on each guest-bio `<item>` to
+  link to the pinned reference-document revision. Rationale: the updated
+  `tei-rapporteur` dependency exposes `Item.corresp` as a pointer list and the
+  smoke probe confirmed round-trip support for external revision identifiers.
+  Date/Author: 2026-05-14 / Implementation.
 
 ## Implementation plan after approval
 
@@ -251,8 +286,7 @@ Create `episodic/generation/guest_bios.py` following the structure of
 `slots=True`, expected to include:
 
 - `GuestBioSource`, carrying guest display name, optional role, pinned
-  reference document identifier, pinned revision identifier, and source
-  content.
+  reference document identifier, pinned revision identifier, and source content.
 - `GuestBioEntry`, carrying display name, biography text, source revision
   identifier, optional role, optional TEI locator, and normalized LLM metadata
   where needed.
@@ -313,8 +347,8 @@ into `GuestBioSource`, then call `GuestBiosGenerator`.
 
 Keep the binding resolution contract in
 `episodic/canonical/reference_documents/resolution.py` unchanged unless tests
-prove it cannot support the guest-bio use case. If changes are required, add
-or update tests in:
+prove it cannot support the guest-bio use case. If changes are required, add or
+update tests in:
 
 - `tests/test_binding_resolution.py`
 - `tests/test_binding_resolution_validation.py`
@@ -420,8 +454,8 @@ make lint 2>&1 | tee /tmp/lint-episodic-2-3-3-generate-guest-bios-from-reference
 make test 2>&1 | tee /tmp/test-episodic-2-3-3-generate-guest-bios-from-reference-document-bindings.out
 ```
 
-Review the log tails after each command if the environment truncates output.
-Do not commit failing gates.
+Review the log tails after each command if the environment truncates output. Do
+not commit failing gates.
 
 Commit with a file-based message. Push to
 `origin/2-3-3-generate-guest-bios-from-reference-document-bindings`. Update the
