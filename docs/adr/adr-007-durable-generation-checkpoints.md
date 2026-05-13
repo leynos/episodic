@@ -37,7 +37,7 @@ successful resume, `CheckpointPort.mark_resumed(...)` moves the checkpoint
 status from `suspended` to `resumed` so cleanup and monitoring code can
 distinguish active work from completed resume handoffs.
 
-The in-memory adapter serialises `save_or_reuse(...)` mutations with an
+The in-memory adapter serializes `save_or_reuse(...)` mutations with an
 `asyncio.Lock` and uses an injected clock. The durable SQLAlchemy adapter lets
 the database unique constraint arbitrate concurrency: it attempts to insert the
 checkpoint inside a savepoint, then loads the existing checkpoint only when the
