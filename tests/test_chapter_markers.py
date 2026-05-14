@@ -143,8 +143,8 @@ def test_enrich_tei_escapes_xml_unsafe_characters() -> None:
 
     document = tei.parse_xml(enriched_xml)
     document.validate()
-    assert "&amp;" in enriched_xml
-    assert "&lt;" in enriched_xml or "<tags>" not in enriched_xml
+    assert "Summary with &lt;tags&gt; &amp; ampersands." in enriched_xml
+    assert "Summary with <tags> & ampersands." not in enriched_xml
 
 
 def test_enrich_tei_omits_content_when_summary_is_blank() -> None:
@@ -198,7 +198,7 @@ def test_enrich_tei_with_missing_body_raises_value_error() -> None:
         "</TEI>"
     )
 
-    with pytest.raises(ValueError, match=r"XML processing error|TEI payload field"):
+    with pytest.raises(ValueError, match=r"XML processing error"):
         enrich_tei_with_chapter_markers(
             malformed_tei_xml,
             _result(ChapterMarker(title="Intro", start="PT0S")),

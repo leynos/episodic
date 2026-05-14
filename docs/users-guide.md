@@ -80,7 +80,7 @@ Days and fractional units are not accepted. When a source segment has a TEI
 locator, the chapter marker records that link so later audio publishing steps
 can project the canonical timing data into player-specific chapter formats.
 
-##### Generation configuration
+#### Generation configuration
 
 Generating show notes uses two successive calls to different language models,
 while chapter markers use the execution model directly against the TEI script
@@ -107,7 +107,7 @@ Chapter markers currently use the configured execution model. A dedicated
 `chapter_marker_model` setting is planned for a future release, but is not a
 live configuration option yet.
 
-##### Resumable orchestration
+#### Resumable orchestration
 
 Generation workflows now persist an internal checkpoint before a suspendable
 execution step runs. If the same workflow step is retried with the same
@@ -116,7 +116,7 @@ the side-effecting execution step twice. Operators do not need to manage these
 checkpoints directly in this release; public generation-run checkpoint APIs are
 planned for a later roadmap item.
 
-##### Failure behaviour
+#### Failure behaviour
 
 If either stage returns a response that does not match the expected structured
 format, the run stops immediately with a clear validation error. No partial or
