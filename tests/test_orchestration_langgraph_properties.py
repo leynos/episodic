@@ -13,6 +13,7 @@ from episodic.orchestration import (
     ExecutionPlan,
     GenerationGraphState,
     GenerationOrchestrationRequest,
+    GenerationOrchestrationResult,
     ModelTier,
     PlannedAction,
     PlannerResult,
@@ -26,21 +27,12 @@ from tests.test_orchestration_properties import (
 )
 
 
-@given(
-    tokens=_token_inputs_strategy,
-    correlation_id=st.text(
-        min_size=1,
-        max_size=48,
-        alphabet=string.ascii_letters + string.digits + "-",
-    ),
-)
-@settings(max_examples=50)
-@pytest.mark.asyncio
-async def test_langgraph_total_tokens_non_negative(
+def _build_planner_and_action(
     tokens: _PropTokenInputs,
     correlation_id: str,
-) -> None:
-    """Property test: LangGraph rollups keep total token counts semiring-safe."""
+) -> tuple[PlannerResult, list[ActionExecutionResult]]:
+    """Build graph planner and action results for one token-input example."""
+    del correlation_id
     planner_usage = LLMUsage(
         tokens.planner_input,
         tokens.planner_output,
@@ -71,7 +63,7 @@ async def test_langgraph_total_tokens_non_negative(
         provider_response_id="prop-planner",
         finish_reason="stop",
     )
-    tool_result = ActionExecutionResult(
+    action_result = ActionExecutionResult(
         action_id="action-1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
         model_tier=ModelTier.EXECUTION,
@@ -79,12 +71,19 @@ async def test_langgraph_total_tokens_non_negative(
         summary="prop graph synthesis",
         usage=tool_usage,
     )
+    return planner_result, [action_result]
 
+
+async def _run_graph_and_collect(
+    planner_result: PlannerResult,
+    actions: list[ActionExecutionResult],
+    correlation_id: str,
+) -> GenerationOrchestrationResult:
+    """Run the graph and return its orchestration result."""
     graph = build_generation_orchestration_graph(
         planner=_PropGraphPlanner(result=planner_result),
-        tool_executor=_PropGraphToolExecutor(result=tool_result),
+        tool_executor=_PropGraphToolExecutor(result=actions[0]),
     )
-
     request = GenerationOrchestrationRequest(
         correlation_id=correlation_id,
         script_tei_xml=(
@@ -94,22 +93,58 @@ async def test_langgraph_total_tokens_non_negative(
         template_structure=None,
     )
     state = await graph.ainvoke(GenerationGraphState(request=request))
-    orchestration_result = state["orchestration_result"]
-    expected_total_tokens = planner_usage.total_tokens + tool_usage.total_tokens
-    assert orchestration_result.total_usage.total_tokens >= 0, (
-        "total_tokens should be >= 0, "
-        f"got {orchestration_result.total_usage.total_tokens}"
+    return state["orchestration_result"]
+
+
+def _assert_usage_rollup(
+    result: GenerationOrchestrationResult,
+    planner_total: int,
+    tool_total: int,
+) -> None:
+    """Assert that graph usage is non-negative and additive."""
+    expected_total_tokens = planner_total + tool_total
+    assert result.total_usage.total_tokens >= 0, (
+        f"total_tokens should be >= 0, got {result.total_usage.total_tokens}"
     )
-    assert orchestration_result.total_usage.total_tokens == expected_total_tokens, (
+    assert result.total_usage.total_tokens == expected_total_tokens, (
         "expected_total_tokens mismatch: "
         f"expected {expected_total_tokens}, "
-        f"got {orchestration_result.total_usage.total_tokens}"
+        f"got {result.total_usage.total_tokens}"
     )
-    assert state["planner_result"] == planner_result, (
+
+
+@given(
+    tokens=_token_inputs_strategy,
+    correlation_id=st.text(
+        min_size=1,
+        max_size=48,
+        alphabet=string.ascii_letters + string.digits + "-",
+    ),
+)
+@settings(max_examples=50)
+@pytest.mark.asyncio
+async def test_langgraph_total_tokens_non_negative(
+    tokens: _PropTokenInputs,
+    correlation_id: str,
+) -> None:
+    """Property test: LangGraph rollups keep total token counts semiring-safe."""
+    planner_result, actions = _build_planner_and_action(tokens, correlation_id)
+    orchestration_result = await _run_graph_and_collect(
+        planner_result,
+        actions,
+        correlation_id,
+    )
+    _assert_usage_rollup(
+        orchestration_result,
+        tokens.planner_input + tokens.planner_output,
+        tokens.action_input + tokens.action_output,
+    )
+    assert orchestration_result.plan == planner_result.plan, (
         "planner_result mismatch: "
-        f"expected {planner_result}, got {state['planner_result']}"
+        f"expected {planner_result.plan}, got {orchestration_result.plan}"
     )
-    assert state["action_results"][0].model == "prop-exec-model", (
+    assert orchestration_result.action_results[0].model == "prop-exec-model", (
         "action result model mismatch: "
-        f"expected 'prop-exec-model', got {state['action_results'][0].model}"
+        f"expected 'prop-exec-model', "
+        f"got {orchestration_result.action_results[0].model}"
     )
