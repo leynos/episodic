@@ -71,31 +71,33 @@ def test_pedante_evaluator_config_rejects_blank_system_prompt() -> None:
 
 def test_pedante_finding_blocking_property_follows_support_level() -> None:
     """Blocking status should track support failures, not prose wording."""
-    assert (
-        PedanteFinding(
-            claim_id="claim-1",
-            claim_text="The quoted text is wrong.",
-            claim_kind=ClaimKind.DIRECT_QUOTE,
-            support_level=SupportLevel.MISQUOTATION,
-            severity=FindingSeverity.CRITICAL,
-            summary="The quotation is inaccurate.",
-            remediation="Correct the quotation.",
-            cited_source_ids=("src-1",),
-        ).is_blocking
-        is True
+    claim_1_is_blocking = PedanteFinding(
+        claim_id="claim-1",
+        claim_text="The quoted text is wrong.",
+        claim_kind=ClaimKind.DIRECT_QUOTE,
+        support_level=SupportLevel.MISQUOTATION,
+        severity=FindingSeverity.CRITICAL,
+        summary="The quotation is inaccurate.",
+        remediation="Correct the quotation.",
+        cited_source_ids=("src-1",),
+    ).is_blocking
+    assert claim_1_is_blocking is True, (
+        "PedanteFinding(claim_id='claim-1').is_blocking should be True, "
+        f"got {claim_1_is_blocking!r}"
     )
-    assert (
-        PedanteFinding(
-            claim_id="claim-2",
-            claim_text="A supported paraphrase.",
-            claim_kind=ClaimKind.TRANSPLANTED_CLAIM,
-            support_level=SupportLevel.ACCURATE_RESTATEMENT,
-            severity=FindingSeverity.LOW,
-            summary="Supported.",
-            remediation="No change required.",
-            cited_source_ids=("src-1",),
-        ).is_blocking
-        is False
+    claim_2_is_blocking = PedanteFinding(
+        claim_id="claim-2",
+        claim_text="A supported paraphrase.",
+        claim_kind=ClaimKind.TRANSPLANTED_CLAIM,
+        support_level=SupportLevel.ACCURATE_RESTATEMENT,
+        severity=FindingSeverity.LOW,
+        summary="Supported.",
+        remediation="No change required.",
+        cited_source_ids=("src-1",),
+    ).is_blocking
+    assert claim_2_is_blocking is False, (
+        "PedanteFinding(claim_id='claim-2').is_blocking should be False, "
+        f"got {claim_2_is_blocking!r}"
     )
 
 
@@ -106,7 +108,9 @@ def test_pedante_requires_revision_false_for_empty_findings() -> None:
         findings=(),
         usage=LLMUsage(10, 5, 15),
     )
-    assert result.requires_revision is False
+    assert result.requires_revision is False, (
+        f"empty findings should not require revision, got {result.requires_revision!r}"
+    )
 
 
 def test_pedante_parse_result_allows_empty_findings_list() -> None:
@@ -119,7 +123,10 @@ def test_pedante_parse_result_allows_empty_findings_list() -> None:
         f"expected empty tuple for findings, got {result.findings!r} "
         f"({type(result.findings).__name__})"
     )
-    assert result.requires_revision is False
+    assert result.requires_revision is False, (
+        "non-blocking findings should not require revision, "
+        f"got {result.requires_revision!r}"
+    )
 
 
 def test_pedante_requires_revision_false_for_non_blocking_findings() -> None:

@@ -28,7 +28,6 @@ The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
 
-
 ## Linting
 
 Run the full lint gate with:
@@ -40,8 +39,9 @@ make lint
 The target runs the architecture import-boundary checker, Ruff, and a focused
 Pylint 4 pass. The Pylint pass is invoked through `uv tool run --python pypy`
 with the pinned `pylint-pypy-shim` wrapper from
-`github.com/leynos/pylint-pypy-shim`. That wrapper installs the PyPy-specific
-Astroid compatibility patch before delegating to Pylint.
+[github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
+ That wrapper installs the PyPy-specific Astroid compatibility patch before
+delegating to Pylint.
 
 Pylint's message selection is allow-listed in `pyproject.toml` with
 `disable = ["all"]` and explicit `enable` entries for the logging, match,

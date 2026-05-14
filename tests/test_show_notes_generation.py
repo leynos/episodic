@@ -73,5 +73,5 @@ async def test_generate_raises_on_unparseable_response() -> None:
 
     script_xml = "<TEI><text><body><p>Test script.</p></body></text></TEI>"
 
-    with pytest.raises(ShowNotesResponseFormatError):
+    with pytest.raises(ShowNotesResponseFormatError, match="not valid JSON"):
         await generator.generate(script_xml)

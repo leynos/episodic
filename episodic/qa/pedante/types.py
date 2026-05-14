@@ -38,6 +38,14 @@ def _require_non_empty_tuple_field(value: object, field_name: str) -> None:
         raise ValueError(msg)
 
 
+def _require_source_packet_items(value: tuple[object, ...], field_name: str) -> None:
+    """Reject source tuples containing non-source-packet items."""
+    for item in value:
+        if not isinstance(item, PedanteSourcePacket):
+            msg = f"{field_name} must contain PedanteSourcePacket values."
+            raise TypeError(msg)
+
+
 class ClaimKind(enum.StrEnum):
     """Kinds of claims Pedante can evaluate."""
 
@@ -115,6 +123,7 @@ class PedanteEvaluationRequest:
         """Reject blank TEI payloads and empty source lists."""
         _require_non_empty_string_field(self.script_tei_xml, "script_tei_xml")
         _require_non_empty_tuple_field(self.sources, "sources")
+        _require_source_packet_items(self.sources, "sources")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -135,6 +144,9 @@ class PedanteFinding:
         _ensure_non_empty_fields(
             self, "claim_id", "claim_text", "summary", "remediation"
         )
+        if not isinstance(self.cited_source_ids, tuple):
+            msg = "cited_source_ids must be a tuple of string values."
+            raise TypeError(msg)
         for source_id in self.cited_source_ids:
             if not isinstance(source_id, str):
                 msg = "cited_source_ids must contain string values."

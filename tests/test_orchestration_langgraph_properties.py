@@ -96,7 +96,20 @@ async def test_langgraph_total_tokens_non_negative(
     state = await graph.ainvoke(GenerationGraphState(request=request))
     orchestration_result = state["orchestration_result"]
     expected_total_tokens = planner_usage.total_tokens + tool_usage.total_tokens
-    assert orchestration_result.total_usage.total_tokens >= 0
-    assert orchestration_result.total_usage.total_tokens == expected_total_tokens
-    assert state["planner_result"] == planner_result
-    assert state["action_results"][0].model == "prop-exec-model"
+    assert orchestration_result.total_usage.total_tokens >= 0, (
+        "total_tokens should be >= 0, "
+        f"got {orchestration_result.total_usage.total_tokens}"
+    )
+    assert orchestration_result.total_usage.total_tokens == expected_total_tokens, (
+        "expected_total_tokens mismatch: "
+        f"expected {expected_total_tokens}, "
+        f"got {orchestration_result.total_usage.total_tokens}"
+    )
+    assert state["planner_result"] == planner_result, (
+        "planner_result mismatch: "
+        f"expected {planner_result}, got {state['planner_result']}"
+    )
+    assert state["action_results"][0].model == "prop-exec-model", (
+        "action result model mismatch: "
+        f"expected 'prop-exec-model', got {state['action_results'][0].model}"
+    )

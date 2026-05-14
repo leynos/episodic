@@ -29,7 +29,8 @@ def is_openai_choice_payload(payload: object) -> bool:
         return False
     message_mapping = typ.cast("cabc.Mapping[str, object]", message)
 
-    if not isinstance(message_mapping.get("content"), str):
+    content = message_mapping.get("content")
+    if not isinstance(content, str) or not content.strip():
         return False
 
     if "finish_reason" not in payload_mapping:
@@ -87,6 +88,26 @@ def _extract_message_content(payload_mapping: cabc.Mapping[str, object]) -> str:
     return generated_text
 
 
+def _has_blank_first_choice_message_content(payload: object) -> bool:
+    """Return whether the first choice has blank message content."""
+    if not _is_string_keyed_mapping(payload):
+        return False
+    payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
+    choices = payload_mapping.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return False
+    first_choice = choices[0]
+    if not _is_string_keyed_mapping(first_choice):
+        return False
+    choice_mapping = typ.cast("cabc.Mapping[str, object]", first_choice)
+    message = choice_mapping.get("message")
+    if not _is_string_keyed_mapping(message):
+        return False
+    message_mapping = typ.cast("cabc.Mapping[str, object]", message)
+    content = message_mapping.get("content")
+    return isinstance(content, str) and not content.strip()
+
+
 class OpenAIChatCompletionAdapter:
     """Adapter entrypoint for OpenAI chat completion payload normalization."""
 
@@ -94,6 +115,8 @@ class OpenAIChatCompletionAdapter:
     def normalize_chat_completion(payload: object) -> LLMResponse:
         """Validate and normalize a raw OpenAI chat completion payload."""
         if not is_openai_chat_completion_payload(payload):
+            if _has_blank_first_choice_message_content(payload):
+                raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)
             raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
 
         payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)

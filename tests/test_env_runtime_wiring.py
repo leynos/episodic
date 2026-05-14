@@ -74,11 +74,13 @@ async def test_create_app_from_env_wires_database_readiness_probe(
     ) as client:
         response = await client.get("/health/ready")
 
-    assert response.status_code == 200
+    assert response.status_code == 200, (
+        f"unexpected readiness status code: {response.status_code}"
+    )
     assert response.json() == {
         "status": "ok",
         "checks": [{"name": "database", "status": "ok"}],
-    }
+    }, f"unexpected response body: {response.json()!r}"
 
 
 @pytest.mark.asyncio
@@ -126,5 +128,5 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
     assert sent_events == [
         {"type": "lifespan.startup.complete"},
         {"type": "lifespan.shutdown.complete"},
-    ]
+    ], f"unexpected lifespan events: {sent_events!r}"
     assert shutdown_hook_called, "engine.dispose shutdown hook was not called"
