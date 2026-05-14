@@ -525,7 +525,7 @@ and
     job, create or bind presenter profile revisions, and observe JSON status
     until the source context is ready for generation.
 - [ ] 4.3.2. Implement no-QA generation runs and TEI-P5 retrieval.
-  - Requires 2.1.1, 2.4.2, 4.2.2, and 4.3.1.
+  - Requires 2.1.1, 2.4.2, and 4.3.1.
   - Implement `/v1/episodes/{episode_id}/generation-runs` creation with
     `quality_mode=draft_without_qa`, `skip_qa_rationale`, actor metadata, and
     `Idempotency-Key` enforcement.
@@ -535,7 +535,8 @@ and
   - Persist the generated script into the canonical episode TEI with QA marked
     as skipped for the run and resulting TEI revision.
   - Implement `GET /v1/episodes/{episode_id}/tei` as both a JSON metadata
-    envelope and an `Accept: application/tei+xml` file download.
+    envelope and an `Accept: application/tei+xml` file download for draft TEI
+    output without requiring approval endpoints.
   - Success: a client can trigger draft generation from uploaded source and
     presenter context, poll completion over REST, and download a TEI-P5 XML
     file without using the QA, audio, or export-job pipelines.
