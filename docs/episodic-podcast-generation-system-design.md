@@ -15,6 +15,7 @@ Accepted decision records:
 - [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
 - [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
 - [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
+- [ADR 008: Source-to-script REST vertical slice](adr/adr-008-source-to-script-rest-vertical-slice.md)
 
 ## Overview
 
@@ -268,6 +269,9 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   guardrails per template.
 - Uses canonical prompt composition to derive both the user prompt scaffold and
   the system guardrail prompt before invoking provider adapters.
+- Accepts an explicit generation quality mode so the first source-to-script
+  REST slice can request `draft_without_qa` output without pretending the full
+  QA path has run.
 - Employs LangGraph StateGraphs to manage generation state, enabling iterative
   refinement cycles driven by QA feedback.
 - Implements conditional edges that route content based on Pedante, Bromide,
@@ -293,8 +297,8 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   `<div type="chapters"><list><item n="...">...</item></list></div>` output.
   This TEI representation is defined in
   [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md).
-- Persists generation runs alongside prompts, responses, iteration counts, and
-  cost telemetry.
+- Persists generation runs alongside prompts, responses, iteration counts,
+  quality mode, QA status, skip rationale, and cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
   pinning provider pricing snapshots and evaluator-node metadata to support
   auditability and dispute resolution.
@@ -653,35 +657,43 @@ The content generation workflow operates as a cyclic StateGraph with the
 following node structure:
 
 1. **Initialize:** Load series profile, episode template, and canonical TEI
-   sources; construct the initial prompt scaffold.
+   sources; construct the initial prompt scaffold; validate the requested
+   quality mode.
 2. **Generate:** Invoke `LLMPort` to produce draft content, show notes, and
    enrichments.
-3. **Evaluate (parallel branch):** Execute Pedante, Bromide, Chiltern, Anthem,
+3. **Quality branch:** Route `draft_without_qa` runs directly to draft
+   persistence with QA status recorded as skipped. Route QA-gated runs to the
+   evaluator branch.
+4. **Evaluate (parallel branch):** Execute Pedante, Bromide, Chiltern, Anthem,
    and Caesura checks, plus Chrono runtime estimation, concurrently; aggregate
    results.
-4. **Route:** Conditional edge based on evaluation outcome:
+5. **Route:** Conditional edge based on evaluation outcome:
    - If all evaluators pass thresholds, proceed to **Prepare for Approval**.
    - If evaluators fail but iteration count is below limit, proceed to
      **Refine**.
    - If iteration limit exceeded, proceed to **Escalate**.
-5. **Refine:** Construct remediation prompts from QA findings; return to
+6. **Refine:** Construct remediation prompts from QA findings; return to
    **Generate**.
-6. **Prepare for Approval:** Package content for human review; create
+7. **Persist Draft:** Write generated script content into canonical TEI with
+   the generation run id, quality mode, content hash, and QA status.
+8. **Prepare for Approval:** Package content for human review; create
    checkpoint.
-7. **Escalate:** Create review tasks for human intervention; pause graph.
+9. **Escalate:** Create review tasks for human intervention; pause graph.
 
 The following diagram illustrates the content generation graph:
 
 ```mermaid
 flowchart TD
     A[Initialize] --> B[Generate]
-    B --> C{Evaluate}
-    C -->|Parallel| D1[Pedante]
-    C -->|Parallel| D2[Bromide]
-    C -->|Parallel| D3[Chiltern]
-    C -->|Parallel| D4[Anthem]
-    C -->|Parallel| D5[Caesura]
-    C -->|Parallel| D6[Chrono]
+    B --> C{Quality Mode}
+    C -->|draft_without_qa| P[Persist Draft]
+    C -->|qa_gated| Q{Evaluate}
+    Q -->|Parallel| D1[Pedante]
+    Q -->|Parallel| D2[Bromide]
+    Q -->|Parallel| D3[Chiltern]
+    Q -->|Parallel| D4[Anthem]
+    Q -->|Parallel| D5[Caesura]
+    Q -->|Parallel| D6[Chrono]
     D1 --> E[Aggregate]
     D2 --> E
     D3 --> E
@@ -689,13 +701,45 @@ flowchart TD
     D5 --> E
     D6 --> E
     E --> F{Route}
-    F -->|Pass| G[Prepare for Approval]
+    F -->|Pass| P
     F -->|Fail, retries remain| H[Refine]
     F -->|Fail, limit exceeded| I[Escalate]
     H --> B
+    P --> G[Prepare for Approval]
     G --> J((Checkpoint))
     I --> K((Human Review))
 ```
+
+
+### Source-to-script vertical slice
+
+ADR 008 defines the first end-to-end REST slice that proves uploaded source
+material can become a downloadable TEI-P5 script before the full QA, approval,
+audio, and export pipelines are complete.
+
+The slice has two delivery tasks:
+
+1. **Source and presenter-profile intake:** clients create uploads, create or
+   reuse an ingestion job, attach uploaded or URI-backed sources, and provide
+   presenter context using reusable reference documents of kind `host_profile`
+   and `guest_profile`.
+2. **No-QA generation and TEI retrieval:** clients create a generation run with
+   `quality_mode=draft_without_qa`, poll the run and event resources, and fetch
+   the resulting TEI through the episode TEI resource.
+
+All control-plane operations use JSON over REST. Source and generation
+operations that can outlive a request return pollable resources with
+`202 Accepted`, `Location`, and `Retry-After` where appropriate. Side-effecting
+`POST` requests accept `Idempotency-Key` so clients can retry network failures
+without duplicating uploads, source attachments, or generation runs.
+
+TEI retrieval remains attached to the episode resource rather than to export
+jobs. `GET /v1/episodes/{episode_id}/tei` returns a JSON envelope by default,
+including TEI XML, content hash, revision, last generation run id, quality
+mode, and QA status. The same resource returns the TEI-P5 file directly when
+the request uses `Accept: application/tei+xml`; this response uses the TEI
+media type registered by RFC 6129 and includes `Content-Disposition:
+attachment`.
 
 #### Content Request Decision Tree
 
@@ -1175,6 +1219,9 @@ Agentic workflow behaviour is configurable per series profile:
 - `reference_document_bindings` links pinned reference revisions to a target
   context (series profile, episode template, or ingestion run), with an
   optional `effective_from_episode_id` anchor for forward-only applicability.
+- `uploads` records file upload metadata, content hashes, content type, size
+  limits, storage location, and idempotency keys before uploaded material is
+  attached to ingestion jobs.
 - `ingestion_jobs` tracks each ingestion run, including status, timestamps, and
   targeted episodes.
 - `source_documents` records ingestion-run inputs, document types, weighting
@@ -1186,6 +1233,9 @@ Agentic workflow behaviour is configurable per series profile:
   guidance.
 - `approval_events` maintains the approval state machine history with actor and
   timestamp.
+- `generation_runs` records script generation status, quality mode, skip-QA
+  rationale, actor metadata, linked episode, and the TEI revision written by
+  the run.
 - `generation_iterations` records each generation cycle within a StateGraph run,
   including prompts, responses, evaluator scores, routing decisions, and
   timestamps.
@@ -1833,22 +1883,26 @@ stateDiagram-v2
 ### Episode Generation and Enrichment
 
 1. Orchestrator initializes a LangGraph StateGraph, loading the latest series
-   profile and episode template to derive prompt scaffolds.
+   profile, episode template, uploaded source context, and presenter reference
+   bindings to derive prompt scaffolds.
 2. `LLMPort` adapters invoke selected models, respecting token budgets and retry
    policies; the graph captures generated content in state.
-3. Pedante, Bromide, Chiltern, Anthem, and Caesura execute in parallel as
-   graph nodes, with Chrono supplying runtime estimates, producing structured
-   findings.
-4. Conditional edges route based on aggregated evaluation scores:
+3. The graph checks the requested quality mode. `draft_without_qa` runs skip
+   evaluator nodes, record the bypass actor and rationale, and persist draft
+   TEI with QA status set to skipped.
+4. For QA-gated runs, Pedante, Bromide, Chiltern, Anthem, and Caesura execute
+   in parallel as graph nodes, with Chrono supplying runtime estimates,
+   producing structured findings.
+5. Conditional edges route based on aggregated evaluation scores:
    - Passing scores advance content to the approval checkpoint.
    - Failing scores trigger refinement: the graph constructs targeted prompts
      from QA findings and re-enters generation.
    - Repeated failures escalate to human review with accumulated context.
-5. Generated artefacts persist alongside confidence scores, iteration counts,
+6. Generated artefacts persist alongside confidence scores, iteration counts,
    and content hashes.
-6. Human-in-the-loop checkpoints pause the graph for editorial review; editors
+7. Human-in-the-loop checkpoints pause the graph for editorial review; editors
    may approve, request changes, or override evaluation decisions.
-7. Editors receive drafts in the console or CLI for optional redlines; approved
+8. Editors receive drafts in the console or CLI for optional redlines; approved
    content proceeds to audio synthesis.
 
 ### QA, Compliance, and Approvals
