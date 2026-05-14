@@ -25,16 +25,19 @@ from ._dto import (
     _coerce_action_kind,
     _coerce_action_kinds,
     _coerce_model_tier,
+    _coerce_single_action_kind,
     _require_non_empty_string,
     _require_object,
     _require_optional_string_list,
     _require_plan_step_list,
     build_workflow_step_idempotency_key,
 )
+from ._guest_bios_executor import GuestBiosToolExecutor
 from ._protocols import PlannerPort, ToolExecutorPort
 from ._show_notes_executor import ShowNotesToolExecutor
 from ._types import (
     ActionKind,
+    GuestBiosFormatError,
     ModelTier,
     PlanningResponseFormatError,
     ShowNotesFormatError,
@@ -51,12 +54,15 @@ __all__ = [
     "GenerationOrchestrationConfig",
     "GenerationOrchestrationRequest",
     "GenerationOrchestrationResult",
+    "GuestBiosFormatError",
+    "GuestBiosToolExecutor",
     "ModelTier",
     "PlannedAction",
     "PlannerPort",
     "PlannerResult",
     "PlanningResponseFormatError",
     "ResumeWorkflowCommand",
+    "RoutingToolExecutor",
     "ShowNotesFormatError",
     "ShowNotesToolExecutor",
     "StructuredGenerationPlanner",
@@ -222,6 +228,39 @@ class StructuredGenerationPlanner:
             provider_response_id=response.provider_response_id,
             finish_reason=response.finish_reason,
         )
+
+
+@dc.dataclass(slots=True)
+class RoutingToolExecutor:
+    """Dispatch planned actions to tool executors by normalized action kind."""
+
+    routes: dict[ActionKind | str, ToolExecutorPort]
+
+    def __post_init__(self) -> None:
+        """Normalize and freeze the action-kind route table."""
+        if not self.routes:
+            msg = "routes must not be empty."
+            raise ValueError(msg)
+        object.__setattr__(
+            self,
+            "routes",
+            {
+                _coerce_single_action_kind(action_kind): executor
+                for action_kind, executor in self.routes.items()
+            },
+        )
+
+    async def execute(
+        self,
+        action: PlannedAction,
+        context: GenerationOrchestrationRequest,
+    ) -> ActionExecutionResult:
+        """Execute one planned action through its registered tool executor."""
+        executor = self.routes.get(action.action_kind)
+        if executor is None:
+            msg = f"No tool executor registered for action kind: {action.action_kind}"
+            raise UnsupportedActionError(msg)
+        return await executor.execute(action, context)
 
 
 @dc.dataclass(slots=True)

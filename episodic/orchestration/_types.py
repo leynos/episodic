@@ -35,6 +35,7 @@ class ActionKind(enum.StrEnum):
     """Supported generation-enrichment actions for this orchestration slice."""
 
     GENERATE_SHOW_NOTES = "generate_show_notes"
+    GENERATE_GUEST_BIOS = "generate_guest_bios"
 
 
 class ModelTier(enum.StrEnum):
@@ -58,3 +59,7 @@ class ToolExecutionError(RuntimeError):
 
 class ShowNotesFormatError(ToolExecutionError):
     """Raised when the show-notes generator returns malformed structured JSON."""
+
+
+class GuestBiosFormatError(ToolExecutionError):
+    """Raised when the guest-bios generator returns malformed structured JSON."""

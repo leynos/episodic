@@ -128,6 +128,38 @@ Chapter markers apply the same fail-fast rule. Blank titles,
 invalid durations, negative starts, duplicate starts, and descending starts are
 rejected before the canonical TEI document is enriched.
 
+
+#### Guest biographies
+
+Guest biographies are generated from guest profile reference documents that are
+bound to the series, template, or episode context. The generator resolves the
+same pinned reference revisions exposed by
+`GET /series-profiles/{profile_id}/resolved-bindings`, filters them to
+`guest_profile` documents, and asks the configured execution model for a short,
+source-grounded biography for each resolved guest.
+
+The generated biographies are written into the canonical TEI body as:
+
+```xml
+<div type="guest-bios">
+  <list>
+    <item corresp="reference-document-revision-id">
+      <label>Guest name</label>
+      Biography text.
+    </item>
+  </list>
+</div>
+```
+
+The `corresp` value identifies the pinned reference-document revision used for
+that biography. If no guest profile bindings resolve for the episode context,
+the TEI body is left unchanged and no LLM call is made.
+
+Guest-bio generation has the same fail-fast behaviour as show notes. A
+malformed provider response, an invented revision identifier, or a duplicate
+guest revision identifier stops the run instead of publishing uncertain
+metadata.
+
 ### Reusable Reference Documents
 
 Reusable reference-document workflows currently support:

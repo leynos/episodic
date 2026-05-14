@@ -3,10 +3,13 @@
 import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
+import uuid
 
 from episodic.generation import (
+    GuestBiosEnrichmentResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
     ShowNotesResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
 )
+
 from episodic.llm import (
     LLMProviderOperation,
     LLMTokenBudget,
@@ -71,7 +74,8 @@ def _coerce_action_kind(value: object) -> ActionKind:
     try:
         return ActionKind(value.strip())
     except ValueError as exc:
-        msg = f"action_kind must be one of: {ActionKind.GENERATE_SHOW_NOTES.value}."
+        expected = ", ".join(action.value for action in ActionKind)
+        msg = f"action_kind must be one of: {expected}."
         raise PlanningResponseFormatError(msg) from exc
 
 
@@ -183,6 +187,9 @@ class GenerationOrchestrationRequest:
     correlation_id: str
     script_tei_xml: str
     template_structure: dict[str, object] | None = None
+    series_profile_id: uuid.UUID | None = None
+    episode_id: uuid.UUID | None = None
+    template_id: uuid.UUID | None = None
 
     def __post_init__(self) -> None:
         """Validate core request invariants eagerly."""
@@ -346,6 +353,7 @@ class ActionExecutionResult:
     summary: str
     usage: LLMUsage | None = None
     show_notes_result: ShowNotesResult | None = None
+    guest_bios_result: GuestBiosEnrichmentResult | None = None
 
     def __post_init__(self) -> None:
         """Reject blank text fields and normalize enum-shaped fields."""

@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -187,15 +187,42 @@ ExecPlan has been explicitly approved.
   `guest_profile` documents, skip inference when no guest profiles are bound,
   and return the enriched TEI plus source and usage metadata. Focused tests,
   `make check-fmt`, `make typecheck`, `make lint`, `make markdownlint`, and
-  `make nixie` passed. `coderabbit review --agent` completed with zero
-  findings.
+  `make nixie` passed. `coderabbit review --agent` completed with zero findings.
+- [x] 2026-05-14: Added `ActionKind.GENERATE_GUEST_BIOS`,
+  `GuestBiosToolExecutor`, guest-bio action result metadata, and
+  `RoutingToolExecutor` so structured orchestration can execute show notes and
+  guest-bio actions in the same plan through the existing tool-executor port.
+- [x] 2026-05-14: Added a Vidai Mock-backed `pytest-bdd` scenario in
+  `tests/features/guest_bios.feature` and
+  `tests/steps/test_guest_bios_steps.py`. The scenario proves the generator
+  sends pinned guest profile content to the LLM adapter, receives structured
+  guest-bio output, and formats that output into the canonical TEI body.
+- [x] 2026-05-14: Ran focused orchestration and behavioural validation with
+  focused guest-bio executor and BDD tests, followed by `make check-fmt`,
+  `make typecheck`, and `make lint`. Ran `coderabbit review --agent` through
+  several review/fix loops; the final pass completed with zero findings.
+- [x] 2026-05-14: Ran a full sequential gate batch after orchestration and
+  behavioural fixes: `make check-fmt`, `make typecheck`, `make lint`,
+  `make markdownlint`, `make nixie`, and `make test`. The full test suite
+  completed with `480 passed, 3 skipped`.
+- [x] 2026-05-14: Updated
+  `docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`,
+  and `docs/developers-guide.md` with guest-bio generation behaviour, internal
+  conventions, and Vidai Mock testing guidance. Marked roadmap item 2.3.3 done
+  in `docs/roadmap.md`.
+- [x] 2026-05-14: Cleared the final `coderabbit review --agent` loop for the
+  orchestration, behavioural, and documentation slice. The final review pass
+  completed with zero findings.
+- [x] 2026-05-14: Ran the final sequential gate batch: `make check-fmt`,
+  `make typecheck`, `make lint`, `make markdownlint`, `make nixie`, and
+  `make test`. The full test suite completed with `481 passed, 3 skipped`.
 - [x] Implement milestone 2: guest profile projection and
   generator service.
 - [x] Implement milestone 3: TEI body enrichment.
-- [ ] Implement milestone 4: binding retrieval and orchestration integration.
-- [ ] Implement milestone 5: behavioural, property, and
+- [x] Implement milestone 4: binding retrieval and orchestration integration.
+- [x] Implement milestone 5: behavioural, property, and
   end-to-end validation.
-- [ ] Implement milestone 6: documentation, roadmap completion,
+- [x] Implement milestone 6: documentation, roadmap completion,
   full validation, CodeRabbit review, commit, push, and PR update.
 
 ## Surprises & discoveries
@@ -510,7 +537,20 @@ The future implementation must additionally include focused fail-first tests:
 
 ## Outcomes & retrospective
 
-This section is intentionally empty while the plan is in draft. During
-implementation, record what changed, what was validated, any deviations from
-the plan, and lessons that should influence later roadmap items 2.3.4 and
-content-generation orchestration work.
+The implementation stayed within the planned architecture. Guest-bio policy and
+TEI formatting live in `episodic/generation/guest_bios.py`; orchestration sees
+only typed DTOs and `ToolExecutorPort` implementations; the persistence-facing
+binding resolver remains in the canonical reference-document layer.
+
+No schema migration, CLI change, worker task, or new HTTP endpoint was needed.
+Because the externally observable workflow is an in-process generation action
+backed by existing reference-document bindings, no additional process-level
+end-to-end test was added. The feature is covered by unit tests, Hypothesis
+property tests, orchestration executor tests, and a Vidai Mock-backed
+`pytest-bdd` behavioural scenario.
+
+The main lesson for later enrichment items is that the `RoutingToolExecutor`
+keeps the structured planner extensible without teaching the orchestrator about
+individual enrichment services. Future 2.3.x work should follow that adapter
+shape and keep TEI body representation decisions in ADRs before adding new
+actions.
