@@ -7,6 +7,7 @@ import typing as typ
 import tei_rapporteur as tei
 
 from episodic.canonical.domain import ReferenceDocumentKind
+from episodic.canonical.reference_documents.resolution import resolve_bindings
 from episodic.llm import (
     LLMPort,
     LLMProviderOperation,
@@ -17,9 +18,16 @@ from episodic.llm import (
 )
 
 if typ.TYPE_CHECKING:
+    import uuid
+
+    from episodic.canonical.ports import CanonicalUnitOfWork
     from episodic.canonical.reference_documents.resolution import ResolvedBinding
 
 type JsonMapping = dict[str, object]
+type BindingResolver = typ.Callable[
+    ...,
+    typ.Awaitable[list[ResolvedBinding]],
+]
 
 _DEFAULT_SYSTEM_PROMPT = (
     "The assistant acts as a podcast guest biography writer. Given TEI P5 "
@@ -130,6 +138,15 @@ class GuestBiosResult:
     model: str = ""
     provider_response_id: str = ""
     finish_reason: str | None = None
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GuestBiosEnrichmentResult:
+    """Guest-bio enrichment output for a resolved binding context."""
+
+    tei_xml: str
+    generation_result: GuestBiosResult
+    sources: tuple[GuestBioSource, ...]
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -445,3 +462,44 @@ def enrich_tei_with_guest_bios(tei_xml: str, result: GuestBiosResult) -> str:
     body_blocks.append(_build_guest_bios_div_payload(result.entries))
     enriched_document = tei.from_dict(document_payload)
     return tei.emit_xml(enriched_document)
+
+
+async def generate_guest_bios_from_reference_bindings(  # noqa: PLR0913
+    uow: CanonicalUnitOfWork,
+    *,
+    series_profile_id: uuid.UUID,
+    tei_xml: str,
+    generator: GuestBiosGenerator,
+    template_id: uuid.UUID | None = None,
+    episode_id: uuid.UUID | None = None,
+    template_structure: JsonMapping | None = None,
+    binding_resolver: BindingResolver = resolve_bindings,
+) -> GuestBiosEnrichmentResult:
+    """Resolve guest profile bindings, generate bios, and enrich TEI."""
+    resolved_bindings = await binding_resolver(
+        uow,
+        series_profile_id=series_profile_id,
+        template_id=template_id,
+        episode_id=episode_id,
+    )
+    sources = project_guest_bio_sources(resolved_bindings)
+    if not sources:
+        return GuestBiosEnrichmentResult(
+            tei_xml=tei_xml,
+            generation_result=GuestBiosResult(
+                entries=(),
+                usage=LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0),
+            ),
+            sources=(),
+        )
+
+    result = await generator.generate(
+        tei_xml,
+        sources,
+        template_structure=template_structure,
+    )
+    return GuestBiosEnrichmentResult(
+        tei_xml=enrich_tei_with_guest_bios(tei_xml, result),
+        generation_result=result,
+        sources=sources,
+    )

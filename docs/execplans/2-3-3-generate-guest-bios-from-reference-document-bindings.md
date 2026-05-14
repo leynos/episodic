@@ -177,16 +177,22 @@ ExecPlan has been explicitly approved.
   brittle raw XML assertions around entity escaping; the tests now inspect
   parsed `tei_rapporteur` payloads.
 - [x] 2026-05-14: Ran focused validation for milestone 2/3 with `set -o
-  pipefail`, including
-  `uv run pytest tests/test_guest_bios.py tests/test_guest_bios_properties.py -q`,
+  pipefail`, including `uv run pytest tests/test_guest_bios.py
+  tests/test_guest_bios_properties.py -q`, `make check-fmt`, `make
+  typecheck`, `make lint`, `make markdownlint`, and `make
+  nixie`. Ran `coderabbit review --agent`; it completed with zero findings.
+- [x] 2026-05-14: Added
+  `generate_guest_bios_from_reference_bindings(...)` to resolve existing
+  reference bindings through the canonical unit of work, project only
+  `guest_profile` documents, skip inference when no guest profiles are bound,
+  and return the enriched TEI plus source and usage metadata. Focused tests,
   `make check-fmt`, `make typecheck`, `make lint`, `make markdownlint`, and
-  `make nixie`. Ran `coderabbit review --agent`; it completed with zero
+  `make nixie` passed. `coderabbit review --agent` completed with zero
   findings.
 - [x] Implement milestone 2: guest profile projection and
   generator service.
 - [x] Implement milestone 3: TEI body enrichment.
-- [ ] Implement milestone 4: binding retrieval and
-  orchestration integration.
+- [ ] Implement milestone 4: binding retrieval and orchestration integration.
 - [ ] Implement milestone 5: behavioural, property, and
   end-to-end validation.
 - [ ] Implement milestone 6: documentation, roadmap completion,

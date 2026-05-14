@@ -1,5 +1,6 @@
 """Guest biography generation and TEI enrichment tests."""
 
+import asyncio
 import dataclasses as dc
 import datetime as dt
 import json
@@ -26,9 +27,13 @@ from episodic.generation.guest_bios import (
     GuestBiosResponseFormatError,
     GuestBiosResult,
     enrich_tei_with_guest_bios,
+    generate_guest_bios_from_reference_bindings,
     project_guest_bio_sources,
 )
 from episodic.llm import LLMRequest, LLMResponse, LLMUsage
+
+if typ.TYPE_CHECKING:
+    from episodic.canonical.ports import CanonicalUnitOfWork
 
 
 @dc.dataclass(slots=True)
@@ -313,6 +318,118 @@ async def test_generate_calls_llm_and_returns_guest_bios_result() -> None:
             reference_document_revision_id="rev-ada",
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_generate_from_reference_bindings_resolves_and_enriches_tei() -> None:
+    """Resolve guest-profile bindings and enrich TEI with generated bios."""
+    guest_document_id = uuid4()
+    guest_revision_id = uuid4()
+    series_profile_id = uuid4()
+    episode_id = uuid4()
+    template_id = uuid4()
+    calls: list[dict[str, object]] = []
+
+    async def binding_resolver(
+        uow: object,
+        **kwargs: object,
+    ) -> list[ResolvedBinding]:
+        await asyncio.sleep(0)
+        calls.append({"uow": uow, **kwargs})
+        return [
+            ResolvedBinding(
+                binding=_reference_binding(guest_revision_id),
+                document=_reference_document(
+                    document_id=guest_document_id,
+                    kind=ReferenceDocumentKind.GUEST_PROFILE,
+                ),
+                revision=_reference_revision(
+                    document_id=guest_document_id,
+                    revision_id=guest_revision_id,
+                    content={
+                        "display_name": "Ada Lovelace",
+                        "profile": "Ada wrote notes on the Analytical Engine.",
+                    },
+                ),
+            )
+        ]
+
+    llm = _FakeLLMPort(
+        response=_response({
+            "guests": [
+                {
+                    "display_name": "Ada Lovelace",
+                    "bio": "Ada Lovelace wrote about analytical engines.",
+                    "reference_document_revision_id": str(guest_revision_id),
+                }
+            ]
+        }),
+        requests=[],
+    )
+    generator = GuestBiosGenerator(
+        llm=llm,
+        config=GuestBiosGeneratorConfig(model="vidai-mock"),
+    )
+    uow = object()
+
+    result = await generate_guest_bios_from_reference_bindings(
+        typ.cast("CanonicalUnitOfWork", uow),
+        series_profile_id=series_profile_id,
+        episode_id=episode_id,
+        template_id=template_id,
+        tei_xml=SCRIPT_TEI,
+        generator=generator,
+        binding_resolver=binding_resolver,
+    )
+
+    assert calls == [
+        {
+            "uow": uow,
+            "series_profile_id": series_profile_id,
+            "episode_id": episode_id,
+            "template_id": template_id,
+        }
+    ]
+    assert result.sources[0].reference_document_revision_id == str(guest_revision_id)
+    assert result.generation_result.entries[0].display_name == "Ada Lovelace"
+    assert 'type="guest-bios"' in result.tei_xml
+    assert "Ada Lovelace wrote about analytical engines." in result.tei_xml
+
+
+@pytest.mark.asyncio
+async def test_generate_from_reference_bindings_skips_llm_without_guest_profiles() -> (
+    None
+):
+    """Return the original TEI when no guest-profile bindings resolve."""
+
+    async def binding_resolver(
+        uow: object,
+        **kwargs: object,
+    ) -> list[ResolvedBinding]:
+        await asyncio.sleep(0)
+        return []
+
+    llm = _FakeLLMPort(
+        response=_response({"guests": []}),
+        requests=[],
+    )
+    generator = GuestBiosGenerator(
+        llm=llm,
+        config=GuestBiosGeneratorConfig(model="vidai-mock"),
+    )
+
+    result = await generate_guest_bios_from_reference_bindings(
+        typ.cast("CanonicalUnitOfWork", object()),
+        series_profile_id=uuid4(),
+        tei_xml=SCRIPT_TEI,
+        generator=generator,
+        binding_resolver=binding_resolver,
+    )
+
+    assert result.tei_xml == SCRIPT_TEI
+    assert result.sources == ()
+    assert result.generation_result.entries == ()
+    assert llm.requests == []
 
 
 def test_enrich_tei_with_guest_bios_appends_canonical_div() -> None:
