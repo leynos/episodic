@@ -9,6 +9,8 @@ This migration introduces:
 
 from __future__ import annotations
 
+import typing as typ
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -18,6 +20,37 @@ revision = "20260220_000002"
 down_revision = "20260203_000001"
 branch_labels = None
 depends_on = None
+
+
+class _HistorySpec(typ.NamedTuple):
+    """Describe one change-history table."""
+
+    table_name: str
+    parent_fk_col: str
+    parent_fk_target: tuple[str, str]
+    constraint_names: tuple[str, str]
+
+
+_HISTORY_SPECS = (
+    _HistorySpec(
+        table_name="series_profile_history",
+        parent_fk_col="series_profile_id",
+        parent_fk_target=("series_profiles", "id"),
+        constraint_names=(
+            "uq_series_profile_history_revision",
+            "ck_series_profile_history_revision_positive",
+        ),
+    ),
+    _HistorySpec(
+        table_name="episode_template_history",
+        parent_fk_col="episode_template_id",
+        parent_fk_target=("episode_templates", "id"),
+        constraint_names=(
+            "uq_episode_template_history_revision",
+            "ck_episode_template_history_revision_positive",
+        ),
+    ),
+)
 
 
 def _create_history_table(
@@ -56,6 +89,12 @@ def _create_history_table(
         table_name,
         [parent_fk_col],
     )
+
+
+def _create_history_tables() -> None:
+    """Create change-history tables in dependency order."""
+    for spec in _HISTORY_SPECS:
+        _create_history_table(**spec._asdict())
 
 
 def _create_episode_templates_table() -> None:
@@ -98,48 +137,14 @@ def _create_episode_templates_table() -> None:
     )
 
 
-def _create_series_profile_history_table() -> None:
-    """Create the series profile history table and indexes."""
-    _create_history_table(
-        table_name="series_profile_history",
-        parent_fk_col="series_profile_id",
-        parent_fk_target=("series_profiles", "id"),
-        constraint_names=(
-            "uq_series_profile_history_revision",
-            "ck_series_profile_history_revision_positive",
-        ),
-    )
-
-
-def _create_episode_template_history_table() -> None:
-    """Create the episode template history table and indexes."""
-    _create_history_table(
-        table_name="episode_template_history",
-        parent_fk_col="episode_template_id",
-        parent_fk_target=("episode_templates", "id"),
-        constraint_names=(
-            "uq_episode_template_history_revision",
-            "ck_episode_template_history_revision_positive",
-        ),
-    )
-
-
-def _drop_episode_template_history_table() -> None:
-    """Drop the episode template history table and indexes."""
-    op.drop_index(
-        "ix_episode_template_history_episode_template_id",
-        table_name="episode_template_history",
-    )
-    op.drop_table("episode_template_history")
-
-
-def _drop_series_profile_history_table() -> None:
-    """Drop the series profile history table and indexes."""
-    op.drop_index(
-        "ix_series_profile_history_series_profile_id",
-        table_name="series_profile_history",
-    )
-    op.drop_table("series_profile_history")
+def _drop_history_tables() -> None:
+    """Drop change-history tables in reverse dependency order."""
+    for spec in reversed(_HISTORY_SPECS):
+        op.drop_index(
+            f"ix_{spec.table_name}_{spec.parent_fk_col}",
+            table_name=spec.table_name,
+        )
+        op.drop_table(spec.table_name)
 
 
 def _drop_episode_templates_table() -> None:
@@ -154,12 +159,10 @@ def _drop_episode_templates_table() -> None:
 def upgrade() -> None:
     """Apply schema changes."""
     _create_episode_templates_table()
-    _create_series_profile_history_table()
-    _create_episode_template_history_table()
+    _create_history_tables()
 
 
 def downgrade() -> None:
     """Revert schema changes."""
-    _drop_episode_template_history_table()
-    _drop_series_profile_history_table()
+    _drop_history_tables()
     _drop_episode_templates_table()
