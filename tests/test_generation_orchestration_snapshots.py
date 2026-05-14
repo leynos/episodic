@@ -1,6 +1,7 @@
 """Syrupy regression snapshots for typed generation artefacts."""
 
 import dataclasses
+import typing as typ
 
 from syrupy.assertion import SnapshotAssertion
 
@@ -15,6 +16,7 @@ from episodic.orchestration import (
     ModelTier,
     PlannedAction,
     PlannerResult,
+    PlanningResponseFormatError,
     StructuredGenerationPlanner,
 )
 from episodic.orchestration.langgraph import (
@@ -35,7 +37,67 @@ class _UnusedLLMPort:
         raise RuntimeError(msg)
 
 
+def _valid_plan_payload() -> dict[str, object]:
+    """Return one raw planner payload used as the basis for error snapshots."""
+    return {
+        "plan_version": "1.0",
+        "steps": [
+            {
+                "action_id": "action-1",
+                "action_kind": ActionKind.GENERATE_SHOW_NOTES.value,
+                "rationale": "Generate show notes.",
+                "model_tier": ModelTier.EXECUTION.value,
+                "required_inputs": ["script_tei_xml"],
+            }
+        ],
+    }
+
+
+def _valid_plan_step() -> dict[str, object]:
+    """Return the first valid raw planner step for targeted corruption."""
+    steps = _valid_plan_payload()["steps"]
+    assert isinstance(steps, list)
+    step = steps[0]
+    assert isinstance(step, dict)
+    return typ.cast("dict[str, object]", step)
+
+
+def _plan_payload_with_step_field(field_name: str, value: object) -> dict[str, object]:
+    """Return a planner payload with one step field replaced."""
+    return _valid_plan_payload() | {"steps": [_valid_plan_step() | {field_name: value}]}
+
+
+def _plan_payload_without_step_field(field_name: str) -> dict[str, object]:
+    """Return a planner payload with one required step field omitted."""
+    return _valid_plan_payload() | {
+        "steps": [
+            {
+                key: value
+                for key, value in _valid_plan_step().items()
+                if key != field_name
+            }
+        ]
+    }
+
+
+def _capture_plan_format_error(payload: dict[str, object]) -> str:
+    """Return the structured-planner format error for a malformed payload."""
+    try:
+        StructuredGenerationPlanner._parse_plan(
+            payload,
+            config=GenerationOrchestrationConfig(
+                planning_model="gpt-4.1",
+                execution_model="gpt-4o-mini",
+            ),
+        )
+    except PlanningResponseFormatError as exc:
+        return str(exc)
+    msg = f"Expected PlanningResponseFormatError for payload: {payload!r}"
+    raise AssertionError(msg)
+
+
 def test_build_prompt_snapshot(snapshot: SnapshotAssertion) -> None:
+    """Snapshot the JSON planner prompt rendered for a minimal request."""
     cfg = GenerationOrchestrationConfig(
         planning_model="gpt-4.1",
         execution_model="gpt-4o-mini",
@@ -50,6 +112,7 @@ def test_build_prompt_snapshot(snapshot: SnapshotAssertion) -> None:
 
 
 def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> None:
+    """Snapshot dataclass serialisation for execution plans."""
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
@@ -69,6 +132,7 @@ def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> N
 def test_generation_orchestration_result_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
+    """Snapshot dataclass serialisation for aggregated orchestration results."""
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
@@ -100,6 +164,7 @@ def test_generation_orchestration_result_snapshot(
 
 
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
+    """Snapshot checkpoint payload conversion for planner and action results."""
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
@@ -132,4 +197,33 @@ def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
     assert {
         "planner_result": _planner_result_to_payload(planner_result),
         "action_result": _action_result_to_payload(action_result),
+    } == snapshot
+
+
+def test_planner_format_error_messages_snapshot(snapshot: SnapshotAssertion) -> None:
+    """Snapshot representative strict-planner format error messages."""
+    assert {
+        "missing_action_id": _capture_plan_format_error(
+            _plan_payload_without_step_field("action_id")
+        ),
+        "missing_plan_version": _capture_plan_format_error({
+            key: value
+            for key, value in _valid_plan_payload().items()
+            if key != "plan_version"
+        }),
+        "non_list_required_inputs": _capture_plan_format_error(
+            _plan_payload_with_step_field("required_inputs", "script_tei_xml")
+        ),
+        "non_list_steps": _capture_plan_format_error(
+            _valid_plan_payload() | {"steps": "not-a-list"}
+        ),
+        "non_object_step": _capture_plan_format_error(
+            _valid_plan_payload() | {"steps": ["not-an-object"]}
+        ),
+        "unknown_action_kind": _capture_plan_format_error(
+            _plan_payload_with_step_field("action_kind", "unknown_action")
+        ),
+        "unknown_model_tier": _capture_plan_format_error(
+            _plan_payload_with_step_field("model_tier", "training")
+        ),
     } == snapshot
