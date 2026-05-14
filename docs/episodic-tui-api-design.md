@@ -1105,7 +1105,7 @@ sequenceDiagram
 
     User->>TUI: Configure generation parameters
     TUI->>REST_v1: POST /v1/episodes/{episode_id}/generation-runs
-    REST_v1-->>TUI: 201 Created {run_id}
+    REST_v1-->>TUI: 202 Accepted {run_id}
 
     TUI->>WS_runs: WebSocket connect /ws/runs/{run_id}
     TUI->>WS_runs: client.hello(token, resume_from=0)

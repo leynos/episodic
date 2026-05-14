@@ -682,6 +682,9 @@ following node structure:
 
 The following diagram illustrates the content generation graph:
 
+For screen readers: The diagram shows the content generation graph and how
+nodes relate during episodic podcast generation.
+
 ```mermaid
 flowchart TD
     A[Initialize] --> B[Generate]
@@ -709,7 +712,6 @@ flowchart TD
     G --> J((Checkpoint))
     I --> K((Human Review))
 ```
-
 
 ### Source-to-script vertical slice
 

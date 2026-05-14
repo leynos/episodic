@@ -178,13 +178,11 @@ the literal file-download case defined by TEI media-type prior art.
 
 ## References
 
-- [Episodic podcast generation system design][system-design]
+- [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
 - [Episodic TUI API design](../episodic-tui-api-design.md)
-- Microsoft REST API design best practices.
-- Microsoft Fabric long-running operation pattern.
-- [Stripe idempotent request guidance][stripe-idempotency]
-- [RFC 6129: The `application/tei+xml` media type][rfc-6129]
-
-[rfc-6129]: https://datatracker.ietf.org/doc/html/rfc6129
-[stripe-idempotency]: https://docs.stripe.com/api/idempotent_requests
-[system-design]: ../episodic-podcast-generation-system-design.md
+- Microsoft REST API design best practices:
+  <https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design>
+- Microsoft Fabric long-running operation pattern:
+  <https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation>
+- [Stripe idempotent request guidance](https://docs.stripe.com/api/idempotent_requests)
+- [RFC 6129: The `application/tei+xml` media type](https://datatracker.ietf.org/doc/html/rfc6129)
