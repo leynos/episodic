@@ -197,13 +197,13 @@ XML and unsupported TEI body markup.
 - [x] (2026-05-13 13:45Z) Added `asyncio.gather(...)` coverage for shared
   Chrono estimator and graph invocations so concurrent calls preserve
   per-request results and metadata. Validation reported `470 passed, 3 skipped`.
-- [x] (2026-05-13 14:10Z) Added Chrono observability for TEI validation
-  failures, graph-node failures, and bounded-cardinality estimator metrics for
-  success/error counts and latency. Validation reported `473 passed, 3 skipped`.
 - [x] (2026-05-13 12:10Z) Added Chrono determinism and formula property tests,
   Syrupy snapshots for estimator and graph artefacts, and distinct spoken-word
   counts in concurrent evaluator and graph fixtures. Validation reported
   `477 passed, 3 skipped`.
+- [x] (2026-05-13 14:10Z) Added Chrono observability for TEI validation
+  failures, graph-node failures, and bounded-cardinality estimator metrics for
+  success/error counts and latency. Validation reported `473 passed, 3 skipped`.
 
 Follow-on roadmap entry: close ADR-006 by accepting or revising the
 spoken-text semantics, then update documentation if the accepted semantics
