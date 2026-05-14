@@ -1,4 +1,28 @@
-"""OpenAI chat completion payload normalization."""
+"""Normalize OpenAI chat completion payloads.
+
+This module contains the chat-completion half of the OpenAI response adapters.
+It validates raw provider dictionaries before converting them into
+``LLMResponse`` values used by the LLM port boundary.
+
+Public API
+----------
+is_openai_choice_payload
+    Check whether one ``choices`` item has the expected message/content shape.
+is_openai_chat_completion_payload
+    Check whether a full chat completion payload can be normalized.
+OpenAIChatCompletionAdapter
+    Adapter entrypoint used by provider clients before returning ``LLMResponse``.
+
+Examples
+--------
+>>> payload = {
+...     "id": "chatcmpl_123",
+...     "model": "gpt-4o-mini",
+...     "choices": [{"message": {"content": "Draft text"}, "finish_reason": "stop"}],
+... }
+>>> OpenAIChatCompletionAdapter.normalize_chat_completion(payload).text
+'Draft text'
+"""
 
 import collections.abc as cabc  # noqa: TC003  # Runtime casts use mapping aliases.
 import typing as typ
@@ -19,7 +43,33 @@ _EMPTY_CONTENT_MESSAGE = (
 
 
 def is_openai_choice_payload(payload: object) -> bool:
-    """Validate OpenAI choice payload shape."""
+    """Validate one OpenAI chat completion choice.
+
+    Parameters
+    ----------
+    payload : object
+        Candidate choice object from a provider ``choices`` list.
+
+    Returns
+    -------
+    bool
+        ``True`` when *payload* is a mapping with a message containing
+        non-empty string content and an optional string or ``None``
+        ``finish_reason``.
+
+    Raises
+    ------
+    None
+        This predicate reports invalid input with ``False`` rather than
+        raising.
+
+    Examples
+    --------
+    >>> is_openai_choice_payload({"message": {"content": "Hello"}})
+    True
+    >>> is_openai_choice_payload({"message": {"content": "   "}})
+    False
+    """
     if not _is_string_keyed_mapping(payload):
         return False
     payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
@@ -65,7 +115,34 @@ def _has_valid_usage(payload_mapping: cabc.Mapping[str, object]) -> bool:
 
 
 def is_openai_chat_completion_payload(payload: object) -> bool:
-    """Validate OpenAI chat completion payload shape."""
+    """Validate a full OpenAI chat completion payload.
+
+    Parameters
+    ----------
+    payload : object
+        Candidate provider payload to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when identity fields, choice entries, and optional usage
+        metadata are structurally valid.
+
+    Raises
+    ------
+    None
+        Invalid input returns ``False`` so callers can decide whether to raise
+        a domain-specific validation error.
+
+    Examples
+    --------
+    >>> is_openai_chat_completion_payload({
+    ...     "id": "chatcmpl_123",
+    ...     "model": "gpt-4o-mini",
+    ...     "choices": [{"message": {"content": "Hello"}}],
+    ... })
+    True
+    """
     if not _is_string_keyed_mapping(payload):
         return False
     payload_mapping = typ.cast("cabc.Mapping[str, object]", payload)
@@ -109,11 +186,63 @@ def _has_blank_first_choice_message_content(payload: object) -> bool:
 
 
 class OpenAIChatCompletionAdapter:
-    """Adapter entrypoint for OpenAI chat completion payload normalization."""
+    """Adapter entrypoint for OpenAI chat completion payload normalization.
+
+    Parameters
+    ----------
+    None
+        The adapter is stateless; use ``normalize_chat_completion`` directly.
+
+    Returns
+    -------
+    OpenAIChatCompletionAdapter
+        A namespace object when instantiated, though callers usually use the
+        static method.
+
+    Raises
+    ------
+    None
+        Instantiation performs no validation.
+
+    Examples
+    --------
+    >>> adapter = OpenAIChatCompletionAdapter()
+    >>> isinstance(adapter, OpenAIChatCompletionAdapter)
+    True
+    """
 
     @staticmethod
     def normalize_chat_completion(payload: object) -> LLMResponse:
-        """Validate and normalize a raw OpenAI chat completion payload."""
+        """Validate and normalize a raw OpenAI chat completion payload.
+
+        Parameters
+        ----------
+        payload : object
+            Raw provider response dictionary returned by OpenAI chat
+            completions.
+
+        Returns
+        -------
+        LLMResponse
+            Normalized response text, model metadata, finish reason, and usage
+            counters.
+
+        Raises
+        ------
+        OpenAIResponseValidationError
+            Raised when the payload shape is invalid or the first choice has
+            blank message content.
+
+        Examples
+        --------
+        >>> payload = {
+        ...     "id": "chatcmpl_123",
+        ...     "model": "gpt-4o-mini",
+        ...     "choices": [{"message": {"content": "Hello"}, "finish_reason": "stop"}],
+        ... }
+        >>> OpenAIChatCompletionAdapter.normalize_chat_completion(payload).finish_reason
+        'stop'
+        """
         if not is_openai_chat_completion_payload(payload):
             if _has_blank_first_choice_message_content(payload):
                 raise OpenAIResponseValidationError(_EMPTY_CONTENT_MESSAGE)

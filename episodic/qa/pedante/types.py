@@ -1,5 +1,31 @@
-"""Pedante evaluator contracts and response DTOs."""
+"""Pedante evaluator contracts and response DTOs.
 
+The Pedante QA pipeline exchanges immutable request and response objects while
+checking scripted podcast claims against cited source packets.  This module
+defines the public contracts used by evaluator implementations, prompt builders,
+and tests: ``PedanteEvaluationRequest`` carries TEI plus source evidence,
+``PedanteFinding`` models one claim-level result, ``PedanteEvaluationResult``
+collects typed findings and provider metadata, and ``PedanteEvaluatorConfig``
+describes one invocation.
+
+Typical flow is to build a ``PedanteEvaluationRequest``, pass it to an evaluator
+port, then inspect the typed result for blocking findings:
+
+Examples
+--------
+>>> packet = PedanteSourcePacket(
+...     source_id="src-1",
+...     citation_label="Source 1",
+...     tei_locator="#s1",
+...     title="Archive note",
+...     excerpt="Evidence text.",
+... )
+>>> request = PedanteEvaluationRequest("<TEI/>", (packet,))
+>>> request.sources[0].source_id
+'src-1'
+"""
+
+import collections.abc as cabc
 import dataclasses as dc
 import enum
 
@@ -44,6 +70,40 @@ def _require_source_packet_items(value: tuple[object, ...], field_name: str) -> 
         if not isinstance(item, PedanteSourcePacket):
             msg = f"{field_name} must contain PedanteSourcePacket values."
             raise TypeError(msg)
+
+
+def _require_enum_field(
+    value: object,
+    enum_type: type[enum.Enum],
+    field_name: str,
+) -> None:
+    """Reject values that are not members of the expected enum."""
+    if not isinstance(value, enum_type):
+        msg = f"{field_name} must be a {enum_type.__name__}."
+        raise TypeError(msg)
+
+
+def _coerce_findings_tuple(value: object) -> tuple[PedanteFinding, ...]:
+    """Return immutable Pedante findings after validating every item."""
+    if not isinstance(value, cabc.Sequence) or isinstance(
+        value, (str, bytes, bytearray)
+    ):
+        msg = "findings must be a sequence of PedanteFinding values."
+        raise TypeError(msg)
+    findings: list[PedanteFinding] = []
+    for finding in value:
+        if not isinstance(finding, PedanteFinding):
+            msg = "findings must contain PedanteFinding values."
+            raise TypeError(msg)
+        findings.append(finding)
+    return tuple(findings)
+
+
+def _require_usage(value: object) -> None:
+    """Reject usage metadata that is not normalized LLM usage."""
+    if value is not None and not isinstance(value, LLMUsage):
+        msg = "usage must be an LLMUsage value."
+        raise TypeError(msg)
 
 
 class ClaimKind(enum.StrEnum):
@@ -141,6 +201,9 @@ class PedanteFinding:
 
     def __post_init__(self) -> None:
         """Reject blank claim identifiers and prose fields."""
+        _require_enum_field(self.claim_kind, ClaimKind, "claim_kind")
+        _require_enum_field(self.support_level, SupportLevel, "support_level")
+        _require_enum_field(self.severity, FindingSeverity, "severity")
         _ensure_non_empty_fields(
             self, "claim_id", "claim_text", "summary", "remediation"
         )
@@ -174,6 +237,12 @@ class PedanteEvaluationResult:
 
     def __post_init__(self) -> None:
         """Reject blank summaries."""
+        object.__setattr__(
+            self,
+            "findings",
+            _coerce_findings_tuple(self.findings),
+        )
+        _require_usage(self.usage)
         _ensure_non_empty_fields(self, "summary")
 
     @property

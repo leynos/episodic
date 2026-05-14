@@ -1,6 +1,7 @@
 """Validation tests for Pedante request and result contracts."""
 
 import json
+import typing as typ
 
 import pytest
 
@@ -101,6 +102,69 @@ def test_pedante_finding_blocking_property_follows_support_level() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("field_name", "bad_value", "error_message"),
+    [
+        ("claim_kind", "direct_quote", "claim_kind"),
+        ("support_level", "misquotation", "support_level"),
+        ("severity", "critical", "severity"),
+    ],
+)
+def test_pedante_finding_rejects_non_enum_contract_fields(
+    field_name: str,
+    bad_value: str,
+    error_message: str,
+) -> None:
+    """Reject raw strings for enum-backed PedanteFinding fields."""
+    kwargs = {
+        "claim_id": "claim-1",
+        "claim_text": "The quoted text is wrong.",
+        "claim_kind": ClaimKind.DIRECT_QUOTE,
+        "support_level": SupportLevel.MISQUOTATION,
+        "severity": FindingSeverity.CRITICAL,
+        "summary": "The quotation is inaccurate.",
+        "remediation": "Correct the quotation.",
+        "cited_source_ids": ("src-1",),
+    }
+    kwargs[field_name] = bad_value
+
+    with pytest.raises(TypeError, match=error_message):
+        PedanteFinding(**typ.cast("typ.Any", kwargs))
+
+
+def test_pedante_result_freezes_mutable_finding_sequences() -> None:
+    """Mutable finding sequences are converted to tuples at construction."""
+    finding = PedanteFinding(
+        claim_id="claim-1",
+        claim_text="A supported factual statement.",
+        claim_kind=ClaimKind.TRANSPLANTED_CLAIM,
+        support_level=SupportLevel.ACCURATE_RESTATEMENT,
+        severity=FindingSeverity.LOW,
+        summary="The claim is fully supported.",
+        remediation="No change needed.",
+        cited_source_ids=("src-1",),
+    )
+    result = PedanteEvaluationResult(
+        summary="No issues found.",
+        findings=typ.cast("typ.Any", [finding]),
+        usage=LLMUsage(10, 5, 15),
+    )
+
+    assert result.findings == (finding,), (
+        f"expected findings to be frozen as a tuple, got {result.findings!r}"
+    )
+
+
+def test_pedante_result_rejects_invalid_usage_type() -> None:
+    """Usage metadata must stay normalized as LLMUsage."""
+    with pytest.raises(TypeError, match="usage"):
+        PedanteEvaluationResult(
+            summary="No issues found.",
+            findings=(),
+            usage=typ.cast("typ.Any", "not usage"),
+        )
+
+
 def test_pedante_requires_revision_false_for_empty_findings() -> None:
     """Empty findings should not require revision."""
     result = PedanteEvaluationResult(
@@ -158,4 +222,7 @@ def test_pedante_requires_revision_false_for_non_blocking_findings() -> None:
         findings=non_blocking_findings,
         usage=LLMUsage(20, 10, 30),
     )
-    assert result.requires_revision is False
+    assert result.requires_revision is False, (
+        f"expected result.requires_revision to be False but was "
+        f"{result.requires_revision!r}"
+    )
