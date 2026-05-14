@@ -6,6 +6,7 @@ import typing as typ
 
 import tei_rapporteur as tei
 
+from episodic.canonical.domain import ReferenceDocumentKind
 from episodic.llm import (
     LLMPort,
     LLMProviderOperation,
@@ -14,6 +15,9 @@ from episodic.llm import (
     LLMTokenBudget,
     LLMUsage,
 )
+
+if typ.TYPE_CHECKING:
+    from episodic.canonical.reference_documents.resolution import ResolvedBinding
 
 type JsonMapping = dict[str, object]
 
@@ -46,6 +50,27 @@ def _normalize_optional_string(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _optional_content_string(value: object) -> str | None:
+    """Return a stripped string from untrusted reference payload content."""
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _first_content_string(payload: JsonMapping, *field_names: str) -> str | None:
+    """Return the first non-empty string from the given mapping fields."""
+    for field_name in field_names:
+        if content := _optional_content_string(payload.get(field_name)):
+            return content
+    return None
+
+
+def _json_source_content(payload: JsonMapping) -> str:
+    """Serialize structured reference content for source-grounded prompts."""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -117,6 +142,56 @@ class GuestBiosGeneratorConfig:
     )
     token_budget: LLMTokenBudget | None = None
     system_prompt: str = _DEFAULT_SYSTEM_PROMPT
+
+
+def project_guest_bio_sources(
+    resolved_bindings: list[ResolvedBinding],
+) -> tuple[GuestBioSource, ...]:
+    """Project resolved guest-profile bindings into generator source records."""
+    sources: list[GuestBioSource] = []
+    for resolved in resolved_bindings:
+        if resolved.document.kind is not ReferenceDocumentKind.GUEST_PROFILE:
+            continue
+
+        revision_content = resolved.revision.content
+        document_metadata = resolved.document.metadata
+        display_name = _first_content_string(
+            revision_content,
+            "display_name",
+            "name",
+            "title",
+        ) or _first_content_string(document_metadata, "display_name", "name", "title")
+        if display_name is None:
+            display_name = str(resolved.document.id)
+
+        role = _first_content_string(revision_content, "role", "occupation")
+        if role is None:
+            role = _first_content_string(document_metadata, "role", "occupation")
+
+        source_content = _first_content_string(
+            revision_content,
+            "source_content",
+            "profile",
+            "bio",
+            "biography",
+            "summary",
+            "content",
+            "text",
+        )
+        if source_content is None:
+            source_content = _json_source_content(revision_content)
+
+        sources.append(
+            GuestBioSource(
+                display_name=display_name,
+                role=role,
+                reference_document_id=str(resolved.document.id),
+                reference_document_revision_id=str(resolved.revision.id),
+                source_content=source_content,
+            )
+        )
+
+    return tuple(sources)
 
 
 def _decode_object(value: object, field_name: str) -> dict[str, object]:

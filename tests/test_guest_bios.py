@@ -1,19 +1,48 @@
 """Guest biography generation and TEI enrichment tests."""
 
+import dataclasses as dc
+import datetime as dt
 import json
 import typing as typ
+from uuid import UUID, uuid4
 
 import pytest
 import tei_rapporteur as tei
 
+from episodic.canonical.domain import (
+    ReferenceBinding,
+    ReferenceBindingTargetKind,
+    ReferenceDocument,
+    ReferenceDocumentKind,
+    ReferenceDocumentLifecycleState,
+    ReferenceDocumentRevision,
+)
+from episodic.canonical.reference_documents.resolution import ResolvedBinding
 from episodic.generation.guest_bios import (
     GuestBioEntry,
     GuestBiosGenerator,
+    GuestBiosGeneratorConfig,
+    GuestBioSource,
     GuestBiosResponseFormatError,
     GuestBiosResult,
     enrich_tei_with_guest_bios,
+    project_guest_bio_sources,
 )
-from episodic.llm import LLMResponse, LLMUsage
+from episodic.llm import LLMRequest, LLMResponse, LLMUsage
+
+
+@dc.dataclass(slots=True)
+class _FakeLLMPort:
+    """Capture one guest-bios request and return a canned response."""
+
+    response: LLMResponse
+    requests: list[LLMRequest]
+
+    async def generate(self, request: LLMRequest) -> LLMResponse:
+        """Return the canned response and capture the request."""
+        self.requests.append(request)
+        return self.response
+
 
 SCRIPT_TEI = """\
 <TEI xmlns="http://www.tei-c.org/ns/1.0">
@@ -55,6 +84,53 @@ def _body_blocks(xml: str) -> list[object]:
     text = typ.cast("dict[str, object]", payload["text"])
     body = typ.cast("dict[str, object]", text["body"])
     return typ.cast("list[object]", body["blocks"])
+
+
+def _reference_document(
+    *,
+    document_id: UUID,
+    kind: ReferenceDocumentKind,
+    metadata: dict[str, object] | None = None,
+) -> ReferenceDocument:
+    return ReferenceDocument(
+        id=document_id,
+        owner_series_profile_id=uuid4(),
+        kind=kind,
+        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+        metadata=metadata or {},
+        created_at=dt.datetime.now(dt.UTC),
+        updated_at=dt.datetime.now(dt.UTC),
+    )
+
+
+def _reference_revision(
+    *,
+    document_id: UUID,
+    revision_id: UUID,
+    content: dict[str, object],
+) -> ReferenceDocumentRevision:
+    return ReferenceDocumentRevision(
+        id=revision_id,
+        reference_document_id=document_id,
+        content=content,
+        content_hash="hash",
+        author=None,
+        change_note=None,
+        created_at=dt.datetime.now(dt.UTC),
+    )
+
+
+def _reference_binding(revision_id: UUID) -> ReferenceBinding:
+    return ReferenceBinding(
+        id=uuid4(),
+        reference_document_revision_id=revision_id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=uuid4(),
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=dt.datetime.now(dt.UTC),
+    )
 
 
 def test_result_from_response_rejects_unknown_revision_identifier() -> None:
@@ -117,6 +193,126 @@ def test_result_from_response_rejects_missing_revision_identifier() -> None:
             response,
             expected_revision_ids=("rev-ada", "rev-grace"),
         )
+
+
+def test_project_guest_bio_sources_filters_guest_profiles() -> None:
+    """Project only guest-profile resolved bindings into generator sources."""
+    guest_document_id = uuid4()
+    guest_revision_id = uuid4()
+    style_document_id = uuid4()
+    style_revision_id = uuid4()
+    resolved = [
+        ResolvedBinding(
+            binding=_reference_binding(guest_revision_id),
+            document=_reference_document(
+                document_id=guest_document_id,
+                kind=ReferenceDocumentKind.GUEST_PROFILE,
+                metadata={"role": "Mathematician"},
+            ),
+            revision=_reference_revision(
+                document_id=guest_document_id,
+                revision_id=guest_revision_id,
+                content={
+                    "display_name": "Ada Lovelace",
+                    "profile": "Ada wrote notes on the Analytical Engine.",
+                },
+            ),
+        ),
+        ResolvedBinding(
+            binding=_reference_binding(style_revision_id),
+            document=_reference_document(
+                document_id=style_document_id,
+                kind=ReferenceDocumentKind.STYLE_GUIDE,
+            ),
+            revision=_reference_revision(
+                document_id=style_document_id,
+                revision_id=style_revision_id,
+                content={"display_name": "Style Guide", "profile": "Ignore me."},
+            ),
+        ),
+    ]
+
+    sources = project_guest_bio_sources(resolved)
+
+    assert sources == (
+        GuestBioSource(
+            display_name="Ada Lovelace",
+            role="Mathematician",
+            reference_document_id=str(guest_document_id),
+            reference_document_revision_id=str(guest_revision_id),
+            source_content="Ada wrote notes on the Analytical Engine.",
+        ),
+    )
+
+
+def test_build_prompt_includes_guest_profile_sources() -> None:
+    """Include pinned profile content and identifiers in the LLM prompt."""
+    source = GuestBioSource(
+        display_name="Ada Lovelace",
+        role="Mathematician",
+        reference_document_id="doc-ada",
+        reference_document_revision_id="rev-ada",
+        source_content="Ada wrote notes on the Analytical Engine.",
+    )
+
+    prompt = GuestBiosGenerator.build_prompt(
+        SCRIPT_TEI,
+        (source,),
+        template_structure={"segments": ["intro"]},
+    )
+    payload = json.loads(prompt)
+
+    assert payload["script_tei_xml"] == SCRIPT_TEI
+    assert payload["template_structure"] == {"segments": ["intro"]}
+    assert payload["guest_profiles"] == [
+        {
+            "display_name": "Ada Lovelace",
+            "role": "Mathematician",
+            "reference_document_id": "doc-ada",
+            "reference_document_revision_id": "rev-ada",
+            "source_content": "Ada wrote notes on the Analytical Engine.",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_generate_calls_llm_and_returns_guest_bios_result() -> None:
+    """Call the LLM port and parse the response against expected revisions."""
+    llm = _FakeLLMPort(
+        response=_response({
+            "guests": [
+                {
+                    "display_name": "Ada Lovelace",
+                    "bio": "Ada Lovelace wrote about analytical engines.",
+                    "reference_document_revision_id": "rev-ada",
+                }
+            ]
+        }),
+        requests=[],
+    )
+    generator = GuestBiosGenerator(
+        llm=llm,
+        config=GuestBiosGeneratorConfig(model="vidai-mock"),
+    )
+    source = GuestBioSource(
+        display_name="Ada Lovelace",
+        reference_document_id="doc-ada",
+        reference_document_revision_id="rev-ada",
+        source_content="Ada wrote notes on the Analytical Engine.",
+    )
+
+    result = await generator.generate(SCRIPT_TEI, (source,))
+
+    assert len(llm.requests) == 1
+    assert llm.requests[0].model == "vidai-mock"
+    assert "Ada wrote notes on the Analytical Engine." in llm.requests[0].prompt
+    assert result.entries == (
+        GuestBioEntry(
+            display_name="Ada Lovelace",
+            bio="Ada Lovelace wrote about analytical engines.",
+            reference_document_revision_id="rev-ada",
+        ),
+    )
 
 
 def test_enrich_tei_with_guest_bios_appends_canonical_div() -> None:

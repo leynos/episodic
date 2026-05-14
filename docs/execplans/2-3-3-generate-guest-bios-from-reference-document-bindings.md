@@ -167,9 +167,24 @@ ExecPlan has been explicitly approved.
   completed with zero findings.
 - [x] Implement milestone 1: representation decision and
   fail-first unit tests.
-- [ ] Implement milestone 2: guest profile projection and
+- [x] 2026-05-14: Added `project_guest_bio_sources(...)` to filter resolved
+  bindings to `ReferenceDocumentKind.GUEST_PROFILE` and project pinned
+  revisions into `GuestBioSource` records. Added unit coverage for projection,
+  prompt construction, and async `LLMPort` invocation.
+- [x] 2026-05-14: Added `tests/test_guest_bios_properties.py` with Hypothesis
+  coverage for parseable guest-bio TEI, entry ordering, duplicate replacement,
+  empty-result no-op behaviour, and blank biography rejection. Hypothesis found
+  brittle raw XML assertions around entity escaping; the tests now inspect
+  parsed `tei_rapporteur` payloads.
+- [x] 2026-05-14: Ran focused validation for milestone 2/3 with `set -o
+  pipefail`, including
+  `uv run pytest tests/test_guest_bios.py tests/test_guest_bios_properties.py -q`,
+  `make check-fmt`, `make typecheck`, `make lint`, `make markdownlint`, and
+  `make nixie`. Ran `coderabbit review --agent`; it completed with zero
+  findings.
+- [x] Implement milestone 2: guest profile projection and
   generator service.
-- [ ] Implement milestone 3: TEI body enrichment.
+- [x] Implement milestone 3: TEI body enrichment.
 - [ ] Implement milestone 4: binding retrieval and
   orchestration integration.
 - [ ] Implement milestone 5: behavioural, property, and

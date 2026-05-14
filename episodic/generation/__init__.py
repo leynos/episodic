@@ -20,6 +20,7 @@ from episodic.generation.guest_bios import (
     GuestBiosResponseFormatError,
     GuestBiosResult,
     enrich_tei_with_guest_bios,
+    project_guest_bio_sources,
 )
 from episodic.generation.show_notes import (
     ShowNotesEntry,
@@ -50,4 +51,5 @@ __all__ = [
     "enrich_tei_with_chapter_markers",
     "enrich_tei_with_guest_bios",
     "enrich_tei_with_show_notes",
+    "project_guest_bio_sources",
 ]
