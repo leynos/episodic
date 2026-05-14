@@ -51,6 +51,11 @@ def _create_history_table(
         sa.UniqueConstraint(parent_fk_col, "revision", name=uq_name),
         sa.CheckConstraint("revision >= 1", name=ck_name),
     )
+    op.create_index(
+        f"ix_{table_name}_{parent_fk_col}",
+        table_name,
+        [parent_fk_col],
+    )
 
 
 def _create_episode_templates_table() -> None:
@@ -104,11 +109,6 @@ def _create_series_profile_history_table() -> None:
             "ck_series_profile_history_revision_positive",
         ),
     )
-    op.create_index(
-        "ix_series_profile_history_series_profile_id",
-        "series_profile_history",
-        ["series_profile_id"],
-    )
 
 
 def _create_episode_template_history_table() -> None:
@@ -121,11 +121,6 @@ def _create_episode_template_history_table() -> None:
             "uq_episode_template_history_revision",
             "ck_episode_template_history_revision_positive",
         ),
-    )
-    op.create_index(
-        "ix_episode_template_history_episode_template_id",
-        "episode_template_history",
-        ["episode_template_id"],
     )
 
 
