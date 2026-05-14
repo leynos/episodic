@@ -11,13 +11,13 @@ from episodic.canonical.domain import (
     ReferenceDocumentKind,
     ReferenceDocumentRevision,
 )
-from episodic.canonical.ports import (
+from episodic.canonical.reference_protocols import (
     ReferenceBindingRepository,
     ReferenceDocumentRepository,
     ReferenceDocumentRevisionRepository,
 )
 
-from .mappers import (
+from .reference_mappers import (
     _reference_binding_from_record,
     _reference_binding_to_record,
     _reference_document_from_record,
@@ -25,7 +25,7 @@ from .mappers import (
     _reference_document_revision_to_record,
     _reference_document_to_record,
 )
-from .models import (
+from .reference_models import (
     ReferenceBindingRecord,
     ReferenceDocumentRecord,
     ReferenceDocumentRevisionRecord,
@@ -54,7 +54,7 @@ class SqlAlchemyReferenceDocumentRepository(
             _reference_document_from_record,
         )
 
-    async def list_for_series(
+    async def list_for_series(  # pylint: disable=too-many-arguments  # domain query exposes independent filters
         self,
         series_profile_id: uuid.UUID,
         *,
@@ -155,7 +155,7 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
             _reference_document_revision_from_record,
         )
 
-    async def list_for_document(
+    async def list_for_document(  # pylint: disable=too-many-arguments  # repository API mirrors pagination filters
         self,
         document_id: uuid.UUID,
         *,
@@ -233,7 +233,7 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
             _reference_binding_from_record,
         )
 
-    async def list_for_target(
+    async def list_for_target(  # pylint: disable=too-many-arguments  # target and pagination filters are public contract
         self,
         *,
         target_kind: ReferenceBindingTargetKind,

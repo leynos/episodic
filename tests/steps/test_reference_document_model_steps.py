@@ -30,7 +30,7 @@ if typ.TYPE_CHECKING:
 
 def _run_async_step(
     runner: asyncio.Runner,
-    step_fn: cabc.Callable[[], typ.Coroutine[object, object, None]],
+    step_fn: cabc.Callable[[], cabc.Coroutine[object, object, None]],
 ) -> None:
     """Execute an async BDD step via the provided runner."""
     runner.run(step_fn())

@@ -9,18 +9,18 @@ from episodic.canonical.domain import (
     EpisodeTemplateHistoryEntry,
     SeriesProfileHistoryEntry,
 )
-from episodic.canonical.ports import (
+from episodic.canonical.history_protocols import (
     EpisodeTemplateHistoryRepository,
     SeriesProfileHistoryRepository,
 )
 
-from .mappers import (
+from .history_mappers import (
     _episode_template_history_from_record,
     _episode_template_history_to_record,
     _series_profile_history_from_record,
     _series_profile_history_to_record,
 )
-from .models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
+from .history_models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
 from .repository_base import _RepositoryBase
 
 if typ.TYPE_CHECKING:
@@ -37,8 +37,8 @@ class HistoryRepositoryConfig[HistoryEntryT, HistoryRecordT]:
 
     record_type: type[HistoryRecordT]
     parent_id_field: str
-    mapper: typ.Callable[[HistoryRecordT], HistoryEntryT]
-    record_builder: typ.Callable[[HistoryEntryT], HistoryRecordT]
+    mapper: cabc.Callable[[HistoryRecordT], HistoryEntryT]
+    record_builder: cabc.Callable[[HistoryEntryT], HistoryRecordT]
 
 
 class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):

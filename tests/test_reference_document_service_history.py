@@ -17,6 +17,8 @@ from episodic.canonical.reference_documents import (
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -26,7 +28,7 @@ ServiceFixture = support.ServiceFixture
 
 @pytest.mark.asyncio
 async def test_reference_document_revision_history_round_trip(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> None:
     """Revision create/list/get should provide immutable change-history access."""

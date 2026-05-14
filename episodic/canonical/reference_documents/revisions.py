@@ -22,7 +22,7 @@ from .types import (
 )
 
 if typ.TYPE_CHECKING:
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 _REVISION_CONTENT_HASH_CONSTRAINT = "uq_reference_document_revisions_document_hash"

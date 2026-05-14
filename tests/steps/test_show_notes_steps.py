@@ -229,7 +229,7 @@ def _start_vidaimock_process(
     last_error: RuntimeError | None = None
     for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
         port = _find_free_port()
-        process = subprocess.Popen(  # noqa: S603
+        process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
             [
                 vidaimock_path,
                 "--host",

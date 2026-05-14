@@ -41,7 +41,7 @@ if typ.TYPE_CHECKING:
         SourceNormalizer,
         WeightingStrategy,
     )
-    from .ports import CanonicalUnitOfWork
+    from .unit_of_work_protocols import CanonicalUnitOfWork
 
 
 @dc.dataclass(frozen=True, slots=True)

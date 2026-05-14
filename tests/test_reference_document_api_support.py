@@ -1,227 +1,22 @@
 """Shared helpers for reference-document API tests."""
 
-import dataclasses as dc
 import typing as typ
+
+from tests import api_fixtures
 
 if typ.TYPE_CHECKING:
     from falcon import testing
 
-
-@dc.dataclass(frozen=True, slots=True)
-class _ApiFixture:
-    """Fixture payload for reference-document API tests."""
-
-    primary_profile_id: str
-    secondary_profile_id: str
-    template_id: str
-    secondary_template_id: str
-
-
-def _post_and_return_id(
-    client: testing.TestClient,
-    path: str,
-    body: dict[str, object],
-    *,
-    assertion_message: str | None = None,
-) -> str:
-    """POST *body* to *path*, assert HTTP 201, and return the ``id`` field."""
-    response = client.simulate_post(path, json=body)
-    msg = assertion_message or f"Expected POST {path} to return 201."
-    assert response.status_code == 201, msg
-    return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
-
-
-def _profile_body(slug: str) -> dict[str, object]:
-    """Return a series-profile creation body for *slug*."""
-    return {
-        "slug": slug,
-        "title": f"{slug} title",
-        "description": f"{slug} description",
-        "configuration": {"tone": "neutral"},
-        "actor": "api-reference@example.com",
-        "note": "Create profile",
-    }
-
-
-def _build_api_fixture(client: testing.TestClient) -> _ApiFixture:
-    """Build common API fixture entities for reference-document endpoint tests."""
-    primary_profile_id = _post_and_return_id(
-        client,
-        "/series-profiles",
-        _profile_body("api-reference-primary"),
-        assertion_message="Expected profile creation to return 201.",
-    )
-    secondary_profile_id = _post_and_return_id(
-        client,
-        "/series-profiles",
-        _profile_body("api-reference-secondary"),
-        assertion_message="Expected profile creation to return 201.",
-    )
-    template_id = _post_and_return_id(
-        client,
-        "/episode-templates",
-        {
-            "series_profile_id": primary_profile_id,
-            "slug": "api-reference-template",
-            "title": "api-reference-template title",
-            "description": "api-reference-template description",
-            "structure": {"segments": ["intro", "main", "outro"]},
-            "actor": "api-reference@example.com",
-            "note": "Create template",
-        },
-        assertion_message="Expected template creation to return 201.",
-    )
-    secondary_template_id = _post_and_return_id(
-        client,
-        "/episode-templates",
-        {
-            "series_profile_id": secondary_profile_id,
-            "slug": "api-reference-secondary-template",
-            "title": "api-reference-secondary-template title",
-            "description": "api-reference-secondary-template description",
-            "structure": {"segments": ["intro", "outro"]},
-            "actor": "api-reference@example.com",
-            "note": "Create secondary template",
-        },
-        assertion_message="Expected secondary template creation to return 201.",
-    )
-    return _ApiFixture(
-        primary_profile_id=primary_profile_id,
-        secondary_profile_id=secondary_profile_id,
-        template_id=template_id,
-        secondary_template_id=secondary_template_id,
-    )
-
-
-def _create_reference_document(
-    client: testing.TestClient,
-    *,
-    profile_id: str,
-    kind: str,
-    name: str,
-) -> str:
-    """Create one reusable reference document and return its identifier."""
-    response = client.simulate_post(
-        f"/series-profiles/{profile_id}/reference-documents",
-        json={
-            "kind": kind,
-            "lifecycle_state": "active",
-            "metadata": {"name": name},
-        },
-    )
-    assert response.status_code == 201, (
-        "expected 201 creating reference document, got "
-        f"{response.status_code}: {response.text}"
-    )
-    payload = typ.cast("dict[str, object]", response.json)
-    assert payload["lock_version"] == 1, (
-        f"unexpected lock_version in payload: {payload}"
-    )
-    return typ.cast("str", payload["id"])
-
-
-def _assert_reference_document_list(
-    client: testing.TestClient,
-    *,
-    profile_id: str,
-    kind: str | None = None,
-) -> list[dict[str, object]]:
-    """List reference documents and assert a valid list envelope."""
-    params: dict[str, str] = {"limit": "10", "offset": "0"}
-    if kind is not None:
-        params["kind"] = kind
-
-    response = client.simulate_get(
-        f"/series-profiles/{profile_id}/reference-documents",
-        params=params,
-    )
-    assert response.status_code == 200, (
-        f"unexpected status for GET reference documents: {response.status_code}: "
-        f"{response.text}"
-    )
-    payload = typ.cast("dict[str, object]", response.json)
-    assert isinstance(payload, dict), f"expected list payload dict, got: {payload!r}"
-    items = typ.cast("list[dict[str, object]]", payload["items"])
-    assert isinstance(items, list), f"expected items list in payload: {payload}"
-    assert payload["limit"] == 10, f"expected limit 10 in payload: {payload}"
-    assert payload["offset"] == 0, f"expected offset 0 in payload: {payload}"
-    return items
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _RevisionRequest:
-    summary: str
-    content_hash: str
-
-
-def _create_reference_document_revision(
-    client: testing.TestClient,
-    *,
-    profile_id: str,
-    document_id: str,
-    revision: _RevisionRequest,
-) -> str:
-    """Create one immutable reference-document revision and return its id."""
-    response = client.simulate_post(
-        f"/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
-        json={
-            "content": {"summary": revision.summary},
-            "content_hash": revision.content_hash,
-            "author": "api-reference@example.com",
-            "change_note": revision.summary,
-        },
-    )
-    assert response.status_code == 201, (
-        "expected 201 creating reference-document revision, got "
-        f"{response.status_code}: {response.text}"
-    )
-    payload = typ.cast("dict[str, object]", response.json)
-    return typ.cast("str", payload["id"])
-
-
-def _assert_reference_revision_history(
-    client: testing.TestClient,
-    *,
-    profile_id: str,
-    document_id: str,
-) -> list[dict[str, object]]:
-    """List immutable revisions and assert a valid list envelope."""
-    response = client.simulate_get(
-        f"/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
-        params={"limit": "10", "offset": "0"},
-    )
-    assert response.status_code == 200, (
-        f"unexpected status for GET revision history: {response.status_code}: "
-        f"{response.text}"
-    )
-    payload = typ.cast("dict[str, object]", response.json)
-    items = typ.cast("list[dict[str, object]]", payload["items"])
-    assert payload["limit"] == 10, f"expected limit 10, got {payload['limit']}"
-    assert payload["offset"] == 0, f"expected offset 0, got {payload['offset']}"
-    return items
-
-
-def _create_reference_binding(
-    client: testing.TestClient,
-    *,
-    revision_id: str,
-    template_id: str,
-) -> str:
-    """Create one reference binding and return its identifier."""
-    response = client.simulate_post(
-        "/reference-bindings",
-        json={
-            "reference_document_revision_id": revision_id,
-            "target_kind": "episode_template",
-            "episode_template_id": template_id,
-        },
-    )
-    assert response.status_code == 201, (
-        "expected 201 creating reference binding, got "
-        f"{response.status_code}: {response.text}"
-    )
-    payload = typ.cast("dict[str, object]", response.json)
-    return typ.cast("str", payload["id"])
+ApiFixture = api_fixtures.ApiFixture
+RevisionRequest = api_fixtures.RevisionRequest
+post_and_return_id = api_fixtures.post_and_return_id
+profile_body = api_fixtures.profile_body
+build_api_fixture = api_fixtures.build_api_fixture
+create_reference_document = api_fixtures.create_reference_document
+assert_reference_document_list = api_fixtures.assert_reference_document_list
+create_reference_document_revision = api_fixtures.create_reference_document_revision
+assert_reference_revision_history = api_fixtures.assert_reference_revision_history
+create_reference_binding = api_fixtures.create_reference_binding
 
 
 def _assert_document_get_and_optimistic_lock(
@@ -277,25 +72,25 @@ def _assert_revision_and_binding_workflow(
     template_id: str,
 ) -> None:
     """Assert revision history and binding workflow endpoints."""
-    first_revision_id = _create_reference_document_revision(
+    first_revision_id = create_reference_document_revision(
         client,
         profile_id=profile_id,
         document_id=document_id,
-        revision=_RevisionRequest(
+        revision=RevisionRequest(
             summary="first revision",
             content_hash="api-reference-hash-1",
         ),
     )
-    second_revision_id = _create_reference_document_revision(
+    second_revision_id = create_reference_document_revision(
         client,
         profile_id=profile_id,
         document_id=document_id,
-        revision=_RevisionRequest(
+        revision=RevisionRequest(
             summary="second revision",
             content_hash="api-reference-hash-2",
         ),
     )
-    revisions_items = _assert_reference_revision_history(
+    revisions_items = assert_reference_revision_history(
         client,
         profile_id=profile_id,
         document_id=document_id,
@@ -326,7 +121,7 @@ def _assert_binding_list_workflow(
     template_id: str,
 ) -> None:
     """Create a binding, verify it via GET, and assert the binding list response."""
-    binding_id = _create_reference_binding(
+    binding_id = create_reference_binding(
         client,
         revision_id=second_revision_id,
         template_id=template_id,
@@ -383,7 +178,7 @@ def _assert_bad_request_error(
 
 
 def _binding_list_params(
-    fixture: _ApiFixture,
+    fixture: ApiFixture,
     **extra_params: str,
 ) -> dict[str, str]:
     """Build list-binding query params while preserving a valid target."""
@@ -396,25 +191,25 @@ def _binding_list_params(
 
 def _seed_reference_binding(
     client: testing.TestClient,
-    fixture: _ApiFixture,
+    fixture: ApiFixture,
 ) -> None:
     """Create one document, revision, and binding for negative-path list tests."""
-    document_id = _create_reference_document(
+    document_id = create_reference_document(
         client,
         profile_id=fixture.primary_profile_id,
         kind="host_profile",
         name="Host API Validation",
     )
-    revision_id = _create_reference_document_revision(
+    revision_id = create_reference_document_revision(
         client,
         profile_id=fixture.primary_profile_id,
         document_id=document_id,
-        revision=_RevisionRequest(
+        revision=RevisionRequest(
             summary="validation revision",
             content_hash="api-reference-validation-hash",
         ),
     )
-    _create_reference_binding(
+    create_reference_binding(
         client,
         revision_id=revision_id,
         template_id=fixture.template_id,

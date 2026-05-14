@@ -12,6 +12,8 @@ from episodic.canonical.reference_documents import (
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -21,7 +23,7 @@ ServiceFixture = support.ServiceFixture
 
 @pytest.mark.asyncio
 async def test_series_aligned_host_guest_access_and_binding_workflow(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> None:
     """Host/guest docs should be series aligned and bindable to templates."""

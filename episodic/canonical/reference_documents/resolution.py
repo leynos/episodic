@@ -17,7 +17,7 @@ if typ.TYPE_CHECKING:
         ReferenceDocument,
         ReferenceDocumentRevision,
     )
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 from episodic.canonical.domain import ReferenceBindingTargetKind
 

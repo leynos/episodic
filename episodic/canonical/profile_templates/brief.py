@@ -13,6 +13,11 @@ Build a structured brief for one profile and optional template filter:
 >>> brief["episode_templates"]  # list[dict[str, object]]
 """
 
+# Structured-brief assembly keeps ownership checks and payload shaping together.
+# FIXME: https://github.com/leynos/episodic/issues/92 - decompose this module to  # noqa: E501, TD001, TD002
+# comply with the 400-line limit.
+# pylint: disable=too-many-lines
+
 import typing as typ
 from itertools import starmap
 
@@ -24,6 +29,7 @@ from .services import get_entity_with_revision, list_entities_with_revisions
 from .types import EntityNotFoundError
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
     from episodic.canonical.domain import (
@@ -34,7 +40,7 @@ if typ.TYPE_CHECKING:
         ReferenceDocumentRevision,
         SeriesProfile,
     )
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 def _serialize_profile_for_brief(
@@ -198,7 +204,7 @@ async def _load_revisions_by_id(
 async def _load_documents_by_id(
     *,
     uow: CanonicalUnitOfWork,
-    revisions: typ.Iterable[ReferenceDocumentRevision],
+    revisions: cabc.Iterable[ReferenceDocumentRevision],
 ) -> dict[uuid.UUID, ReferenceDocument]:
     """Load documents referenced by revisions and fail on missing identifiers."""
     document_ids = {revision.reference_document_id for revision in revisions}

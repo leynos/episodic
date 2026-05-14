@@ -26,6 +26,8 @@ from episodic.canonical.reference_documents import (
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -34,7 +36,7 @@ ServiceFixture = support.ServiceFixture
 
 
 async def _create_draft_episode(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     *,
     series_profile_id: str,
     title: str,
@@ -71,7 +73,7 @@ async def _create_draft_episode(
 
 @pytest.mark.asyncio
 async def test_create_reference_document_revision_duplicate_hash_raises_conflict(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> None:
     """Duplicate revision content hashes should map to reference conflicts."""
@@ -119,7 +121,7 @@ async def test_create_reference_document_revision_duplicate_hash_raises_conflict
 
 @pytest.mark.asyncio
 async def test_create_reference_binding_duplicate_target_raises_conflict(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> None:
     """Duplicate revision/target bindings should map to reference conflicts."""
@@ -174,7 +176,7 @@ async def test_create_reference_binding_duplicate_target_raises_conflict(
 )
 @pytest.mark.asyncio
 async def test_create_reference_binding_rejects_invalid_target_identifier_shapes(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
     payload_kwargs: dict[str, str | None],
     expected_match: str,
@@ -218,7 +220,7 @@ async def test_create_reference_binding_rejects_invalid_target_identifier_shapes
 
 @pytest.mark.asyncio
 async def test_create_reference_binding_rejects_effective_from_for_non_series_target(
-    session_factory: typ.Callable[[], AsyncSession],
+    session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> None:
     """Binding creation should reject effective_from on non-series targets."""

@@ -16,7 +16,7 @@ from episodic.canonical.reference_documents.resolution import (
 )
 
 if typ.TYPE_CHECKING:
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 from tests.conftest import create_episode_template_for_binding_tests
 

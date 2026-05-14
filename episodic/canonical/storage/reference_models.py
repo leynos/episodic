@@ -25,7 +25,7 @@ from episodic.canonical.storage.reference_document_schema import (
     REFERENCE_BINDINGS_TARGET_CHECK_SQL,
 )
 
-from .models import (
+from .models_base import (
     REFERENCE_BINDING_TARGET_KIND,
     REFERENCE_DOCUMENT_KIND,
     REFERENCE_DOCUMENT_LIFECYCLE_STATE,

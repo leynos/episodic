@@ -1,5 +1,11 @@
 """Binding-focused reusable reference-document services."""
 
+# Service rules for bindings are kept together to preserve their shared
+# validation context until this domain area is split by workflow. Track the
+# validation, creation, and list-operation split in
+# https://github.com/leynos/episodic/issues/92.
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -35,7 +41,9 @@ from .types import (
 )
 
 if typ.TYPE_CHECKING:
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    import collections.abc as cabc
+
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 _BINDING_CONSTRAINT_NAMES = {
@@ -96,7 +104,7 @@ _INGESTION_JOB_CHECK = _EntityAlignmentCheck(
 
 async def _validate_entity_series_alignment(
     entity_id: uuid.UUID | None,
-    fetcher: typ.Callable[[uuid.UUID], typ.Awaitable[_SeriesOwnedEntity | None]],
+    fetcher: cabc.Callable[[uuid.UUID], cabc.Awaitable[_SeriesOwnedEntity | None]],
     check: _EntityAlignmentCheck,
     document_owner_series_id: uuid.UUID,
 ) -> None:

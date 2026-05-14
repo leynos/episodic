@@ -56,11 +56,16 @@ jobs:
       - name: Check formatting
         run: make check-fmt
 
-      - name: Run ruff
-        run: ruff check
+      - name: Run lint
+        run: make lint
 
-      - name: Run architecture checks
-        run: make check-architecture
+      - name: Check CPython syntax with Pylint
+        run: |
+          uv tool run --python 3.14 --from 'pylint==4.*' pylint \
+            --disable=all \
+            --enable=syntax-error \
+            --recursive=y \
+            alembic episodic openai_test_types.py tests
 
       - name: Run typechecker
         run: make typecheck

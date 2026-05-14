@@ -18,7 +18,7 @@ import typing as typ
 
 import sqlalchemy as sa
 
-from episodic.canonical.ports import (
+from episodic.canonical.entity_protocols import (
     ApprovalEventRepository,
     EpisodeRepository,
     EpisodeTemplateRepository,
@@ -28,11 +28,7 @@ from episodic.canonical.ports import (
     TeiHeaderRepository,
 )
 
-from .history_repositories import (
-    SqlAlchemyEpisodeTemplateHistoryRepository,
-    SqlAlchemySeriesProfileHistoryRepository,
-)
-from .mappers import (
+from .entity_mappers import (
     _approval_event_from_record,
     _approval_event_to_record,
     _episode_from_record,
@@ -48,15 +44,18 @@ from .mappers import (
     _tei_header_from_record,
     _tei_header_to_record,
 )
-from .models import (
+from .entity_models import (
     ApprovalEventRecord,
     EpisodeRecord,
-    EpisodeTemplateRecord,
     IngestionJobRecord,
-    SeriesProfileRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
 )
+from .history_repositories import (
+    SqlAlchemyEpisodeTemplateHistoryRepository,
+    SqlAlchemySeriesProfileHistoryRepository,
+)
+from .profile_models import EpisodeTemplateRecord, SeriesProfileRecord
 from .reference_repositories import (
     SqlAlchemyReferenceBindingRepository,
     SqlAlchemyReferenceDocumentRepository,
@@ -109,7 +108,7 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
             _series_profile_from_record,
         )
 
-    async def list(self) -> typ.Sequence[SeriesProfile]:
+    async def list(self) -> cabc.Sequence[SeriesProfile]:
         """List all series profiles."""
         return await self._list_where(
             SeriesProfileRecord,
@@ -307,7 +306,7 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
     async def list(
         self,
         series_profile_id: uuid.UUID | None,
-    ) -> typ.Sequence[EpisodeTemplate]:
+    ) -> cabc.Sequence[EpisodeTemplate]:
         """List episode templates, optionally by series profile."""
         where_clause: typ.Any = sa.true()
         if series_profile_id is not None:

@@ -57,7 +57,7 @@ class SourceNormalizer(typ.Protocol):
         NormalizedSource
             The normalized source with TEI fragment and quality scores.
         """
-        ...
+        raise NotImplementedError
 
 
 @typ.runtime_checkable
@@ -94,7 +94,7 @@ class WeightingStrategy(typ.Protocol):
         list[WeightingResult]
             Weighted sources with computed weights and factor breakdowns.
         """
-        ...
+        raise NotImplementedError
 
 
 @typ.runtime_checkable
@@ -127,4 +127,4 @@ class ConflictResolver(typ.Protocol):
         ConflictOutcome
             The merged canonical TEI and conflict resolution metadata.
         """
-        ...
+        raise NotImplementedError

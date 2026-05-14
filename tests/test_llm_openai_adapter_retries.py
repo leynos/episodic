@@ -9,6 +9,8 @@ import pytest
 from episodic.llm import LLMProviderResponseError, LLMTransientProviderError
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from openai_test_types import (
         _OpenAIAdapterFactory,
         _OpenAIJsonResponseBuilder,
@@ -21,7 +23,7 @@ _OFFLINE_MESSAGE = "still offline"
 
 def _static_content_handler(
     content: bytes,
-) -> typ.Callable[[httpx.Request], httpx.Response]:
+) -> cabc.Callable[[httpx.Request], httpx.Response]:
     """Return a handler that always responds with the given raw JSON-typed content."""
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -36,9 +38,9 @@ def _static_content_handler(
 
 
 def _make_fail_once_handler(
-    first_call: typ.Callable[[httpx.Request], httpx.Response],
-    second_call: typ.Callable[[httpx.Request], httpx.Response],
-) -> tuple[typ.Callable[[httpx.Request], httpx.Response], list[int]]:
+    first_call: cabc.Callable[[httpx.Request], httpx.Response],
+    second_call: cabc.Callable[[httpx.Request], httpx.Response],
+) -> tuple[cabc.Callable[[httpx.Request], httpx.Response], list[int]]:
     """Return a (handler, counter) pair routing the first call to *first_call*.
 
     Routes the first call to *first_call* and every subsequent call to

@@ -39,6 +39,19 @@ from .domain import (
     SourceDocumentInput,
     TeiHeader,
 )
+from .entity_protocols import (
+    ApprovalEventRepository,
+    EpisodeRepository,
+    EpisodeTemplateRepository,
+    IngestionJobRepository,
+    SeriesProfileRepository,
+    SourceDocumentRepository,
+    TeiHeaderRepository,
+)
+from .history_protocols import (
+    EpisodeTemplateHistoryRepository,
+    SeriesProfileHistoryRepository,
+)
 from .ingestion import (
     ConflictOutcome,
     MultiSourceRequest,
@@ -59,6 +72,12 @@ from .profile_templates import (
     update_episode_template,
     update_series_profile,
 )
+from .reference_protocols import (
+    ReferenceBindingRepository,
+    ReferenceDocumentRepository,
+    ReferenceDocumentRevisionRepository,
+)
+from .unit_of_work_protocols import CanonicalUnitOfWork
 
 # isort: split
 # Intentional: avoids import cycle with .profile_templates.
@@ -72,15 +91,21 @@ from .services import ingest_sources
 
 __all__: list[str] = [
     "ApprovalEvent",
+    "ApprovalEventRepository",
     "ApprovalState",
     "CanonicalEpisode",
+    "CanonicalUnitOfWork",
     "ConflictOutcome",
     "EntityKind",
     "EntityNotFoundError",
+    "EpisodeRepository",
     "EpisodeStatus",
     "EpisodeTemplate",
     "EpisodeTemplateHistoryEntry",
+    "EpisodeTemplateHistoryRepository",
+    "EpisodeTemplateRepository",
     "IngestionJob",
+    "IngestionJobRepository",
     "IngestionPipeline",
     "IngestionRequest",
     "IngestionStatus",
@@ -88,17 +113,24 @@ __all__: list[str] = [
     "NormalizedSource",
     "RawSourceInput",
     "ReferenceBinding",
+    "ReferenceBindingRepository",
     "ReferenceBindingTargetKind",
     "ReferenceDocument",
     "ReferenceDocumentKind",
     "ReferenceDocumentLifecycleState",
+    "ReferenceDocumentRepository",
     "ReferenceDocumentRevision",
+    "ReferenceDocumentRevisionRepository",
     "RevisionConflictError",
     "SeriesProfile",
     "SeriesProfileHistoryEntry",
+    "SeriesProfileHistoryRepository",
+    "SeriesProfileRepository",
     "SourceDocument",
     "SourceDocumentInput",
+    "SourceDocumentRepository",
     "TeiHeader",
+    "TeiHeaderRepository",
     "WeightingResult",
     "build_series_brief",
     "build_series_brief_prompt",

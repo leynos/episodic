@@ -18,10 +18,11 @@ from .profile_templates.brief import build_series_brief
 from .prompts import render_series_brief_prompt, render_series_guardrail_prompt
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import uuid
 
-    from .ports import CanonicalUnitOfWork
     from .prompts import RenderedPrompt
+    from .unit_of_work_protocols import CanonicalUnitOfWork
 
 
 async def build_series_brief_prompt(
@@ -29,7 +30,7 @@ async def build_series_brief_prompt(
     *,
     profile_id: uuid.UUID,
     template_id: uuid.UUID | None,
-    escape_interpolation: typ.Callable[[str], str] | None = None,
+    escape_interpolation: cabc.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
     """Build and render a deterministic prompt scaffold from series brief data.
 
@@ -77,7 +78,7 @@ async def build_series_guardrail_prompt(
     *,
     profile_id: uuid.UUID,
     template_id: uuid.UUID | None,
-    escape_interpolation: typ.Callable[[str], str] | None = None,
+    escape_interpolation: cabc.Callable[[str], str] | None = None,
 ) -> RenderedPrompt:
     """Build and render a deterministic guardrail scaffold from series brief data.
 

@@ -2,7 +2,7 @@
 
 import typing as typ
 
-import test_reference_document_api_support as support
+import tests.test_reference_document_api_support as support
 
 if typ.TYPE_CHECKING:
     from falcon import testing
@@ -12,7 +12,7 @@ def test_series_aligned_host_guest_access_paths(
     canonical_api_client: testing.TestClient,
 ) -> None:
     """Host/guest reference documents should remain series aligned."""
-    fixture = support._build_api_fixture(canonical_api_client)
+    fixture = support.build_api_fixture(canonical_api_client)
 
     host_response = canonical_api_client.simulate_post(
         f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
@@ -71,8 +71,8 @@ def test_reference_document_api_rejects_boolean_expected_lock_version(
     canonical_api_client: testing.TestClient,
 ) -> None:
     """Document updates should reject boolean lock versions."""
-    fixture = support._build_api_fixture(canonical_api_client)
-    document_id = support._create_reference_document(
+    fixture = support.build_api_fixture(canonical_api_client)
+    document_id = support.create_reference_document(
         canonical_api_client,
         profile_id=fixture.primary_profile_id,
         kind="host_profile",

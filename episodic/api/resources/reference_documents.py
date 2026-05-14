@@ -74,6 +74,7 @@ class ReferenceDocumentsResource:
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_post(
         self,
         req: falcon.Request,
@@ -100,6 +101,7 @@ class ReferenceDocumentsResource:
         resp.media = serialize_reference_document(document)
         resp.status = falcon.HTTP_201
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_get(
         self,
         req: falcon.Request,
@@ -140,6 +142,7 @@ class ReferenceDocumentResource:
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_get(
         self,
         req: falcon.Request,
@@ -162,6 +165,7 @@ class ReferenceDocumentResource:
         resp.media = serialize_reference_document(document)
         resp.status = falcon.HTTP_200
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_patch(
         self,
         req: falcon.Request,
@@ -200,6 +204,7 @@ class ReferenceDocumentRevisionsResource:
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_post(
         self,
         req: falcon.Request,
@@ -232,6 +237,7 @@ class ReferenceDocumentRevisionsResource:
         resp.media = serialize_reference_document_revision(revision)
         resp.status = falcon.HTTP_201
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments  # required by Falcon route signature
     async def on_get(
         self,
         req: falcon.Request,

@@ -1,0 +1,246 @@
+"""Shared helpers for multi-source ingestion integration tests."""
+
+import dataclasses
+import datetime as dt
+import typing as typ
+import uuid
+
+import pytest
+from _ingestion_service_helpers import _get_job_record_for_episode, _make_raw_source
+
+from episodic.canonical.domain import (
+    ReferenceBinding,
+    ReferenceBindingTargetKind,
+    ReferenceDocument,
+    ReferenceDocumentKind,
+    ReferenceDocumentLifecycleState,
+    ReferenceDocumentRevision,
+)
+from episodic.canonical.ingestion import MultiSourceRequest
+from episodic.canonical.ingestion_service import ingest_multi_source
+from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from tests.test_uuid_assertions import assert_uuid7
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from episodic.canonical.domain import SeriesProfile
+    from episodic.canonical.ingestion_service import IngestionPipeline
+    from episodic.canonical.storage.entity_models import IngestionJobRecord
+
+
+class SourcePriorityRecord(typ.TypedDict):
+    """Serialized source-priority record in TEI provenance metadata."""
+
+    priority: int
+    source_uri: str
+    source_type: str
+    weight: float
+    content_hash: str
+
+
+class TeiHeaderProvenanceRecord(typ.TypedDict):
+    """Serialized TEI header provenance metadata payload."""
+
+    capture_context: str
+    ingestion_timestamp: str
+    source_priorities: list[SourcePriorityRecord]
+    reviewer_identities: list[str]
+
+
+class _WeightedSourceDocument(typ.Protocol):
+    """Source-document shape needed for weight assertions."""
+
+    id: uuid.UUID
+    weight: float
+
+
+class _SnapshotSourceDocument(typ.Protocol):
+    """Source-document shape needed for reference snapshot assertions."""
+
+    source_type: str
+    reference_document_revision_id: uuid.UUID | None
+    source_uri: str
+    metadata: dict[str, object]
+
+
+@dataclasses.dataclass(frozen=True)
+class IngestionTestContext:
+    """Test fixtures for multi-source ingestion error tests."""
+
+    session_factory: cabc.Callable[[], AsyncSession]
+    profile: SeriesProfile
+    ingestion_pipeline: IngestionPipeline
+
+
+def require_provenance_payload(
+    payload: dict[str, object],
+) -> TeiHeaderProvenanceRecord:
+    """Return the TEI header provenance payload with runtime checks."""
+    provenance = payload.get("episodic_provenance")
+    assert isinstance(provenance, dict), (
+        "Expected TEI header payload to include dict provenance metadata."
+    )
+    return typ.cast("TeiHeaderProvenanceRecord", provenance)
+
+
+def verify_provenance_metadata(
+    provenance: TeiHeaderProvenanceRecord,
+    expected_reviewer: str,
+    expected_source_uris: list[str],
+) -> None:
+    """Verify provenance metadata values for an ingested TEI header."""
+    timestamp = provenance.get("ingestion_timestamp")
+    assert isinstance(timestamp, str), "Expected ingestion timestamp as string."
+    assert dt.datetime.fromisoformat(timestamp).tzinfo is not None, (
+        "Expected timezone-aware ingestion timestamp."
+    )
+    assert provenance.get("reviewer_identities") == [expected_reviewer], (
+        "Expected reviewer identity to be captured from request actor."
+    )
+    priorities = provenance["source_priorities"]
+    assert len(priorities) == len(expected_source_uris), (
+        "Expected one priority entry per source."
+    )
+    actual_source_uris = [priority["source_uri"] for priority in priorities]
+    assert actual_source_uris == expected_source_uris, (
+        "Expected source priorities to match source URI order."
+    )
+
+
+def verify_source_documents(
+    documents: cabc.Sequence[_WeightedSourceDocument],
+    expected_count: int,
+) -> None:
+    """Verify persisted source document count and weight bounds."""
+    assert len(documents) == expected_count, (
+        "Expected all input sources to be persisted as source documents."
+    )
+    for document in documents:
+        assert_uuid7(document.id, "source document")
+        assert document.weight > 0.0, (
+            "Expected persisted source weight to be greater than zero."
+        )
+        assert document.weight <= 1.0, (
+            "Expected persisted source weight to be capped at one."
+        )
+
+
+async def create_reference_fixtures(
+    session_factory: cabc.Callable[[], AsyncSession],
+    profile: SeriesProfile,
+) -> tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding]:
+    """Persist the reference document fixtures used by snapshotting tests."""
+    now = dt.datetime.now(dt.UTC)
+    reference_document = ReferenceDocument(
+        id=uuid.uuid4(),
+        owner_series_profile_id=profile.id,
+        kind=ReferenceDocumentKind.STYLE_GUIDE,
+        lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+        metadata={"name": "Ingestion style guide"},
+        created_at=now,
+        updated_at=now,
+    )
+    reference_revision = ReferenceDocumentRevision(
+        id=uuid.uuid4(),
+        reference_document_id=reference_document.id,
+        content={"summary": "Use short declarative sentences."},
+        content_hash="ingestion-reference-hash",
+        author="editor@example.com",
+        change_note="Initial guidance",
+        created_at=now,
+    )
+    reference_binding = ReferenceBinding(
+        id=uuid.uuid4(),
+        reference_document_revision_id=reference_revision.id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=profile.id,
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=None,
+        created_at=now,
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.reference_documents.add(reference_document)
+        await uow.reference_document_revisions.add(reference_revision)
+        await uow.flush()
+        await uow.reference_bindings.add(reference_binding)
+        await uow.commit()
+    return reference_document, reference_revision, reference_binding
+
+
+async def assert_ingestion_raises(
+    context: IngestionTestContext,
+    request: MultiSourceRequest,
+    expected_error_pattern: str,
+) -> None:
+    """Assert that multi-source ingestion raises a matching ValueError."""
+    async with SqlAlchemyUnitOfWork(context.session_factory) as uow:
+        with pytest.raises(ValueError, match=expected_error_pattern):
+            await ingest_multi_source(
+                uow,
+                context.profile,
+                request,
+                context.ingestion_pipeline,
+            )
+
+
+def make_reference_ingestion_request(profile: SeriesProfile) -> MultiSourceRequest:
+    """Build the multi-source request used by reference snapshotting tests."""
+    return MultiSourceRequest(
+        raw_sources=[
+            _make_raw_source(
+                source_type="transcript",
+                source_uri="s3://bucket/reference-transcript.txt",
+                content="Primary transcript",
+                content_hash="hash-primary-reference",
+                metadata={"title": "Primary Episode"},
+            ),
+            _make_raw_source(
+                source_type="brief",
+                source_uri="s3://bucket/reference-brief.txt",
+                content="Background brief",
+                content_hash="hash-brief-reference",
+                metadata={"title": "Brief Notes"},
+            ),
+        ],
+        series_slug=profile.slug,
+        requested_by="producer@example.com",
+    )
+
+
+def assert_reference_snapshot(
+    documents: cabc.Sequence[_SnapshotSourceDocument],
+    reference_document: ReferenceDocument,
+    reference_revision: ReferenceDocumentRevision,
+    reference_binding: ReferenceBinding,
+) -> None:
+    """Assert that one reference snapshot document was persisted correctly."""
+    snapshot_documents = [
+        document
+        for document in documents
+        if document.source_type == "reference_document"
+    ]
+    assert len(snapshot_documents) == 1, (
+        "Expected exactly one persisted reference snapshot document."
+    )
+    assert len(documents) >= 3, (
+        "Expected at least two raw sources plus one reference snapshot document."
+    )
+    reference_snapshot = snapshot_documents[0]
+    assert reference_snapshot.reference_document_revision_id == reference_revision.id
+    assert reference_snapshot.source_uri == (
+        f"ref://{reference_document.id}/revisions/{reference_revision.id}"
+    )
+    assert reference_snapshot.metadata["binding_id"] == str(reference_binding.id)
+    assert reference_snapshot.metadata["document_kind"] == "style_guide"
+
+
+async def get_job_record_for_episode(
+    session_factory: cabc.Callable[[], AsyncSession],
+    episode_id: uuid.UUID,
+) -> IngestionJobRecord:
+    """Return the ingestion job record created for an episode."""
+    return await _get_job_record_for_episode(session_factory, episode_id)

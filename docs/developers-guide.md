@@ -28,6 +28,33 @@ The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
 
+## Linting
+
+Run the full lint gate with:
+
+```shell
+make lint
+```
+
+The target runs the architecture import-boundary checker, Ruff, and a focused
+Pylint 4 pass. The Pylint pass is invoked through `uv tool run --python pypy`
+with the pinned `pylint-pypy-shim` wrapper from
+[github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
+ That wrapper installs the PyPy-specific Astroid compatibility patch before
+delegating to Pylint.
+
+Pylint's message selection is allow-listed in `pyproject.toml` with
+`disable = ["all"]` and explicit `enable` entries for the logging, match,
+refactoring, standard-library, and modified-iteration checks this repository
+cares about. Keep rule rationale comments beside those entries, so future lint
+changes explain why a rule is enabled, instead of only recording its name.
+
+The wrapper disables Pylint's `syntax-error` message for this pass because the
+managed PyPy runtime currently parses Python 3.11 syntax while the project
+targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
+the wrapper and skipped, which keeps parse incompatibilities visible without
+hiding other diagnostics from files that PyPy can analyse.
+
 ## Falcon HTTP runtime
 
 The canonical HTTP adapter has two layers:

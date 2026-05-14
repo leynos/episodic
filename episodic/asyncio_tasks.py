@@ -110,7 +110,7 @@ def _validate_task_create_kwargs(
 def _create_with_optional_metadata[T](
     *,
     loop: asyncio.AbstractEventLoop,
-    task_creator: typ.Callable[..., asyncio.Task[T]],
+    task_creator: cabc.Callable[..., asyncio.Task[T]],
     coro: cabc.Coroutine[object, object, T],
     task_kwargs: TaskCreateKwargs,
 ) -> asyncio.Task[T]:
@@ -149,7 +149,7 @@ def create_task[T](
         task_kwargs["metadata"] = _validate_task_metadata(metadata)
     loop = asyncio.get_running_loop()
     loop_task_creator = typ.cast(
-        "typ.Callable[..., asyncio.Task[T]]",
+        "cabc.Callable[..., asyncio.Task[T]]",
         loop.create_task,
     )
     return _create_with_optional_metadata(
@@ -173,7 +173,7 @@ def create_task_in_group[T](
         task_kwargs["metadata"] = _validate_task_metadata(metadata)
     loop = asyncio.get_running_loop()
     group_task_creator = typ.cast(
-        "typ.Callable[..., asyncio.Task[T]]",
+        "cabc.Callable[..., asyncio.Task[T]]",
         task_group.create_task,
     )
     return _create_with_optional_metadata(

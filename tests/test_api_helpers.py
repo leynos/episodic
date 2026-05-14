@@ -33,7 +33,7 @@ if typ.TYPE_CHECKING:
 
 
 def _call_builder_with_payload(
-    builder: typ.Callable[..., object],
+    builder: cabc.Callable[..., object],
     payload: JsonPayload,
 ) -> object:
     """Invoke a helper builder with the right argument shape for the test."""
@@ -251,7 +251,7 @@ class TestGuardrailValidation:
         ],
     )
     def test_builders_reject_non_object_guardrails(
-        builder: typ.Callable[..., object],
+        builder: cabc.Callable[..., object],
         payload: JsonPayload,
     ) -> None:
         """Reject null and other non-object guardrail payloads."""

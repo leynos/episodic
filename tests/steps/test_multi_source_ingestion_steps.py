@@ -7,8 +7,8 @@ Run the multi-source ingestion BDD scenarios:
 >>> pytest tests/steps/test_multi_source_ingestion_steps.py -v
 """
 
-from __future__ import annotations
-
+import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
+import collections.abc as cabc  # noqa: TC003 - pytest-bdd inspects annotations.
 import datetime as dt
 import typing as typ
 import uuid
@@ -16,15 +16,12 @@ import uuid
 import pytest
 import sqlalchemy as sa
 from pytest_bdd import given, parsers, scenario, then, when
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002 - used by pytest-bdd.
 
 from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
 from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
 from episodic.canonical.adapters.weighting import DefaultWeightingStrategy
-from episodic.canonical.domain import (
-    ApprovalState,
-    CanonicalEpisode,
-    SeriesProfile,
-)
+from episodic.canonical.domain import ApprovalState, SeriesProfile
 from episodic.canonical.ingestion import MultiSourceRequest, RawSourceInput
 from episodic.canonical.ingestion_service import (
     IngestionPipeline,
@@ -34,57 +31,11 @@ from episodic.canonical.storage import (
     IngestionJobRecord,
     SqlAlchemyUnitOfWork,
 )
-
-if typ.TYPE_CHECKING:
-    import asyncio
-    import collections.abc as cabc
-
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-
-def _run_async_step(
-    runner: asyncio.Runner,
-    step_fn: cabc.Callable[[], typ.Awaitable[None]],
-) -> None:
-    """Execute an async BDD step via the provided runner."""
-    coro = typ.cast("typ.Coroutine[object, object, None]", step_fn())
-    runner.run(coro)
-
-
-class MultiSourceContext(typ.TypedDict, total=False):
-    """Shared state for multi-source ingestion BDD steps."""
-
-    profile: SeriesProfile
-    raw_sources: list[RawSourceInput]
-    episode: CanonicalEpisode
-    episode_id: uuid.UUID
-    ingestion_job_id: uuid.UUID
-
-
-def _add_raw_source(
-    multi_source_context: MultiSourceContext,
-    source: RawSourceInput,
-    *,
-    replace: bool = False,
-) -> None:
-    """Append (or replace) a raw source in the shared context.
-
-    Parameters
-    ----------
-    multi_source_context : MultiSourceContext
-        Shared BDD step state dictionary.
-    source : RawSourceInput
-        Pre-constructed raw source to register.
-    replace : bool
-        When ``True``, discard any previously registered sources and
-        start a fresh list containing only *source*.
-    """
-    if replace:
-        multi_source_context["raw_sources"] = [source]
-    else:
-        sources = multi_source_context.get("raw_sources", [])
-        sources.append(source)
-        multi_source_context["raw_sources"] = sources
+from tests.steps.multi_source_ingestion_support import (
+    MultiSourceContext,
+    add_raw_source,
+    run_async_step,
+)
 
 
 @scenario(
@@ -143,7 +94,7 @@ def series_profile_exists_for_multi_source(
 
         multi_source_context["profile"] = profile
 
-    _run_async_step(_function_scoped_runner, _store_profile)
+    run_async_step(_function_scoped_runner, _store_profile)
 
 
 @given("a transcript source is available for multi-source ingestion")
@@ -158,7 +109,7 @@ def transcript_source_available(
         content_hash="hash-transcript",
         metadata={"title": "Episode Transcript"},
     )
-    _add_raw_source(multi_source_context, source)
+    add_raw_source(multi_source_context, source)
 
 
 @given("a brief source is available for multi-source ingestion")
@@ -173,7 +124,7 @@ def brief_source_available(
         content_hash="hash-brief",
         metadata={"title": "Episode Brief"},
     )
-    _add_raw_source(multi_source_context, source)
+    add_raw_source(multi_source_context, source)
 
 
 @given(
@@ -190,7 +141,7 @@ def single_transcript_source_available(
         content_hash="hash-solo",
         metadata={"title": "Solo Transcript"},
     )
-    _add_raw_source(multi_source_context, source, replace=True)
+    add_raw_source(multi_source_context, source, replace=True)
 
 
 @when("multi-source ingestion processes the sources")
@@ -238,7 +189,7 @@ def multi_source_ingestion_processes(
         multi_source_context["episode_id"] = episode.id
         multi_source_context["ingestion_job_id"] = job_record.id
 
-    _run_async_step(_function_scoped_runner, _ingest)
+    run_async_step(_function_scoped_runner, _ingest)
 
 
 @then(parsers.re(r'a canonical episode is created for "(?P<slug>[^"]+)"'))
@@ -260,7 +211,7 @@ def canonical_episode_created(
             "Expected the episode approval state to be draft."
         )
 
-    _run_async_step(_function_scoped_runner, _verify)
+    run_async_step(_function_scoped_runner, _verify)
 
 
 @then("source documents are persisted with computed weights")
@@ -281,7 +232,7 @@ def source_documents_persisted_with_weights(
             assert doc.weight > 0.0, "Expected computed weight to be non-zero."
             assert doc.weight <= 1.0, "Expected computed weight within [0, 1]."
 
-    _run_async_step(_function_scoped_runner, _verify)
+    run_async_step(_function_scoped_runner, _verify)
 
 
 @then(
@@ -336,7 +287,7 @@ def conflict_resolution_metadata_recorded(
                 f"metadata for doc index={idx} id={doc.id}."
             )
 
-    _run_async_step(_function_scoped_runner, _verify)
+    run_async_step(_function_scoped_runner, _verify)
 
 
 @then("the single source is marked as preferred")
@@ -357,7 +308,7 @@ def single_source_marked_as_preferred(
             "Expected the single source to have a non-zero weight."
         )
 
-    _run_async_step(_function_scoped_runner, _verify)
+    run_async_step(_function_scoped_runner, _verify)
 
 
 @then("TEI header provenance captures source priorities")
@@ -400,4 +351,4 @@ def tei_header_provenance_captures_priorities(
                 "Expected transcript source to rank highest in default weighting."
             )
 
-    _run_async_step(_function_scoped_runner, _verify)
+    run_async_step(_function_scoped_runner, _verify)

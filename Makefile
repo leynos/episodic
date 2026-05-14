@@ -7,6 +7,11 @@ TOOLS = $(MDFORMAT_ALL)
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 PYTEST_XDIST_WORKERS ?= 1
+PYLINT_PYTHON ?= pypy
+PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
+PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
+PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
+PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie test typecheck check-migrations $(TOOLS) $(VENV_TOOLS)
@@ -67,6 +72,7 @@ check-fmt: build ## Verify formatting
 
 lint: check-architecture ## Run linters
 	$(UV_ENV) $(UV) run ruff check
+	$(PYLINT) $(PYLINT_TARGETS)
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run python -m episodic.architecture

@@ -95,7 +95,7 @@ def architecture_check_passes(context: ArchitectureContext) -> None:
     """Assert the checker accepted the selected fixture package."""
     completed_process = context.completed_process
     assert completed_process is not None, "checker did not run"
-    assert completed_process.returncode == 0, (
+    assert not completed_process.returncode, (
         f"expected exit 0, got {completed_process.returncode}"
     )
 

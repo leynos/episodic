@@ -8,6 +8,9 @@ import pytest
 
 from episodic import logging as episodic_logging
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 
 class _SpyLogger:
     """Collect low-level log calls emitted by the compatibility wrappers."""
@@ -18,6 +21,7 @@ class _SpyLogger:
             tuple[episodic_logging.LogLevel, str, object | None, bool]
         ] = []
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def _record(
         self,
         level: episodic_logging.LogLevel,
@@ -30,6 +34,7 @@ class _SpyLogger:
         """Append a normalised call tuple to the record list."""
         self.calls.append((level, message, exc_info, stack_info))
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def info(
         self,
         message: str,
@@ -46,6 +51,7 @@ class _SpyLogger:
             stack_info=stack_info,
         )
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def warning(
         self,
         message: str,
@@ -62,6 +68,7 @@ class _SpyLogger:
             stack_info=stack_info,
         )
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def error(
         self,
         message: str,
@@ -86,6 +93,7 @@ class _LogOnlySpyLogger:
         """Initialise an empty call record."""
         self.calls: list[tuple[int, str, object | None, bool]] = []
 
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def log(
         self,
         level: int | episodic_logging.LogLevel,
@@ -120,7 +128,7 @@ class _SupportsFlushHandlers(typ.Protocol):
 
 
 @pytest.fixture
-def isolated_femtologging() -> typ.Generator[None]:
+def isolated_femtologging() -> cabc.Generator[None]:
     """Reset the femtologging global manager before and after each test."""
     import femtologging
 
@@ -248,7 +256,9 @@ def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
     ):
         episodic_logging.log_info(logger, "Loaded %s documents for %s", 3)
 
-    assert logger.calls == []
+    assert logger.calls == [], (  # pylint: disable=use-implicit-booleaness-not-comparison
+        "expected no log calls after TypeError"
+    )
 
 
 def test_log_wrappers_fall_back_to_logger_log_when_needed() -> None:

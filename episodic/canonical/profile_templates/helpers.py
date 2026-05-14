@@ -30,14 +30,16 @@ from .types import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from episodic.canonical.domain import EpisodeTemplate, JsonMapping, SeriesProfile
-    from episodic.canonical.ports import CanonicalUnitOfWork
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
 async def _get_latest_revision[HistoryEntryT: _RevisionedEntry](
-    fetch_latest: typ.Callable[
+    fetch_latest: cabc.Callable[
         [uuid.UUID],
-        typ.Awaitable[HistoryEntryT | None],
+        cabc.Awaitable[HistoryEntryT | None],
     ],
     entity_id: uuid.UUID,
 ) -> int:
@@ -98,8 +100,8 @@ async def _get_entity_with_latest_revision[EntityT: _VersionedEntity](
     *,
     entity_id: uuid.UUID,
     entity_label: str,
-    get_entity: typ.Callable[[uuid.UUID], typ.Awaitable[EntityT | None]],
-    fetch_latest: typ.Callable[[uuid.UUID], typ.Awaitable[_RevisionedEntry | None]],
+    get_entity: cabc.Callable[[uuid.UUID], cabc.Awaitable[EntityT | None]],
+    fetch_latest: cabc.Callable[[uuid.UUID], cabc.Awaitable[_RevisionedEntry | None]],
 ) -> tuple[EntityT, int]:
     """Return an entity with its latest revision or raise if absent."""
     entity = await get_entity(entity_id)
@@ -111,10 +113,10 @@ async def _get_entity_with_latest_revision[EntityT: _VersionedEntity](
 
 
 async def _with_latest_revisions[EntityT: _VersionedEntity](
-    entities: typ.Sequence[EntityT],
-    fetch_bulk_revisions: typ.Callable[
-        [typ.Collection[uuid.UUID]],
-        typ.Awaitable[dict[uuid.UUID, int]],
+    entities: cabc.Sequence[EntityT],
+    fetch_bulk_revisions: cabc.Callable[
+        [cabc.Collection[uuid.UUID]],
+        cabc.Awaitable[dict[uuid.UUID, int]],
     ],
 ) -> list[tuple[EntityT, int]]:
     """Pair entities with their latest revision values."""
@@ -131,11 +133,11 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
     entity_label: str,
     entity_repo: _EntityRepository[EntityT],
     history_repo: _HistoryRepository[HistoryT],
-    fetch_latest: typ.Callable[[uuid.UUID], typ.Awaitable[_RevisionedEntry | None]],
+    fetch_latest: cabc.Callable[[uuid.UUID], cabc.Awaitable[_RevisionedEntry | None]],
     history_entry_class: type[HistoryT],
     entity_id_field: str,
-    update_fields: typ.Callable[[EntityT, dt.datetime], EntityT],
-    create_snapshot: typ.Callable[[EntityT], JsonMapping],
+    update_fields: cabc.Callable[[EntityT, dt.datetime], EntityT],
+    create_snapshot: cabc.Callable[[EntityT], JsonMapping],
     audit: AuditMetadata,
 ) -> tuple[EntityT, int]:
     """Update a versioned entity using optimistic locking."""
