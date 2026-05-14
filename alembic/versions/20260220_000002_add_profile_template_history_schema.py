@@ -20,18 +20,22 @@ branch_labels = None
 depends_on = None
 
 
-def _history_columns(parent_fk_col: str) -> list[sa.Column]:
-    """Build shared change-history table columns."""
-    parent_fk_targets = {
-        "series_profile_id": "series_profiles.id",
-        "episode_template_id": "episode_templates.id",
-    }
-    return [
+def _create_history_table(
+    *,
+    table_name: str,
+    parent_fk_col: str,
+    parent_fk_target: tuple[str, str],
+    constraint_names: tuple[str, str],
+) -> None:
+    """Create a change-history table with shared column layout."""
+    uq_name, ck_name = constraint_names
+    op.create_table(
+        table_name,
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
             parent_fk_col,
             postgresql.UUID(as_uuid=True),
-            sa.ForeignKey(parent_fk_targets[parent_fk_col]),
+            sa.ForeignKey(f"{parent_fk_target[0]}.{parent_fk_target[1]}"),
             nullable=False,
         ),
         sa.Column("revision", sa.Integer(), nullable=False),
@@ -44,7 +48,9 @@ def _history_columns(parent_fk_col: str) -> list[sa.Column]:
             nullable=False,
             server_default=sa.func.now(),
         ),
-    ]
+        sa.UniqueConstraint(parent_fk_col, "revision", name=uq_name),
+        sa.CheckConstraint("revision >= 1", name=ck_name),
+    )
 
 
 def _create_episode_templates_table() -> None:
@@ -89,17 +95,13 @@ def _create_episode_templates_table() -> None:
 
 def _create_series_profile_history_table() -> None:
     """Create the series profile history table and indexes."""
-    op.create_table(
-        "series_profile_history",
-        *_history_columns("series_profile_id"),
-        sa.UniqueConstraint(
-            "series_profile_id",
-            "revision",
-            name="uq_series_profile_history_revision",
-        ),
-        sa.CheckConstraint(
-            "revision >= 1",
-            name="ck_series_profile_history_revision_positive",
+    _create_history_table(
+        table_name="series_profile_history",
+        parent_fk_col="series_profile_id",
+        parent_fk_target=("series_profiles", "id"),
+        constraint_names=(
+            "uq_series_profile_history_revision",
+            "ck_series_profile_history_revision_positive",
         ),
     )
     op.create_index(
@@ -111,17 +113,13 @@ def _create_series_profile_history_table() -> None:
 
 def _create_episode_template_history_table() -> None:
     """Create the episode template history table and indexes."""
-    op.create_table(
-        "episode_template_history",
-        *_history_columns("episode_template_id"),
-        sa.UniqueConstraint(
-            "episode_template_id",
-            "revision",
-            name="uq_episode_template_history_revision",
-        ),
-        sa.CheckConstraint(
-            "revision >= 1",
-            name="ck_episode_template_history_revision_positive",
+    _create_history_table(
+        table_name="episode_template_history",
+        parent_fk_col="episode_template_id",
+        parent_fk_target=("episode_templates", "id"),
+        constraint_names=(
+            "uq_episode_template_history_revision",
+            "ck_episode_template_history_revision_positive",
         ),
     )
     op.create_index(
