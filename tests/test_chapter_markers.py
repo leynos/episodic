@@ -7,6 +7,7 @@ file.
 """
 
 import asyncio
+import re
 import typing as typ
 import xml.sax.saxutils as xml_utils
 
@@ -26,7 +27,9 @@ if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
 
 
-def _minimal_tei() -> str:
+@pytest.fixture(scope="module")
+def minimal_tei() -> str:
+    """Return a minimal TEI string."""
     return (
         '<TEI xmlns="http://www.tei-c.org/ns/1.0">'
         "<teiHeader><fileDesc><title>Test</title></fileDesc></teiHeader>"
@@ -38,7 +41,9 @@ def _minimal_tei() -> str:
     )
 
 
-def _tei_with_existing_chapters() -> str:
+@pytest.fixture(scope="module")
+def tei_with_existing_chapters() -> str:
+    """Return a TEI string that already contains a chapters div."""
     return (
         '<TEI xmlns="http://www.tei-c.org/ns/1.0">'
         "<teiHeader><fileDesc><title>Test</title></fileDesc></teiHeader>"
@@ -51,18 +56,28 @@ def _tei_with_existing_chapters() -> str:
     )
 
 
-def _result(*chapters: ChapterMarker) -> ChapterMarkersResult:
-    return ChapterMarkersResult(
-        chapters=chapters,
-        usage=LLMUsage(input_tokens=10, output_tokens=5, total_tokens=15),
-    )
+@pytest.fixture(scope="module")
+def chapter_markers_result() -> typ.Callable[..., ChapterMarkersResult]:
+    """Return a factory for chapter-marker results."""
+
+    def build_result(*chapters: ChapterMarker) -> ChapterMarkersResult:
+        return ChapterMarkersResult(
+            chapters=chapters,
+            usage=LLMUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+
+    return build_result
 
 
-def test_enrich_tei_with_chapter_markers(snapshot: SnapshotAssertion) -> None:
+def test_enrich_tei_with_chapter_markers(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    snapshot: SnapshotAssertion,
+) -> None:
     """TEI body can be enriched with a div containing chapter markers."""
     enriched_xml = enrich_tei_with_chapter_markers(
-        _minimal_tei(),
-        _result(
+        minimal_tei,
+        chapter_markers_result(
             ChapterMarker(
                 title="Introduction",
                 start="PT0S",
@@ -81,21 +96,35 @@ def test_enrich_tei_with_chapter_markers(snapshot: SnapshotAssertion) -> None:
 
     document = tei.parse_xml(enriched_xml)
     document.validate()
-    assert enriched_xml.count('type="chapters"') == 1
-    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_xml
-    assert '<item n="PT5M30S" corresp="#seg-main">' in enriched_xml
-    assert "<label>Introduction</label>" in enriched_xml
-    assert "The hosts begin the main topic." in enriched_xml
-    assert enriched_xml == snapshot
+    assert enriched_xml.count('type="chapters"') == 1, (
+        "expected exactly one chapters div in enriched TEI"
+    )
+    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_xml, (
+        "expected intro chapter item with segment locator"
+    )
+    assert '<item n="PT5M30S" corresp="#seg-main">' in enriched_xml, (
+        "expected main chapter item with segment locator"
+    )
+    assert "<label>Introduction</label>" in enriched_xml, (
+        "expected introduction label in enriched TEI"
+    )
+    assert "The hosts begin the main topic." in enriched_xml, (
+        "expected main chapter summary in enriched TEI"
+    )
+    assert enriched_xml == snapshot, "expected enriched TEI to match snapshot"
 
 
 def test_enrich_tei_replaces_existing_chapters_div(
+    tei_with_existing_chapters: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
     snapshot: SnapshotAssertion,
 ) -> None:
     """Repeated enrichment should keep a single canonical chapters container."""
     enriched_xml = enrich_tei_with_chapter_markers(
-        _tei_with_existing_chapters(),
-        _result(ChapterMarker(title="New", start="PT0S", summary="Fresh summary")),
+        tei_with_existing_chapters,
+        chapter_markers_result(
+            ChapterMarker(title="New", start="PT0S", summary="Fresh summary")
+        ),
     )
 
     assert enriched_xml.count('type="chapters"') == 1
@@ -104,22 +133,30 @@ def test_enrich_tei_replaces_existing_chapters_div(
     assert enriched_xml == snapshot
 
 
-def test_enrich_tei_with_empty_result_returns_original() -> None:
+def test_enrich_tei_with_empty_result_returns_original(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+) -> None:
     """When the result has no chapters, return the original TEI unchanged."""
-    original_xml = _minimal_tei()
-    enriched_xml = enrich_tei_with_chapter_markers(original_xml, _result())
+    original_xml = minimal_tei
+    enriched_xml = enrich_tei_with_chapter_markers(
+        original_xml,
+        chapter_markers_result(),
+    )
 
     assert enriched_xml == original_xml
     assert "<div" not in enriched_xml
 
 
 def test_enrich_tei_with_empty_result_removes_existing_chapters(
+    tei_with_existing_chapters: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
     snapshot: SnapshotAssertion,
 ) -> None:
     """Empty chapter results remove stale chapter metadata from the TEI body."""
     enriched_xml = enrich_tei_with_chapter_markers(
-        _tei_with_existing_chapters(),
-        _result(),
+        tei_with_existing_chapters,
+        chapter_markers_result(),
     )
 
     document = tei.parse_xml(enriched_xml)
@@ -129,11 +166,14 @@ def test_enrich_tei_with_empty_result_removes_existing_chapters(
     assert enriched_xml == snapshot
 
 
-def test_enrich_tei_escapes_xml_unsafe_characters() -> None:
+def test_enrich_tei_escapes_xml_unsafe_characters(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+) -> None:
     """TEI enrichment properly escapes ampersands and angle brackets."""
     enriched_xml = enrich_tei_with_chapter_markers(
-        _minimal_tei(),
-        _result(
+        minimal_tei,
+        chapter_markers_result(
             ChapterMarker(
                 title="Topic & More",
                 start="PT0S",
@@ -148,11 +188,14 @@ def test_enrich_tei_escapes_xml_unsafe_characters() -> None:
     assert "Summary with <tags> & ampersands." not in enriched_xml
 
 
-def test_enrich_tei_omits_content_when_summary_is_blank() -> None:
+def test_enrich_tei_omits_content_when_summary_is_blank(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+) -> None:
     """Blank chapter summaries should not duplicate the title as item content."""
     enriched_xml = enrich_tei_with_chapter_markers(
-        _minimal_tei(),
-        _result(ChapterMarker(title="Introduction", start="PT0S")),
+        minimal_tei,
+        chapter_markers_result(ChapterMarker(title="Introduction", start="PT0S")),
     )
 
     document = tei.parse_xml(enriched_xml)
@@ -161,13 +204,16 @@ def test_enrich_tei_omits_content_when_summary_is_blank() -> None:
     assert '<item n="PT0S"><label>Introduction</label></item>' in enriched_xml
 
 
-def test_enrich_tei_is_idempotent_for_same_result() -> None:
+def test_enrich_tei_is_idempotent_for_same_result(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+) -> None:
     """Applying the same chapter result twice leaves one canonical chapter div."""
-    result = _result(
+    result = chapter_markers_result(
         ChapterMarker(title="Introduction", start="PT0S", summary="Opening context.")
     )
 
-    once = enrich_tei_with_chapter_markers(_minimal_tei(), result)
+    once = enrich_tei_with_chapter_markers(minimal_tei, result)
     twice = enrich_tei_with_chapter_markers(once, result)
 
     assert twice == once
@@ -175,12 +221,15 @@ def test_enrich_tei_is_idempotent_for_same_result() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enrich_tei_is_idempotent_across_concurrent_calls() -> None:
+async def test_enrich_tei_is_idempotent_across_concurrent_calls(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+) -> None:
     """Concurrent enrichment of the same inputs yields the same canonical XML."""
-    result = _result(
+    result = chapter_markers_result(
         ChapterMarker(title="Introduction", start="PT0S", summary="Opening context.")
     )
-    base_xml = enrich_tei_with_chapter_markers(_minimal_tei(), result)
+    base_xml = enrich_tei_with_chapter_markers(minimal_tei, result)
 
     enriched_documents = await asyncio.gather(
         asyncio.to_thread(enrich_tei_with_chapter_markers, base_xml, result),
@@ -190,7 +239,9 @@ async def test_enrich_tei_is_idempotent_across_concurrent_calls() -> None:
     assert enriched_documents == [base_xml, base_xml]
 
 
-def test_enrich_tei_with_missing_body_raises_value_error() -> None:
+def test_enrich_tei_with_missing_body_raises_value_error(
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+) -> None:
     """Malformed TEI should raise ValueError rather than mutating blindly."""
     malformed_tei_xml = (
         '<TEI xmlns="http://www.tei-c.org/ns/1.0">'
@@ -202,11 +253,13 @@ def test_enrich_tei_with_missing_body_raises_value_error() -> None:
     with pytest.raises(ValueError, match=r"XML processing error"):
         enrich_tei_with_chapter_markers(
             malformed_tei_xml,
-            _result(ChapterMarker(title="Intro", start="PT0S")),
+            chapter_markers_result(ChapterMarker(title="Intro", start="PT0S")),
         )
 
 
 def test_enrich_tei_with_missing_payload_fields_raises_value_error(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Structurally valid TEI missing payload fields should raise ValueError."""
@@ -218,12 +271,13 @@ def test_enrich_tei_with_missing_payload_fields_raises_value_error(
 
     with pytest.raises(ValueError, match=r"TEI payload field"):
         enrich_tei_with_chapter_markers(
-            _minimal_tei(),
-            _result(ChapterMarker(title="Intro", start="PT0S")),
+            minimal_tei,
+            chapter_markers_result(ChapterMarker(title="Intro", start="PT0S")),
         )
 
 
 def _iso_duration(seconds: int) -> str:
+    """Return an integer-only ISO 8601-style duration."""
     hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
     parts = ["PT"]
@@ -239,6 +293,8 @@ def _iso_duration(seconds: int) -> str:
 @given(st.lists(st.integers(min_value=0, max_value=86_400), min_size=1, unique=True))
 @settings(max_examples=50)
 def test_ordered_timings_survive_validation_and_tei_enrichment(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
     starts: list[int],
 ) -> None:
     """Property test: strictly ordered starts survive validation and TEI output."""
@@ -247,23 +303,31 @@ def test_ordered_timings_survive_validation_and_tei_enrichment(
         ChapterMarker(title=f"Chapter {index}", start=_iso_duration(start))
         for index, start in enumerate(ordered_starts)
     )
-    result = _result(*markers)
+    result = chapter_markers_result(*markers)
 
-    enriched_xml = enrich_tei_with_chapter_markers(_minimal_tei(), result)
+    enriched_xml = enrich_tei_with_chapter_markers(minimal_tei, result)
 
     document = tei.parse_xml(enriched_xml)
     document.validate()
-    for marker in markers:
-        assert f'n="{marker.start}"' in enriched_xml
+    timing_sequence = re.findall(r'<item n="([^"]+)"', enriched_xml)
+    assert timing_sequence == [marker.start for marker in markers], (
+        "expected enriched chapter timings to preserve marker order"
+    )
 
 
 @given(summary=st.text(alphabet=" abcXYZ<&", max_size=50))
 @settings(max_examples=50)
-def test_arbitrary_summary_text_produces_valid_tei(summary: str) -> None:
+def test_arbitrary_summary_text_produces_valid_tei(
+    minimal_tei: str,
+    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    summary: str,
+) -> None:
     """Property test: arbitrary summary text is escaped through TEI enrichment."""
     assume(summary.strip())
-    result = _result(ChapterMarker(title="Chapter", start="PT0S", summary=summary))
-    enriched_xml = enrich_tei_with_chapter_markers(_minimal_tei(), result)
+    result = chapter_markers_result(
+        ChapterMarker(title="Chapter", start="PT0S", summary=summary)
+    )
+    enriched_xml = enrich_tei_with_chapter_markers(minimal_tei, result)
 
     document = tei.parse_xml(enriched_xml)
     document.validate()

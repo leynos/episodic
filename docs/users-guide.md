@@ -124,9 +124,9 @@ malformed metadata is published silently. This "fail fast" behaviour is
 intentional — a clear error is easier to diagnose and correct than silent data
 loss.
 
-Chapter markers apply the same fail-fast rule. Blank titles, invalid durations,
-negative starts, duplicate starts, and descending starts are rejected before
-the canonical TEI document is enriched.
+Chapter markers apply the same fail-fast rule. Blank titles,
+invalid durations, negative starts, duplicate starts, and descending starts are
+rejected before the canonical TEI document is enriched.
 
 ### Reusable Reference Documents
 
