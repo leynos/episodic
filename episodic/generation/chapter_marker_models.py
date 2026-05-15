@@ -52,7 +52,7 @@ def _normalize_optional_string(value: object, field_name: str) -> str | None:
         msg = f"{field_name} must be a string or null."
         raise TypeError(msg)
     normalized = value.strip()
-    if normalized == "":
+    if not normalized:
         return None
     return normalized
 

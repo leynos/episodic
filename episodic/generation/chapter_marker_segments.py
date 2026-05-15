@@ -11,6 +11,8 @@ from episodic.generation.chapter_marker_models import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from episodic.generation.chapter_marker_common import JsonMapping
 
 
@@ -79,7 +81,7 @@ def _transitions_from_dict(
 
 
 def _transitions_from_sequence(
-    items: typ.Sequence[object],
+    items: cabc.Sequence[object],
     *,
     depth: int,
 ) -> tuple[_SegmentTransition, ...]:
@@ -106,7 +108,7 @@ def _segment_transitions_from_value(
         mapping = typ.cast("dict[str, object]", value)
         return _transitions_from_dict(mapping, depth=depth)
     if isinstance(value, list):
-        items = typ.cast("typ.Sequence[object]", value)
+        items = typ.cast("cabc.Sequence[object]", value)
         return _transitions_from_sequence(items, depth=depth)
     return ()
 

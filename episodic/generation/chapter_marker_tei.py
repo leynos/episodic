@@ -19,6 +19,8 @@ from episodic.generation.tei_payload import (
 from episodic.logging import log_info
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from episodic.generation.chapter_marker_models import (
         ChapterMarker,
         ChapterMarkersResult,
@@ -60,7 +62,7 @@ def _build_chapters_div_payload(
 
 def _iter_list_item_payloads(
     list_payload: dict[str, object],
-) -> typ.Iterator[dict[str, object]]:
+) -> cabc.Iterator[dict[str, object]]:
     """Yield validated item payloads from a single list-type payload."""
     for item in require_sequence(
         list_payload.get("items"),
@@ -76,7 +78,7 @@ def _iter_list_item_payloads(
 
 def _iter_chapter_block_item_payloads(
     block_payload: dict[str, object],
-) -> typ.Iterator[dict[str, object]]:
+) -> cabc.Iterator[dict[str, object]]:
     """Yield item payloads from all list nodes inside a chapters div block."""
     for block_content in require_sequence(
         block_payload.get("content"),
@@ -95,7 +97,7 @@ def _iter_chapter_block_item_payloads(
 
 def _iter_chapter_item_payloads(
     document_payload: dict[str, object],
-) -> typ.Iterator[dict[str, object]]:
+) -> cabc.Iterator[dict[str, object]]:
     """Yield list-item payloads inside chapter div blocks."""
     body_blocks = body_blocks_payload(document_payload)
     for body_block in body_blocks:

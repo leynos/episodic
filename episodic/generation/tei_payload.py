@@ -129,7 +129,7 @@ def require_non_empty_str_value(
     Exception
         Instance of ``error_cls`` when ``value`` is not a non-empty string.
     """
-    if not isinstance(value, str) or value.strip() == "":
+    if not isinstance(value, str) or not value.strip():
         msg = f"{field_name} {message}"
         raise error_cls(msg)
     return value

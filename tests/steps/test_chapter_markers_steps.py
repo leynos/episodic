@@ -234,7 +234,7 @@ def _start_vidaimock_process(
     last_error: RuntimeError | None = None
     for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
         port = _find_free_port()
-        process = subprocess.Popen(  # noqa: S603 - fixed trusted local binary.
+        process = subprocess.Popen(  # noqa: S603 - fixed trusted local binary.  # pylint: disable=consider-using-with
             [
                 vidaimock_path,
                 "--host",
