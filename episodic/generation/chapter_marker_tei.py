@@ -139,15 +139,15 @@ def enrich_tei_with_chapter_markers(
         body_blocks.append(_build_chapters_div_payload(result.chapters))
     elif removed_block_count == 0:
         return tei_xml
+    sentinel = _prepare_empty_chapter_summaries_for_tei_rapporteur(document_payload)
+    enriched_document = tei.from_dict(document_payload)
+    enriched_xml = tei.emit_xml(enriched_document)
+    if sentinel is not None:
+        enriched_xml = enriched_xml.replace(sentinel, "")
     log_info(
         logger,
         "chapter_markers_tei_enriched chapter_count=%s removed_chapter_blocks=%s",
         len(result.chapters),
         removed_block_count,
     )
-    sentinel = _prepare_empty_chapter_summaries_for_tei_rapporteur(document_payload)
-    enriched_document = tei.from_dict(document_payload)
-    enriched_xml = tei.emit_xml(enriched_document)
-    if sentinel is None:
-        return enriched_xml
-    return enriched_xml.replace(sentinel, "")
+    return enriched_xml

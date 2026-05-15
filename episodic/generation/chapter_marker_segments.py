@@ -132,10 +132,11 @@ def _check_locator_conflict(
 ) -> None:
     """Raise if a locator key maps to two different segment starts."""
     if existing is not None and existing[0] != start_secs:
-        raise ChapterMarkersResponseFormatError(  # noqa: TRY003
+        msg = (
             f"Conflicting locator reuse for {locator_key!r}: "
             f"{existing[1]!r} and {start_text!r}."
         )
+        raise ChapterMarkersResponseFormatError(msg)
 
 
 def _build_segment_start_lookups(
