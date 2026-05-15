@@ -7,9 +7,10 @@ file.
 """
 
 import asyncio
+import collections.abc as cabc  # noqa: TC003 - Hypothesis evaluates annotations during collection
 import re
-import typing as typ
 import xml.sax.saxutils as xml_utils
+from typing import TYPE_CHECKING  # noqa: ICN003 - requested direct type-checking guard
 
 import hypothesis.strategies as st
 import pytest
@@ -23,7 +24,7 @@ from episodic.generation.chapter_markers import (
 )
 from episodic.llm import LLMUsage
 
-if typ.TYPE_CHECKING:
+if TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
 
 
@@ -57,7 +58,7 @@ def tei_with_existing_chapters() -> str:
 
 
 @pytest.fixture(scope="module")
-def chapter_markers_result() -> typ.Callable[..., ChapterMarkersResult]:
+def chapter_markers_result() -> cabc.Callable[..., ChapterMarkersResult]:
     """Return a factory for chapter-marker results."""
 
     def build_result(*chapters: ChapterMarker) -> ChapterMarkersResult:
@@ -71,7 +72,7 @@ def chapter_markers_result() -> typ.Callable[..., ChapterMarkersResult]:
 
 def test_enrich_tei_with_chapter_markers(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
     snapshot: SnapshotAssertion,
 ) -> None:
     """TEI body can be enriched with a div containing chapter markers."""
@@ -116,7 +117,7 @@ def test_enrich_tei_with_chapter_markers(
 
 def test_enrich_tei_replaces_existing_chapters_div(
     tei_with_existing_chapters: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
     snapshot: SnapshotAssertion,
 ) -> None:
     """Repeated enrichment should keep a single canonical chapters container."""
@@ -135,7 +136,7 @@ def test_enrich_tei_replaces_existing_chapters_div(
 
 def test_enrich_tei_with_empty_result_returns_original(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
 ) -> None:
     """When the result has no chapters, return the original TEI unchanged."""
     original_xml = minimal_tei
@@ -150,7 +151,7 @@ def test_enrich_tei_with_empty_result_returns_original(
 
 def test_enrich_tei_with_empty_result_removes_existing_chapters(
     tei_with_existing_chapters: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
     snapshot: SnapshotAssertion,
 ) -> None:
     """Empty chapter results remove stale chapter metadata from the TEI body."""
@@ -168,7 +169,7 @@ def test_enrich_tei_with_empty_result_removes_existing_chapters(
 
 def test_enrich_tei_escapes_xml_unsafe_characters(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
 ) -> None:
     """TEI enrichment properly escapes ampersands and angle brackets."""
     enriched_xml = enrich_tei_with_chapter_markers(
@@ -190,7 +191,7 @@ def test_enrich_tei_escapes_xml_unsafe_characters(
 
 def test_enrich_tei_omits_content_when_summary_is_blank(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
 ) -> None:
     """Blank chapter summaries should not duplicate the title as item content."""
     enriched_xml = enrich_tei_with_chapter_markers(
@@ -206,7 +207,7 @@ def test_enrich_tei_omits_content_when_summary_is_blank(
 
 def test_enrich_tei_is_idempotent_for_same_result(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
 ) -> None:
     """Applying the same chapter result twice leaves one canonical chapter div."""
     result = chapter_markers_result(
@@ -223,7 +224,7 @@ def test_enrich_tei_is_idempotent_for_same_result(
 @pytest.mark.asyncio
 async def test_enrich_tei_is_idempotent_across_concurrent_calls(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
 ) -> None:
     """Concurrent enrichment of the same inputs yields the same canonical XML."""
     result = chapter_markers_result(
@@ -240,7 +241,7 @@ async def test_enrich_tei_is_idempotent_across_concurrent_calls(
 
 
 def test_enrich_tei_with_missing_body_raises_value_error(
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
 ) -> None:
     """Malformed TEI should raise ValueError rather than mutating blindly."""
     malformed_tei_xml = (
@@ -259,7 +260,7 @@ def test_enrich_tei_with_missing_body_raises_value_error(
 
 def test_enrich_tei_with_missing_payload_fields_raises_value_error(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Structurally valid TEI missing payload fields should raise ValueError."""
@@ -294,7 +295,7 @@ def _iso_duration(seconds: int) -> str:
 @settings(max_examples=50)
 def test_ordered_timings_survive_validation_and_tei_enrichment(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
     starts: list[int],
 ) -> None:
     """Property test: strictly ordered starts survive validation and TEI output."""
@@ -319,7 +320,7 @@ def test_ordered_timings_survive_validation_and_tei_enrichment(
 @settings(max_examples=50)
 def test_arbitrary_summary_text_produces_valid_tei(
     minimal_tei: str,
-    chapter_markers_result: typ.Callable[..., ChapterMarkersResult],
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
     summary: str,
 ) -> None:
     """Property test: arbitrary summary text is escaped through TEI enrichment."""
