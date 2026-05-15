@@ -26,7 +26,6 @@ class ChronoEvaluatorPort(typ.Protocol):
         request: ChronoEvaluationRequest,
     ) -> ChronoRuntimeEstimate:
         """Estimate script runtime and return metadata."""
-        ...
 
 
 @dc.dataclass(slots=True)

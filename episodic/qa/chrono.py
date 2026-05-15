@@ -1,5 +1,7 @@
 """Deterministic spoken-runtime estimation for TEI scripts."""
 
+from __future__ import annotations
+
 import dataclasses as dc
 import logging
 import math
@@ -8,6 +10,9 @@ import time
 import typing as typ
 
 import tei_rapporteur as _tei
+
+if typ.TYPE_CHECKING:
+    from collections import abc as cabc
 
 SPOKEN_WORD_REGEX = r"[A-Za-z][A-Za-z0-9'-]*"
 _log = logging.getLogger(__name__)
@@ -26,20 +31,18 @@ class ChronoMetricsPort(typ.Protocol):
         self,
         name: str,
         *,
-        labels: typ.Mapping[str, str],
+        labels: cabc.Mapping[str, str],
     ) -> None:
         """Increment a bounded-cardinality counter."""
-        ...
 
     def observe_latency_ms(
         self,
         name: str,
         value: float,
         *,
-        labels: typ.Mapping[str, str],
+        labels: cabc.Mapping[str, str],
     ) -> None:
         """Observe a latency measurement in milliseconds."""
-        ...
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -50,7 +53,7 @@ class _NoopChronoMetrics:
         self,
         name: str,
         *,
-        labels: typ.Mapping[str, str],
+        labels: cabc.Mapping[str, str],
     ) -> None:
         """Ignore counter increments."""
 
@@ -59,14 +62,14 @@ class _NoopChronoMetrics:
         name: str,
         value: float,
         *,
-        labels: typ.Mapping[str, str],
+        labels: cabc.Mapping[str, str],
     ) -> None:
         """Ignore latency observations."""
 
 
 def _ensure_non_empty_string(value: str, field_name: str) -> None:
     """Reject blank string fields at Chrono contract boundaries."""
-    if value.strip() == "":
+    if not value.strip():
         msg = f"{field_name} must be non-empty."
         raise ValueError(msg)
 
