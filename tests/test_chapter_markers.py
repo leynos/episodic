@@ -8,11 +8,12 @@ file.
 
 import asyncio
 import typing as typ
+import xml.sax.saxutils as xml_utils
 
 import hypothesis.strategies as st
 import pytest
 import tei_rapporteur as tei
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 
 from episodic.generation.chapter_markers import (
     ChapterMarker,
@@ -260,8 +261,10 @@ def test_ordered_timings_survive_validation_and_tei_enrichment(
 @settings(max_examples=50)
 def test_arbitrary_summary_text_produces_valid_tei(summary: str) -> None:
     """Property test: arbitrary summary text is escaped through TEI enrichment."""
+    assume(summary.strip())
     result = _result(ChapterMarker(title="Chapter", start="PT0S", summary=summary))
     enriched_xml = enrich_tei_with_chapter_markers(_minimal_tei(), result)
 
     document = tei.parse_xml(enriched_xml)
     document.validate()
+    assert xml_utils.escape(summary.strip()) in enriched_xml
