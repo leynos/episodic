@@ -544,7 +544,6 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 - `episodic/qa/langgraph.py` contains the in-process LangGraph path for the
   Pedante evaluate-and-route flow.
 
-
 ### Chrono package structure
 
 - `episodic/qa/chrono.py` contains `ChronoRuntimeEstimator`, typed
@@ -565,7 +564,6 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 - Keep Pedante dependent on evaluator contracts and LLM ports only. LangGraph
   state should hold evaluator metadata and results, not the sole canonical copy
   of editorial data.
-
 
 ### Chrono maintainer rules
 
