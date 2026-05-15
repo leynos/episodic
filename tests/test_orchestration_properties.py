@@ -9,6 +9,10 @@ normalisation, model-tier validation, planner JSON error preservation, and the
 LangGraph plan-execute-finish ordering contract.
 """
 
+# Keep the related orchestration properties together so each invariant can share
+# the same domain-specific strategies and fakes.
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import json
 import string
