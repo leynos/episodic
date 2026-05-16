@@ -1,8 +1,11 @@
 """Structured planning and tool execution for content generation."""
 
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import json
 import time
+import typing as typ
 
 from episodic.llm import (
     LLMError,
@@ -46,6 +49,9 @@ from ._types import (
     _log_event,
 )
 from ._usage import build_generation_result
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 __all__ = [
     "ActionExecutionResult",
@@ -166,6 +172,46 @@ class StructuredGenerationPlanner:
             raise ValueError(msg) from exc
         return f"Return JSON only.\n{rendered_payload}"
 
+    def _decode_planner_json(
+        self,
+        response_text: str,
+        *,
+        correlation_id: str,
+    ) -> dict[str, object]:
+        """Decode planner JSON text or raise a deterministic format error."""
+        try:
+            decoded: dict[str, object] = json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            msg = "Planner response is not valid JSON."
+            _log_event(
+                "error",
+                "structured_generation_planner.plan.invalid_json",
+                correlation_id=correlation_id,
+                planning_model=self.config.planning_model,
+            )
+            raise PlanningResponseFormatError(msg) from exc
+        return decoded
+
+    def _parse_and_validate_plan(
+        self,
+        decoded: object,
+        *,
+        correlation_id: str,
+    ) -> ExecutionPlan:
+        """Validate decoded planner payload and return an execution plan."""
+        try:
+            payload = _require_object(decoded, "planner response")
+            plan = self._parse_plan(payload, config=self.config)
+        except PlanningResponseFormatError:
+            _log_event(
+                "error",
+                "structured_generation_planner.plan.invalid_plan",
+                correlation_id=correlation_id,
+                planning_model=self.config.planning_model,
+            )
+            raise
+        return plan
+
     async def plan(self, request: GenerationOrchestrationRequest) -> PlannerResult:
         """Call the LLM and parse the strict planner response."""
         _log_event(
@@ -192,28 +238,14 @@ class StructuredGenerationPlanner:
                 planning_model=self.config.planning_model,
             )
             raise
-        try:
-            decoded = json.loads(response.text)
-        except json.JSONDecodeError as exc:
-            msg = "Planner response is not valid JSON."
-            _log_event(
-                "error",
-                "structured_generation_planner.plan.invalid_json",
-                correlation_id=request.correlation_id,
-                planning_model=self.config.planning_model,
-            )
-            raise PlanningResponseFormatError(msg) from exc
-        try:
-            payload = _require_object(decoded, "planner response")
-            plan = self._parse_plan(payload, config=self.config)
-        except PlanningResponseFormatError:
-            _log_event(
-                "error",
-                "structured_generation_planner.plan.invalid_plan",
-                correlation_id=request.correlation_id,
-                planning_model=self.config.planning_model,
-            )
-            raise
+        decoded = self._decode_planner_json(
+            response.text,
+            correlation_id=request.correlation_id,
+        )
+        plan = self._parse_and_validate_plan(
+            decoded,
+            correlation_id=request.correlation_id,
+        )
         _log_event(
             "info",
             "structured_generation_planner.plan.success",
@@ -270,15 +302,15 @@ class StructuredPlanningOrchestrator:
     planner: PlannerPort
     tool_executor: ToolExecutorPort
 
-    async def execute_plan(
+    def _execute_single_action(
         self,
-        *,
+        action: PlannedAction,
         request: GenerationOrchestrationRequest,
         plan: ExecutionPlan,
-    ) -> tuple[ActionExecutionResult, ...]:
-        """Execute each plan step sequentially through the tool-execution port."""
-        results: list[ActionExecutionResult] = []
-        for action in plan.steps:
+    ) -> cabc.Awaitable[ActionExecutionResult]:
+        """Execute one planned action with the standard action log envelope."""
+
+        async def execute() -> ActionExecutionResult:
             _log_event(
                 "debug",
                 "structured_planning_orchestrator.execute_plan.action.start",
@@ -312,8 +344,71 @@ class StructuredPlanningOrchestrator:
                 execution_model=plan.selected_execution_model,
                 elapsed_ms=round((time.monotonic() - t0) * 1000, 1),
             )
-            results.append(result)
+            return result
+
+        return execute()
+
+    async def execute_plan(
+        self,
+        *,
+        request: GenerationOrchestrationRequest,
+        plan: ExecutionPlan,
+    ) -> tuple[ActionExecutionResult, ...]:
+        """Execute each plan step sequentially through the tool-execution port."""
+        results: list[ActionExecutionResult] = []
+        for action in plan.steps:
+            results.append(  # noqa: PERF401 - keep execution sequential and explicit.
+                await self._execute_single_action(action, request, plan)
+            )
         return tuple(results)
+
+    def _run_planner(
+        self,
+        request: GenerationOrchestrationRequest,
+    ) -> cabc.Awaitable[PlannerResult]:
+        """Run the planner with the orchestration-level error log envelope."""
+
+        async def run() -> PlannerResult:
+            try:
+                return await self.planner.plan(request)
+            except (LLMError, PlanningResponseFormatError) as exc:
+                _log_event(
+                    "error",
+                    "structured_planning_orchestrator.orchestrate.error",
+                    correlation_id=request.correlation_id,
+                    stage="plan",
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+                raise
+
+        return run()
+
+    def _run_execute_plan(
+        self,
+        request: GenerationOrchestrationRequest,
+        plan: ExecutionPlan,
+    ) -> cabc.Awaitable[tuple[ActionExecutionResult, ...]]:
+        """Run tool execution with the orchestration-level error log envelope."""
+
+        async def run() -> tuple[ActionExecutionResult, ...]:
+            try:
+                return await self.execute_plan(
+                    request=request,
+                    plan=plan,
+                )
+            except (LLMError, ToolExecutionError, UnsupportedActionError) as exc:
+                _log_event(
+                    "error",
+                    "structured_planning_orchestrator.orchestrate.error",
+                    correlation_id=request.correlation_id,
+                    stage="execute_plan",
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+                raise
+
+        return run()
 
     async def orchestrate(
         self,
@@ -325,33 +420,8 @@ class StructuredPlanningOrchestrator:
             "structured_planning_orchestrator.orchestrate.start",
             correlation_id=request.correlation_id,
         )
-        try:
-            planner_result = await self.planner.plan(request)
-        except (LLMError, PlanningResponseFormatError) as exc:
-            _log_event(
-                "error",
-                "structured_planning_orchestrator.orchestrate.error",
-                correlation_id=request.correlation_id,
-                stage="plan",
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
-            raise
-        try:
-            action_results = await self.execute_plan(
-                request=request,
-                plan=planner_result.plan,
-            )
-        except (LLMError, ToolExecutionError, UnsupportedActionError) as exc:
-            _log_event(
-                "error",
-                "structured_planning_orchestrator.orchestrate.error",
-                correlation_id=request.correlation_id,
-                stage="execute_plan",
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
-            raise
+        planner_result = await self._run_planner(request)
+        action_results = await self._run_execute_plan(request, planner_result.plan)
         result = build_generation_result(planner_result, action_results)
         _log_event(
             "info",
