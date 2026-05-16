@@ -1,4 +1,33 @@
-"""Deterministic spoken-runtime estimation for TEI scripts."""
+"""Chrono deterministic spoken-runtime estimation.
+
+This module implements Chrono, the local QA component that estimates anticipated
+spoken duration for TEI P5 podcast scripts. It delegates TEI parsing and
+spoken-text extraction to ``tei-rapporteur`` and keeps Chrono's own policy
+limited to deterministic token counting, duration calculation, metadata, and
+operational reporting.
+
+Main entry points:
+
+- ``ChronoEvaluationRequest``: Input contract containing the TEI XML script to
+  evaluate.
+- ``ChronoRuntimeEstimator``: Primary estimator class. Call
+  ``estimator.estimate(request)`` for synchronous domain use or
+  ``await estimator.evaluate(request)`` when invoking through orchestration
+  ports.
+- ``ChronoRuntimeEstimate`` and ``ChronoEstimatorMetadata``: Output contracts
+  carrying the predicted seconds and comparison metadata for later estimator
+  versions.
+- ``ChronoMetricsPort`` and ``ChronoClockPort``: Boundary ports for operational
+  side effects. They keep latency measurement and metrics outside the
+  deterministic estimation helper.
+- ``tokenize_spoken_words``: Public tokenizer helper used by property tests and
+  callers that need to compare Chrono's simple word-count heuristic directly.
+
+Chrono sits beside Pedante in the QA package but does not call an LLM. The
+LangGraph adapter in ``episodic.qa.chrono_langgraph`` wraps this estimator for
+graph execution, while this module owns the estimator contracts and local
+runtime policy.
+"""
 
 import dataclasses as dc
 import logging

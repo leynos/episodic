@@ -1,4 +1,25 @@
-"""LangGraph seam for the Chrono spoken-runtime estimator."""
+"""LangGraph seam for the Chrono spoken-runtime estimator.
+
+This module adapts Chrono's local runtime estimator to the orchestration shape
+used by the QA layer. It keeps graph state and node wiring separate from the
+deterministic estimation policy in ``episodic.qa.chrono``.
+
+Main entry points:
+
+- ``ChronoEvaluatorPort``: Protocol implemented by objects that can evaluate a
+  ``ChronoEvaluationRequest`` asynchronously and return a
+  ``ChronoRuntimeEstimate``.
+- ``ChronoGraphState``: Minimal state object carrying the Chrono request and
+  result through the graph.
+- ``build_chrono_graph``: Builds a one-node ``StateGraph`` that validates the
+  request, calls the evaluator, stores ``chrono_result``, and terminates.
+
+Use this adapter when Chrono participates in LangGraph QA orchestration. Direct
+callers that only need a spoken-runtime estimate should use
+``ChronoRuntimeEstimator`` from ``episodic.qa.chrono`` instead. The graph seam
+depends on the estimator port and result contracts, while the estimator module
+remains independent of LangGraph.
+"""
 
 import dataclasses as dc
 import logging
