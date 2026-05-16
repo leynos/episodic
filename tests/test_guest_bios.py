@@ -1,5 +1,7 @@
 """Guest biography generation and TEI enrichment tests."""
 
+# pylint: disable=too-many-lines
+
 import asyncio
 import dataclasses as dc
 import datetime as dt
@@ -429,7 +431,7 @@ async def test_generate_from_reference_bindings_skips_llm_without_guest_profiles
     assert result.tei_xml == SCRIPT_TEI
     assert result.sources == ()
     assert result.generation_result.entries == ()
-    assert llm.requests == []
+    assert not llm.requests
 
 
 def test_enrich_tei_with_guest_bios_appends_canonical_div() -> None:

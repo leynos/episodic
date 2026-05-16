@@ -49,10 +49,10 @@ _LLM_PROVIDER_ERROR_EVENTS: dict[type[Exception], str] = {
 }
 
 
-class BindingResolver(typing.Protocol):
+class BindingResolver(typing.Protocol):  # pylint: disable=too-many-arguments
     """Resolve pinned reference-document bindings for one generation context."""
 
-    def __call__(
+    def __call__(  # pylint: disable=too-many-arguments
         self,
         uow: CanonicalUnitOfWork,
         *,
@@ -123,7 +123,7 @@ def _handle_generator_error(
 
 
 @dc.dataclass(slots=True, frozen=True)
-class GuestBiosToolExecutor:
+class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments
     """Adapter that runs ``generate_guest_bios`` through the guest-bios generator."""
 
     llm: LLMPort

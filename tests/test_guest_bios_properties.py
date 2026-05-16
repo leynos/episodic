@@ -29,7 +29,7 @@ _TEXT = st.text(
     ),
     min_size=1,
     max_size=48,
-).filter(lambda value: value.strip() != "")
+).filter(lambda value: bool(value.strip()))
 
 
 def _usage() -> LLMUsage:
@@ -139,7 +139,7 @@ def test_empty_guest_bios_result_is_no_op(script_text: str) -> None:
     assert enrich_tei_with_guest_bios(tei_xml, _result(())) == tei_xml
 
 
-@given(st.text(max_size=12).filter(lambda value: value.strip() == ""))
+@given(st.text(max_size=12).filter(lambda value: not value.strip()))
 def test_guest_bio_entries_reject_blank_biography(blank_bio: str) -> None:
     """Guest-bio entries require non-empty biography text."""
     with pytest.raises(ValueError, match="bio"):

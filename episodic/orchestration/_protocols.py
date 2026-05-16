@@ -85,6 +85,7 @@ class _ShowNotesGeneratorPort(typ.Protocol):
     ) -> ShowNotesResult:
         """Generate show notes from the supplied TEI context."""
 
+
 class _GuestBiosGeneratorPort(typ.Protocol):
     """Abstraction for guest-bios generation used by the guest-bios executor."""
 

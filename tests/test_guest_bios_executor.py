@@ -1,5 +1,7 @@
 """Tests for GuestBiosToolExecutor."""
 
+# pylint: disable=too-many-lines
+
 import asyncio
 import datetime as dt
 import json

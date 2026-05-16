@@ -12,6 +12,8 @@ also recording generated `GuestBiosResult` and enriched TEI artefacts for the
 Then steps.
 """
 
+# pylint: disable=consider-using-with
+
 from __future__ import annotations
 
 import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.

@@ -1,20 +1,23 @@
 """Typed DTOs and validation helpers for generation orchestration."""
 
+# pylint: disable=too-many-lines
+
 import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
-import uuid
 
 from episodic.generation import (
     GuestBiosEnrichmentResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
     ShowNotesResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
 )
-
 from episodic.llm import (
     LLMProviderOperation,
     LLMTokenBudget,
     LLMUsage,
 )
+
+if typ.TYPE_CHECKING:
+    import uuid
 
 from ._types import (
     ActionKind,

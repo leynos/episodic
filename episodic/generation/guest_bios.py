@@ -1,5 +1,6 @@
 """Guest biography generation from reference document bindings."""
 
+import collections.abc as cabc
 import dataclasses as dc
 import json
 import typing as typ
@@ -24,9 +25,9 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.reference_documents.resolution import ResolvedBinding
 
 type JsonMapping = dict[str, object]
-type BindingResolver = typ.Callable[
+type BindingResolver = cabc.Callable[
     ...,
-    typ.Awaitable[list[ResolvedBinding]],
+    cabc.Awaitable[list[ResolvedBinding]],
 ]
 
 _DEFAULT_SYSTEM_PROMPT = (
