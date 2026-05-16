@@ -264,6 +264,11 @@ jobs.
   public API feature. Its outputs are therefore visible in internal workflows
   first, with broader generation-run and QA artefact APIs planned in later
   roadmap items.
+- Generated scripts can now receive an internal Chrono spoken-runtime estimate
+  during QA. Chrono uses the canonical TEI script through `tei-rapporteur`,
+  counts spoken words with a deterministic local heuristic, and records
+  estimator metadata for audit and future comparison. Chrono does not call a
+  Large Language Model (LLM) and does not add provider usage charges.
 - Using the editorial approval workflow
 - Reviewing approval states and audit history for canonical episodes
 - Reviewing and approving generated content

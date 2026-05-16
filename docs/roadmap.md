@@ -212,7 +212,7 @@ without changing the orchestration contract.
   - Flag cases where the episode appears to wrap up but continues for another
     four minutes or more.
   - Return structured findings identifying the suspected false-ending boundary.
-- [ ] 2.2.6. Implement Chrono for runtime estimation.
+- [x] 2.2.6. Implement Chrono for runtime estimation.
   - Estimate anticipated runtime for written dialogue using an initial naive
     local heuristic.
   - Record estimator metadata so later implementations remain comparable.

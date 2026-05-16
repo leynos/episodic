@@ -535,7 +535,7 @@ changing canonical prompt assembly rules.
 
 ## Quality-assurance evaluators
 
-Pedante is implemented in the `episodic/qa/` package.
+Pedante and Chrono are implemented in the `episodic/qa/` package.
 
 ### Pedante package structure
 
@@ -543,6 +543,18 @@ Pedante is implemented in the `episodic/qa/` package.
   objects, and strict response parsing for evaluator output.
 - `episodic/qa/langgraph.py` contains the in-process LangGraph path for the
   Pedante evaluate-and-route flow.
+
+### Chrono package structure
+
+- `episodic/qa/chrono.py` contains `ChronoRuntimeEstimator`, typed
+  request/result objects, estimator metadata, the deterministic local
+  spoken-runtime heuristic, `ChronoMetricsPort`, and `ChronoClockPort`. The
+  module delegates TEI P5 parsing and spoken-text extraction to
+  `tei-rapporteur`; it must not add a separate XML parser or local TEI
+  traversal path.
+- `episodic/qa/chrono_langgraph.py` contains the in-process LangGraph seam for
+  running Chrono as a QA graph node without attaching Large Language Model
+  (LLM) usage metadata.
 
 ### Pedante maintainer rules
 
@@ -554,6 +566,24 @@ Pedante is implemented in the `episodic/qa/` package.
   state should hold evaluator metadata and results, not the sole canonical copy
   of editorial data.
 
+### Chrono maintainer rules
+
+- Keep Chrono local and deterministic. The domain module must not import
+  Falcon, SQLAlchemy, Celery, Vidai Mock, HTTP adapters, or LLM ports. Its
+  first heuristic receives spoken prose from `tei-rapporteur`, counts simple
+  word tokens, estimates duration at 150 words per minute, and rounds up to
+  whole seconds.
+- Preserve Chrono metadata whenever results cross an orchestration boundary:
+  estimator name, estimator version, input character count, spoken word count,
+  and words-per-minute setting are the comparison baseline for later
+  implementations.
+- Wire Chrono operational metrics through `ChronoMetricsPort` and measure
+  latency through `ChronoClockPort`. Keep labels bounded to outcome and error
+  class, and record estimator latency without including script text or other
+  high-cardinality payload data. Keep the deterministic spoken-runtime
+  calculation free of logging, metrics, and wall-clock reads; those side
+  effects belong at the estimator orchestration boundary.
+
 ### Testing the evaluator
 
 - Unit tests live in `tests/test_pedante.py`.
@@ -564,6 +594,13 @@ Pedante is implemented in the `episodic/qa/` package.
   `response_template` paths are resolved relative to the template root. For
   example, use `pedante/response.json.j2`, not
   `templates/pedante/response.json.j2`.
+- Chrono unit tests live in `tests/test_chrono.py`. Its property tests live in
+  `tests/test_chrono_properties.py`, its graph seam tests live in
+  `tests/test_chrono_langgraph.py`, and its behavioural scenario lives in
+  `tests/features/chrono.feature` with steps in
+  `tests/steps/test_chrono_steps.py`.
+- Chrono behavioural tests do not launch Vidai Mock because Chrono has no
+  inference-service boundary in roadmap item `2.2.6`.
 
 ## Content generation services
 
