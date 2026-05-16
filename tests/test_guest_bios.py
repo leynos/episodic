@@ -141,22 +141,43 @@ def _reference_binding(revision_id: UUID) -> ReferenceBinding:
     )
 
 
-def test_result_from_response_rejects_unknown_revision_identifier() -> None:
-    """Reject LLM output that invents an unrequested source revision."""
+@pytest.mark.parametrize(
+    ("revision_id_in_response", "expected_revision_ids", "error_match"),
+    [
+        pytest.param(
+            "rev-unknown",
+            ("rev-ada",),
+            "unknown revision",
+            id="unknown",
+        ),
+        pytest.param(
+            "rev-ada",
+            ("rev-ada", "rev-grace"),
+            "missing revision",
+            id="missing",
+        ),
+    ],
+)
+def test_result_from_response_rejects_invalid_revision_identifier(
+    revision_id_in_response: str,
+    expected_revision_ids: tuple[str, ...],
+    error_match: str,
+) -> None:
+    """Reject LLM output with an invalid source revision identifier."""
     response = _response({
         "guests": [
             {
                 "display_name": "Ada Lovelace",
                 "bio": "Ada Lovelace writes about analytical engines.",
-                "reference_document_revision_id": "rev-unknown",
+                "reference_document_revision_id": revision_id_in_response,
             }
         ]
     })
 
-    with pytest.raises(GuestBiosResponseFormatError, match="unknown revision"):
+    with pytest.raises(GuestBiosResponseFormatError, match=error_match):
         GuestBiosGenerator.result_from_response(
             response,
-            expected_revision_ids=("rev-ada",),
+            expected_revision_ids=expected_revision_ids,
         )
 
 
@@ -181,25 +202,6 @@ def test_result_from_response_rejects_duplicate_revision_identifier() -> None:
         GuestBiosGenerator.result_from_response(
             response,
             expected_revision_ids=("rev-ada",),
-        )
-
-
-def test_result_from_response_rejects_missing_revision_identifier() -> None:
-    """Reject LLM output that omits an expected source revision."""
-    response = _response({
-        "guests": [
-            {
-                "display_name": "Ada Lovelace",
-                "bio": "Ada Lovelace writes about analytical engines.",
-                "reference_document_revision_id": "rev-ada",
-            }
-        ]
-    })
-
-    with pytest.raises(GuestBiosResponseFormatError, match="missing revision"):
-        GuestBiosGenerator.result_from_response(
-            response,
-            expected_revision_ids=("rev-ada", "rev-grace"),
         )
 
 
