@@ -115,6 +115,34 @@ def test_enrich_tei_with_chapter_markers(
     assert enriched_xml == snapshot, "expected enriched TEI to match snapshot"
 
 
+def test_enrich_tei_canonicalizes_bare_internal_locator(
+    minimal_tei: str,
+    chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],
+) -> None:
+    """Bare internal TEI locators should be emitted as fragment references."""
+    enriched_xml = enrich_tei_with_chapter_markers(
+        minimal_tei,
+        chapter_markers_result(
+            ChapterMarker(
+                title="Introduction",
+                start="PT0S",
+                tei_locator=" seg-intro ",
+            ),
+            ChapterMarker(
+                title="Main discussion",
+                start="PT1S",
+                tei_locator="https://example.test/episode.xml#seg-main",
+            ),
+        ),
+    )
+
+    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_xml
+    assert (
+        '<item n="PT1S" corresp="https://example.test/episode.xml#seg-main">'
+        in enriched_xml
+    )
+
+
 def test_enrich_tei_replaces_existing_chapters_div(
     tei_with_existing_chapters: str,
     chapter_markers_result: cabc.Callable[..., ChapterMarkersResult],

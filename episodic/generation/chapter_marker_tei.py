@@ -36,7 +36,10 @@ def _build_item_payload(chapter: ChapterMarker) -> dict[str, object]:
     if chapter.summary:
         item_payload["content"] = build_text_inline(chapter.summary)
     if chapter.tei_locator is not None:
-        item_payload["corresp"] = [chapter.tei_locator]
+        locator = chapter.tei_locator.strip()
+        if not locator.startswith("#") and ":" not in locator:
+            locator = f"#{locator}"
+        item_payload["corresp"] = [locator]
     return item_payload
 
 

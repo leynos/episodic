@@ -31,9 +31,12 @@ def _locator_keys_for_segment(raw: dict[str, object]) -> frozenset[str]:
         value = raw.get(field_name)
         if isinstance(value, str) and value.strip():
             locator = value.strip()
-            keys.add(locator)
-            keys.add(locator.removeprefix("#"))
-            keys.add(f"#{locator.removeprefix('#')}")
+            locator_id = locator.removeprefix("#")
+            if not locator_id:
+                msg = f"segment locator {field_name!r} must identify a segment."
+                raise ChapterMarkersResponseFormatError(msg)
+            keys.add(locator_id)
+            keys.add(f"#{locator_id}")
     return frozenset(keys)
 
 

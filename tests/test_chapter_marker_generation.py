@@ -254,3 +254,24 @@ def test_repeated_locator_with_same_start_passes_validation(
 
     assert len(result.chapters) == 1
     assert result.chapters[0].tei_locator == "#shared"
+
+
+@pytest.mark.asyncio
+async def test_generate_rejects_empty_fragment_segment_locator() -> None:
+    """Segment locators must identify a concrete segment fragment."""
+    segment_structure: dict[str, object] = {
+        "segments": [{"locator": "#", "start": "PT0S"}]
+    }
+    chapters_payload = [{"title": "Intro", "start": "PT0S", "tei_locator": "#"}]
+    fake_llm = FakeLLMPort(
+        valid_llm_response(json.dumps({"chapters": chapters_payload}))
+    )
+
+    with pytest.raises(
+        ChapterMarkersResponseFormatError,
+        match="segment locator 'locator' must identify a segment",
+    ):
+        await make_generator(fake_llm).generate(
+            minimal_tei(),
+            segment_structure=segment_structure,
+        )
