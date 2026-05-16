@@ -45,6 +45,17 @@ class _FakeChronoMetrics:
         self.latencies.append((name, value, dict(labels)))
 
 
+@dc.dataclass(slots=True)
+class _FakeChronoClock:
+    """Provide deterministic monotonic timestamps to Chrono tests."""
+
+    timestamps: list[float]
+
+    def monotonic_seconds(self) -> float:
+        """Return the next configured monotonic timestamp."""
+        return self.timestamps.pop(0)
+
+
 def _tei_document(body: str) -> str:
     """Wrap a TEI body fixture with the required document header."""
     return (
@@ -152,20 +163,19 @@ def test_chrono_estimator_returns_predictable_default_runtime() -> None:
 def test_chrono_estimator_records_success_metrics() -> None:
     """Record bounded success metrics around runtime estimation."""
     metrics = _FakeChronoMetrics()
+    clock = _FakeChronoClock([10.0, 10.125])
     request = ChronoEvaluationRequest(
         script_tei_xml=_tei_document("<sp><p>Hello there.</p></sp>")
     )
 
-    ChronoRuntimeEstimator(metrics=metrics).estimate(request)
+    ChronoRuntimeEstimator(metrics=metrics, clock=clock).estimate(request)
 
     assert metrics.counters == [
         ("chrono.runtime_estimator.evaluations", {"outcome": "success"})
     ]
-    assert len(metrics.latencies) == 1
-    latency_name, latency_ms, labels = metrics.latencies[0]
-    assert latency_name == "chrono.runtime_estimator.latency_ms"
-    assert latency_ms >= 0
-    assert labels == {"outcome": "success"}
+    assert metrics.latencies == [
+        ("chrono.runtime_estimator.latency_ms", 125.0, {"outcome": "success"})
+    ]
 
 
 def test_chrono_estimator_ignores_markup_only_script() -> None:
@@ -276,6 +286,7 @@ def test_chrono_estimator_propagates_tei_validation_errors(
     """Malformed or unsupported TEI should fail instead of being counted."""
     request = ChronoEvaluationRequest(script_tei_xml=script_tei_xml)
     metrics = _FakeChronoMetrics()
+    clock = _FakeChronoClock([10.0, 10.25])
     warnings: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
 
     def capture_warning(
@@ -287,7 +298,7 @@ def test_chrono_estimator_propagates_tei_validation_errors(
 
     monkeypatch.setattr("episodic.qa.chrono._log.warning", capture_warning)
     with pytest.raises(ValueError, match=message):
-        ChronoRuntimeEstimator(metrics=metrics).estimate(request)
+        ChronoRuntimeEstimator(metrics=metrics, clock=clock).estimate(request)
 
     assert warnings == [
         (
@@ -302,11 +313,13 @@ def test_chrono_estimator_propagates_tei_validation_errors(
             {"outcome": "error", "error_type": "ValueError"},
         )
     ]
-    assert len(metrics.latencies) == 1
-    latency_name, latency_ms, labels = metrics.latencies[0]
-    assert latency_name == "chrono.runtime_estimator.latency_ms"
-    assert latency_ms >= 0
-    assert labels == {"outcome": "error", "error_type": "ValueError"}
+    assert metrics.latencies == [
+        (
+            "chrono.runtime_estimator.latency_ms",
+            250.0,
+            {"outcome": "error", "error_type": "ValueError"},
+        )
+    ]
 
 
 @pytest.mark.parametrize(

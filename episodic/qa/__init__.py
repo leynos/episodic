@@ -1,6 +1,7 @@
 """Quality-assurance evaluator contracts and orchestration helpers."""
 
 from .chrono import (
+    ChronoClockPort,
     ChronoEstimatorConfig,
     ChronoEstimatorMetadata,
     ChronoEvaluationRequest,
@@ -24,6 +25,7 @@ from .pedante import (
 )
 
 __all__: list[str] = [
+    "ChronoClockPort",
     "ChronoEstimatorConfig",
     "ChronoEstimatorMetadata",
     "ChronoEvaluationRequest",

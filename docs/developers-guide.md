@@ -547,10 +547,11 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 ### Chrono package structure
 
 - `episodic/qa/chrono.py` contains `ChronoRuntimeEstimator`, typed
-  request/result objects, estimator metadata, and the deterministic local
-  spoken-runtime heuristic. The module delegates TEI P5 parsing and
-  spoken-text extraction to `tei-rapporteur`; it must not add a separate XML
-  parser or local TEI traversal path.
+  request/result objects, estimator metadata, the deterministic local
+  spoken-runtime heuristic, `ChronoMetricsPort`, and `ChronoClockPort`. The
+  module delegates TEI P5 parsing and spoken-text extraction to
+  `tei-rapporteur`; it must not add a separate XML parser or local TEI
+  traversal path.
 - `episodic/qa/chrono_langgraph.py` contains the in-process LangGraph seam for
   running Chrono as a QA graph node without attaching Large Language Model
   (LLM) usage metadata.
@@ -576,9 +577,12 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   estimator name, estimator version, input character count, spoken word count,
   and words-per-minute setting are the comparison baseline for later
   implementations.
-- Wire Chrono operational metrics through `ChronoMetricsPort`. Keep labels
-  bounded to outcome and error class, and record estimator latency without
-  including script text or other high-cardinality payload data.
+- Wire Chrono operational metrics through `ChronoMetricsPort` and measure
+  latency through `ChronoClockPort`. Keep labels bounded to outcome and error
+  class, and record estimator latency without including script text or other
+  high-cardinality payload data. Keep the deterministic spoken-runtime
+  calculation free of logging, metrics, and wall-clock reads; those side
+  effects belong at the estimator orchestration boundary.
 
 ### Testing the evaluator
 

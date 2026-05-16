@@ -45,6 +45,13 @@ class ChronoMetricsPort(typ.Protocol):
         """Observe a latency measurement in milliseconds."""
 
 
+class ChronoClockPort(typ.Protocol):
+    """Monotonic clock used to measure Chrono orchestration latency."""
+
+    def monotonic_seconds(self) -> float:
+        """Return a monotonic timestamp in seconds."""
+
+
 @dc.dataclass(frozen=True, slots=True)
 class _NoopChronoMetrics:
     """Default metrics sink used when no backend is wired."""
@@ -65,6 +72,17 @@ class _NoopChronoMetrics:
         labels: cabc.Mapping[str, str],
     ) -> None:
         """Ignore latency observations."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _PerfCounterChronoClock:
+    """Production Chrono clock backed by Python's monotonic perf counter."""
+
+    read_seconds: cabc.Callable[[], float] = time.perf_counter
+
+    def monotonic_seconds(self) -> float:
+        """Return the current monotonic timestamp in seconds."""
+        return self.read_seconds()
 
 
 def _ensure_non_empty_string(value: str, field_name: str) -> None:
@@ -165,6 +183,30 @@ class ChronoRuntimeEstimate:
             raise ValueError(msg)
 
 
+def _estimate_runtime(
+    *,
+    script_tei_xml: str,
+    spoken_text: str,
+    config: ChronoEstimatorConfig,
+) -> ChronoRuntimeEstimate:
+    """Build a deterministic Chrono estimate from extracted spoken text."""
+    spoken_word_count = _count_spoken_words(spoken_text)
+    estimated_seconds = 0
+    if spoken_word_count > 0:
+        estimated_seconds = math.ceil(spoken_word_count / config.words_per_minute * 60)
+    metadata = ChronoEstimatorMetadata(
+        estimator_name=config.estimator_name,
+        estimator_version=config.estimator_version,
+        input_character_count=len(script_tei_xml),
+        spoken_word_count=spoken_word_count,
+        words_per_minute=config.words_per_minute,
+    )
+    return ChronoRuntimeEstimate(
+        estimated_seconds=estimated_seconds,
+        metadata=metadata,
+    )
+
+
 @dc.dataclass(frozen=True, slots=True)
 class ChronoRuntimeEstimator:
     """Estimate anticipated spoken duration from TEI using a local heuristic.
@@ -175,54 +217,70 @@ class ChronoRuntimeEstimator:
 
     config: ChronoEstimatorConfig = dc.field(default_factory=ChronoEstimatorConfig)
     metrics: ChronoMetricsPort = dc.field(default_factory=_NoopChronoMetrics)
+    clock: ChronoClockPort = dc.field(default_factory=_PerfCounterChronoClock)
 
     def estimate(self, request: ChronoEvaluationRequest) -> ChronoRuntimeEstimate:
         """Return a deterministic spoken-runtime estimate and metadata."""
-        started = time.perf_counter()
+        started = self.clock.monotonic_seconds()
         try:
             spoken_text = _extract_spoken_text(request.script_tei_xml)
         except ValueError:
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            labels = {"outcome": "error", "error_type": "ValueError"}
-            _log.warning(
-                "Chrono TEI validation failed; input_character_count=%s",
-                len(request.script_tei_xml),
-                exc_info=True,
-            )
-            self.metrics.increment_counter(_METRIC_EVALUATIONS, labels=labels)
-            self.metrics.observe_latency_ms(
-                _METRIC_LATENCY_MS,
-                elapsed_ms,
-                labels=labels,
-            )
+            self._record_validation_error(request, started=started)
             raise
-        spoken_word_count = _count_spoken_words(spoken_text)
-        if spoken_word_count == 0:
-            _log.debug(
-                "Chrono: no spoken words found",
-                extra={"input_character_count": len(request.script_tei_xml)},
-            )
-        estimated_seconds = 0
-        if spoken_word_count > 0:
-            estimated_seconds = math.ceil(
-                spoken_word_count / self.config.words_per_minute * 60
-            )
-        metadata = ChronoEstimatorMetadata(
-            estimator_name=self.config.estimator_name,
-            estimator_version=self.config.estimator_version,
-            input_character_count=len(request.script_tei_xml),
-            spoken_word_count=spoken_word_count,
-            words_per_minute=self.config.words_per_minute,
+
+        result = _estimate_runtime(
+            script_tei_xml=request.script_tei_xml,
+            spoken_text=spoken_text,
+            config=self.config,
         )
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        labels = {"outcome": "success"}
-        self.metrics.increment_counter(_METRIC_EVALUATIONS, labels=labels)
-        self.metrics.observe_latency_ms(_METRIC_LATENCY_MS, elapsed_ms, labels=labels)
-        return ChronoRuntimeEstimate(
-            estimated_seconds=estimated_seconds,
-            metadata=metadata,
-        )
+        self._record_success(request, result=result, started=started)
+        return result
 
     async def evaluate(self, request: ChronoEvaluationRequest) -> ChronoRuntimeEstimate:
         """Async adapter method for orchestration code."""
         return self.estimate(request)
+
+    def _elapsed_ms_since(self, started: float) -> float:
+        """Return elapsed wall-clock milliseconds via the injected clock."""
+        return (self.clock.monotonic_seconds() - started) * 1000
+
+    def _record_success(
+        self,
+        request: ChronoEvaluationRequest,
+        *,
+        result: ChronoRuntimeEstimate,
+        started: float,
+    ) -> None:
+        """Record success-only side effects for the estimator boundary."""
+        if result.metadata.spoken_word_count == 0:
+            _log.debug(
+                "Chrono: no spoken words found",
+                extra={"input_character_count": len(request.script_tei_xml)},
+            )
+        labels = {"outcome": "success"}
+        self.metrics.increment_counter(_METRIC_EVALUATIONS, labels=labels)
+        self.metrics.observe_latency_ms(
+            _METRIC_LATENCY_MS,
+            self._elapsed_ms_since(started),
+            labels=labels,
+        )
+
+    def _record_validation_error(
+        self,
+        request: ChronoEvaluationRequest,
+        *,
+        started: float,
+    ) -> None:
+        """Record validation-error side effects for the estimator boundary."""
+        labels = {"outcome": "error", "error_type": "ValueError"}
+        _log.warning(
+            "Chrono TEI validation failed; input_character_count=%s",
+            len(request.script_tei_xml),
+            exc_info=True,
+        )
+        self.metrics.increment_counter(_METRIC_EVALUATIONS, labels=labels)
+        self.metrics.observe_latency_ms(
+            _METRIC_LATENCY_MS,
+            self._elapsed_ms_since(started),
+            labels=labels,
+        )

@@ -320,7 +320,9 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   result rounded up to whole seconds. The result records the estimator name,
   estimator version, input character count, spoken word count, and
   words-per-minute setting so later estimators can be compared against the
-  first baseline.
+  first baseline. Operational metrics are emitted at the estimator boundary,
+  and latency measurement uses an injected monotonic clock rather than direct
+  wall-clock reads in the deterministic estimation helper.
 - Pedante, Bromide, Chiltern, Anthem, and Caesura initially execute as
   internal LangGraph evaluator nodes backed by structured `LLMPort` calls
   rather than separate network services.
