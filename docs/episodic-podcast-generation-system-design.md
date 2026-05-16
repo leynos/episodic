@@ -14,6 +14,7 @@ Accepted decision records:
 - [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
 - [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
 - [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
+- [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
 
 ## Overview
 
@@ -284,6 +285,14 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   TEI body with `<div type="notes"><list><item>...</item></list></div>` output.
   This TEI representation is defined in
   [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md).
+- Treats chapter-marker generation as the matching segment-aligned enrichment
+  service: `episodic/generation/chapter_markers.py` accepts a TEI script plus
+  segment-transition metadata, asks the configured provider for structured
+  chapter entries, validates ordered integer-only ISO 8601-style starts against
+  supplied segment transitions, and enriches the canonical TEI body with
+  `<div type="chapters"><list><item n="...">...</item></list></div>` output.
+  This TEI representation is defined in
+  [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md).
 - Persists generation runs alongside prompts, responses, iteration counts, and
   cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,

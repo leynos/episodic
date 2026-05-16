@@ -68,15 +68,23 @@ This guide will cover:
 - Persisting `guardrails` on series profiles and episode templates so
   generation requests carry stable editorial instructions as system prompts
 
-#### Show notes
+#### Show notes and chapter markers
 
-Show notes are the episode summaries, topic lists, and chapter markers that
-appear alongside a podcast episode — helping listeners decide whether to tune
-in and navigate the content.
+Show notes are the episode summaries and topic lists that appear alongside a
+podcast episode, helping listeners decide whether to tune in.
 
-##### Two-stage generation
+Chapter markers are separate navigational playback boundaries. They are aligned
+to script segment transitions and carry required integer-only ISO 8601-style
+start times in the `PT#H#M#S` form, such as `PT0S`, `PT5M30S`, and `PT1H2M3S`.
+Days and fractional units are not accepted. When a source segment has a TEI
+locator, the chapter marker records that link, so later audio publishing steps
+can project the canonical timing data into player-specific chapter formats.
 
-Generating show notes uses two successive calls to different language models:
+#### Generation configuration
+
+Generating show notes uses two successive calls to different language models,
+while chapter markers use the execution model directly against the TEI script
+and segment metadata:
 
 1. A **planning model** reads the episode script and decides which enrichment
    tasks to run. Using a capable model here ensures the right work is selected.
@@ -87,8 +95,6 @@ Generating show notes uses two successive calls to different language models:
 No manual intervention is required; the split is handled automatically.
 Configuration is provided through the provider settings file:
 
-Table: Show-notes model configuration settings.
-
 | Setting           | Purpose                                                   |
 | ----------------- | --------------------------------------------------------- |
 | `planning_model`  | Name of the model used for the planning pass              |
@@ -97,7 +103,11 @@ Table: Show-notes model configuration settings.
 Both model names must reference endpoints available through the configured LLM
 provider.
 
-##### Resumable orchestration
+Chapter markers currently use the configured execution model. A dedicated
+`chapter_marker_model` setting is planned for a future release, but is not a
+live configuration option yet.
+
+#### Resumable orchestration
 
 Generation workflows now persist an internal checkpoint before a suspendable
 execution step runs. If the same workflow step is retried with the same
@@ -106,13 +116,17 @@ the side-effecting execution step twice. Operators do not need to manage these
 checkpoints directly in this release; public generation-run checkpoint APIs are
 planned for a later roadmap item.
 
-##### Failure behaviour
+#### Failure behaviour
 
 If either stage returns a response that does not match the expected structured
 format, the run stops immediately with a clear validation error. No partial or
 malformed metadata is published silently. This "fail fast" behaviour is
 intentional — a clear error is easier to diagnose and correct than silent data
 loss.
+
+Chapter markers apply the same fail-fast rule. Blank titles,
+invalid durations, negative starts, duplicate starts, and descending starts are
+rejected before the canonical TEI document is enriched.
 
 ### Reusable Reference Documents
 

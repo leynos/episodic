@@ -230,7 +230,7 @@ Completion enables rich episode content with chapter markers and guest details.
 - [x] 2.3.1. Generate show notes from template expansions.
   - Extract key topics and timestamps from generated content.
   - Format as structured metadata within TEI body.
-- [ ] 2.3.2. Generate chapter markers aligned to script segments.
+- [x] 2.3.2. Generate chapter markers aligned to script segments.
   - Define chapter boundaries based on segment transitions.
   - Include timing metadata for podcast player compatibility.
 - [ ] 2.3.3. Generate guest bios from reference document bindings.

@@ -1,0 +1,10 @@
+# serializer version: 1
+# name: test_enrich_tei_replaces_existing_chapters_div
+  '<TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader><fileDesc><title>Test</title></fileDesc></teiHeader><text><body><p>Hello</p><div type="chapters"><list><item n="PT0S"><label>New</label>Fresh summary</item></list></div></body></text></TEI>'
+# ---
+# name: test_enrich_tei_with_chapter_markers
+  '<TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader><fileDesc><title>Test</title></fileDesc></teiHeader><text><body><p xml:id="seg-intro">Welcome and framing.</p><p xml:id="seg-main">Main discussion.</p><div type="chapters"><list><item n="PT0S" corresp="#seg-intro"><label>Introduction</label>Opening context.</item><item n="PT5M30S" corresp="#seg-main"><label>Main discussion</label>The hosts begin the main topic.</item></list></div></body></text></TEI>'
+# ---
+# name: test_enrich_tei_with_empty_result_removes_existing_chapters
+  '<TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader><fileDesc><title>Test</title></fileDesc></teiHeader><text><body><p>Hello</p></body></text></TEI>'
+# ---

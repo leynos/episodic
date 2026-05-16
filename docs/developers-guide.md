@@ -665,12 +665,79 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   (`topic` or `summary`) is absent, empty, or not a string; when an optional
   field (`timestamp` or `tei_locator`) is present but is not a string or null;
   and when a `timestamp` value does not match the ISO 8601 duration format.
+- `ChapterMarkersGenerator` follows the same boundary in
+  `episodic/generation/chapter_markers.py`. It depends only on `LLMPort` and
+  accepts a TEI script plus optional `segment_structure` metadata describing
+  segment starts and identifiers.
+- `ChapterMarker` carries a title, required `start` time, optional summary,
+  optional `end`, optional `duration`, and optional `tei_locator`. Start, end,
+  and duration values must be non-negative integer-only ISO 8601-style
+  `PT#H#M#S` durations. Days and fractional units are not accepted. A
+  `ChapterMarkersResult` rejects duplicate or descending starts, and
+  `ChapterMarkersGenerator.generate(...)` rejects outputs that do not align to
+  explicit starts and locators in supplied `segment_structure` metadata.
+- `enrich_tei_with_chapter_markers(...)` inserts a
+  `<div type="chapters">` element into the TEI body using the representation
+  defined by
+  [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md).
+   The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
+  `@n` stores the required start time, and `@corresp` stores an optional source
+  locator. Optional DTO `end` and `duration` values are validated but not
+  emitted into TEI until the TEI tooling exposes supported attributes.
+- `ChapterMarkersResponseFormatError` is a `ValueError` subclass raised when
+  the LLM response is not valid JSON, when the top-level object does not
+  contain a `chapters` list, when a chapter entry is not an object, when
+  required fields are absent or blank, when optional fields are not strings or
+  null, or when timing values fail validation.
+
+Standalone chapter-marker usage pattern:
+
+```python
+from episodic.generation import (
+    ChapterMarkersGenerator,
+    ChapterMarkersGeneratorConfig,
+    ChapterMarkersResponseFormatError,
+    enrich_tei_with_chapter_markers,
+)
+from episodic.llm.ports import LLMTokenBudget
+
+chapter_config = ChapterMarkersGeneratorConfig(
+    model="gpt-4o-mini",
+    token_budget=LLMTokenBudget(
+        max_input_tokens=4096,
+        max_output_tokens=1024,
+        max_total_tokens=5120,
+    ),
+)
+
+
+async def enrich_with_chapters(llm_port, script_tei_xml: str) -> str:
+    generator = ChapterMarkersGenerator(llm=llm_port, config=chapter_config)
+    try:
+        result = await generator.generate(
+            script_tei_xml,
+            segment_structure={
+                "segments": [
+                    {"id": "seg-intro", "title": "Introduction", "start": "PT0S"},
+                    {"id": "seg-main", "title": "Main", "start": "PT5M30S"},
+                ]
+            },
+        )
+    except ChapterMarkersResponseFormatError:
+        # handle malformed LLM response
+        raise
+    return enrich_tei_with_chapter_markers(script_tei_xml, result)
+```
 
 ### Testing content generation services
 
 - Unit coverage for show notes lives in `tests/test_show_notes.py`.
 - Behavioural coverage lives in `tests/features/show_notes.feature` and
   `tests/steps/test_show_notes_steps.py`.
+- Unit and property coverage for chapter markers lives in
+  `tests/test_chapter_markers.py`.
+- Behavioural coverage lives in `tests/features/chapter_markers.feature` and
+  `tests/steps/test_chapter_markers_steps.py`.
 - The behavioural scenario uses Vidai Mock in the same style as Pedante. When
   writing provider fixtures, keep the prompt assertions structural and the
   response template minimal so prompt wording can evolve without making the
