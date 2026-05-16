@@ -51,6 +51,22 @@ _METRIC_EVALUATIONS = "chrono.runtime_estimator.evaluations"
 _METRIC_LATENCY_MS = "chrono.runtime_estimator.latency_ms"
 
 
+def _ceil_seconds(spoken_word_count: int, words_per_minute: int) -> int:
+    """Compute the ceiling-formula estimate used by Chrono contracts."""
+    return math.ceil(spoken_word_count / words_per_minute * 60)
+
+
+def _seconds_contract_holds(
+    spoken_word_count: int,
+    words_per_minute: int,
+    estimated_seconds: int,
+) -> bool:
+    """Return whether an estimate matches the Chrono ceiling formula."""
+    return spoken_word_count == 0 or estimated_seconds == _ceil_seconds(
+        spoken_word_count, words_per_minute
+    )
+
+
 class ChronoMetricsPort(typ.Protocol):
     """Bounded-cardinality metrics sink for Chrono runtime estimation."""
 
@@ -218,9 +234,10 @@ def _estimate_runtime(
 ) -> ChronoRuntimeEstimate:
     """Build a deterministic Chrono estimate from extracted spoken text."""
     spoken_word_count = _count_spoken_words(spoken_text)
-    estimated_seconds = 0
-    if spoken_word_count > 0:
-        estimated_seconds = math.ceil(spoken_word_count / config.words_per_minute * 60)
+    estimated_seconds = _compute_estimated_seconds(
+        spoken_word_count,
+        config.words_per_minute,
+    )
     metadata = ChronoEstimatorMetadata(
         estimator_name=config.estimator_name,
         estimator_version=config.estimator_version,
@@ -232,6 +249,20 @@ def _estimate_runtime(
         estimated_seconds=estimated_seconds,
         metadata=metadata,
     )
+
+
+def _compute_estimated_seconds(spoken_word_count: int, words_per_minute: int) -> int:
+    """Compute estimated spoken duration in whole seconds.
+
+    pre: spoken_word_count >= 0
+    pre: words_per_minute > 0
+    post: __return__ >= 0
+    post: (spoken_word_count == 0) == (__return__ == 0)
+    post: _seconds_contract_holds(spoken_word_count, words_per_minute, __return__)
+    """
+    if spoken_word_count == 0:
+        return 0
+    return _ceil_seconds(spoken_word_count, words_per_minute)
 
 
 @dc.dataclass(frozen=True, slots=True)
