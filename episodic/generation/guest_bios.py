@@ -151,6 +151,17 @@ class GuestBiosEnrichmentResult:
 
 
 @dc.dataclass(frozen=True, slots=True)
+class GuestBiosEnrichmentRequest:
+    """Binding-resolution and generation context for one guest-bios enrichment call."""
+
+    series_profile_id: uuid.UUID
+    tei_xml: str
+    template_id: uuid.UUID | None = None
+    episode_id: uuid.UUID | None = None
+    template_structure: JsonMapping | None = None
+
+
+@dc.dataclass(frozen=True, slots=True)
 class GuestBiosGeneratorConfig:
     """Configuration for the guest biography generator service."""
 
@@ -465,28 +476,24 @@ def enrich_tei_with_guest_bios(tei_xml: str, result: GuestBiosResult) -> str:
     return tei.emit_xml(enriched_document)
 
 
-async def generate_guest_bios_from_reference_bindings(  # noqa: PLR0913
+async def generate_guest_bios_from_reference_bindings(
     uow: CanonicalUnitOfWork,
+    request: GuestBiosEnrichmentRequest,
     *,
-    series_profile_id: uuid.UUID,
-    tei_xml: str,
     generator: GuestBiosGenerator,
-    template_id: uuid.UUID | None = None,
-    episode_id: uuid.UUID | None = None,
-    template_structure: JsonMapping | None = None,
     binding_resolver: BindingResolver = resolve_bindings,
 ) -> GuestBiosEnrichmentResult:
     """Resolve guest profile bindings, generate bios, and enrich TEI."""
     resolved_bindings = await binding_resolver(
         uow,
-        series_profile_id=series_profile_id,
-        template_id=template_id,
-        episode_id=episode_id,
+        series_profile_id=request.series_profile_id,
+        template_id=request.template_id,
+        episode_id=request.episode_id,
     )
     sources = project_guest_bio_sources(resolved_bindings)
     if not sources:
         return GuestBiosEnrichmentResult(
-            tei_xml=tei_xml,
+            tei_xml=request.tei_xml,
             generation_result=GuestBiosResult(
                 entries=(),
                 usage=LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0),
@@ -495,12 +502,12 @@ async def generate_guest_bios_from_reference_bindings(  # noqa: PLR0913
         )
 
     result = await generator.generate(
-        tei_xml,
+        request.tei_xml,
         sources,
-        template_structure=template_structure,
+        template_structure=request.template_structure,
     )
     return GuestBiosEnrichmentResult(
-        tei_xml=enrich_tei_with_guest_bios(tei_xml, result),
+        tei_xml=enrich_tei_with_guest_bios(request.tei_xml, result),
         generation_result=result,
         sources=sources,
     )

@@ -5,6 +5,7 @@ import dataclasses as dc
 import typing  # noqa: ICN001
 
 from episodic.generation import (
+    GuestBiosEnrichmentRequest,
     GuestBiosGenerator,
     GuestBiosGeneratorConfig,
     generate_guest_bios_from_reference_bindings,
@@ -223,11 +224,13 @@ class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments
                 generation_kwargs["binding_resolver"] = self.binding_resolver
             result = await generate_guest_bios_from_reference_bindings(
                 self.uow,
-                series_profile_id=series_profile_id,
-                template_id=context.template_id,
-                episode_id=context.episode_id,
-                tei_xml=context.script_tei_xml,
-                template_structure=context.template_structure,
+                GuestBiosEnrichmentRequest(
+                    series_profile_id=series_profile_id,
+                    tei_xml=context.script_tei_xml,
+                    template_id=context.template_id,
+                    episode_id=context.episode_id,
+                    template_structure=context.template_structure,
+                ),
                 generator=self._get_generator(),
                 **generation_kwargs,
             )

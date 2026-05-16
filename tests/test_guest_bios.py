@@ -23,6 +23,7 @@ from episodic.canonical.domain import (
 from episodic.canonical.reference_documents.resolution import ResolvedBinding
 from episodic.generation.guest_bios import (
     GuestBioEntry,
+    GuestBiosEnrichmentRequest,
     GuestBiosGenerator,
     GuestBiosGeneratorConfig,
     GuestBioSource,
@@ -376,10 +377,12 @@ async def test_generate_from_reference_bindings_resolves_and_enriches_tei() -> N
 
     result = await generate_guest_bios_from_reference_bindings(
         typ.cast("CanonicalUnitOfWork", uow),
-        series_profile_id=series_profile_id,
-        episode_id=episode_id,
-        template_id=template_id,
-        tei_xml=SCRIPT_TEI,
+        GuestBiosEnrichmentRequest(
+            series_profile_id=series_profile_id,
+            tei_xml=SCRIPT_TEI,
+            template_id=template_id,
+            episode_id=episode_id,
+        ),
         generator=generator,
         binding_resolver=binding_resolver,
     )
@@ -422,8 +425,10 @@ async def test_generate_from_reference_bindings_skips_llm_without_guest_profiles
 
     result = await generate_guest_bios_from_reference_bindings(
         typ.cast("CanonicalUnitOfWork", object()),
-        series_profile_id=uuid4(),
-        tei_xml=SCRIPT_TEI,
+        GuestBiosEnrichmentRequest(
+            series_profile_id=uuid4(),
+            tei_xml=SCRIPT_TEI,
+        ),
         generator=generator,
         binding_resolver=binding_resolver,
     )

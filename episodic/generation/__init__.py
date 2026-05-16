@@ -14,6 +14,7 @@ from episodic.generation.chapter_markers import (
 )
 from episodic.generation.guest_bios import (
     GuestBioEntry,
+    GuestBiosEnrichmentRequest,
     GuestBiosEnrichmentResult,
     GuestBiosGenerator,
     GuestBiosGeneratorConfig,
@@ -41,6 +42,7 @@ __all__ = [
     "ChapterMarkersResult",
     "GuestBioEntry",
     "GuestBioSource",
+    "GuestBiosEnrichmentRequest",
     "GuestBiosEnrichmentResult",
     "GuestBiosGenerator",
     "GuestBiosGeneratorConfig",
