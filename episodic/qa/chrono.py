@@ -1,7 +1,5 @@
 """Deterministic spoken-runtime estimation for TEI scripts."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import logging
 import math
