@@ -142,29 +142,3 @@ class TestChronoContracts:
         assert spoken_word_count == 0 or estimated_seconds == _integer_ceiling_seconds(
             spoken_word_count, words_per_minute
         )
-
-    @given(
-        spoken_word_count=_VALID_WORD_COUNTS,
-        words_per_minute=_VALID_WORDS_PER_MINUTE,
-    )
-    def test_compute_estimated_seconds_matches_independent_postcondition(
-        self,
-        spoken_word_count: int,
-        words_per_minute: int,
-    ) -> None:
-        """The helper should produce values matching the independent postcondition."""
-        estimated_seconds = _compute_estimated_seconds(
-            spoken_word_count,
-            words_per_minute,
-        )
-        expected = (
-            estimated_seconds >= 0
-            and (spoken_word_count == 0) == (estimated_seconds == 0)
-            and (
-                spoken_word_count == 0
-                or estimated_seconds
-                == _integer_ceiling_seconds(spoken_word_count, words_per_minute)
-            )
-        )
-
-        assert expected
