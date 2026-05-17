@@ -358,7 +358,6 @@ schema. See
 [Audio Synthesis Pipeline](episodic-podcast-generation-system-design.md#audio-synthesis-pipeline)
  for design context.
 
-
 ### 3.1. Speech capability contracts
 
 Define the provider-neutral speech boundary before binding to any one TTS
@@ -514,7 +513,6 @@ Completion enables broadcast-quality audio production.
   - Implement peak limiting across stereo channels.
   - Reject mixes violating thresholds with actionable diagnostics.
 
-
 ### 3.5. Audio runs, previews, and feedback
 
 Define the audio-run domain model and implement run lifecycle endpoints.
@@ -549,14 +547,13 @@ Completion enables audio workflow tracking and iterative refinement.
   - Store preview artefacts in object storage.
   - Generate signed URLs with configurable expiry.
 
-
 ### 3.6. Voice preview and export jobs
 
 Implement standalone voice preview synthesis and export job workflows.
 Completion enables persona testing and deliverable packaging.
 
 - [ ] 3.6.1. Define `VoicePreviewPort` and implement synthesis endpoints.
-  Requires 3.1.1.
+  Requires 3.1.1, 3.1.4, 3.3.1, 3.3.3, and 3.3.4.
   - Implement `/v1/voice-previews` (POST) accepting text and voice
     configuration.
   - Implement `/v1/voice-previews/{preview_id}` (GET) returning status and

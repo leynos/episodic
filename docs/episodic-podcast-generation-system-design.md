@@ -415,7 +415,6 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 - Checkpointing enables pause-and-resume for audio review workflows spanning
   multiple sessions.
 
-
 #### Speech synthesis contracts
 
 The speech synthesis boundary separates authorial data from provider
@@ -475,7 +474,6 @@ plus turn-level timing or alignment metadata; if a provider cannot return
 turn-level alignment, the result is marked as less editable and cannot replace
 per-segment stems for workflows that require surgical partial regeneration.
 
-
 #### Pronunciation repository
 
 Pronunciation guidance is a first-class domain capability rather than
@@ -516,7 +514,6 @@ Chiltern reads from the same repository when deciding whether a term lacks
 pronunciation guidance. Audio feedback that flags a mispronunciation can create
 or update proposed entries, re-render affected TEI turns only, and preserve the
 old render for audit until the replacement is approved.
-
 
 #### Initial speech adapters
 
