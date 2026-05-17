@@ -3,8 +3,8 @@
 ## Status
 
 Accepted. On 2026-05-14, the project adopted a two-task vertical slice for
-source upload, presenter-profile intake, draft script generation, and
-Text Encoding Initiative (TEI) P5 retrieval through the Application Programming
+source upload, presenter-profile intake, draft script generation, and Text
+Encoding Initiative (TEI) P5 retrieval through the Application Programming
 Interface (API).
 
 ## Date
@@ -27,8 +27,8 @@ XML. This must be available through resource-oriented JSON/Representational
 State Transfer (REST) operations, with long-running work exposed as pollable
 resources rather than hidden synchronous commands.
 
-The repository is still pre-v0.1.0, so the design does not need to preserve
-the existing unversioned API surface. The implementation should converge on the
+The repository is still pre-v0.1.0, so the design does not need to preserve the
+existing unversioned API surface. The implementation should converge on the
 target `/v1` contract instead of carrying compatibility obligations that do not
 yet exist.
 
@@ -75,8 +75,7 @@ yet exist.
   cannot complete in the initial request.
 - The implementation respects the hexagonal boundary rules in
   [ADR 006](adr-006-hexagonal-architecture-enforcement.md) and the resumable
-  workflow rules in
-  [ADR 007](adr-007-durable-generation-checkpoints.md).
+  workflow rules in [ADR 007](adr-007-durable-generation-checkpoints.md).
 
 ## Options considered
 
@@ -99,12 +98,12 @@ This would describe the user journey directly, but it would be too large for a
 normal review. It would also mix object upload, ingestion status, presenter
 profiles, generation-run semantics, and TEI retrieval into one change.
 
-| Topic | Option A | Option B | Option C |
-| ----- | -------- | -------- | -------- |
-| Value | Arrives late | Arrives after two tasks | Oversized task |
-| Review size | Small but fragmented | Review-sized | Too large |
-| Dependencies | Spread across phases | Explicit | Hidden inside task |
-| Roadmap fit | Existing structure | Best fit | Poor fit |
+| Topic        | Option A             | Option B                | Option C           |
+| ------------ | -------------------- | ----------------------- | ------------------ |
+| Value        | Arrives late         | Arrives after two tasks | Oversized task     |
+| Review size  | Small but fragmented | Review-sized            | Too large          |
+| Dependencies | Spread across phases | Explicit                | Hidden inside task |
+| Roadmap fit  | Existing structure   | Best fit                | Poor fit           |
 
 _Table 1: Comparison of vertical-slice task boundaries._
 
@@ -152,10 +151,10 @@ v0.1.0.
 
 The decision follows resource-oriented REST guidance by modelling uploads,
 ingestion jobs, generation runs, and TEI documents as resources rather than as
-command endpoints. It follows common long-running operation practice by
-turning asynchronous work into pollable resources. It also follows idempotent
-request practice by making client-provided idempotency keys part of
-side-effecting `POST` requests.
+command endpoints. It follows common long-running operation practice by turning
+asynchronous work into pollable resources. It also follows idempotent request
+practice by making client-provided idempotency keys part of side-effecting
+`POST` requests.
 
 Keeping TEI retrieval on the episode resource avoids coupling the first script
 generation slice to export jobs. The JSON envelope supports clients that need
@@ -165,13 +164,12 @@ the literal file-download case defined by TEI media-type prior art.
 ## Known risks and limitations
 
 - No-QA generation can create plausible but unchecked scripts. The API must
-  mark these runs and TEI revisions as draft output, with QA explicitly
-  skipped.
+  mark these runs and TEI revisions as draft output, with QA explicitly skipped.
 - The first slice does not replace later QA artefact persistence, approval
   workflows, audio generation, or export bundles.
 - Presenter terminology may drift from the canonical `host_profile` and
-  `guest_profile` document kinds. Documentation must use "presenter profile"
-  as a user-facing umbrella while retaining the canonical kinds in schemas.
+  `guest_profile` document kinds. Documentation must use "presenter profile" as
+  a user-facing umbrella while retaining the canonical kinds in schemas.
 - Direct TEI download may need additional authorization controls before
   multi-tenant production use because source documents and presenter profiles
   can contain confidential or copyrighted material.
@@ -180,9 +178,7 @@ the literal file-download case defined by TEI media-type prior art.
 
 - [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
 - [Episodic TUI API design](../episodic-tui-api-design.md)
-- Microsoft REST API design best practices:
-  <https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design>
-- Microsoft Fabric long-running operation pattern:
-  <https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation>
+- [Microsoft REST API design best practices](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design)
+- [Microsoft Fabric long-running operation pattern](https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation)
 - [Stripe idempotent request guidance](https://docs.stripe.com/api/idempotent_requests)
 - [RFC 6129: The `application/tei+xml` media type](https://datatracker.ietf.org/doc/html/rfc6129)

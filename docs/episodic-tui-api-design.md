@@ -218,10 +218,10 @@ POST   /v1/uploads/init
        Header: Idempotency-Key
 ```
 
-Upload and source-attachment endpoints enforce content-type allowlists,
-maximum file sizes, and content-hash recording. Pre-signed uploads remain
-decoupled from ingestion until the client attaches the resulting `upload_id`
-to an ingestion-job source.
+Upload and source-attachment endpoints enforce content-type allowlists, maximum
+file sizes, and content-hash recording. Pre-signed uploads remain decoupled
+from ingestion until the client attaches the resulting `upload_id` to an
+ingestion-job source.
 
 ### Generation runs
 

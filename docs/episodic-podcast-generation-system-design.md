@@ -680,10 +680,9 @@ following node structure:
    checkpoint.
 9. **Escalate:** Create review tasks for human intervention; pause graph.
 
-The following diagram illustrates the content generation graph:
-
-For screen readers: The diagram shows the content generation graph and how
-nodes relate during episodic podcast generation.
+For screen readers: Diagram showing the episodic content generation workflow
+from Initialize through Generate, Quality Mode, Persist Draft, Evaluate,
+Aggregate, Route, Refine, Escalate, Prepare for Approval, and Human Review.
 
 ```mermaid
 flowchart TD
@@ -740,8 +739,8 @@ jobs. `GET /v1/episodes/{episode_id}/tei` returns a JSON envelope by default,
 including TEI XML, content hash, revision, last generation run id, quality
 mode, and QA status. The same resource returns the TEI-P5 file directly when
 the request uses `Accept: application/tei+xml`; this response uses the TEI
-media type registered by RFC 6129 and includes `Content-Disposition:
-attachment`.
+media type registered by RFC 6129 and includes
+`Content-Disposition: attachment`.
 
 #### Content Request Decision Tree
 
