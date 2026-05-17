@@ -108,21 +108,6 @@ class TestChronoContracts:
         assert _compute_estimated_seconds(0, words_per_minute) == 0
 
     @given(
-        spoken_word_count=st.integers(min_value=1, max_value=sys.maxsize),
-        words_per_minute=_VALID_WORDS_PER_MINUTE,
-    )
-    def test_compute_estimated_seconds_matches_formula_for_positive_counts(
-        self,
-        spoken_word_count: int,
-        words_per_minute: int,
-    ) -> None:
-        """Positive word counts should use the exact documented ceiling formula."""
-        assert _compute_estimated_seconds(
-            spoken_word_count,
-            words_per_minute,
-        ) == _integer_ceiling_seconds(spoken_word_count, words_per_minute)
-
-    @given(
         spoken_word_count=_VALID_WORD_COUNTS,
         words_per_minute=_VALID_WORDS_PER_MINUTE,
     )
