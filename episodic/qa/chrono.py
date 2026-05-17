@@ -61,9 +61,14 @@ def _seconds_contract_holds(
     words_per_minute: int,
     estimated_seconds: int,
 ) -> bool:
-    """Return whether an estimate matches the Chrono ceiling formula."""
-    return spoken_word_count == 0 or estimated_seconds == _ceil_seconds(
-        spoken_word_count, words_per_minute
+    """Return whether an estimate satisfies Chrono's numeric postconditions."""
+    return (
+        estimated_seconds >= 0
+        and (spoken_word_count == 0) == (estimated_seconds == 0)
+        and (
+            spoken_word_count == 0
+            or estimated_seconds == _ceil_seconds(spoken_word_count, words_per_minute)
+        )
     )
 
 

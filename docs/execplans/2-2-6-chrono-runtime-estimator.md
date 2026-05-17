@@ -173,14 +173,14 @@ XML and unsupported TEI body markup.
   `2.2.6` completion gate. The extraction gap was closed later in Stage K;
   strict validation and ADR closure remain follow-on work.
 - [x] (2026-05-13 11:10Z) Updated `tei-rapporteur` to
-  `89fc86ef3952ecfde0bb7f653cde217e2651b895` and refreshed the vendored
-  users' guide from the same revision. The guide now documents
+  `89fc86ef3952ecfde0bb7f653cde217e2651b895` and refreshed the vendored users'
+  guide from the same revision. The guide now documents
   `spoken_text_segments(...)`, strict validation, and streaming events for
   spoken text.
 - [x] (2026-05-13 11:30Z) Resume Stage K by replacing Chrono's local
-  `ElementTree` traversal with the Chrono-ready `tei_rapporteur`
-  spoken-text extraction surface, keeping the naive word-count and metadata
-  policy inside Chrono.
+  `ElementTree` traversal with the Chrono-ready `tei_rapporteur` spoken-text
+  extraction surface, keeping the naive word-count and metadata policy inside
+  Chrono.
 - [x] (2026-05-13 12:15Z) Updated Chrono fixtures to valid TEI documents with
   headers and confirmed the focused Chrono suite passes with 29 tests.
 - [x] (2026-05-13 12:35Z) Ran repository gates after the migration:
@@ -204,10 +204,14 @@ XML and unsupported TEI body markup.
   Syrupy snapshots for estimator and graph artefacts, and distinct spoken-word
   counts in concurrent evaluator and graph fixtures. Validation reported
   `477 passed, 3 skipped`.
+- [x] (2026-05-17 00:00Z) Added CrossHair PEP 316 contracts to the pure Chrono
+  `_compute_estimated_seconds(...)` arithmetic helper, documented why Rust
+  verification tools are out of scope for Chrono, and added direct helper tests
+  for the CrossHair gate.
 
-Follow-on roadmap entry: close ADR-006 by accepting or revising the
-spoken-text semantics, then update documentation if the accepted semantics
-change Chrono's supported inputs.
+Follow-on roadmap entry: close ADR-006 by accepting or revising the spoken-text
+semantics, then update documentation if the accepted semantics change Chrono's
+supported inputs.
 
 ## Surprises & Discoveries
 
@@ -250,11 +254,11 @@ change Chrono's supported inputs.
 
 - Observation: the initial `tei-rapporteur` pin exposed `parse_xml`, `to_dict`,
   `to_msgpack`, and `iter_parse`, but not the Chrono-specific spoken-text
-  extraction contract. Evidence: the earlier `docs/tei-rapporteur-users-guide.md`
-  documented paragraph, utterance, and div events, plus inline tagged nodes,
-  but no runtime-estimation extraction API. Impact: Chrono could not safely own
-  local TEI semantics, so the required behaviour moved upstream into
-  `tei-rapporteur` before Stage K.
+  extraction contract. Evidence: the earlier
+  `docs/tei-rapporteur-users-guide.md` documented paragraph, utterance, and div
+  events, plus inline tagged nodes, but no runtime-estimation extraction API.
+  Impact: Chrono could not safely own local TEI semantics, so the required
+  behaviour moved upstream into `tei-rapporteur` before Stage K.
 
 - Observation: after updating `tei-rapporteur` to
   `89fc86ef3952ecfde0bb7f653cde217e2651b895`, `iter_parse(...)` returns
@@ -336,6 +340,14 @@ change Chrono's supported inputs.
   `ValueError` cases and never falls back to raw-text counting; Chrono should
   not create plausible runtime metadata from invalid scripts. Date/Author:
   2026-05-13 / User and Codex.
+
+- Decision: use CrossHair PEP 316 contracts for Chrono numeric arithmetic
+  instead of Kani or Verus. Rationale: Chrono is Python application code, while
+  Kani and Verus verify Rust code and cannot be applied directly to
+  `episodic/qa/chrono.py`. CrossHair provides a Python-native symbolic check
+  for the pure `_compute_estimated_seconds(...)` helper, and Chrono's dataclass
+  guards enforce the same non-negative word-count and positive words-per-minute
+  preconditions at runtime boundaries. Date/Author: 2026-05-17 / Codex.
 
 ## Outcomes & Retrospective
 
@@ -515,8 +527,8 @@ class ChronoRuntimeEstimate:
 Add `ChronoRuntimeEstimator` with an async `evaluate(...)` method or a
 synchronous `estimate(...)` method plus an async adapter method. Prefer the
 shape that best matches the QA graph port without adding fake asynchrony to the
-domain policy. Keep word counting as estimator-local policy, but delegate TEI P5
-parsing and spoken-text extraction to `tei-rapporteur`.
+domain policy. Keep word counting as estimator-local policy, but delegate TEI
+P5 parsing and spoken-text extraction to `tei-rapporteur`.
 
 The original initial heuristic used the Python standard library XML parser and
 raw-text fallback. Stage K replaced it with this `tei-rapporteur`-backed
@@ -779,8 +791,8 @@ spoken_text_segments(...). The remaining follow-on items are ADR-006 acceptance
 and strict contract enforcement.
 ```
 
-For the follow-on strict TEI P5 roadmap item, after ADR-006 is accepted, enforce
-the accepted strict contract and run focused validation:
+For the follow-on strict TEI P5 roadmap item, after ADR-006 is accepted,
+enforce the accepted strict contract and run focused validation:
 
 ```bash
 uv run pytest tests/test_chrono.py tests/test_chrono_properties.py
@@ -917,9 +929,8 @@ P5 is the enforced interchange format in Episodic. Raw-text fallback for
 malformed XML was invalid for the future contract and has since been removed;
 minimal TEI-shaped snippets are not acceptable fixtures unless they validate as
 TEI P5 documents, and Chrono should not own TEI spoken-dialogue semantics. That
-remaining work is
-gated by an ADR and by prioritized `tei-rapporteur` changes that provide the
-spoken-text extraction contract Chrono needs.
+remaining work is gated by an ADR and by prioritized `tei-rapporteur` changes
+that provide the spoken-text extraction contract Chrono needs.
 
 The next 2026-05-10 revision adds proposed ADR-006 as the Stage I draft. The
 ADR is intentionally not yet accepted, so strict TEI P5 validation remains
@@ -927,7 +938,6 @@ blocked until reviewers ratify or revise the proposed TEI P5 spoken-text
 semantics.
 
 The latest 2026-05-13 revision keeps `Status: COMPLETE` authoritative for
-roadmap item `2.2.6`. The deterministic local Chrono slice,
-`tei-rapporteur` spoken-text extraction migration, and validation-error
-propagation are complete, while ADR acceptance is tracked as separate follow-on
-roadmap work.
+roadmap item `2.2.6`. The deterministic local Chrono slice, `tei-rapporteur`
+spoken-text extraction migration, and validation-error propagation are
+complete, while ADR acceptance is tracked as separate follow-on roadmap work.

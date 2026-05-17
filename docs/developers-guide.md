@@ -583,6 +583,12 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   high-cardinality payload data. Keep the deterministic spoken-runtime
   calculation free of logging, metrics, and wall-clock reads; those side
   effects belong at the estimator orchestration boundary.
+- Keep Chrono's numeric duration arithmetic in small pure helpers. The
+  `_compute_estimated_seconds(...)` helper carries Python Enhancement Proposal
+  (PEP) 316 contracts verified by CrossHair. Run
+  `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py` after changing
+  the word-count, words-per-minute, or ceiling-rounding policy. Kani and Verus
+  are Rust verification tools and are not applicable to this Python module.
 
 ### Testing the evaluator
 
@@ -599,6 +605,11 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   `tests/test_chrono_langgraph.py`, and its behavioural scenario lives in
   `tests/features/chrono.feature` with steps in
   `tests/steps/test_chrono_steps.py`.
+- Chrono contract tests live in `tests/test_chrono_contracts.py`. They pin the
+  direct helper behaviour for `_ceil_seconds(...)`,
+  `_seconds_contract_holds(...)`, and `_compute_estimated_seconds(...)` so the
+  CrossHair gate has ordinary unit and property-test coverage beside symbolic
+  verification.
 - Chrono behavioural tests do not launch Vidai Mock because Chrono has no
   inference-service boundary in roadmap item `2.2.6`.
 
