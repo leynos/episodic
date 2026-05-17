@@ -606,9 +606,8 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   `tests/features/chrono.feature` with steps in
   `tests/steps/test_chrono_steps.py`.
 - Chrono contract tests live in `tests/test_chrono_contracts.py`. They pin the
-  direct helper behaviour for `_ceil_seconds(...)`,
-  `_seconds_contract_holds(...)`, and `_compute_estimated_seconds(...)` so the
-  CrossHair gate has ordinary unit and property-test coverage beside symbolic
+  direct helper behaviour for `_compute_estimated_seconds(...)` so the CrossHair
+  gate has ordinary unit and property-test coverage beside symbolic
   verification. The same module includes the `pytest.mark.crosshair` subprocess
   gate for `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py`.
 - Chrono behavioural tests do not launch Vidai Mock because Chrono has no

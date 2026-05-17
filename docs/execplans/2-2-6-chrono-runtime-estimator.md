@@ -939,7 +939,7 @@ P5 is the enforced interchange format in Episodic. Raw-text fallback for
 malformed XML was invalid for the future contract and has since been removed;
 minimal TEI-shaped snippets are not acceptable fixtures unless they validate as
 TEI P5 documents, and Chrono should not own TEI spoken-dialogue semantics. That
-remaining work is gated by an ADR and by prioritized `tei-rapporteur` changes
+remaining work is gated by an ADR and by prioritised `tei-rapporteur` changes
 that provide the spoken-text extraction contract Chrono needs.
 
 The next 2026-05-10 revision adds proposed ADR-006 as the Stage I draft. The
