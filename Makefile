@@ -91,7 +91,7 @@ nixie: ## Validate Mermaid diagrams
 	$(call ensure_tool,nixie)
 	$(NIXIE) --no-sandbox
 
-test: build $(VENV_TOOLS) ## Run tests
+test: build crosshair $(VENV_TOOLS) ## Run tests
 	$(UV_ENV) $(UV) run pytest -v -n $(PYTEST_XDIST_WORKERS)
 
 check-migrations: build $(VENV_TOOLS) ## Check for schema drift between models and migrations
