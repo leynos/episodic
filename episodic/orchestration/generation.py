@@ -362,6 +362,23 @@ class StructuredPlanningOrchestrator:
             )
         return tuple(results)
 
+    def _log_orchestrate_error(  # noqa: PLR6301 - keep orchestration log helper on the instance.
+        self,
+        exc: Exception,
+        *,
+        correlation_id: str,
+        stage: str,
+    ) -> None:
+        """Emit the standard orchestration-stage error event."""
+        _log_event(
+            "error",
+            "structured_planning_orchestrator.orchestrate.error",
+            correlation_id=correlation_id,
+            stage=stage,
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+
     def _run_planner(
         self,
         request: GenerationOrchestrationRequest,
@@ -372,13 +389,10 @@ class StructuredPlanningOrchestrator:
             try:
                 return await self.planner.plan(request)
             except (LLMError, PlanningResponseFormatError) as exc:
-                _log_event(
-                    "error",
-                    "structured_planning_orchestrator.orchestrate.error",
+                self._log_orchestrate_error(
+                    exc,
                     correlation_id=request.correlation_id,
                     stage="plan",
-                    error_type=type(exc).__name__,
-                    error=str(exc),
                 )
                 raise
 
@@ -398,13 +412,10 @@ class StructuredPlanningOrchestrator:
                     plan=plan,
                 )
             except (LLMError, ToolExecutionError, UnsupportedActionError) as exc:
-                _log_event(
-                    "error",
-                    "structured_planning_orchestrator.orchestrate.error",
+                self._log_orchestrate_error(
+                    exc,
                     correlation_id=request.correlation_id,
                     stage="execute_plan",
-                    error_type=type(exc).__name__,
-                    error=str(exc),
                 )
                 raise
 
