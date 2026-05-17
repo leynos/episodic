@@ -422,6 +422,7 @@ enable = [
 timeout = 60
 markers = [
     "act: integration tests that drive GitHub Actions via act",
+    "crosshair: symbolic contract verification using CrossHair",
     "slow: exercises that take longer or require heavyweight tooling",
 ]
 filterwarnings = [

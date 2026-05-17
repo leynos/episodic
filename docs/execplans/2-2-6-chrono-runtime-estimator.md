@@ -208,6 +208,9 @@ XML and unsupported TEI body markup.
   `_compute_estimated_seconds(...)` arithmetic helper, documented why Rust
   verification tools are out of scope for Chrono, and added direct helper tests
   for the CrossHair gate.
+- [x] (2026-05-17 00:00Z) Replaced Chrono's floating-point ceiling expression
+  with integer-only arithmetic, added an automated `pytest.mark.crosshair`
+  subprocess gate, and added `make crosshair` for CI and local verification.
 
 Follow-on roadmap entry: close ADR-006 by accepting or revising the spoken-text
 semantics, then update documentation if the accepted semantics change Chrono's
@@ -348,6 +351,13 @@ supported inputs.
   for the pure `_compute_estimated_seconds(...)` helper, and Chrono's dataclass
   guards enforce the same non-negative word-count and positive words-per-minute
   preconditions at runtime boundaries. Date/Author: 2026-05-17 / Codex.
+
+- Decision: compute Chrono's ceiling seconds with integer arithmetic and run
+  CrossHair through an automated pytest gate plus `make crosshair`. Rationale:
+  integer-only arithmetic avoids floating-point precision edge cases for large
+  generated word counts, and the verification command should be reproducible as
+  a normal gate rather than only documented as a manual instruction.
+  Date/Author: 2026-05-17 / Codex.
 
 ## Outcomes & Retrospective
 

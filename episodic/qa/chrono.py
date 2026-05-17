@@ -31,7 +31,6 @@ runtime policy.
 
 import dataclasses as dc
 import logging
-import math
 import re
 import time
 import typing as typ
@@ -53,7 +52,7 @@ _METRIC_LATENCY_MS = "chrono.runtime_estimator.latency_ms"
 
 def _ceil_seconds(spoken_word_count: int, words_per_minute: int) -> int:
     """Compute the ceiling-formula estimate used by Chrono contracts."""
-    return math.ceil(spoken_word_count / words_per_minute * 60)
+    return (spoken_word_count * 60 + words_per_minute - 1) // words_per_minute
 
 
 def _seconds_contract_holds(
@@ -61,7 +60,7 @@ def _seconds_contract_holds(
     words_per_minute: int,
     estimated_seconds: int,
 ) -> bool:
-    """Return whether an estimate satisfies Chrono's numeric postconditions."""
+    """Return whether an estimate satisfies CrossHair contract postconditions."""
     return (
         estimated_seconds >= 0
         and (spoken_word_count == 0) == (estimated_seconds == 0)

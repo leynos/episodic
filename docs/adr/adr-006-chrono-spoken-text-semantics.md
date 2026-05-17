@@ -202,8 +202,8 @@ contracts around the pure `_compute_estimated_seconds(...)` helper. CrossHair
 symbolically checks the same safety boundary that matters for the estimator:
 valid inputs have a non-negative word count and positive words-per-minute
 setting, zero words produce zero seconds, and positive word counts use the
-documented ceiling formula. The surrounding dataclass guards enforce the same
-input preconditions at Chrono's runtime boundaries.
+documented integer-only ceiling formula. The surrounding dataclass guards
+enforce the same input preconditions at Chrono's runtime boundaries.
 
 ## Consequences
 
@@ -218,9 +218,8 @@ input preconditions at Chrono's runtime boundaries.
 - Nested inline segmentation can no longer inflate runtime estimates by
   double-counting child text.
 - Chrono now has a Python-native symbolic verification gate for the
-  deterministic
-  duration arithmetic without adding a Rust verification toolchain to this
-  repository.
+  deterministic duration arithmetic without adding a Rust verification
+  toolchain to this repository.
 
 ### Negative
 
