@@ -11,6 +11,7 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-003-celery-worker-scaffold.md`](adr/adr-003-celery-worker-scaffold.md)
 - [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md)
 - [`adr-005-structured-planning-and-tool-execution.md`](adr/adr-005-structured-planning-and-tool-execution.md)
+- [`adr-006-chrono-spoken-text-semantics.md`](adr/adr-006-chrono-spoken-text-semantics.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -606,10 +607,10 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   `tests/features/chrono.feature` with steps in
   `tests/steps/test_chrono_steps.py`.
 - Chrono contract tests live in `tests/test_chrono_contracts.py`. They pin the
-  direct helper behaviour for `_compute_estimated_seconds(...)` so the CrossHair
-  gate has ordinary unit and property-test coverage beside symbolic
-  verification. The same module includes the `pytest.mark.crosshair` subprocess
-  gate for `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py`.
+  public estimator behaviour backed by `_compute_estimated_seconds(...)` so the
+  CrossHair gate has property-test coverage beside symbolic verification. The
+  same module includes the `pytest.mark.crosshair` subprocess gate for
+  `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py`.
 - Chrono behavioural tests do not launch Vidai Mock because Chrono has no
   inference-service boundary in roadmap item `2.2.6`.
 

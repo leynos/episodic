@@ -28,10 +28,12 @@ import pytest
 from hypothesis import given
 
 from episodic.qa.chrono import (
-    _compute_estimated_seconds,
+    ChronoEstimatorConfig,
+    ChronoEvaluationRequest,
+    ChronoRuntimeEstimator,
 )
 
-_VALID_WORD_COUNTS = st.integers(min_value=0, max_value=sys.maxsize)
+_PUBLIC_API_WORD_COUNTS = st.integers(min_value=0, max_value=500)
 _VALID_WORDS_PER_MINUTE = st.integers(min_value=1, max_value=sys.maxsize)
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,24 +43,44 @@ def _integer_ceiling_seconds(spoken_word_count: int, words_per_minute: int) -> i
     return (spoken_word_count * 60 + words_per_minute - 1) // words_per_minute
 
 
+def _tei_document(body: str) -> str:
+    """Wrap a TEI body fixture with the required document header."""
+    return (
+        "<TEI><teiHeader><fileDesc><title>Chrono contract test</title></fileDesc>"
+        f"</teiHeader><text><body>{body}</body></text></TEI>"
+    )
+
+
+def _script_with_word_count(spoken_word_count: int) -> str:
+    """Build a valid TEI script with the requested spoken word count."""
+    spoken_text = " ".join(f"word{index}" for index in range(spoken_word_count))
+    return _tei_document(f"<sp><p>{spoken_text}</p></sp>")
+
+
 class TestChronoContracts:
     """Contract and property coverage for Chrono duration arithmetic."""
 
-    def test_compute_estimated_seconds_matches_boundary_inputs(self) -> None:
-        """The formula helper should match the documented ceiling calculation."""
-        assert _compute_estimated_seconds(1, 150) == 1
-        assert _compute_estimated_seconds(150, 150) == 60
-        assert _compute_estimated_seconds(sys.maxsize, sys.maxsize) == 60
-        assert _compute_estimated_seconds(1, 10**400) == 1
+    def test_estimate_matches_boundary_inputs(self) -> None:
+        """The public estimator should match the documented ceiling calculation."""
+        request = ChronoEvaluationRequest(script_tei_xml=_script_with_word_count(1))
+        result = ChronoRuntimeEstimator(
+            config=ChronoEstimatorConfig(words_per_minute=10**400)
+        ).estimate(request)
 
-    def test_compute_estimated_seconds_preserves_zero_identity(self) -> None:
+        assert result.estimated_seconds == 1
+        assert result.metadata.spoken_word_count == 1
+        assert result.metadata.words_per_minute == 10**400
+
+    def test_estimate_preserves_zero_identity(self) -> None:
         """Zero spoken words should produce a zero-second estimate."""
-        assert _compute_estimated_seconds(0, 1) == 0
-        assert _compute_estimated_seconds(0, sys.maxsize) == 0
+        request = ChronoEvaluationRequest(script_tei_xml=_script_with_word_count(0))
+        result = ChronoRuntimeEstimator(
+            config=ChronoEstimatorConfig(words_per_minute=sys.maxsize)
+        ).estimate(request)
 
-    def test_compute_estimated_seconds_avoids_float_underflow(self) -> None:
-        """Positive word counts should not round down under huge WPM configs."""
-        assert _compute_estimated_seconds(1, 10**400) == 1
+        assert result.estimated_seconds == 0
+        assert result.metadata.spoken_word_count == 0
+        assert result.metadata.words_per_minute == sys.maxsize
 
     @pytest.mark.crosshair
     def test_chrono_crosshair_contracts_pass(self) -> None:
@@ -86,41 +108,60 @@ class TestChronoContracts:
         )
 
     @given(
-        spoken_word_count=_VALID_WORD_COUNTS,
+        spoken_word_count=_PUBLIC_API_WORD_COUNTS,
         words_per_minute=_VALID_WORDS_PER_MINUTE,
     )
-    def test_compute_estimated_seconds_matches_ceiling_formula(
+    def test_estimate_matches_ceiling_formula(
         self,
         spoken_word_count: int,
         words_per_minute: int,
     ) -> None:
-        """The contract helper should match Chrono's arithmetic formula."""
-        assert _compute_estimated_seconds(spoken_word_count, words_per_minute) == (
+        """The public estimator should match Chrono's arithmetic formula."""
+        request = ChronoEvaluationRequest(
+            script_tei_xml=_script_with_word_count(spoken_word_count)
+        )
+        result = ChronoRuntimeEstimator(
+            config=ChronoEstimatorConfig(words_per_minute=words_per_minute)
+        ).estimate(request)
+
+        assert result.estimated_seconds == (
             _integer_ceiling_seconds(spoken_word_count, words_per_minute)
         )
+        assert result.metadata.spoken_word_count == spoken_word_count
+        assert result.metadata.words_per_minute == words_per_minute
 
     @given(words_per_minute=_VALID_WORDS_PER_MINUTE)
-    def test_compute_estimated_seconds_handles_zero_word_count(
+    def test_estimate_handles_zero_word_count(
         self,
         words_per_minute: int,
     ) -> None:
-        """The public contract helper should preserve the zero-case identity."""
-        assert _compute_estimated_seconds(0, words_per_minute) == 0
+        """The public estimator should preserve the zero-case identity."""
+        request = ChronoEvaluationRequest(script_tei_xml=_script_with_word_count(0))
+        result = ChronoRuntimeEstimator(
+            config=ChronoEstimatorConfig(words_per_minute=words_per_minute)
+        ).estimate(request)
+
+        assert result.estimated_seconds == 0
+        assert result.metadata.spoken_word_count == 0
+        assert result.metadata.words_per_minute == words_per_minute
 
     @given(
-        spoken_word_count=_VALID_WORD_COUNTS,
+        spoken_word_count=_PUBLIC_API_WORD_COUNTS,
         words_per_minute=_VALID_WORDS_PER_MINUTE,
     )
-    def test_compute_estimated_seconds_satisfies_postconditions(
+    def test_estimate_satisfies_postconditions(
         self,
         spoken_word_count: int,
         words_per_minute: int,
     ) -> None:
-        """Computed estimates should satisfy the CrossHair postcondition predicate."""
-        estimated_seconds = _compute_estimated_seconds(
-            spoken_word_count,
-            words_per_minute,
+        """Public estimates should satisfy the CrossHair postcondition predicate."""
+        request = ChronoEvaluationRequest(
+            script_tei_xml=_script_with_word_count(spoken_word_count)
         )
+        result = ChronoRuntimeEstimator(
+            config=ChronoEstimatorConfig(words_per_minute=words_per_minute)
+        ).estimate(request)
+        estimated_seconds = result.estimated_seconds
 
         assert estimated_seconds >= 0
         assert (spoken_word_count == 0) == (estimated_seconds == 0)
