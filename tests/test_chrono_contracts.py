@@ -48,12 +48,18 @@ def test_ceil_seconds_matches_formula_for_boundary_inputs() -> None:
     assert _ceil_seconds(1, 150) == 1
     assert _ceil_seconds(150, 150) == 60
     assert _ceil_seconds(sys.maxsize, sys.maxsize) == 60
+    assert _ceil_seconds(1, 10**400) == 1
 
 
 def test_compute_estimated_seconds_preserves_zero_identity() -> None:
     """Zero spoken words should produce a zero-second estimate."""
     assert _compute_estimated_seconds(0, 1) == 0
     assert _compute_estimated_seconds(0, sys.maxsize) == 0
+
+
+def test_compute_estimated_seconds_avoids_float_underflow() -> None:
+    """Positive word counts should not round down under huge WPM configs."""
+    assert _compute_estimated_seconds(1, 10**400) == 1
 
 
 def test_seconds_contract_holds_rejects_invalid_estimates() -> None:
