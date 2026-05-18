@@ -70,6 +70,16 @@ yet exist.
   [RFC 6129][^1].
 - Side-effecting `POST` requests that create uploads, ingestion jobs, source
   attachments, and generation runs accept `Idempotency-Key`.
+- `Idempotency-Key` storage records the request body hash, response status,
+  response body, `Location`, and `Retry-After` metadata for a configurable
+  retention time, with a default time to live (TTL) of 24 hours.
+- Reusing the same `Idempotency-Key` with an identical request body returns the
+  original response. Reusing the same key with a different request body returns
+  `409 Conflict`.
+- Concurrent duplicate long-running `POST` requests use first-write-wins
+  semantics: the first accepted request proceeds, and later in-flight requests
+  with the same key and identical body return the stored in-progress resource
+  information, including `202 Accepted`, `Location`, and `Retry-After`.
 - Long-running ingestion and generation operations return pollable resources
   with `202 Accepted`, `Location`, and `Retry-After` semantics where the work
   cannot complete in the initial request.
