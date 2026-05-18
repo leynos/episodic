@@ -536,7 +536,7 @@ episodic-tui-api-design.md#source-to-script-vertical-slice
     `/v1/generation-runs/{run_id}/events` as JSON polling surfaces for the
     draft generation lifecycle.
   - Persist the generated script into the canonical episode TEI with QA marked
-    as skipped for the run and resulting TEI revision.
+    as skipped for the run, and the resulting TEI revision.
   - Implement `GET /v1/episodes/{episode_id}/tei` as both a JSON metadata
     envelope and an `Accept: application/tei+xml` file download for draft TEI
     output without requiring approval endpoints.

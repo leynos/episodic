@@ -76,8 +76,8 @@ published structural surface.
 ## References
 
 Roadmap items `1.5.4` and `2.4.5` in `docs/roadmap.md`.[^1] ExecPlan:
-`docs/execplans/1-5-4-architectural-enforcement-for-hexagonal-boundaries.md`.[
-^2] Implementation: `episodic/architecture/checker.py`.[^3] Tests:
+`docs/execplans/1-5-4-architectural-enforcement-for-hexagonal-boundaries.md`.[^2]
+Implementation: `episodic/architecture/checker.py`.[^3] Tests:
 `tests/test_architecture_enforcement.py`, `tests/test_port_contracts.py`,
 `tests/features/architecture_enforcement.feature`, and
 `tests/steps/test_architecture_enforcement_steps.py`.[^4]

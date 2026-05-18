@@ -679,7 +679,7 @@ sequenceDiagram
     participant WS as WS /ws/runs/{run_id}
     participant Orchestrator
 
-    TUI->>REST: POST /v1/episodes/{id}/generation-runs
+    TUI->>REST: POST /v1/episodes/{id}/generation-runs (Idempotency-Key: {uuid})
     Note right of TUI: quality_mode=draft_without_qa
     REST-->>TUI: 202 Accepted {run_id}
     TUI->>WS: connect
@@ -756,7 +756,7 @@ sequenceDiagram
     participant REST as REST API
     participant Generator as Generation Orchestrator
 
-    Client->>REST: POST /v1/episodes/{id}/generation-runs
+    Client->>REST: POST /v1/episodes/{id}/generation-runs (Idempotency-Key: {uuid})
     Note right of Client: quality_mode=draft_without_qa
     REST-->>Client: 202 Accepted {run_id}
     Client->>REST: GET /v1/generation-runs/{run_id}
@@ -1104,7 +1104,7 @@ sequenceDiagram
     participant Orchestrator
 
     User->>TUI: Configure generation parameters
-    TUI->>REST_v1: POST /v1/episodes/{episode_id}/generation-runs
+    TUI->>REST_v1: POST /v1/episodes/{episode_id}/generation-runs (Idempotency-Key: {uuid})
     REST_v1-->>TUI: 202 Accepted {run_id}
 
     TUI->>WS_runs: WebSocket connect /ws/runs/{run_id}
