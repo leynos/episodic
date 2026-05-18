@@ -170,6 +170,69 @@ generation slice to export jobs. The JSON envelope supports clients that need
 metadata and hashes, while the `application/tei+xml` representation supports
 the literal file-download case defined by TEI media-type prior art.
 
+## Idempotency implementation contract
+
+The idempotency store must enforce one accepted request per `Idempotency-Key`
+through a database-level unique constraint and an atomic insert-or-read
+operation. The create-request transaction records the key, request body hash,
+resource type, resource identifier, response status, response body, `Location`,
+`Retry-After`, expiry timestamp, and terminal state. Handlers must commit the
+idempotency record and created resource in the same transaction where the
+backing database supports it, or through an outbox-backed recovery step where
+object storage or orchestration queues are involved.
+
+The implementation must use an isolation level and locking strategy that
+prevents two concurrent requests with the same key from both creating
+resources. The first committed request wins. A duplicate request with the same
+key and same body hash reads the existing record. A duplicate with a different
+body hash returns `409 Conflict` without starting work.
+
+## Partial-failure recovery
+
+If a request stores an idempotency record but fails before all side effects are
+complete, the record must remain recoverable rather than being deleted.
+Recovery workers should reconcile records whose resource identifier exists but
+whose response metadata is incomplete, and should mark abandoned records as
+failed with a replayable error response. For long-running ingestion and
+generation runs, retrying the same key must either return the existing
+in-progress resource metadata or the terminal response stored after completion.
+
+## Request-body hash
+
+The request body hash must be SHA-256 over the canonical request payload. JSON
+payloads use canonical UTF-8 JSON with stable object-key ordering and no
+insignificant whitespace. Multipart uploads hash the binary upload bytes plus
+the canonical JSON metadata fields that affect the requested side effect. The
+hash excludes transport-only headers, but includes every field that changes the
+created upload, source attachment, ingestion job, presenter profile revision,
+or generation run.
+
+## Observability
+
+Implementations must log the `quality_mode` branch decision, the
+`draft_without_qa` bypass rationale, idempotency replay or conflict outcomes,
+and draft TEI persistence. Logs must carry correlation identifiers,
+`Idempotency-Key`, generation run id, episode id, actor id, and whether QA was
+skipped. Metrics must include draft generation latency, draft generation error
+rate, QA-bypass rate, idempotency replay rate, idempotency conflict rate, and
+long-running operation completion counts by terminal state. Distributed traces
+must cross the REST handler, application service, idempotency store,
+orchestration boundary, and TEI persistence adapter. Alerts should fire for
+draft generation failure spikes, stuck in-progress idempotency records,
+elevated conflict rates, and repeated TEI persistence failures.
+
+## Testing strategy
+
+Endpoint implementations must include property-based tests, using Hypothesis
+for Python endpoints, that generate duplicate keys, reordered concurrent
+requests, body mismatches, retries after partial failure, and terminal-state
+replays. The properties must assert that identical bodies for a key never
+create more than one resource, different bodies for a key always return
+`409 Conflict`, and in-flight duplicates for long-running operations return the
+stored `202 Accepted`, `Location`, and `Retry-After` metadata. If the
+idempotency state machine moves into Rust, add Kani bounded model checking for
+the same first-write-wins and conflict-detection invariants.
+
 ## Known risks and limitations
 
 - No-QA generation can create plausible but unchecked scripts. The API must
