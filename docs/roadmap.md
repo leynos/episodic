@@ -498,7 +498,6 @@ Completion enables structured approval workflows with audit trails.
   - Support email, Slack, and webhook notifications.
   - Trigger on approvals, rejections, and automated compliance alerts.
 
-
 ### 4.3. Source-to-script REST vertical slice
 
 This step answers whether an integration client can drive the narrowest useful
