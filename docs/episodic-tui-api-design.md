@@ -78,9 +78,13 @@ expose.
    implementing endpoints. Use OpenAPI for REST and AsyncAPI for WebSocket
    documentation.
 
-## Existing canonical endpoints
+## Current canonical endpoint coverage
 
-The following endpoints are already implemented and remain unchanged[^2]:
+The following endpoint behaviours are already implemented in the canonical API
+surface[^2]. Because Episodic is still pre-v0.1.0, these routes do not create
+backwards compatibility obligations. Implementations may move the same resource
+contracts under `/v1` or remove unversioned paths before the first public
+release.
 
 - `POST /series-profiles`, `GET /series-profiles`
 - `GET /series-profiles/{profile_id}`,
@@ -103,9 +107,32 @@ The following endpoints are already implemented and remain unchanged[^2]:
 
 ## Proposed REST endpoints
 
-All new endpoints use a `/v1` prefix. Existing routes remain available without
-a prefix during the transition period. The version prefix is introduced to
-support future contract evolution without breaking existing clients.
+The target REST API uses a `/v1` prefix. ADR 009 defines the first
+source-to-script vertical slice and explicitly removes any requirement to
+preserve the existing unversioned routes before v0.1.0. Control-plane requests
+and status responses use JSON; downloadable artefact representations may use
+their registered media types.
+
+### Source-to-script vertical slice
+
+The first implementation slice proves the narrow client workflow that turns a
+show source document and presenter context into downloadable TEI-P5 XML. The
+slice deliberately bypasses the full QA loop by requiring
+`quality_mode=draft_without_qa` on generation-run creation. Runs created this
+way remain draft artefacts and record the actor and rationale for skipping QA.
+
+The slice is intentionally limited to two implementation tasks:
+
+- Source and presenter-profile intake:
+  - upload bytes or initialize a pre-signed upload;
+  - create an ingestion job and attach the upload or a source URI;
+  - create or bind presenter profiles using reusable reference documents of
+    kind `host_profile` and `guest_profile`.
+- No-QA generation and TEI retrieval:
+  - create a generation run with `quality_mode=draft_without_qa`;
+  - poll the generation run and event log over REST;
+  - fetch `GET /v1/episodes/{episode_id}/tei` as either a JSON envelope or an
+    `application/tei+xml` file download.
 
 ### Episodes and TEI
 
@@ -121,7 +148,8 @@ PATCH  /v1/episodes/{episode_id}
        Body: title, configuration; requires expected_revision
 
 GET    /v1/episodes/{episode_id}/tei
-       Returns canonical TEI XML in a JSON envelope
+       Returns canonical TEI XML in a JSON envelope by default
+       Accept: application/tei+xml returns direct XML download
 PUT    /v1/episodes/{episode_id}/tei
        Body: tei_xml, expected_revision
 
@@ -140,9 +168,16 @@ POST   /v1/episodes/{episode_id}/approval-events
   "tei_xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> ...",
   "content_hash": "sha256:...",
   "version": 7,
+  "last_generation_run_id": "018f0c2a-....",
+  "quality_mode": "draft_without_qa",
+  "qa_status": "skipped",
   "updated_at": "2026-03-16T12:34:56Z"
 }
 ```
+
+Clients that need a file download send `Accept: application/tei+xml` to the
+same endpoint. The response body is the TEI-P5 XML document, with
+`Content-Type: application/tei+xml` and `Content-Disposition: attachment`.
 
 ### Ingestion jobs and sources
 
@@ -152,6 +187,7 @@ TUI needs endpoints to create jobs, attach sources, and observe progress.
 ```plaintext
 POST   /v1/ingestion-jobs
        Body: series_profile_id, target_episode_id (optional)
+       Header: Idempotency-Key
 GET    /v1/ingestion-jobs
        Query: series_profile_id, status, limit, offset
 
@@ -159,6 +195,7 @@ GET    /v1/ingestion-jobs/{job_id}
 
 POST   /v1/ingestion-jobs/{job_id}/sources
        Body: upload_id or source_uri, source_type, weight, metadata
+       Header: Idempotency-Key
 GET    /v1/ingestion-jobs/{job_id}/sources
        Query: limit, offset
 ```
@@ -172,12 +209,19 @@ multipart and pre-signed object storage strategies.
 POST   /v1/uploads
        Content-Type: multipart/form-data
        Returns: upload_id, content_hash, size_bytes
+       Header: Idempotency-Key
 
 POST   /v1/uploads/init
        Body: filename, content_type, size_bytes
        Returns: upload_id, put_url, headers
        (Pre-signed upload for direct-to-storage flow)
+       Header: Idempotency-Key
 ```
+
+Upload and source-attachment endpoints enforce content-type allowlists, maximum
+file sizes, and content-hash recording. Pre-signed uploads remain decoupled
+from ingestion until the client attaches the resulting `upload_id` to an
+ingestion-job source.
 
 ### Generation runs
 
@@ -186,7 +230,8 @@ checkpoint support for human-in-the-loop intervention.
 
 ```plaintext
 POST   /v1/episodes/{episode_id}/generation-runs
-       Body: template_id, prompt_overrides, budget_hints
+       Body: template_id, quality_mode, prompt_overrides,
+             budget_hints, skip_qa_rationale, actor
        Header: Idempotency-Key
 GET    /v1/episodes/{episode_id}/generation-runs
        Query: status, limit, offset
@@ -203,6 +248,12 @@ POST   /v1/generation-runs/{run_id}/checkpoint
        Body: checkpoint_id, action (approve | request_changes | edit),
        payload (notes, patch)
 ```
+
+`quality_mode` is required for the source-to-script vertical slice. The first
+supported value is `draft_without_qa`; runs created with this value skip QA
+evaluator nodes, record `qa_status=skipped`, and require `skip_qa_rationale`
+plus actor metadata. Later QA-gated workflows may add `qa_gated` without
+changing the run resource shape.
 
 ### Script projection and editing
 
@@ -628,8 +679,9 @@ sequenceDiagram
     participant WS as WS /ws/runs/{run_id}
     participant Orchestrator
 
-    TUI->>REST: POST /v1/episodes/{id}/generation-runs
-    REST-->>TUI: 201 {run_id}
+    TUI->>REST: POST /v1/episodes/{id}/generation-runs (Idempotency-Key: {uuid})
+    Note right of TUI: quality_mode=draft_without_qa
+    REST-->>TUI: 202 Accepted {run_id}
     TUI->>WS: connect
     TUI->>WS: client.hello(token, resume_from=0)
     WS-->>TUI: server.welcome
@@ -641,7 +693,9 @@ sequenceDiagram
 ```
 
 _Figure 1: Generation run lifecycle from launch through WebSocket event
-streaming._
+streaming. REST polling through `GET /v1/generation-runs/{run_id}` and
+`GET /v1/generation-runs/{run_id}/events` provides the JSON-only fallback for
+the source-to-script vertical slice._
 
 ### Checkpoint intervention
 
@@ -674,11 +728,12 @@ sequenceDiagram
     participant REST as REST API
     participant Ingestion as Ingestion Service
 
-    TUI->>REST: POST /v1/uploads (multipart)
+    TUI->>REST: POST /v1/uploads (multipart, Idempotency-Key)
     REST-->>TUI: 201 {upload_id, content_hash}
-    TUI->>REST: POST /v1/ingestion-jobs
+    TUI->>REST: POST /v1/ingestion-jobs (Idempotency-Key)
     REST-->>TUI: 201 {job_id}
-    TUI->>REST: POST /v1/ingestion-jobs/{job_id}/sources
+    TUI->>REST: POST /v1/ingestion-jobs/{job_id}/sources (Idempotency-Key required/consumed)
+    Note right of TUI: upload_id or source_uri
     REST-->>TUI: 201 {source_id}
     TUI->>REST: GET /v1/ingestion-jobs/{job_id}
     REST->>Ingestion: check status
@@ -689,6 +744,33 @@ sequenceDiagram
 ```
 
 _Figure 3: Source upload and ingestion job lifecycle._
+
+### Source-to-script completion
+
+For screen readers: the following sequence diagram shows the REST-only path
+from completed source ingestion to TEI-P5 XML download.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant REST as REST API
+    participant Generator as Generation Orchestrator
+
+    Client->>REST: POST /v1/episodes/{id}/generation-runs (Idempotency-Key: {uuid})
+    Note right of Client: quality_mode=draft_without_qa
+    REST-->>Client: 202 Accepted {run_id}
+    Client->>REST: GET /v1/generation-runs/{run_id}
+    REST->>Generator: check status
+    Generator-->>REST: running
+    REST-->>Client: 200 {status: running, qa_status: skipped}
+    Client->>REST: GET /v1/generation-runs/{run_id}
+    REST-->>Client: 200 {status: completed, tei_version: 7}
+    Client->>REST: GET /v1/episodes/{id}/tei
+    Note right of Client: Accept: application/tei+xml
+    REST-->>Client: 200 TEI-P5 XML
+```
+
+_Figure 4: REST-only source-to-script completion and TEI download._
 
 ### Audio review and feedback
 
@@ -712,7 +794,7 @@ sequenceDiagram
     REST-->>TUI: 200 [updated preview assets]
 ```
 
-_Figure 4: Audio preview review and feedback-driven regeneration cycle._
+_Figure 5: Audio preview review and feedback-driven regeneration cycle._
 
 ## Hexagonal architecture alignment
 
@@ -1022,8 +1104,8 @@ sequenceDiagram
     participant Orchestrator
 
     User->>TUI: Configure generation parameters
-    TUI->>REST_v1: POST /v1/episodes/{episode_id}/generation-runs
-    REST_v1-->>TUI: 201 Created {run_id}
+    TUI->>REST_v1: POST /v1/episodes/{episode_id}/generation-runs (Idempotency-Key: {uuid})
+    REST_v1-->>TUI: 202 Accepted {run_id}
 
     TUI->>WS_runs: WebSocket connect /ws/runs/{run_id}
     TUI->>WS_runs: client.hello(token, resume_from=0)

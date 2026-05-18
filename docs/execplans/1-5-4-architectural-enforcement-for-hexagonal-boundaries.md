@@ -17,14 +17,14 @@ from convention into a repo-local dependency-direction checker and
 architecture-test suite that proves concrete adapters still satisfy the
 published port contracts.
 
-After this work, a maintainer can change code in
-`episodic/canonical`, `episodic/api`, `episodic/llm`, and related packages and
-immediately learn whether the change crosses a forbidden boundary. The local
-developer path and the Continuous Integration (CI) path should agree:
-`make lint` must fail on forbidden imports, `make test` must fail when adapters
-stop honouring port contracts, and CI must surface the architecture gate
-clearly enough that a reviewer can tell whether a failure is a formatting
-problem, a typing problem, or a boundary-regression problem.
+After this work, a maintainer can change code in `episodic/canonical`,
+`episodic/api`, `episodic/llm`, and related packages and immediately learn
+whether the change crosses a forbidden boundary. The local developer path and
+the Continuous Integration (CI) path should agree: `make lint` must fail on
+forbidden imports, `make test` must fail when adapters stop honouring port
+contracts, and CI must surface the architecture gate clearly enough that a
+reviewer can tell whether a failure is a formatting problem, a typing problem,
+or a boundary-regression problem.
 
 This plan intentionally lands the foundation for boundary enforcement in the
 current service scaffold without consuming roadmap item `2.4.5`. Item `1.5.4`

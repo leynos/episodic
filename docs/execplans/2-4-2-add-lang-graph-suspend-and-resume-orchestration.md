@@ -463,10 +463,10 @@ shape is:
 - `created_at`, `updated_at`, `expires_at`: timezone-aware timestamps.
 
 Add repository methods through a port-owned adapter. The repository must make
-`save_or_reuse(...)` atomic using a uniqueness constraint on
-`idempotency_key`, so two concurrent retries converge on one record. Use
-py-pglite-backed tests that create a checkpoint, open a fresh unit of work,
-fetch the checkpoint, and resume it.
+`save_or_reuse(...)` atomic using a uniqueness constraint on `idempotency_key`,
+so two concurrent retries converge on one record. Use py-pglite-backed tests
+that create a checkpoint, open a fresh unit of work, fetch the checkpoint, and
+resume it.
 
 Stage E extends LangGraph orchestration. Update
 `episodic/orchestration/langgraph.py` so graph construction can receive a
@@ -736,25 +736,25 @@ passed with `make check-fmt`, `make typecheck`, `make lint`,
 reported 461 passed and 3 skipped tests. An earlier `make test` run hit a
 single setup timeout in
 `tests/test_snapshot_sources.py::test_snapshot_resolved_bindings_persists_reference_source_documents[explicit_created_at]`;
-the isolated test rerun passed both parametrisations before the clean full
+ the isolated test rerun passed both parametrisations before the clean full
 rerun.
 
-Revision note 2026-05-12: Review follow-up verified that the suspend
-checkpoint path already had no pre-save lookup and already derives reuse from
-the `save_or_reuse()` result, so no TOCTOU change was still needed. The
-remaining missing required checkpoint field helper now normalises missing
-payload keys to the documented `TypeError` contract. Validation passed with
-focused orchestration tests, `make check-fmt`, `make typecheck`, `make lint`,
-and `make test`; the full test suite reported 461 passed and 3 skipped tests.
+Revision note 2026-05-12: Review follow-up verified that the suspend checkpoint
+path already had no pre-save lookup and already derives reuse from the
+`save_or_reuse()` result, so no TOCTOU change was still needed. The remaining
+missing required checkpoint field helper now normalizes missing payload keys to
+the documented `TypeError` contract. Validation passed with focused
+orchestration tests, `make check-fmt`, `make typecheck`, `make lint`, and
+`make test`; the full test suite reported 461 passed and 3 skipped tests.
 
 Revision note 2026-05-12: Review follow-up verified and fixed the remaining
-checkpoint persistence issues: the migration now creates a DB-side
-`updated_at` trigger, checkpoint status is backed by the
-`WorkflowCheckpointStatus` enum in the domain and SQLAlchemy model, plan
-payload required-input deserialization now uses the shared `TypeError`
-contract, and redundant future annotations imports were removed from the new
-checkpoint storage files. Stale checkpoint-store API references were updated to
-the final `save_or_reuse(...)` API, and screen-reader descriptions now precede
-the suspend and resume sequence diagrams. The snapshot import comment was
-already resolved in the current code and required no change. Focused checkpoint,
-migration-drift, and malformed-payload tests passed.
+checkpoint persistence issues: the migration now creates a DB-side `updated_at`
+trigger, checkpoint status is backed by the `WorkflowCheckpointStatus` enum in
+the domain and SQLAlchemy model, plan payload required-input deserialization
+now uses the shared `TypeError` contract, and redundant future annotations
+imports were removed from the new checkpoint storage files. Stale
+checkpoint-store API references were updated to the final `save_or_reuse(...)`
+API, and screen-reader descriptions now precede the suspend and resume sequence
+diagrams. The snapshot import comment was already resolved in the current code
+and required no change. Focused checkpoint, migration-drift, and
+malformed-payload tests passed.

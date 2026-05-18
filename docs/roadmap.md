@@ -465,9 +465,10 @@ context.
 Finalize REST API surfaces with consistent contracts and version routing.
 Completion enables stable API consumption by clients.
 
-- [ ] 4.1.1. Introduce `/v1` API version prefix for new endpoints.
-  - Route all new TUI-facing endpoints under `/v1`.
-  - Preserve existing unversioned routes during transition.
+- [ ] 4.1.1. Introduce `/v1` as the target API prefix.
+  - Route TUI-facing and vertical-slice endpoints under `/v1`.
+  - Treat existing unversioned routes as pre-v0.1.0 implementation details
+    that do not require compatibility preservation.
   - Document version routing in the developers' guide.
   - See
     [Proposed REST endpoints](episodic-tui-api-design.md#proposed-rest-endpoints).
@@ -497,24 +498,51 @@ Completion enables structured approval workflows with audit trails.
   - Support email, Slack, and webhook notifications.
   - Trigger on approvals, rejections, and automated compliance alerts.
 
-### 4.3. Ingestion and upload endpoints
+### 4.3. Source-to-script REST vertical slice
 
-Implement ingestion job endpoints and file upload infrastructure. Completion
-enables programmatic content submission.
+This step answers whether an integration client can drive the narrowest useful
+source-to-script workflow through JSON/REST: submit show source material,
+provide presenter context, trigger draft generation without QA, and retrieve
+the resulting TEI-P5 XML. It validates the `/v1` resource contract before the
+full approval, QA, audio, and export surfaces land. See
+[ADR 009](adr/adr-009-source-to-script-rest-vertical-slice.md), the [system
+design source-to-script vertical slice], and the [TUI API source-to-script
+vertical slice].
 
-- [ ] 4.3.1. Define `UploadPort` and implement file upload endpoints.
-  - Implement `/v1/uploads` (POST) for direct multipart upload.
-  - Implement `/v1/uploads/init` (POST) for pre-signed object storage flows.
-  - Enforce content-type allowlist and maximum file size.
-  - Validate hexagonal boundary tests passing.
-  - See [Uploads](episodic-tui-api-design.md#uploads).
-- [ ] 4.3.2. Implement ingestion job and source endpoints. Requires 4.3.1.
-  - Implement `/v1/ingestion-jobs` (POST, GET) with series-scoped filtering.
-  - Implement `/v1/ingestion-jobs/{job_id}` (GET) with status reflection.
-  - Implement `/v1/ingestion-jobs/{job_id}/sources` (POST) with upload
-    reference or URI attachment.
-  - See
-    [Ingestion jobs and sources](episodic-tui-api-design.md#ingestion-jobs-and-sources).
+[system design source-to-script vertical slice]:
+episodic-podcast-generation-system-design.md#source-to-script-vertical-slice
+[TUI API source-to-script vertical slice]:
+episodic-tui-api-design.md#source-to-script-vertical-slice
+
+- [ ] 4.3.1. Implement source and presenter-profile intake for script
+  generation.
+  - Requires 1.3.4, 1.4.3, and 4.1.1.
+  - Implement `/v1/uploads` and `/v1/uploads/init` with idempotency keys,
+    content-type allowlists, size limits, content hashes, and upload metadata.
+  - Implement `/v1/ingestion-jobs` and
+    `/v1/ingestion-jobs/{job_id}/sources` with pollable job status and source
+    attachment by `upload_id` or `source_uri`.
+  - Use reusable reference documents with `kind=host_profile` and
+    `kind=guest_profile` as the presenter-profile contract.
+  - Success: a client can upload a research paper, attach it to an ingestion
+    job, create or bind presenter profile revisions, and observe JSON status
+    until the source context is ready for generation.
+- [ ] 4.3.2. Implement no-QA generation runs and TEI-P5 retrieval.
+  - Requires 2.1.1, 2.4.2, and 4.3.1.
+  - Implement `/v1/episodes/{episode_id}/generation-runs` creation with
+    `quality_mode=draft_without_qa`, `skip_qa_rationale`, actor metadata, and
+    `Idempotency-Key` enforcement.
+  - Implement `/v1/generation-runs/{run_id}` and
+    `/v1/generation-runs/{run_id}/events` as JSON polling surfaces for the
+    draft generation lifecycle.
+  - Persist the generated script into the canonical episode TEI with QA marked
+    as skipped for the run, and the resulting TEI revision.
+  - Implement `GET /v1/episodes/{episode_id}/tei` as both a JSON metadata
+    envelope and an `Accept: application/tei+xml` file download for draft TEI
+    output without requiring approval endpoints.
+  - Success: a client can trigger draft generation from uploaded source and
+    presenter context, poll completion over REST, and download a TEI-P5 XML
+    file without using the QA, audio, or export-job pipelines.
 
 ### 4.4. WebSocket event streaming
 
