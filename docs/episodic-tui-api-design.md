@@ -107,7 +107,7 @@ release.
 
 ## Proposed REST endpoints
 
-The target REST API uses a `/v1` prefix. ADR 008 defines the first
+The target REST API uses a `/v1` prefix. ADR 009 defines the first
 source-to-script vertical slice and explicitly removes any requirement to
 preserve the existing unversioned routes before v0.1.0. Control-plane requests
 and status responses use JSON; downloadable artefact representations may use
@@ -732,7 +732,7 @@ sequenceDiagram
     REST-->>TUI: 201 {upload_id, content_hash}
     TUI->>REST: POST /v1/ingestion-jobs (Idempotency-Key)
     REST-->>TUI: 201 {job_id}
-    TUI->>REST: POST /v1/ingestion-jobs/{job_id}/sources
+    TUI->>REST: POST /v1/ingestion-jobs/{job_id}/sources (Idempotency-Key required/consumed)
     Note right of TUI: upload_id or source_uri
     REST-->>TUI: 201 {source_id}
     TUI->>REST: GET /v1/ingestion-jobs/{job_id}

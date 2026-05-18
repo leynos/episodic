@@ -505,7 +505,7 @@ source-to-script workflow through JSON/REST: submit show source material,
 provide presenter context, trigger draft generation without QA, and retrieve
 the resulting TEI-P5 XML. It validates the `/v1` resource contract before the
 full approval, QA, audio, and export surfaces land. See
-[ADR 008](adr/adr-008-source-to-script-rest-vertical-slice.md), the [system
+[ADR 009](adr/adr-009-source-to-script-rest-vertical-slice.md), the [system
 design source-to-script vertical slice], and the [TUI API source-to-script
 vertical slice].
 

@@ -1,4 +1,4 @@
-# Architectural decision record (ADR) 008: Source-to-script REST vertical slice
+# Architectural decision record (ADR) 009: Source-to-script REST vertical slice
 
 ## Status
 
@@ -67,15 +67,14 @@ yet exist.
 
 - Control-plane requests and status responses use JSON over REST.
 - TEI download uses the registered `application/tei+xml` media type from
-  [RFC 6129](https://datatracker.ietf.org/doc/html/rfc6129).
+  [RFC 6129][^1].
 - Side-effecting `POST` requests that create uploads, ingestion jobs, source
   attachments, and generation runs accept `Idempotency-Key`.
 - Long-running ingestion and generation operations return pollable resources
   with `202 Accepted`, `Location`, and `Retry-After` semantics where the work
   cannot complete in the initial request.
 - The implementation respects the hexagonal boundary rules in
-  [ADR 006](adr-006-hexagonal-architecture-enforcement.md) and the resumable
-  workflow rules in [ADR 007](adr-007-durable-generation-checkpoints.md).
+  [ADR 006][^2] and the resumable workflow rules in [ADR 007][^3].
 
 ## Options considered
 
@@ -149,12 +148,12 @@ v0.1.0.
 
 ## Architectural rationale
 
-The decision follows resource-oriented REST guidance by modelling uploads,
+The decision follows resource-oriented REST guidance[^6] by modelling uploads,
 ingestion jobs, generation runs, and TEI documents as resources rather than as
-command endpoints. It follows common long-running operation practice by turning
-asynchronous work into pollable resources. It also follows idempotent request
-practice by making client-provided idempotency keys part of side-effecting
-`POST` requests.
+command endpoints. It follows common long-running operation practice[^7] by
+turning asynchronous work into pollable resources. It also follows idempotent
+request practice[^8] by making client-provided idempotency keys part of
+side-effecting `POST` requests.
 
 Keeping TEI retrieval on the episode resource avoids coupling the first script
 generation slice to export jobs. The JSON envelope supports clients that need
@@ -176,9 +175,13 @@ the literal file-download case defined by TEI media-type prior art.
 
 ## References
 
-- [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
-- [Episodic TUI API design](../episodic-tui-api-design.md)
-- [Microsoft REST API design best practices](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design)
-- [Microsoft Fabric long-running operation pattern](https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation)
-- [Stripe idempotent request guidance](https://docs.stripe.com/api/idempotent_requests)
-- [RFC 6129: The `application/tei+xml` media type](https://datatracker.ietf.org/doc/html/rfc6129)
+See also the system design[^4] and TUI API design.[^5]
+
+[^1]: [RFC 6129: The `application/tei+xml` media type](https://datatracker.ietf.org/doc/html/rfc6129)
+[^2]: [ADR 006: Hexagonal architecture enforcement](adr-006-hexagonal-architecture-enforcement.md)
+[^3]: [ADR 007: Durable generation checkpoints](adr-007-durable-generation-checkpoints.md)
+[^4]: [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
+[^5]: [Episodic TUI API design](../episodic-tui-api-design.md)
+[^6]: [Microsoft REST API design best practices](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design)
+[^7]: [Microsoft Fabric long-running operation pattern](https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation)
+[^8]: [Stripe idempotent request guidance](https://docs.stripe.com/api/idempotent_requests)

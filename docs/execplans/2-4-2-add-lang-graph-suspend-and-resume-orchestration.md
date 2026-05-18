@@ -742,7 +742,7 @@ rerun.
 Revision note 2026-05-12: Review follow-up verified that the suspend checkpoint
 path already had no pre-save lookup and already derives reuse from the
 `save_or_reuse()` result, so no TOCTOU change was still needed. The remaining
-missing required checkpoint field helper now normalises missing payload keys to
+missing required checkpoint field helper now normalizes missing payload keys to
 the documented `TypeError` contract. Validation passed with focused
 orchestration tests, `make check-fmt`, `make typecheck`, `make lint`, and
 `make test`; the full test suite reported 461 passed and 3 skipped tests.

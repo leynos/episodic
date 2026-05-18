@@ -15,7 +15,7 @@ Accepted decision records:
 - [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
 - [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
 - [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
-- [ADR 008: Source-to-script REST vertical slice](adr/adr-008-source-to-script-rest-vertical-slice.md)
+- [ADR 009: Source-to-script REST vertical slice](adr/adr-009-source-to-script-rest-vertical-slice.md)
 
 ## Overview
 
@@ -714,7 +714,7 @@ flowchart TD
 
 ### Source-to-script vertical slice
 
-ADR 008 defines the first end-to-end REST slice that proves uploaded source
+ADR 009 defines the first end-to-end REST slice that proves uploaded source
 material can become a downloadable TEI-P5 script before the full QA, approval,
 audio, and export pipelines are complete.
 
