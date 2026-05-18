@@ -267,8 +267,8 @@ jobs.
 - Generated scripts can now receive an internal Chrono spoken-runtime estimate
   during QA. Chrono uses the canonical TEI script through `tei-rapporteur`,
   counts spoken words with a deterministic local heuristic, and records
-  estimator metadata for audit and future comparison. Chrono does not call a
-  Large Language Model (LLM) and does not add provider usage charges. Duration
+  estimator metadata for audit and future comparison. Chrono does not call an
+  LLM (Large Language Model) and does not add provider usage charges. Duration
   estimates round up to the next whole second using integer arithmetic, so any
   non-empty spoken script receives at least a one-second estimate even when a
   custom words-per-minute setting is extremely high.
