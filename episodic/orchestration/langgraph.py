@@ -22,6 +22,8 @@ from episodic.orchestration._types import _log_event
 from episodic.orchestration._usage import build_generation_result
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from langgraph.graph.state import CompiledStateGraph
 
     from episodic.orchestration import _dto as dto
@@ -607,6 +609,7 @@ def build_generation_orchestration_graph(
     planner: protocols.PlannerPort,
     tool_executor: protocols.ToolExecutorPort,
     checkpoint_port: protocols.CheckpointPort | None = None,
+    finish_callback: cabc.Callable[[GenerationGraphState], None] | None = None,
 ) -> CompiledStateGraph[
     GenerationGraphState,
     None,
@@ -628,6 +631,15 @@ def build_generation_orchestration_graph(
         """Async entry point for the execute graph node."""
         return await _execute_node(state, tool_executor=tool_executor)
 
+    def _run_finish_node(
+        state: GenerationGraphState,
+    ) -> dict[str, dto.GenerationOrchestrationResult]:
+        """Entry point for the finish graph node."""
+        result = _finish_node(state)
+        if finish_callback is not None:
+            finish_callback(state)
+        return result
+
     if checkpoint_port is None:
         execute_node = _run_execute_node
         execute_target = "finish"
@@ -647,7 +659,7 @@ def build_generation_orchestration_graph(
 
     graph.add_node("plan", _run_plan_node)
     graph.add_node("execute", execute_node)
-    graph.add_node("finish", _finish_node)
+    graph.add_node("finish", _run_finish_node)
     graph.add_edge(START, "plan")
     graph.add_edge("plan", "execute")
     graph.add_edge("execute", execute_target)

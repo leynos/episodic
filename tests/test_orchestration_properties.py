@@ -311,7 +311,25 @@ _unknown_model_tier_values = st.one_of(
 
 _invalid_required_inputs_values = st.one_of(
     st.integers(),
-    st.lists(st.one_of(st.none(), st.integers(), st.just("")), min_size=1),
+    st.lists(
+        st.one_of(st.none(), st.integers(), st.just("")),
+        min_size=1,
+        max_size=10,
+    ),
+)
+
+_PLANNER_FORMAT_ERROR_PATTERN = (
+    r"plan_version must be a non-empty string"
+    r"|steps must be a list"
+    r"|step must be an object"
+    r"|action_id must be a non-empty string"
+    r"|action_kind must be a non-empty string"
+    r"|action_kind must be one of: generate_show_notes"
+    r"|rationale must be a non-empty string"
+    r"|model_tier must be a non-empty string"
+    r"|model_tier must be one of: planning, execution"
+    r"|required_inputs must be a list of strings"
+    r"|required_inputs must contain only non-empty strings"
 )
 
 _invalid_plan_payloads = st.one_of(
@@ -552,7 +570,10 @@ async def test_planning_response_format_error_for_invalid_plan_objects(
         config=_config(),
     )
 
-    with pytest.raises(PlanningResponseFormatError):
+    with pytest.raises(
+        PlanningResponseFormatError,
+        match=_PLANNER_FORMAT_ERROR_PATTERN,
+    ):
         await planner.plan(_request())
 
 
@@ -697,10 +718,10 @@ async def test_langgraph_respects_plan_execute_finish_order(
     graph = build_generation_orchestration_graph(
         planner=planner,
         tool_executor=tool_executor,
+        finish_callback=lambda _state: event_recorder.record("finish"),
     )
 
     state = await graph.ainvoke(GenerationGraphState(request=request))
-    event_recorder.record("finish")
 
     assert event_recorder.events == ["plan", "execute", "finish"]
     assert state["planner_result"] is not None
