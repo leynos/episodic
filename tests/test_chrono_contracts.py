@@ -60,27 +60,30 @@ def _script_with_word_count(spoken_word_count: int) -> str:
 class TestChronoContracts:
     """Contract and property coverage for Chrono duration arithmetic."""
 
-    def test_estimate_matches_boundary_inputs(self) -> None:
-        """The public estimator should match the documented ceiling calculation."""
-        request = ChronoEvaluationRequest(script_tei_xml=_script_with_word_count(1))
+    @pytest.mark.parametrize(
+        ("word_count", "words_per_minute", "expected_seconds"),
+        [
+            (1, 10**400, 1),
+            (0, sys.maxsize, 0),
+        ],
+    )
+    def test_estimate_matches_boundary_inputs(
+        self,
+        word_count: int,
+        words_per_minute: int,
+        expected_seconds: int,
+    ) -> None:
+        """The public estimator should match boundary duration cases."""
+        request = ChronoEvaluationRequest(
+            script_tei_xml=_script_with_word_count(word_count)
+        )
         result = ChronoRuntimeEstimator(
-            config=ChronoEstimatorConfig(words_per_minute=10**400)
+            config=ChronoEstimatorConfig(words_per_minute=words_per_minute)
         ).estimate(request)
 
-        assert result.estimated_seconds == 1
-        assert result.metadata.spoken_word_count == 1
-        assert result.metadata.words_per_minute == 10**400
-
-    def test_estimate_preserves_zero_identity(self) -> None:
-        """Zero spoken words should produce a zero-second estimate."""
-        request = ChronoEvaluationRequest(script_tei_xml=_script_with_word_count(0))
-        result = ChronoRuntimeEstimator(
-            config=ChronoEstimatorConfig(words_per_minute=sys.maxsize)
-        ).estimate(request)
-
-        assert result.estimated_seconds == 0
-        assert result.metadata.spoken_word_count == 0
-        assert result.metadata.words_per_minute == sys.maxsize
+        assert result.estimated_seconds == expected_seconds
+        assert result.metadata.spoken_word_count == word_count
+        assert result.metadata.words_per_minute == words_per_minute
 
     @pytest.mark.crosshair
     def test_chrono_crosshair_contracts_pass(self) -> None:
