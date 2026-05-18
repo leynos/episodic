@@ -92,6 +92,20 @@ class StructuredGenerationPlanner:
     config: GenerationOrchestrationConfig
 
     @staticmethod
+    def _coerce_enabled_action_kind(
+        value: object,
+        *,
+        enabled_action_kinds: tuple[ActionKind, ...],
+    ) -> ActionKind:
+        """Return a planner action kind only when the config enables it."""
+        action_kind = _coerce_action_kind(value)
+        if action_kind not in enabled_action_kinds:
+            expected = ", ".join(action.value for action in enabled_action_kinds)
+            msg = f"action_kind must be one of enabled actions: {expected}."
+            raise PlanningResponseFormatError(msg)
+        return action_kind
+
+    @staticmethod
     def _parse_plan(
         payload: dict[str, object],
         *,
@@ -103,13 +117,17 @@ class StructuredGenerationPlanner:
             "plan_version",
         )
         step_payloads = _require_plan_step_list(payload.get("steps"))
+        enabled_action_kinds = _coerce_action_kinds(config.enabled_action_kinds)
         steps = tuple(
             PlannedAction(
                 action_id=_require_non_empty_string(
                     step_payload.get("action_id"),
                     "action_id",
                 ),
-                action_kind=_coerce_action_kind(step_payload.get("action_kind")),
+                action_kind=StructuredGenerationPlanner._coerce_enabled_action_kind(
+                    step_payload.get("action_kind"),
+                    enabled_action_kinds=enabled_action_kinds,
+                ),
                 rationale=_require_non_empty_string(
                     step_payload.get("rationale"),
                     "rationale",

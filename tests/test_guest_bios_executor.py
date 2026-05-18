@@ -320,6 +320,43 @@ async def test_guest_bios_tool_executor_uses_guest_bios_prompt_by_default() -> N
 
 
 @pytest.mark.asyncio
+async def test_guest_bios_tool_executor_allows_no_sources_no_op() -> None:
+    """Guest-bios plans with no bound guest profiles should complete as no-ops."""
+
+    async def binding_resolver(
+        uow: object,
+        **kwargs: object,
+    ) -> list[ResolvedBinding]:
+        del uow, kwargs
+        await asyncio.sleep(0)
+        return []
+
+    llm = _FakeLLMPort([])
+    executor = GuestBiosToolExecutor(
+        llm=llm,
+        config=_config(),
+        uow=typ.cast("CanonicalUnitOfWork", object()),
+        binding_resolver=binding_resolver,
+    )
+    request = GenerationOrchestrationRequest(
+        correlation_id="corr-guest-bios",
+        script_tei_xml=SCRIPT_TEI,
+        series_profile_id=uuid4(),
+    )
+
+    result = await executor.execute(_guest_bios_action(), request)
+
+    assert result.model == _config().execution_model
+    assert result.summary == "Generated 0 guest biographies."
+    assert result.usage == _usage(input_tokens=0, output_tokens=0)
+    assert result.guest_bios_result is not None
+    assert not result.guest_bios_result.generation_result.model
+    assert result.guest_bios_result.sources == ()
+    assert result.guest_bios_result.tei_xml == request.script_tei_xml
+    assert not llm.requests
+
+
+@pytest.mark.asyncio
 async def test_guest_bios_tool_executor_requires_series_profile_id() -> None:
     """Binding-backed guest-bios execution needs a series profile context."""
     executor = GuestBiosToolExecutor(
