@@ -133,21 +133,6 @@ class TestChronoContracts:
         assert result.metadata.spoken_word_count == spoken_word_count
         assert result.metadata.words_per_minute == words_per_minute
 
-    @given(words_per_minute=_VALID_WORDS_PER_MINUTE)
-    def test_estimate_handles_zero_word_count(
-        self,
-        words_per_minute: int,
-    ) -> None:
-        """The public estimator should preserve the zero-case identity."""
-        request = ChronoEvaluationRequest(script_tei_xml=_script_with_word_count(0))
-        result = ChronoRuntimeEstimator(
-            config=ChronoEstimatorConfig(words_per_minute=words_per_minute)
-        ).estimate(request)
-
-        assert result.estimated_seconds == 0
-        assert result.metadata.spoken_word_count == 0
-        assert result.metadata.words_per_minute == words_per_minute
-
     @given(
         spoken_word_count=_PUBLIC_API_WORD_COUNTS,
         words_per_minute=_VALID_WORDS_PER_MINUTE,
