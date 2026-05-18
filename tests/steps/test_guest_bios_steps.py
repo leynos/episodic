@@ -12,8 +12,6 @@ also recording generated `GuestBiosResult` and enriched TEI artefacts for the
 Then steps.
 """
 
-# pylint: disable=consider-using-with
-
 from __future__ import annotations
 
 import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
@@ -241,7 +239,7 @@ def _start_vidaimock_process(
     last_error: RuntimeError | None = None
     for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
         port = _find_free_port()
-        process = subprocess.Popen(  # noqa: S603 - vidaimock_path comes from shutil.which and subprocess.Popen receives only controlled test arguments.
+        process = subprocess.Popen(  # pylint: disable=consider-using-with  # noqa: S603 - vidaimock_path comes from shutil.which and subprocess.Popen receives only controlled test arguments.
             [
                 vidaimock_path,
                 "--host",

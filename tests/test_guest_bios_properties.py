@@ -1,6 +1,5 @@
 """Property tests for guest biography TEI enrichment."""
 
-import re
 import typing as typ
 
 import pytest
@@ -60,17 +59,22 @@ def _guest_bio_items(xml: str) -> list[dict[str, object]]:
     text_payload = typ.cast("dict[str, object]", document_payload["text"])
     body_payload = typ.cast("dict[str, object]", text_payload["body"])
     blocks = typ.cast("list[object]", body_payload["blocks"])
-    guest_bios = [
-        typ.cast("dict[str, object]", block)
-        for block in blocks
-        if isinstance(block, dict)
-        and typ.cast("dict[str, object]", block).get("div_type") == "guest-bios"
-    ]
+    guest_bios = _guest_bio_divs(blocks)
     content = typ.cast("list[object]", guest_bios[0]["content"])
     list_payload = typ.cast("dict[str, object]", content[0])
     return [
         typ.cast("dict[str, object]", item)
         for item in typ.cast("list[object]", list_payload["items"])
+    ]
+
+
+def _guest_bio_divs(blocks: list[object]) -> list[dict[str, object]]:
+    """Return parsed guest-bios div blocks."""
+    return [
+        typ.cast("dict[str, object]", block)
+        for block in blocks
+        if isinstance(block, dict)
+        and typ.cast("dict[str, object]", block).get("div_type") == "guest-bios"
     ]
 
 
@@ -121,7 +125,11 @@ def test_enriched_guest_bios_replaces_prior_guest_bios_div(
     twice = enrich_tei_with_guest_bios(once, _result(second_entries))
     item_bios = [_inline_text(item["content"]) for item in _guest_bio_items(twice)]
 
-    assert len(re.findall(r'type="guest-bios"', twice)) == 1
+    document_payload = typ.cast("dict[str, object]", tei.to_dict(tei.parse_xml(twice)))
+    text_payload = typ.cast("dict[str, object]", document_payload["text"])
+    body_payload = typ.cast("dict[str, object]", text_payload["body"])
+    guest_bios_divs = _guest_bio_divs(typ.cast("list[object]", body_payload["blocks"]))
+    assert len(guest_bios_divs) == 1
     assert item_bios == [entry.bio for entry in second_entries]
 
 

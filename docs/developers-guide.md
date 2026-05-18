@@ -12,6 +12,7 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md)
 - [`adr-005-structured-planning-and-tool-execution.md`](adr/adr-005-structured-planning-and-tool-execution.md)
 - [`adr-006-chrono-spoken-text-semantics.md`](adr/adr-006-chrono-spoken-text-semantics.md)
+- [`adr-010-guest-bios-tei-representation.md`](adr/adr-010-guest-bios-tei-representation.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -766,7 +767,7 @@ async def enrich_with_chapters(llm_port, script_tei_xml: str) -> str:
   `<label>` with the guest display name, inline biography text, and `@corresp`
   pointing at the pinned reference-document revision. The representation is
   defined by
-  [`adr-009-guest-bios-tei-representation.md`](adr/adr-009-guest-bios-tei-representation.md).
+  [`adr-010-guest-bios-tei-representation.md`](adr/adr-010-guest-bios-tei-representation.md).
 - `GuestBiosResponseFormatError` is raised when the provider response is not a
   JSON object with a `guests` list, when required fields are missing or blank,
   when a revision identifier is unknown, or when the response duplicates a

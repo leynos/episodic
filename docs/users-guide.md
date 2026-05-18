@@ -124,10 +124,9 @@ malformed metadata is published silently. This "fail fast" behaviour is
 intentional — a clear error is easier to diagnose and correct than silent data
 loss.
 
-Chapter markers apply the same fail-fast rule. Blank titles,
-invalid durations, negative starts, duplicate starts, and descending starts are
-rejected before the canonical TEI document is enriched.
-
+Chapter markers apply the same fail-fast rule. Blank titles, invalid durations,
+negative starts, duplicate starts, and descending starts are rejected before
+the canonical TEI document is enriched.
 
 #### Guest biographies
 
@@ -138,7 +137,8 @@ same pinned reference revisions exposed by
 `guest_profile` documents, and asks the configured execution model for a short,
 source-grounded biography for each resolved guest.
 
-For screen readers: example TEI guest-bios block with one linked biography.
+For screen readers: this XML snippet shows a TEI guest-bios division containing
+a list item with a revision link, guest name label, and biography text.
 
 The generated biographies are written into the canonical TEI body as:
 

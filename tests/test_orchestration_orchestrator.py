@@ -103,7 +103,7 @@ async def test_routing_tool_executor_dispatches_by_action_kind() -> None:
     routing_executor = RoutingToolExecutor(
         routes={
             ActionKind.GENERATE_SHOW_NOTES: show_notes_executor,
-            "generate_guest_bios": guest_bios_executor,
+            ActionKind.GENERATE_GUEST_BIOS: guest_bios_executor,
         }
     )
     request = _request()

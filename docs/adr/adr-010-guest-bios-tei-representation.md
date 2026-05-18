@@ -1,4 +1,4 @@
-# ADR-007: Guest-bios TEI representation
+# ADR-010: Guest-bios TEI representation
 
 ## Status
 
@@ -22,6 +22,9 @@ episode body, where content enrichment output is already represented.
 
 Represent generated guest biographies as a thematic TEI division with a list of
 guest items:
+
+For screen readers: example XML representation of guest biographies with list
+items containing name labels, biography text, and external revision links.
 
 ```xml
 <div type="guest-bios">

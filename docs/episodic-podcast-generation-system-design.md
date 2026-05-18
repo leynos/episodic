@@ -16,6 +16,7 @@ Accepted decision records:
 - [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
 - [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
 - [ADR 009: Source-to-script REST vertical slice](adr/adr-009-source-to-script-rest-vertical-slice.md)
+- [ADR 010: Guest-bios TEI representation](adr/adr-010-guest-bios-tei-representation.md)
 
 ## Overview
 
@@ -305,7 +306,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   `<div type="guest-bios"><list><item corresp="...">...</item></list></div>`.
   The `@corresp` value points back to the consumed reference-document revision.
   This TEI representation is defined in
-  [ADR 009: Guest-bios TEI representation](adr/adr-009-guest-bios-tei-representation.md).
+  [ADR 010: Guest-bios TEI representation](adr/adr-010-guest-bios-tei-representation.md).
 - Persists generation runs alongside prompts, responses, iteration counts,
   quality mode, QA status, skip rationale, and cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
