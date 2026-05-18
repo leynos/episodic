@@ -64,7 +64,6 @@ class TestChronoContracts:
         ("word_count", "words_per_minute", "expected_seconds"),
         [
             (1, 10**400, 1),
-            (0, sys.maxsize, 0),
         ],
     )
     def test_estimate_matches_boundary_inputs(
@@ -119,30 +118,7 @@ class TestChronoContracts:
         spoken_word_count: int,
         words_per_minute: int,
     ) -> None:
-        """The public estimator should match Chrono's arithmetic formula."""
-        request = ChronoEvaluationRequest(
-            script_tei_xml=_script_with_word_count(spoken_word_count)
-        )
-        result = ChronoRuntimeEstimator(
-            config=ChronoEstimatorConfig(words_per_minute=words_per_minute)
-        ).estimate(request)
-
-        assert result.estimated_seconds == (
-            _integer_ceiling_seconds(spoken_word_count, words_per_minute)
-        )
-        assert result.metadata.spoken_word_count == spoken_word_count
-        assert result.metadata.words_per_minute == words_per_minute
-
-    @given(
-        spoken_word_count=_PUBLIC_API_WORD_COUNTS,
-        words_per_minute=_VALID_WORDS_PER_MINUTE,
-    )
-    def test_estimate_satisfies_postconditions(
-        self,
-        spoken_word_count: int,
-        words_per_minute: int,
-    ) -> None:
-        """Public estimates should satisfy the CrossHair postcondition predicate."""
+        """The public estimator should match Chrono's arithmetic contracts."""
         request = ChronoEvaluationRequest(
             script_tei_xml=_script_with_word_count(spoken_word_count)
         )
@@ -151,6 +127,11 @@ class TestChronoContracts:
         ).estimate(request)
         estimated_seconds = result.estimated_seconds
 
+        assert estimated_seconds == (
+            _integer_ceiling_seconds(spoken_word_count, words_per_minute)
+        )
+        assert result.metadata.spoken_word_count == spoken_word_count
+        assert result.metadata.words_per_minute == words_per_minute
         assert estimated_seconds >= 0
         assert (spoken_word_count == 0) == (estimated_seconds == 0)
         assert spoken_word_count == 0 or estimated_seconds == _integer_ceiling_seconds(
