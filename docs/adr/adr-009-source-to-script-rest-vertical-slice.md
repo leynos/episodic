@@ -148,11 +148,11 @@ v0.1.0.
 
 ## Architectural rationale
 
-The decision follows resource-oriented REST guidance[^6] by modelling uploads,
+The decision follows resource-oriented REST guidance[^4] by modelling uploads,
 ingestion jobs, generation runs, and TEI documents as resources rather than as
-command endpoints. It follows common long-running operation practice[^7] by
+command endpoints. It follows common long-running operation practice[^5] by
 turning asynchronous work into pollable resources. It also follows idempotent
-request practice[^8] by making client-provided idempotency keys part of
+request practice[^6] by making client-provided idempotency keys part of
 side-effecting `POST` requests.
 
 Keeping TEI retrieval on the episode resource avoids coupling the first script
@@ -175,13 +175,13 @@ the literal file-download case defined by TEI media-type prior art.
 
 ## References
 
-See also the system design[^4] and TUI API design.[^5]
+See also the system design[^7] and TUI API design.[^8]
 
 [^1]: [RFC 6129: The `application/tei+xml` media type](https://datatracker.ietf.org/doc/html/rfc6129)
 [^2]: [ADR 006: Hexagonal architecture enforcement](adr-006-hexagonal-architecture-enforcement.md)
 [^3]: [ADR 007: Durable generation checkpoints](adr-007-durable-generation-checkpoints.md)
-[^4]: [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
-[^5]: [Episodic TUI API design](../episodic-tui-api-design.md)
-[^6]: [Microsoft REST API design best practices](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design)
-[^7]: [Microsoft Fabric long-running operation pattern](https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation)
-[^8]: [Stripe idempotent request guidance](https://docs.stripe.com/api/idempotent_requests)
+[^4]: [Microsoft REST API design best practices](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design)
+[^5]: [Microsoft Fabric long-running operation pattern](https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation)
+[^6]: [Stripe idempotent request guidance](https://docs.stripe.com/api/idempotent_requests)
+[^7]: [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
+[^8]: [Episodic TUI API design](../episodic-tui-api-design.md)
