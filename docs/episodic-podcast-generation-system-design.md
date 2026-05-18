@@ -305,7 +305,7 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   `<div type="guest-bios"><list><item corresp="...">...</item></list></div>`.
   The `@corresp` value points back to the consumed reference-document revision.
   This TEI representation is defined in
-  [ADR 007: Guest-bios TEI representation](adr/adr-007-guest-bios-tei-representation.md).
+  [ADR 009: Guest-bios TEI representation](adr/adr-009-guest-bios-tei-representation.md).
 - Persists generation runs alongside prompts, responses, iteration counts,
   quality mode, QA status, skip rationale, and cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
@@ -672,7 +672,7 @@ following node structure:
    sources; construct the initial prompt scaffold; validate the requested
    quality mode.
 2. **Generate:** Invoke `LLMPort` to produce draft content, show notes, and
-   guest biographies, and enrichments.
+   guest biographies and enrichments.
 3. **Quality branch:** Route `draft_without_qa` runs directly to draft
    persistence with QA status recorded as skipped. Route QA-gated runs to the
    evaluator branch.

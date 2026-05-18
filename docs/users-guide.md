@@ -138,12 +138,14 @@ same pinned reference revisions exposed by
 `guest_profile` documents, and asks the configured execution model for a short,
 source-grounded biography for each resolved guest.
 
+For screen readers: example TEI guest-bios block with one linked biography.
+
 The generated biographies are written into the canonical TEI body as:
 
 ```xml
 <div type="guest-bios">
   <list>
-    <item corresp="reference-document-revision-id">
+    <item corresp="urn:episodic:reference-document-revision:reference-document-revision-id">
       <label>Guest name</label>
       Biography text.
     </item>

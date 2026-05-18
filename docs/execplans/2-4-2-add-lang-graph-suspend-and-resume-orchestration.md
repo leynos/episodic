@@ -736,13 +736,13 @@ passed with `make check-fmt`, `make typecheck`, `make lint`,
 reported 461 passed and 3 skipped tests. An earlier `make test` run hit a
 single setup timeout in
 `tests/test_snapshot_sources.py::test_snapshot_resolved_bindings_persists_reference_source_documents[explicit_created_at]`;
- the isolated test rerun passed both parametrisations before the clean full
+ the isolated test rerun passed both parametrizations before the clean full
 rerun.
 
 Revision note 2026-05-12: Review follow-up verified that the suspend checkpoint
 path already had no pre-save lookup and already derives reuse from the
 `save_or_reuse()` result, so no TOCTOU change was still needed. The remaining
-missing required checkpoint field helper now normalises missing payload keys to
+missing required checkpoint field helper now normalizes missing payload keys to
 the documented `TypeError` contract. Validation passed with focused
 orchestration tests, `make check-fmt`, `make typecheck`, `make lint`, and
 `make test`; the full test suite reported 461 passed and 3 skipped tests.

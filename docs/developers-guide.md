@@ -766,7 +766,7 @@ async def enrich_with_chapters(llm_port, script_tei_xml: str) -> str:
   `<label>` with the guest display name, inline biography text, and `@corresp`
   pointing at the pinned reference-document revision. The representation is
   defined by
-  [`adr-007-guest-bios-tei-representation.md`](adr/adr-007-guest-bios-tei-representation.md).
+  [`adr-009-guest-bios-tei-representation.md`](adr/adr-009-guest-bios-tei-representation.md).
 - `GuestBiosResponseFormatError` is raised when the provider response is not a
   JSON object with a `guests` list, when required fields are missing or blank,
   when a revision identifier is unknown, or when the response duplicates a

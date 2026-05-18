@@ -156,7 +156,7 @@ ExecPlan has been explicitly approved.
   prompt builder, and TEI enrichment helper. Focused test command
   `uv run pytest tests/test_guest_bios.py -q` now passes with 5 tests.
 - [x] 2026-05-14: Added
-  `docs/adr/adr-007-guest-bios-tei-representation.md` to record the
+  `docs/adr/adr-009-guest-bios-tei-representation.md` to record the
   `<div type="guest-bios"><list><item corresp="...">` representation.
 - [x] 2026-05-14: Ran `coderabbit review --agent` for milestone 1. It raised
   a missing expected-revision parser test and an ADR footnote wrapping concern;
@@ -298,9 +298,8 @@ parser/emitter dependency.
 
 Read `docs/adr/adr-004-show-notes-tei-representation.md`,
 `docs/episodic-podcast-generation-system-design.md`, and the relevant
-`tei_rapporteur` body payload expectations. Add a new ADR, expected to be
-`docs/adr/adr-007-guest-bios-tei-representation.md`, unless the repository has
-renumbered ADRs by then.
+`tei_rapporteur` body payload expectations. Add a new ADR at
+`docs/adr/adr-009-guest-bios-tei-representation.md`.
 
 Write fail-first unit tests in a new `tests/test_guest_bios.py` covering the
 target body shape:
@@ -308,7 +307,7 @@ target body shape:
 ```xml
 <div type="guest-bios">
   <list>
-    <item corresp="#ref-revision-id">
+    <item corresp="urn:episodic:reference-document-revision:ref-revision-id">
       <label>Guest name</label>
       Guest biography text.
     </item>
