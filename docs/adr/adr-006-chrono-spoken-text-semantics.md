@@ -195,6 +195,16 @@ baseline estimator, not a linguistic model. Keeping the token pattern versioned
 and visible makes later improvements comparable rather than silently changing
 historical runtime estimates.
 
+Chrono is Python application code, so Kani and Verus are out of scope for its
+numeric arithmetic. Those tools verify Rust code and cannot be applied directly
+to `episodic/qa/chrono.py`. Chrono instead uses CrossHair with Python PEP 316
+contracts around the pure `_compute_estimated_seconds(...)` helper. CrossHair
+symbolically checks the same safety boundary that matters for the estimator:
+valid inputs have a non-negative word count and positive words-per-minute
+setting, zero words produce zero seconds, and positive word counts use the
+documented integer-only ceiling formula. The surrounding dataclass guards
+enforce the same input preconditions at Chrono's runtime boundaries.
+
 ## Consequences
 
 ### Positive
@@ -207,6 +217,9 @@ historical runtime estimates.
   Chrono and any future spoken-script consumer.
 - Nested inline segmentation can no longer inflate runtime estimates by
   double-counting child text.
+- Chrono now has a Python-native symbolic verification gate for the
+  deterministic duration arithmetic without adding a Rust verification
+  toolchain to this repository.
 
 ### Negative
 
@@ -216,6 +229,9 @@ historical runtime estimates.
   with valid TEI P5 fixtures.
 - Non-Latin scripts and pure numeric speech are undercounted by the first naive
   estimator unless a later version broadens tokenisation.
+- CrossHair covers the pure numeric helper only. It does not replace the
+  behavioural, property, or TEI-validation tests that exercise Chrono's parser
+  boundary and orchestration side effects.
 
 ### Neutral
 

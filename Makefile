@@ -14,7 +14,7 @@ PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_P
 PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie test typecheck check-migrations $(TOOLS) $(VENV_TOOLS)
+        markdownlint nixie test typecheck crosshair check-migrations $(TOOLS) $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
 
@@ -81,6 +81,9 @@ typecheck: build ## Run typechecking
 	$(UV_ENV) $(UV) tool run ty==0.0.32 --version
 	$(UV_ENV) $(UV) tool run ty==0.0.32 check
 
+crosshair: build ## Verify CrossHair PEP 316 contracts
+	$(UV_ENV) $(UV) run crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py
+
 markdownlint: ## Lint Markdown files
 	env -u NO_COLOR $(MDLINT) '**/*.md'
 
@@ -88,7 +91,7 @@ nixie: ## Validate Mermaid diagrams
 	$(call ensure_tool,nixie)
 	$(NIXIE) --no-sandbox
 
-test: build $(VENV_TOOLS) ## Run tests
+test: build crosshair $(VENV_TOOLS) ## Run tests
 	$(UV_ENV) $(UV) run pytest -v -n $(PYTEST_XDIST_WORKERS)
 
 check-migrations: build $(VENV_TOOLS) ## Check for schema drift between models and migrations

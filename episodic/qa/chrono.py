@@ -31,7 +31,6 @@ runtime policy.
 
 import dataclasses as dc
 import logging
-import math
 import re
 import time
 import typing as typ
@@ -218,9 +217,10 @@ def _estimate_runtime(
 ) -> ChronoRuntimeEstimate:
     """Build a deterministic Chrono estimate from extracted spoken text."""
     spoken_word_count = _count_spoken_words(spoken_text)
-    estimated_seconds = 0
-    if spoken_word_count > 0:
-        estimated_seconds = math.ceil(spoken_word_count / config.words_per_minute * 60)
+    estimated_seconds = _compute_estimated_seconds(
+        spoken_word_count,
+        config.words_per_minute,
+    )
     metadata = ChronoEstimatorMetadata(
         estimator_name=config.estimator_name,
         estimator_version=config.estimator_version,
@@ -232,6 +232,20 @@ def _estimate_runtime(
         estimated_seconds=estimated_seconds,
         metadata=metadata,
     )
+
+
+def _compute_estimated_seconds(spoken_word_count: int, words_per_minute: int) -> int:
+    """Compute estimated spoken duration in whole seconds.
+
+    pre: spoken_word_count >= 0
+    pre: words_per_minute > 0
+    post: __return__ >= 0
+    post: (spoken_word_count == 0) == (__return__ == 0)
+    post: spoken_word_count==0 or __return__==-(-spoken_word_count*60//words_per_minute)
+    """
+    if spoken_word_count == 0:
+        return 0
+    return (spoken_word_count * 60 + words_per_minute - 1) // words_per_minute
 
 
 @dc.dataclass(frozen=True, slots=True)

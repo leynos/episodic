@@ -11,6 +11,7 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-003-celery-worker-scaffold.md`](adr/adr-003-celery-worker-scaffold.md)
 - [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md)
 - [`adr-005-structured-planning-and-tool-execution.md`](adr/adr-005-structured-planning-and-tool-execution.md)
+- [`adr-006-chrono-spoken-text-semantics.md`](adr/adr-006-chrono-spoken-text-semantics.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -583,6 +584,12 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   high-cardinality payload data. Keep the deterministic spoken-runtime
   calculation free of logging, metrics, and wall-clock reads; those side
   effects belong at the estimator orchestration boundary.
+- Keep Chrono's numeric duration arithmetic in small pure helpers. The
+  `_compute_estimated_seconds(...)` helper carries Python Enhancement Proposal
+  (PEP) 316 contracts verified by CrossHair. Run `make crosshair` after
+  changing the word-count, words-per-minute, or ceiling-rounding policy. Kani
+  and Verus are Rust verification tools and are not applicable to this Python
+  module.
 
 ### Testing the evaluator
 
@@ -599,6 +606,11 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   `tests/test_chrono_langgraph.py`, and its behavioural scenario lives in
   `tests/features/chrono.feature` with steps in
   `tests/steps/test_chrono_steps.py`.
+- Chrono contract tests live in `tests/test_chrono_contracts.py`. They pin the
+  public estimator behaviour backed by `_compute_estimated_seconds(...)` so the
+  CrossHair gate has property-test coverage beside symbolic verification. The
+  same module includes the `pytest.mark.crosshair` subprocess gate for
+  `crosshair check --analysis_kind=PEP316 episodic/qa/chrono.py`.
 - Chrono behavioural tests do not launch Vidai Mock because Chrono has no
   inference-service boundary in roadmap item `2.2.6`.
 
