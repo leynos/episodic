@@ -21,6 +21,7 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.reference_documents.resolution import ResolvedBinding
 from episodic.generation import (
+    GuestBiosGeneratorConfig,
     GuestBioSource,
     GuestBiosResponseFormatError,
     GuestBiosResult,
@@ -261,6 +262,61 @@ async def test_guest_bios_tool_executor_resolves_bindings_and_returns_result() -
         ids["revision"]
     )
     assert 'type="guest-bios"' in result.guest_bios_result.tei_xml
+
+
+@pytest.mark.asyncio
+async def test_guest_bios_tool_executor_uses_guest_bios_prompt_by_default() -> None:
+    """Default guest-bios execution should not reuse the show-notes prompt."""
+    revision_id = uuid4()
+
+    async def binding_resolver(
+        uow: object,
+        **kwargs: object,
+    ) -> list[ResolvedBinding]:
+        del uow, kwargs
+        await asyncio.sleep(0)
+        return [
+            _resolved_guest_binding(
+                document_id=uuid4(),
+                revision_id=revision_id,
+            )
+        ]
+
+    llm = _FakeLLMPort([
+        _response(
+            json.dumps({
+                "guests": [
+                    {
+                        "display_name": "Ada Lovelace",
+                        "bio": "Ada Lovelace wrote about analytical engines.",
+                        "reference_document_revision_id": str(revision_id),
+                    }
+                ]
+            }),
+            model="gpt-4o-mini",
+            usage=_usage(input_tokens=30, output_tokens=12),
+        )
+    ])
+    executor = GuestBiosToolExecutor(
+        llm=llm,
+        config=_config(),
+        uow=typ.cast("CanonicalUnitOfWork", object()),
+        binding_resolver=binding_resolver,
+    )
+    request = GenerationOrchestrationRequest(
+        correlation_id="corr-guest-bios",
+        script_tei_xml=SCRIPT_TEI,
+        series_profile_id=uuid4(),
+    )
+
+    await executor.execute(_guest_bios_action(), request)
+
+    outbound_request = llm.requests[0]
+    assert (
+        outbound_request.system_prompt
+        == GuestBiosGeneratorConfig(model="gpt-4o-mini").system_prompt
+    )
+    assert outbound_request.system_prompt != _config().execution_system_prompt
 
 
 @pytest.mark.asyncio

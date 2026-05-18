@@ -145,7 +145,6 @@ class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments
                         model=self.config.execution_model,
                         provider_operation=self.config.execution_provider_operation,
                         token_budget=self.config.execution_token_budget,
-                        system_prompt=self.config.execution_system_prompt,
                     ),
                 ),
             )
