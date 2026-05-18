@@ -468,10 +468,12 @@ def test_config_rejects_arbitrary_unknown_action_kind_strings(unknown: str) -> N
         )
 
 
-@pytest.mark.parametrize(
-    "model_tier",
-    [tier for tier in ModelTier if tier is not ModelTier.EXECUTION],
+@given(
+    model_tier=st.sampled_from([
+        tier for tier in ModelTier if tier is not ModelTier.EXECUTION
+    ])
 )
+@settings(max_examples=10)
 @pytest.mark.asyncio
 async def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(
     model_tier: ModelTier,

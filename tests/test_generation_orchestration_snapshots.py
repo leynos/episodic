@@ -1,4 +1,11 @@
-"""Syrupy regression snapshots for typed generation artefacts."""
+"""Syrupy regression snapshots for structured generation orchestration.
+
+Issue #72 added property coverage for orchestration invariants; this module
+keeps stable snapshots alongside `tests/test_orchestration_properties.py` and
+the focused orchestration unit tests. The snapshots pin the planner prompt,
+execution-plan and orchestration-result serialisation, checkpoint payload
+conversion, and representative planner-format error messages.
+"""
 
 import dataclasses
 import typing as typ
