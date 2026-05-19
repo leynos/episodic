@@ -74,18 +74,16 @@ async def test_orchestrator_aggregates_show_notes_tool_output() -> None:
     ])
     show_notes_llm = _FakeLLMPort([
         _response(
-            json.dumps(
-                {
-                    "entries": [
-                        {
-                            "topic": "Structured planning",
-                            "summary": "The hosts explain typed orchestration outputs.",
-                            "timestamp": "PT5M30S",
-                            "tei_locator": "#structured-planning",
-                        }
-                    ]
-                }
-            ),
+            json.dumps({
+                "entries": [
+                    {
+                        "topic": "Structured planning",
+                        "summary": "The hosts explain typed orchestration outputs.",
+                        "timestamp": "PT5M30S",
+                        "tei_locator": "#structured-planning",
+                    }
+                ]
+            }),
             model="gpt-4o-mini",
             usage=_usage(input_tokens=18, output_tokens=7),
         )

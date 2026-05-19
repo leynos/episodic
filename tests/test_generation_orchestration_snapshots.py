@@ -332,7 +332,7 @@ def test_generation_orchestration_result_freezes_action_results() -> None:
         total_usage=LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0),
     )
 
-    assert result.action_results == ()
+    assert not result.action_results
 
     with pytest.raises(TypeError, match="action_results\\[0\\]"):
         GenerationOrchestrationResult(

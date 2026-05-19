@@ -153,6 +153,7 @@
       dict({
         'action_id': 'a1',
         'action_kind': <ActionKind.GENERATE_SHOW_NOTES: 'generate_show_notes'>,
+        'guest_bios_result': None,
         'model': 'gpt-4o-mini',
         'model_tier': <ModelTier.EXECUTION: 'execution'>,
         'show_notes_result': dict({
