@@ -12,11 +12,14 @@ Accepted decision records:
 - [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
 - [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
 - [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
-- [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
 - [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
 - [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
 - [ADR 009: Source-to-script REST vertical slice](adr/adr-009-source-to-script-rest-vertical-slice.md)
 - [ADR 010: Guest-bios TEI representation](adr/adr-010-guest-bios-tei-representation.md)
+- [ADR 011: Text-to-Speech capability negotiation](adr/adr-011-tts-capability-negotiation.md)
+- [ADR 012: Pronunciation repository](adr/adr-012-pronunciation-repository.md)
+- [ADR 013: Speech synthesis adapters](adr/adr-013-speech-synthesis-adapters.md)
+- [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
 
 ## Overview
 
@@ -387,6 +390,14 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 
 - Uses `TTSPort` to request narration voiceovers with persona controls and
   resilience to latency, quota, and failure scenarios.
+- Treats canonical TEI P5 as the spine for script, speaker, pronunciation,
+  cue, segment, and provenance transfer into speech adapters. JSON request
+  payloads are projections of TEI-backed data, not alternative canonical
+  scripts.
+- Uses provider-neutral speech capabilities so orchestration can select a
+  render path by required behaviour, such as reference-audio voices,
+  provider-managed voices, queue execution, streaming, word timings,
+  pronunciation dictionaries, inline phonemes, or dialogue rendering.
 - Constructs timelines combining narration, background music, and sound effect
   stems drawn from managed catalogues.
 - Executes automated mixing: ducking, crossfades, EQ presets, and loudness
@@ -403,6 +414,219 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   storage with chapter metadata embedded.
 - Checkpointing enables pause-and-resume for audio review workflows spanning
   multiple sessions.
+
+#### Speech synthesis contracts
+
+The speech synthesis boundary separates authorial data from provider
+parameters. `TTSPort` remains the single-speaker segment renderer used for
+ordinary narration and partial regeneration. `DialogueSpeechPort` is a separate
+optional port for providers that render multiple speaker turns as one
+conversation-aware artefact. This split preserves editability for per-segment
+stems whilst allowing providers such as Inworld Realtime or ElevenLabs
+text-to-dialogue to use conversational context when the series profile opts in.
+
+Every speech request is derived from canonical TEI P5:
+
+- TEI `<u>` or equivalent speaker-turn structures identify the episode,
+  segment, turn, speaker, and approved text.
+- TEI stand-off annotations and header extensions carry pronunciation entries,
+  performance cues, voice persona bindings, source provenance, and reviewer
+  overrides.
+- Adapter request DTOs may be JSON, but they carry TEI identifiers and hashes
+  so results can be traced back to the exact approved script revision.
+- Returned artefacts include provider metadata, transcript or timing data when
+  available, cost metering identifiers, and warnings about unsupported
+  requested capabilities.
+
+The provider-neutral `TTSPort` request model includes:
+
+- voice reference, distinguishing provider voice IDs, managed voice profiles,
+  and consented reference-audio clips;
+- language and accent hints;
+- execution mode, covering blocking, queued, streaming, and webhook-resumed
+  jobs;
+- output preferences, including container, codec, sample rate, channel count,
+  and required word timings;
+- text normalization policy, so provider-side expansion of dates, acronyms,
+  numbers, and product names is explicit;
+- performance cues for pauses, breaths, laughs, whispers, affect, pacing, and
+  emphasis;
+- speech variation controls, such as stability, expressiveness, randomness,
+  guidance, speed, and seed;
+- pronunciation requirements supplied by the pronunciation repository; and
+- verbatim requirements, including transcript verification for generative or
+  session-based render paths.
+
+Each adapter exposes a capability descriptor before synthesis. The descriptor
+states maximum text length, supported voice-reference kinds, execution modes,
+timing support, pronunciation strategies, cue kinds, controls, output formats,
+and whether dialogue rendering is supported. The Audio Synthesis StateGraph
+uses this descriptor to reject impossible requests early, select a compatible
+adapter, or route to a fallback provider without silently dropping important
+requirements.
+
+The speech result model is also provider-neutral. It returns an audio artefact,
+duration, optional transcript, optional word timings, provider request
+identifier, normalized warnings, billable usage, and the provider capability
+descriptor version used for validation. Segment renderers return one artefact
+per segment or speaker turn. Dialogue renderers may return a combined artefact
+plus turn-level timing or alignment metadata; if a provider cannot return
+turn-level alignment, the result is marked as less editable and cannot replace
+per-segment stems for workflows that require surgical partial regeneration.
+
+#### Speech synthesis observability
+
+- Emit structured logs at adapter boundaries with TEI and script identifiers,
+  provider, model, execution mode, request outcome, and pronunciation
+  repository resolution details, including the matched scope chain and selected
+  realization kind.
+- Keep metric labels low-cardinality: adapter, provider, model, execution mode,
+  outcome category, and error category only. Do not label metrics with TEI
+  revision hashes, episode identifiers, speaker identifiers, or pronunciation
+  terms.
+- Record metrics for synthesis latency, error rates, cost per provider,
+  unsupported-capability diagnostics, and pronunciation-resolution misses,
+  partitioned by adapter and provider.
+- Propagate traces from TEI and script identifiers through adapter and
+  provider calls so renders remain correlated end to end, with spans around
+  pronunciation lookup and provider dispatch.
+- Classify failures as transport, provider, capability, pronunciation
+  resolution, validation, or post-render so dashboards and alerts remain
+  stable across vendors.
+- Alert on synthesis failures and capability mismatches using aggregate
+  metrics: page when the failure rate exceeds 5 percent over 15 minutes or
+  five consecutive renders fail, warn when repeated unsupported-capability
+  diagnostics reach three in 30 minutes, and page when an approved
+  pronunciation cannot be resolved.
+
+The following entity-relationship diagram shows how voice personas, provider
+capabilities, pronunciation entries, speech render requests, and speech render
+artefacts relate in the speech synthesis data model.
+
+```mermaid
+erDiagram
+  VOICE_PERSONAS {
+    uuid id
+    string speaker_id
+  }
+
+  TTS_PROVIDER_CAPABILITIES {
+    uuid id
+    string provider
+    string model
+  }
+
+  PRONUNCIATION_ENTRIES {
+    uuid id
+    string scope
+    string locale
+    string lifecycle_state
+  }
+
+  PRONUNCIATION_ENTRY_REALIZATIONS {
+    uuid id
+    uuid entry_id
+    string realization_kind
+  }
+
+  SPEECH_RENDER_REQUESTS {
+    uuid id
+    string tei_revision_hash
+    uuid voice_persona_id
+    uuid capability_id
+    string pronunciation_pack_hash
+  }
+
+  SPEECH_RENDER_ARTIFACTS {
+    uuid id
+    uuid request_id
+    string artifact_kind
+  }
+
+  PRONUNCIATION_ENTRIES ||--o{ PRONUNCIATION_ENTRY_REALIZATIONS : has
+  VOICE_PERSONAS ||--o{ SPEECH_RENDER_REQUESTS : selected_for
+  TTS_PROVIDER_CAPABILITIES ||--o{ SPEECH_RENDER_REQUESTS : used_by
+  SPEECH_RENDER_REQUESTS ||--o{ SPEECH_RENDER_ARTIFACTS : produces
+```
+
+_Caption: Speech synthesis entity relationships. Pronunciation entries have
+one or more realizations; voice personas and provider capabilities are selected
+for speech render requests; each speech render request produces one or more
+speech render artefacts._
+
+#### Pronunciation repository
+
+Pronunciation guidance is a first-class domain capability rather than
+adapter-local text replacement. The `PronunciationRepositoryPort` stores
+versioned entries scoped to organizations, series, episodes, speakers, and
+segments. Entries can be inherited from broad scopes and overridden at narrower
+scopes, with provenance tracking whether the guidance came from editorial
+review, Chiltern QA findings, source metadata, or adapter feedback.
+
+A pronunciation entry records:
+
+- written surface forms and match policy;
+- locale, language, accent, and optional speaker applicability;
+- one or more provider-neutral realizations, including IPA phonemes, spelling
+  substitutions, acronym expansions, and textual pronunciation notes;
+- provider dictionary references, such as ElevenLabs dictionary identifiers
+  and versions;
+- lifecycle state, covering proposed, approved, deprecated, and rejected
+  guidance;
+- source identifiers, reviewer identity, timestamps, and the TEI revision hash
+  that motivated the entry.
+
+The repository resolves a pronunciation pack for each synthesis request. The
+pack is attached to TEI-derived speech DTOs and compiled by adapters according
+to their capabilities:
+
+- Inworld adapters can use inline International Phonetic Alphabet (IPA)
+  guidance for supported English pronunciations.
+- ElevenLabs text-to-dialogue via FAL can use provider dictionary locators when
+  approved entries have matching provider references.
+- Chatterbox via FAL can use spelling substitutions or other text-level
+  guidance, and must report unsupported phoneme or dictionary requirements
+  instead of ignoring them.
+- Providers without native pronunciation support rely on text substitution,
+  downstream audio QA, or manual regeneration feedback.
+
+Chiltern reads from the same repository when deciding whether a term lacks
+pronunciation guidance. Audio feedback that flags a mispronunciation can create
+or update proposed entries, re-render affected TEI turns only, and preserve the
+old render for audit until the replacement is approved.
+
+#### Initial speech adapters
+
+The first adapter family covers Inworld, Chatterbox via FAL, and ElevenLabs v3
+via FAL. They share the provider-neutral speech ports and capability registry.
+
+- `InworldTtsAdapter` implements `TTSPort` for approved segment rendering. It
+  maps IPA guidance, pause controls, steering cues, streaming output, output
+  formats, and timestamp alignment onto Inworld TTS capabilities where
+  supported.
+- `InworldRealtimeDialogueAdapter` implements `DialogueSpeechPort` for
+  opt-in conversational rendering. It opens a session for an episode scene or
+  dialogue block, renders ordered host turns, captures transcripts, verifies
+  verbatim requirements, and records whether session context was used.
+- `FalChatterboxTtsAdapter` implements `TTSPort` for reference-audio voices.
+  It maps reference clips to `audio_url`, compiles supported non-verbal cues to
+  Chatterbox text tags, maps expressiveness, randomness, guidance, and seed
+  controls to the FAL request, and rejects unsupported timings or provider
+  voice IDs.
+- `FalElevenV3TtsAdapter` implements `TTSPort` for provider-managed voices. It
+  maps voice IDs, stability, language code, timestamps, and text normalization
+  onto the FAL ElevenLabs v3 TTS endpoint.
+- `FalElevenV3DialogueAdapter` implements `DialogueSpeechPort` for multi-host
+  dialogue rendering. It maps TEI speaker turns to dialogue blocks, applies up
+  to the provider-supported pronunciation dictionary references, and marks
+  combined-output artefacts as less editable unless turn-level alignment is
+  available.
+
+Provider-specific request fields remain at the adapter edge. The domain never
+stores FAL, Inworld, Chatterbox, or ElevenLabs parameter names as canonical
+episode data. Escape hatches for provider experiments are allowed only as
+adapter-owned metadata that is excluded from TEI canon unless promoted through
+an accepted design change.
 
 ### Client Experience Layer
 
@@ -1267,6 +1491,23 @@ Agentic workflow behaviour is configurable per series profile:
   caps, including reset cadence and enforcement policies.
 - `budget_usage` aggregates spend by scope and reporting window to support
   budget checks and alerting.
+- `voice_personas` records speaker voice choices, including provider voice
+  identifiers, managed profile references, reference-audio artefact
+  identifiers, language, accent, consent evidence, and default speech controls.
+- `tts_provider_capabilities` stores adapter capability descriptors by
+  provider, model, version, and retrieval timestamp so routing and historical
+  renders can explain which features were available.
+- `pronunciation_entries` stores provider-neutral pronunciation guidance with
+  scope, locale, match policy, lifecycle state, provenance, and TEI revision
+  hashes.
+- `pronunciation_entry_realizations` stores IPA, spelling-substitution,
+  acronym-expansion, textual-note, and provider-dictionary realizations for a
+  pronunciation entry.
+- `speech_render_requests` records TEI-derived synthesis requests, selected
+  provider capabilities, idempotency keys, pronunciation-pack hashes, and
+  requested output constraints.
+- `speech_render_artifacts` records generated audio artefacts, transcripts,
+  timings, provider request identifiers, warnings, and billable usage.
 - `workflow_checkpoints` stores serialised LangGraph state for resumable
   workflows, keyed by episode ID, workflow type (generation or synthesis), and
   checkpoint timestamp.

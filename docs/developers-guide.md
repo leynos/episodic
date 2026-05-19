@@ -12,7 +12,14 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md)
 - [`adr-005-structured-planning-and-tool-execution.md`](adr/adr-005-structured-planning-and-tool-execution.md)
 - [`adr-006-chrono-spoken-text-semantics.md`](adr/adr-006-chrono-spoken-text-semantics.md)
+- [`adr-007-durable-generation-checkpoints.md`](adr/adr-007-durable-generation-checkpoints.md)
+- [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md)
+- [`adr-009-source-to-script-rest-vertical-slice.md`](adr/adr-009-source-to-script-rest-vertical-slice.md)
 - [`adr-010-guest-bios-tei-representation.md`](adr/adr-010-guest-bios-tei-representation.md)
+- [`adr-011-tts-capability-negotiation.md`](adr/adr-011-tts-capability-negotiation.md)
+- [`adr-012-pronunciation-repository.md`](adr/adr-012-pronunciation-repository.md)
+- [`adr-013-speech-synthesis-adapters.md`](adr/adr-013-speech-synthesis-adapters.md)
+- [`adr-014-hexagonal-architecture-enforcement.md`](adr/adr-014-hexagonal-architecture-enforcement.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development

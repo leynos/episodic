@@ -1,4 +1,4 @@
-# ADR-006: Hexagonal architecture enforcement
+# ADR-014: Hexagonal architecture enforcement
 
 ## Status
 

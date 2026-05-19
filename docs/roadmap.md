@@ -351,49 +351,172 @@ compliance-checked levels, and provides reliable preview and delivery
 workflows. Success is observable when end-to-end renders produce master files
 with embedded chapter markers, quality automation rejects mixes violating
 loudness thresholds, and audio runs are accessible via REST endpoints with
-signed download URLs. See
+signed download URLs. The phase keeps canonical TEI P5 as the source of truth
+for script, speaker turns, pronunciation guidance, and render provenance; TTS
+requests are projections of TEI-backed data rather than a parallel script
+schema. See
 [Audio Synthesis Pipeline](episodic-podcast-generation-system-design.md#audio-synthesis-pipeline)
  for design context.
 
-### 3.1. Text-to-speech (TTS) adapter
+### 3.1. Speech capability contracts
 
-Implement the TTS inference boundary with voice persona configuration and retry
-semantics. Completion enables speech synthesis from script content.
+Define the provider-neutral speech boundary before binding to any one TTS
+engine. Completion answers whether the audio graph can express the behaviours
+needed by Inworld, Chatterbox, ElevenLabs v3, and future engines without
+leaking provider parameter names into the domain model.
 
-- [ ] 3.1.1. Implement the `TTSPort` adapter with retry semantics.
+- [ ] 3.1.1. Define the `TTSPort` request and result contracts.
+  - Represent TEI-derived episode, segment, speaker-turn, and text revision
+    identifiers.
+  - Include voice references, language hints, output preferences, execution
+    mode, text normalization, verbatim requirements, and idempotency keys.
+  - Return provider-agnostic audio artefacts, transcripts, timings, warnings,
+    usage metadata, and provider request identifiers.
+  - See
+    [Speech synthesis contracts](episodic-podcast-generation-system-design.md#speech-synthesis-contracts).
+- [ ] 3.1.2. Define the `DialogueSpeechPort` contract for multi-speaker
+  conversation rendering. Requires 3.1.1.
+  - Accept ordered TEI speaker turns and voice assignments.
+  - Return combined dialogue artefacts with turn-level alignment when
+    available.
+  - Mark results that are less editable than per-segment stems.
+  - See
+    [Speech synthesis contracts](episodic-podcast-generation-system-design.md#speech-synthesis-contracts).
+- [ ] 3.1.3. Implement the TTS capability registry and selector. Requires
+  3.1.1.
+  - Store provider, model, maximum text length, execution modes, voice
+    reference kinds, cue kinds, controls, output formats, timing support,
+    pronunciation strategies, and dialogue support.
+  - Reject incompatible requests before synthesis instead of silently dropping
+    requirements.
+  - Select fallback providers when required capabilities are available
+    elsewhere.
+  - See
+    [Speech synthesis contracts](episodic-podcast-generation-system-design.md#speech-synthesis-contracts)
+    and
+    [ADR 011](adr/adr-011-tts-capability-negotiation.md).
+- [ ] 3.1.4. Implement configurable voice persona support. Requires 3.1.1.
+  - Define voice persona configuration for provider voice IDs, managed voice
+    profiles, and consented reference-audio clips.
+  - Map personas to provider-specific identifiers only inside adapters.
+  - Support per-speaker voice assignment and voice-preview reuse.
+  - See
+    [Speech synthesis contracts](episodic-podcast-generation-system-design.md#speech-synthesis-contracts).
+
+### 3.2. Pronunciation repository and speech markup
+
+Build the pronunciation system as a reusable repository connected to TEI
+annotations, QA findings, and audio feedback. Completion answers whether
+mispronunciation fixes can be captured once, audited, and rendered through
+multiple providers with different pronunciation surfaces.
+
+- [ ] 3.2.1. Define `PronunciationRepositoryPort` and pronunciation entry
+  models.
+  - Scope entries to organizations, series, episodes, speakers, and segments.
+  - Record surface forms, match policy, locale, accent, lifecycle state,
+    provenance, reviewer identity, and TEI revision hashes.
+  - Support IPA, spelling substitution, acronym expansion, textual notes, and
+    provider dictionary references as separate realizations.
+  - See
+    [Pronunciation repository](episodic-podcast-generation-system-design.md#pronunciation-repository)
+    and
+    [ADR 012](adr/adr-012-pronunciation-repository.md).
+- [ ] 3.2.2. Implement pronunciation-pack resolution. Requires 3.2.1.
+  - Merge entries from broad scopes into segment-level packs with deterministic
+    override rules.
+  - Attach pack hashes to speech render requests for reproducibility.
+  - Expose unsupported strategy diagnostics when a selected provider cannot
+    honour required guidance.
+- [ ] 3.2.3. Connect Chiltern findings and audio feedback to pronunciation
+  proposals. Requires 3.2.1.
+  - Let Chiltern identify missing guidance using the repository.
+  - Let audio feedback create proposed entries for mispronounced terms.
+  - Trigger partial regeneration for affected TEI speaker turns after approval.
+- [ ] 3.2.4. Define provider-neutral performance cues in TEI-backed speech
+  markup. Requires 3.1.1.
+  - Represent pauses, breaths, laughs, whispers, affect, pacing, and emphasis
+    without storing provider-specific tags as canonical text.
+  - Compile cues at the adapter edge according to capability descriptors.
+  - See
+    [Speech synthesis contracts](episodic-podcast-generation-system-design.md#speech-synthesis-contracts).
+
+### 3.3. Initial TTS provider adapters
+
+Implement concrete adapters that prove the speech contracts support different
+vendor shapes. Completion answers whether the system can mix direct segment
+TTS, reference-audio voice cloning, and dialogue rendering whilst preserving
+TEI-backed traceability.
+
+- [ ] 3.3.1. Implement the Inworld TTS adapter. Requires 3.1.3 and 3.2.2.
+  - Support approved segment rendering through `TTSPort`.
+  - Map IPA guidance, pause controls, steering cues, streaming output, output
+    formats, and timestamps where supported.
   - Define retry policy for transient provider failures.
-  - Return provider-agnostic audio segments with metadata.
-- [ ] 3.1.2. Implement configurable voice persona support.
-  - Define voice persona configuration schema.
-  - Map personas to provider-specific voice identifiers.
-  - Support per-speaker voice assignment.
+  - Verify transcripts when the render path is not guaranteed to be verbatim.
+  - See
+    [Initial speech adapters](episodic-podcast-generation-system-design.md#initial-speech-adapters)
+    and
+    [ADR 013](adr/adr-013-speech-synthesis-adapters.md).
+- [ ] 3.3.2. Implement the Inworld realtime dialogue adapter. Requires 3.1.2
+  and 3.3.1.
+  - Open session-scoped render contexts for ordered host turns.
+  - Capture streamed audio, transcripts, provider events, and session metadata.
+  - Require explicit opt-in because session-based rendering can be less
+    verbatim than direct TTS.
+- [ ] 3.3.3. Implement the Chatterbox via FAL adapter. Requires 3.1.3 and
+  3.2.2.
+  - Map reference-audio voice personas to FAL `audio_url` inputs.
+  - Compile supported non-verbal cues into Chatterbox text tags.
+  - Map expressiveness, randomness, guidance, and seed controls.
+  - Reject provider voice IDs, word timings, and native pronunciation
+    dictionaries unless a later capability descriptor proves support.
+- [ ] 3.3.4. Implement the ElevenLabs v3 via FAL TTS adapter. Requires 3.1.3
+  and 3.2.2.
+  - Map provider voice IDs, stability, language code, timestamps, and text
+    normalization.
+  - Compile supported bracket-style performance cues at the adapter edge.
+  - Return provider request IDs and word timing metadata when requested.
+- [ ] 3.3.5. Implement the ElevenLabs v3 via FAL dialogue adapter. Requires
+  3.1.2 and 3.2.2.
+  - Map TEI speaker turns to dialogue blocks with per-turn voice IDs.
+  - Apply provider pronunciation dictionary locators when approved entries
+    have matching references.
+  - Mark combined dialogue output as less editable unless turn-level alignment
+    is returned.
+- [ ] 3.3.6. Add adapter contract scenarios across capability combinations.
+  Requires 3.3.1-3.3.5.
+  - Cover direct TTS, dialogue rendering, reference-audio voices,
+    provider-managed voices, pronunciation strategies, timing requirements,
+    streaming, queue execution, and unsupported-feature failures.
+  - Success: every adapter either fulfils requested capabilities or returns a
+    stable unsupported-capability diagnostic.
 
-### 3.2. Mixing engine and loudness compliance
+### 3.4. Mixing engine and loudness compliance
 
 Build the audio mixing engine with stem management and loudness normalization.
 Completion enables broadcast-quality audio production.
 
-- [ ] 3.2.1. Integrate background music and sound effect stem management.
+- [ ] 3.4.1. Integrate background music and sound effect stem management.
   - Define asset catalogue schema for music beds and effects.
   - Implement bed selection based on template configuration.
   - Schedule mixes relative to script beats and segment transitions.
-- [ ] 3.2.2. Build the mixing engine for narration and stem combination.
+- [ ] 3.4.2. Build the mixing engine for narration and stem combination.
   - Implement ducking for voice-over-music transitions.
   - Implement fades and scene transitions.
   - Support stem isolation for post-production flexibility.
-- [ ] 3.2.3. Enforce loudness normalization to broadcast standards.
+- [ ] 3.4.3. Enforce loudness normalization to broadcast standards.
   - Target -16 Loudness Units Full Scale (LUFS) ±1 Loudness Unit (LU)
     integrated loudness per European Broadcasting Union (EBU) R128.
   - Implement peak limiting across stereo channels.
   - Reject mixes violating thresholds with actionable diagnostics.
 
-### 3.3. Audio runs, previews, and feedback
+### 3.5. Audio runs, previews, and feedback
 
 Define the audio-run domain model and implement run lifecycle endpoints.
 Completion enables audio workflow tracking and iterative refinement.
 
-- [ ] 3.3.1. Define `AudioRunPort` and implement domain model.
-  Requires 3.1.1, 3.2.2.
+- [ ] 3.5.1. Define `AudioRunPort` and implement domain model.
+  Requires 3.1.1, 3.4.2.
   - Define `AudioRun`, `PreviewAsset`, `StemAsset`, and `AudioFeedback`
     entities.
   - Use frozen dataclasses with UUIDv7 identifiers.
@@ -404,10 +527,10 @@ Completion enables audio workflow tracking and iterative refinement.
   - Define feedback actions (approve, reject, regenerate segment).
   - See
     [Audio runs, previews, stems, and feedback](episodic-tui-api-design.md#audio-runs-previews-stems-and-feedback).
-- [ ] 3.3.2. Implement repository contracts and Alembic migrations.
+- [ ] 3.5.2. Implement repository contracts and Alembic migrations.
   - Define repository interfaces for audio-run aggregates.
   - Add integration tests validating asset linking.
-- [ ] 3.3.3. Implement REST endpoints for audio runs. Requires 3.3.1.
+- [ ] 3.5.3. Implement REST endpoints for audio runs. Requires 3.5.1.
   - Implement `/v1/episodes/{episode_id}/audio-runs` (POST, GET).
   - Implement `/v1/audio-runs/{audio_run_id}` (GET).
   - Implement `/v1/audio-runs/{audio_run_id}/previews` (GET) with signed URLs.
@@ -417,17 +540,17 @@ Completion enables audio workflow tracking and iterative refinement.
     upload-reference attachment.
   - Enforce idempotency-key support for run creation.
   - Validate hexagonal boundary tests passing.
-- [ ] 3.3.4. Generate shareable previews via `PreviewPublisherPort`.
+- [ ] 3.5.4. Generate shareable previews via `PreviewPublisherPort`.
   - Store preview artefacts in object storage.
   - Generate signed URLs with configurable expiry.
 
-### 3.4. Voice preview and export jobs
+### 3.6. Voice preview and export jobs
 
 Implement standalone voice preview synthesis and export job workflows.
 Completion enables persona testing and deliverable packaging.
 
-- [ ] 3.4.1. Define `VoicePreviewPort` and implement synthesis endpoints.
-  Requires 3.1.1.
+- [ ] 3.6.1. Define `VoicePreviewPort` and implement synthesis endpoints.
+  Requires 3.1.1, 3.1.4, 3.3.1, 3.3.3, and 3.3.4.
   - Implement `/v1/voice-previews` (POST) accepting text and voice
     configuration.
   - Implement `/v1/voice-previews/{preview_id}` (GET) returning status and
@@ -435,8 +558,8 @@ Completion enables persona testing and deliverable packaging.
   - Ensure synthesis does not modify episode state.
   - Enforce idempotency-key support.
   - See [Voice previews](episodic-tui-api-design.md#voice-previews).
-- [ ] 3.4.2. Define `ExportJobPort` and implement export endpoints.
-  Requires 3.2.2, 3.2.3.
+- [ ] 3.6.2. Define `ExportJobPort` and implement export endpoints.
+  Requires 3.4.2, 3.4.3.
   - Implement `/v1/episodes/{episode_id}/exports` (POST, GET).
   - Implement `/v1/exports/{export_id}` (GET) returning status and download
     URLs.
@@ -445,7 +568,8 @@ Completion enables persona testing and deliverable packaging.
   - Include manifest hash for integrity verification.
   - Store export artefacts in object storage with signed URLs.
   - See [Export jobs](episodic-tui-api-design.md#export-jobs).
-- [ ] 3.4.3. Publish final masters to Content Delivery Network (CDN) endpoints.
+- [ ] 3.6.3. Publish final masters to Content Delivery Network (CDN)
+  endpoints.
   - Configure CDN distribution for audio assets.
   - Support optional RSS feed publication.
 

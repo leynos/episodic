@@ -314,7 +314,7 @@ Implementation approval rule:
 
 Implementation began after explicit approval on 2026-04-30. The delivery adds
 the repo-local architecture checker, production boundary fixes, port contract
-tests, CI visibility, ADR-006, guide updates, and roadmap completion.
+tests, CI visibility, ADR-014, guide updates, and roadmap completion.
 
 Delivered outcome:
 
@@ -608,7 +608,7 @@ model.
    - leave `make test` to collect the architecture tests along with the rest of
      the suite.
 2. Add a new ADR, expected path
-   `docs/adr/adr-006-hexagonal-architecture-enforcement.md`, describing:
+   `docs/adr/adr-014-hexagonal-architecture-enforcement.md`, describing:
    - why Ruff alone is insufficient for Episodic's dependency graph;
    - the chosen checker shape and scope;
    - the explicit composition-root exception model; and
