@@ -477,13 +477,27 @@ per-segment stems for workflows that require surgical partial regeneration.
 #### Speech synthesis observability
 
 - Emit structured logs at adapter boundaries with TEI and script identifiers,
-  provider, model, execution mode, and request outcome.
-- Record metrics for synthesis latency, error rates, and cost per provider,
+  provider, model, execution mode, request outcome, and pronunciation
+  repository resolution details, including the matched scope chain and selected
+  realization kind.
+- Keep metric labels low-cardinality: adapter, provider, model, execution mode,
+  outcome category, and error category only. Do not label metrics with TEI
+  revision hashes, episode identifiers, speaker identifiers, or pronunciation
+  terms.
+- Record metrics for synthesis latency, error rates, cost per provider,
+  unsupported-capability diagnostics, and pronunciation-resolution misses,
   partitioned by adapter and provider.
 - Propagate traces from TEI and script identifiers through adapter and
-  provider calls so renders remain correlated end to end.
-- Alert on synthesis failures and capability mismatches, including repeated
-  unsupported-capability diagnostics.
+  provider calls so renders remain correlated end to end, with spans around
+  pronunciation lookup and provider dispatch.
+- Classify failures as transport, provider, capability, pronunciation
+  resolution, validation, or post-render so dashboards and alerts remain
+  stable across vendors.
+- Alert on synthesis failures and capability mismatches using aggregate
+  metrics: page when the failure rate exceeds 5 percent over 15 minutes or
+  five consecutive renders fail, warn when repeated unsupported-capability
+  diagnostics reach three in 30 minutes, and page when an approved
+  pronunciation cannot be resolved.
 
 The following entity-relationship diagram shows how voice personas, provider
 capabilities, pronunciation entries, speech render requests, and speech render

@@ -90,6 +90,9 @@ more natural but can be less editable than individual stems.
 - FAL-backed Chatterbox and ElevenLabs paths exercise both reference-audio and
   provider-managed voice models.
 - Pronunciation and cue compilation stay at the adapter edge.
+- Adapter observability stays vendor-neutral with bounded-cardinality metrics,
+  structured logs, traces, and alert rules keyed to aggregate error
+  categories.
 
 ### Negative
 
