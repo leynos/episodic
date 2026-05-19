@@ -1,20 +1,17 @@
 """Action and planner result DTOs for generation orchestration."""
 
-from __future__ import annotations
-
 import dataclasses as dc
-import typing as typ
 
 from episodic.generation import (
     GuestBiosEnrichmentResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
     ShowNotesResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
 )
+from episodic.llm import (
+    LLMUsage,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
+)
 
 from ._dto import ExecutionPlan, _normalize_non_empty_text
 from ._types import ActionKind, ModelTier
-
-if typ.TYPE_CHECKING:
-    from episodic.llm import LLMUsage
 
 
 @dc.dataclass(frozen=True, slots=True)

@@ -1,7 +1,5 @@
 """Routing tool executor for generation orchestration."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 

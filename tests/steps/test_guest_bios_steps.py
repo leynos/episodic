@@ -383,7 +383,10 @@ def assert_enriched_tei_contains_guest_bios(
 ) -> None:
     """Verify generated biographies are formatted in the canonical TEI body."""
     assert 'type="guest-bios"' in guest_bios_context.enriched_tei_xml
-    assert 'corresp="rev-ada"' in guest_bios_context.enriched_tei_xml
+    assert (
+        'corresp="urn:episodic:reference-document-revision:rev-ada"'
+        in guest_bios_context.enriched_tei_xml
+    )
     assert "Ada Lovelace wrote about analytical engines." in (
         guest_bios_context.enriched_tei_xml
     )

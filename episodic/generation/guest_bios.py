@@ -129,6 +129,13 @@ class GuestBioEntry:
             _normalize_optional_string(self.tei_locator),
         )
 
+    def get_external_corresp_id(self) -> str:
+        """Return the external TEI correspondence identifier for this source."""
+        return (
+            "urn:episodic:reference-document-revision:"
+            f"{self.reference_document_revision_id}"
+        )
+
 
 @dc.dataclass(frozen=True, slots=True)
 class GuestBiosResult:
@@ -418,7 +425,7 @@ def _build_item_payload(entry: GuestBioEntry) -> dict[str, object]:
     item_payload: dict[str, object] = {
         "label": {"content": _build_text_inline(entry.display_name)},
         "content": _build_text_inline(entry.bio),
-        "corresp": [entry.reference_document_revision_id],
+        "corresp": [entry.get_external_corresp_id()],
     }
     if entry.role is not None:
         item_payload["n"] = entry.role

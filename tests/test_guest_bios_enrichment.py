@@ -36,7 +36,7 @@ def test_enrich_tei_with_guest_bios_appends_canonical_div() -> None:
         "dict[str, object]", typ.cast("list[object]", guest_list["items"])[0]
     )
 
-    assert item["corresp"] == ["rev-ada"]
+    assert item["corresp"] == ["urn:episodic:reference-document-revision:rev-ada"]
     assert item["n"] == "Mathematician"
     assert item["label"] == {"content": [{"type": "text", "value": "Ada Lovelace"}]}
     assert item["content"] == [
