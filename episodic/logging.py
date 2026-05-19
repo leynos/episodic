@@ -50,7 +50,9 @@ class LogLevel(enum.StrEnum):
     CRITICAL = "CRITICAL"
 
 
-def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, bool]:
+def configure_logging(
+    level: str | None, *, force: bool = False
+) -> tuple[LogLevel, bool]:
     """Configure femtologging and return the normalized level.
 
     Parameters
@@ -62,7 +64,7 @@ def configure_logging(level: str | None, *, force: bool = False) -> tuple[str, b
 
     Returns
     -------
-    tuple[str, bool]
+    tuple[LogLevel, bool]
         A tuple of (effective_level, used_default), where used_default is True
         when the input was missing or invalid.
     """
