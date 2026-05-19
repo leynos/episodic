@@ -2,7 +2,6 @@
 
 import dataclasses as dc
 import json
-import time
 
 from episodic.llm import (
     LLMError,
@@ -31,10 +30,14 @@ from ._dto import (
     _require_plan_step_list,
     build_workflow_step_idempotency_key,
 )
+from ._guest_bios_executor import GuestBiosToolExecutor
+from ._planning_orchestrator import StructuredPlanningOrchestrator
 from ._protocols import PlannerPort, ToolExecutorPort
+from ._routing_executor import RoutingToolExecutor
 from ._show_notes_executor import ShowNotesToolExecutor
 from ._types import (
     ActionKind,
+    GuestBiosFormatError,
     ModelTier,
     PlanningResponseFormatError,
     ShowNotesFormatError,
@@ -51,12 +54,15 @@ __all__ = [
     "GenerationOrchestrationConfig",
     "GenerationOrchestrationRequest",
     "GenerationOrchestrationResult",
+    "GuestBiosFormatError",
+    "GuestBiosToolExecutor",
     "ModelTier",
     "PlannedAction",
     "PlannerPort",
     "PlannerResult",
     "PlanningResponseFormatError",
     "ResumeWorkflowCommand",
+    "RoutingToolExecutor",
     "ShowNotesFormatError",
     "ShowNotesToolExecutor",
     "StructuredGenerationPlanner",
@@ -80,6 +86,20 @@ class StructuredGenerationPlanner:
     config: GenerationOrchestrationConfig
 
     @staticmethod
+    def _coerce_enabled_action_kind(
+        value: object,
+        *,
+        enabled_action_kinds: tuple[ActionKind, ...],
+    ) -> ActionKind:
+        """Return a planner action kind only when the config enables it."""
+        action_kind = _coerce_action_kind(value)
+        if action_kind not in enabled_action_kinds:
+            expected = ", ".join(action.value for action in enabled_action_kinds)
+            msg = f"action_kind must be one of enabled actions: {expected}."
+            raise PlanningResponseFormatError(msg)
+        return action_kind
+
+    @staticmethod
     def _parse_plan(
         payload: dict[str, object],
         *,
@@ -91,13 +111,17 @@ class StructuredGenerationPlanner:
             "plan_version",
         )
         step_payloads = _require_plan_step_list(payload.get("steps"))
+        enabled_action_kinds = _coerce_action_kinds(config.enabled_action_kinds)
         steps = tuple(
             PlannedAction(
                 action_id=_require_non_empty_string(
                     step_payload.get("action_id"),
                     "action_id",
                 ),
-                action_kind=_coerce_action_kind(step_payload.get("action_kind")),
+                action_kind=StructuredGenerationPlanner._coerce_enabled_action_kind(
+                    step_payload.get("action_kind"),
+                    enabled_action_kinds=enabled_action_kinds,
+                ),
                 rationale=_require_non_empty_string(
                     step_payload.get("rationale"),
                     "rationale",
@@ -160,6 +184,46 @@ class StructuredGenerationPlanner:
             raise ValueError(msg) from exc
         return f"Return JSON only.\n{rendered_payload}"
 
+    def _decode_planner_json(
+        self,
+        response_text: str,
+        *,
+        correlation_id: str,
+    ) -> dict[str, object]:
+        """Decode planner JSON text or raise a deterministic format error."""
+        try:
+            decoded: dict[str, object] = json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            msg = "Planner response is not valid JSON."
+            _log_event(
+                "error",
+                "structured_generation_planner.plan.invalid_json",
+                correlation_id=correlation_id,
+                planning_model=self.config.planning_model,
+            )
+            raise PlanningResponseFormatError(msg) from exc
+        return decoded
+
+    def _parse_and_validate_plan(
+        self,
+        decoded: object,
+        *,
+        correlation_id: str,
+    ) -> ExecutionPlan:
+        """Validate decoded planner payload and return an execution plan."""
+        try:
+            payload = _require_object(decoded, "planner response")
+            plan = self._parse_plan(payload, config=self.config)
+        except PlanningResponseFormatError:
+            _log_event(
+                "error",
+                "structured_generation_planner.plan.invalid_plan",
+                correlation_id=correlation_id,
+                planning_model=self.config.planning_model,
+            )
+            raise
+        return plan
+
     async def plan(self, request: GenerationOrchestrationRequest) -> PlannerResult:
         """Call the LLM and parse the strict planner response."""
         _log_event(
@@ -186,28 +250,14 @@ class StructuredGenerationPlanner:
                 planning_model=self.config.planning_model,
             )
             raise
-        try:
-            decoded = json.loads(response.text)
-        except json.JSONDecodeError as exc:
-            msg = "Planner response is not valid JSON."
-            _log_event(
-                "error",
-                "structured_generation_planner.plan.invalid_json",
-                correlation_id=request.correlation_id,
-                planning_model=self.config.planning_model,
-            )
-            raise PlanningResponseFormatError(msg) from exc
-        try:
-            payload = _require_object(decoded, "planner response")
-            plan = self._parse_plan(payload, config=self.config)
-        except PlanningResponseFormatError:
-            _log_event(
-                "error",
-                "structured_generation_planner.plan.invalid_plan",
-                correlation_id=request.correlation_id,
-                planning_model=self.config.planning_model,
-            )
-            raise
+        decoded = self._decode_planner_json(
+            response.text,
+            correlation_id=request.correlation_id,
+        )
+        plan = self._parse_and_validate_plan(
+            decoded,
+            correlation_id=request.correlation_id,
+        )
         _log_event(
             "info",
             "structured_generation_planner.plan.success",
@@ -222,105 +272,3 @@ class StructuredGenerationPlanner:
             provider_response_id=response.provider_response_id,
             finish_reason=response.finish_reason,
         )
-
-
-@dc.dataclass(slots=True)
-class StructuredPlanningOrchestrator:
-    """Plan one orchestration run, then execute each planned action in order."""
-
-    planner: PlannerPort
-    tool_executor: ToolExecutorPort
-
-    async def execute_plan(
-        self,
-        *,
-        request: GenerationOrchestrationRequest,
-        plan: ExecutionPlan,
-    ) -> tuple[ActionExecutionResult, ...]:
-        """Execute each plan step sequentially through the tool-execution port."""
-        results: list[ActionExecutionResult] = []
-        for action in plan.steps:
-            _log_event(
-                "debug",
-                "structured_planning_orchestrator.execute_plan.action.start",
-                correlation_id=request.correlation_id,
-                action_id=action.action_id,
-                action_kind=str(action.action_kind),
-                execution_model=plan.selected_execution_model,
-            )
-            t0 = time.monotonic()
-            try:
-                result = await self.tool_executor.execute(action, request)
-            except (LLMError, ToolExecutionError, UnsupportedActionError) as exc:
-                _log_event(
-                    "error",
-                    "structured_planning_orchestrator.execute_plan.action.error",
-                    correlation_id=request.correlation_id,
-                    action_id=action.action_id,
-                    action_kind=str(action.action_kind),
-                    execution_model=plan.selected_execution_model,
-                    elapsed_ms=round((time.monotonic() - t0) * 1000, 1),
-                    error_type=type(exc).__name__,
-                    error=str(exc),
-                )
-                raise
-            _log_event(
-                "debug",
-                "structured_planning_orchestrator.execute_plan.action.complete",
-                correlation_id=request.correlation_id,
-                action_id=action.action_id,
-                action_kind=str(action.action_kind),
-                execution_model=plan.selected_execution_model,
-                elapsed_ms=round((time.monotonic() - t0) * 1000, 1),
-            )
-            results.append(result)
-        return tuple(results)
-
-    async def orchestrate(
-        self,
-        request: GenerationOrchestrationRequest,
-    ) -> GenerationOrchestrationResult:
-        """Plan and execute one structured generation request."""
-        _log_event(
-            "info",
-            "structured_planning_orchestrator.orchestrate.start",
-            correlation_id=request.correlation_id,
-        )
-        try:
-            planner_result = await self.planner.plan(request)
-        except (LLMError, PlanningResponseFormatError) as exc:
-            _log_event(
-                "error",
-                "structured_planning_orchestrator.orchestrate.error",
-                correlation_id=request.correlation_id,
-                stage="plan",
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
-            raise
-        try:
-            action_results = await self.execute_plan(
-                request=request,
-                plan=planner_result.plan,
-            )
-        except (LLMError, ToolExecutionError, UnsupportedActionError) as exc:
-            _log_event(
-                "error",
-                "structured_planning_orchestrator.orchestrate.error",
-                correlation_id=request.correlation_id,
-                stage="execute_plan",
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
-            raise
-        result = build_generation_result(planner_result, action_results)
-        _log_event(
-            "info",
-            "structured_planning_orchestrator.orchestrate.complete",
-            correlation_id=request.correlation_id,
-            execution_model=planner_result.plan.selected_execution_model,
-            input_tokens=result.total_usage.input_tokens,
-            output_tokens=result.total_usage.output_tokens,
-            total_tokens=result.total_usage.total_tokens,
-        )
-        return result

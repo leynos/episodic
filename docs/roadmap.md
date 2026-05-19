@@ -233,7 +233,7 @@ Completion enables rich episode content with chapter markers and guest details.
 - [x] 2.3.2. Generate chapter markers aligned to script segments.
   - Define chapter boundaries based on segment transitions.
   - Include timing metadata for podcast player compatibility.
-- [ ] 2.3.3. Generate guest bios from reference document bindings.
+- [x] 2.3.3. Generate guest bios from reference document bindings.
   - Retrieve guest profile reference documents.
   - Format biographical summaries within TEI body.
 - [ ] 2.3.4. Generate sponsor reads from template-defined placements.

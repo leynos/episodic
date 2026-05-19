@@ -16,6 +16,7 @@ Accepted decision records:
 - [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
 - [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
 - [ADR 009: Source-to-script REST vertical slice](adr/adr-009-source-to-script-rest-vertical-slice.md)
+- [ADR 010: Guest-bios TEI representation](adr/adr-010-guest-bios-tei-representation.md)
 
 ## Overview
 
@@ -297,6 +298,15 @@ The following rules are normative for LangGraph nodes and Celery tasks:
   `<div type="chapters"><list><item n="...">...</item></list></div>` output.
   This TEI representation is defined in
   [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md).
+- Treats guest-biography generation as the corresponding reference-document
+  enrichment service. `episodic/generation/guest_bios.py` resolves pinned
+  `guest_profile` reference-document bindings for the series, template, and
+  episode context, projects those revisions into grounded prompt sources, and
+  enriches the canonical TEI body with
+  `<div type="guest-bios"><list><item corresp="...">...</item></list></div>`.
+  The `@corresp` value points back to the consumed reference-document revision.
+  This TEI representation is defined in
+  [ADR 010: Guest-bios TEI representation](adr/adr-010-guest-bios-tei-representation.md).
 - Persists generation runs alongside prompts, responses, iteration counts,
   quality mode, QA status, skip rationale, and cost telemetry.
 - Records per-task roll-ups and per-call cost line items via `CostLedgerPort`,
@@ -646,10 +656,13 @@ once to obtain strict JSON, parses it into a typed `ExecutionPlan`, and records
 the planning model separately from the execution model selected in
 `GenerationOrchestrationConfig`. `StructuredPlanningOrchestrator` then executes
 the resulting actions through `ToolExecutorPort`, with `ShowNotesToolExecutor`
-serving as the first concrete tool adapter. The matching LangGraph wrapper
-remains in-process and intentionally limited to `plan -> execute -> finish`
-until checkpointing, Celery resume, and cost-ledger persistence land in later
-roadmap items.
+and `GuestBiosToolExecutor` serving as the first concrete enrichment tool
+adapters. `RoutingToolExecutor` dispatches planned actions by `ActionKind` so
+show notes and guest biographies can appear in the same typed plan without the
+orchestrator importing either generation service directly. The matching
+LangGraph wrapper remains in-process and intentionally limited to
+`plan -> execute -> finish` until checkpointing, Celery resume, and cost-ledger
+persistence land in later roadmap items.
 
 ### Content Generation Graph
 
@@ -660,7 +673,7 @@ following node structure:
    sources; construct the initial prompt scaffold; validate the requested
    quality mode.
 2. **Generate:** Invoke `LLMPort` to produce draft content, show notes, and
-   enrichments.
+   guest biographies and enrichments.
 3. **Quality branch:** Route `draft_without_qa` runs directly to draft
    persistence with QA status recorded as skipped. Route QA-gated runs to the
    evaluator branch.

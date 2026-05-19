@@ -4,14 +4,13 @@ import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
 
-from episodic.generation import (
-    ShowNotesResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
-)
 from episodic.llm import (
     LLMProviderOperation,
     LLMTokenBudget,
-    LLMUsage,
 )
+
+if typ.TYPE_CHECKING:
+    import uuid
 
 from ._types import (
     ActionKind,
@@ -71,7 +70,8 @@ def _coerce_action_kind(value: object) -> ActionKind:
     try:
         return ActionKind(value.strip())
     except ValueError as exc:
-        msg = f"action_kind must be one of: {ActionKind.GENERATE_SHOW_NOTES.value}."
+        expected = ", ".join(action.value for action in ActionKind)
+        msg = f"action_kind must be one of: {expected}."
         raise PlanningResponseFormatError(msg) from exc
 
 
@@ -183,6 +183,9 @@ class GenerationOrchestrationRequest:
     correlation_id: str
     script_tei_xml: str
     template_structure: dict[str, object] | None = None
+    series_profile_id: uuid.UUID | None = None
+    episode_id: uuid.UUID | None = None
+    template_id: uuid.UUID | None = None
 
     def __post_init__(self) -> None:
         """Validate core request invariants eagerly."""
@@ -324,58 +327,12 @@ class ExecutionPlan:
         object.__setattr__(self, "steps", steps)
 
 
-@dc.dataclass(frozen=True, slots=True)
-class PlannerResult:
-    """Planner output plus normalized provider metadata."""
-
-    plan: ExecutionPlan
-    usage: LLMUsage | None
-    model: str
-    provider_response_id: str
-    finish_reason: str | None
-
-
-@dc.dataclass(frozen=True, slots=True)
-class ActionExecutionResult:
-    """Typed result for one executed orchestration action."""
-
-    action_id: str
-    action_kind: ActionKind
-    model_tier: ModelTier
-    model: str
-    summary: str
-    usage: LLMUsage | None = None
-    show_notes_result: ShowNotesResult | None = None
-
-    def __post_init__(self) -> None:
-        """Reject blank text fields and normalize enum-shaped fields."""
-        for field_name in ("action_id", "model", "summary"):
-            value = getattr(self, field_name)
-            object.__setattr__(
-                self, field_name, _normalize_non_empty_text(value, field_name)
-            )
-        try:
-            action_kind = (
-                self.action_kind
-                if isinstance(self.action_kind, ActionKind)
-                else ActionKind(str(self.action_kind).strip())
-            )
-        except ValueError:
-            msg = f"Unknown action kind: {self.action_kind!r}"
-            raise ValueError(msg) from None
-        try:
-            model_tier = (
-                self.model_tier
-                if isinstance(self.model_tier, ModelTier)
-                else ModelTier(str(self.model_tier).strip())
-            )
-        except ValueError:
-            msg = f"Unknown model tier: {self.model_tier!r}"
-            raise ValueError(msg) from None
-        object.__setattr__(self, "action_kind", action_kind)
-        object.__setattr__(self, "model_tier", model_tier)
-
-
+from ._action_result_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+    ActionExecutionResult as ActionExecutionResult,
+)
+from ._action_result_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
+    PlannerResult as PlannerResult,
+)
 from ._checkpoint_dto import (  # noqa: E402  # Re-export after dependent DTOs exist.
     ResumeWorkflowCommand as ResumeWorkflowCommand,
 )

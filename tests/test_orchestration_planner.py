@@ -7,6 +7,7 @@ import pytest
 from episodic.llm import LLMProviderOperation
 from episodic.orchestration import (
     ActionKind,
+    GenerationOrchestrationConfig,
     ModelTier,
     PlannedAction,
     PlanningResponseFormatError,
@@ -108,4 +109,40 @@ async def test_planner_rejects_malformed_structured_output(
     planner = StructuredGenerationPlanner(llm=llm, config=_config())
 
     with pytest.raises(PlanningResponseFormatError, match=expected_match):
+        await planner.plan(_request())
+
+
+@pytest.mark.asyncio
+async def test_planner_rejects_disabled_action_kind() -> None:
+    """Planner output should be constrained by the configured action set."""
+    llm = _FakeLLMPort([
+        _response(
+            json.dumps({
+                "plan_version": "1.0",
+                "steps": [
+                    {
+                        "action_id": "guest-bios-1",
+                        "action_kind": "generate_guest_bios",
+                        "rationale": "Guest biographies are useful here.",
+                        "model_tier": "execution",
+                    }
+                ],
+            }),
+            model="gpt-4.1",
+            usage=_usage(input_tokens=30, output_tokens=5),
+        )
+    ])
+    base_config = _config()
+    planner = StructuredGenerationPlanner(
+        llm=llm,
+        config=GenerationOrchestrationConfig(
+            planning_model=base_config.planning_model,
+            execution_model=base_config.execution_model,
+            planning_provider_operation=base_config.planning_provider_operation,
+            execution_provider_operation=base_config.execution_provider_operation,
+            enabled_action_kinds=(ActionKind.GENERATE_SHOW_NOTES,),
+        ),
+    )
+
+    with pytest.raises(PlanningResponseFormatError, match="enabled actions"):
         await planner.plan(_request())

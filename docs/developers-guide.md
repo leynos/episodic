@@ -12,6 +12,7 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-004-show-notes-tei-representation.md`](adr/adr-004-show-notes-tei-representation.md)
 - [`adr-005-structured-planning-and-tool-execution.md`](adr/adr-005-structured-planning-and-tool-execution.md)
 - [`adr-006-chrono-spoken-text-semantics.md`](adr/adr-006-chrono-spoken-text-semantics.md)
+- [`adr-010-guest-bios-tei-representation.md`](adr/adr-010-guest-bios-tei-representation.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -28,33 +29,6 @@ Accepted design decisions relevant to current implementation work:
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
-
-## Linting
-
-Run the full lint gate with:
-
-```shell
-make lint
-```
-
-The target runs the architecture import-boundary checker, Ruff, and a focused
-Pylint 4 pass. The Pylint pass is invoked through `uv tool run --python pypy`
-with the pinned `pylint-pypy-shim` wrapper from
-[github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
- That wrapper installs the PyPy-specific Astroid compatibility patch before
-delegating to Pylint.
-
-Pylint's message selection is allow-listed in `pyproject.toml` with
-`disable = ["all"]` and explicit `enable` entries for the logging, match,
-refactoring, standard-library, and modified-iteration checks this repository
-cares about. Keep rule rationale comments beside those entries, so future lint
-changes explain why a rule is enabled, instead of only recording its name.
-
-The wrapper disables Pylint's `syntax-error` message for this pass because the
-managed PyPy runtime currently parses Python 3.11 syntax while the project
-targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
-the wrapper and skipped, which keeps parse incompatibilities visible without
-hiding other diagnostics from files that PyPy can analyse.
 
 ## Falcon HTTP runtime
 
@@ -778,6 +752,28 @@ async def enrich_with_chapters(llm_port, script_tei_xml: str) -> str:
     return enrich_tei_with_chapter_markers(script_tei_xml, result)
 ```
 
+- `GuestBiosGenerator` follows the same boundary rules. It depends only on
+  `LLMPort`, resolved reference-document projections, and canonical TEI XML.
+  Keep reference-document retrieval outside the generator itself unless using
+  the application helper `generate_guest_bios_from_reference_bindings(...)`,
+  which composes around a `CanonicalUnitOfWork` and the existing binding
+  resolver.
+- `project_guest_bio_sources(...)` filters resolved bindings to
+  `ReferenceDocumentKind.GUEST_PROFILE`. Do not broaden this function to use
+  host profiles, style guides, or research briefs; those documents may
+  influence other generation steps, but they are not biography subjects.
+- `enrich_tei_with_guest_bios(...)` inserts one canonical
+  `<div type="guest-bios">` block into the TEI body. Each `<item>` contains a
+  `<label>` with the guest display name, inline biography text, and `@corresp`
+  pointing at the pinned reference-document revision. The representation is
+  defined by
+  [`adr-010-guest-bios-tei-representation.md`](adr/adr-010-guest-bios-tei-representation.md).
+- `GuestBiosResponseFormatError` is raised when the provider response is not a
+  JSON object with a `guests` list, when required fields are missing or blank,
+  when a revision identifier is unknown, or when the response duplicates a
+  source revision. Treat this as malformed model output and surface it without
+  silently dropping guests.
+
 ### Testing content generation services
 
 - Unit coverage for show notes lives in `tests/test_show_notes.py`.
@@ -787,10 +783,18 @@ async def enrich_with_chapters(llm_port, script_tei_xml: str) -> str:
   `tests/test_chapter_markers.py`.
 - Behavioural coverage lives in `tests/features/chapter_markers.feature` and
   `tests/steps/test_chapter_markers_steps.py`.
-- The behavioural scenario uses Vidai Mock in the same style as Pedante. When
+- Unit and property coverage for guest biographies lives in
+  `tests/test_guest_bios.py`, `tests/test_guest_bios_properties.py`, and
+  `tests/test_guest_bios_executor.py`.
+- Guest-bio behavioural coverage lives in
+  `tests/features/guest_bios.feature` and
+  `tests/steps/test_guest_bios_steps.py`.
+- The behavioural scenarios use Vidai Mock in the same style as Pedante. When
   writing provider fixtures, keep the prompt assertions structural and the
   response template minimal so prompt wording can evolve without making the
-  scenario brittle.
+  scenario brittle. Guest-bio scenarios should assert that pinned guest profile
+  content reaches the provider request and that the enriched TEI contains the
+  canonical `guest-bios` block.
 
 ## Structured generation orchestration
 
@@ -810,6 +814,10 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   checkpoint DTOs.
 - `episodic/orchestration/_show_notes_executor.py` contains the concrete
   `ShowNotesToolExecutor` implementation.
+- `episodic/orchestration/_guest_bios_executor.py` contains the concrete
+  `GuestBiosToolExecutor` implementation. It resolves the request's
+  `series_profile_id`, optional `episode_id`, and optional `template_id`
+  through the configured binding resolver before invoking the generation helper.
 - `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
   used for `plan -> execute -> finish` and the checkpointing path that pauses
   after planning.
@@ -841,15 +849,17 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   uniqueness constraint. The SQLAlchemy adapter attempts the insert first and
   falls back to loading the existing row only when the database reports a
   duplicate key.
-- Treat `ShowNotesToolExecutor` as the first tool adapter, not as a special
-  case that other orchestration code may import around.
+- Treat `ShowNotesToolExecutor` and `GuestBiosToolExecutor` as tool adapters,
+  not as special cases that other orchestration code may import around. Use
+  `RoutingToolExecutor` when one orchestration run needs to dispatch multiple
+  action kinds.
 
 ### Testing the orchestration slice
 
 - Unit coverage for DTO validation, planner behaviour, orchestration dispatch,
-  show-notes execution, and properties lives in the focused
-  `tests/test_orchestration_*.py` and `tests/test_show_notes_executor.py`
-  modules.
+  show-notes execution, guest-bio execution, and properties lives in the
+  focused `tests/test_orchestration_*.py`, `tests/test_show_notes_executor.py`,
+  and `tests/test_guest_bios_executor.py` modules.
 - LangGraph seam coverage lives in
   `tests/test_generation_orchestration_langgraph.py`.
 - Behavioural coverage lives in
@@ -859,9 +869,6 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   responses from one OpenAI-compatible endpoint: the first for structured
   planning, and the second for the show-notes tool call. Keep that fixture
   model-driven so prompt wording can evolve without breaking the scenario.
-- Durable checkpoint coverage lives in
-  `tests/canonical_storage/test_workflow_checkpoints.py` and uses py-pglite via
-  the migrated SQLAlchemy fixtures.
 
 ## LLM adapter boundary
 

@@ -12,7 +12,7 @@ without knowing which queue, worker, or user interface produced them.
 import typing as typ
 
 if typ.TYPE_CHECKING:
-    from episodic.generation import ShowNotesResult
+    from episodic.generation import GuestBioSource, GuestBiosResult, ShowNotesResult
     from episodic.orchestration._dto import (
         ActionExecutionResult,
         GenerationOrchestrationRequest,
@@ -84,3 +84,16 @@ class _ShowNotesGeneratorPort(typ.Protocol):
         template_structure: dict[str, object] | None = None,
     ) -> ShowNotesResult:
         """Generate show notes from the supplied TEI context."""
+
+
+class _GuestBiosGeneratorPort(typ.Protocol):
+    """Abstraction for guest-bios generation used by the guest-bios executor."""
+
+    async def generate(
+        self,
+        script_tei_xml: str,
+        sources: tuple[GuestBioSource, ...],
+        *,
+        template_structure: dict[str, object] | None = None,
+    ) -> GuestBiosResult:
+        """Generate guest biographies from the supplied TEI and sources."""
