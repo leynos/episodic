@@ -521,8 +521,9 @@ request gates and must not be the only proof of routing correctness.
 - [x] (2026-05-19T19:00:12Z) Ran a CodeRabbit confirmation pass, applied two
   additional minor prose findings, and reran `make markdownlint` plus
   `make nixie` successfully.
-- [ ] Commit this ExecPlan, push the branch, and open a draft pull request for
-  plan review.
+- [x] (2026-05-19T19:13:40Z) Committed this ExecPlan, pushed the branch, and
+  opened draft pull request
+  [#106](https://github.com/leynos/episodic/pull/106) for plan review.
 - [ ] Await explicit plan approval before implementation.
 
 ## Surprises & Discoveries
