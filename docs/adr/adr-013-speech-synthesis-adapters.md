@@ -111,9 +111,9 @@ more natural but can be less editable than individual stems.
 - Roadmap items `3.3.x` in `docs/roadmap.md`
 - Design:
   `docs/episodic-podcast-generation-system-design.md#initial-speech-adapters`
-- ADR 009:
-  `docs/adr/adr-011-tts-capability-negotiation.md`
 - ADR 011:
+  `docs/adr/adr-011-tts-capability-negotiation.md`
+- ADR 012:
   `docs/adr/adr-012-pronunciation-repository.md`
 - Inworld Realtime overview:
   <https://docs.inworld.ai/realtime/overview>

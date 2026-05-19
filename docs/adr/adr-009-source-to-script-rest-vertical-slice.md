@@ -84,7 +84,7 @@ yet exist.
   with `202 Accepted`, `Location`, and `Retry-After` semantics where the work
   cannot complete in the initial request.
 - The implementation respects the hexagonal boundary rules in
-  [ADR 006][^2] and the resumable workflow rules in [ADR 007][^3].
+  [ADR 014][^2] and the resumable workflow rules in [ADR 007][^3].
 
 ## Options considered
 
@@ -251,7 +251,7 @@ the same first-write-wins and conflict-detection invariants.
 See also the system design[^7] and TUI API design.[^8]
 
 [^1]: [RFC 6129: The `application/tei+xml` media type](https://datatracker.ietf.org/doc/html/rfc6129)
-[^2]: [ADR 006: Hexagonal architecture enforcement](adr-006-hexagonal-architecture-enforcement.md)
+[^2]: [ADR 014: Hexagonal architecture enforcement](adr-014-hexagonal-architecture-enforcement.md)
 [^3]: [ADR 007: Durable generation checkpoints](adr-007-durable-generation-checkpoints.md)
 [^4]: [Microsoft REST API design best practices](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design)
 [^5]: [Microsoft Fabric long-running operation pattern](https://learn.microsoft.com/en-us/rest/api/fabric/articles/long-running-operation)

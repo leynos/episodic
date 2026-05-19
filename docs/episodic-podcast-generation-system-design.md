@@ -12,7 +12,6 @@ Accepted decision records:
 - [ADR 003: Celery worker scaffold](adr/adr-003-celery-worker-scaffold.md)
 - [ADR 004: Show-notes TEI representation](adr/adr-004-show-notes-tei-representation.md)
 - [ADR 005: Structured planning and tool execution for generation orchestration](adr/adr-005-structured-planning-and-tool-execution.md)
-- [ADR 006: Hexagonal architecture enforcement](adr/adr-006-hexagonal-architecture-enforcement.md)
 - [ADR 007: Durable generation checkpoints](adr/adr-007-durable-generation-checkpoints.md)
 - [ADR 008: Chapter-marker TEI representation](adr/adr-008-chapter-marker-tei-representation.md)
 - [ADR 009: Source-to-script REST vertical slice](adr/adr-009-source-to-script-rest-vertical-slice.md)
@@ -20,6 +19,7 @@ Accepted decision records:
 - [ADR 011: Text-to-Speech capability negotiation](adr/adr-011-tts-capability-negotiation.md)
 - [ADR 012: Pronunciation repository](adr/adr-012-pronunciation-repository.md)
 - [ADR 013: Speech synthesis adapters](adr/adr-013-speech-synthesis-adapters.md)
+- [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
 
 ## Overview
 

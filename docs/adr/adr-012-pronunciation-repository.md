@@ -100,5 +100,5 @@ compiled artefacts and can be regenerated when adapter rules change.
 - Roadmap items `2.2.3` and `3.2.x` in `docs/roadmap.md`
 - Design:
   `docs/episodic-podcast-generation-system-design.md#pronunciation-repository`
-- ADR 009:
+- ADR 011:
   `docs/adr/adr-011-tts-capability-negotiation.md`
