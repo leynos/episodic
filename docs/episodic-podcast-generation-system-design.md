@@ -474,6 +474,17 @@ plus turn-level timing or alignment metadata; if a provider cannot return
 turn-level alignment, the result is marked as less editable and cannot replace
 per-segment stems for workflows that require surgical partial regeneration.
 
+#### Speech synthesis observability
+
+- Emit structured logs at adapter boundaries with TEI and script identifiers,
+  provider, model, execution mode, and request outcome.
+- Record metrics for synthesis latency, error rates, and cost per provider,
+  partitioned by adapter and provider.
+- Propagate traces from TEI and script identifiers through adapter and
+  provider calls so renders remain correlated end to end.
+- Alert on synthesis failures and capability mismatches, including repeated
+  unsupported-capability diagnostics.
+
 The following entity-relationship diagram shows how voice personas, provider
 capabilities, pronunciation entries, speech render requests, and speech render
 artefacts relate in the speech synthesis data model.

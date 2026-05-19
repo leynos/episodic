@@ -85,6 +85,8 @@ compiled artefacts and can be regenerated when adapter rules change.
 
 - Repository resolution introduces inheritance and override rules that need
   careful contract tests.
+- Property-based tests should cover scope inheritance and override resolution
+  across organisation, series, episode, speaker, and segment levels.
 - Some providers will still require lower-fidelity fallback strategies such as
   spelling substitutions.
 - Editors may need a review workflow for proposed entries before automatic

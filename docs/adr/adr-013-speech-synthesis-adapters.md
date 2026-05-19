@@ -95,6 +95,9 @@ more natural but can be less editable than individual stems.
 
 - Each adapter needs provider-specific contract fixtures and drift monitoring
   because hosted model APIs can change.
+- Property-based tests should cover contract scenarios across capability
+  combinations, including supported fulfilment and unsupported-capability
+  diagnostics.
 - Dialogue renderers can produce artefacts that are harder to partially
   regenerate than per-turn stems.
 - Verbatim transcript verification is necessary for session-based or otherwise

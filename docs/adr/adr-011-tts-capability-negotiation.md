@@ -93,6 +93,8 @@ regeneration semantics.
 
 - Adapter authors must maintain capability descriptors and contract tests
   alongside request mapping code.
+- Property-based tests should cover capability descriptor validation across
+  required and optional behaviour combinations.
 - The request model is broader than the first concrete adapter needs.
 - The selector can only be as accurate as the descriptors and provider tests
   that back them.
