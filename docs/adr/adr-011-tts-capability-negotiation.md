@@ -86,7 +86,7 @@ regeneration semantics.
   synthesis call.
 - Direct segment rendering and conversation-aware rendering can evolve without
   overloading one port.
-- Cost, timing, transcript, and provider request metadata can be captured
+- Cost, timing, transcripts, and provider request metadata can be captured
   consistently across adapters.
 
 ### Negative
