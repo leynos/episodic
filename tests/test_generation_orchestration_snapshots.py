@@ -189,15 +189,41 @@ def test_show_notes_result_serialisation_snapshot(
     result = make_show_notes_result()
     serialised = dataclasses.asdict(result)
     assert serialised == snapshot
-def test_generation_orchestration_result_snapshot(
-    snapshot: SnapshotAssertion,
-) -> None:
-    """Snapshot dataclass serialisation for aggregated orchestration results."""
+
+def _make_orchestration_result(
+    *,
+    rationale: str = "test",
+    required_inputs: tuple[str, ...] = (),
+    action_summary: str = "test",
+    action_usage: LLMUsage | None = None,
+    show_notes_result: ShowNotesResult | None = None,
+    planner_usage: LLMUsage | None = None,
+    total_usage: LLMUsage | None = None,
+) -> GenerationOrchestrationResult:
+    if action_usage is None:
+        action_usage = LLMUsage(
+            input_tokens=10,
+            output_tokens=20,
+            total_tokens=30,
+        )
+    if planner_usage is None:
+        planner_usage = LLMUsage(
+            input_tokens=1,
+            output_tokens=2,
+            total_tokens=3,
+        )
+    if total_usage is None:
+        total_usage = LLMUsage(
+            input_tokens=11,
+            output_tokens=22,
+            total_tokens=33,
+        )
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
-        rationale="test",
+        rationale=rationale,
         model_tier=ModelTier.EXECUTION,
+        required_inputs=required_inputs,
     )
     plan = ExecutionPlan(
         plan_version="1",
@@ -210,54 +236,36 @@ def test_generation_orchestration_result_snapshot(
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
         model_tier=ModelTier.EXECUTION,
         model="gpt-4o-mini",
-        summary="test",
-        usage=LLMUsage(input_tokens=10, output_tokens=20, total_tokens=30),
+        summary=action_summary,
+        usage=action_usage,
+        show_notes_result=show_notes_result,
     )
-    result = GenerationOrchestrationResult(
+    return GenerationOrchestrationResult(
         plan=plan,
         action_results=(action_done,),
-        planner_usage=LLMUsage(input_tokens=1, output_tokens=2, total_tokens=3),
-        total_usage=LLMUsage(input_tokens=11, output_tokens=22, total_tokens=33),
+        planner_usage=planner_usage,
+        total_usage=total_usage,
     )
-    serialised = dataclasses.asdict(result)
-    assert serialised == snapshot
+def test_generation_orchestration_result_snapshot(
+    snapshot: SnapshotAssertion,
+) -> None:
+    result = _make_orchestration_result()
+    assert dataclasses.asdict(result) == snapshot
 
 def test_generation_orchestration_result_with_show_notes_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
-    planned = PlannedAction(
-        action_id="a1",
-        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+    show_notes = make_show_notes_result(entries=(make_show_notes_entry(),))
+    result = _make_orchestration_result(
         rationale="Generate listener-facing notes from canonical TEI.",
-        model_tier=ModelTier.EXECUTION,
         required_inputs=("script_tei_xml",),
-    )
-    plan = ExecutionPlan(
-        plan_version="1",
-        selected_planning_model="gpt-4.1",
-        selected_execution_model="gpt-4o-mini",
-        steps=(planned,),
-    )
-    show_notes = make_show_notes_result(
-        entries=(make_show_notes_entry(),),
-    )
-    action_done = ActionExecutionResult(
-        action_id="a1",
-        action_kind=ActionKind.GENERATE_SHOW_NOTES,
-        model_tier=ModelTier.EXECUTION,
-        model="gpt-4o-mini",
-        summary="Generated one show-notes entry.",
-        usage=show_notes.usage,
+        action_summary="Generated one show-notes entry.",
+        action_usage=show_notes.usage,
         show_notes_result=show_notes,
-    )
-    result = GenerationOrchestrationResult(
-        plan=plan,
-        action_results=(action_done,),
         planner_usage=LLMUsage(input_tokens=12, output_tokens=8, total_tokens=20),
         total_usage=LLMUsage(input_tokens=52, output_tokens=33, total_tokens=85),
     )
-    serialised = dataclasses.asdict(result)
-    assert serialised == snapshot
+    assert dataclasses.asdict(result) == snapshot
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
     """Snapshot checkpoint payload conversion for planner and action results."""
     planned = PlannedAction(
