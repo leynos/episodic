@@ -129,3 +129,17 @@ async def test_routing_tool_executor_dispatches_by_action_kind() -> None:
     )
     assert show_notes_executor.calls == [(show_notes_action, request)]
     assert guest_bios_executor.calls == [(guest_bios_action, request)]
+
+
+def test_routing_tool_executor_rejects_normalized_action_kind_collisions() -> None:
+    """Routing executor should not silently discard equivalent route keys."""
+    first_executor = _FakeToolExecutor()
+    second_executor = _FakeToolExecutor()
+
+    with pytest.raises(ValueError, match="route action kind collision"):
+        RoutingToolExecutor(
+            routes={
+                "generate_show_notes": first_executor,
+                " generate_show_notes ": second_executor,
+            }
+        )
