@@ -1,15 +1,21 @@
-"""Syrupy regression snapshots for structured generation orchestration.
+"""Regression tests for typed generation orchestration serialisation.
 
-Issue #72 added property coverage for orchestration invariants; this module
-keeps stable snapshots alongside `tests/test_orchestration_properties.py` and
-the focused orchestration unit tests. The snapshots pin the planner prompt,
-execution-plan and orchestration-result serialisation, checkpoint payload
-conversion, and representative planner-format error messages.
+This module gives CI a stable view of the wire-shaped DTOs produced by the
+generation orchestration layer. Syrupy snapshots catch accidental structural
+changes in `ExecutionPlan`, `GenerationOrchestrationResult`,
+`ShowNotesEntry`, and `ShowNotesResult` serialisation, including plan version
+metadata and action-kind representation.
+
+The non-snapshot assertions in this file cover the DTO invariants that make the
+snapshots meaningful: show-notes optional field normalisation, execution-plan
+step validation, action-result aggregation validation, and usage-accounting
+consistency in the canonical orchestration fixture.
 """
 
 import dataclasses
 import typing as typ
 
+import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from episodic.generation.show_notes import ShowNotesEntry, ShowNotesResult
@@ -143,7 +149,7 @@ def _capture_plan_format_error(payload: dict[str, object]) -> str:
 
 
 def test_build_prompt_snapshot(snapshot: SnapshotAssertion) -> None:
-    """Snapshot the JSON planner prompt rendered for a minimal request."""
+    """Snapshot the planner prompt that describes orchestration output shape."""
     cfg = GenerationOrchestrationConfig(
         planning_model="gpt-4.1",
         execution_model="gpt-4o-mini",
@@ -158,7 +164,7 @@ def test_build_prompt_snapshot(snapshot: SnapshotAssertion) -> None:
 
 
 def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> None:
-    """Snapshot dataclass serialisation for execution plans."""
+    """Snapshot the canonical dictionary form of an `ExecutionPlan`."""
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
@@ -179,6 +185,7 @@ def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> N
 def test_show_notes_entry_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
+    """Snapshot the serialised shape of one representative show-note entry."""
     entry = make_show_notes_entry()
     serialised = dataclasses.asdict(entry)
     assert serialised == snapshot
@@ -186,10 +193,51 @@ def test_show_notes_entry_serialisation_snapshot(
 def test_show_notes_result_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
+    """Snapshot nested show-note entries plus deterministic provider metadata."""
     result = make_show_notes_result()
     serialised = dataclasses.asdict(result)
     assert serialised == snapshot
 
+def test_show_notes_entry_normalises_optional_locator() -> None:
+    """Verify optional locator normalisation before snapshot serialisation."""
+    entry = make_show_notes_entry(tei_locator="   ")
+
+    assert entry.tei_locator is None
+
+def test_show_notes_entry_rejects_non_iso8601_timestamp() -> None:
+    """Verify invalid timestamps cannot enter show-note snapshot fixtures."""
+    with pytest.raises(ValueError, match="timestamp"):
+        make_show_notes_entry(timestamp="5:30")
+
+def test_execution_plan_freezes_and_validates_steps() -> None:
+    """Verify plan steps are typed and immutable before nested serialisation."""
+    planned = PlannedAction(
+        action_id="a1",
+        action_kind="generate_show_notes",
+        rationale="test",
+        model_tier="execution",
+    )
+    plan = ExecutionPlan(
+        plan_version=" 1 ",
+        selected_planning_model=" gpt-4.1 ",
+        selected_execution_model=" gpt-4o-mini ",
+        steps=typ.cast("tuple[PlannedAction, ...]", [planned]),
+    )
+
+    assert plan.plan_version == "1"
+    assert plan.steps == (planned,)
+    assert plan.steps[0].action_kind is ActionKind.GENERATE_SHOW_NOTES
+
+    with pytest.raises(TypeError, match="steps\\[0\\]"):
+        ExecutionPlan(
+            plan_version="1",
+            selected_planning_model="gpt-4.1",
+            selected_execution_model="gpt-4o-mini",
+            steps=typ.cast(
+                "tuple[PlannedAction, ...]",
+                ("not-a-planned-action",),
+            ),
+        )
 def _make_orchestration_result(
     *,
     rationale: str = "test",
@@ -200,6 +248,7 @@ def _make_orchestration_result(
     planner_usage: LLMUsage | None = None,
     total_usage: LLMUsage | None = None,
 ) -> GenerationOrchestrationResult:
+    """Build the canonical orchestration DTO graph used by snapshots."""
     if action_usage is None:
         action_usage = LLMUsage(
             input_tokens=10,
@@ -249,12 +298,14 @@ def _make_orchestration_result(
 def test_generation_orchestration_result_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
+    """Snapshot the aggregate orchestration result without tool-specific data."""
     result = _make_orchestration_result()
     assert dataclasses.asdict(result) == snapshot
 
 def test_generation_orchestration_result_with_show_notes_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
+    """Snapshot orchestration aggregation with nested show-note tool output."""
     show_notes = make_show_notes_result(entries=(make_show_notes_entry(),))
     result = _make_orchestration_result(
         rationale="Generate listener-facing notes from canonical TEI.",
@@ -266,8 +317,54 @@ def test_generation_orchestration_result_with_show_notes_snapshot(
         total_usage=LLMUsage(input_tokens=52, output_tokens=33, total_tokens=85),
     )
     assert dataclasses.asdict(result) == snapshot
+
+def test_generation_orchestration_result_freezes_action_results() -> None:
+    """Verify aggregation rejects non-action results and freezes valid ones."""
+    result = GenerationOrchestrationResult(
+        plan=ExecutionPlan(
+            plan_version="1",
+            selected_planning_model="gpt-4.1",
+            selected_execution_model="gpt-4o-mini",
+            steps=(),
+        ),
+        action_results=typ.cast("tuple[ActionExecutionResult, ...]", []),
+        planner_usage=None,
+        total_usage=LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0),
+    )
+
+    assert result.action_results == ()
+
+    with pytest.raises(TypeError, match="action_results\\[0\\]"):
+        GenerationOrchestrationResult(
+            plan=result.plan,
+            action_results=typ.cast(
+                "tuple[ActionExecutionResult, ...]",
+                ("not-an-action-result",),
+            ),
+            planner_usage=None,
+            total_usage=result.total_usage,
+        )
+
+def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
+    """Verify the canonical aggregate keeps planner and action usage aligned."""
+    result = _make_orchestration_result()
+    action_usage = result.action_results[0].usage
+
+    assert result.planner_usage is not None
+    assert action_usage is not None
+    assert result.total_usage.input_tokens == (
+        result.planner_usage.input_tokens + action_usage.input_tokens
+    )
+    assert result.total_usage.output_tokens == (
+        result.planner_usage.output_tokens + action_usage.output_tokens
+    )
+    assert result.total_usage.total_tokens == (
+        result.planner_usage.total_tokens + action_usage.total_tokens
+    )
+
+
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
-    """Snapshot checkpoint payload conversion for planner and action results."""
+    """Snapshot checkpoint payloads used when orchestration pauses and resumes."""
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
