@@ -98,6 +98,15 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
     ----------
     max_workers : int | None
         Optional explicit worker count for interpreter pool creation.
+
+    Notes
+    -----
+    Each instance owns its interpreter pool. Create the executor at the
+    boundary that owns the CPU fan-out operation, reuse it for the related
+    ``map_ordered()`` calls, and call ``shutdown()`` when that operation or
+    worker-scoped owner is finished. Lazy pool creation is protected by a
+    lock, but callers should still avoid sharing one executor as mutable global
+    state across unrelated task flows.
     """
 
     def __init__(
@@ -142,7 +151,14 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
 
 
 def build_cpu_task_executor_from_environment() -> CpuTaskExecutor:
-    """Select CPU-task adapter based on feature flag and runtime capability."""
+    """Select CPU-task adapter based on feature flag and runtime capability.
+
+    The returned object is owned by the caller. Inline executors have no
+    resources to release; interpreter-pool executors should be shut down by the
+    task-level owner after the fan-out work completes, commonly with
+    ``try/finally`` and ``getattr(executor, "shutdown", None)`` so the same
+    code works for both adapters.
+    """
     if not _flag_enabled(os.getenv(_INTERPRETER_POOL_FEATURE_FLAG)):
         return InlineCpuTaskExecutor()
     if not interpreter_pool_supported():

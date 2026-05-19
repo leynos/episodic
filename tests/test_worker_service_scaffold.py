@@ -1,9 +1,12 @@
 """Tests for the Celery worker scaffold."""
 
+import concurrent.futures as cf
 import dataclasses as dc
 import typing as typ
 
 import pytest
+
+import episodic.concurrent_interpreters as ci
 
 if typ.TYPE_CHECKING:
     from kombu import Queue
@@ -55,6 +58,21 @@ def _runtime_environ() -> dict[str, str]:
         "EPISODIC_CELERY_BROKER_URL": "amqp://guest:guest@localhost:5672//",
         "EPISODIC_CELERY_ALWAYS_EAGER": "true",
     }
+
+
+def _double(value: int) -> int:
+    return value * 2
+
+
+async def _cpu_task_inner_fan_out(items: tuple[int, ...]) -> list[int]:
+    """Mirror the documented CPU task interpreter-pool integration pattern."""
+    executor = ci.build_cpu_task_executor_from_environment()
+    try:
+        return await executor.map_ordered(_double, items)
+    finally:
+        shutdown = getattr(executor, "shutdown", None)
+        if shutdown is not None:
+            shutdown()
 
 
 def test_worker_topology_defines_io_and_cpu_queues() -> None:
@@ -237,6 +255,57 @@ def test_build_worker_launch_profiles_maps_workloads_to_distinct_pools() -> None
     assert profiles[WorkloadClass.CPU_BOUND].pool is WorkerPool.PREFORK
     assert profiles[WorkloadClass.CPU_BOUND].concurrency == 6
     assert profiles[WorkloadClass.CPU_BOUND].queue_name == "episodic.cpu"
+
+
+@pytest.mark.asyncio
+async def test_cpu_task_inner_fan_out_uses_environment_executor_pattern(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exercise the documented CPU task interpreter-pool integration seam."""
+    monkeypatch.setenv("EPISODIC_USE_INTERPRETER_POOL", "1")
+    monkeypatch.setenv("EPISODIC_INTERPRETER_POOL_MAX_WORKERS", "2")
+    monkeypatch.setattr(ci, "interpreter_pool_supported", lambda: True)
+
+    captured_max_workers: list[int | None] = []
+
+    def fake_create_interpreter_pool_executor(max_workers: int | None) -> cf.Executor:
+        captured_max_workers.append(max_workers)
+        return cf.ThreadPoolExecutor(max_workers=max_workers)
+
+    monkeypatch.setattr(
+        ci,
+        "_create_interpreter_pool_executor",
+        fake_create_interpreter_pool_executor,
+    )
+
+    results = await _cpu_task_inner_fan_out((1, 3, 5))
+
+    assert results == [2, 6, 10], (
+        "Expected task-level executor fan-out to preserve input ordering."
+    )
+    assert captured_max_workers == [2], (
+        "Expected task-level executor creation to honour interpreter-pool env."
+    )
+
+
+@pytest.mark.asyncio
+async def test_cpu_task_inner_fan_out_falls_back_when_flag_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep CPU task fan-out runnable when interpreter-pool dispatch is off."""
+    monkeypatch.delenv("EPISODIC_USE_INTERPRETER_POOL", raising=False)
+    monkeypatch.setattr(ci, "interpreter_pool_supported", lambda: True)
+    monkeypatch.setattr(
+        ci,
+        "_create_interpreter_pool_executor",
+        pytest.fail,
+    )
+
+    results = await _cpu_task_inner_fan_out((2, 4))
+
+    assert results == [4, 8], (
+        "Expected documented task-level pattern to fall back to inline execution."
+    )
 
 
 def test_create_celery_app_registers_task_routes_and_queues() -> None:

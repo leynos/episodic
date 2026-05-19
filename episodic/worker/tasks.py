@@ -10,7 +10,12 @@ from episodic.concurrent_interpreters import (
 )
 
 executor = build_cpu_task_executor_from_environment()
-results = await executor.map_ordered(pure_python_fn, items)
+try:
+    results = await executor.map_ordered(pure_python_fn, items)
+finally:
+    shutdown = getattr(executor, "shutdown", None)
+    if shutdown is not None:
+        shutdown()
 ```
 
 Set `EPISODIC_USE_INTERPRETER_POOL=1` to enable subinterpreter parallelism for
@@ -19,6 +24,9 @@ that inner fan-out path, with the implementation and
 `episodic/concurrent_interpreters.py`. Callers that gate fan-out by batch size
 should keep that threshold as task-level policy, as
 `DefaultWeightingStrategy` does with `EPISODIC_INTERPRETER_POOL_MIN_ITEMS`.
+Treat the executor as owned by the task-level fan-out operation or an explicit
+worker-scoped owner; do not hide a long-lived interpreter pool in unrelated
+global task state.
 """
 
 import collections.abc as cabc

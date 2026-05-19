@@ -210,6 +210,31 @@ When adding new worker tasks:
   adapters directly into task code.
 - Extend `SCAFFOLD_TASK_WORKLOADS` and the topology-backed routing metadata, so
   the new task's queue assignment remains explicit.
+- For CPU-bound tasks on `episodic.cpu` that can split pure-Python inner work
+  into independent items, build the task-level executor from the environment:
+
+  ```python
+  from episodic.concurrent_interpreters import (
+      build_cpu_task_executor_from_environment,
+  )
+
+  executor = build_cpu_task_executor_from_environment()
+  try:
+      results = await executor.map_ordered(pure_python_fn, items)
+  finally:
+      shutdown = getattr(executor, "shutdown", None)
+      if shutdown is not None:
+          shutdown()
+  ```
+
+  `EPISODIC_USE_INTERPRETER_POOL=1` enables `InterpreterPoolCpuTaskExecutor`
+  when the Python runtime supports it, and
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps its worker count. Keep
+  `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` as task-level fan-out policy, not
+  Celery pool configuration. The task-level owner is responsible for executor
+  lifetime and cleanup; inline executors do not need shutdown, while
+  interpreter-pool executors must be shut down when their fan-out operation or
+  explicit worker-scoped owner is finished.
 
 ## Database migrations
 
