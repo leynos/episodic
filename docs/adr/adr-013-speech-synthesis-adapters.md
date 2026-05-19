@@ -1,4 +1,4 @@
-# ADR-012: Speech synthesis adapters
+# ADR-013: Speech synthesis adapters
 
 ## Status
 

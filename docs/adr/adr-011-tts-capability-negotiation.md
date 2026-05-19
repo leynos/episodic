@@ -1,4 +1,4 @@
-# ADR-010: Text-to-Speech capability negotiation
+# ADR-011: Text-to-Speech capability negotiation
 
 ## Status
 

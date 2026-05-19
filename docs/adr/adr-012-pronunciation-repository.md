@@ -1,4 +1,4 @@
-# ADR-011: Pronunciation repository
+# ADR-012: Pronunciation repository
 
 ## Status
 
