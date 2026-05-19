@@ -403,7 +403,6 @@ leaking provider parameter names into the domain model.
   - See
     [Speech synthesis contracts](episodic-podcast-generation-system-design.md#speech-synthesis-contracts).
 
-
 ### 3.2. Pronunciation repository and speech markup
 
 Build the pronunciation system as a reusable repository connected to TEI
@@ -440,7 +439,6 @@ multiple providers with different pronunciation surfaces.
   - Compile cues at the adapter edge according to capability descriptors.
   - See
     [Speech synthesis contracts](episodic-podcast-generation-system-design.md#speech-synthesis-contracts).
-
 
 ### 3.3. Initial TTS provider adapters
 
@@ -492,7 +490,6 @@ TEI-backed traceability.
     streaming, queue execution, and unsupported-feature failures.
   - Success: every adapter either fulfils requested capabilities or returns a
     stable unsupported-capability diagnostic.
-
 
 ### 3.4. Mixing engine and loudness compliance
 

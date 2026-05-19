@@ -474,6 +474,61 @@ plus turn-level timing or alignment metadata; if a provider cannot return
 turn-level alignment, the result is marked as less editable and cannot replace
 per-segment stems for workflows that require surgical partial regeneration.
 
+The following entity-relationship diagram shows how voice personas, provider
+capabilities, pronunciation entries, speech render requests, and speech render
+artefacts relate in the speech synthesis data model.
+
+```mermaid
+erDiagram
+  VOICE_PERSONAS {
+    uuid id
+    string speaker_id
+  }
+
+  TTS_PROVIDER_CAPABILITIES {
+    uuid id
+    string provider
+    string model
+  }
+
+  PRONUNCIATION_ENTRIES {
+    uuid id
+    string scope
+    string locale
+    string lifecycle_state
+  }
+
+  PRONUNCIATION_ENTRY_REALIZATIONS {
+    uuid id
+    uuid entry_id
+    string realization_kind
+  }
+
+  SPEECH_RENDER_REQUESTS {
+    uuid id
+    string tei_revision_hash
+    uuid voice_persona_id
+    uuid capability_id
+    string pronunciation_pack_hash
+  }
+
+  SPEECH_RENDER_ARTIFACTS {
+    uuid id
+    uuid request_id
+    string artifact_kind
+  }
+
+  PRONUNCIATION_ENTRIES ||--o{ PRONUNCIATION_ENTRY_REALIZATIONS : has
+  VOICE_PERSONAS ||--o{ SPEECH_RENDER_REQUESTS : selected_for
+  TTS_PROVIDER_CAPABILITIES ||--o{ SPEECH_RENDER_REQUESTS : used_by
+  SPEECH_RENDER_REQUESTS ||--o{ SPEECH_RENDER_ARTIFACTS : produces
+```
+
+_Caption: Speech synthesis entity relationships. Pronunciation entries have
+one or more realizations; voice personas and provider capabilities are selected
+for speech render requests; each speech render request produces one or more
+speech render artefacts._
+
 #### Pronunciation repository
 
 Pronunciation guidance is a first-class domain capability rather than
