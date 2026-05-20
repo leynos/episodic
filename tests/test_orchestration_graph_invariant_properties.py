@@ -13,9 +13,11 @@ from episodic.orchestration import (
     ExecutionPlan,
     GenerationGraphState,
     GenerationOrchestrationRequest,
+    InMemoryCheckpointStore,
     ModelTier,
     PlannedAction,
     PlannerResult,
+    SuspendedWorkflowResult,
     build_generation_orchestration_graph,
 )
 from tests._orchestration_property_support import (
@@ -25,6 +27,50 @@ from tests._orchestration_property_support import (
     PropTokenInputs,
     token_inputs_strategy,
 )
+
+
+def _planner_result() -> PlannerResult:
+    """Build a minimal planner result for graph callback probes."""
+    return PlannerResult(
+        plan=ExecutionPlan(
+            plan_version="1.0",
+            selected_planning_model="prop-plan-model",
+            selected_execution_model="prop-exec-model",
+            steps=(
+                PlannedAction(
+                    action_id="action-1",
+                    action_kind=ActionKind.GENERATE_SHOW_NOTES,
+                    rationale="prop graph rationale",
+                    model_tier=ModelTier.EXECUTION,
+                    required_inputs=("script_tei_xml",),
+                ),
+            ),
+        ),
+        usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
+        model="prop-plan-model",
+        provider_response_id="prop-planner",
+        finish_reason="stop",
+    )
+
+
+def _tool_result() -> ActionExecutionResult:
+    """Build a minimal action result for graph callback probes."""
+    return ActionExecutionResult(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        model_tier=ModelTier.EXECUTION,
+        model="prop-exec-model",
+        summary="prop graph synthesis",
+        usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
+    )
+
+
+def _request(correlation_id: str = "callback-probe") -> GenerationOrchestrationRequest:
+    """Build a minimal generation request for graph callback probes."""
+    return GenerationOrchestrationRequest(
+        correlation_id=correlation_id,
+        script_tei_xml="<TEI><text><body><p>body</p></body></text></TEI>",
+    )
 
 
 @given(
@@ -180,53 +226,53 @@ async def test_langgraph_respects_plan_execute_finish_order(
 
 
 @pytest.mark.asyncio
-async def test_langgraph_finish_callback_errors_do_not_replace_result() -> None:
-    """Finish callback failures must not discard the computed graph result."""
-    planner_result = PlannerResult(
-        plan=ExecutionPlan(
-            plan_version="1.0",
-            selected_planning_model="prop-plan-model",
-            selected_execution_model="prop-exec-model",
-            steps=(
-                PlannedAction(
-                    action_id="action-1",
-                    action_kind=ActionKind.GENERATE_SHOW_NOTES,
-                    rationale="prop graph rationale",
-                    model_tier=ModelTier.EXECUTION,
-                    required_inputs=("script_tei_xml",),
-                ),
-            ),
-        ),
-        usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
-        model="prop-plan-model",
-        provider_response_id="prop-planner",
-        finish_reason="stop",
+async def test_finish_callback_is_invoked_in_direct_execute_path() -> None:
+    """Direct execution invokes the finish callback with finished state."""
+    observed_states: list[GenerationGraphState] = []
+    graph = build_generation_orchestration_graph(
+        planner=PropGraphPlanner(result=_planner_result()),
+        tool_executor=PropGraphToolExecutor(result=_tool_result()),
+        finish_callback=observed_states.append,
     )
-    tool_result = ActionExecutionResult(
-        action_id="action-1",
-        action_kind=ActionKind.GENERATE_SHOW_NOTES,
-        model_tier=ModelTier.EXECUTION,
-        model="prop-exec-model",
-        summary="prop graph synthesis",
-        usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
+
+    state = await graph.ainvoke(GenerationGraphState(request=_request()))
+
+    assert len(observed_states) == 1
+    assert observed_states[0].orchestration_result is not None
+    assert state["orchestration_result"] == observed_states[0].orchestration_result
+
+
+@pytest.mark.asyncio
+async def test_finish_callback_is_not_invoked_in_suspend_path() -> None:
+    """Checkpointed execution stops before the finish callback hook."""
+    observed_states: list[GenerationGraphState] = []
+    graph = build_generation_orchestration_graph(
+        planner=PropGraphPlanner(result=_planner_result()),
+        tool_executor=PropGraphToolExecutor(result=_tool_result()),
+        checkpoint_port=InMemoryCheckpointStore(),
+        finish_callback=observed_states.append,
     )
+
+    state = await graph.ainvoke(GenerationGraphState(request=_request()))
+
+    assert not observed_states
+    assert isinstance(state["suspended_result"], SuspendedWorkflowResult)
+    assert state["orchestration_result"] is None
+
+
+@pytest.mark.asyncio
+async def test_langgraph_finish_callback_errors_are_logged_and_propagated() -> None:
+    """Finish callback failures propagate after callback error logging."""
 
     def _raise_callback(_state: GenerationGraphState) -> None:
         msg = "callback failed after result computation"
         raise RuntimeError(msg)
 
     graph = build_generation_orchestration_graph(
-        planner=PropGraphPlanner(result=planner_result),
-        tool_executor=PropGraphToolExecutor(result=tool_result),
+        planner=PropGraphPlanner(result=_planner_result()),
+        tool_executor=PropGraphToolExecutor(result=_tool_result()),
         finish_callback=_raise_callback,
     )
-    request = GenerationOrchestrationRequest(
-        correlation_id="callback-error",
-        script_tei_xml="<TEI><text><body><p>body</p></body></text></TEI>",
-    )
 
-    state = await graph.ainvoke(GenerationGraphState(request=request))
-
-    assert state["orchestration_result"] is not None
-    assert state["planner_result"] == planner_result
-    assert state["action_results"] == (tool_result,)
+    with pytest.raises(RuntimeError, match="callback failed after result computation"):
+        await graph.ainvoke(GenerationGraphState(request=_request("callback-error")))

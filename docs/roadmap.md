@@ -248,6 +248,8 @@ metering. Completion enables reliable, auditable generation workflows.
 - [x] 2.4.1. Implement structured-output planning and tool-calling execution.
   - Define model tiering for cost control.
   - Implement tool-calling patterns for enrichment steps.
+  - Added issue `#72` property-based coverage for orchestration DTOs, planner
+    format errors, model-tier boundaries, and LangGraph invariants.
 - [x] 2.4.2. Add LangGraph suspend-and-resume orchestration. Requires 2.1.1.
   - Implement checkpoint persistence for resumable workflows.
   - Define idempotency keys for each workflow step.

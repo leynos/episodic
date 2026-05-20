@@ -616,7 +616,26 @@ def build_generation_orchestration_graph(
     GenerationGraphState,
     GenerationGraphState,
 ]:
-    """Build the minimal in-process generation orchestration graph."""
+    """Build the in-process generation orchestration graph.
+
+    The returned graph plans a structured generation request, either executes
+    the first planned action directly and aggregates a final
+    `GenerationOrchestrationResult`, or suspends after planning when
+    `checkpoint_port` is provided.
+
+    Args:
+        planner: Port used by the `plan` node to produce an execution plan.
+        tool_executor: Port used by the direct `execute` node to run planned
+            actions.
+        checkpoint_port: Optional persistence port. When provided, the graph
+            writes a checkpoint after planning and returns a suspended result
+            instead of running the direct finish path.
+        finish_callback: Optional callable invoked as
+            `finish_callback(state)` after finish-node aggregation and before
+            returning from the direct-execute path. It receives the
+            `GenerationGraphState` that entered the finish node; callback
+            exceptions are logged and propagated to the caller.
+    """
     graph = StateGraph(GenerationGraphState)
 
     async def _run_plan_node(
@@ -637,12 +656,25 @@ def build_generation_orchestration_graph(
         """Entry point for the finish graph node."""
         result = _finish_node(state)
         if finish_callback is not None:
+            callback_state = dc.replace(
+                state,
+                orchestration_result=result["orchestration_result"],
+            )
             try:
-                finish_callback(state)
-            except Exception as exc:  # noqa: BLE001
+                finish_callback(callback_state)
+                _log_event(
+                    "debug",
+                    "generation_graph.finish_node.callback.finish",
+                    correlation_id=(
+                        state.request.correlation_id
+                        if state.request is not None
+                        else None
+                    ),
+                )
+            except Exception as exc:
                 _log_event(
                     "error",
-                    "generation_graph.finish_node.callback_error",
+                    "generation_graph.finish_node.callback.error",
                     correlation_id=(
                         state.request.correlation_id
                         if state.request is not None
@@ -650,6 +682,7 @@ def build_generation_orchestration_graph(
                     ),
                     error=str(exc),
                 )
+                raise
         return result
 
     if checkpoint_port is None:

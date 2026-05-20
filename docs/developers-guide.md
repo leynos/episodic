@@ -833,6 +833,14 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 - `episodic/canonical/storage/workflow_checkpoints.py` contains the SQLAlchemy
   adapter for durable checkpoint persistence.
 
+`build_generation_orchestration_graph(...)` accepts an optional
+`finish_callback: Callable[[GenerationGraphState], None]` for observability and
+test event recording. The hook fires only on the direct
+`plan -> execute -> finish` path, after finish-node aggregation has produced an
+`orchestration_result` and before the graph returns. It is not invoked on the
+checkpoint suspend path. Callback exceptions are logged and propagated to the
+caller, so callbacks must not raise during normal operation.
+
 ### Maintainer rules
 
 - Keep the planner strict: parse model output into typed DTOs immediately and
@@ -867,6 +875,12 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   show-notes execution, guest-bio execution, and properties lives in the
   focused `tests/test_orchestration_*.py`, `tests/test_show_notes_executor.py`,
   and `tests/test_guest_bios_executor.py` modules.
+- Issue `#72` property coverage lives in
+  `tests/test_orchestration_properties.py` and the focused sibling modules for
+  config/model-tier boundaries, planner format errors, and LangGraph
+  invariants.
+- `tests/test_generation_orchestration_snapshots.py` pins planner format-error
+  messages and orchestration artefacts with Syrupy snapshots.
 - LangGraph seam coverage lives in
   `tests/test_generation_orchestration_langgraph.py`.
 - Behavioural coverage lives in
@@ -876,6 +890,9 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   responses from one OpenAI-compatible endpoint: the first for structured
   planning, and the second for the show-notes tool call. Keep that fixture
   model-driven so prompt wording can evolve without breaking the scenario.
+- Durable checkpoint coverage lives in
+  `tests/canonical_storage/test_workflow_checkpoints.py` and uses py-pglite via
+  the migrated SQLAlchemy fixtures.
 
 ## LLM adapter boundary
 
