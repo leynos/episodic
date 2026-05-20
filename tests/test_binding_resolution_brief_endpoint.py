@@ -47,7 +47,7 @@ def test_brief_endpoint_returns_404_for_invalid_episode(
     fixture = reference_support.build_api_fixture(canonical_api_client)
     nonexistent_episode_id = str(uuid.uuid4())
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/brief",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/brief",
         params={"episode_id": nonexistent_episode_id},
     )
     assert response.status_code == 404, "Expected 404 when episode_id does not exist."

@@ -23,7 +23,7 @@ def _create_profile(
 ) -> tuple[str, dict[str, typ.Any]]:
     """Create a series profile and return its identifier and payload."""
     create_profile_response = client.simulate_post(
-        "/series-profiles",
+        "/v1/series-profiles",
         json={
             "slug": slug,
             "title": "API Profile",
@@ -53,7 +53,7 @@ def _create_template(
 ) -> tuple[str, dict[str, typ.Any]]:
     """Create an episode template and return its identifier and payload."""
     create_template_response = client.simulate_post(
-        "/episode-templates",
+        "/v1/episode-templates",
         json={
             "series_profile_id": profile_id,
             "slug": "api-template",
@@ -140,7 +140,7 @@ def _update_profile(client: testing.TestClient, profile_id: str) -> None:
     _update_entity_and_verify_revision(
         client,
         EntityUpdateSpec(
-            endpoint_path=f"/series-profiles/{profile_id}",
+            endpoint_path=f"/v1/series-profiles/{profile_id}",
             payload={
                 "expected_revision": 1,
                 "title": "API Profile Updated",
@@ -160,7 +160,7 @@ def _update_template(client: testing.TestClient, template_id: str) -> None:
     _update_entity_and_verify_revision(
         client,
         EntityUpdateSpec(
-            endpoint_path=f"/episode-templates/{template_id}",
+            endpoint_path=f"/v1/episode-templates/{template_id}",
             payload={
                 "expected_revision": 1,
                 "title": "API Template Updated",
@@ -183,7 +183,7 @@ def _verify_stale_update_rejected(
     _verify_stale_update_rejected_generic(
         client,
         EntityUpdateSpec(
-            endpoint_path=f"/series-profiles/{profile_id}",
+            endpoint_path=f"/v1/series-profiles/{profile_id}",
             payload={
                 "expected_revision": 1,
                 "title": "Stale update",
@@ -206,7 +206,7 @@ def _verify_episode_template_stale_update_rejected(
     _verify_stale_update_rejected_generic(
         client,
         EntityUpdateSpec(
-            endpoint_path=f"/episode-templates/{template_id}",
+            endpoint_path=f"/v1/episode-templates/{template_id}",
             payload={
                 "expected_revision": 1,
                 "title": "Stale template update",
@@ -225,7 +225,7 @@ def _verify_profile_history(client: testing.TestClient, profile_id: str) -> None
     """Verify profile history includes both create and update revisions."""
     _verify_entity_history(
         client,
-        f"/series-profiles/{profile_id}/history",
+        f"/v1/series-profiles/{profile_id}/history",
         "profile",
     )
 
@@ -237,7 +237,7 @@ def _verify_episode_template_history(
     """Verify template history includes both create and update revisions."""
     _verify_entity_history(
         client,
-        f"/episode-templates/{template_id}/history",
+        f"/v1/episode-templates/{template_id}/history",
         "episode-template",
     )
 
@@ -249,7 +249,7 @@ def _verify_structured_brief(
 ) -> None:
     """Verify structured brief returns the expected profile and template."""
     brief_response = client.simulate_get(
-        f"/series-profiles/{profile_id}/brief",
+        f"/v1/series-profiles/{profile_id}/brief",
         params={"template_id": template_id},
     )
     assert brief_response.status_code == 200, (
@@ -303,7 +303,7 @@ def test_get_structured_brief_template_not_in_profile(
     )
 
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{profile_id_2}/brief",
+        f"/v1/series-profiles/{profile_id_2}/brief",
         params={"template_id": template_id},
     )
 
@@ -320,7 +320,7 @@ def test_update_rejects_non_integer_expected_revision(
     template_id, _ = _create_template(canonical_api_client, profile_id)
 
     profile_response = canonical_api_client.simulate_patch(
-        f"/series-profiles/{profile_id}",
+        f"/v1/series-profiles/{profile_id}",
         json={
             "expected_revision": "not-an-int",
             "title": "Invalid profile update",
@@ -333,7 +333,7 @@ def test_update_rejects_non_integer_expected_revision(
     )
 
     template_response = canonical_api_client.simulate_patch(
-        f"/episode-templates/{template_id}",
+        f"/v1/episode-templates/{template_id}",
         json={
             "expected_revision": "not-an-int",
             "title": "Invalid template update",
@@ -354,7 +354,7 @@ def test_update_rejects_missing_expected_revision(
     template_id, _ = _create_template(canonical_api_client, profile_id)
 
     profile_response = canonical_api_client.simulate_patch(
-        f"/series-profiles/{profile_id}",
+        f"/v1/series-profiles/{profile_id}",
         json={
             "title": "Invalid profile update",
             "description": "Should fail",
@@ -366,7 +366,7 @@ def test_update_rejects_missing_expected_revision(
     )
 
     template_response = canonical_api_client.simulate_patch(
-        f"/episode-templates/{template_id}",
+        f"/v1/episode-templates/{template_id}",
         json={
             "title": "Invalid template update",
             "description": "Should fail",

@@ -170,7 +170,7 @@ def create_binding_resolution_bindings(
         (context["late_revision_id"], context["late_episode_id"]),
     ):
         response = canonical_api_client.simulate_post(
-            "/reference-bindings",
+            "/v1/reference-bindings",
             json={
                 "reference_document_revision_id": revision_id,
                 "target_kind": "series_profile",
@@ -223,7 +223,7 @@ def request_early_episode_brief(
     """Request the structured brief using the early-episode context."""
     payload = _simulate_get_ok(
         canonical_api_client,
-        f"/series-profiles/{context['profile_id']}/brief",
+        f"/v1/series-profiles/{context['profile_id']}/brief",
         {
             "template_id": context["template_id"],
             "episode_id": context["early_episode_id"],
@@ -245,7 +245,7 @@ def request_late_episode_resolution(
     """Request the resolved-bindings endpoint using the late-episode context."""
     payload = _simulate_get_ok(
         canonical_api_client,
-        f"/series-profiles/{context['profile_id']}/resolved-bindings",
+        f"/v1/series-profiles/{context['profile_id']}/resolved-bindings",
         {
             "template_id": context["template_id"],
             "episode_id": context["late_episode_id"],

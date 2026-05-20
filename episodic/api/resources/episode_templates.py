@@ -8,7 +8,7 @@ behaviour from the API resource base layer.
 Examples
 --------
 >>> from episodic.api.resources.episode_templates import EpisodeTemplatesResource
->>> app.add_route("/episode-templates", EpisodeTemplatesResource(uow_factory))
+>>> app.add_route("/v1/episode-templates", EpisodeTemplatesResource(uow_factory))
 """
 
 import typing as typ

@@ -45,10 +45,10 @@ This guide will cover:
   profile. TEI headers automatically capture provenance metadata including
   source priorities, ingestion timestamps, and reviewer identities. Source
   normalisation fan-out now uses metadata-aware asyncio task creation, so
-  custom event-loop task factories can receive operation metadata
-  (`operation_name`, `correlation_id`, `priority_hint`) for diagnostics.
-  Storage identifiers generated during canonical ingestion use time-ordered
-  UUIDv7 values for improved chronological locality.
+  custom event-loop task factories can receive operation metadata (
+  `operation_name`, `correlation_id`, `priority_hint`) for diagnostics. Storage
+  identifiers generated during canonical ingestion use time-ordered UUIDv7
+  values for improved chronological locality.
 - Large canonical TEI XML payloads are compressed with standard-library
   Zstandard in persistence storage while API and domain read paths continue to
   return plain text transparently.
@@ -57,11 +57,11 @@ This guide will cover:
 - Creating and updating episode templates linked to series profiles
 - Retrieving change history for series profiles and episode templates
 - Fetching structured brief payloads for downstream generators through
-  `GET /series-profiles/{profile_id}/brief`
+  `GET /v1/series-profiles/{profile_id}/brief`
 - Managing reusable reference documents (including series-aligned host and
   guest profiles) through pinned revision bindings used by structured briefs
 - Resolving the exact reference bindings for a target episode through
-  `GET /series-profiles/{profile_id}/resolved-bindings`
+  `GET /v1/series-profiles/{profile_id}/resolved-bindings`
 - Rendering deterministic prompt scaffolds from structured briefs for
   downstream Large Language Model (LLM) adapters, including interpolation audit
   metadata and optional escaping policies
@@ -133,7 +133,7 @@ the canonical TEI document is enriched.
 Guest biographies are generated from guest profile reference documents that are
 bound to the series, template, or episode context. The generator resolves the
 same pinned reference revisions exposed by
-`GET /series-profiles/{profile_id}/resolved-bindings`, filters them to
+`GET /v1/series-profiles/{profile_id}/resolved-bindings`, filters them to
 `guest_profile` documents, and asks the configured execution model for a short,
 source-grounded biography for each resolved guest.
 
@@ -167,26 +167,28 @@ metadata.
 Reusable reference-document workflows currently support:
 
 - Creating and listing reusable documents per series profile at
-  `POST /series-profiles/{profile_id}/reference-documents` and
-  `GET /series-profiles/{profile_id}/reference-documents`.
+  `POST /v1/series-profiles/{profile_id}/reference-documents` and
+  `GET /v1/series-profiles/{profile_id}/reference-documents`.
 - Updating reusable documents with optimistic locking using
   `expected_lock_version` at
-  `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`.
+  `PATCH /v1/series-profiles/{profile_id}/reference-documents/{document_id}`.
   Stale updates return `409 Conflict`.
 - Creating and listing immutable document revisions at
-  `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+  `POST /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
    and
-  `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`.
-- Creating, listing, and fetching target bindings at `POST /reference-bindings`,
-  `GET /reference-bindings`, and `GET /reference-bindings/{binding_id}`.
+  `GET /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`.
+- Creating, listing, and fetching target bindings at
+  `POST /v1/reference-bindings`,
+  `GET /v1/reference-bindings`, and `GET /v1/reference-bindings/{binding_id}`.
 - Series-aligned access behaviour for host and guest profile documents:
   cross-series profile paths do not expose documents owned by another series.
-- Requesting `GET /series-profiles/{profile_id}/brief?episode_id=...` to apply
+- Requesting `GET /v1/series-profiles/{profile_id}/brief?episode_id=...` to
+  apply
   `effective_from_episode_id` precedence for series-level bindings while still
   including any selected template bindings. Add optional `template_id=...` to
   restrict the template section selection to one episode template.
 - Requesting
-  `GET /series-profiles/{profile_id}/resolved-bindings?episode_id=...` to
+  `GET /v1/series-profiles/{profile_id}/resolved-bindings?episode_id=...` to
   inspect the resolved binding, document, and revision payloads for one episode
   context without fetching the full structured brief. Add optional
   `template_id=...` to restrict template-scoped bindings to one episode
@@ -199,6 +201,11 @@ Reusable reference-document workflows currently support:
 
 The canonical-content HTTP service now runs as a Falcon ASGI application under
 Granian.
+
+Client-facing canonical API resources are served under the `/v1` prefix.
+Unversioned canonical resource paths are internal pre-v0.1.0 implementation
+details and should not be used by clients. Health checks stay outside the
+client API prefix because deployment platforms use them as operator endpoints.
 
 Start the service with:
 
@@ -226,16 +233,15 @@ Health endpoints:
 
 ### Logging
 
-`episodic.logging.LogLevel` accepts these string levels: `TRACE`, `DEBUG`,
+`episodic.logging.LogLevel` accepts the configured log levels: `TRACE`, `DEBUG`,
 `INFO`, `WARNING`, `ERROR`, and `CRITICAL`. `WARN` remains available as a
 deprecated alias for `WARNING`.
 
 Use `configure_logging(level, ...)` to configure process logging. The `level`
-argument accepts strings case-insensitively, so `debug`, `Debug`, and `DEBUG`
-all select `LogLevel.DEBUG`. The function returns a `tuple[LogLevel, bool]`:
-the normalized `LogLevel` value and a flag indicating whether the default
-`INFO` level was substituted. Substitution happens when no level is provided or
-when the provided string is not recognized.
+argument is case-insensitive, and the function returns a
+`tuple[LogLevel, bool]`: the normalized `LogLevel` value and a flag indicating
+whether the default (`INFO`) was substituted because the input was absent or
+unrecognized.
 
 ### Worker runtime
 

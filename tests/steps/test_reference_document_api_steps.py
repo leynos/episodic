@@ -33,7 +33,7 @@ def test_reference_document_api_behaviour() -> None:
 def _create_profile(client: testing.TestClient, slug: str) -> str:
     """Create one series profile and return its identifier."""
     response = client.simulate_post(
-        "/series-profiles",
+        "/v1/series-profiles",
         json={
             "slug": slug,
             "title": f"{slug} title",
@@ -58,7 +58,7 @@ def reference_fixtures(
         "bdd-reference-secondary",
     )
     template_response = canonical_api_client.simulate_post(
-        "/episode-templates",
+        "/v1/episode-templates",
         json={
             "series_profile_id": primary_profile_id,
             "slug": "bdd-reference-template",
@@ -87,7 +87,7 @@ def create_host_document(
 ) -> None:
     """Create one host reference document for the primary profile."""
     response = canonical_api_client.simulate_post(
-        f"/series-profiles/{context['primary_profile_id']}/reference-documents",
+        f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents",
         json={
             "kind": "host_profile",
             "lifecycle_state": "active",
@@ -107,7 +107,7 @@ def update_host_document(
 ) -> None:
     """Update the host reference document with lock precondition."""
     response = canonical_api_client.simulate_patch(
-        f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
+        f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents/"
         f"{context['document_id']}",
         json={
             "expected_lock_version": 1,
@@ -127,7 +127,7 @@ def add_revisions(
     """Create two immutable revisions for the host reference document."""
     first = canonical_api_client.simulate_post(
         (
-            f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
+            f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents/"
             f"{context['document_id']}/revisions"
         ),
         json={
@@ -144,7 +144,7 @@ def add_revisions(
 
     second = canonical_api_client.simulate_post(
         (
-            f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
+            f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents/"
             f"{context['document_id']}/revisions"
         ),
         json={
@@ -167,7 +167,7 @@ def bind_revision(
 ) -> None:
     """Bind the latest revision to the prepared episode template."""
     response = canonical_api_client.simulate_post(
-        "/reference-bindings",
+        "/v1/reference-bindings",
         json={
             "reference_document_revision_id": context["second_revision_id"],
             "target_kind": "episode_template",
@@ -188,7 +188,7 @@ def assert_history(
     """Ensure revision history endpoint returns both revisions in order."""
     response = canonical_api_client.simulate_get(
         (
-            f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
+            f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents/"
             f"{context['document_id']}/revisions"
         ),
         params={"limit": "10", "offset": "0"},
@@ -210,7 +210,7 @@ def assert_stale_rejected(
     """Ensure stale optimistic-lock updates return conflict."""
     response = canonical_api_client.simulate_patch(
         (
-            f"/series-profiles/{context['primary_profile_id']}/reference-documents/"
+            f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents/"
             f"{context['document_id']}"
         ),
         json={
@@ -229,7 +229,7 @@ def assert_series_alignment(
 ) -> None:
     """Ensure host/guest filtering and cross-series guard behaviour."""
     guest_document_response = canonical_api_client.simulate_post(
-        f"/series-profiles/{context['primary_profile_id']}/reference-documents",
+        f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents",
         json={
             "kind": "guest_profile",
             "lifecycle_state": "active",
@@ -239,7 +239,7 @@ def assert_series_alignment(
     assert guest_document_response.status_code == 201
 
     host_list = canonical_api_client.simulate_get(
-        f"/series-profiles/{context['primary_profile_id']}/reference-documents",
+        f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents",
         params={"kind": "host_profile", "limit": "10", "offset": "0"},
     )
     assert host_list.status_code == 200
@@ -250,7 +250,7 @@ def assert_series_alignment(
     assert len(host_items) == 1
 
     guest_list = canonical_api_client.simulate_get(
-        f"/series-profiles/{context['primary_profile_id']}/reference-documents",
+        f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents",
         params={"kind": "guest_profile", "limit": "10", "offset": "0"},
     )
     assert guest_list.status_code == 200
@@ -261,7 +261,7 @@ def assert_series_alignment(
     assert len(guest_items) == 1
 
     cross_series = canonical_api_client.simulate_get(
-        f"/series-profiles/{context['secondary_profile_id']}/reference-documents/"
+        f"/v1/series-profiles/{context['secondary_profile_id']}/reference-documents/"
         f"{context['document_id']}"
     )
     assert cross_series.status_code == 404

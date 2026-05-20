@@ -27,7 +27,7 @@ def _assert_document_get_and_optimistic_lock(
 ) -> None:
     """Assert get and optimistic-lock update behaviour for one document."""
     get_document_response = client.simulate_get(
-        f"/series-profiles/{profile_id}/reference-documents/{document_id}"
+        f"/v1/series-profiles/{profile_id}/reference-documents/{document_id}"
     )
     assert get_document_response.status_code == 200, (
         "unexpected status for GET reference document: "
@@ -35,7 +35,7 @@ def _assert_document_get_and_optimistic_lock(
     )
 
     update_document_response = client.simulate_patch(
-        f"/series-profiles/{profile_id}/reference-documents/{document_id}",
+        f"/v1/series-profiles/{profile_id}/reference-documents/{document_id}",
         json={
             "expected_lock_version": 1,
             "lifecycle_state": "active",
@@ -52,7 +52,7 @@ def _assert_document_get_and_optimistic_lock(
     )
 
     stale_update_response = client.simulate_patch(
-        f"/series-profiles/{profile_id}/reference-documents/{document_id}",
+        f"/v1/series-profiles/{profile_id}/reference-documents/{document_id}",
         json={
             "expected_lock_version": 1,
             "lifecycle_state": "archived",
@@ -101,7 +101,7 @@ def _assert_revision_and_binding_workflow(
     ], "Expected revision history to preserve creation order."
 
     get_revision_response = client.simulate_get(
-        f"/reference-document-revisions/{second_revision_id}"
+        f"/v1/reference-document-revisions/{second_revision_id}"
     )
     assert get_revision_response.status_code == 200, (
         f"Unexpected status for GET revision: {get_revision_response.status_code}"
@@ -126,13 +126,13 @@ def _assert_binding_list_workflow(
         revision_id=second_revision_id,
         template_id=template_id,
     )
-    get_binding_response = client.simulate_get(f"/reference-bindings/{binding_id}")
+    get_binding_response = client.simulate_get(f"/v1/reference-bindings/{binding_id}")
     assert get_binding_response.status_code == 200, (
         f"Unexpected status for GET binding: {get_binding_response.status_code}"
     )
 
     list_bindings_response = client.simulate_get(
-        "/reference-bindings",
+        "/v1/reference-bindings",
         params={
             "target_kind": "episode_template",
             "target_id": template_id,

@@ -1,13 +1,13 @@
 # Introduce the `/v1` target API prefix
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+ `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
-This plan must be approved before implementation begins.
+The user approved implementation on 2026-05-20 and asked for the plan to be
+kept current as milestones complete.
 
 ## Purpose and big picture
 
@@ -469,14 +469,91 @@ The final implementation should include short transcripts in this plan's
 - [x] 2026-05-19T01:04:00+02:00: Used Firecrawl to confirm Falcon route
   registration behaviour and REST API versioning prior art.
 - [x] 2026-05-19T01:07:00+02:00: Drafted this pre-implementation ExecPlan.
-- [ ] Obtain explicit user approval before implementation.
-- [ ] During approved implementation, add route-contract tests first and
-  record the red test evidence here.
-- [ ] Prefix canonical API routes under `/v1`.
-- [ ] Update API BDD steps and direct API tests to use `/v1`.
-- [ ] Update developers' guide and users' guide.
-- [ ] Run focused tests, full gates and CodeRabbit review.
-- [ ] Mark roadmap item `4.1.1` done after implementation and gates pass.
+- [x] 2026-05-20T13:34:49+02:00: User approved implementation and asked for
+  this ExecPlan to be kept current with decisions, findings, observations and
+  progress.
+- [x] 2026-05-20T13:38:00+02:00: Updated the focused API tests and shared
+  test helpers to call `/v1/...` canonical paths before changing production
+  routing. The focused red run failed as expected with 28 failures and one pass
+  because `/v1/series-profiles` returned Falcon `404 Not Found`. Log:
+  `/tmp/v1-red-api-tests-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T13:43:00+02:00: Prefixed canonical Falcon API route
+  registrations in `episodic/api/app.py` under `/v1`, leaving `/health/live` and
+   `/health/ready` unchanged at the root.
+- [x] 2026-05-20T13:45:00+02:00: Added explicit route-versioning contract
+  coverage in `tests/test_api_route_versioning.py` for unversioned canonical
+  route `404` responses and for `/v1/health/live` remaining unregistered.
+- [x] 2026-05-20T13:46:00+02:00: Re-ran the focused API test pass with the
+  route table changed. Result: 44 passed in 94.21 seconds. Log:
+  `/tmp/v1-green-api-tests-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T13:51:00+02:00: Addressed CodeRabbit's route-versioning
+  coverage concerns by adding positive `/v1` route-registration assertions and
+  positive root health assertions. `tests/test_api_route_versioning.py` passed
+  with 31 tests in 67.21 seconds. Log:
+  `/tmp/v1-route-versioning-tests-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T13:57:00+02:00: Re-ran `coderabbit review --agent` after
+  the route and test milestone. Result: `review_completed` with zero findings.
+  Log:
+  `/tmp/coderabbit-review-after-route-coverage-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T13:59:00+02:00: Ran API BDD step-module coverage after
+  updating the step paths to `/v1`. Result: 4 passed in 8.76 seconds. Log:
+  `/tmp/v1-bdd-api-tests-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T13:59:00+02:00: Ran runtime health and HTTP scaffold
+  coverage. Result: 10 passed and 1 skipped in 8.40 seconds, with health
+  endpoints still root-level. Log:
+  `/tmp/v1-runtime-tests-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] Update API BDD steps and direct API tests to use `/v1`.
+- [x] 2026-05-20T14:13:00+02:00: Re-ran `coderabbit review --agent` after
+  clearing readability concerns in `tests/test_api_route_versioning.py`. Result:
+   `review_completed` with zero findings. Log:
+  `/tmp/coderabbit-review-after-test-readability-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T14:14:00+02:00: Updated `docs/developers-guide.md` with
+  versioned API routing guidance, added ADR 009 to the accepted-design list,
+  and updated currently implemented endpoint examples in
+  `docs/developers-guide.md` and `docs/users-guide.md` to use `/v1`.
+- [x] 2026-05-20T14:32:00+02:00: Cleared CodeRabbit's documentation and test
+  readability concerns. The latest `coderabbit review --agent` completed with
+  zero findings. Log:
+  `/tmp/coderabbit-review-after-route-docstring-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] Update developers' guide and users' guide.
+- [x] 2026-05-20T14:34:00+02:00: Marked roadmap item `4.1.1` done after
+  implementation, focused tests, documentation updates, and milestone
+  CodeRabbit reviews completed.
+- [x] 2026-05-20T14:36:00+02:00: Ran `make fmt`. Result: passed. The command
+  attempted unrelated Markdown wrapping in older documents; that unrelated
+  formatter churn was reverted, leaving only task-scoped files changed. Log:
+  `/tmp/fmt-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T14:38:00+02:00: Ran `mbake validate Makefile`,
+  `make check-fmt`, `make markdownlint`, `make nixie`, and `make build`.
+  Results: all passed. Logs:
+  `/tmp/mbake-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/check-fmt-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/markdownlint-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/nixie-episodic-4-1-1-introduce-v1-target-api-prefix.out`, and
+  `/tmp/build-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T14:42:00+02:00: Ran `make lint`. The first run found two
+  issues in the new route-versioning test file. After moving the Falcon
+  `testing` import under `TYPE_CHECKING` and making string concatenation
+  explicit, the rerun passed. Log:
+  `/tmp/lint-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T14:43:00+02:00: Ran `make typecheck`. Result: passed. Log:
+  `/tmp/typecheck-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T14:50:00+02:00: Ran `make test`. Result: 662 passed and
+  3 skipped in 325.31 seconds. Log:
+  `/tmp/test-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T14:56:00+02:00: Ran `make check-migrations`. Result:
+  passed. Log:
+  `/tmp/check-migrations-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T14:57:00+02:00: Ran `coderabbit doctor`. Result: 9 passed,
+  0 warnings, 0 failed. Log:
+  `/tmp/coderabbit-doctor-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-20T15:03:49+02:00: Ran final `coderabbit review --agent`.
+  It first requested removal of the redundant Python 3.14 future import from
+  `tests/test_api_route_versioning.py`; after removal and a successful
+  `make lint` rerun, the final review completed with zero findings. Log:
+  `/tmp/coderabbit-review-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] Run focused tests, full gates and CodeRabbit review.
+- [x] Mark roadmap item `4.1.1` done after implementation and gates pass.
 
 ## Surprises and discoveries
 
@@ -508,7 +585,17 @@ The final implementation should include short transcripts in this plan's
 
 ## Outcomes and retrospective
 
-This section is intentionally empty while the plan is in draft. During
-implementation, record what shipped, which tests and gates proved it, any
-deviations from this plan, and whether the route-prefix approach remained small
-enough to avoid a broader API-router abstraction.
+The implementation shipped the `/v1` target prefix for the existing canonical
+Falcon API resources without adding unversioned compatibility aliases. Root
+health checks remain available at `/health/live` and `/health/ready`, while
+`/v1/health/live` returns `404`.
+
+The route-prefix approach stayed inside the planned inbound-adapter boundary:
+production changes were limited to Falcon route registration and docstring
+examples in the API adapter package. Domain, application, repository,
+SQLAlchemy, LLM, and worker modules did not learn about HTTP path prefixes.
+
+The work updated direct API tests, shared API fixtures, BDD step modules,
+developer and user documentation, and the roadmap checkbox. Full repository
+gates passed, and CodeRabbit review completed with zero findings after
+addressing its test coverage and readability suggestions.

@@ -76,50 +76,52 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
         HealthReadyResource(dependencies.readiness_probes),
     )
 
-    app.add_route("/series-profiles", SeriesProfilesResource(uow_factory))
-    app.add_route("/series-profiles/{profile_id}", SeriesProfileResource(uow_factory))
+    app.add_route("/v1/series-profiles", SeriesProfilesResource(uow_factory))
     app.add_route(
-        "/series-profiles/{profile_id}/history",
+        "/v1/series-profiles/{profile_id}", SeriesProfileResource(uow_factory)
+    )
+    app.add_route(
+        "/v1/series-profiles/{profile_id}/history",
         SeriesProfileHistoryResource(uow_factory),
     )
     app.add_route(
-        "/series-profiles/{profile_id}/brief",
+        "/v1/series-profiles/{profile_id}/brief",
         SeriesProfileBriefResource(uow_factory),
     )
     app.add_route(
-        "/series-profiles/{profile_id}/resolved-bindings",
+        "/v1/series-profiles/{profile_id}/resolved-bindings",
         ResolvedBindingsResource(uow_factory),
     )
 
-    app.add_route("/episode-templates", EpisodeTemplatesResource(uow_factory))
+    app.add_route("/v1/episode-templates", EpisodeTemplatesResource(uow_factory))
     app.add_route(
-        "/episode-templates/{template_id}",
+        "/v1/episode-templates/{template_id}",
         EpisodeTemplateResource(uow_factory),
     )
     app.add_route(
-        "/episode-templates/{template_id}/history",
+        "/v1/episode-templates/{template_id}/history",
         EpisodeTemplateHistoryResource(uow_factory),
     )
 
     app.add_route(
-        "/series-profiles/{profile_id}/reference-documents",
+        "/v1/series-profiles/{profile_id}/reference-documents",
         ReferenceDocumentsResource(uow_factory),
     )
     app.add_route(
-        "/series-profiles/{profile_id}/reference-documents/{document_id}",
+        "/v1/series-profiles/{profile_id}/reference-documents/{document_id}",
         ReferenceDocumentResource(uow_factory),
     )
     app.add_route(
-        "/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
+        "/v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
         ReferenceDocumentRevisionsResource(uow_factory),
     )
     app.add_route(
-        "/reference-document-revisions/{revision_id}",
+        "/v1/reference-document-revisions/{revision_id}",
         ReferenceDocumentRevisionResource(uow_factory),
     )
-    app.add_route("/reference-bindings", ReferenceBindingsResource(uow_factory))
+    app.add_route("/v1/reference-bindings", ReferenceBindingsResource(uow_factory))
     app.add_route(
-        "/reference-bindings/{binding_id}",
+        "/v1/reference-bindings/{binding_id}",
         ReferenceBindingResource(uow_factory),
     )
 

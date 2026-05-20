@@ -130,7 +130,7 @@ def create_profile(
     _create_entity_and_store_id(
         canonical_api_client,
         EntityCreationSpec(
-            path="/series-profiles",
+            path="/v1/series-profiles",
             payload={
                 "slug": "bdd-profile",
                 "title": "BDD Profile",
@@ -154,7 +154,7 @@ def create_template(
     _create_entity_and_store_id(
         canonical_api_client,
         EntityCreationSpec(
-            path="/episode-templates",
+            path="/v1/episode-templates",
             payload={
                 "series_profile_id": context["profile_id"],
                 "slug": "bdd-template",
@@ -178,7 +178,7 @@ def update_profile(
     """Update profile using expected revision."""
     _update_entity_and_assert_revision(
         canonical_api_client,
-        f"/series-profiles/{context['profile_id']}",
+        f"/v1/series-profiles/{context['profile_id']}",
         {
             "expected_revision": 1,
             "title": "BDD Profile Updated",
@@ -201,7 +201,7 @@ def assert_history(
         canonical_api_client,
         HttpRequest(
             method="GET",
-            path=f"/series-profiles/{context['profile_id']}/history",
+            path=f"/v1/series-profiles/{context['profile_id']}/history",
         ),
         200,
     )
@@ -219,7 +219,7 @@ def assert_brief(
         canonical_api_client,
         HttpRequest(
             method="GET",
-            path=f"/series-profiles/{context['profile_id']}/brief",
+            path=f"/v1/series-profiles/{context['profile_id']}/brief",
             params={"template_id": context["template_id"]},
         ),
         200,
