@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT - awaiting approval before implementation
+Status: IN PROGRESS
 
 ## Purpose and big picture
 
@@ -181,9 +181,10 @@ The plan signposts these skills for the implementing agent:
   `make nixie`.
 - [x] (2026-05-19 00:00Z) Ran `coderabbit review --agent`; it reported two
   minor documentation findings, both resolved in this plan.
-- [ ] User approves this ExecPlan for implementation.
-- [ ] Milestone 1: Add Hecate as a pinned development dependency and encode
-  the production policy in `[tool.hecate]`.
+- [x] (2026-05-20 00:00Z) User approved the ExecPlan for implementation by
+  requesting that the planned functionality be implemented.
+- [x] (2026-05-20 00:00Z) Milestone 1: Added Hecate as a pinned development
+  dependency and encoded the production policy in `[tool.hecate]`.
 - [ ] Milestone 2: Replace the Makefile architecture command with
   `hecate check` while keeping `make check-architecture` and `make lint`
   behaviour.
@@ -236,6 +237,12 @@ The plan signposts these skills for the implementing agent:
   Impact: the timeout was treated as transient and is recorded here because the
   plan itself only changed Markdown.
 
+- Observation: `make build` installed Hecate from the requested pinned Git SHA,
+  and `uv run hecate check` passed against the production `episodic` package
+  with the translated `[tool.hecate]` policy. Impact: the dependency and
+  production-policy migration path is viable through the normal `uv sync
+  --group dev` route.
+
 ## Decision Log
 
 - Decision: keep `make check-architecture` as the stable local command and
@@ -262,6 +269,11 @@ The plan signposts these skills for the implementing agent:
   guide, ADR status, or roadmap status during the draft planning phase.
   Rationale: those documents should describe implemented behaviour, and this
   plan still awaits approval. Date/Author: 2026-05-19 / Codex.
+
+- Decision: retain `ARCH001` as the Hecate rule identifier for Episodic.
+  Rationale: existing tests and documentation already use `ARCH001`; preserving
+  it keeps diagnostic continuity while moving the implementation to Hecate.
+  Date/Author: 2026-05-20 / Codex.
 
 ## Implementation plan
 

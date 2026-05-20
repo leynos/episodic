@@ -34,6 +34,7 @@ stilyagi = "stilyagi.stilyagi:main"
 [dependency-groups]
 dev = [
     "crosshair-tool>=0.0.104,<0.1",
+    "hecate @ git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12",
     "hypothesis[asyncio]>=6,<7",
     "mypy>=2.1,<3",
     "pytest>=9,<11",
@@ -432,6 +433,67 @@ filterwarnings = [
 
 [tool.uv]
 package = true
+
+[tool.hecate]
+root_packages = ["episodic"]
+default_rule_id = "ARCH001"
+
+[[tool.hecate.groups]]
+name = "composition_root"
+prefixes = ["episodic.api.runtime", "episodic.worker.runtime"]
+allowed = [
+    "application",
+    "composition_root",
+    "domain_ports",
+    "inbound_adapter",
+    "outbound_adapter",
+]
+
+[[tool.hecate.groups]]
+name = "domain_ports"
+prefixes = [
+    "episodic.canonical.domain",
+    "episodic.canonical.constraints",
+    "episodic.canonical.ingestion",
+    "episodic.canonical.ingestion_ports",
+    "episodic.canonical.entity_protocols",
+    "episodic.canonical.history_protocols",
+    "episodic.canonical.ports",
+    "episodic.canonical.reference_protocols",
+    "episodic.canonical.unit_of_work_protocols",
+    "episodic.llm.ports",
+]
+allowed = ["domain_ports"]
+
+[[tool.hecate.groups]]
+name = "application"
+prefixes = [
+    "episodic.canonical.services",
+    "episodic.canonical.ingestion_service",
+    "episodic.canonical.profile_templates",
+    "episodic.canonical.reference_documents",
+    "episodic.generation",
+]
+allowed = ["application", "domain_ports"]
+
+[[tool.hecate.groups]]
+name = "inbound_adapter"
+prefixes = [
+    "episodic.api",
+    "episodic.worker.tasks",
+    "episodic.worker.topology",
+]
+allowed = ["inbound_adapter", "application", "domain_ports"]
+
+[[tool.hecate.groups]]
+name = "outbound_adapter"
+prefixes = [
+    "episodic.canonical.adapters",
+    "episodic.canonical.storage",
+    "episodic.llm.openai_adapter",
+    "episodic.llm.openai_client",
+]
+allowed = ["outbound_adapter", "application", "domain_ports"]
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
