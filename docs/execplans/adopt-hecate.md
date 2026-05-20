@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
  `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -28,10 +28,8 @@ and get the same boundary protection that exists today, now powered by Hecate
 configuration in `pyproject.toml` rather than duplicated Python code under
 `episodic/architecture/`.
 
-This plan is only the planning artefact. Implementation must not begin until
-the user explicitly approves this ExecPlan. Until then, do not edit
-`pyproject.toml`, the Makefile, tests, product documentation, or roadmap status
-as though the migration has happened.
+The implementation is complete. The approved migration replaced the local
+checker with Hecate while preserving the maintainer-facing Makefile targets.
 
 The plan signposts these skills for the implementing agent:
 
@@ -196,8 +194,9 @@ The plan signposts these skills for the implementing agent:
 - [x] (2026-05-20 00:00Z) Milestone 5: Updated ADR-006, the system design,
   users' guide, developers' guide, and roadmap text to describe the
   Hecate-backed architecture gate.
-- [ ] Milestone 6: Run full validation gates, run CodeRabbit review, clear
-  concerns, and commit the final implementation state.
+- [x] (2026-05-20 00:00Z) Milestone 6: Ran full validation gates, ran final
+  CodeRabbit review, cleared concerns, and prepared the final implementation
+  state for commit.
 
 ## Surprises & Discoveries
 
@@ -272,6 +271,11 @@ The plan signposts these skills for the implementing agent:
   deleted `episodic.architecture` package. Impact: ADR-006, the system design,
   users' guide, developers' guide, and roadmap now identify Hecate and
   `[tool.hecate]` as the enforcement source.
+
+- Observation: final validation passed with `make check-fmt`, `make lint`,
+  `make test`, `make typecheck`, `make markdownlint`, and `make nixie`; the
+  final `make test` result was 631 passed and 3 skipped. Impact: the branch is
+  ready for review with local gates and CodeRabbit clear.
 
 ## Decision Log
 
@@ -636,10 +640,35 @@ work is present in the same files.
 
 ## Outcomes & Retrospective
 
-Not started. This plan is awaiting approval. When implementation completes,
-record what changed, which gates passed, what CodeRabbit reported, which
-roadmap entry was updated, and any follow-up work left for deferred
-orchestration enforcement.
+Hecate is now the enforcement engine for Episodic's hexagonal architecture
+checks. `pyproject.toml` pins Hecate to
+`46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12`, defines the production
+`[tool.hecate]` policy, and preserves `ARCH001` diagnostics. The
+`make check-architecture` target runs `hecate check`, and `make lint` still
+includes that gate.
+
+Architecture fixture and behaviour-driven development (BDD) tests now run
+Hecate against generated fixture configs. The old `episodic.architecture`
+package was removed after Leta confirmed no non-test consumers remained.
+ADR-006, the system design, users' guide, developers' guide, and roadmap now
+describe the Hecate-backed gate.
+
+Validation passed with:
+
+- `make check-fmt`
+- `make lint`
+- `make test` (`631 passed, 3 skipped`)
+- `make typecheck`
+- `make markdownlint`
+- `make nixie`
+
+CodeRabbit was run after each major milestone. It raised documentation and
+test-helper clarity findings during the fixture conversion, all of which were
+resolved. The final CodeRabbit review completed with zero findings.
+
+Roadmap item `1.5.4` remains done and now states that the gate is
+Hecate-backed. Roadmap item `2.4.5` remains open because orchestration-specific
+LangGraph and Celery enforcement was intentionally out of scope.
 
 [^1]: Hecate users' guide at pinned SHA:
   <https://raw.githubusercontent.com/leynos/hecate/46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12/docs/users-guide.md>
