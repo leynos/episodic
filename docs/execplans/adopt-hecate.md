@@ -191,8 +191,8 @@ The plan signposts these skills for the implementing agent:
 - [x] (2026-05-20 00:00Z) Milestone 3: Converted architecture fixture tests
   and BDD scenarios to Hecate-driven configs and diagnostics; the focused
   architecture test command reports 13 passing tests.
-- [ ] Milestone 4: Remove or reduce `episodic.architecture` so Episodic no
-  longer owns duplicated checker semantics.
+- [x] (2026-05-20 00:00Z) Milestone 4: Removed `episodic.architecture` after
+  Leta confirmed remaining references were confined to the package itself.
 - [ ] Milestone 5: Update ADR, system design, users' guide, developers' guide,
   and roadmap text to match the implemented behaviour.
 - [ ] Milestone 6: Run full validation gates, run CodeRabbit review, clear
@@ -260,6 +260,12 @@ The plan signposts these skills for the implementing agent:
   docstring, security-suppression, and small clarity findings. Impact: the
   helper now documents its generated config behaviour, justifies subprocess
   lint suppressions, and builds the package-barrel prefix string directly.
+
+- Observation: after test conversion, Leta found no references to
+  `check_architecture` outside `episodic/architecture`, and references to
+  `ArchitecturePolicy` were limited to that package's own exports and
+  implementation. Impact: the package could be deleted without a compatibility
+  shim.
 
 ## Decision Log
 
