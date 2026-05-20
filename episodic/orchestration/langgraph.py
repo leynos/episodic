@@ -637,7 +637,19 @@ def build_generation_orchestration_graph(
         """Entry point for the finish graph node."""
         result = _finish_node(state)
         if finish_callback is not None:
-            finish_callback(state)
+            try:
+                finish_callback(state)
+            except Exception as exc:  # noqa: BLE001
+                _log_event(
+                    "error",
+                    "generation_graph.finish_node.callback_error",
+                    correlation_id=(
+                        state.request.correlation_id
+                        if state.request is not None
+                        else None
+                    ),
+                    error=str(exc),
+                )
         return result
 
     if checkpoint_port is None:
