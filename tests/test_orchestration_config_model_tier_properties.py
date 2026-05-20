@@ -64,8 +64,8 @@ def test_config_rejects_arbitrary_unknown_action_kind_strings(unknown: str) -> N
 
 
 @pytest.mark.parametrize(
-    "model_tier",
-    [tier for tier in ModelTier if tier is not ModelTier.EXECUTION],
+    ("model_tier",),  # noqa: PT006 - requested tuple-shaped parameter list.
+    [(tier,) for tier in ModelTier if tier is not ModelTier.EXECUTION],
 )
 @pytest.mark.asyncio
 async def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(

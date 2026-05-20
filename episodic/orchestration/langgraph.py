@@ -634,7 +634,7 @@ def build_generation_orchestration_graph(
             `finish_callback(state)` after finish-node aggregation and before
             returning from the direct-execute path. It receives the
             `GenerationGraphState` that entered the finish node; callback
-            exceptions are logged and propagated to the caller.
+            exceptions are logged without replacing the computed graph result.
     """
     graph = StateGraph(GenerationGraphState)
 
@@ -671,7 +671,7 @@ def build_generation_orchestration_graph(
                         else None
                     ),
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 _log_event(
                     "error",
                     "generation_graph.finish_node.callback.error",
@@ -682,7 +682,6 @@ def build_generation_orchestration_graph(
                     ),
                     error=str(exc),
                 )
-                raise
         return result
 
     if checkpoint_port is None:

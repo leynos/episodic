@@ -261,18 +261,25 @@ async def test_finish_callback_is_not_invoked_in_suspend_path() -> None:
 
 
 @pytest.mark.asyncio
-async def test_langgraph_finish_callback_errors_are_logged_and_propagated() -> None:
-    """Finish callback failures propagate after callback error logging."""
+async def test_langgraph_finish_callback_errors_do_not_replace_result() -> None:
+    """Finish callback failures do not discard the computed graph result."""
+    planner_result = _planner_result()
+    tool_result = _tool_result()
 
     def _raise_callback(_state: GenerationGraphState) -> None:
         msg = "callback failed after result computation"
         raise RuntimeError(msg)
 
     graph = build_generation_orchestration_graph(
-        planner=PropGraphPlanner(result=_planner_result()),
-        tool_executor=PropGraphToolExecutor(result=_tool_result()),
+        planner=PropGraphPlanner(result=planner_result),
+        tool_executor=PropGraphToolExecutor(result=tool_result),
         finish_callback=_raise_callback,
     )
 
-    with pytest.raises(RuntimeError, match="callback failed after result computation"):
-        await graph.ainvoke(GenerationGraphState(request=_request("callback-error")))
+    state = await graph.ainvoke(
+        GenerationGraphState(request=_request("callback-error"))
+    )
+
+    assert state["orchestration_result"] is not None
+    assert state["planner_result"] == planner_result
+    assert state["action_results"] == (tool_result,)

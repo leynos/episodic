@@ -839,7 +839,7 @@ test event recording. The hook fires only on the direct
 `plan -> execute -> finish` path, after finish-node aggregation has produced an
 `orchestration_result` and before the graph returns. It is not invoked on the
 checkpoint suspend path. Callback exceptions are logged and propagated to the
-caller, so callbacks must not raise during normal operation.
+callback error log without replacing the already computed graph result.
 
 ### Maintainer rules
 
