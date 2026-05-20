@@ -147,7 +147,8 @@ Completion enables feature development within enforced boundaries.
     [Hexagonal architecture enforcement](episodic-podcast-generation-system-design.md#hexagonal-architecture-enforcement).
 - [x] 1.5.4. Implement architectural enforcement checks for hexagonal
   boundaries.
-  - Added `make check-architecture` and wired it into `make lint`.
+  - Added `make check-architecture` and wired the Hecate-backed gate into
+    `make lint`.
   - Added architecture tests and BDD fixtures for dependency-direction checks.
   - Added port contract tests for the current concrete adapters.
   - CI exposes architecture enforcement as a named gate.

@@ -1,9 +1,8 @@
 # Adopt Hecate for hexagonal architecture checks
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+ `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: IN PROGRESS
 
@@ -46,22 +45,22 @@ The plan signposts these skills for the implementing agent:
 
 - Do not implement the migration before explicit approval of this plan.
 - Preserve the hexagonal architecture invariants from the
-  `hexagonal-architecture` skill:
-  domain and port modules stay inward, application services depend only on
-  application and domain-port groups, inbound adapters must not import outbound
-  adapters, outbound adapters must not import inbound adapters, and composition
-  roots are the only modules allowed to wire concrete adapters together.
+  `hexagonal-architecture` skill: domain and port modules stay inward,
+  application services depend only on application and domain-port groups,
+  inbound adapters must not import outbound adapters, outbound adapters must
+  not import inbound adapters, and composition roots are the only modules
+  allowed to wire concrete adapters together.
 - Keep the local maintainer command contract. `make check-architecture` must
   continue to exist, and `make lint` must continue to include the architecture
   gate.
 - Pin Hecate to
   `git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12`
-  unless explicit approval is given to use a different revision.
+   unless explicit approval is given to use a different revision.
 - Put the production architecture policy in `pyproject.toml` under
   `[tool.hecate]`, because Hecate discovers that table from the project root.
 - Keep composition-root prefixes before broader adapter prefixes. Hecate group
-  matching is first-match, so `episodic.api.runtime` must be matched before
-  the broader `episodic.api` inbound-adapter prefix.
+  matching is first-match, so `episodic.api.runtime` must be matched before the
+  broader `episodic.api` inbound-adapter prefix.
 - Retire duplicated checker semantics from Episodic once Hecate has equivalent
   coverage. Do not keep two independent import-policy engines active.
 - Preserve project-specific fixture coverage where it documents Episodic's
@@ -123,11 +122,12 @@ The plan signposts these skills for the implementing agent:
   Prefer setting `default_rule_id = "ARCH001"` only if preserving the existing
   rule code is more valuable than adopting Hecate's default `HEC001`.
 
-- Risk: fixture tests currently depend on `python -m episodic.architecture
-  --fixture-policy`, while Hecate has no fixture-policy flag. Severity: high.
-  Likelihood: high. Mitigation: create fixture-specific Hecate TOML config
-  files or a test helper that writes temporary Hecate configs, then invoke
-  `hecate check --config <path>` through the command line.
+- Risk: fixture tests currently depend on the former
+  `python -m episodic.architecture --fixture-policy` command, while Hecate has
+  no fixture-policy flag. Severity: high. Likelihood: high. Mitigation: create
+  fixture-specific Hecate TOML config files or a test helper that writes
+  temporary Hecate configs, then invoke `hecate check --config <path>` through
+  the command line.
 
 - Risk: first-match group ordering can accidentally classify
   `episodic.api.runtime` as an inbound adapter instead of a composition root.
@@ -153,9 +153,9 @@ The plan signposts these skills for the implementing agent:
   approval.
 
 - Risk: the roadmap item `1.5.4` is already marked done for the existing
-  repo-local checker. Severity: low. Likelihood: high. Mitigation: treat
-  Hecate adoption as replacement work for the same gate, not as completion of
-  deferred roadmap item `2.4.5`. Do not mark `2.4.5` done unless the approved
+  repo-local checker. Severity: low. Likelihood: high. Mitigation: treat Hecate
+  adoption as replacement work for the same gate, not as completion of deferred
+  roadmap item `2.4.5`. Do not mark `2.4.5` done unless the approved
   implementation actually completes orchestration-specific enforcement.
 
 ## Progress
@@ -193,8 +193,9 @@ The plan signposts these skills for the implementing agent:
   architecture test command reports 13 passing tests.
 - [x] (2026-05-20 00:00Z) Milestone 4: Removed `episodic.architecture` after
   Leta confirmed remaining references were confined to the package itself.
-- [ ] Milestone 5: Update ADR, system design, users' guide, developers' guide,
-  and roadmap text to match the implemented behaviour.
+- [x] (2026-05-20 00:00Z) Milestone 5: Updated ADR-006, the system design,
+  users' guide, developers' guide, and roadmap text to describe the
+  Hecate-backed architecture gate.
 - [ ] Milestone 6: Run full validation gates, run CodeRabbit review, clear
   concerns, and commit the final implementation state.
 
@@ -222,27 +223,27 @@ The plan signposts these skills for the implementing agent:
   continuity, update tests and docs accordingly, and record the decision.
 
 - Observation: the fixture policy is generic and package-relative, but Hecate
-  configuration is TOML-based. Impact: fixture coverage should probably move
-  to small generated or checked-in TOML configs rather than recreating a
+  configuration is TOML-based. Impact: fixture coverage should probably move to
+  small generated or checked-in TOML configs rather than recreating a
   Python-only policy helper.
 
 - Observation: the documentation-focused Wyvern warned not to mark deferred
   roadmap item `2.4.5` done during Hecate adoption. Impact: this plan treats
-  Hecate migration as replacement of the existing `1.5.4` enforcement
-  mechanism unless the approved implementation explicitly expands scope.
+  Hecate migration as replacement of the existing `1.5.4` enforcement mechanism
+  unless the approved implementation explicitly expands scope.
 
 - Observation: the first full `make test` validation run timed out once while
   setting up
   `tests/test_reference_document_service_validation.py::test_list_endpoints_reject_invalid_pagination`,
-  but a focused rerun of that test passed and the full gate passed on rerun.
+   but a focused rerun of that test passed and the full gate passed on rerun.
   Impact: the timeout was treated as transient and is recorded here because the
   plan itself only changed Markdown.
 
 - Observation: `make build` installed Hecate from the requested pinned Git SHA,
   and `uv run hecate check` passed against the production `episodic` package
   with the translated `[tool.hecate]` policy. Impact: the dependency and
-  production-policy migration path is viable through the normal `uv sync
-  --group dev` route.
+  production-policy migration path is viable through the normal
+  `uv sync --group dev` route.
 
 - Observation: the Makefile architecture target can call `hecate check`
   directly without CI-specific installation changes. Impact: the existing
@@ -252,9 +253,9 @@ The plan signposts these skills for the implementing agent:
   modules, but a star import from a package barrel is reported as an import of
   the package module itself. Impact: the
   `api_imports_star_reexported_outbound_adapter` fixture uses a
-  fixture-specific package-barrel classification and asserts the package
-  module diagnostic, while the nested and cyclic star re-export fixtures still
-  assert storage-origin diagnostics.
+  fixture-specific package-barrel classification and asserts the package module
+  diagnostic, while the nested and cyclic star re-export fixtures still assert
+  storage-origin diagnostics.
 
 - Observation: CodeRabbit reviewed the fixture conversion and raised helper
   docstring, security-suppression, and small clarity findings. Impact: the
@@ -266,6 +267,11 @@ The plan signposts these skills for the implementing agent:
   `ArchitecturePolicy` were limited to that package's own exports and
   implementation. Impact: the package could be deleted without a compatibility
   shim.
+
+- Observation: product and maintainer documentation still described the
+  deleted `episodic.architecture` package. Impact: ADR-006, the system design,
+  users' guide, developers' guide, and roadmap now identify Hecate and
+  `[tool.hecate]` as the enforcement source.
 
 ## Decision Log
 
@@ -405,10 +411,10 @@ make build 2>&1 | tee /tmp/build-episodic-feat-plan-hecate-adoption.out
 uv run hecate check 2>&1 | tee /tmp/hecate-episodic-feat-plan-hecate-adoption.out
 ```
 
-Expected result: `hecate check` exits `0` on the production package. If it
-exits `1`, inspect the diagnostics and decide whether the issue is a real
-boundary leak or a policy translation problem. If it exits `2`, fix the config
-or dependency installation before proceeding.
+Expected result: `hecate check` exits `0` on the production package. If it exits
+ `1`, inspect the diagnostics and decide whether the issue is a real boundary
+leak or a policy translation problem. If it exits `2`, fix the config or
+dependency installation before proceeding.
 
 Run `coderabbit review --agent`, clear concerns, update this plan, then commit
 the dependency and production policy once the focused gate passes.
@@ -421,8 +427,9 @@ Change `Makefile` so `check-architecture` runs:
 	$(UV_ENV) $(UV) run hecate check
 ```
 
-Do not remove the `check-architecture` target, and keep `lint:
-check-architecture` unless a documented Makefile ordering problem appears.
+Do not remove the `check-architecture` target, and keep
+`lint: check-architecture` unless a documented Makefile ordering problem
+appears.
 
 Review `.github/workflows/ci.yml`. Because CI already runs `make build` before
 `make lint`, a development dependency should make `hecate` available in the
@@ -506,12 +513,12 @@ leta refs fixture_policy
 leta refs ArchitecturePolicy
 ```
 
-If only tests and `episodic.architecture` internals reference the package, remove
-the duplicated checker implementation in `episodic/architecture/` and adjust
-exports accordingly. If import compatibility is required, keep only a minimal
-module that raises a clear deprecation or delegates to Hecate without owning
-policy logic. Escalate before adding a compatibility shim with more than one
-release-cycle's worth of behaviour.
+If only tests and `episodic.architecture` internals reference the package,
+remove the duplicated checker implementation in `episodic/architecture/` and
+adjust exports accordingly. If import compatibility is required, keep only a
+minimal module that raises a clear deprecation or delegates to Hecate without
+owning policy logic. Escalate before adding a compatibility shim with more than
+one release-cycle's worth of behaviour.
 
 Run:
 
@@ -534,8 +541,7 @@ behaviour:
   substantive enough to be a new accepted decision, create a new ADR under
   `docs/adr/` and reference the old ADR as superseded or amended.
 - Update the accepted decision records list and hexagonal architecture
-  enforcement section in
-  `docs/episodic-podcast-generation-system-design.md`.
+  enforcement section in `docs/episodic-podcast-generation-system-design.md`.
 - Update `docs/developers-guide.md` so maintainers edit `[tool.hecate]` when
   package boundaries change, not `episodic/architecture/checker.py`.
 - Update `docs/users-guide.md` only if the checker command, diagnostics, or
