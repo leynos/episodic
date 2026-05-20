@@ -185,9 +185,9 @@ The plan signposts these skills for the implementing agent:
   requesting that the planned functionality be implemented.
 - [x] (2026-05-20 00:00Z) Milestone 1: Added Hecate as a pinned development
   dependency and encoded the production policy in `[tool.hecate]`.
-- [ ] Milestone 2: Replace the Makefile architecture command with
-  `hecate check` while keeping `make check-architecture` and `make lint`
-  behaviour.
+- [x] (2026-05-20 00:00Z) Milestone 2: Replaced the Makefile architecture
+  command with `hecate check` while keeping `make check-architecture` and
+  `make lint` behaviour.
 - [ ] Milestone 3: Convert architecture fixture tests and BDD scenarios to
   Hecate-driven configs and diagnostics.
 - [ ] Milestone 4: Remove or reduce `episodic.architecture` so Episodic no
@@ -242,6 +242,10 @@ The plan signposts these skills for the implementing agent:
   with the translated `[tool.hecate]` policy. Impact: the dependency and
   production-policy migration path is viable through the normal `uv sync
   --group dev` route.
+
+- Observation: the Makefile architecture target can call `hecate check`
+  directly without CI-specific installation changes. Impact: the existing
+  `make lint` dependency chain remains the public maintainer contract.
 
 ## Decision Log
 

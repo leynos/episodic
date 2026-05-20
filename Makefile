@@ -75,7 +75,7 @@ lint: check-architecture ## Run linters
 	$(PYLINT) $(PYLINT_TARGETS)
 
 check-architecture: build ## Check hexagonal architecture import boundaries
-	$(UV_ENV) $(UV) run python -m episodic.architecture
+	$(UV_ENV) $(UV) run hecate check
 
 typecheck: build ## Run typechecking
 	$(UV_ENV) $(UV) tool run ty==0.0.32 --version
