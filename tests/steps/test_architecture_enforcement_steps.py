@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import dataclasses as dc
-import subprocess  # noqa: S404  # BDD scenarios validate the public CLI.
-import sys
-from pathlib import Path
+import typing as typ
 
 import pytest
+from architecture_hecate_config import run_hecate_fixture_check, write_fixture_config
 from pytest_bdd import given, parsers, scenario, then, when
+
+if typ.TYPE_CHECKING:
+    import subprocess  # noqa: S404  # Type-only CompletedProcess reference.
+    from pathlib import Path
 
 
 @dc.dataclass(slots=True)
@@ -59,24 +62,12 @@ def architecture_fixture_package(
 
 
 @when("the architecture checker runs")
-def architecture_checker_runs(context: ArchitectureContext) -> None:
+def architecture_checker_runs(context: ArchitectureContext, tmp_path: Path) -> None:
     """Run the architecture checker through its command-line entrypoint."""
-    package = f"tests.fixtures.architecture.{context.package_name}"
-    package_root = Path("tests/fixtures/architecture") / context.package_name
-    context.completed_process = subprocess.run(  # noqa: S603
-        [
-            sys.executable,
-            "-m",
-            "episodic.architecture",
-            "--package",
-            package,
-            "--root",
-            str(package_root),
-            "--fixture-policy",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
+    config_path = write_fixture_config(tmp_path, context.package_name)
+    context.completed_process = run_hecate_fixture_check(
+        context.package_name,
+        config_path,
     )
 
 

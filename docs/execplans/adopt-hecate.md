@@ -188,8 +188,9 @@ The plan signposts these skills for the implementing agent:
 - [x] (2026-05-20 00:00Z) Milestone 2: Replaced the Makefile architecture
   command with `hecate check` while keeping `make check-architecture` and
   `make lint` behaviour.
-- [ ] Milestone 3: Convert architecture fixture tests and BDD scenarios to
-  Hecate-driven configs and diagnostics.
+- [x] (2026-05-20 00:00Z) Milestone 3: Converted architecture fixture tests
+  and BDD scenarios to Hecate-driven configs and diagnostics; the focused
+  architecture test command reports 13 passing tests.
 - [ ] Milestone 4: Remove or reduce `episodic.architecture` so Episodic no
   longer owns duplicated checker semantics.
 - [ ] Milestone 5: Update ADR, system design, users' guide, developers' guide,
@@ -247,6 +248,19 @@ The plan signposts these skills for the implementing agent:
   directly without CI-specific installation changes. Impact: the existing
   `make lint` dependency chain remains the public maintainer contract.
 
+- Observation: Hecate expands named package-barrel re-exports to their origin
+  modules, but a star import from a package barrel is reported as an import of
+  the package module itself. Impact: the
+  `api_imports_star_reexported_outbound_adapter` fixture uses a
+  fixture-specific package-barrel classification and asserts the package
+  module diagnostic, while the nested and cyclic star re-export fixtures still
+  assert storage-origin diagnostics.
+
+- Observation: CodeRabbit reviewed the fixture conversion and raised helper
+  docstring, security-suppression, and small clarity findings. Impact: the
+  helper now documents its generated config behaviour, justifies subprocess
+  lint suppressions, and builds the package-barrel prefix string directly.
+
 ## Decision Log
 
 - Decision: keep `make check-architecture` as the stable local command and
@@ -278,6 +292,12 @@ The plan signposts these skills for the implementing agent:
   Rationale: existing tests and documentation already use `ARCH001`; preserving
   it keeps diagnostic continuity while moving the implementation to Hecate.
   Date/Author: 2026-05-20 / Codex.
+
+- Decision: keep the direct package star-import fixture by classifying that
+  fixture's package barrel as an outbound adapter in its generated Hecate
+  config. Rationale: Hecate reports bare star imports from package barrels at
+  the package module edge, so this preserves star-import coverage without
+  reintroducing local checker semantics. Date/Author: 2026-05-20 / Codex.
 
 ## Implementation plan
 
