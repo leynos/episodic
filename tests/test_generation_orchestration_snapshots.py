@@ -15,7 +15,9 @@ consistency in the canonical orchestration fixture.
 import dataclasses
 import typing as typ
 
+import hypothesis.strategies as st
 import pytest
+from hypothesis import given, settings
 from syrupy.assertion import SnapshotAssertion
 
 from episodic.generation.show_notes import ShowNotesEntry, ShowNotesResult
@@ -249,8 +251,6 @@ def _make_orchestration_result(
     total_usage: LLMUsage | None = None,
 ) -> GenerationOrchestrationResult:
     """Build the canonical orchestration DTO graph used by snapshots."""
-    has_action_usage = action_usage is not None
-    has_planner_usage = planner_usage is not None
     if action_usage is None:
         action_usage = LLMUsage(
             input_tokens=10,
@@ -264,27 +264,11 @@ def _make_orchestration_result(
             total_tokens=3,
         )
     if total_usage is None:
-        if has_action_usage or has_planner_usage:
-            total_usage = LLMUsage(
-                input_tokens=(
-                    (planner_usage.input_tokens if has_planner_usage else 0)
-                    + (action_usage.input_tokens if has_action_usage else 0)
-                ),
-                output_tokens=(
-                    (planner_usage.output_tokens if has_planner_usage else 0)
-                    + (action_usage.output_tokens if has_action_usage else 0)
-                ),
-                total_tokens=(
-                    (planner_usage.total_tokens if has_planner_usage else 0)
-                    + (action_usage.total_tokens if has_action_usage else 0)
-                ),
-            )
-        else:
-            total_usage = LLMUsage(
-                input_tokens=11,
-                output_tokens=22,
-                total_tokens=33,
-            )
+        total_usage = LLMUsage(
+            input_tokens=planner_usage.input_tokens + action_usage.input_tokens,
+            output_tokens=planner_usage.output_tokens + action_usage.output_tokens,
+            total_tokens=planner_usage.total_tokens + action_usage.total_tokens,
+        )
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
@@ -386,10 +370,38 @@ def test_generation_orchestration_fixture_totals_partial_usage_overrides() -> No
         action_usage=LLMUsage(input_tokens=5, output_tokens=7, total_tokens=12),
     )
 
+    assert result.total_usage == LLMUsage(6, 9, 15)
+
+@given(
+    planner=st.tuples(
+        st.integers(min_value=0, max_value=100_000),
+        st.integers(min_value=0, max_value=100_000),
+        st.integers(min_value=0, max_value=200_000),
+    ),
+    action=st.tuples(
+        st.integers(min_value=0, max_value=100_000),
+        st.integers(min_value=0, max_value=100_000),
+        st.integers(min_value=0, max_value=200_000),
+    ),
+)
+@settings(max_examples=50)
+def test_generation_orchestration_fixture_total_usage_property(
+    planner: tuple[int, int, int],
+    action: tuple[int, int, int],
+) -> None:
+    """Verify fixture total usage is a token-wise sum for arbitrary inputs."""
+    planner_usage = LLMUsage(*planner)
+    action_usage = LLMUsage(*action)
+
+    result = _make_orchestration_result(
+        action_usage=action_usage,
+        planner_usage=planner_usage,
+    )
+
     assert result.total_usage == LLMUsage(
-        input_tokens=5,
-        output_tokens=7,
-        total_tokens=12,
+        input_tokens=planner[0] + action[0],
+        output_tokens=planner[1] + action[1],
+        total_tokens=planner[2] + action[2],
     )
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
     """Snapshot checkpoint payloads used when orchestration pauses and resumes."""
