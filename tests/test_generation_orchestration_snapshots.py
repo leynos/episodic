@@ -249,6 +249,8 @@ def _make_orchestration_result(
     total_usage: LLMUsage | None = None,
 ) -> GenerationOrchestrationResult:
     """Build the canonical orchestration DTO graph used by snapshots."""
+    has_action_usage = action_usage is not None
+    has_planner_usage = planner_usage is not None
     if action_usage is None:
         action_usage = LLMUsage(
             input_tokens=10,
@@ -262,11 +264,27 @@ def _make_orchestration_result(
             total_tokens=3,
         )
     if total_usage is None:
-        total_usage = LLMUsage(
-            input_tokens=11,
-            output_tokens=22,
-            total_tokens=33,
-        )
+        if has_action_usage or has_planner_usage:
+            total_usage = LLMUsage(
+                input_tokens=(
+                    (planner_usage.input_tokens if has_planner_usage else 0)
+                    + (action_usage.input_tokens if has_action_usage else 0)
+                ),
+                output_tokens=(
+                    (planner_usage.output_tokens if has_planner_usage else 0)
+                    + (action_usage.output_tokens if has_action_usage else 0)
+                ),
+                total_tokens=(
+                    (planner_usage.total_tokens if has_planner_usage else 0)
+                    + (action_usage.total_tokens if has_action_usage else 0)
+                ),
+            )
+        else:
+            total_usage = LLMUsage(
+                input_tokens=11,
+                output_tokens=22,
+                total_tokens=33,
+            )
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
@@ -362,7 +380,17 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
         result.planner_usage.total_tokens + action_usage.total_tokens
     )
 
+def test_generation_orchestration_fixture_totals_partial_usage_overrides() -> None:
+    """Verify total usage is derived from whichever usage values callers supply."""
+    result = _make_orchestration_result(
+        action_usage=LLMUsage(input_tokens=5, output_tokens=7, total_tokens=12),
+    )
 
+    assert result.total_usage == LLMUsage(
+        input_tokens=5,
+        output_tokens=7,
+        total_tokens=12,
+    )
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
     """Snapshot checkpoint payloads used when orchestration pauses and resumes."""
     planned = PlannedAction(
