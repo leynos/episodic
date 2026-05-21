@@ -98,6 +98,9 @@ Health contract:
 - `GET /health/ready` is an infrastructure readiness check. It currently
   verifies database connectivity and returns `503 Service Unavailable` when the
   probe fails.
+- Health semantics are represented by `episodic.canonical.health`, so the
+  domain-facing readiness contract is transport-free. Falcon resources convert
+  those observations into HTTP status codes and JSON.
 
 Versioned API routing:
 
@@ -178,6 +181,41 @@ Testing guidance:
   fixture rather than sharing a long-lived migrated engine fixture. The full
   engine disposal step is required to keep the py-pglite-backed runtime probe
   responsive.
+
+
+## Container and local Kubernetes previews
+
+The deployment design is documented in
+[`local-k3d-preview-design.md`](local-k3d-preview-design.md).
+
+Container conventions:
+
+- `Dockerfile` must keep the Granian factory target aligned with
+  `episodic.api.runtime`.
+- Runtime containers must stay non-root and keep `/health/live` as the image
+  health check.
+- Docker smoke tests stay opt-in through `EPISODIC_RUN_DOCKER_TESTS=1` because
+  CI and agent hosts may not expose a Docker daemon.
+
+Helm conventions:
+
+- Keep chart values aligned with the Nile Valley example chart contract:
+  `config`, `existingSecretName`, `allowMissingSecret`, `secretEnvFromKeys`,
+  `externalSecret`, ingress, and HTTP probes.
+- Validate chart edits with `uv run pytest tests/test_helm_chart_contract.py`.
+- Update the syrupy snapshot when intentional local manifest output changes.
+- Preserve explicit `secretEnvFromKeys.*.optional: false`; do not use Helm's
+  `default` function where a boolean `false` has semantic meaning.
+
+Local preview conventions:
+
+- Makefile targets call `uv run --group dev scripts/local_k8s.py`.
+- `scripts/local_k8s/commands.py` should contain command construction only.
+- `scripts/local_k8s/validation.py` should contain host prerequisite checks.
+- `scripts/local_k8s/orchestration.py` should sequence helpers without hiding
+  command failures.
+- Add focused tests in `tests/test_local_k8s_tooling.py` for new command
+  construction or idempotency behaviour.
 
 ## Celery worker runtime
 
@@ -1008,8 +1046,8 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `ShowNotesResult`. Callers should catch this exception to handle malformed or
   unexpected LLM output gracefully. It is raised when the response text is not
   valid JSON; when the top-level JSON object does not contain an `entries`
-  list; when an entry in `entries` is not a JSON object; when a required field
-  (`topic` or `summary`) is absent, empty, or not a string; when an optional
+  list; when an entry in `entries` is not a JSON object; when a required field (
+  `topic` or `summary`) is absent, empty, or not a string; when an optional
   field (`timestamp` or `tei_locator`) is present but is not a string or null;
   and when a `timestamp` value does not match the ISO 8601 duration format.
 - `ChapterMarkersGenerator` follows the same boundary in
@@ -1027,7 +1065,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `<div type="chapters">` element into the TEI body using the representation
   defined by
   [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md).
-  The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
+   The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
   `@n` stores the required start time, and `@corresp` stores an optional source
   locator. Optional DTO `end` and `duration` values are validated but not
   emitted into TEI until the TEI tooling exposes supported attributes.
@@ -1314,8 +1352,8 @@ module remains responsible for HTTP lifecycle and retry orchestration.
 
 The multi-source ingestion service normalizes heterogeneous source documents,
 applies source weighting heuristics, resolves conflicts, and merges the result
-into a canonical TEI episode. The service is implemented as an orchestrator
-(`ingest_multi_source`) that composes around the existing low-level
+into a canonical TEI episode. The service is implemented as an orchestrator (
+`ingest_multi_source`) that composes around the existing low-level
 `ingest_sources` persistence function.
 
 ### Port protocols
