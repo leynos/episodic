@@ -73,7 +73,7 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     app.add_route("/health/live", HealthLiveResource())
     app.add_route(
         "/health/ready",
-        HealthReadyResource(dependencies.readiness_probes),
+        HealthReadyResource(dependencies.readiness_observer()),
     )
 
     app.add_route("/series-profiles", SeriesProfilesResource(uow_factory))

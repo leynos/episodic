@@ -66,6 +66,7 @@ def _domain_ports_group() -> ModuleGroup:
             "episodic.canonical.ingestion_ports",
             "episodic.canonical.entity_protocols",
             "episodic.canonical.history_protocols",
+            "episodic.canonical.health",
             "episodic.canonical.ports",
             "episodic.canonical.reference_protocols",
             "episodic.canonical.unit_of_work_protocols",

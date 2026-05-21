@@ -1,0 +1,25 @@
+{{- if .Values.podDisruptionBudget.enabled -}}
+{{- $minSet := ne .Values.podDisruptionBudget.minAvailable nil -}}
+{{- $maxSet := ne .Values.podDisruptionBudget.maxUnavailable nil -}}
+{{- if and (not $minSet) (not $maxSet) -}}
+{{- fail "Exactly one of podDisruptionBudget.minAvailable or podDisruptionBudget.maxUnavailable is required when podDisruptionBudget.enabled is true" -}}
+{{- end -}}
+{{- if and $minSet $maxSet -}}
+{{- fail "podDisruptionBudget.minAvailable and podDisruptionBudget.maxUnavailable are mutually exclusive; set only one" -}}
+{{- end -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "episodic.fullname" . }}
+  labels:
+    {{- include "episodic.labels" . | nindent 4 }}
+spec:
+  {{- if ne .Values.podDisruptionBudget.minAvailable nil }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- else if ne .Values.podDisruptionBudget.maxUnavailable nil }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "episodic.selectorLabels" . | nindent 6 }}
+{{- end }}

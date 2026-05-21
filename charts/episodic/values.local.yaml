@@ -1,0 +1,23 @@
+image:
+  repository: episodic
+  tag: local
+  pullPolicy: IfNotPresent
+
+config:
+  EPISODIC_ENV: local
+
+existingSecretName: episodic-local
+allowMissingSecret: false
+secretEnvFromKeys:
+  DATABASE_URL:
+    key: database-url
+    optional: false
+
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: episodic.localhost
+      paths:
+        - path: /
+          pathType: Prefix

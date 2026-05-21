@@ -11,6 +11,29 @@ if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
 
 
+def test_runtime_exposes_container_granian_contract() -> None:
+    """Keep container and orchestration code anchored to the HTTP runtime."""
+    from episodic.api import runtime
+
+    module_name, separator, factory_name = runtime.GRANIAN_FACTORY_TARGET.partition(":")
+    assert module_name == "episodic.api.runtime", (
+        f"unexpected Granian module target: {module_name!r}"
+    )
+    assert separator == ":", "Granian factory target must include a ':' separator."
+    assert factory_name == "create_app_from_env", (
+        f"unexpected Granian factory name: {factory_name!r}"
+    )
+    assert getattr(runtime, factory_name) is runtime.create_app_from_env, (
+        "Granian factory target must point at create_app_from_env."
+    )
+    assert runtime.GRANIAN_INTERFACE == "asgi", (
+        f"unexpected Granian interface: {runtime.GRANIAN_INTERFACE!r}"
+    )
+    assert runtime.HTTP_BIND_PORT == 8080, (
+        f"unexpected container HTTP bind port: {runtime.HTTP_BIND_PORT}"
+    )
+
+
 def test_create_app_from_env_requires_database_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

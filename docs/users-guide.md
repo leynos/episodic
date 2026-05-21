@@ -45,10 +45,10 @@ This guide will cover:
   profile. TEI headers automatically capture provenance metadata including
   source priorities, ingestion timestamps, and reviewer identities. Source
   normalisation fan-out now uses metadata-aware asyncio task creation, so
-  custom event-loop task factories can receive operation metadata
-  (`operation_name`, `correlation_id`, `priority_hint`) for diagnostics.
-  Storage identifiers generated during canonical ingestion use time-ordered
-  UUIDv7 values for improved chronological locality.
+  custom event-loop task factories can receive operation metadata (
+  `operation_name`, `correlation_id`, `priority_hint`) for diagnostics. Storage
+  identifiers generated during canonical ingestion use time-ordered UUIDv7
+  values for improved chronological locality.
 - Large canonical TEI XML payloads are compressed with standard-library
   Zstandard in persistence storage while API and domain read paths continue to
   return plain text transparently.
@@ -224,11 +224,34 @@ Health endpoints:
   fails, so deployment platforms can keep traffic away from an unhealthy
   instance.
 
+Container and Kubernetes deployment:
+
+- The production image runs Granian on port `8080` as a non-root user.
+- The image health check calls `/health/live` inside the container.
+- The Helm chart lives under `charts/episodic` and exposes configurable
+  ingress, non-secret configuration, existing Secret references, and
+  ExternalSecret support.
+- Default chart probes call `/health/live` and `/health/ready`.
+
+Local Kubernetes preview:
+
+```shell
+make local-k8s-up
+make local-k8s-status
+make local-k8s-logs
+make local-k8s-down
+```
+
+The preview workflow uses `k3d`, Docker, `kubectl`, Helm, and the local chart
+values in `charts/episodic/values.local.yaml`. By default it deploys the
+`episodic:local` image into the `episodic-preview` cluster and exposes ingress
+through `http://episodic.localhost:8088`.
+
 ### Logging
 
-`episodic.logging.LogLevel` accepts the configured log levels: `TRACE`,
-`DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`. `WARN` remains available
-as a deprecated alias for `WARNING`.
+`episodic.logging.LogLevel` accepts the configured log levels: `TRACE`, `DEBUG`,
+ `INFO`, `WARNING`, `ERROR`, and `CRITICAL`. `WARN` remains available as a
+deprecated alias for `WARNING`.
 
 Use `configure_logging(level, ...)` to configure process logging. The `level`
 argument is case-insensitive, and the function returns a
