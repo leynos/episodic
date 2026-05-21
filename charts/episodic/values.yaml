@@ -1,0 +1,112 @@
+replicaCount: 1
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+image:
+  repository: ghcr.io/leynos/episodic
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsGroup: 10001
+  runAsUser: 10001
+
+service:
+  type: ClusterIP
+  port: 80
+
+container:
+  port: 8080
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+config: {}
+
+existingSecretName: ""
+allowMissingSecret: true
+# Map environment variable names to keys inside the resolved Kubernetes Secret.
+# Each entry must set `key`; `optional` falls back to `allowMissingSecret` when
+# omitted.
+secretEnvFromKeys:
+  DATABASE_URL:
+    key: database-url
+    optional: false
+
+externalSecret:
+  enabled: false
+  apiVersion: external-secrets.io/v1beta1
+  refreshInterval: 1h
+  creationPolicy: Owner
+  secretStoreRef:
+    name: ""
+    kind: ClusterSecretStore
+  targetName: ""
+  data: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: episodic.localhost
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1  # Use this OR minAvailable, not both.
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
