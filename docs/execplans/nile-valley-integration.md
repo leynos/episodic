@@ -177,6 +177,14 @@ repository quality gates pass.
   review before committing Stage 1; CodeRabbit reported zero findings.
 - [x] (2026-05-21T12:50:00Z) Prepared Stage 1 for commit after final
   validation and CodeRabbit review.
+- [x] (2026-05-21T13:05:00Z) Committed Stage 1 as `592ff12` after a clean
+  `git diff --check`.
+- [x] (2026-05-21T13:10:00Z) Started Stage 2 runtime hardening by making the
+  Granian factory target, interface, and container HTTP bind port explicit in
+  `episodic.api.runtime`.
+- [x] (2026-05-21T13:35:00Z) Completed Stage 2 runtime hardening validation:
+  focused runtime tests, full code gates, full test suite, Markdown gates, and
+  CodeRabbit review passed.
 
 ## Surprises & discoveries
 
@@ -300,6 +308,26 @@ repository quality gates pass.
   `/tmp/coderabbit-stage1-commit-episodic-nile-valley-integration.out`, which
   reported `findings: 0`. Impact: Stage 1 can be committed.
 
+- Observation: Stage 2 did not require a new HTTP entrypoint because
+  `episodic.api.runtime:create_app_from_env` already booted Falcon through
+  Granian. Evidence: `tests/steps/test_http_service_scaffold_steps.py` and the
+  focused run in `/tmp/runtime-stage2-episodic-nile-valley-integration.out`,
+  which reported `9 passed`. Impact: made the entrypoint contract explicit as
+  runtime constants for later Docker and Helm wiring instead of introducing a
+  second wrapper command.
+
+- Observation: Stage 2 full validation passed after the runtime contract
+  constants and behavioural test update. Evidence:
+  `/tmp/check-fmt-stage2-episodic-nile-valley-integration.out`,
+  `/tmp/typecheck-stage2-episodic-nile-valley-integration.out`,
+  `/tmp/lint-stage2-episodic-nile-valley-integration.out`,
+  `/tmp/test-stage2-episodic-nile-valley-integration.out`, which reported
+  `671 passed, 3 skipped`,
+  `/tmp/markdownlint-stage2-episodic-nile-valley-integration.out`,
+  `/tmp/nixie-stage2-episodic-nile-valley-integration.out`, and
+  `/tmp/coderabbit-stage2-episodic-nile-valley-integration.out`, which
+  reported `findings: 0`. Impact: Stage 2 is ready to commit.
+
 ## Decision log
 
 - Decision: keep `/health/live` and `/health/ready` as the external health
@@ -331,6 +359,13 @@ repository quality gates pass.
   `ReadinessProbe(name, check)`, so keeping that small API stable lets the
   Falcon adapter move to a domain observer without expanding the public change
   surface. Date/Author: 2026-05-21 / Codex.
+
+- Decision: expose the Granian factory target, interface, and default
+  container HTTP bind port as constants in the runtime composition root.
+  Rationale: later Dockerfile, Helm, and local preview code need to use the
+  Wildside HTTP runtime entrypoint consistently, and centralising these values
+  avoids string drift while keeping the runtime path unchanged.
+  Date/Author: 2026-05-21 / Codex.
 
 ## Outcomes and retrospective
 
