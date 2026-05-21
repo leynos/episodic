@@ -1,4 +1,5 @@
 # ADR-014: Hexagonal architecture enforcement
+
 ## Status
 
 Accepted
@@ -89,6 +90,3 @@ records the implementation path.[^2] Implementation:
   `tests/test_port_contracts.py`,
   `tests/features/architecture_enforcement.feature`, and
   `tests/steps/test_architecture_enforcement_steps.py`
-# ADR-014: Hexagonal architecture enforcement
-
-# ADR-014: Hexagonal architecture enforcement
