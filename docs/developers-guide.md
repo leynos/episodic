@@ -838,8 +838,8 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 test event recording. The hook fires only on the direct
 `plan -> execute -> finish` path, after finish-node aggregation has produced an
 `orchestration_result` and before the graph returns. It is not invoked on the
-checkpoint suspend path. Callback exceptions are logged and propagated to the
-callback error log without replacing the already computed graph result.
+checkpoint suspend path. Callback exceptions are logged without replacing the
+already computed graph result.
 
 ### Maintainer rules
 

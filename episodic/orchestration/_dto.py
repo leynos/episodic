@@ -3,14 +3,12 @@
 import collections.abc as cabc
 import dataclasses as dc
 import typing as typ
+import uuid  # noqa: TC003 - runtime annotation inspection needs this name.
 
 from episodic.llm import (
     LLMProviderOperation,
     LLMTokenBudget,
 )
-
-if typ.TYPE_CHECKING:
-    import uuid
 
 from ._types import (
     ActionKind,

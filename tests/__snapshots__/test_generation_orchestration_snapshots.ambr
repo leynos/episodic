@@ -142,7 +142,7 @@
     'non_list_required_inputs': 'required_inputs must be a list of strings.',
     'non_list_steps': 'steps must be a list.',
     'non_object_step': 'step must be an object.',
-    'unknown_action_kind': 'action_kind must be one of: generate_show_notes.',
+    'unknown_action_kind': 'action_kind must be one of: generate_show_notes, generate_guest_bios.',
     'unknown_model_tier': 'model_tier must be one of: planning, execution.',
   })
 # ---
