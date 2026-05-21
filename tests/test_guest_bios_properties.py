@@ -21,6 +21,26 @@ SCRIPT_TEI = (
     "</TEI>"
 )
 
+
+def _is_xml_compatible_text(value: str) -> bool:
+    """Return True when all characters are valid XML 1.0 text characters."""
+
+    def is_allowed(char: str) -> bool:
+        codepoint = ord(char)
+        is_noncharacter = 0xFDD0 <= codepoint <= 0xFDEF or codepoint & 0xFFFF in {
+            0xFFFE,
+            0xFFFF,
+        }
+        return not is_noncharacter and (
+            char in "\t\n\r"
+            or 0x20 <= codepoint <= 0xD7FF
+            or 0xE000 <= codepoint <= 0xFFFD
+            or 0x10000 <= codepoint <= 0x10FFFF
+        )
+
+    return all(is_allowed(char) for char in value)
+
+
 _TEXT = st.text(
     alphabet=st.characters(
         blacklist_categories=("Cc", "Cs"),
@@ -28,7 +48,7 @@ _TEXT = st.text(
     ),
     min_size=1,
     max_size=48,
-).filter(lambda value: bool(value.strip()))
+).filter(lambda value: bool(value.strip()) and _is_xml_compatible_text(value))
 
 
 def _usage() -> LLMUsage:

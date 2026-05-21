@@ -566,6 +566,16 @@ repository quality gates pass.
   `/tmp/coderabbit-stage6-docs-episodic-nile-valley-integration.out`, which
   reported `findings: 0`. Impact: Stage 6 is ready to commit.
 
+- Observation: the first final `make test` pass found a latent guest-bio
+  property-test instability unrelated to the Nile Valley implementation.
+  Hypothesis generated XML noncharacters such as `U+FFFE` and `U+1FFFE`, which
+  `tei_rapporteur` correctly rejects during XML emission. Evidence:
+  `/tmp/test-final-episodic-nile-valley-integration.out` failed one property
+  test, and `/tmp/guest-bios-properties-rerun2-episodic-nile-valley-integration.out`
+  passed after constraining the property strategy to XML-compatible text.
+  Impact: keep the final validation loop open and rerun the full gates after
+  committing the test-stability fix.
+
 ## Decision log
 
 - Decision: keep `/health/live` and `/health/ready` as the external health
