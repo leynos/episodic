@@ -604,6 +604,66 @@ def _finish_node(
     return result
 
 
+def _invoke_finish_callback(
+    finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None],
+    state: GenerationGraphState,
+    result: dict[str, dto.GenerationOrchestrationResult],
+) -> None:
+    """Invoke *finish_callback* with the post-aggregation result.
+
+    Logs a debug event on success and an error event on failure. Exceptions are
+    swallowed so callback failures do not replace the already-computed graph
+    result.
+    """
+    correlation_id = state.request.correlation_id if state.request is not None else None
+    try:
+        finish_callback(result["orchestration_result"])
+        _log_event(
+            "debug",
+            "generation_graph.finish_node.callback.finish",
+            correlation_id=correlation_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _log_event(
+            "error",
+            "generation_graph.finish_node.callback.error",
+            correlation_id=correlation_id,
+            error=str(exc),
+        )
+
+
+def _build_execute_node(
+    tool_executor: protocols.ToolExecutorPort,
+    checkpoint_port: protocols.CheckpointPort | None,
+) -> tuple[typ.Any, str]:
+    """Return *(execute_node_fn, execute_target)* for the graph.
+
+    When *checkpoint_port* is ``None``, returns the direct execute node
+    targeting ``"finish"``. Otherwise returns the suspend-before-execute node
+    targeting ``END``.
+    """
+    if checkpoint_port is None:
+
+        async def _run_execute_node(
+            state: GenerationGraphState,
+        ) -> dict[str, tuple[dto.ActionExecutionResult, ...]]:
+            """Async entry point for the execute graph node."""
+            return await _execute_node(state, tool_executor=tool_executor)
+
+        return _run_execute_node, "finish"
+
+    async def _run_suspend_execute_node(
+        state: GenerationGraphState,
+    ) -> dict[str, dto.SuspendedWorkflowResult]:
+        """Async entry point for the suspend-before-execute graph node."""
+        return await _suspend_execute_node(
+            state,
+            checkpoint_port=checkpoint_port,
+        )
+
+    return _run_suspend_execute_node, END
+
+
 def build_generation_orchestration_graph(
     *,
     planner: protocols.PlannerPort,
@@ -647,58 +707,19 @@ def build_generation_orchestration_graph(
         """Async entry point for the plan graph node."""
         return await _plan_node(state, planner=planner)
 
-    async def _run_execute_node(
-        state: GenerationGraphState,
-    ) -> dict[str, tuple[dto.ActionExecutionResult, ...]]:
-        """Async entry point for the execute graph node."""
-        return await _execute_node(state, tool_executor=tool_executor)
-
     def _run_finish_node(
         state: GenerationGraphState,
     ) -> dict[str, dto.GenerationOrchestrationResult]:
         """Entry point for the finish graph node."""
         result = _finish_node(state)
         if finish_callback is not None:
-            try:
-                finish_callback(result["orchestration_result"])
-                _log_event(
-                    "debug",
-                    "generation_graph.finish_node.callback.finish",
-                    correlation_id=(
-                        state.request.correlation_id
-                        if state.request is not None
-                        else None
-                    ),
-                )
-            except Exception as exc:  # noqa: BLE001
-                _log_event(
-                    "error",
-                    "generation_graph.finish_node.callback.error",
-                    correlation_id=(
-                        state.request.correlation_id
-                        if state.request is not None
-                        else None
-                    ),
-                    error=str(exc),
-                )
+            _invoke_finish_callback(finish_callback, state, result)
         return result
 
-    if checkpoint_port is None:
-        execute_node = _run_execute_node
-        execute_target = "finish"
-    else:
-
-        async def _run_suspend_execute_node(
-            state: GenerationGraphState,
-        ) -> dict[str, dto.SuspendedWorkflowResult]:
-            """Async entry point for the suspend-before-execute graph node."""
-            return await _suspend_execute_node(
-                state,
-                checkpoint_port=checkpoint_port,
-            )
-
-        execute_node = _run_suspend_execute_node
-        execute_target = END
+    execute_node, execute_target = _build_execute_node(
+        tool_executor,
+        checkpoint_port,
+    )
 
     graph.add_node("plan", _run_plan_node)
     graph.add_node("execute", execute_node)
