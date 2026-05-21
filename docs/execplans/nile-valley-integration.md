@@ -185,6 +185,14 @@ repository quality gates pass.
 - [x] (2026-05-21T13:35:00Z) Completed Stage 2 runtime hardening validation:
   focused runtime tests, full code gates, full test suite, Markdown gates, and
   CodeRabbit review passed.
+- [x] (2026-05-21T13:45:00Z) Started Stage 3 container image work: added a
+  multi-stage Dockerfile, `.dockerignore`, and container contract tests,
+  including an opt-in Docker smoke test guarded by `EPISODIC_RUN_DOCKER_TESTS`.
+- [x] (2026-05-21T14:25:00Z) Completed Stage 3 container validation: focused
+  container contract tests, wheel build validation, full code gates, full test
+  suite, Markdown gates, and CodeRabbit review passed. The Docker daemon was
+  not available in this environment, so the live image smoke test remains
+  documented as an opt-in skip.
 
 ## Surprises & discoveries
 
@@ -328,6 +336,41 @@ repository quality gates pass.
   `/tmp/coderabbit-stage2-episodic-nile-valley-integration.out`, which
   reported `findings: 0`. Impact: Stage 2 is ready to commit.
 
+- Observation: the first Stage 3 formatting gate failed because
+  `tests/test_container_image_contract.py` needed Ruff formatting. Evidence:
+  `/tmp/check-fmt-stage3-episodic-nile-valley-integration.out`. Impact:
+  formatted the test file with `uv run ruff format` before continuing with the
+  Stage 3 gates.
+
+- Observation: the first Stage 3 lint gate failed on the new container contract
+  test for import ordering, the intentional `0.0.0.0` container bind host, and
+  partial Docker executable paths in the opt-in smoke test. Evidence:
+  `/tmp/lint-stage3-episodic-nile-valley-integration.out`. Impact: sorted the
+  imports, documented the intentional container bind, and used the resolved
+  Docker executable path when the smoke test is enabled.
+
+- Observation: Docker was not available or not reachable in this execution
+  environment. Evidence: `command -v docker >/dev/null 2>&1 && docker version`
+  produced no output, and the opt-in smoke test skipped in
+  `/tmp/container-stage3-focused-episodic-nile-valley-integration.out`.
+  Impact: validated the image contract by parsing `Dockerfile`, checking the
+  runtime constants, and running `uv build --wheel --out-dir
+  /tmp/episodic-stage3-dist` successfully in
+  `/tmp/uv-build-stage3-episodic-nile-valley-integration.out`; the live Docker
+  smoke can be exercised later with `EPISODIC_RUN_DOCKER_TESTS=1`.
+
+- Observation: Stage 3 full validation passed after formatting and lint
+  cleanup. Evidence:
+  `/tmp/check-fmt-stage3-rerun2-episodic-nile-valley-integration.out`,
+  `/tmp/typecheck-stage3-rerun-episodic-nile-valley-integration.out`,
+  `/tmp/lint-stage3-rerun-episodic-nile-valley-integration.out`,
+  `/tmp/test-stage3-episodic-nile-valley-integration.out`, which reported
+  `675 passed, 4 skipped`,
+  `/tmp/markdownlint-stage3-episodic-nile-valley-integration.out`,
+  `/tmp/nixie-stage3-episodic-nile-valley-integration.out`, and
+  `/tmp/coderabbit-stage3-episodic-nile-valley-integration.out`, which
+  reported `findings: 0`. Impact: Stage 3 is ready to commit.
+
 ## Decision log
 
 - Decision: keep `/health/live` and `/health/ready` as the external health
@@ -366,6 +409,12 @@ repository quality gates pass.
   Wildside HTTP runtime entrypoint consistently, and centralising these values
   avoids string drift while keeping the runtime path unchanged.
   Date/Author: 2026-05-21 / Codex.
+
+- Decision: make the live Docker image smoke test opt-in with
+  `EPISODIC_RUN_DOCKER_TESTS=1`. Rationale: the repository gates should remain
+  deterministic on agent hosts without a Docker daemon, while still providing
+  an executable end-to-end image check for environments that can build and run
+  containers. Date/Author: 2026-05-21 / Codex.
 
 ## Outcomes and retrospective
 
