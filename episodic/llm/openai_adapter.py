@@ -1,4 +1,15 @@
-"""Concrete OpenAI-compatible async LLM adapter."""
+"""OpenAI-compatible outbound adapter for the LLM port.
+
+This module keeps provider-specific HTTP concerns behind the `LLMPort`
+boundary. It builds chat-completion or Responses API payloads, applies retry
+policy for transient provider failures, normalizes response payloads, and
+enforces token budgets before and after provider calls.
+
+Pre-flight token checks use a configurable characters-per-token estimate on
+`OpenAICompatibleLLMConfig`. The estimate is intentionally conservative enough
+for early rejection, while actual provider usage remains the source of truth
+for post-call budget validation.
+"""
 
 import dataclasses as dc
 import json
@@ -237,7 +248,10 @@ def _validate_llm_config(config: OpenAICompatibleLLMConfig) -> None:
         (config.max_attempts <= 0, "max_attempts must be greater than zero."),
         (config.retry_delay_seconds < 0, "retry_delay_seconds must be non-negative."),
         (config.timeout_seconds <= 0, "timeout_seconds must be greater than zero."),
-        (config.chars_per_token <= 0, "chars_per_token must be greater than zero."),
+        (
+            not math.isfinite(config.chars_per_token) or config.chars_per_token <= 0,
+            "chars_per_token must be finite and greater than zero.",
+        ),
         (not config.base_url.strip(), "base_url must be non-empty."),
         (not config.api_key.strip(), "api_key must be non-empty."),
     ]

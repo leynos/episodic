@@ -336,6 +336,14 @@ jobs.
 - OpenAI-compatible preflight token estimates can tune the configured
   `chars_per_token` ratio when a target model's tokenizer differs from the
   default four-characters-per-token heuristic
+- Configure `OpenAICompatibleLLMConfig(chars_per_token=...)` when model
+  prompts routinely use text that tokenizes differently from the default
+  estimate. Lower values, such as `2.0`, make preflight checks stricter for
+  code-heavy or non-Latin-script prompts; higher values make them more
+  permissive for compact natural-language prompts. The value must be finite
+  and greater than zero. Operators should calibrate it by comparing sampled
+  prompt character counts with provider-reported input-token usage, then use a
+  conservative ratio that rejects oversized prompts before a provider call.
 - Setting budget limits per user or organization
 - Monitoring spend and usage dashboards
 - Optimizing costs with model tiering
