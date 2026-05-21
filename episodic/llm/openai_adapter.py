@@ -244,13 +244,17 @@ def _decode_json_response(response: httpx.Response) -> dict[str, object]:
 
 def _validate_llm_config(config: OpenAICompatibleLLMConfig) -> None:
     """Validate OpenAICompatibleLLMConfig field values."""
+    chars_per_token_msg = (
+        "chars_per_token must be finite and greater than zero "
+        f"(got {config.chars_per_token!r})."
+    )
     checks: list[tuple[bool, str]] = [
         (config.max_attempts <= 0, "max_attempts must be greater than zero."),
         (config.retry_delay_seconds < 0, "retry_delay_seconds must be non-negative."),
         (config.timeout_seconds <= 0, "timeout_seconds must be greater than zero."),
         (
             not math.isfinite(config.chars_per_token) or config.chars_per_token <= 0,
-            "chars_per_token must be finite and greater than zero.",
+            chars_per_token_msg,
         ),
         (not config.base_url.strip(), "base_url must be non-empty."),
         (not config.api_key.strip(), "api_key must be non-empty."),

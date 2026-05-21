@@ -3,7 +3,9 @@
 import typing as typ
 
 import httpx
+import hypothesis.strategies as st
 import pytest
+from hypothesis import given, settings
 
 from episodic.llm import (
     LLMProviderResponseError,
@@ -11,9 +13,35 @@ from episodic.llm import (
     LLMTokenBudget,
     LLMTokenBudgetExceededError,
 )
+from episodic.llm.openai_adapter import _estimate_token_count
 
 if typ.TYPE_CHECKING:
     from openai_test_types import _OpenAIAdapterFactory, _OpenAIJsonResponseBuilder
+
+
+@given(
+    text=st.text(max_size=500),
+    chars_per_token=st.floats(
+        min_value=0.001,
+        max_value=1_000.0,
+        allow_nan=False,
+        allow_infinity=False,
+    ),
+)
+@settings(max_examples=100)
+def test_estimate_token_count_matches_ceiling_ratio(
+    text: str,
+    chars_per_token: float,
+) -> None:
+    """Token estimates should preserve the configured finite positive ratio."""
+    estimated_tokens = _estimate_token_count(chars_per_token, text)
+
+    assert estimated_tokens >= 0
+    if not text:
+        assert estimated_tokens == 0
+    else:
+        assert (estimated_tokens - 1) * chars_per_token < len(text)
+        assert estimated_tokens * chars_per_token >= len(text)
 
 
 def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
