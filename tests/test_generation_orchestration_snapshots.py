@@ -1,15 +1,8 @@
 """Regression tests for typed generation orchestration serialisation.
 
-This module gives CI a stable view of the wire-shaped DTOs produced by the
-generation orchestration layer. Syrupy snapshots catch accidental structural
-changes in `ExecutionPlan`, `GenerationOrchestrationResult`,
-`ShowNotesEntry`, and `ShowNotesResult` serialisation, including plan version
-metadata and action-kind representation.
-
-The non-snapshot assertions in this file cover the DTO invariants that make the
-snapshots meaningful: show-notes optional field normalisation, execution-plan
-step validation, action-result aggregation validation, and usage-accounting
-consistency in the canonical orchestration fixture.
+Syrupy snapshots give CI a stable view of orchestration DTO serialisation for
+`ExecutionPlan`, `GenerationOrchestrationResult`, `ShowNotesEntry`, and
+`ShowNotesResult`. Assertions also cover optional fields and usage accounting.
 """
 
 import dataclasses
@@ -358,27 +351,34 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
     )
     assert result.total_usage == expected_usage
 
-def test_generation_orchestration_fixture_totals_partial_usage_overrides() -> None:
-    """Verify total usage is derived from whichever usage values callers supply."""
-    result = _make_orchestration_result(
+@pytest.mark.parametrize(
+    "spec",
+    (  # noqa: PT007 - single-parameter values are clearer as direct specs here.
         _OrchestrationResultSpec(
-            action_usage=LLMUsage(input_tokens=5, output_tokens=7, total_tokens=12),
-            total_usage=LLMUsage(input_tokens=6, output_tokens=9, total_tokens=15),
-        )
-    )
-    assert result.total_usage == LLMUsage(6, 9, 15)
+            action_usage=LLMUsage(5, 7, 12), total_usage=LLMUsage(6, 9, 15)
+        ),
+        _OrchestrationResultSpec(
+            planner_usage=LLMUsage(5, 7, 12), total_usage=LLMUsage(15, 27, 42)
+        ),
+    ),
+)
+def test_generation_orchestration_fixture_totals_partial_usage_overrides(
+    spec: _OrchestrationResultSpec,
+) -> None:
+    """Verify total usage is derived from whichever usage values callers supply."""
+    result = _make_orchestration_result(spec)
+    assert result.total_usage == spec.total_usage
+
+_USAGE_COUNTS = st.tuples(
+    st.integers(min_value=0, max_value=100_000),
+    st.integers(min_value=0, max_value=100_000),
+    st.integers(min_value=0, max_value=200_000),
+)
+
 
 @given(
-    planner=st.tuples(
-        st.integers(min_value=0, max_value=100_000),
-        st.integers(min_value=0, max_value=100_000),
-        st.integers(min_value=0, max_value=200_000),
-    ),
-    action=st.tuples(
-        st.integers(min_value=0, max_value=100_000),
-        st.integers(min_value=0, max_value=100_000),
-        st.integers(min_value=0, max_value=200_000),
-    ),
+    planner=_USAGE_COUNTS,
+    action=_USAGE_COUNTS,
 )
 @settings(max_examples=50)
 def test_generation_orchestration_fixture_total_usage_property(
@@ -393,16 +393,16 @@ def test_generation_orchestration_fixture_total_usage_property(
             action_usage=action_usage,
             planner_usage=planner_usage,
             total_usage=LLMUsage(
-                input_tokens=planner[0] + action[0],
-                output_tokens=planner[1] + action[1],
-                total_tokens=planner[2] + action[2],
+                planner[0] + action[0],
+                planner[1] + action[1],
+                planner[2] + action[2],
             ),
         )
     )
     assert result.total_usage == LLMUsage(
-        input_tokens=planner[0] + action[0],
-        output_tokens=planner[1] + action[1],
-        total_tokens=planner[2] + action[2],
+        planner[0] + action[0],
+        planner[1] + action[1],
+        planner[2] + action[2],
     )
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
     """Snapshot checkpoint payloads used when orchestration pauses and resumes."""
