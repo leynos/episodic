@@ -1,0 +1,618 @@
+# Integrate Episodic with Nile Valley previews
+
+This ExecPlan (execution plan) is a living document. The sections
+`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
+`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
+proceeds.
+
+Status: DRAFT. This plan requires explicit approval before implementation
+begins.
+
+## Purpose and big picture
+
+This work makes Episodic deployable through the Nile Valley preview and GitOps
+workflow. After implementation, an operator can build a production-style
+container image, install Episodic through a Helm chart, and bring up a local
+`k3d` preview environment with one Makefile command. Kubernetes liveness and
+readiness probes can observe the service through stable HTTP endpoints, and the
+local preview path exercises the same chart shape expected by Nile Valley.
+
+Success is observable when `make local-k8s-up` creates or reuses a local
+cluster, deploys the Episodic chart, and prints a preview URL whose
+`/health/live` endpoint returns HTTP `200`. The chart can be rendered with Nile
+Valley-compatible values, the container runs as a non-root user, and the
+repository quality gates pass.
+
+## Constraints
+
+- Do not implement this plan until it is explicitly approved.
+- Preserve the hexagonal architecture invariants from the
+  `hexagonal-architecture` skill. Domain modules must not import Falcon,
+  Granian, Docker, Helm, Kubernetes, `k3d`, or other infrastructure concerns.
+- Use the `leta` skill for code navigation and refactoring. Use textual search
+  only for configuration, documentation, literal strings, or non-code files.
+- Use the `rust-router` skill before any Rust implementation. This plan does
+  not currently require Rust code; introduce a Rust extension or Verus proof
+  only if a substantive invariant cannot be expressed and tested cleanly in
+  Python.
+- Keep `episodic/api/app.py` as a Falcon application factory. Runtime
+  environment parsing and concrete adapter construction remain in composition
+  roots such as `episodic/api/runtime.py`.
+- Treat `/health/live` and `/health/ready` as the canonical health contract.
+  These paths already exist in Episodic and match Nile Valley's example chart
+  probe contract.
+- Define health semantics behind a domain-owned health observation port. The
+  Falcon resource may adapt that port, but the domain port must not depend on
+  Falcon response objects, Kubernetes probe shapes, or HTTP status codes.
+- The container image must run the HTTP server as the deployed Wildside runtime
+  entrypoint by starting Granian against
+  `episodic.api.runtime:create_app_from_env`. Do not add a second production
+  entrypoint that bypasses the HTTP health server.
+- Build the container as a multi-stage image and run it as a non-root user with
+  stable liveness and readiness checks.
+- Align the Helm chart with Nile Valley values conventions:
+  `existingSecretName`,
+  `secretEnvFromKeys`, `allowMissingSecret`, optional `externalSecret`,
+  optional ingress, configurable non-secret `config`, and health probe values.
+- Provide local `k3d` orchestration through Python code using Cyclopts and
+  Makefile targets named `local-k8s-up`, `local-k8s-down`, `local-k8s-status`,
+  and `local-k8s-logs`.
+- Use Vidai Mock for behavioural tests of inference services. This preview
+  slice should not call live model providers; if any behavioural test exercises
+  `LLMPort` or generation services, it must use the existing Vidai Mock
+  fixtures.
+- Add unit tests with `pytest`, behavioural tests with `pytest-bdd`, snapshot
+  tests with `syrupy` where rendered output needs format stability, and
+  end-to-end tests for externally observable workflows such as CLI behaviour,
+  Helm rendering, container health, and live HTTP network boundaries.
+- Use property tests with Hypothesis or CrossHair when introducing an invariant
+  over a range of inputs, such as secret-key mapping, health aggregation, or
+  Kubernetes name validation.
+- Update `docs/users-guide.md`, `docs/developers-guide.md`, the relevant
+  architecture/design document, and any Architecture Decision Record (ADR)
+  needed to preserve substantive decisions.
+- Run validation commands sequentially, not in parallel. Capture long command
+  output with `tee` under `/tmp`, for example
+  `/tmp/test-episodic-nile-valley-integration.out`.
+- Run `coderabbit review --agent` after each major implementation milestone and
+  clear all concerns before moving to the next milestone.
+- Commit after each approved milestone only after that milestone's gate passes.
+
+## Tolerances
+
+- Scope tolerance: stop and escalate if the implementation exceeds 45 changed
+  files or 3500 net new lines before the first working local preview is
+  demonstrated.
+- Dependency tolerance: stop and escalate before adding any new runtime
+  dependency beyond Cyclopts and local preview helpers, or before adding any
+  dependency that conflicts with Python `>=3.14`.
+- Public contract tolerance: stop and escalate if the existing canonical API
+  routes must change, or if `/health/live` and `/health/ready` cannot remain
+  backwards compatible.
+- Architecture tolerance: stop and escalate if the health observation port
+  cannot be introduced without weakening `make check-architecture`.
+- Tooling tolerance: stop and escalate if local preview requires privileged
+  host changes beyond Docker, `k3d`, `kubectl`, and Helm availability.
+- Cluster tolerance: stop and escalate before deleting any non-Episodic
+  cluster, namespace, Docker image, or Kubernetes resource.
+- Test tolerance: stop and escalate after three failed attempts to stabilize
+  the same subprocess, container, Helm rendering, or `k3d` test failure.
+- Ambiguity tolerance: stop and ask for direction if "Wildside runtime
+  entrypoint" requires a service name, package name, or command-line interface
+  that conflicts with current Episodic naming.
+
+## Risks
+
+- Risk: Episodic already has health endpoints, but readiness semantics live in
+  `episodic/api/dependencies.py` rather than a domain-owned port. Severity:
+  medium. Likelihood: high. Mitigation: first add a domain health observation
+  protocol and tests, then adapt existing `ReadinessProbe` wiring through that
+  port without changing the external HTTP payload.
+
+- Risk: the repository has no existing Dockerfile, Helm chart, or local `k3d`
+  implementation. Severity: medium. Likelihood: high. Mitigation: mirror the
+  Corbusier chart and local-k8s structure, prune it to Episodic's actual
+  Postgres-backed HTTP service, and add small tests around each helper rather
+  than landing one large toolchain change.
+
+- Risk: Python 3.14 images and dependency installation can make container
+  builds slow or brittle. Severity: medium. Likelihood: medium. Mitigation: use
+  a multi-stage wheel build, copy only required project files into the build
+  context, and keep `.dockerignore` aggressive.
+
+- Risk: local `k3d` previews may fail on machines where ports are occupied or
+  required CLIs are absent. Severity: medium. Likelihood: medium. Mitigation:
+  add validation helpers, loopback port selection with bounded retry, clear
+  errors for missing executables, and idempotent status/down commands.
+
+- Risk: Helm `ExternalSecret` support can couple the chart to one secret
+  backend. Severity: medium. Likelihood: medium. Mitigation: make
+  `externalSecret` values-driven, disabled by default, and compatible with
+  `external-secrets.io/v1beta1` without hard-coding a concrete store name.
+
+- Risk: adding a chart and local orchestration increases the quality-gate
+  surface beyond the current Makefile. Severity: medium. Likelihood: high.
+  Mitigation: add focused validation targets and keep the existing gates
+  `make check-fmt`, `make typecheck`, `make lint`, and `make test` green.
+
+## Progress
+
+- [x] (2026-05-21T09:42:32Z) Loaded the requested `leta`, `rust-router`, and
+  `hexagonal-architecture` skills, and created a Leta workspace for this
+  worktree.
+- [x] (2026-05-21T09:42:32Z) Loaded the `execplans`, `firecrawl-mcp`,
+  `pr-creation`, and `commit-message` workflows needed for this planning branch.
+- [x] (2026-05-21T09:42:32Z) Renamed the branch to
+  `nile-valley-integration`.
+- [x] (2026-05-21T09:42:32Z) Used Wyvern agents to inspect local Episodic
+  conventions and Corbusier, Ghillie, and Nile Valley prior art.
+- [x] (2026-05-21T09:42:32Z) Used Firecrawl to verify the Nile Valley example
+  chart contract and current upstream documentation for Helm, `k3d`, and
+  Cyclopts.
+- [x] (2026-05-21T09:42:32Z) Drafted this approval-gated ExecPlan.
+- [ ] Obtain explicit approval before implementing any production, chart,
+  container, local-k8s, or user-facing documentation changes.
+
+## Surprises & discoveries
+
+- Observation: Episodic already exposes `GET /health/live` and
+  `GET /health/ready` through `episodic/api/resources/health.py`, and Granian
+  can already boot `episodic.api.runtime:create_app_from_env`. Evidence:
+  `docs/adr/adr-002-http-service-composition-root.md`,
+  `tests/test_health_endpoints.py`, and
+  `tests/steps/test_http_service_scaffold_steps.py`. Impact: the HTTP work is
+  not a new endpoint scaffold. It is a refactor and hardening step that moves
+  health semantics behind a domain port while preserving the current probe
+  contract.
+
+- Observation: Nile Valley's README describes a multi-application preview
+  workflow where applications supply Helm charts, and its example chart uses
+  `existingSecretName`, `secretEnvFromKeys`, `allowMissingSecret`, session
+  secret values, and `/health/live` plus `/health/ready` probes. Evidence:
+  Firecrawl scrape of `https://github.com/leynos/nile-valley` and
+  `deploy/charts/example-app/values.yaml`. Impact: the Episodic chart should
+  match the example-app contract unless a documented Episodic-specific need
+  requires an extension.
+
+- Observation: Corbusier has the richer local `k3d` orchestration pattern,
+  including Cyclopts commands, dependency bootstrap, Docker image import, Helm
+  install, status, logs, and success banners. Evidence: the Wyvern prior-art
+  brief and local reference files under `/tmp/corbusier-ref/scripts/local_k8s`.
+  Impact: mirror Corbusier's structure for the local preview toolchain, but
+  keep dependencies limited to Episodic's actual Postgres and HTTP needs.
+
+- Observation: Ghillie provides the closer Python container precedent: a
+  multi-stage wheel build, non-root runtime user, and container `HEALTHCHECK`.
+  Evidence: the Wyvern prior-art brief and `/tmp/ghillie-ref/Dockerfile`.
+  Impact: use Ghillie for Python image mechanics and Corbusier for Kubernetes
+  chart and local preview shape.
+
+## Decision log
+
+- Decision: keep `/health/live` and `/health/ready` as the external health
+  URLs. Rationale: these endpoints already exist in Episodic, are documented in
+  ADR-002, and match the Nile Valley example chart's probe defaults.
+  Date/Author: 2026-05-21 / Codex.
+
+- Decision: introduce a domain-owned health observation port instead of moving
+  readiness logic deeper into the Falcon adapter. Rationale: the user
+  explicitly asked to decouple health semantics from HTTP, and the hexagonal
+  architecture skill requires the domain to own ports while adapters translate
+  transport-specific details. Date/Author: 2026-05-21 / Codex.
+
+- Decision: model the implementation on Corbusier for Helm and local `k3d`,
+  and on Ghillie for Python container mechanics. Rationale: Corbusier is the
+  stronger Nile Valley-aligned chart and orchestration reference, while Ghillie
+  demonstrates a production-style Python image pattern. Date/Author: 2026-05-21
+  / Codex.
+
+- Decision: keep Vidai Mock as a conditional requirement rather than forcing
+  it into health-only behavioural tests. Rationale: the requested preview work
+  does not inherently call inference services. If implementation touches
+  generation or `LLMPort` behaviour, behavioural tests must use Vidai Mock.
+  Date/Author: 2026-05-21 / Codex.
+
+## Outcomes and retrospective
+
+This section is intentionally empty while the plan is in draft. During
+implementation, record each milestone outcome, CodeRabbit review result, gate
+result, and any deviation from this plan.
+
+## Context and orientation
+
+Episodic is a Python 3.14 service with Falcon ASGI endpoints and Granian as the
+HTTP process runtime. `episodic/api/app.py` registers routes and receives an
+`ApiDependencies` object. `episodic/api/runtime.py` reads environment
+configuration, builds SQLAlchemy-backed dependencies, and returns the Falcon
+application for Granian. Health endpoints currently live in
+`episodic/api/resources/health.py`, and tests cover both in-memory ASGI calls
+and a live Granian subprocess.
+
+The repository enforces hexagonal boundaries with `episodic/architecture`.
+Composition roots may wire concrete adapters, but domain and port modules must
+not import infrastructure. New health semantics should therefore live in a
+domain-facing module such as `episodic/health.py` or
+`episodic/canonical/health.py`, while the Falcon resource converts domain
+observations into HTTP status codes and JSON.
+
+There is no current Dockerfile, Helm chart, or local-k8s orchestration in
+Episodic. There is an `infra/` tree containing cluster and GitOps template
+documentation, but no deployable chart for the application. The implementation
+will add new packaging and local preview files instead of modifying an existing
+chart.
+
+Nile Valley is the shared infrastructure repository for ephemeral previews. It
+expects applications to supply Helm charts. Its example chart exposes
+values-driven configuration for non-secret environment variables, externally
+managed Secrets, optional session-key mounting, optional ingress, non-root pod
+security, and Kubernetes HTTP probes.
+
+Corbusier and Ghillie are the closest implementation references. Corbusier
+shows the chart, local `k3d` command shape, and operator-style preview flow.
+Ghillie shows a Python image built as a wheel in one stage and installed into a
+non-root runtime stage.
+
+## Plan of work
+
+Stage 0 is the approval gate. Review this document and revise it until it is
+approved. Do not edit production files, chart files, Docker files, Makefile
+targets, or user-facing guides before approval.
+
+Stage 1 introduces the health observation port. Add fail-first unit tests for a
+domain health observation type and aggregation behaviour. Implement a small
+domain-owned protocol and default observer that represents check names and
+statuses without HTTP concepts. Adapt `ReadinessProbe` and
+`HealthReadyResource` so the current JSON payload and status-code behaviour do
+not change. Update `episodic/architecture/policy.py` if the new module needs
+classification, and add architecture tests for the boundary. If the aggregation
+rules span multiple checks or failure modes, add Hypothesis tests.
+
+Stage 2 hardens the Falcon and Granian runtime path. Keep
+`episodic.api.runtime:create_app_from_env` as the production factory target and
+make sure the container command can run it through Granian. Extend existing
+`pytest` and `pytest-bdd` health tests only as needed to prove the domain port
+is used and the external contract remains unchanged. Do not change the public
+health payload unless a test and documentation update explicitly justify it.
+
+Stage 3 adds the container image. Add `.dockerignore`, `Dockerfile`, and any
+small runtime wrapper needed for signal handling. Use a multi-stage Python
+build that creates a wheel, installs it into a slim runtime image, creates a
+non-root user, exposes port `8080`, and starts Granian with the factory target.
+Add a Docker health check that calls `/health/live` on localhost. Add tests or
+scripts that validate the Dockerfile's command contract without requiring a
+full push to a registry. Add an end-to-end container smoke test if Docker is
+available; otherwise document the skip condition clearly.
+
+Stage 4 adds the Helm chart. Create `charts/episodic/Chart.yaml`,
+`charts/episodic/values.yaml`, `charts/episodic/values.local.yaml`,
+`charts/episodic/values.schema.json`, chart templates, and chart README or
+NOTES as appropriate. Include Deployment, Service, ConfigMap, optional Ingress,
+optional ExternalSecret, optional PodDisruptionBudget, ServiceAccount, and
+helpers. Match Nile Valley's values conventions for `existingSecretName`,
+`allowMissingSecret`, `secretEnvFromKeys`, `externalSecret`, `config`, and HTTP
+probes. Add snapshot tests with syrupy or stable text snapshots for rendered
+Helm manifests where output format stability matters, and run `helm lint` and
+`helm template` in validation.
+
+Stage 5 adds local `k3d` orchestration. Add `scripts/local_k8s.py` and a
+`scripts/local_k8s/` package modelled on Corbusier's command split:
+configuration, validation, `k3d`, Kubernetes helpers, deployment helpers, and
+orchestration. Use Cyclopts for the command line. Add Makefile targets
+`local-k8s-up`, `local-k8s-down`, `local-k8s-status`, and `local-k8s-logs` that
+run the script through `uv`. The `up` command should validate required tools,
+create or reuse a named cluster, choose or validate a loopback ingress port,
+build and import the local image unless skipped, create the application Secret,
+install the Helm chart with local values, wait for readiness, and print a
+concise success banner. Unit tests should cover validation helpers, port
+selection, command construction, secret decoding, and idempotent
+cluster-not-found behaviour. Behavioural or end-to-end tests should cover the
+CLI surface and a live preview when required tools are available.
+
+Stage 6 updates documentation and decisions. Add
+`docs/local-k3d-preview-design.md` describing the Nile Valley integration,
+container design, chart values, local workflow, and operational expectations.
+Update `docs/users-guide.md` with service health endpoints, container/runtime
+configuration, and local preview commands. Update `docs/developers-guide.md`
+with maintainer-facing conventions for chart changes, local-k8s tooling, and
+validation. Update the relevant architecture document with the health port and
+adapter split. Add an ADR if implementation settles a durable decision such as
+the health observation port contract or the chart/Nile Valley values contract.
+
+Stage 7 runs full validation, CodeRabbit review, commits, and push/PR updates.
+Run each gate sequentially with `tee`, clear `coderabbit review --agent`
+concerns, and commit the milestone. Push `nile-valley-integration` to
+`origin/nile-valley-integration`. Update this ExecPlan after each milestone so
+the branch history records the actual path taken.
+
+## Concrete steps
+
+All commands run from the repository root:
+
+```plaintext
+/home/leynos/.lody/repos/github---leynos---episodic/worktrees/1504541e-1283-45d0-8f23-3255689bb4a2
+```
+
+Before implementation, confirm the branch and that this plan is approved:
+
+```bash
+git branch --show-current
+git status --short
+```
+
+Expected branch:
+
+```plaintext
+nile-valley-integration
+```
+
+For code navigation during implementation, start with:
+
+```bash
+leta files | head -n 260
+leta grep "Health|Readiness|create_app|create_app_from_env" \
+  "episodic/api|tests" -k function,method,class --head 120
+```
+
+For the health-port milestone, write or update tests first:
+
+```bash
+UV_ENV="PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools"
+$UV_ENV uv run pytest tests/test_health_endpoints.py -v \
+  | tee /tmp/health-tests-episodic-nile-valley-integration.out
+```
+
+For the Falcon/Granian behavioural milestone:
+
+```bash
+UV_ENV="PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools"
+$UV_ENV uv run pytest tests/test_http_service_scaffold.py -v \
+  | tee /tmp/http-bdd-episodic-nile-valley-integration.out
+```
+
+For chart rendering and linting, add Makefile helpers where appropriate and run
+the underlying commands directly while the helpers are still being developed:
+
+```bash
+helm lint charts/episodic \
+  | tee /tmp/helm-lint-episodic-nile-valley-integration.out
+helm template episodic charts/episodic --values charts/episodic/values.local.yaml \
+  | tee /tmp/helm-template-episodic-nile-valley-integration.out
+```
+
+For local preview smoke testing:
+
+```bash
+make local-k8s-up | tee /tmp/local-k8s-up-episodic-nile-valley-integration.out
+make local-k8s-status | tee /tmp/local-k8s-status-episodic-nile-valley-integration.out
+make local-k8s-logs | tee /tmp/local-k8s-logs-episodic-nile-valley-integration.out
+make local-k8s-down | tee /tmp/local-k8s-down-episodic-nile-valley-integration.out
+```
+
+For required final validation, run these sequentially:
+
+```bash
+make check-fmt | tee /tmp/check-fmt-episodic-nile-valley-integration.out
+make typecheck | tee /tmp/typecheck-episodic-nile-valley-integration.out
+make lint | tee /tmp/lint-episodic-nile-valley-integration.out
+make test | tee /tmp/test-episodic-nile-valley-integration.out
+make markdownlint | tee /tmp/markdownlint-episodic-nile-valley-integration.out
+make nixie | tee /tmp/nixie-episodic-nile-valley-integration.out
+```
+
+After each major milestone:
+
+```bash
+coderabbit review --agent
+git status --short
+git diff --check
+```
+
+Use file-based commit messages:
+
+```bash
+COMMIT_MSG_DIR=$(mktemp -d)
+cat > "$COMMIT_MSG_DIR/COMMIT_MSG.md" << 'ENDOFMSG'
+Implement <milestone summary>
+
+Explain what changed and why in wrapped Markdown prose.
+ENDOFMSG
+git commit -F "$COMMIT_MSG_DIR/COMMIT_MSG.md"
+rm -rf "$COMMIT_MSG_DIR"
+```
+
+## Validation and acceptance
+
+The feature is accepted when all of the following are true:
+
+- `GET /health/live` returns HTTP `200` with the existing liveness payload.
+- `GET /health/ready` returns HTTP `200` when all configured observations are
+  healthy and HTTP `503` when any configured observation fails.
+- Health semantics are represented by a domain-owned port and adapted by the
+  Falcon HTTP layer without framework imports in domain modules.
+- The Docker image builds, runs as a non-root user, exposes port `8080`, starts
+  the Granian factory target, and passes its container health check.
+- `helm lint charts/episodic` succeeds.
+- `helm template episodic charts/episodic --values charts/episodic/values.local.yaml`
+  renders Deployment, Service, ConfigMap, optional Ingress, optional
+  ExternalSecret, and probe configuration matching the documented values.
+- `make local-k8s-up` can create or reuse a local `k3d` cluster and deploy the
+  chart, or skips with a clear documented reason when required CLIs are absent
+  in the test environment.
+- The local preview success banner includes the preview URL, health URL, status
+  command, logs command, and teardown command.
+- Unit tests cover the health port, health aggregation, Falcon adapter
+  behaviour, local preview validation helpers, and command construction.
+- Behavioural tests cover the live Granian health contract and the local
+  preview CLI surface. Any behavioural test that invokes inference uses Vidai
+  Mock.
+- Snapshot tests cover rendered output where the exact manifest or CLI output
+  shape is part of the contract.
+- Property tests or CrossHair checks cover any newly introduced input
+  invariants that range over names, ports, secret mappings, or health
+  observations.
+- `make check-fmt`, `make typecheck`, `make lint`, and `make test` all
+  succeed.
+- Documentation and ADR updates describe the user-visible behaviour,
+  maintainer-facing practices, and durable design decisions.
+- `coderabbit review --agent` has no unresolved concerns for the completed
+  milestone.
+
+## Idempotence and recovery
+
+The local-k8s commands must be safe to repeat. `local-k8s-up` should reuse an
+existing cluster when its ingress port matches the requested configuration, and
+it should fail clearly when the requested port conflicts with the existing
+cluster. `local-k8s-down` should return success when the target cluster is
+already absent. `local-k8s-status` and `local-k8s-logs` should report a missing
+cluster or namespace without mutating unrelated resources.
+
+The preview tooling must operate only on the configured cluster name,
+namespace, Helm release, and image tag. It must not delete unnamed clusters,
+prune Docker globally, or modify unrelated Kubernetes namespaces.
+
+If Helm install fails after creating a cluster, rerun `make local-k8s-status`
+and inspect `/tmp/local-k8s-up-episodic-nile-valley-integration.out`. Fix the
+chart or runtime issue, then rerun `make local-k8s-up`. Use
+`make local-k8s-down` only to remove the configured local preview cluster.
+
+If a quality gate fails after formatting or docs changes, update this ExecPlan
+with the failure and remediation before continuing. If a tolerance threshold is
+hit, stop implementation and ask for direction.
+
+## Artifacts and notes
+
+Primary project files to inspect before implementation:
+
+- `episodic/api/app.py`
+- `episodic/api/runtime.py`
+- `episodic/api/dependencies.py`
+- `episodic/api/resources/health.py`
+- `episodic/architecture/policy.py`
+- `tests/test_health_endpoints.py`
+- `tests/test_env_runtime_wiring.py`
+- `tests/test_http_service_scaffold.py`
+- `tests/steps/test_http_service_scaffold_steps.py`
+- `Makefile`
+- `pyproject.toml`
+- `docs/adr/adr-002-http-service-composition-root.md`
+- `docs/adr/adr-014-hexagonal-architecture-enforcement.md`
+
+Prior-art files reviewed during planning:
+
+- Corbusier `Dockerfile`
+- Corbusier `charts/corbusier/values.yaml`
+- Corbusier `charts/corbusier/templates/deployment.yaml`
+- Corbusier `charts/corbusier/templates/externalsecret.yaml`
+- Corbusier `scripts/local_k8s.py`
+- Corbusier `scripts/local_k8s/orchestration.py`
+- Corbusier `scripts/local_k8s/deployment.py`
+- Corbusier `scripts/local_k8s/validation.py`
+- Ghillie `Dockerfile`
+
+Firecrawl sources used during planning:
+
+- <https://github.com/leynos/nile-valley>
+- <https://raw.githubusercontent.com/leynos/nile-valley/main/deploy/charts/example-app/values.yaml>
+- <https://k3d.io/stable/usage/commands/k3d_cluster_create/>
+- <https://helm.sh/docs/topics/charts/>
+- <https://cyclopts.readthedocs.io/en/latest/>
+
+## Interfaces and dependencies
+
+The health domain port should be small and transport-free. The exact names may
+be adjusted during implementation, but the final public shape should be close
+to:
+
+```python
+import collections.abc as cabc
+import dataclasses as dc
+import enum
+
+
+class HealthStatus(enum.StrEnum):
+    OK = "ok"
+    ERROR = "error"
+
+
+@dc.dataclass(frozen=True, slots=True)
+class HealthCheck:
+    name: str
+    status: HealthStatus
+
+
+class HealthObserver(cabc.Protocol):
+    async def observe(self) -> tuple[HealthCheck, ...]:
+        """Return current health checks without transport-specific metadata."""
+```
+
+The Falcon adapter should remain responsible for mapping this transport-free
+state to the existing JSON contract:
+
+```json
+{
+  "status": "ok",
+  "checks": [
+    {
+      "name": "database",
+      "status": "ok"
+    }
+  ]
+}
+```
+
+The Docker runtime command should be equivalent to:
+
+```bash
+granian episodic.api.runtime:create_app_from_env \
+  --interface asgi \
+  --factory \
+  --host 0.0.0.0 \
+  --port 8080
+```
+
+The Helm chart should expose these value groups:
+
+```yaml
+image: {}
+service: {}
+ingress: {}
+config: {}
+existingSecretName: ""
+allowMissingSecret: true
+secretEnvFromKeys: {}
+externalSecret:
+  enabled: false
+container:
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: http
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: http
+```
+
+The local preview CLI should expose these commands:
+
+```bash
+uv run scripts/local_k8s.py up
+uv run scripts/local_k8s.py down
+uv run scripts/local_k8s.py status
+uv run scripts/local_k8s.py logs
+```
+
+The Python dependency plan is:
+
+- Add `cyclopts` for local preview command parsing.
+- Reuse the standard library and small internal helpers for subprocess
+  validation where possible.
+- Do not add Kubernetes Python client dependencies unless shelling out to
+  `kubectl`, `helm`, and `k3d` proves insufficient.
+
+## Revision note
+
+Initial draft created from local Episodic inspection, Wyvern agent findings,
+Corbusier and Ghillie prior art, and Firecrawl-verified Nile Valley, Helm,
+`k3d`, and Cyclopts documentation. The remaining work is approval, followed by
+milestone-by-milestone implementation with this plan kept current.
