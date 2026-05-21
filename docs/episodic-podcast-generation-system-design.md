@@ -417,13 +417,13 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 
 #### Speech synthesis contracts
 
-The speech synthesis boundary separates authorial data from provider
-parameters. `TTSPort` remains the single-speaker segment renderer used for
-ordinary narration and partial regeneration. `DialogueSpeechPort` is a separate
-optional port for providers that render multiple speaker turns as one
-conversation-aware artefact. This split preserves editability for per-segment
-stems whilst allowing providers such as Inworld Realtime or ElevenLabs
-text-to-dialogue to use conversational context when the series profile opts in.
+The speech synthesis boundary separates authorial data from provider parameters.
+ `TTSPort` remains the single-speaker segment renderer used for ordinary
+narration and partial regeneration. `DialogueSpeechPort` is a separate optional
+port for providers that render multiple speaker turns as one conversation-aware
+artefact. This split preserves editability for per-segment stems whilst
+allowing providers such as Inworld Realtime or ElevenLabs text-to-dialogue to
+use conversational context when the series profile opts in.
 
 Every speech request is derived from canonical TEI P5:
 
@@ -491,11 +491,11 @@ per-segment stems for workflows that require surgical partial regeneration.
   provider calls so renders remain correlated end to end, with spans around
   pronunciation lookup and provider dispatch.
 - Classify failures as transport, provider, capability, pronunciation
-  resolution, validation, or post-render so dashboards and alerts remain
-  stable across vendors.
+  resolution, validation, or post-render so dashboards and alerts remain stable
+  across vendors.
 - Alert on synthesis failures and capability mismatches using aggregate
-  metrics: page when the failure rate exceeds 5 percent over 15 minutes or
-  five consecutive renders fail, warn when repeated unsupported-capability
+  metrics: page when the failure rate exceeds 5 percent over 15 minutes or five
+  consecutive renders fail, warn when repeated unsupported-capability
   diagnostics reach three in 30 minutes, and page when an approved
   pronunciation cannot be resolved.
 
@@ -549,10 +549,10 @@ erDiagram
   SPEECH_RENDER_REQUESTS ||--o{ SPEECH_RENDER_ARTIFACTS : produces
 ```
 
-_Caption: Speech synthesis entity relationships. Pronunciation entries have
-one or more realizations; voice personas and provider capabilities are selected
-for speech render requests; each speech render request produces one or more
-speech render artefacts._
+_Caption: Speech synthesis entity relationships. Pronunciation entries have one
+or more realizations; voice personas and provider capabilities are selected for
+speech render requests; each speech render request produces one or more speech
+render artefacts._
 
 #### Pronunciation repository
 
@@ -635,6 +635,12 @@ an accepted design change.
 - The canonical REST adapter exposes `/health/live` and `/health/ready` so
   deployment platforms can distinguish process liveness from infrastructure
   readiness.
+- Health observations are represented in `episodic.canonical.health`, keeping
+  probe status independent of the Falcon adapter. The HTTP adapter maps the
+  domain health report to the stable JSON payload and status code contract.
+- Nile Valley preview and GitOps deployment use the chart under
+  `charts/episodic`, the non-root Docker image, and the local `k3d`
+  orchestration described in `docs/local-k3d-preview-design.md`.
 - CLI client provides ergonomics for ingest, generate, QA review, and approval
   commands.
 - Web console surfaces dashboards, approval queues, and configuration editors.
@@ -874,10 +880,10 @@ ports, including optional
  adapters that expose tool catalogues. Skill-based tool loading narrows the
 available tool set per workflow, reducing context size and guiding model choice.
 
-Roadmap item `2.4.1` now ships the first narrow implementation of that design
-in `episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort`
-once to obtain strict JSON, parses it into a typed `ExecutionPlan`, and records
-the planning model separately from the execution model selected in
+Roadmap item `2.4.1` now ships the first narrow implementation of that design in
+ `episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort` once
+to obtain strict JSON, parses it into a typed `ExecutionPlan`, and records the
+planning model separately from the execution model selected in
 `GenerationOrchestrationConfig`. `StructuredPlanningOrchestrator` then executes
 the resulting actions through `ToolExecutorPort`, with `ShowNotesToolExecutor`
 and `GuestBiosToolExecutor` serving as the first concrete enrichment tool
@@ -1455,8 +1461,8 @@ Agentic workflow behaviour is configurable per series profile:
 - `reference_document_revisions` stores immutable content versions for each
   reusable reference document, including hashes and author metadata.
 - `reference_document_bindings` links pinned reference revisions to a target
-  context (series profile, episode template, or ingestion run), with an
-  optional `effective_from_episode_id` anchor for forward-only applicability.
+  context (series profile, episode template, or ingestion run), with an optional
+   `effective_from_episode_id` anchor for forward-only applicability.
 - `uploads` records file upload metadata, content hashes, content type, size
   limits, storage location, and idempotency keys before uploaded material is
   attached to ingestion jobs.
@@ -1541,9 +1547,9 @@ hosts may skip episodes and guests may appear across multiple episodes. When
 profile guidance changes mid-series, editors will add a new revision and will
 create a binding with `effective_from_episode_id`; that revision will apply
 from the anchor episode onwards until superseded. Ingestion workflows will
-resolve these bindings and will snapshot selected revisions into
-ingestion-bound `source_documents`, preserving reproducible TEI provenance
-while allowing independent document reuse across jobs.
+resolve these bindings and will snapshot selected revisions into ingestion-bound
+ `source_documents`, preserving reproducible TEI provenance while allowing
+independent document reuse across jobs.
 
 TEI header payloads include an `episodic_provenance` extension with
 `source_priorities`, `ingestion_timestamp`, `reviewer_identities`, and a
@@ -1764,15 +1770,14 @@ and all criteria below are met:
 The canonical persistence layer follows the hexagonal architecture by defining
 Protocol-based port interfaces in `episodic/canonical/ports.py` and
 implementing them as async SQLAlchemy adapters in
-`episodic/canonical/storage/`. Twelve repository protocols
-(`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
-`IngestionJobRepository`, `SourceDocumentRepository`,
-`ApprovalEventRepository`, `EpisodeTemplateRepository`,
-`SeriesProfileHistoryRepository`, `EpisodeTemplateHistoryRepository`,
-`ReferenceDocumentRepository`, `ReferenceDocumentRevisionRepository`, and
-`ReferenceBindingRepository`) define the persistence contract, and
-`CanonicalUnitOfWork` aggregates them behind a transactional boundary with
-`commit()`, `flush()`, and `rollback()` methods.
+`episodic/canonical/storage/`. Twelve repository protocols (
+`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
+`IngestionJobRepository`, `SourceDocumentRepository`, `ApprovalEventRepository`,
+ `EpisodeTemplateRepository`, `SeriesProfileHistoryRepository`,
+`EpisodeTemplateHistoryRepository`, `ReferenceDocumentRepository`,
+`ReferenceDocumentRevisionRepository`, and `ReferenceBindingRepository`) define
+the persistence contract, and `CanonicalUnitOfWork` aggregates them behind a
+transactional boundary with `commit()`, `flush()`, and `rollback()` methods.
 
 The `SqlAlchemyUnitOfWork` adapter creates a fresh `AsyncSession` on entry,
 instantiates all repositories bound to that session, and rolls back
@@ -1884,8 +1889,8 @@ exercise the same semantics from a scenario-driven perspective.
 
 ### Multi-source ingestion service implementation
 
-The multi-source ingestion service composes a higher-level orchestrator
-(`ingest_multi_source`) around the existing `ingest_sources` persistence
+The multi-source ingestion service composes a higher-level orchestrator (
+`ingest_multi_source`) around the existing `ingest_sources` persistence
 function. Three Protocol-based port interfaces define the pipeline extension
 points:
 
@@ -2227,9 +2232,9 @@ Schema drift detection runs in Continuous Integration (CI) via
 `make check-migrations`. The check starts an ephemeral PostgreSQL instance
 using py-pglite, applies all Alembic migrations to it, and then calls
 `alembic.autogenerate.compare_metadata()` to compare the migrated database
-state against the current Object-Relational Mapping (ORM) model metadata
-(`Base.metadata`). If the comparison finds differences, the check exits
-non-zero and the pull request is blocked. This approach was chosen over the
+state against the current Object-Relational Mapping (ORM) model metadata (
+`Base.metadata`). If the comparison finds differences, the check exits non-zero
+and the pull request is blocked. This approach was chosen over the
 `alembic check` Command-Line Interface (CLI) because it reuses the existing
 py-pglite test infrastructure, is fully testable in isolation, and gives
 explicit control over false-positive filtering.

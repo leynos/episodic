@@ -1,13 +1,12 @@
 # Integrate Episodic with Nile Valley previews
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+ `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS. The user explicitly approved implementation on
-2026-05-21 after reviewing the draft plan and asked Codex to proceed while
-keeping this ExecPlan current.
+Status: IN PROGRESS. The user explicitly approved implementation on 2026-05-21
+after reviewing the draft plan and asked Codex to proceed while keeping this
+ExecPlan current.
 
 ## Purpose and big picture
 
@@ -54,9 +53,9 @@ repository quality gates pass.
 - Build the container as a multi-stage image and run it as a non-root user with
   stable liveness and readiness checks.
 - Align the Helm chart with Nile Valley values conventions:
-  `existingSecretName`,
-  `secretEnvFromKeys`, `allowMissingSecret`, optional `externalSecret`,
-  optional ingress, configurable non-secret `config`, and health probe values.
+  `existingSecretName`, `secretEnvFromKeys`, `allowMissingSecret`, optional
+  `externalSecret`, optional ingress, configurable non-secret `config`, and
+  health probe values.
 - Provide local `k3d` orchestration through Python code using Cyclopts and
   Makefile targets named `local-k8s-up`, `local-k8s-down`, `local-k8s-status`,
   and `local-k8s-logs`.
@@ -205,6 +204,11 @@ repository quality gates pass.
 - [x] (2026-05-21T17:15:00Z) Completed Stage 5 local preview tooling
   validation after full code gates, full tests, Markdown gates, and a clean
   CodeRabbit review.
+- [x] (2026-05-21T17:25:00Z) Started Stage 6 documentation updates for the
+  local `k3d` design, user-facing container and Helm behaviour, maintainer
+  conventions, and architecture design notes.
+- [x] (2026-05-21T18:27:00Z) Completed Stage 6 documentation validation after
+  Markdown linting, Mermaid validation, and a clean CodeRabbit review.
 
 ## Surprises & discoveries
 
@@ -261,8 +265,8 @@ repository quality gates pass.
   are ready for full milestone gates.
 
 - Observation: the first full Stage 1 `make test` run reported three
-  py-pglite fixture setup timeouts and one migration BDD timeout, while all
-  new health tests passed. Evidence:
+  py-pglite fixture setup timeouts and one migration BDD timeout, while all new
+  health tests passed. Evidence:
   `/tmp/test-stage1-episodic-nile-valley-integration.out`. Impact: reran the
   failing tests directly; three passed immediately and the migration BDD test
   passed on a second isolated run. A full `make test` rerun then passed with
@@ -275,8 +279,8 @@ repository quality gates pass.
   `/tmp/typecheck-stage1-rerun3-episodic-nile-valley-integration.out`,
   `/tmp/lint-stage1-rerun-episodic-nile-valley-integration.out`,
   `/tmp/markdownlint-stage1-episodic-nile-valley-integration.out`, and
-  `/tmp/nixie-stage1-episodic-nile-valley-integration.out`. Impact: Stage 1
-  is ready for CodeRabbit review and commit.
+  `/tmp/nixie-stage1-episodic-nile-valley-integration.out`. Impact: Stage 1 is
+  ready for CodeRabbit review and commit.
 
 - Observation: CodeRabbit returned two trivial Stage 1 findings: expand the
   `episodic.canonical.health` module docstring and broaden
@@ -317,9 +321,9 @@ repository quality gates pass.
   `/tmp/check-fmt-stage1-commit3-episodic-nile-valley-integration.out`,
   `/tmp/typecheck-stage1-commit3-episodic-nile-valley-integration.out`,
   `/tmp/lint-stage1-commit3-episodic-nile-valley-integration.out`, and
-  `/tmp/test-stage1-commit-episodic-nile-valley-integration.out`, which
-  reported `670 passed, 3 skipped`. Impact: Stage 1 is ready for final
-  Markdown gates, CodeRabbit review, and commit.
+  `/tmp/test-stage1-commit-episodic-nile-valley-integration.out`, which reported
+   `670 passed, 3 skipped`. Impact: Stage 1 is ready for final Markdown gates,
+  CodeRabbit review, and commit.
 
 - Observation: final Stage 1 Markdown gates and CodeRabbit review passed after
   the last ExecPlan update. Evidence:
@@ -345,8 +349,8 @@ repository quality gates pass.
   `671 passed, 3 skipped`,
   `/tmp/markdownlint-stage2-episodic-nile-valley-integration.out`,
   `/tmp/nixie-stage2-episodic-nile-valley-integration.out`, and
-  `/tmp/coderabbit-stage2-episodic-nile-valley-integration.out`, which
-  reported `findings: 0`. Impact: Stage 2 is ready to commit.
+  `/tmp/coderabbit-stage2-episodic-nile-valley-integration.out`, which reported
+  `findings: 0`. Impact: Stage 2 is ready to commit.
 
 - Observation: the first Stage 3 formatting gate failed because
   `tests/test_container_image_contract.py` needed Ruff formatting. Evidence:
@@ -364,12 +368,12 @@ repository quality gates pass.
 - Observation: Docker was not available or not reachable in this execution
   environment. Evidence: `command -v docker >/dev/null 2>&1 && docker version`
   produced no output, and the opt-in smoke test skipped in
-  `/tmp/container-stage3-focused-episodic-nile-valley-integration.out`.
-  Impact: validated the image contract by parsing `Dockerfile`, checking the
-  runtime constants, and running `uv build --wheel --out-dir
-  /tmp/episodic-stage3-dist` successfully in
-  `/tmp/uv-build-stage3-episodic-nile-valley-integration.out`; the live Docker
-  smoke can be exercised later with `EPISODIC_RUN_DOCKER_TESTS=1`.
+  `/tmp/container-stage3-focused-episodic-nile-valley-integration.out`. Impact:
+  validated the image contract by parsing `Dockerfile`, checking the runtime
+  constants, and running `uv build --wheel --out-dir /tmp/episodic-stage3-dist`
+  successfully in `/tmp/uv-build-stage3-episodic-nile-valley-integration.out`;
+  the live Docker smoke can be exercised later with
+  `EPISODIC_RUN_DOCKER_TESTS=1`.
 
 - Observation: Stage 3 full validation passed after formatting and lint
   cleanup. Evidence:
@@ -380,16 +384,16 @@ repository quality gates pass.
   `675 passed, 4 skipped`,
   `/tmp/markdownlint-stage3-episodic-nile-valley-integration.out`,
   `/tmp/nixie-stage3-episodic-nile-valley-integration.out`, and
-  `/tmp/coderabbit-stage3-episodic-nile-valley-integration.out`, which
-  reported `findings: 0`. Impact: Stage 3 is ready to commit.
+  `/tmp/coderabbit-stage3-episodic-nile-valley-integration.out`, which reported
+  `findings: 0`. Impact: Stage 3 is ready to commit.
 
 - Observation: the initial Stage 4 chart lint and render checks passed, and the
   focused Helm chart tests generated one syrupy snapshot. Evidence:
   `/tmp/helm-lint-stage4-initial-episodic-nile-valley-integration.out`,
   `/tmp/helm-template-stage4-initial-episodic-nile-valley-integration.out`,
   `/tmp/helm-stage4-tests-update-episodic-nile-valley-integration.out`, and
-  `/tmp/helm-stage4-tests-episodic-nile-valley-integration.out`. Impact:
-  chart structure and local manifest snapshot are ready for full gates.
+  `/tmp/helm-stage4-tests-episodic-nile-valley-integration.out`. Impact: chart
+  structure and local manifest snapshot are ready for full gates.
 
 - Observation: the first Stage 4 formatting gate failed because
   `tests/test_helm_chart_contract.py` needed Ruff formatting. Evidence:
@@ -399,8 +403,8 @@ repository quality gates pass.
 - Observation: the first Stage 4 lint gate failed because the Helm snapshot
   test imported `SnapshotAssertion` at runtime and had one long assertion
   message. Evidence: `/tmp/lint-stage4-episodic-nile-valley-integration.out`.
-  Impact: moved the snapshot assertion import under `TYPE_CHECKING` and
-  wrapped the Helm failure message before rerunning gates.
+  Impact: moved the snapshot assertion import under `TYPE_CHECKING` and wrapped
+  the Helm failure message before rerunning gates.
 
 - Observation: the Stage 4 lint rerun then caught a Python 3.14 lazy
   annotation cleanup where the `SnapshotAssertion` annotation no longer needed
@@ -422,15 +426,15 @@ repository quality gates pass.
   polish concerns: standardise `secretEnvFromKeys`, document secret-name
   resolution priority, add a pod version label, fail clearly for enabled PDBs
   without a constraint, and tighten ingress schema validation. Evidence:
-  `/tmp/coderabbit-stage4-rerun-episodic-nile-valley-integration.out`.
-  Impact: implemented all five before the final Stage 4 validation pass.
+  `/tmp/coderabbit-stage4-rerun-episodic-nile-valley-integration.out`. Impact:
+  implemented all five before the final Stage 4 validation pass.
 
 - Observation: the final Stage 4 CodeRabbit pass still found four small
   validation concerns: demonstrate `allowMissingSecret` fallback in default
   `secretEnvFromKeys`, require root schema keys, parse `helm lint` JSON in
   tests, and enforce PDB mutual exclusivity. Evidence:
-  `/tmp/coderabbit-stage4-final-episodic-nile-valley-integration.out`.
-  Impact: applied all four changes before rerunning focused Helm tests.
+  `/tmp/coderabbit-stage4-final-episodic-nile-valley-integration.out`. Impact:
+  applied all four changes before rerunning focused Helm tests.
 
 - Observation: Helm 4.0.4 does not support `helm lint --output json`, so the
   CodeRabbit suggestion to parse machine-readable lint output is not valid for
@@ -449,25 +453,25 @@ repository quality gates pass.
 - Observation: the second Stage 4 precommit CodeRabbit pass found only a Helm
   subprocess comment clarity issue and missing optional Kubernetes probe fields
   in the values schema. Evidence:
-  `/tmp/coderabbit-stage4-final2-episodic-nile-valley-integration.out`.
-  Impact: clarified the narrow `subprocess.run` suppression and expanded the
-  probe schema for HTTP headers, TCP host, gRPC probes, and probe-level
-  termination grace period.
+  `/tmp/coderabbit-stage4-final2-episodic-nile-valley-integration.out`. Impact:
+  clarified the narrow `subprocess.run` suppression and expanded the probe
+  schema for HTTP headers, TCP host, gRPC probes, and probe-level termination
+  grace period.
 
 - Observation: the next Stage 4 CodeRabbit pass found four more small chart
   polish requests: conditionally render optional probe/resource blocks, clarify
   README wording, avoid contradictory PDB defaults, and make the probe schema
   strict at the top level. Evidence:
-  `/tmp/coderabbit-stage4-final3-episodic-nile-valley-integration.out`.
-  Impact: applied all four changes before rerunning Helm chart validation.
+  `/tmp/coderabbit-stage4-final3-episodic-nile-valley-integration.out`. Impact:
+  applied all four changes before rerunning Helm chart validation.
 
 - Observation: the following Stage 4 CodeRabbit pass found only documentation
   and schema consistency issues: clarify the secret-name helper comment, wrap
   the chart README, and make probe handler schemas strict in the same way as
   the top-level probe schema. Evidence:
-  `/tmp/coderabbit-stage4-final4-episodic-nile-valley-integration.out`.
-  Impact: applied those fixes and reran the focused Helm chart tests, which
-  passed with `4 passed` and one accepted snapshot in
+  `/tmp/coderabbit-stage4-final4-episodic-nile-valley-integration.out`. Impact:
+  applied those fixes and reran the focused Helm chart tests, which passed with
+  `4 passed` and one accepted snapshot in
   `/tmp/helm-stage4-tests-final4-rerun-episodic-nile-valley-integration.out`.
 
 - Observation: the next Stage 4 CodeRabbit pass found three minor chart
@@ -475,16 +479,16 @@ repository quality gates pass.
   default `DATABASE_URL` secret key explicitly required even though
   `allowMissingSecret` remains available as a fallback for entries that omit
   `optional`. Evidence:
-  `/tmp/coderabbit-stage4-final5-episodic-nile-valley-integration.out`.
-  Impact: wrapped the README, set `secretEnvFromKeys.DATABASE_URL.optional` to
-  `false`, and reran the focused Helm chart tests with snapshot update in
+  `/tmp/coderabbit-stage4-final5-episodic-nile-valley-integration.out`. Impact:
+  wrapped the README, set `secretEnvFromKeys.DATABASE_URL.optional` to `false`,
+  and reran the focused Helm chart tests with snapshot update in
   `/tmp/helm-stage4-tests-final5-update-episodic-nile-valley-integration.out`.
 
 - Observation: the final Stage 4 CodeRabbit rerun found that the values schema
   did not yet cover every value group consumed by chart templates, and asked
   either for mandatory probes or fallback probe rendering. Evidence:
-  `/tmp/coderabbit-stage4-final6-episodic-nile-valley-integration.out`.
-  Impact: extended `values.schema.json` for service accounts, pod labels and
+  `/tmp/coderabbit-stage4-final6-episodic-nile-valley-integration.out`. Impact:
+  extended `values.schema.json` for service accounts, pod labels and
   annotations, security contexts, service, resources, PDBs, scheduling values,
   name overrides, and image pull secrets; made container liveness and readiness
   probes mandatory in schema; then reran focused Helm tests in
@@ -494,20 +498,20 @@ repository quality gates pass.
   bug: `default` treats explicit `false` as empty, so
   `secretEnvFromKeys.*.optional: false` could be overridden by
   `allowMissingSecret: true`. Evidence:
-  `/tmp/coderabbit-stage4-final7-episodic-nile-valley-integration.out`.
-  Impact: replaced the `default` call with a `hasKey` conditional and added a
-  focused Helm test proving an explicit required secret remains
-  `optional: false` when the fallback allows missing secrets; the focused chart
-  test suite passed with `5 passed` in
+  `/tmp/coderabbit-stage4-final7-episodic-nile-valley-integration.out`. Impact:
+  replaced the `default` call with a `hasKey` conditional and added a focused
+  Helm test proving an explicit required secret remains `optional: false` when
+  the fallback allows missing secrets; the focused chart test suite passed with
+  `5 passed` in
   `/tmp/helm-stage4-tests-final7-rerun-episodic-nile-valley-integration.out`.
 
 - Observation: the following Stage 4 CodeRabbit rerun found only readability
   cleanup in the deployment template: use pipe-form `default` for image tag
   fallback and remove unnecessary whitespace-control markers from the optional
   secret conditional. Evidence:
-  `/tmp/coderabbit-stage4-final8-episodic-nile-valley-integration.out`.
-  Impact: applied both template cleanups and reran focused Helm chart tests
-  with `5 passed` in
+  `/tmp/coderabbit-stage4-final8-episodic-nile-valley-integration.out`. Impact:
+  applied both template cleanups and reran focused Helm chart tests with
+  `5 passed` in
   `/tmp/helm-stage4-tests-final8-rerun-episodic-nile-valley-integration.out`.
 
 - Observation: Stage 4 final validation passed after the last Helm template
@@ -517,8 +521,8 @@ repository quality gates pass.
   `/tmp/lint-stage4-final9-episodic-nile-valley-integration.out`,
   `/tmp/markdownlint-stage4-final9-episodic-nile-valley-integration.out`,
   `/tmp/nixie-stage4-final9-episodic-nile-valley-integration.out`,
-  `/tmp/test-stage4-final9-episodic-nile-valley-integration.out`, which
-  reported `680 passed, 4 skipped`, and
+  `/tmp/test-stage4-final9-episodic-nile-valley-integration.out`, which reported
+   `680 passed, 4 skipped`, and
   `/tmp/coderabbit-stage4-final9-episodic-nile-valley-integration.out`, which
   reported `findings: 0`. Impact: Stage 4 is ready to commit.
 
@@ -547,10 +551,20 @@ repository quality gates pass.
   `/tmp/lint-stage5-final-episodic-nile-valley-integration.out`,
   `/tmp/markdownlint-stage5-final-episodic-nile-valley-integration.out`,
   `/tmp/nixie-stage5-final-episodic-nile-valley-integration.out`,
-  `/tmp/test-stage5-final-episodic-nile-valley-integration.out`, which
-  reported `685 passed, 4 skipped`, and
+  `/tmp/test-stage5-final-episodic-nile-valley-integration.out`, which reported
+  `685 passed, 4 skipped`, and
   `/tmp/coderabbit-stage5-final-episodic-nile-valley-integration.out`, which
   reported `findings: 0`. Impact: Stage 5 is ready to commit.
+
+- Observation: Stage 6 documentation now includes
+  `docs/local-k3d-preview-design.md`, user-guide deployment and local preview
+  commands, developer-guide container/Helm/local-k8s conventions, and a system
+  design note tying the health port to the Falcon adapter and Nile Valley
+  deployment surface. Evidence:
+  `/tmp/markdownlint-stage6-docs-episodic-nile-valley-integration.out`,
+  `/tmp/nixie-stage6-docs-episodic-nile-valley-integration.out`, and
+  `/tmp/coderabbit-stage6-docs-episodic-nile-valley-integration.out`, which
+  reported `findings: 0`. Impact: Stage 6 is ready to commit.
 
 ## Decision log
 
@@ -588,8 +602,8 @@ repository quality gates pass.
   container HTTP bind port as constants in the runtime composition root.
   Rationale: later Dockerfile, Helm, and local preview code need to use the
   Wildside HTTP runtime entrypoint consistently, and centralising these values
-  avoids string drift while keeping the runtime path unchanged.
-  Date/Author: 2026-05-21 / Codex.
+  avoids string drift while keeping the runtime path unchanged. Date/Author:
+  2026-05-21 / Codex.
 
 - Decision: make the live Docker image smoke test opt-in with
   `EPISODIC_RUN_DOCKER_TESTS=1`. Rationale: the repository gates should remain
@@ -639,9 +653,9 @@ non-root runtime stage.
 
 ## Plan of work
 
-Stage 0 is complete. The user explicitly approved implementation on
-2026-05-21. Production files, chart files, Docker files, Makefile targets, and
-user-facing guides may now change within the tolerances above.
+Stage 0 is complete. The user explicitly approved implementation on 2026-05-21.
+Production files, chart files, Docker files, Makefile targets, and user-facing
+guides may now change within the tolerances above.
 
 Stage 1 introduces the health observation port. Add fail-first unit tests for a
 domain health observation type and aggregation behaviour. Implement a small
