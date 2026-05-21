@@ -1,12 +1,11 @@
 """Falcon resources for liveness and readiness endpoints."""
 
-import asyncio
 import typing as typ
 
 import falcon
 
 if typ.TYPE_CHECKING:
-    from episodic.api.dependencies import ReadinessProbe
+    from episodic.canonical.health import HealthObserver
 
 type HealthCheckPayload = dict[str, str]
 
@@ -17,14 +16,6 @@ def _build_check_payload(name: str, status: str) -> HealthCheckPayload:
         "name": name,
         "status": status,
     }
-
-
-async def _check_probe(probe: ReadinessProbe) -> bool:
-    """Treat unexpected probe exceptions as a failed readiness check."""
-    try:
-        return await probe.check()
-    except Exception:  # noqa: BLE001 - readiness failures should degrade to 503
-        return False
 
 
 class HealthLiveResource:
@@ -44,27 +35,24 @@ class HealthLiveResource:
 
 
 class HealthReadyResource:
-    """Serve a readiness response based on injected infrastructural probes."""
+    """Serve a readiness response based on a domain health observer."""
 
-    def __init__(self, readiness_probes: tuple[ReadinessProbe, ...]) -> None:
-        self._readiness_probes = readiness_probes
+    def __init__(self, health_observer: HealthObserver) -> None:
+        self._health_observer = health_observer
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Return readiness status for all configured probes."""
         del req
-        results = await asyncio.gather(
-            *(_check_probe(probe) for probe in self._readiness_probes)
-        )
+        report = await self._health_observer.observe()
         checks = [
             _build_check_payload(
-                probe.name,
-                "ok" if result else "error",
+                check.name,
+                check.status.value,
             )
-            for probe, result in zip(self._readiness_probes, results, strict=True)
+            for check in report.checks
         ]
-        is_ready = all(check["status"] == "ok" for check in checks)
         resp.media = {
-            "status": "ok" if is_ready else "error",
+            "status": report.status.value,
             "checks": checks,
         }
-        resp.status = falcon.HTTP_200 if is_ready else falcon.HTTP_503
+        resp.status = falcon.HTTP_200 if report.status == "ok" else falcon.HTTP_503
