@@ -199,6 +199,12 @@ repository quality gates pass.
 - [x] (2026-05-21T16:40:00Z) Completed Stage 4 Helm chart validation after
   focused chart tests, full code gates, full test suite, Markdown gates, and a
   clean CodeRabbit review.
+- [x] (2026-05-21T16:50:00Z) Started Stage 5 local `k3d` orchestration with a
+  Cyclopts CLI, Makefile targets, command-building helpers, prerequisite
+  validation, and focused helper tests.
+- [x] (2026-05-21T17:15:00Z) Completed Stage 5 local preview tooling
+  validation after full code gates, full tests, Markdown gates, and a clean
+  CodeRabbit review.
 
 ## Surprises & discoveries
 
@@ -515,6 +521,36 @@ repository quality gates pass.
   reported `680 passed, 4 skipped`, and
   `/tmp/coderabbit-stage4-final9-episodic-nile-valley-integration.out`, which
   reported `findings: 0`. Impact: Stage 4 is ready to commit.
+
+- Observation: the first Stage 5 focused implementation added
+  `scripts/local_k8s.py`, a `scripts/local_k8s/` helper package, Cyclopts in
+  the dev dependency group, and Makefile targets for `local-k8s-up`,
+  `local-k8s-down`, `local-k8s-status`, and `local-k8s-logs`. Evidence:
+  `/tmp/local-k8s-stage5-focused-rerun-episodic-nile-valley-integration.out`
+  reported `5 passed`, and
+  `/tmp/local-k8s-stage5-help-rerun-episodic-nile-valley-integration.out`
+  rendered the CLI command surface. Impact: Stage 5 is ready for broader code
+  gates and CodeRabbit review before commit.
+
+- Observation: the first Stage 5 CodeRabbit review found only clarity issues:
+  add assertion messages to local-k8s helper tests, document that the default
+  database URL uses local-preview credentials only, and explain the
+  `SO_REUSEADDR` port-probe trade-off. Evidence:
+  `/tmp/coderabbit-stage5-episodic-nile-valley-integration.out`. Impact:
+  applied all three suggestions and reran focused local-k8s tests with
+  `5 passed` in
+  `/tmp/local-k8s-stage5-coderabbit-rerun-episodic-nile-valley-integration.out`.
+
+- Observation: Stage 5 final validation passed after CodeRabbit cleanup.
+  Evidence: `/tmp/check-fmt-stage5-final-episodic-nile-valley-integration.out`,
+  `/tmp/typecheck-stage5-final-episodic-nile-valley-integration.out`,
+  `/tmp/lint-stage5-final-episodic-nile-valley-integration.out`,
+  `/tmp/markdownlint-stage5-final-episodic-nile-valley-integration.out`,
+  `/tmp/nixie-stage5-final-episodic-nile-valley-integration.out`,
+  `/tmp/test-stage5-final-episodic-nile-valley-integration.out`, which
+  reported `685 passed, 4 skipped`, and
+  `/tmp/coderabbit-stage5-final-episodic-nile-valley-integration.out`, which
+  reported `findings: 0`. Impact: Stage 5 is ready to commit.
 
 ## Decision log
 
