@@ -5,8 +5,9 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT. This plan requires explicit approval before implementation
-begins.
+Status: IN PROGRESS. The user explicitly approved implementation on
+2026-05-21 after reviewing the draft plan and asked Codex to proceed while
+keeping this ExecPlan current.
 
 ## Purpose and big picture
 
@@ -25,7 +26,9 @@ repository quality gates pass.
 
 ## Constraints
 
-- Do not implement this plan until it is explicitly approved.
+- Implementation is approved as of 2026-05-21. Continue milestone by
+  milestone, and stop only when a tolerance threshold is reached or a
+  constraint would be violated.
 - Preserve the hexagonal architecture invariants from the
   `hexagonal-architecture` skill. Domain modules must not import Falcon,
   Granian, Docker, Helm, Kubernetes, `k3d`, or other infrastructure concerns.
@@ -150,8 +153,30 @@ repository quality gates pass.
   chart contract and current upstream documentation for Helm, `k3d`, and
   Cyclopts.
 - [x] (2026-05-21T09:42:32Z) Drafted this approval-gated ExecPlan.
-- [ ] Obtain explicit approval before implementing any production, chart,
-  container, local-k8s, or user-facing documentation changes.
+- [x] (2026-05-21T10:38:00Z) Received explicit user approval to implement the
+  planned functionality.
+- [x] (2026-05-21T10:55:00Z) Implemented Stage 1: domain-owned health
+  observation port, readiness probe adapter preservation, and focused unit and
+  Falcon adapter tests.
+- [x] (2026-05-21T11:25:00Z) Ran Stage 1 validation gates: `make check-fmt`,
+  `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
+  `make nixie`.
+- [x] (2026-05-21T11:45:00Z) Ran Stage 1 CodeRabbit review, addressed both
+  findings, and reran focused health tests.
+- [x] (2026-05-21T12:05:00Z) Reran Stage 1 final gates after CodeRabbit fixes:
+  `make check-fmt`, `make typecheck`, `make lint`, and `make test`.
+- [x] (2026-05-21T12:10:00Z) Reran Stage 1 Markdown gates after ExecPlan
+  updates: `make markdownlint` and `make nixie`.
+- [x] (2026-05-21T12:25:00Z) Addressed the second Stage 1 CodeRabbit review
+  findings in `tests/test_health_observation.py`, including assertion context
+  and a lint-compatible cast for the non-async callable case.
+- [x] (2026-05-21T12:35:00Z) Reran Stage 1 commit gates after the second
+  CodeRabbit cleanup: `make check-fmt`, `make typecheck`, `make lint`, and
+  `make test`.
+- [x] (2026-05-21T12:45:00Z) Ran final Stage 1 Markdown gates and CodeRabbit
+  review before committing Stage 1; CodeRabbit reported zero findings.
+- [x] (2026-05-21T12:50:00Z) Prepared Stage 1 for commit after final
+  validation and CodeRabbit review.
 
 ## Surprises & discoveries
 
@@ -187,6 +212,94 @@ repository quality gates pass.
   Impact: use Ghillie for Python image mechanics and Corbusier for Kubernetes
   chart and local preview shape.
 
+- Observation: the first focused Stage 1 test run failed because
+  `episodic.canonical.health.HealthObserver` incorrectly inherited from
+  `collections.abc.Protocol`. Evidence:
+  `/tmp/health-stage1-episodic-nile-valley-integration.out`. Impact: corrected
+  the protocol base to `typing.Protocol`; no design change was needed.
+
+- Observation: the second focused Stage 1 test run exposed that awaiting inside
+  a generator expression produced an async generator instead of a tuple of
+  checks. Evidence:
+  `/tmp/health-stage1-rerun-episodic-nile-valley-integration.out`. Impact:
+  changed `ProbeHealthObserver.observe()` to build observations with an
+  explicit loop, which keeps sequential readiness semantics clear and avoids
+  hidden task scheduling.
+
+- Observation: the focused Stage 1 rerun passed after the protocol and async
+  aggregation fixes. Evidence:
+  `/tmp/health-stage1-rerun2-episodic-nile-valley-integration.out` reported
+  `13 passed`. Impact: the domain health port and Falcon adapter preservation
+  are ready for full milestone gates.
+
+- Observation: the first full Stage 1 `make test` run reported three
+  py-pglite fixture setup timeouts and one migration BDD timeout, while all
+  new health tests passed. Evidence:
+  `/tmp/test-stage1-episodic-nile-valley-integration.out`. Impact: reran the
+  failing tests directly; three passed immediately and the migration BDD test
+  passed on a second isolated run. A full `make test` rerun then passed with
+  `666 passed, 3 skipped` in
+  `/tmp/test-stage1-rerun-full-episodic-nile-valley-integration.out`.
+
+- Observation: Stage 1 non-test gates passed after formatting and type
+  narrowing fixes. Evidence:
+  `/tmp/check-fmt-stage1-rerun4-episodic-nile-valley-integration.out`,
+  `/tmp/typecheck-stage1-rerun3-episodic-nile-valley-integration.out`,
+  `/tmp/lint-stage1-rerun-episodic-nile-valley-integration.out`,
+  `/tmp/markdownlint-stage1-episodic-nile-valley-integration.out`, and
+  `/tmp/nixie-stage1-episodic-nile-valley-integration.out`. Impact: Stage 1
+  is ready for CodeRabbit review and commit.
+
+- Observation: CodeRabbit returned two trivial Stage 1 findings: expand the
+  `episodic.canonical.health` module docstring and broaden
+  `tests/test_health_observation.py` coverage for false returns, iterable
+  construction, non-async callables, and mixed aggregation. Evidence:
+  `/tmp/coderabbit-stage1-episodic-nile-valley-integration.out`. Impact:
+  implemented both requests; focused health tests then reported `17 passed` in
+  `/tmp/health-stage1-coderabbit-fixes-episodic-nile-valley-integration.out`.
+
+- Observation: the final Stage 1 code gates passed after the CodeRabbit fixes
+  and import-sort cleanup. Evidence:
+  `/tmp/check-fmt-stage1-final2-episodic-nile-valley-integration.out`,
+  `/tmp/typecheck-stage1-final2-episodic-nile-valley-integration.out`,
+  `/tmp/lint-stage1-final2-episodic-nile-valley-integration.out`, and
+  `/tmp/test-stage1-final-episodic-nile-valley-integration.out`, which reported
+  `670 passed, 3 skipped`. Impact: only final Markdown gates and a clean
+  CodeRabbit rerun remain before the Stage 1 commit.
+
+- Observation: the final Stage 1 Markdown gates passed after this ExecPlan was
+  updated with validation evidence. Evidence:
+  `/tmp/markdownlint-stage1-final2-episodic-nile-valley-integration.out` and
+  `/tmp/nixie-stage1-final2-episodic-nile-valley-integration.out`. Impact:
+  Stage 1 is ready for final CodeRabbit review and commit.
+
+- Observation: the final CodeRabbit pass found two remaining trivial test
+  concerns: bare assertions in `tests/test_health_observation.py` lacked
+  descriptive messages, and its suggested inline `typ.cast("Any", ...)`
+  conflicted with `ty` and Ruff when applied literally. Evidence:
+  `/tmp/coderabbit-stage1-final-episodic-nile-valley-integration.out`,
+  `/tmp/typecheck-stage1-commit-episodic-nile-valley-integration.out`, and
+  `/tmp/lint-stage1-commit2-episodic-nile-valley-integration.out`. Impact:
+  added assertion messages and used a local
+  `typ.cast("dict[str, typ.Any]", ...)` mapping to exercise runtime validation
+  while satisfying the repository's type and lint rules.
+
+- Observation: the Stage 1 commit gates passed after that final cleanup.
+  Evidence:
+  `/tmp/check-fmt-stage1-commit3-episodic-nile-valley-integration.out`,
+  `/tmp/typecheck-stage1-commit3-episodic-nile-valley-integration.out`,
+  `/tmp/lint-stage1-commit3-episodic-nile-valley-integration.out`, and
+  `/tmp/test-stage1-commit-episodic-nile-valley-integration.out`, which
+  reported `670 passed, 3 skipped`. Impact: Stage 1 is ready for final
+  Markdown gates, CodeRabbit review, and commit.
+
+- Observation: final Stage 1 Markdown gates and CodeRabbit review passed after
+  the last ExecPlan update. Evidence:
+  `/tmp/markdownlint-stage1-commit-episodic-nile-valley-integration.out`,
+  `/tmp/nixie-stage1-commit-episodic-nile-valley-integration.out`, and
+  `/tmp/coderabbit-stage1-commit-episodic-nile-valley-integration.out`, which
+  reported `findings: 0`. Impact: Stage 1 can be committed.
+
 ## Decision log
 
 - Decision: keep `/health/live` and `/health/ready` as the external health
@@ -211,6 +324,13 @@ repository quality gates pass.
   does not inherently call inference services. If implementation touches
   generation or `LLMPort` behaviour, behavioural tests must use Vidai Mock.
   Date/Author: 2026-05-21 / Codex.
+
+- Decision: start implementation with the health port milestone and preserve
+  the current `ReadinessProbe` construction API during the first change.
+  Rationale: existing runtime wiring and tests already depend on
+  `ReadinessProbe(name, check)`, so keeping that small API stable lets the
+  Falcon adapter move to a domain observer without expanding the public change
+  surface. Date/Author: 2026-05-21 / Codex.
 
 ## Outcomes and retrospective
 
@@ -254,9 +374,9 @@ non-root runtime stage.
 
 ## Plan of work
 
-Stage 0 is the approval gate. Review this document and revise it until it is
-approved. Do not edit production files, chart files, Docker files, Makefile
-targets, or user-facing guides before approval.
+Stage 0 is complete. The user explicitly approved implementation on
+2026-05-21. Production files, chart files, Docker files, Makefile targets, and
+user-facing guides may now change within the tolerances above.
 
 Stage 1 introduces the health observation port. Add fail-first unit tests for a
 domain health observation type and aggregation behaviour. Implement a small

@@ -13,6 +13,7 @@ import typing as typ
 from .authorization import AuthorizationPort, PermitAll
 
 if typ.TYPE_CHECKING:
+    from episodic.canonical.health import HealthObserver
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.llm import LLMPort
 
@@ -93,6 +94,7 @@ class ApiDependencies:
         "text/html",
     )
     readiness_probes: tuple[ReadinessProbe, ...] = ()
+    health_observer: HealthObserver | None = None
     shutdown_hooks: tuple[ShutdownHook, ...] = ()
     llm_port: LLMPort | None = None
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
@@ -107,8 +109,24 @@ class ApiDependencies:
         object.__setattr__(self, "shutdown_hooks", tuple(self.shutdown_hooks))
         for probe in self.readiness_probes:
             _validate_readiness_probe(probe)
+        if self.health_observer is not None and not hasattr(
+            self.health_observer,
+            "observe",
+        ):
+            msg = "ApiDependencies.health_observer must define observe()."
+            raise TypeError(msg)
         for shutdown_hook in self.shutdown_hooks:
             _validate_async_callable(
                 shutdown_hook,
                 "ApiDependencies.shutdown_hooks entries",
             )
+
+    def readiness_observer(self) -> HealthObserver:
+        """Return the domain health observer used by the readiness resource."""
+        from episodic.canonical.health import ProbeHealthObserver
+
+        if self.health_observer is not None:
+            return self.health_observer
+        return ProbeHealthObserver.from_checks(
+            (probe.name, probe.check) for probe in self.readiness_probes
+        )
