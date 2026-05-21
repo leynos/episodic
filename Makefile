@@ -19,7 +19,9 @@ PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_P
 PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie test typecheck crosshair check-migrations $(TOOLS) $(VENV_TOOLS)
+        markdownlint nixie test typecheck crosshair check-migrations \
+        local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
+        $(TOOLS) $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
 
@@ -101,6 +103,18 @@ test: build crosshair $(VENV_TOOLS) ## Run tests
 
 check-migrations: build $(VENV_TOOLS) ## Check for schema drift between models and migrations
 	$(UV_ENV) $(UV) run python -m episodic.canonical.storage.migration_check
+
+local-k8s-up: build ## Create or update the local k3d preview
+	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py up
+
+local-k8s-down: build ## Tear down the local k3d preview
+	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py down
+
+local-k8s-status: build ## Inspect the local k3d preview
+	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py status
+
+local-k8s-logs: build ## Show logs from the local k3d preview
+	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py logs
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
