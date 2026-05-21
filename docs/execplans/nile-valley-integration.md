@@ -1,12 +1,12 @@
 # Integrate Episodic with Nile Valley previews
 
 This ExecPlan (execution plan) is a living document. The sections `Constraints`,
- `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS. The user explicitly approved implementation on 2026-05-21
-after reviewing the draft plan and asked Codex to proceed while keeping this
-ExecPlan current.
+Status: COMPLETE. The user explicitly approved implementation on 2026-05-21.
+The health server, container image, Helm chart, local `k3d` workflow,
+documentation, tests, final validation, and CodeRabbit review are complete.
 
 ## Purpose and big picture
 
@@ -209,6 +209,9 @@ repository quality gates pass.
   conventions, and architecture design notes.
 - [x] (2026-05-21T18:27:00Z) Completed Stage 6 documentation validation after
   Markdown linting, Mermaid validation, and a clean CodeRabbit review.
+- [x] (2026-05-21T18:50:00Z) Completed final validation and CodeRabbit review
+  for the full branch. The final `make test` rerun reported `685 passed,
+  4 skipped`, and CodeRabbit reported `findings: 0`.
 
 ## Surprises & discoveries
 
@@ -623,9 +626,35 @@ repository quality gates pass.
 
 ## Outcomes and retrospective
 
-This section is intentionally empty while the plan is in draft. During
-implementation, record each milestone outcome, CodeRabbit review result, gate
-result, and any deviation from this plan.
+Episodic now has a production-oriented Nile Valley integration surface. The
+implemented branch adds a domain-owned health observation port, preserves the
+Falcon `/health/live` and `/health/ready` HTTP contract, makes the Granian
+factory runtime explicit, adds a non-root multi-stage container image, provides
+a Nile Valley-aligned Helm chart, and exposes a Cyclopts-driven local `k3d`
+preview workflow through Makefile targets.
+
+The work also adds focused tests for the health port, Falcon health adapter,
+runtime command contract, Dockerfile contract, Helm chart rendering and
+snapshot output, local `k3d` helper behaviour, and the guest-bio property-test
+stability discovery found during final validation. Documentation now covers the
+local preview design, user-facing deployment workflow, developer conventions,
+and system-design placement of the health port and deployment adapters.
+
+Final validation evidence:
+`/tmp/check-fmt-guest-bios-property3-episodic-nile-valley-integration.out`,
+`/tmp/typecheck-guest-bios-property-episodic-nile-valley-integration.out`,
+`/tmp/lint-guest-bios-property-episodic-nile-valley-integration.out`,
+`/tmp/markdownlint-guest-bios-property-episodic-nile-valley-integration.out`,
+`/tmp/test-final-rerun-episodic-nile-valley-integration.out`, and
+`/tmp/coderabbit-final-episodic-nile-valley-integration.out`. The final test
+run reported `685 passed, 4 skipped`; the final CodeRabbit review reported
+`findings: 0`.
+
+The only runtime validation gap is environmental: this host did not expose a
+Docker daemon, so the live container smoke test remains opt-in through
+`EPISODIC_RUN_DOCKER_TESTS=1`. The repository still validates the image
+contract structurally and documents the live smoke-test path for hosts with
+Docker access.
 
 ## Context and orientation
 
