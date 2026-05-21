@@ -1028,17 +1028,16 @@ def configure_logging(
     level: str | None,
     *,
     force: bool = False,
-) -> tuple[str, bool]: ...
+) -> tuple[LogLevel, bool]: ...
 ```
 
 `level` is matched case-insensitively against `LogLevel` members. Returns a
-`tuple[str, bool]` — the normalized effective level and a flag that is `True`
+`tuple[LogLevel, bool]` — the normalized effective level and a flag that is `True`
 when the default (`INFO`) was substituted because the input was absent or
 unrecognized. The first element is always a `LogLevel` member; because
-`LogLevel` is a `StrEnum`, those values are also `str` instances, which matches
-the `str` slot in the annotated return type. Passing `"WARN"` (any case)
-normalizes to `WARNING` and emits a `DeprecationWarning`. The `force` parameter
-is forwarded directly to `femtologging.basicConfig`.
+`LogLevel` is a `StrEnum`, those values are also `str` instances. Passing
+`"WARN"` (any case) normalizes to `WARNING` and emits a `DeprecationWarning`.
+The `force` parameter is forwarded directly to `femtologging.basicConfig`.
 
 ### Internal protocol interfaces
 
