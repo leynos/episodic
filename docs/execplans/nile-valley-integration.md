@@ -193,6 +193,12 @@ repository quality gates pass.
   suite, Markdown gates, and CodeRabbit review passed. The Docker daemon was
   not available in this environment, so the live image smoke test remains
   documented as an opt-in skip.
+- [x] (2026-05-21T14:40:00Z) Started Stage 4 Helm chart implementation with
+  Nile Valley-aligned values for config, existing Secret references,
+  ExternalSecret, ingress, non-root pod security, and health probes.
+- [x] (2026-05-21T16:40:00Z) Completed Stage 4 Helm chart validation after
+  focused chart tests, full code gates, full test suite, Markdown gates, and a
+  clean CodeRabbit review.
 
 ## Surprises & discoveries
 
@@ -370,6 +376,145 @@ repository quality gates pass.
   `/tmp/nixie-stage3-episodic-nile-valley-integration.out`, and
   `/tmp/coderabbit-stage3-episodic-nile-valley-integration.out`, which
   reported `findings: 0`. Impact: Stage 3 is ready to commit.
+
+- Observation: the initial Stage 4 chart lint and render checks passed, and the
+  focused Helm chart tests generated one syrupy snapshot. Evidence:
+  `/tmp/helm-lint-stage4-initial-episodic-nile-valley-integration.out`,
+  `/tmp/helm-template-stage4-initial-episodic-nile-valley-integration.out`,
+  `/tmp/helm-stage4-tests-update-episodic-nile-valley-integration.out`, and
+  `/tmp/helm-stage4-tests-episodic-nile-valley-integration.out`. Impact:
+  chart structure and local manifest snapshot are ready for full gates.
+
+- Observation: the first Stage 4 formatting gate failed because
+  `tests/test_helm_chart_contract.py` needed Ruff formatting. Evidence:
+  `/tmp/check-fmt-stage4-episodic-nile-valley-integration.out`. Impact:
+  formatted the Helm chart test before continuing with Stage 4 gates.
+
+- Observation: the first Stage 4 lint gate failed because the Helm snapshot
+  test imported `SnapshotAssertion` at runtime and had one long assertion
+  message. Evidence: `/tmp/lint-stage4-episodic-nile-valley-integration.out`.
+  Impact: moved the snapshot assertion import under `TYPE_CHECKING` and
+  wrapped the Helm failure message before rerunning gates.
+
+- Observation: the Stage 4 lint rerun then caught a Python 3.14 lazy
+  annotation cleanup where the `SnapshotAssertion` annotation no longer needed
+  quotes. Evidence:
+  `/tmp/lint-stage4-rerun-episodic-nile-valley-integration.out`. Impact:
+  removed the annotation quotes and continued validation.
+
+- Observation: Stage 4 CodeRabbit review reported seven chart concerns: make
+  rollout strategy explicit, tighten the probe schema, add default resource
+  requests and limits, support per-secret optional flags, support PDB
+  `maxUnavailable`, document ExternalSecret ownership semantics, and confirm
+  the Helm subprocess lint suppression. Evidence:
+  `/tmp/coderabbit-stage4-episodic-nile-valley-integration.out`. Impact:
+  implemented chart changes for the substantive findings, added chart README
+  documentation for ExternalSecret lifecycle behaviour, and regenerated the
+  local manifest snapshot.
+
+- Observation: the Stage 4 CodeRabbit rerun reported five remaining chart
+  polish concerns: standardise `secretEnvFromKeys`, document secret-name
+  resolution priority, add a pod version label, fail clearly for enabled PDBs
+  without a constraint, and tighten ingress schema validation. Evidence:
+  `/tmp/coderabbit-stage4-rerun-episodic-nile-valley-integration.out`.
+  Impact: implemented all five before the final Stage 4 validation pass.
+
+- Observation: the final Stage 4 CodeRabbit pass still found four small
+  validation concerns: demonstrate `allowMissingSecret` fallback in default
+  `secretEnvFromKeys`, require root schema keys, parse `helm lint` JSON in
+  tests, and enforce PDB mutual exclusivity. Evidence:
+  `/tmp/coderabbit-stage4-final-episodic-nile-valley-integration.out`.
+  Impact: applied all four changes before rerunning focused Helm tests.
+
+- Observation: Helm 4.0.4 does not support `helm lint --output json`, so the
+  CodeRabbit suggestion to parse machine-readable lint output is not valid for
+  the installed Helm CLI. Evidence:
+  `/tmp/helm-stage4-tests-final-update-episodic-nile-valley-integration.out`.
+  Impact: kept `helm lint` text output but parse the failure count with a
+  regular expression instead of matching the full output string.
+
+- Observation: the Stage 4 precommit CodeRabbit pass found a real bug in the
+  pod `app.kubernetes.io/version` label fallback order, plus Helm NOTES access
+  guidance and README wrapping requests. Evidence:
+  `/tmp/coderabbit-stage4-precommit-episodic-nile-valley-integration.out`.
+  Impact: fixed image tag precedence, added ingress/port-forward notes, and
+  wrapped chart README prose.
+
+- Observation: the second Stage 4 precommit CodeRabbit pass found only a Helm
+  subprocess comment clarity issue and missing optional Kubernetes probe fields
+  in the values schema. Evidence:
+  `/tmp/coderabbit-stage4-final2-episodic-nile-valley-integration.out`.
+  Impact: clarified the narrow `subprocess.run` suppression and expanded the
+  probe schema for HTTP headers, TCP host, gRPC probes, and probe-level
+  termination grace period.
+
+- Observation: the next Stage 4 CodeRabbit pass found four more small chart
+  polish requests: conditionally render optional probe/resource blocks, clarify
+  README wording, avoid contradictory PDB defaults, and make the probe schema
+  strict at the top level. Evidence:
+  `/tmp/coderabbit-stage4-final3-episodic-nile-valley-integration.out`.
+  Impact: applied all four changes before rerunning Helm chart validation.
+
+- Observation: the following Stage 4 CodeRabbit pass found only documentation
+  and schema consistency issues: clarify the secret-name helper comment, wrap
+  the chart README, and make probe handler schemas strict in the same way as
+  the top-level probe schema. Evidence:
+  `/tmp/coderabbit-stage4-final4-episodic-nile-valley-integration.out`.
+  Impact: applied those fixes and reran the focused Helm chart tests, which
+  passed with `4 passed` and one accepted snapshot in
+  `/tmp/helm-stage4-tests-final4-rerun-episodic-nile-valley-integration.out`.
+
+- Observation: the next Stage 4 CodeRabbit pass found three minor chart
+  concerns: keep README wrapping in the exact requested shape and make the
+  default `DATABASE_URL` secret key explicitly required even though
+  `allowMissingSecret` remains available as a fallback for entries that omit
+  `optional`. Evidence:
+  `/tmp/coderabbit-stage4-final5-episodic-nile-valley-integration.out`.
+  Impact: wrapped the README, set `secretEnvFromKeys.DATABASE_URL.optional` to
+  `false`, and reran the focused Helm chart tests with snapshot update in
+  `/tmp/helm-stage4-tests-final5-update-episodic-nile-valley-integration.out`.
+
+- Observation: the final Stage 4 CodeRabbit rerun found that the values schema
+  did not yet cover every value group consumed by chart templates, and asked
+  either for mandatory probes or fallback probe rendering. Evidence:
+  `/tmp/coderabbit-stage4-final6-episodic-nile-valley-integration.out`.
+  Impact: extended `values.schema.json` for service accounts, pod labels and
+  annotations, security contexts, service, resources, PDBs, scheduling values,
+  name overrides, and image pull secrets; made container liveness and readiness
+  probes mandatory in schema; then reran focused Helm tests in
+  `/tmp/helm-stage4-tests-final6-rerun-episodic-nile-valley-integration.out`.
+
+- Observation: the next Stage 4 CodeRabbit rerun found a real Helm template
+  bug: `default` treats explicit `false` as empty, so
+  `secretEnvFromKeys.*.optional: false` could be overridden by
+  `allowMissingSecret: true`. Evidence:
+  `/tmp/coderabbit-stage4-final7-episodic-nile-valley-integration.out`.
+  Impact: replaced the `default` call with a `hasKey` conditional and added a
+  focused Helm test proving an explicit required secret remains
+  `optional: false` when the fallback allows missing secrets; the focused chart
+  test suite passed with `5 passed` in
+  `/tmp/helm-stage4-tests-final7-rerun-episodic-nile-valley-integration.out`.
+
+- Observation: the following Stage 4 CodeRabbit rerun found only readability
+  cleanup in the deployment template: use pipe-form `default` for image tag
+  fallback and remove unnecessary whitespace-control markers from the optional
+  secret conditional. Evidence:
+  `/tmp/coderabbit-stage4-final8-episodic-nile-valley-integration.out`.
+  Impact: applied both template cleanups and reran focused Helm chart tests
+  with `5 passed` in
+  `/tmp/helm-stage4-tests-final8-rerun-episodic-nile-valley-integration.out`.
+
+- Observation: Stage 4 final validation passed after the last Helm template
+  cleanup. Evidence:
+  `/tmp/check-fmt-stage4-final9-episodic-nile-valley-integration.out`,
+  `/tmp/typecheck-stage4-final9-episodic-nile-valley-integration.out`,
+  `/tmp/lint-stage4-final9-episodic-nile-valley-integration.out`,
+  `/tmp/markdownlint-stage4-final9-episodic-nile-valley-integration.out`,
+  `/tmp/nixie-stage4-final9-episodic-nile-valley-integration.out`,
+  `/tmp/test-stage4-final9-episodic-nile-valley-integration.out`, which
+  reported `680 passed, 4 skipped`, and
+  `/tmp/coderabbit-stage4-final9-episodic-nile-valley-integration.out`, which
+  reported `findings: 0`. Impact: Stage 4 is ready to commit.
 
 ## Decision log
 

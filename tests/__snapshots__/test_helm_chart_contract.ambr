@@ -1,0 +1,158 @@
+# serializer version: 1
+# name: test_helm_local_manifest_snapshot
+  '''
+  ---
+  # Source: episodic/templates/serviceaccount.yaml
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: episodic
+    labels:
+      helm.sh/chart: episodic-0.1.0
+      app.kubernetes.io/name: episodic
+      app.kubernetes.io/instance: episodic
+      app.kubernetes.io/managed-by: Helm
+  ---
+  # Source: episodic/templates/configmap.yaml
+  apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: episodic
+    labels:
+      helm.sh/chart: episodic-0.1.0
+      app.kubernetes.io/name: episodic
+      app.kubernetes.io/instance: episodic
+      app.kubernetes.io/managed-by: Helm
+  data:
+    EPISODIC_ENV: "local"
+  ---
+  # Source: episodic/templates/service.yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: episodic
+    labels:
+      helm.sh/chart: episodic-0.1.0
+      app.kubernetes.io/name: episodic
+      app.kubernetes.io/instance: episodic
+      app.kubernetes.io/managed-by: Helm
+  spec:
+    type: ClusterIP
+    ports:
+      - port: 80
+        targetPort: http
+        protocol: TCP
+        name: http
+    selector:
+      app.kubernetes.io/name: episodic
+      app.kubernetes.io/instance: episodic
+  ---
+  # Source: episodic/templates/deployment.yaml
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: episodic
+    labels:
+      helm.sh/chart: episodic-0.1.0
+      app.kubernetes.io/name: episodic
+      app.kubernetes.io/instance: episodic
+      app.kubernetes.io/managed-by: Helm
+  spec:
+    replicas: 1
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+      type: RollingUpdate
+    selector:
+      matchLabels:
+        app.kubernetes.io/name: episodic
+        app.kubernetes.io/instance: episodic
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/name: episodic
+          app.kubernetes.io/instance: episodic
+          app.kubernetes.io/version: "local"
+      spec:
+        serviceAccountName: episodic
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: episodic
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              readOnlyRootFilesystem: true
+              runAsGroup: 10001
+              runAsUser: 10001
+            image: "episodic:local"
+            imagePullPolicy: IfNotPresent
+            ports:
+              - name: http
+                containerPort: 8080
+                protocol: TCP
+            envFrom:
+              - configMapRef:
+                  name: episodic
+            env:
+              - name: DATABASE_URL
+                valueFrom:
+                  secretKeyRef:
+                    name: episodic-local
+                    key: database-url
+                    optional: false
+            livenessProbe:
+              failureThreshold: 3
+              httpGet:
+                path: /health/live
+                port: http
+              initialDelaySeconds: 10
+              periodSeconds: 30
+              timeoutSeconds: 3
+            readinessProbe:
+              failureThreshold: 3
+              httpGet:
+                path: /health/ready
+                port: http
+              initialDelaySeconds: 5
+              periodSeconds: 10
+              timeoutSeconds: 3
+            resources:
+              limits:
+                cpu: 500m
+                memory: 512Mi
+              requests:
+                cpu: 100m
+                memory: 256Mi
+  ---
+  # Source: episodic/templates/ingress.yaml
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    name: episodic
+    labels:
+      helm.sh/chart: episodic-0.1.0
+      app.kubernetes.io/name: episodic
+      app.kubernetes.io/instance: episodic
+      app.kubernetes.io/managed-by: Helm
+  spec:
+    ingressClassName: traefik
+    rules:
+      - host: "episodic.localhost"
+        http:
+          paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                  name: episodic
+                  port:
+                    name: http
+  
+  '''
+# ---

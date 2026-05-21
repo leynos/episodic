@@ -1,0 +1,6 @@
+apiVersion: v2
+name: episodic
+description: Episodic HTTP service for Nile Valley preview and GitOps workflows.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
