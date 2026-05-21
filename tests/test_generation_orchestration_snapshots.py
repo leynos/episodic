@@ -240,41 +240,36 @@ def test_execution_plan_freezes_and_validates_steps() -> None:
                 ("not-a-planned-action",),
             ),
         )
+
+@dataclasses.dataclass(frozen=True)
+class _OrchestrationResultSpec:
+    """Parameter object for building the canonical orchestration DTO graph."""
+
+    rationale: str = "test"
+    required_inputs: tuple[str, ...] = dataclasses.field(default_factory=tuple)
+    action_summary: str = "test"
+    action_usage: LLMUsage = dataclasses.field(
+        default_factory=lambda: LLMUsage(10, 20, 30)
+    )
+    show_notes_result: ShowNotesResult | None = None
+    planner_usage: LLMUsage = dataclasses.field(
+        default_factory=lambda: LLMUsage(1, 2, 3)
+    )
+    total_usage: LLMUsage = dataclasses.field(
+        default_factory=lambda: LLMUsage(11, 22, 33)
+    )
 def _make_orchestration_result(
-    *,
-    rationale: str = "test",
-    required_inputs: tuple[str, ...] = (),
-    action_summary: str = "test",
-    action_usage: LLMUsage | None = None,
-    show_notes_result: ShowNotesResult | None = None,
-    planner_usage: LLMUsage | None = None,
-    total_usage: LLMUsage | None = None,
+    spec: _OrchestrationResultSpec | None = None,
 ) -> GenerationOrchestrationResult:
     """Build the canonical orchestration DTO graph used by snapshots."""
-    if action_usage is None:
-        action_usage = LLMUsage(
-            input_tokens=10,
-            output_tokens=20,
-            total_tokens=30,
-        )
-    if planner_usage is None:
-        planner_usage = LLMUsage(
-            input_tokens=1,
-            output_tokens=2,
-            total_tokens=3,
-        )
-    if total_usage is None:
-        total_usage = LLMUsage(
-            input_tokens=planner_usage.input_tokens + action_usage.input_tokens,
-            output_tokens=planner_usage.output_tokens + action_usage.output_tokens,
-            total_tokens=planner_usage.total_tokens + action_usage.total_tokens,
-        )
+    if spec is None:
+        spec = _OrchestrationResultSpec()
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
-        rationale=rationale,
+        rationale=spec.rationale,
         model_tier=ModelTier.EXECUTION,
-        required_inputs=required_inputs,
+        required_inputs=spec.required_inputs,
     )
     plan = ExecutionPlan(
         plan_version="1",
@@ -287,15 +282,15 @@ def _make_orchestration_result(
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
         model_tier=ModelTier.EXECUTION,
         model="gpt-4o-mini",
-        summary=action_summary,
-        usage=action_usage,
-        show_notes_result=show_notes_result,
+        summary=spec.action_summary,
+        usage=spec.action_usage,
+        show_notes_result=spec.show_notes_result,
     )
     return GenerationOrchestrationResult(
         plan=plan,
         action_results=(action_done,),
-        planner_usage=planner_usage,
-        total_usage=total_usage,
+        planner_usage=spec.planner_usage,
+        total_usage=spec.total_usage,
     )
 def test_generation_orchestration_result_snapshot(
     snapshot: SnapshotAssertion,
@@ -310,13 +305,15 @@ def test_generation_orchestration_result_with_show_notes_snapshot(
     """Snapshot orchestration aggregation with nested show-note tool output."""
     show_notes = make_show_notes_result(entries=(make_show_notes_entry(),))
     result = _make_orchestration_result(
-        rationale="Generate listener-facing notes from canonical TEI.",
-        required_inputs=("script_tei_xml",),
-        action_summary="Generated one show-notes entry.",
-        action_usage=show_notes.usage,
-        show_notes_result=show_notes,
-        planner_usage=LLMUsage(input_tokens=12, output_tokens=8, total_tokens=20),
-        total_usage=LLMUsage(input_tokens=52, output_tokens=33, total_tokens=85),
+        _OrchestrationResultSpec(
+            rationale="Generate listener-facing notes from canonical TEI.",
+            required_inputs=("script_tei_xml",),
+            action_summary="Generated one show-notes entry.",
+            action_usage=show_notes.usage,
+            show_notes_result=show_notes,
+            planner_usage=LLMUsage(input_tokens=12, output_tokens=8, total_tokens=20),
+            total_usage=LLMUsage(input_tokens=52, output_tokens=33, total_tokens=85),
+        )
     )
     assert dataclasses.asdict(result) == snapshot
 
@@ -354,22 +351,21 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
 
     assert result.planner_usage is not None
     assert action_usage is not None
-    assert result.total_usage.input_tokens == (
-        result.planner_usage.input_tokens + action_usage.input_tokens
+    expected_usage = LLMUsage(
+        input_tokens=result.planner_usage.input_tokens + action_usage.input_tokens,
+        output_tokens=result.planner_usage.output_tokens + action_usage.output_tokens,
+        total_tokens=result.planner_usage.total_tokens + action_usage.total_tokens,
     )
-    assert result.total_usage.output_tokens == (
-        result.planner_usage.output_tokens + action_usage.output_tokens
-    )
-    assert result.total_usage.total_tokens == (
-        result.planner_usage.total_tokens + action_usage.total_tokens
-    )
+    assert result.total_usage == expected_usage
 
 def test_generation_orchestration_fixture_totals_partial_usage_overrides() -> None:
     """Verify total usage is derived from whichever usage values callers supply."""
     result = _make_orchestration_result(
-        action_usage=LLMUsage(input_tokens=5, output_tokens=7, total_tokens=12),
+        _OrchestrationResultSpec(
+            action_usage=LLMUsage(input_tokens=5, output_tokens=7, total_tokens=12),
+            total_usage=LLMUsage(input_tokens=6, output_tokens=9, total_tokens=15),
+        )
     )
-
     assert result.total_usage == LLMUsage(6, 9, 15)
 
 @given(
@@ -392,12 +388,17 @@ def test_generation_orchestration_fixture_total_usage_property(
     """Verify fixture total usage is a token-wise sum for arbitrary inputs."""
     planner_usage = LLMUsage(*planner)
     action_usage = LLMUsage(*action)
-
     result = _make_orchestration_result(
-        action_usage=action_usage,
-        planner_usage=planner_usage,
+        _OrchestrationResultSpec(
+            action_usage=action_usage,
+            planner_usage=planner_usage,
+            total_usage=LLMUsage(
+                input_tokens=planner[0] + action[0],
+                output_tokens=planner[1] + action[1],
+                total_tokens=planner[2] + action[2],
+            ),
+        )
     )
-
     assert result.total_usage == LLMUsage(
         input_tokens=planner[0] + action[0],
         output_tokens=planner[1] + action[1],
