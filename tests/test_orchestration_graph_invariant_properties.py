@@ -13,6 +13,7 @@ from episodic.orchestration import (
     ExecutionPlan,
     GenerationGraphState,
     GenerationOrchestrationRequest,
+    GenerationOrchestrationResult,
     InMemoryCheckpointStore,
     ModelTier,
     PlannedAction,
@@ -228,34 +229,34 @@ async def test_langgraph_respects_plan_execute_finish_order(
 @pytest.mark.asyncio
 async def test_finish_callback_is_invoked_in_direct_execute_path() -> None:
     """Direct execution invokes the finish callback with finished state."""
-    observed_states: list[GenerationGraphState] = []
+    observed_results: list[GenerationOrchestrationResult] = []
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=_planner_result()),
         tool_executor=PropGraphToolExecutor(result=_tool_result()),
-        finish_callback=observed_states.append,
+        finish_callback=observed_results.append,
     )
 
     state = await graph.ainvoke(GenerationGraphState(request=_request()))
 
-    assert len(observed_states) == 1
-    assert observed_states[0].orchestration_result is not None
-    assert state["orchestration_result"] == observed_states[0].orchestration_result
+    assert len(observed_results) == 1
+    assert observed_results[0] is not None
+    assert state["orchestration_result"] == observed_results[0]
 
 
 @pytest.mark.asyncio
 async def test_finish_callback_is_not_invoked_in_suspend_path() -> None:
     """Checkpointed execution stops before the finish callback hook."""
-    observed_states: list[GenerationGraphState] = []
+    observed_results: list[GenerationOrchestrationResult] = []
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=_planner_result()),
         tool_executor=PropGraphToolExecutor(result=_tool_result()),
         checkpoint_port=InMemoryCheckpointStore(),
-        finish_callback=observed_states.append,
+        finish_callback=observed_results.append,
     )
 
     state = await graph.ainvoke(GenerationGraphState(request=_request()))
 
-    assert not observed_states
+    assert not observed_results
     assert isinstance(state["suspended_result"], SuspendedWorkflowResult)
     assert state["orchestration_result"] is None
 
@@ -266,7 +267,7 @@ async def test_langgraph_finish_callback_errors_do_not_replace_result() -> None:
     planner_result = _planner_result()
     tool_result = _tool_result()
 
-    def _raise_callback(_state: GenerationGraphState) -> None:
+    def _raise_callback(_result: GenerationOrchestrationResult) -> None:
         msg = "callback failed after result computation"
         raise RuntimeError(msg)
 

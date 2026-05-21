@@ -609,7 +609,8 @@ def build_generation_orchestration_graph(
     planner: protocols.PlannerPort,
     tool_executor: protocols.ToolExecutorPort,
     checkpoint_port: protocols.CheckpointPort | None = None,
-    finish_callback: cabc.Callable[[GenerationGraphState], None] | None = None,
+    finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None]
+    | None = None,
 ) -> CompiledStateGraph[
     GenerationGraphState,
     None,
@@ -631,10 +632,12 @@ def build_generation_orchestration_graph(
             writes a checkpoint after planning and returns a suspended result
             instead of running the direct finish path.
         finish_callback: Optional callable invoked as
-            `finish_callback(state)` after finish-node aggregation and before
+            `finish_callback(result)` after finish-node aggregation and before
             returning from the direct-execute path. It receives the
-            `GenerationGraphState` that entered the finish node; callback
-            exceptions are logged without replacing the computed graph result.
+            `GenerationOrchestrationResult` produced by the finish node.
+            Invoked only on the direct plan -> execute -> finish path, not
+            the checkpoint suspend path. Callback exceptions are logged
+            without replacing the computed graph result.
     """
     graph = StateGraph(GenerationGraphState)
 
@@ -656,12 +659,8 @@ def build_generation_orchestration_graph(
         """Entry point for the finish graph node."""
         result = _finish_node(state)
         if finish_callback is not None:
-            callback_state = dc.replace(
-                state,
-                orchestration_result=result["orchestration_result"],
-            )
             try:
-                finish_callback(callback_state)
+                finish_callback(result["orchestration_result"])
                 _log_event(
                     "debug",
                     "generation_graph.finish_node.callback.finish",
