@@ -942,8 +942,8 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 
 The multi-source ingestion service normalizes heterogeneous source documents,
 applies source weighting heuristics, resolves conflicts, and merges the result
-into a canonical TEI episode. The service is implemented as an orchestrator (
-`ingest_multi_source`) that composes around the existing low-level
+into a canonical TEI episode. The service is implemented as an orchestrator
+(`ingest_multi_source`) that composes around the existing low-level
 `ingest_sources` persistence function.
 
 ### Port protocols

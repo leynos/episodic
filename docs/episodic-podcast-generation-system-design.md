@@ -871,11 +871,11 @@ tiering assigns higher-capability models to planning and cheaper models to
 execution when budgets are tight. External tools integrate through outbound
 ports, including optional
 [Model Context Protocol (MCP)](agentic-systems-with-langgraph-and-celery.md#5-the-interface-layer-model-context-protocol-mcp)
- adapters that expose tool catalogues. Skill-based tool loading narrows the
+adapters that expose tool catalogues. Skill-based tool loading narrows the
 available tool set per workflow, reducing context size and guiding model choice.
 
-Roadmap item `2.4.1` now ships the first narrow implementation of that design in
- `episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort` once
+Roadmap item `2.4.1` now ships the first narrow implementation of that design
+in `episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort` once
 to obtain strict JSON, parses it into a typed `ExecutionPlan`, and records the
 planning model separately from the execution model selected in
 `GenerationOrchestrationConfig`. `StructuredPlanningOrchestrator` then executes
@@ -1764,13 +1764,13 @@ and all criteria below are met:
 The canonical persistence layer follows the hexagonal architecture by defining
 Protocol-based port interfaces in `episodic/canonical/ports.py` and
 implementing them as async SQLAlchemy adapters in
-`episodic/canonical/storage/`. Twelve repository protocols (
-`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
-`IngestionJobRepository`, `SourceDocumentRepository`, `ApprovalEventRepository`,
- `EpisodeTemplateRepository`, `SeriesProfileHistoryRepository`,
-`EpisodeTemplateHistoryRepository`, `ReferenceDocumentRepository`,
-`ReferenceDocumentRevisionRepository`, and `ReferenceBindingRepository`) define
-the persistence contract, and `CanonicalUnitOfWork` aggregates them behind a
+`episodic/canonical/storage/`. Twelve repository protocols define the
+persistence contract: `SeriesProfileRepository`, `TeiHeaderRepository`,
+`EpisodeRepository`, `IngestionJobRepository`, `SourceDocumentRepository`,
+`ApprovalEventRepository`, `EpisodeTemplateRepository`,
+`SeriesProfileHistoryRepository`, `EpisodeTemplateHistoryRepository`,
+`ReferenceDocumentRepository`, `ReferenceDocumentRevisionRepository`, and
+`ReferenceBindingRepository`. `CanonicalUnitOfWork` aggregates them behind a
 transactional boundary with `commit()`, `flush()`, and `rollback()` methods.
 
 The `SqlAlchemyUnitOfWork` adapter creates a fresh `AsyncSession` on entry,
@@ -1883,8 +1883,8 @@ exercise the same semantics from a scenario-driven perspective.
 
 ### Multi-source ingestion service implementation
 
-The multi-source ingestion service composes a higher-level orchestrator (
-`ingest_multi_source`) around the existing `ingest_sources` persistence
+The multi-source ingestion service composes a higher-level orchestrator
+(`ingest_multi_source`) around the existing `ingest_sources` persistence
 function. Three Protocol-based port interfaces define the pipeline extension
 points:
 

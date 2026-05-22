@@ -69,7 +69,7 @@ The plan signposts these skills for the implementing agent:
   repo-local checker until the approved implementation changes it.
 - On implementation, record the decision to adopt Hecate in an Architecture
   Decision Record (ADR) or by superseding
-  `docs/adr/adr-006-hexagonal-architecture-enforcement.md`, then update
+  `docs/adr/adr-014-hexagonal-architecture-enforcement.md`, then update
   `docs/episodic-podcast-generation-system-design.md` to reference the
   accepted decision.
 - On implementation, update `docs/users-guide.md` only for user-visible command
@@ -172,7 +172,7 @@ The plan signposts these skills for the implementing agent:
   group schema, and Episodic-specific migration mapping.[^1][^2][^3][^4]
 - [x] (2026-05-19 00:00Z) Inspected the current Makefile, CI workflow,
   `pyproject.toml`, architecture checker package, architecture tests, BDD
-  steps, fixture packages, ADR-006, the system design, the developers' guide,
+  steps, fixture packages, ADR-014, the system design, the developers' guide,
   and the roadmap.
 - [x] (2026-05-19 00:00Z) Drafted this plan for approval.
 - [x] (2026-05-19 00:00Z) Validated the planning artefact with
@@ -192,7 +192,7 @@ The plan signposts these skills for the implementing agent:
   architecture test command reports 13 passing tests.
 - [x] (2026-05-20 00:00Z) Milestone 4: Removed `episodic.architecture` after
   Leta confirmed remaining references were confined to the package itself.
-- [x] (2026-05-20 00:00Z) Milestone 5: Updated ADR-006, the system design,
+- [x] (2026-05-20 00:00Z) Milestone 5: Updated ADR-014, the system design,
   users' guide, developers' guide, and roadmap text to describe the
   Hecate-backed architecture gate.
 - [x] (2026-05-20 00:00Z) Milestone 6: Ran full validation gates, ran final
@@ -276,7 +276,7 @@ The plan signposts these skills for the implementing agent:
   shim.
 
 - Observation: product and maintainer documentation still described the
-  deleted `episodic.architecture` package. Impact: ADR-006, the system design,
+  deleted `episodic.architecture` package. Impact: ADR-014, the system design,
   users' guide, developers' guide, and roadmap now identify Hecate and
   `[tool.hecate]` as the enforcement source.
 
@@ -572,7 +572,7 @@ Update documentation in the same implementation sequence that changes the
 behaviour:
 
 - Update or supersede
-  `docs/adr/adr-006-hexagonal-architecture-enforcement.md`. If the change is
+  `docs/adr/adr-014-hexagonal-architecture-enforcement.md`. If the change is
   substantive enough to be a new accepted decision, create a new ADR under
   `docs/adr/` and reference the old ADR as superseded or amended.
 - Update the accepted decision records list and hexagonal architecture
@@ -681,7 +681,7 @@ includes that gate.
 Architecture fixture and behaviour-driven development (BDD) tests now run
 Hecate against generated fixture configs. The old `episodic.architecture`
 package was removed after Leta confirmed no non-test consumers remained.
-ADR-006, the system design, users' guide, developers' guide, and roadmap now
+ADR-014, the system design, users' guide, developers' guide, and roadmap now
 describe the Hecate-backed gate.
 
 Validation passed with:

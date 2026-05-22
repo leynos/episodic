@@ -1,7 +1,5 @@
 """Tests for hexagonal architecture enforcement."""
 
-from __future__ import annotations
-
 import tomllib
 import typing as typ
 
