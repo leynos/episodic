@@ -606,16 +606,15 @@ def _finish_node(
 
 def _invoke_finish_callback(
     finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None],
-    state: GenerationGraphState,
     result: dict[str, dto.GenerationOrchestrationResult],
+    correlation_id: str | None,
 ) -> None:
-    """Invoke *finish_callback* with the post-aggregation result.
+    """Invoke *finish_callback* with the aggregated domain result.
 
-    Logs a debug event on success and an error event on failure. Exceptions are
-    swallowed so callback failures do not replace the already-computed graph
-    result.
+    Logs a debug event on success and an error event on failure.
+    Exceptions are swallowed so that callback failures do not replace
+    the already-computed graph result.
     """
-    correlation_id = state.request.correlation_id if state.request is not None else None
     try:
         finish_callback(result["orchestration_result"])
         _log_event(
@@ -713,13 +712,13 @@ def build_generation_orchestration_graph(
         """Entry point for the finish graph node."""
         result = _finish_node(state)
         if finish_callback is not None:
-            _invoke_finish_callback(finish_callback, state, result)
+            correlation_id = (
+                state.request.correlation_id if state.request is not None else None
+            )
+            _invoke_finish_callback(finish_callback, result, correlation_id)
         return result
 
-    execute_node, execute_target = _build_execute_node(
-        tool_executor,
-        checkpoint_port,
-    )
+    execute_node, execute_target = _build_execute_node(tool_executor, checkpoint_port)
 
     graph.add_node("plan", _run_plan_node)
     graph.add_node("execute", execute_node)
