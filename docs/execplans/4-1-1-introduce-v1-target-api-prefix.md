@@ -39,7 +39,8 @@ Success is observable when:
 
 This work is a routing and contract-alignment change. It does not implement the
 future episode, upload, ingestion-job, generation-run, WebSocket, approval,
-CLI, or web-console resources described later in phase 4.
+command-line interface (CLI), or web-console resources described later in phase
+4.
 
 ## Context and orientation
 
@@ -86,8 +87,9 @@ The source documents that govern this work are:
 - `docs/adr/adr-009-source-to-script-rest-vertical-slice.md`, which records
   the accepted decision that existing unversioned routes do not need
   preservation before v0.1.0.
-- `docs/episodic-podcast-generation-system-design.md`, which links ADR 009 and
-  already describes the source-to-script vertical-slice direction.
+- `docs/episodic-podcast-generation-system-design.md`, which links
+  architecture decision record (ADR) 009 and already describes the
+  source-to-script vertical-slice direction.
 - `docs/async-sqlalchemy-with-pg-and-falcon.md`,
   `docs/testing-async-falcon-endpoints.md`,
   `docs/testing-sqlalchemy-with-pytest-and-py-pglite.md`, and
@@ -170,7 +172,7 @@ contract without adding those future endpoints here.
 - Risk: path churn is broad because many tests hard-code unversioned routes.
   Severity: medium. Likelihood: high. Mitigation: introduce or update shared
   test path helpers where that reduces repetition, then update direct tests and
-  BDD steps in one controlled pass.
+  behaviour-driven development (BDD) steps in one controlled pass.
 
 - Risk: health endpoints could be accidentally moved under `/v1`. Severity:
   medium. Likelihood: medium. Mitigation: add or preserve tests that assert
@@ -554,6 +556,31 @@ The final implementation should include short transcripts in this plan's
   `/tmp/coderabbit-review-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
 - [x] Run focused tests, full gates and CodeRabbit review.
 - [x] Mark roadmap item `4.1.1` done after implementation and gates pass.
+- [x] 2026-05-22T19:05:00+02:00: Verified CodeRabbit follow-up findings with
+  Wyvern and scribe agents. Still-valid issues were limited to brittle
+  route-registration assertions, missing negative coverage for
+  `/v1/health/ready`, missing unversioned write-route coverage, one stale
+  user-guide route example, and first-use acronym definitions in this ExecPlan.
+- [x] 2026-05-22T19:31:00+02:00: Addressed the still-valid follow-up findings
+  by narrowing route-versioning coverage to representative route families,
+  asserting route registration as non-`404`, adding `/v1/health/ready` and
+  unversioned write-route negative coverage, and fixing the stale documentation
+  examples. `tests/test_api_route_versioning.py` passed with 8 tests. Log:
+  `/tmp/route-versioning-review-fixes-final-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-22T19:58:00+02:00: Re-ran validation after the follow-up fixes.
+  `make check-fmt`, `make markdownlint`, `make nixie`, `make typecheck`, and
+  `make lint` passed. `make test` passed with 669 tests and 3 skipped. Logs:
+  `/tmp/check-fmt-review-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/markdownlint-review-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/nixie-review-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/typecheck-review-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/lint-review-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  and
+  `/tmp/test-review-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-22T20:03:00+02:00: Ran
+  `coderabbit review --agent` after the follow-up fixes. Result:
+  `review_completed` with zero findings. Log:
+  `/tmp/coderabbit-review-followup-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
 
 ## Surprises and discoveries
 

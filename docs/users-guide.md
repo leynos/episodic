@@ -178,15 +178,15 @@ Reusable reference-document workflows currently support:
    and
   `GET /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`.
 - Creating, listing, and fetching target bindings at
-  `POST /v1/reference-bindings`,
-  `GET /v1/reference-bindings`, and `GET /v1/reference-bindings/{binding_id}`.
+  `POST /v1/reference-bindings`, `GET /v1/reference-bindings`, and
+  `GET /v1/reference-bindings/{binding_id}`.
 - Series-aligned access behaviour for host and guest profile documents:
   cross-series profile paths do not expose documents owned by another series.
 - Requesting `GET /v1/series-profiles/{profile_id}/brief?episode_id=...` to
-  apply
-  `effective_from_episode_id` precedence for series-level bindings while still
-  including any selected template bindings. Add optional `template_id=...` to
-  restrict the template section selection to one episode template.
+  apply `effective_from_episode_id` precedence for series-level bindings while
+  still including any selected template bindings. Add optional
+  `template_id=...` to restrict the template section selection to one episode
+  template.
 - Requesting
   `GET /v1/series-profiles/{profile_id}/resolved-bindings?episode_id=...` to
   inspect the resolved binding, document, and revision payloads for one episode
