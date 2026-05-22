@@ -149,31 +149,20 @@ async def test_checkpoint_store_reuses_concurrent_idempotency_key(
 
 
 @pytest.mark.asyncio
-async def test_checkpoint_store_marks_checkpoint_resumed(
+@pytest.mark.parametrize(
+    ("commit_resume", "expected_fetched_status"),
+    [
+        (True, "resumed"),
+        (False, "suspended"),
+    ],
+    ids=["commit", "rollback"],
+)
+async def test_checkpoint_store_mark_resumed_status(
     session_factory: object,
+    commit_resume: bool,  # noqa: FBT001
+    expected_fetched_status: str,
 ) -> None:
-    """`mark_resumed` should persist the resumed checkpoint status."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    checkpoint = _checkpoint()
-
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        stored = await uow.workflow_checkpoints.save_or_reuse(checkpoint)
-        resumed = await uow.workflow_checkpoints.mark_resumed(stored.checkpoint_id)
-        await uow.commit()
-
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        fetched = await uow.workflow_checkpoints.get(stored.checkpoint_id)
-
-    assert resumed.status == "resumed"
-    assert fetched is not None
-    assert fetched.status == "resumed"
-
-
-@pytest.mark.asyncio
-async def test_checkpoint_store_mark_resumed_rollback_leaves_suspended(
-    session_factory: object,
-) -> None:
-    """Rolled-back resume markers should leave checkpoints retryable."""
+    """mark_resumed persists status on commit and leaves it suspended on rollback."""
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
     checkpoint = _checkpoint()
 
@@ -183,14 +172,17 @@ async def test_checkpoint_store_mark_resumed_rollback_leaves_suspended(
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         resumed = await uow.workflow_checkpoints.mark_resumed(stored.checkpoint_id)
-        await uow.rollback()
+        if commit_resume:
+            await uow.commit()
+        else:
+            await uow.rollback()
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.workflow_checkpoints.get(stored.checkpoint_id)
 
     assert resumed.status == "resumed"
     assert fetched is not None
-    assert fetched.status == "suspended"
+    assert fetched.status == expected_fetched_status
 
 
 @pytest.mark.asyncio
