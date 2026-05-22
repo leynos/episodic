@@ -12,11 +12,11 @@ kept current as milestones complete.
 ## Purpose and big picture
 
 Roadmap item `4.1.1` makes `/v1` the target prefix for Episodic's client-facing
-REST API. After the implementation, clients, the terminal user interface (TUI),
-and future source-to-script vertical-slice endpoints will call canonical
-resources through `/v1/...` paths. Existing unversioned canonical API routes
-are pre-v0.1.0 implementation details and do not need compatibility
-preservation.
+representational state transfer (REST) API. After the implementation, clients,
+the terminal user interface (TUI), and future source-to-script vertical-slice
+endpoints will call canonical resources through `/v1/...` paths. Existing
+unversioned canonical API routes are pre-v0.1.0 implementation details and do
+not need compatibility preservation.
 
 Success is observable when:
 
@@ -105,13 +105,14 @@ implementation unexpectedly introduces Rust code; this plan does not require
 Rust, Verus, Kani or CrossHair changes.
 
 Firecrawl research resolved two external prior-art points. Falcon 4.2 routes
-are registered through `app.add_route()` URI templates, and unmatched routes
-fall through to Falcon's normal route-not-found responder. Microsoft REST API
-guidance treats REST APIs as resource-oriented HTTP surfaces, says versioning
-protects client compatibility during updates, and recommends `202 Accepted` for
-long-running asynchronous operations. These facts support a simple route prefix
-for the existing resources and preserve ADR 009's later long-running operation
-contract without adding those future endpoints here.
+are registered through `app.add_route()` uniform resource identifier (URI)
+templates, and unmatched routes fall through to Falcon's normal route-not-found
+responder. Microsoft REST API guidance treats REST APIs as resource-oriented
+hypertext transfer protocol (HTTP) surfaces, says versioning protects client
+compatibility during updates, and recommends `202 Accepted` for long-running
+asynchronous operations. These facts support a simple route prefix for the
+existing resources and preserve ADR 009's later long-running operation contract
+without adding those future endpoints here.
 
 ## Constraints
 
@@ -129,8 +130,8 @@ contract without adding those future endpoints here.
   compatibility weight.
 - Keep hexagonal architecture boundaries intact. Route registration belongs in
   the inbound Falcon adapter. Domain packages, application services, repository
-  ports, SQLAlchemy adapters and LLM adapters must not learn about HTTP path
-  prefixes.
+  ports, SQLAlchemy adapters and large language model (LLM) adapters must not
+  learn about HTTP path prefixes.
 - Do not introduce a new runtime dependency for this work.
 - Use Vidai Mock only for behavioural tests that exercise inference services.
   This route-prefix task should not need Vidai Mock because it does not call an
@@ -581,6 +582,33 @@ The final implementation should include short transcripts in this plan's
   `coderabbit review --agent` after the follow-up fixes. Result:
   `review_completed` with zero findings. Log:
   `/tmp/coderabbit-review-followup-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-22T21:17:00+02:00: Verified the latest failed-check findings
+  with Wyvern and scribe agents. The `/v1/health/ready` and users-guide path
+  findings were stale. The still-valid issues were route contract tests
+  relying only on status codes and remaining first-use acronym expansions in
+  this ExecPlan. Added response payload assertions to
+  `tests/test_api_route_versioning.py` and expanded the remaining acronyms.
+  `tests/test_api_route_versioning.py` passed with 8 tests. Log:
+  `/tmp/route-versioning-contract-behaviour-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-22T21:28:00+02:00: Ran follow-up gates for the contract
+  behaviour assertions. `make check-fmt`, `make markdownlint`,
+  `make typecheck`, and `make lint` passed. `make test` reached the updated
+  route-versioning tests successfully, then failed later in
+  `tests/test_guest_bios_properties.py::test_enriched_guest_bios_preserves_entry_order`
+  because Hypothesis generated the XML-forbidden character `U+FFFE` in an
+  unrelated guest biography payload. The single-test rerun reproduced the same
+  failure. Logs:
+  `/tmp/check-fmt-contract-behaviour-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/markdownlint-contract-behaviour-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/typecheck-contract-behaviour-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/lint-contract-behaviour-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  `/tmp/test-contract-behaviour-episodic-4-1-1-introduce-v1-target-api-prefix.out`,
+  and
+  `/tmp/guest-bios-property-validation-failure-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
+- [x] 2026-05-22T21:31:00+02:00: Attempted
+  `coderabbit review --agent` after the contract behaviour fixes. CodeRabbit
+  returned a recoverable rate-limit error before review analysis began. Log:
+  `/tmp/coderabbit-review-contract-behaviour-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
 
 ## Surprises and discoveries
 

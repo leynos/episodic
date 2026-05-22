@@ -18,6 +18,8 @@ import pytest
 if typ.TYPE_CHECKING:
     from falcon import testing
 
+_NOT_FOUND_PAYLOAD = {"title": "404 Not Found"}
+
 _CANONICAL_ROUTE_CONTRACT_PATHS = (
     ("/series-profiles", "series-profiles"),
     ("/series-profiles/not-a-valid-uuid", "series-profile"),
@@ -66,6 +68,9 @@ def test_versioned_canonical_api_routes_are_registered(
         assert response.status_code != 404, (
             f"Expected registered /v1 route for {case_id}, got 404."
         )
+        assert response.json != _NOT_FOUND_PAYLOAD, (
+            f"Expected {case_id} to bypass Falcon's not-found responder."
+        )
 
 
 def test_unversioned_canonical_api_routes_are_not_registered(
@@ -77,6 +82,9 @@ def test_unversioned_canonical_api_routes_are_not_registered(
 
         assert response.status_code == 404, (
             f"Expected 404 for unversioned {case_id}, got {response.status_code}."
+        )
+        assert response.json == _NOT_FOUND_PAYLOAD, (
+            f"Expected Falcon not-found payload for unversioned {case_id}."
         )
 
 
@@ -91,6 +99,9 @@ def test_versioned_health_routes_are_not_registered(
     assert response.status_code == 404, (
         f"Expected 404 for {path}, got {response.status_code}."
     )
+    assert response.json == _NOT_FOUND_PAYLOAD, (
+        f"Expected Falcon not-found payload for {path}."
+    )
 
 
 @pytest.mark.parametrize("path", ["/series-profiles", "/episode-templates"])
@@ -104,6 +115,9 @@ def test_unversioned_canonical_write_routes_are_not_registered(
     assert response.status_code == 404, (
         f"Expected 404 for unversioned POST {path}, got {response.status_code}."
     )
+    assert response.json == _NOT_FOUND_PAYLOAD, (
+        f"Expected Falcon not-found payload for unversioned POST {path}."
+    )
 
 
 @pytest.mark.parametrize("path", ["/health/live", "/health/ready"])
@@ -116,4 +130,10 @@ def test_unversioned_health_routes_remain_registered(
 
     assert response.status_code == 200, (
         f"Expected 200 for {path}, got {response.status_code}."
+    )
+    assert response.json["status"] == "ok", (
+        f"Expected healthy status payload for {path}, got {response.json}."
+    )
+    assert isinstance(response.json["checks"], list), (
+        f"Expected health checks list for {path}, got {response.json}."
     )
