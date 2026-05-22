@@ -37,7 +37,6 @@ The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
 
-
 ## Linting
 
 Run the full lint gate with:
