@@ -1,4 +1,13 @@
-"""BDD steps for architecture-enforcement behaviour."""
+"""BDD orchestration for the Hecate architecture feature scenarios.
+
+The step definitions bridge the human-readable architecture feature file to
+the shared Hecate test helpers in `tests/architecture_hecate_config.py`.
+Scenarios select one fixture package, generate the corresponding TOML policy,
+invoke Hecate through its CLI wrapper, and assert the behavioural outcome. The
+lower-level unit tests cover command construction and config shape; this module
+keeps the fixture infrastructure connected to the behaviour-driven acceptance
+contract.
+"""
 
 from __future__ import annotations
 

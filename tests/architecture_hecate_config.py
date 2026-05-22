@@ -39,6 +39,18 @@ OUTBOUND_ADAPTER_GROUPS: tuple[str, ...] = (
 BARREL_OUTBOUND_FIXTURE = "api_imports_star_reexported_outbound_adapter"
 
 
+class HecateInvocationError(RuntimeError):
+    """Raised when the Hecate CLI process cannot be started or captured."""
+
+    def __init__(self, *, package_name: str | None = None) -> None:
+        """Build a contextual Hecate invocation failure."""
+        if package_name is None:
+            message = "failed to invoke Hecate for production packages"
+        else:
+            message = f"failed to invoke Hecate for fixture package {package_name!r}"
+        super().__init__(message)
+
+
 def write_fixture_config(tmp_path: Path, package_name: str) -> Path:
     """Write a Hecate config for one architecture fixture package.
 
@@ -75,6 +87,8 @@ def write_fixture_config(tmp_path: Path, package_name: str) -> Path:
 def run_hecate_fixture_check(
     package_name: str,
     config_path: Path,
+    *,
+    python_executable: str | Path = sys.executable,
 ) -> subprocess.CompletedProcess[str]:
     """Run Hecate against one architecture fixture package.
 
@@ -84,11 +98,20 @@ def run_hecate_fixture_check(
         Directory name of the fixture package under `tests/fixtures/architecture`.
     config_path : Path
         Path to the generated Hecate TOML configuration file.
+    python_executable : str | Path
+        Python executable used to invoke `python -m hecate`. Tests may inject a
+        substitute executable when validating command construction.
 
     Returns
     -------
     subprocess.CompletedProcess[str]
         Completed Hecate process with `stdout` and `stderr` captured.
+
+    Raises
+    ------
+    HecateInvocationError
+        Raised when the subprocess operation itself fails before Hecate can
+        return an architecture-check exit code.
 
     Notes
     -----
@@ -97,44 +120,66 @@ def run_hecate_fixture_check(
     """
     package = f"tests.fixtures.architecture.{package_name}"
     package_root = FIXTURE_ROOT / package_name
-    return subprocess.run(  # noqa: S603  # shell=False with trusted test args.
-        [
-            sys.executable,
-            "-m",
-            "hecate",
-            "check",
-            "--config",
-            str(config_path),
-            "--package",
-            package,
-            "--root",
-            str(package_root),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    command = [
+        str(python_executable),
+        "-m",
+        "hecate",
+        "check",
+        "--config",
+        str(config_path),
+        "--package",
+        package,
+        "--root",
+        str(package_root),
+    ]
+    try:
+        return subprocess.run(  # noqa: S603  # shell=False with trusted test args.
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise HecateInvocationError(package_name=package_name) from exc
 
 
-def run_hecate_production_check() -> subprocess.CompletedProcess[str]:
+def run_hecate_production_check(
+    *,
+    python_executable: str | Path = sys.executable,
+) -> subprocess.CompletedProcess[str]:
     """Run Hecate against the production package using project config.
+
+    Parameters
+    ----------
+    python_executable : str | Path
+        Python executable used to invoke `python -m hecate`. Tests may inject a
+        substitute executable when validating command construction.
 
     Returns
     -------
     subprocess.CompletedProcess[str]
         Completed Hecate process with `stdout` and `stderr` captured.
 
+    Raises
+    ------
+    HecateInvocationError
+        Raised when the subprocess operation itself fails before Hecate can
+        return an architecture-check exit code.
+
     Notes
     -----
     This invokes Hecate using the repository's default configuration from
     `pyproject.toml`.
     """
-    return subprocess.run(  # noqa: S603  # shell=False with static arguments.
-        [sys.executable, "-m", "hecate", "check"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        return subprocess.run(  # noqa: S603  # shell=False with static arguments.
+            [str(python_executable), "-m", "hecate", "check"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise HecateInvocationError from exc
 
 
 def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) -> str:

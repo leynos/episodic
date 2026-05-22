@@ -205,6 +205,14 @@ The plan signposts these skills for the implementing agent:
 - [x] (2026-05-22 00:00Z) Validated review fixes with `make check-fmt`,
   `make test`, `make typecheck`, `make lint`, `make markdownlint`, `make nixie`,
   and `coderabbit review --agent`.
+- [x] (2026-05-22 00:00Z) Addressed follow-up review findings by expanding
+  architecture test module documentation, adding explicit Hecate subprocess
+  invocation errors, making the Python executable injectable in the test helper,
+  adding unit coverage for generated TOML, subprocess failures, command
+  arguments, and snapshotting one full Hecate diagnostic.
+- [x] (2026-05-22 00:00Z) Validated follow-up review fixes with
+  `make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, and `make nixie`.
 
 ## Surprises & Discoveries
 
@@ -301,6 +309,13 @@ The plan signposts these skills for the implementing agent:
   `tests/canonical_storage/test_unit_of_work.py::test_uow_rolls_back_on_exception`.
   The test passed on focused rerun and the full gate then passed with 663
   passing tests and 3 skipped tests. Impact: no product change was needed.
+
+- Observation: follow-up review requested logging and metrics around Hecate
+  invocations. Impact: no wrapper was added because the architecture gate is a
+  local validation and Continuous Integration (CI) command, not a long-running
+  operational path; maintainer documentation already identifies `ARCH001`, the
+  importer, imported module, and dependency direction as the diagnostic fields
+  to inspect.
 
 ## Decision Log
 
