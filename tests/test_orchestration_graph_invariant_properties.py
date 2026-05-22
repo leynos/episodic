@@ -226,17 +226,30 @@ async def test_langgraph_respects_plan_execute_finish_order(
     assert state["orchestration_result"] is not None
 
 
-@pytest.mark.asyncio
-async def test_finish_callback_is_invoked_in_direct_execute_path() -> None:
-    """Direct execution invokes the finish callback with finished state."""
+async def _invoke_with_callback(
+    *,
+    checkpoint_port: InMemoryCheckpointStore | None = None,
+) -> tuple[dict[str, object], list[GenerationOrchestrationResult]]:
+    """Build a graph with a recording finish_callback and invoke it once.
+
+    Returns the final graph state and the list of domain results the
+    callback received, in invocation order.
+    """
     observed_results: list[GenerationOrchestrationResult] = []
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=_planner_result()),
         tool_executor=PropGraphToolExecutor(result=_tool_result()),
+        checkpoint_port=checkpoint_port,
         finish_callback=observed_results.append,
     )
-
     state = await graph.ainvoke(GenerationGraphState(request=_request()))
+    return state, observed_results
+
+
+@pytest.mark.asyncio
+async def test_finish_callback_is_invoked_in_direct_execute_path() -> None:
+    """Direct execution invokes the finish callback with finished state."""
+    state, observed_results = await _invoke_with_callback()
 
     assert len(observed_results) == 1
     assert observed_results[0] is not None
@@ -246,15 +259,9 @@ async def test_finish_callback_is_invoked_in_direct_execute_path() -> None:
 @pytest.mark.asyncio
 async def test_finish_callback_is_not_invoked_in_suspend_path() -> None:
     """Checkpointed execution stops before the finish callback hook."""
-    observed_results: list[GenerationOrchestrationResult] = []
-    graph = build_generation_orchestration_graph(
-        planner=PropGraphPlanner(result=_planner_result()),
-        tool_executor=PropGraphToolExecutor(result=_tool_result()),
-        checkpoint_port=InMemoryCheckpointStore(),
-        finish_callback=observed_results.append,
+    state, observed_results = await _invoke_with_callback(
+        checkpoint_port=InMemoryCheckpointStore()
     )
-
-    state = await graph.ainvoke(GenerationGraphState(request=_request()))
 
     assert not observed_results
     assert isinstance(state["suspended_result"], SuspendedWorkflowResult)
