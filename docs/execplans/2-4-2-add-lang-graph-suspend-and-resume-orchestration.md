@@ -734,10 +734,9 @@ unknown `mark_resumed()` tests for in-memory and SQL-backed stores. Validation
 passed with `make check-fmt`, `make typecheck`, `make lint`,
 `make markdownlint`, `make nixie`, and `make test`; the full test suite
 reported 461 passed and 3 skipped tests. An earlier `make test` run hit a
-single setup timeout in
-`tests/test_snapshot_sources.py::test_snapshot_resolved_bindings_persists_reference_source_documents[explicit_created_at]`;
- the isolated test rerun passed both parametrizations before the clean full
-rerun.
+single setup timeout in the explicit-created-at snapshot-source test. After
+that, the isolated test rerun passed both parametrizations before the clean
+full rerun.
 
 Revision note 2026-05-12: Review follow-up verified that the suspend checkpoint
 path already had no pre-save lookup and already derives reuse from the
@@ -754,7 +753,7 @@ the domain and SQLAlchemy model, plan payload required-input deserialization
 now uses the shared `TypeError` contract, and redundant future annotations
 imports were removed from the new checkpoint storage files. Stale
 checkpoint-store API references were updated to the final `save_or_reuse(...)`
-API, and screen-reader descriptions now precede the suspend and resume sequence
+API, and screen-reader descriptions now precede the suspend-and-resume sequence
 diagrams. The snapshot import comment was already resolved in the current code
 and required no change. Focused checkpoint, migration-drift, and
 malformed-payload tests passed.
