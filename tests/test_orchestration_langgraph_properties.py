@@ -1,5 +1,6 @@
 """Hypothesis property tests for orchestration LangGraph token rollups."""
 
+import dataclasses
 import string
 
 import hypothesis.strategies as st
@@ -18,6 +19,7 @@ from episodic.orchestration import (
     PlannedAction,
     PlannerResult,
     build_generation_orchestration_graph,
+    build_generation_result,
 )
 from tests._orchestration_property_support import (
     PropGraphPlanner,
@@ -112,7 +114,35 @@ def _assert_usage_rollup(
         f"got {result.total_usage.total_tokens}"
     )
 
+@given(planner=_USAGE_COUNTS, action=_USAGE_COUNTS)
+@settings(max_examples=50)
+def test_build_generation_result_total_usage_property(
+    planner: tuple[int, int, int],
+    action: tuple[int, int, int],
+) -> None:
+    """Property test: generation results sum planner and action usage fields."""
+    planner_result, actions = _build_planner_and_action(
+        _PropTokenInputs(
+            planner_input=planner[0],
+            planner_output=planner[1],
+            action_input=action[0],
+            action_output=action[1],
+        ),
+        "usage-property",
+    )
+    planner_result = dataclasses.replace(
+        planner_result,
+        usage=LLMUsage(*planner),
+    )
+    actions[0] = dataclasses.replace(actions[0], usage=LLMUsage(*action))
 
+    result = build_generation_result(planner_result, tuple(actions))
+
+    assert result.total_usage == LLMUsage(
+        planner[0] + action[0],
+        planner[1] + action[1],
+        planner[2] + action[2],
+    )
 @given(
     tokens=token_inputs_strategy,
     correlation_id=st.text(
