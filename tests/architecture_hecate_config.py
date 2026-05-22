@@ -21,6 +21,22 @@ import textwrap
 from pathlib import Path
 
 FIXTURE_ROOT: Path = Path(__file__).resolve().parent / "fixtures" / "architecture"
+COMPOSITION_ROOT_GROUPS: tuple[str, ...] = (
+    "application",
+    "composition_root",
+    "domain",
+    "inbound_adapter",
+    "outbound_adapter",
+)
+DOMAIN_GROUPS: tuple[str, ...] = ("domain",)
+APPLICATION_GROUPS: tuple[str, ...] = ("application", "domain")
+INBOUND_ADAPTER_GROUPS: tuple[str, ...] = ("inbound_adapter", "application", "domain")
+OUTBOUND_ADAPTER_GROUPS: tuple[str, ...] = (
+    "outbound_adapter",
+    "application",
+    "domain",
+)
+BARREL_OUTBOUND_FIXTURE = "api_imports_star_reexported_outbound_adapter"
 
 
 def write_fixture_config(tmp_path: Path, package_name: str) -> Path:
@@ -49,9 +65,7 @@ def write_fixture_config(tmp_path: Path, package_name: str) -> Path:
     config_path.write_text(
         _fixture_config(
             package,
-            treats_package_barrel_as_outbound=(
-                package_name == "api_imports_star_reexported_outbound_adapter"
-            ),
+            treats_package_barrel_as_outbound=package_name == BARREL_OUTBOUND_FIXTURE,
         ),
         encoding="utf-8",
     )
@@ -130,6 +144,11 @@ def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) ->
         if treats_package_barrel_as_outbound
         else f'"{package}.storage"'
     )
+    composition_root_allowed = _toml_string_array(COMPOSITION_ROOT_GROUPS)
+    domain_allowed = _toml_string_array(DOMAIN_GROUPS)
+    application_allowed = _toml_string_array(APPLICATION_GROUPS)
+    inbound_adapter_allowed = _toml_string_array(INBOUND_ADAPTER_GROUPS)
+    outbound_adapter_allowed = _toml_string_array(OUTBOUND_ADAPTER_GROUPS)
     return textwrap.dedent(
         f"""\
         [tool.hecate]
@@ -139,32 +158,31 @@ def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) ->
         [[tool.hecate.groups]]
         name = "composition_root"
         prefixes = ["{package}.runtime"]
-        allowed = [
-            "application",
-            "composition_root",
-            "domain",
-            "inbound_adapter",
-            "outbound_adapter",
-        ]
+        allowed = {composition_root_allowed}
 
         [[tool.hecate.groups]]
         name = "domain"
         prefixes = ["{package}.domain"]
-        allowed = ["domain"]
+        allowed = {domain_allowed}
 
         [[tool.hecate.groups]]
         name = "application"
         prefixes = ["{package}.service"]
-        allowed = ["application", "domain"]
+        allowed = {application_allowed}
 
         [[tool.hecate.groups]]
         name = "inbound_adapter"
         prefixes = ["{package}.api"]
-        allowed = ["inbound_adapter", "application", "domain"]
+        allowed = {inbound_adapter_allowed}
 
         [[tool.hecate.groups]]
         name = "outbound_adapter"
         prefixes = [{outbound_prefixes}]
-        allowed = ["outbound_adapter", "application", "domain"]
+        allowed = {outbound_adapter_allowed}
         """
     )
+
+
+def _toml_string_array(values: tuple[str, ...]) -> str:
+    """Return a TOML array of quoted strings."""
+    return "[" + ", ".join(f'"{value}"' for value in values) + "]"

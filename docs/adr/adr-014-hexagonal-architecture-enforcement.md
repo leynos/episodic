@@ -1,4 +1,5 @@
 # ADR-014: Hexagonal architecture enforcement
+
 ## Status
 
 Accepted, amended 2026-05-20 to adopt Hecate as the enforcement engine.
@@ -24,9 +25,9 @@ Hecate parses Python files with `ast`, classifies imports into explicit module
 groups, expands supported package re-exports, and emits stable diagnostics with
 a rule identifier, importer, imported module, and dependency direction.
 `make check-architecture` runs `hecate check`, `make lint` includes that gate
-before Ruff, and CI exposes it through the existing lint workflow. Episodic uses
- `ARCH001` as Hecate's configured rule identifier to preserve diagnostic
-continuity from the original checker.
+before Ruff, and Continuous Integration (CI) exposes it through the existing
+lint workflow. Episodic uses `ARCH001` as Hecate's configured rule identifier
+to preserve diagnostic continuity from the original checker.
 
 The first enforced groups are:
 

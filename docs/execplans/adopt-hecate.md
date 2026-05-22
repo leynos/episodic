@@ -67,9 +67,10 @@ The plan signposts these skills for the implementing agent:
   planning phase, the users' guide, developers' guide, design document,
   Architecture Decision Record (ADR), and roadmap should describe the current
   repo-local checker until the approved implementation changes it.
-- On implementation, record the decision to adopt Hecate in an ADR or by
-  superseding `docs/adr/adr-006-hexagonal-architecture-enforcement.md`, then
-  update `docs/episodic-podcast-generation-system-design.md` to reference the
+- On implementation, record the decision to adopt Hecate in an Architecture
+  Decision Record (ADR) or by superseding
+  `docs/adr/adr-006-hexagonal-architecture-enforcement.md`, then update
+  `docs/episodic-podcast-generation-system-design.md` to reference the
   accepted decision.
 - On implementation, update `docs/users-guide.md` only for user-visible command
   or diagnostic behaviour, update `docs/developers-guide.md` for
@@ -197,6 +198,13 @@ The plan signposts these skills for the implementing agent:
 - [x] (2026-05-20 00:00Z) Milestone 6: Ran full validation gates, ran final
   CodeRabbit review, cleared concerns, and prepared the final implementation
   state for commit.
+- [x] (2026-05-22 00:00Z) Addressed post-rebase review comments by adding
+  direct fixture-config tests for the package-barrel special case, factoring
+  repeated fixture group permission lists into named constants, fixing malformed
+  roadmap link definitions, and expanding first-use acronyms in Markdown.
+- [x] (2026-05-22 00:00Z) Validated review fixes with `make check-fmt`,
+  `make test`, `make typecheck`, `make lint`, `make markdownlint`, `make nixie`,
+  and `coderabbit review --agent`.
 
 ## Surprises & Discoveries
 
@@ -277,6 +285,23 @@ The plan signposts these skills for the implementing agent:
   final `make test` result was 631 passed and 3 skipped. Impact: the branch is
   ready for review with local gates and CodeRabbit clear.
 
+- Observation: post-rebase review identified that the generated fixture policy
+  could drift from the intended group layout and that the special package-barrel
+  fixture was only indirectly covered. Impact: the helper now names the shared
+  fixture group permission lists, and tests parse the generated TOML for both a
+  normal fixture and the package-barrel fixture.
+
+- Observation: Hecate exposes importable symbols, but this branch's tests
+  intentionally exercise the command-line interface contract used by
+  `make check-architecture` and `make lint`. Impact: keep subprocess-based
+  tests for now and defer any direct Python application programming interface
+  adoption until Hecate declares that API stable for consumers.
+
+- Observation: the first review-fix `make test` run hit a transient timeout in
+  `tests/canonical_storage/test_unit_of_work.py::test_uow_rolls_back_on_exception`.
+  The test passed on focused rerun and the full gate then passed with 663
+  passing tests and 3 skipped tests. Impact: no product change was needed.
+
 ## Decision Log
 
 - Decision: keep `make check-architecture` as the stable local command and
@@ -285,9 +310,9 @@ The plan signposts these skills for the implementing agent:
   2026-05-19 / Codex.
 
 - Decision: add Hecate as a pinned development dependency using the requested
-  Git SHA instead of invoking an unpinned global tool. Rationale: CI, local
-  validation, and reviewers need reproducible checker behaviour. Date/Author:
-  2026-05-19 / Codex.
+  Git SHA instead of invoking an unpinned global tool. Rationale: Continuous
+  Integration (CI), local validation, and reviewers need reproducible checker
+  behaviour. Date/Author: 2026-05-19 / Codex.
 
 - Decision: encode the production architecture policy in `pyproject.toml`
   under `[tool.hecate]`. Rationale: Hecate discovers that table by default from
@@ -314,6 +339,12 @@ The plan signposts these skills for the implementing agent:
   config. Rationale: Hecate reports bare star imports from package barrels at
   the package module edge, so this preserves star-import coverage without
   reintroducing local checker semantics. Date/Author: 2026-05-20 / Codex.
+
+- Decision: keep architecture tests on the Hecate command-line interface
+  rather than changing them to the importable Python API in this review fix.
+  Rationale: Episodic's public maintainer contract is the CLI reached through
+  Makefile targets, and Hecate has not yet been documented here as a stable
+  library API for downstream tests. Date/Author: 2026-05-22 / Codex.
 
 ## Implementation plan
 
