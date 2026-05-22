@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import concurrent.futures as cf
+import operator
+import typing as typ
+from unittest import mock
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 import episodic.concurrent_interpreters as ci
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 
 def _square(value: int) -> int:
@@ -20,6 +29,17 @@ def _explode_on_three(value: int) -> int:
     return value
 
 
+def _affine(value: int) -> int:
+    return (value * 3) - 7
+
+
+_ORDERED_MAP_TASKS: dict[str, cabc.Callable[[int], int]] = {
+    "affine": _affine,
+    "negate": typ.cast("cabc.Callable[[int], int]", operator.neg),
+    "square": _square,
+}
+
+
 @pytest.mark.asyncio
 async def test_inline_executor_maps_values_in_order() -> None:
     """Inline execution preserves deterministic input ordering."""
@@ -29,6 +49,25 @@ async def test_inline_executor_maps_values_in_order() -> None:
 
     assert results == [4, 1, 9], (
         "Expected inline executor to keep map output aligned with input order."
+    )
+
+
+@given(
+    items=st.lists(st.integers(min_value=-100, max_value=100), max_size=25),
+    task_name=st.sampled_from(sorted(_ORDERED_MAP_TASKS)),
+)
+def test_inline_executor_preserves_order_for_arbitrary_inputs(
+    items: list[int],
+    task_name: str,
+) -> None:
+    """Inline execution preserves map ordering for generated inputs."""
+    task = _ORDERED_MAP_TASKS[task_name]
+    executor = ci.InlineCpuTaskExecutor()
+
+    results = asyncio.run(executor.map_ordered(task, tuple(items)))
+
+    assert results == [task(item) for item in items], (
+        "Expected inline executor output to align with generated input order."
     )
 
 
@@ -51,6 +90,34 @@ async def test_interpreter_executor_maps_values_in_order(
 
     assert results == [4, 1, 9], (
         "Expected interpreter-backed executor to keep output aligned with input order."
+    )
+
+
+@given(
+    items=st.lists(st.integers(min_value=-100, max_value=100), max_size=25),
+    task_name=st.sampled_from(sorted(_ORDERED_MAP_TASKS)),
+)
+def test_interpreter_executor_preserves_order_for_arbitrary_inputs(
+    items: list[int],
+    task_name: str,
+) -> None:
+    """Interpreter-backed execution preserves map ordering for generated inputs."""
+    create_executor = mock.patch.object(
+        ci,
+        "_create_interpreter_pool_executor",
+        side_effect=lambda max_workers: cf.ThreadPoolExecutor(max_workers=max_workers),
+    )
+    task = _ORDERED_MAP_TASKS[task_name]
+    with create_executor:
+        executor = ci.InterpreterPoolCpuTaskExecutor(max_workers=3)
+
+        try:
+            results = asyncio.run(executor.map_ordered(task, tuple(items)))
+        finally:
+            executor.shutdown()
+
+    assert results == [task(item) for item in items], (
+        "Expected interpreter-backed executor output to align with input order."
     )
 
 
