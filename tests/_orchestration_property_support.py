@@ -171,11 +171,20 @@ prop_text = st.text(
     alphabet=string.ascii_letters + string.digits + "-_ .",
 ).filter(lambda value: bool(value.strip()))
 
+
+def _usage_from_counts(input_tokens: int, output_tokens: int) -> LLMUsage:
+    """Build internally consistent LLM token usage counts."""
+    return LLMUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=input_tokens + output_tokens,
+    )
+
+
 usage_strategy = st.builds(
-    LLMUsage,
+    _usage_from_counts,
     input_tokens=st.integers(min_value=0, max_value=10_000),
     output_tokens=st.integers(min_value=0, max_value=10_000),
-    total_tokens=st.integers(min_value=0, max_value=20_000),
 )
 
 planned_action_strategy = st.builds(

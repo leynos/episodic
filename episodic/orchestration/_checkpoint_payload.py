@@ -95,6 +95,20 @@ def _required_enum[EnumT: enum.Enum](
         raise TypeError(msg) from exc
 
 
+def _required_string_list(
+    payload: dict[str, object],
+    field_name: str,
+    *,
+    context: str,
+) -> tuple[str, ...]:
+    """Return a list-of-strings field from a checkpoint payload."""
+    items = _require_field(payload, field_name, list, context=context)
+    if not all(isinstance(item, str) for item in items):
+        msg = f"checkpoint {context} field {field_name} must be a list of strings."
+        raise TypeError(msg)
+    return tuple(items)
+
+
 def _usage_from_payload(payload: object) -> LLMUsage:
     """Return LLMUsage from a checkpoint payload."""
     usage_payload = _as_object_payload(payload, "usage")
@@ -124,6 +138,32 @@ def _plan_to_payload(plan: dto.ExecutionPlan) -> dict[str, object]:
     }
 
 
+def _planned_action_from_payload(payload: object) -> dto.PlannedAction:
+    """Return one PlannedAction from a checkpoint plan-step payload."""
+    step = _as_object_payload(payload, "plan step")
+    return dto.PlannedAction(
+        action_id=_required_string(step, "action_id", context="plan step"),
+        action_kind=_required_enum(
+            step,
+            "action_kind",
+            dto.ActionKind,
+            context="plan step",
+        ),
+        rationale=_required_string(step, "rationale", context="plan step"),
+        model_tier=_required_enum(
+            step,
+            "model_tier",
+            dto.ModelTier,
+            context="plan step",
+        ),
+        required_inputs=_required_string_list(
+            step,
+            "required_inputs",
+            context="plan step",
+        ),
+    )
+
+
 def _plan_from_payload(payload: object) -> dto.ExecutionPlan:
     """Return an ExecutionPlan from a checkpoint payload."""
     plan_payload = _as_object_payload(payload, "plan")
@@ -147,37 +187,7 @@ def _plan_from_payload(payload: object) -> dto.ExecutionPlan:
             "selected_execution_model",
             context="plan",
         ),
-        steps=tuple(
-            dto.PlannedAction(
-                action_id=_required_string(step, "action_id", context="plan step"),
-                action_kind=_required_enum(
-                    step,
-                    "action_kind",
-                    dto.ActionKind,
-                    context="plan step",
-                ),
-                rationale=_required_string(step, "rationale", context="plan step"),
-                model_tier=_required_enum(
-                    step,
-                    "model_tier",
-                    dto.ModelTier,
-                    context="plan step",
-                ),
-                required_inputs=tuple(
-                    str(item)
-                    for item in typ.cast(
-                        "list[object]",
-                        _require_field(
-                            step,
-                            "required_inputs",
-                            list,
-                            context="plan step",
-                        ),
-                    )
-                ),
-            )
-            for step in typ.cast("list[dict[str, object]]", steps)
-        ),
+        steps=tuple(_planned_action_from_payload(step) for step in steps),
     )
 
 

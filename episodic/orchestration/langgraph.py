@@ -63,6 +63,22 @@ else:
     protocols = importlib.import_module("episodic.orchestration._protocols")
 
 
+type ExecuteNodeResult = (
+    dict[str, tuple[dto.ActionExecutionResult, ...]]
+    | dict[str, dto.SuspendedWorkflowResult]
+)
+
+
+class ExecuteNodeFn(typ.Protocol):
+    """Callable protocol for async execute graph nodes."""
+
+    def __call__(
+        self, state: GenerationGraphState
+    ) -> cabc.Awaitable[ExecuteNodeResult]:
+        """Return the async execute-node update for *state*."""
+        ...
+
+
 async def _plan_node(
     state: GenerationGraphState,
     *,
@@ -228,7 +244,7 @@ def _invoke_finish_callback(
 def _build_execute_node(
     tool_executor: protocols.ToolExecutorPort,
     checkpoint_port: protocols.CheckpointPort | None,
-) -> tuple[typ.Any, str]:
+) -> tuple[ExecuteNodeFn, str]:
     """Return *(execute_node_fn, execute_target)* for the graph.
 
     When *checkpoint_port* is ``None``, returns the direct execute node
