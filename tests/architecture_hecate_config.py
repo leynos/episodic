@@ -37,17 +37,28 @@ OUTBOUND_ADAPTER_GROUPS: tuple[str, ...] = (
     "domain",
 )
 BARREL_OUTBOUND_FIXTURE = "api_imports_star_reexported_outbound_adapter"
+HECATE_TIMEOUT_SECONDS = 60
 
 
 class HecateInvocationError(RuntimeError):
     """Raised when the Hecate CLI process cannot be started or captured."""
 
-    def __init__(self, *, package_name: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        package_name: str | None = None,
+        timed_out: bool = False,
+    ) -> None:
         """Build a contextual Hecate invocation failure."""
         if package_name is None:
-            message = "failed to invoke Hecate for production packages"
+            context = "production packages"
         else:
-            message = f"failed to invoke Hecate for fixture package {package_name!r}"
+            context = f"fixture package {package_name!r}"
+        message = (
+            f"Hecate command timed out for {context}"
+            if timed_out
+            else f"failed to invoke Hecate for {context}"
+        )
         super().__init__(message)
 
 
@@ -138,7 +149,13 @@ def run_hecate_fixture_check(
             check=False,
             capture_output=True,
             text=True,
+            timeout=HECATE_TIMEOUT_SECONDS,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise HecateInvocationError(
+            package_name=package_name,
+            timed_out=True,
+        ) from exc
     except (OSError, subprocess.SubprocessError) as exc:
         raise HecateInvocationError(package_name=package_name) from exc
 
@@ -177,7 +194,10 @@ def run_hecate_production_check(
             check=False,
             capture_output=True,
             text=True,
+            timeout=HECATE_TIMEOUT_SECONDS,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise HecateInvocationError(timed_out=True) from exc
     except (OSError, subprocess.SubprocessError) as exc:
         raise HecateInvocationError from exc
 

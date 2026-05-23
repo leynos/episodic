@@ -3,202 +3,25 @@
 These tests exercise the repository's architecture policy through the same
 Hecate command-line interface used by `make lint`, while keeping fixture
 packages isolated with generated TOML configs. The module owns focused unit
-coverage for the fixture-config helper, subprocess wrapper behaviour, and the
 diagnostic contract that connects Hecate output to the behaviour-driven tests
-in `tests/steps/test_architecture_enforcement_steps.py`.
+in `tests/steps/test_architecture_enforcement_steps.py`; helper-level unit
+coverage lives in `tests/test_architecture_hecate_config.py`.
 """
 
-import subprocess  # noqa: S404  # Tests validate Hecate subprocess wrapping.
-import tomllib
 import typing as typ
-from pathlib import Path
 
 import pytest
 from architecture_hecate_config import (
-    BARREL_OUTBOUND_FIXTURE,
-    HecateInvocationError,
     run_hecate_fixture_check,
     run_hecate_production_check,
     write_fixture_config,
 )
 
 if typ.TYPE_CHECKING:
+    import subprocess  # noqa: S404  # Type-only CompletedProcess reference.
+    from pathlib import Path
+
     from syrupy.assertion import SnapshotAssertion
-
-
-def test_fixture_config_normal_fixture_excludes_package_barrel(
-    tmp_path: Path,
-) -> None:
-    """Normal fixture configs classify only storage as the outbound adapter."""
-    package_name = "api_imports_outbound_adapter"
-    package = f"tests.fixtures.architecture.{package_name}"
-
-    config = _read_fixture_config(tmp_path, package_name)
-
-    assert _group_prefixes(config, "outbound_adapter") == [f"{package}.storage"]
-
-
-def test_fixture_config_barrel_fixture_includes_package_barrel(
-    tmp_path: Path,
-) -> None:
-    """The barrel fixture config classifies the package barrel as outbound."""
-    package = f"tests.fixtures.architecture.{BARREL_OUTBOUND_FIXTURE}"
-
-    config = _read_fixture_config(tmp_path, BARREL_OUTBOUND_FIXTURE)
-
-    assert _group_prefixes(config, "outbound_adapter") == [
-        f"{package}.storage",
-        package,
-    ]
-
-
-def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
-    """Generated fixture configs expose Hecate's expected policy shape."""
-    package_name = "allowed_case"
-    package = f"tests.fixtures.architecture.{package_name}"
-
-    config = _read_fixture_config(tmp_path, package_name)
-
-    hecate_config = _hecate_config(config)
-    assert hecate_config["root_packages"] == [package]
-    assert hecate_config["default_rule_id"] == "ARCH001"
-    assert _group_prefixes(config, "composition_root") == [f"{package}.runtime"]
-    assert _group_allowed(config, "composition_root") == [
-        "application",
-        "composition_root",
-        "domain",
-        "inbound_adapter",
-        "outbound_adapter",
-    ]
-    assert _group_allowed(config, "domain") == ["domain"]
-    assert _group_allowed(config, "application") == ["application", "domain"]
-    assert _group_allowed(config, "inbound_adapter") == [
-        "inbound_adapter",
-        "application",
-        "domain",
-    ]
-    assert _group_allowed(config, "outbound_adapter") == [
-        "outbound_adapter",
-        "application",
-        "domain",
-    ]
-
-
-def test_fixture_check_wraps_subprocess_failures(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Fixture checks annotate subprocess failures with package context."""
-    config_path = write_fixture_config(tmp_path, "allowed_case")
-
-    def fail_run(
-        _command: list[str],
-        **_kwargs: object,
-    ) -> subprocess.CompletedProcess[str]:
-        raise OSError
-
-    monkeypatch.setattr(subprocess, "run", fail_run)
-
-    with pytest.raises(
-        HecateInvocationError,
-        match="failed to invoke Hecate for fixture package 'allowed_case'",
-    ) as exc_info:
-        run_hecate_fixture_check("allowed_case", config_path)
-
-    assert isinstance(exc_info.value.__cause__, OSError)
-
-
-def test_production_check_wraps_subprocess_failures(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Production checks annotate subprocess failures with gate context."""
-
-    def fail_run(
-        _command: list[str],
-        **_kwargs: object,
-    ) -> subprocess.CompletedProcess[str]:
-        raise subprocess.SubprocessError
-
-    monkeypatch.setattr(subprocess, "run", fail_run)
-
-    with pytest.raises(
-        HecateInvocationError,
-        match="failed to invoke Hecate for production packages",
-    ) as exc_info:
-        run_hecate_production_check()
-
-    assert isinstance(exc_info.value.__cause__, subprocess.SubprocessError)
-
-
-def test_fixture_check_uses_injected_python_and_explicit_arguments(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Fixture checks construct an isolated Hecate command."""
-    config_path = write_fixture_config(tmp_path, "allowed_case")
-    captured_command: list[str] = []
-
-    def capture_run(
-        command: list[str],
-        *,
-        check: bool,
-        capture_output: bool,
-        text: bool,
-    ) -> subprocess.CompletedProcess[str]:
-        captured_command.extend(command)
-        assert check is False
-        assert capture_output is True
-        assert text is True
-        return subprocess.CompletedProcess(command, 0, "", "")
-
-    monkeypatch.setattr(subprocess, "run", capture_run)
-
-    run_hecate_fixture_check(
-        "allowed_case",
-        config_path,
-        python_executable="/custom/python",
-    )
-
-    assert captured_command == [
-        "/custom/python",
-        "-m",
-        "hecate",
-        "check",
-        "--config",
-        str(config_path),
-        "--package",
-        "tests.fixtures.architecture.allowed_case",
-        "--root",
-        str(
-            Path(__file__).resolve().parent
-            / "fixtures"
-            / "architecture"
-            / "allowed_case",
-        ),
-    ]
-
-
-def test_production_check_uses_injected_python(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Production checks keep the executable substitutable."""
-    captured_command: list[str] = []
-
-    def capture_run(
-        command: list[str],
-        *,
-        check: bool,
-        capture_output: bool,
-        text: bool,
-    ) -> subprocess.CompletedProcess[str]:
-        captured_command.extend(command)
-        return subprocess.CompletedProcess(command, 0, "", "")
-
-    monkeypatch.setattr(subprocess, "run", capture_run)
-
-    run_hecate_production_check(python_executable="/custom/python")
-
-    assert captured_command == ["/custom/python", "-m", "hecate", "check"]
 
 
 @pytest.mark.parametrize(
@@ -322,38 +145,6 @@ def test_production_checker_accepts_scoped_packages() -> None:
 
     rendered = f"{completed_process.stdout}\n{completed_process.stderr}"
     assert completed_process.returncode == 0, rendered
-
-
-def _read_fixture_config(tmp_path: Path, package_name: str) -> dict[str, object]:
-    """Write and parse the fixture Hecate config."""
-    config_path = write_fixture_config(tmp_path, package_name)
-    return tomllib.loads(config_path.read_text(encoding="utf-8"))
-
-
-def _hecate_config(config: dict[str, object]) -> dict[str, object]:
-    """Return the generated `[tool.hecate]` config table."""
-    tool_config = typ.cast("dict[str, object]", config["tool"])
-    return typ.cast("dict[str, object]", tool_config["hecate"])
-
-
-def _group_prefixes(config: dict[str, object], group_name: str) -> list[str]:
-    """Return prefixes for one generated Hecate group."""
-    hecate_config = _hecate_config(config)
-    groups = typ.cast("list[dict[str, object]]", hecate_config["groups"])
-    for group in groups:
-        if group["name"] == group_name:
-            return typ.cast("list[str]", group["prefixes"])
-    raise AssertionError(group_name)
-
-
-def _group_allowed(config: dict[str, object], group_name: str) -> list[str]:
-    """Return allowed dependency groups for one generated Hecate group."""
-    hecate_config = _hecate_config(config)
-    groups = typ.cast("list[dict[str, object]]", hecate_config["groups"])
-    for group in groups:
-        if group["name"] == group_name:
-            return typ.cast("list[str]", group["allowed"])
-    raise AssertionError(group_name)
 
 
 def _render_process(completed_process: subprocess.CompletedProcess[str]) -> str:
