@@ -62,7 +62,7 @@ def create_series_binding(
 ) -> str:
     """Create a series-profile binding through the API."""
     response = client.simulate_post(
-        "/reference-bindings",
+        "/v1/reference-bindings",
         json={
             "reference_document_revision_id": revision_id,
             "target_kind": "series_profile",
@@ -264,7 +264,7 @@ def assert_brief_response(
 ) -> None:
     """Assert that one brief response contains the expected revision ids."""
     response = client.simulate_get(
-        f"/series-profiles/{request.profile_id}/brief",
+        f"/v1/series-profiles/{request.profile_id}/brief",
         params={
             "template_id": request.template_id,
             "episode_id": request.episode_id,

@@ -16,32 +16,32 @@ if typ.TYPE_CHECKING:
     ("path_template", "params_builder", "description"),
     [
         (
-            "/series-profiles/{profile_id}/reference-documents",
+            "/v1/series-profiles/{profile_id}/reference-documents",
             lambda fixture: {"limit": "not-an-int"},
             "Pagination parameters limit/offset must be integers.",
         ),
         (
-            "/series-profiles/{profile_id}/reference-documents",
+            "/v1/series-profiles/{profile_id}/reference-documents",
             lambda fixture: {"offset": "not-an-int"},
             "Pagination parameters limit/offset must be integers.",
         ),
         (
-            "/series-profiles/{profile_id}/reference-documents",
+            "/v1/series-profiles/{profile_id}/reference-documents",
             lambda fixture: {"limit": "0"},
             "limit must be between 1 and 100.",
         ),
         (
-            "/series-profiles/{profile_id}/reference-documents",
+            "/v1/series-profiles/{profile_id}/reference-documents",
             lambda fixture: {"limit": "101"},
             "limit must be between 1 and 100.",
         ),
         (
-            "/series-profiles/{profile_id}/reference-documents",
+            "/v1/series-profiles/{profile_id}/reference-documents",
             lambda fixture: {"offset": "-1"},
             "offset must be a non-negative integer.",
         ),
         (
-            "/reference-bindings",
+            "/v1/reference-bindings",
             lambda fixture: support._binding_list_params(
                 fixture,
                 limit="not-an-int",
@@ -49,7 +49,7 @@ if typ.TYPE_CHECKING:
             "Pagination parameters limit/offset must be integers.",
         ),
         (
-            "/reference-bindings",
+            "/v1/reference-bindings",
             lambda fixture: support._binding_list_params(
                 fixture,
                 offset="not-an-int",
@@ -57,17 +57,17 @@ if typ.TYPE_CHECKING:
             "Pagination parameters limit/offset must be integers.",
         ),
         (
-            "/reference-bindings",
+            "/v1/reference-bindings",
             lambda fixture: support._binding_list_params(fixture, limit="0"),
             "limit must be between 1 and 100.",
         ),
         (
-            "/reference-bindings",
+            "/v1/reference-bindings",
             lambda fixture: support._binding_list_params(fixture, limit="101"),
             "limit must be between 1 and 100.",
         ),
         (
-            "/reference-bindings",
+            "/v1/reference-bindings",
             lambda fixture: support._binding_list_params(fixture, offset="-1"),
             "offset must be a non-negative integer.",
         ),
@@ -95,7 +95,7 @@ def test_reference_document_api_rejects_missing_required_binding_params(
     support._seed_reference_binding(canonical_api_client, fixture)
 
     missing_target_kind = canonical_api_client.simulate_get(
-        "/reference-bindings",
+        "/v1/reference-bindings",
         params={"target_id": fixture.template_id},
     )
     support._assert_bad_request_error(
@@ -104,7 +104,7 @@ def test_reference_document_api_rejects_missing_required_binding_params(
     )
 
     missing_target_id = canonical_api_client.simulate_get(
-        "/reference-bindings",
+        "/v1/reference-bindings",
         params={"target_kind": "episode_template"},
     )
     support._assert_bad_request_error(
@@ -120,7 +120,7 @@ def test_reference_document_api_rejects_invalid_uuids(
     fixture = support.build_api_fixture(canonical_api_client)
 
     invalid_document_id = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/reference-documents/not-a-valid-uuid"
+        f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents/not-a-valid-uuid"
     )
     support._assert_bad_request_error(
         invalid_document_id,
@@ -128,7 +128,7 @@ def test_reference_document_api_rejects_invalid_uuids(
     )
 
     invalid_revision_id = canonical_api_client.simulate_get(
-        "/reference-document-revisions/not-a-valid-uuid"
+        "/v1/reference-document-revisions/not-a-valid-uuid"
     )
     support._assert_bad_request_error(
         invalid_revision_id,
@@ -136,7 +136,7 @@ def test_reference_document_api_rejects_invalid_uuids(
     )
 
     invalid_binding_id = canonical_api_client.simulate_get(
-        "/reference-bindings/not-a-valid-uuid"
+        "/v1/reference-bindings/not-a-valid-uuid"
     )
     support._assert_bad_request_error(
         invalid_binding_id,
@@ -144,7 +144,7 @@ def test_reference_document_api_rejects_invalid_uuids(
     )
 
     invalid_target_id = canonical_api_client.simulate_get(
-        "/reference-bindings",
+        "/v1/reference-bindings",
         params={
             "target_kind": "episode_template",
             "target_id": "not-a-valid-uuid",

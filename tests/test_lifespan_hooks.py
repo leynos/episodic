@@ -49,7 +49,7 @@ async def test_create_app_keeps_existing_canonical_routes_working(
     canonical_api_async_client: httpx.AsyncClient,
 ) -> None:
     """Keep the canonical-content routes available through the new seam."""
-    response = await canonical_api_async_client.get("/series-profiles")
+    response = await canonical_api_async_client.get("/v1/series-profiles")
 
     assert response.status_code == 200
     assert response.json() == {"items": []}

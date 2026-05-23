@@ -67,7 +67,7 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
     )
 
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
         params={"episode_id": episode_id, "template_id": fixture.template_id},
     )
 
@@ -110,7 +110,7 @@ def test_resolved_bindings_endpoint_rejects_bad_episode_id(
     """Resolved-bindings endpoint should reject malformed or absent episode_id."""
     fixture = reference_support.build_api_fixture(canonical_api_client)
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
         params=params,
     )
     assert response.status_code == 400
@@ -125,7 +125,7 @@ def test_resolved_bindings_endpoint_returns_404_for_unknown_profile(
     unknown_profile_id = str(uuid.uuid4())
     episode_id = str(uuid.uuid4())
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{unknown_profile_id}/resolved-bindings",
+        f"/v1/series-profiles/{unknown_profile_id}/resolved-bindings",
         params={"episode_id": episode_id},
     )
     assert response.status_code == 404, "Expected 404 for unknown series profile."
@@ -153,7 +153,7 @@ def test_endpoint_returns_404_for_episode_not_in_profile(
         )
     )
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/{endpoint}",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/{endpoint}",
         params={"episode_id": episode_id},
     )
     assert response.status_code == 404, (
@@ -188,7 +188,7 @@ def test_resolved_bindings_endpoint_returns_404_for_invalid_template(
         else str(uuid.uuid4())
     )
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
         params={"episode_id": episode_id, "template_id": template_id},
     )
     assert response.status_code == 404, (

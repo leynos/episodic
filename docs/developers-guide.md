@@ -61,6 +61,22 @@ Health contract:
   verifies database connectivity and returns `503 Service Unavailable` when the
   probe fails.
 
+Versioned API routing:
+
+- `/v1` is the target prefix for client-facing canonical API resources,
+  including series-profile, episode-template, reusable-reference, and
+  binding-resolution routes.
+- Existing unversioned canonical routes are pre-v0.1.0 implementation details.
+  They are not compatibility aliases and should return Falcon's normal
+  `404 Not Found` response.
+- Health checks remain root-level operator endpoints at `/health/live` and
+  `/health/ready`.
+- New terminal user interface (TUI)-facing and vertical-slice REST endpoints
+  must be registered under `/v1`.
+- The routing decision follows
+  [`adr-009-source-to-script-rest-vertical-slice.md`](adr/adr-009-source-to-script-rest-vertical-slice.md)
+  and [`episodic-tui-api-design.md`](episodic-tui-api-design.md).
+
 Testing guidance:
 
 - Use `tests/test_http_service_scaffold.py` for in-memory ASGI coverage of the
@@ -194,9 +210,9 @@ Migration files follow the naming convention
 The `make check-migrations` target detects drift between the ORM models and the
 applied migration history. It starts an ephemeral Postgres via py-pglite,
 applies all Alembic migrations, and uses
-`alembic.autogenerate.compare_metadata()` to compare the migrated schema
-against `Base.metadata`. If they differ, the check exits non-zero and reports
-the discrepancies.
+`alembic.autogenerate.compare_metadata()` to compare the migrated schema against
+ `Base.metadata`. If they differ, the check exits non-zero and reports the
+discrepancies.
 
 Run it locally before committing model changes:
 
@@ -264,8 +280,8 @@ Key expectations:
 - If a non-SQLite backend is requested while py-pglite is unavailable, the
   fixtures raise a clear error instead of silently skipping tests.
 - `make check-migrations` uses the same database technology, but a separate
-  bootstrap path. `episodic/canonical/storage/migration_check.py` starts a
-  plain `PGliteManager`, creates an async SQLAlchemy engine from
+  bootstrap path. `episodic/canonical/storage/migration_check.py` starts a plain
+   `PGliteManager`, creates an async SQLAlchemy engine from
   `config.get_connection_string()`, applies Alembic migrations, and compares
   the migrated schema against `Base.metadata`.
 
@@ -312,8 +328,8 @@ The `SqlAlchemyUnitOfWork` manages transaction boundaries:
   rolls back automatically.
 
 Database-level constraints (unique slugs, foreign keys, and CHECK constraints
-such as the weight bound on source documents) are enforced by Postgres and
-raise `sqlalchemy.exc.IntegrityError` on violation.
+such as the weight bound on source documents) are enforced by Postgres and raise
+ `sqlalchemy.exc.IntegrityError` on violation.
 
 ### Architecture enforcement
 
@@ -375,18 +391,18 @@ adapter (`episodic/api/app.py`) over domain services in
 
 ### Endpoints
 
-- `POST /series-profiles`
-- `GET /series-profiles`
-- `GET /series-profiles/{profile_id}`
-- `PATCH /series-profiles/{profile_id}`
-- `GET /series-profiles/{profile_id}/history`
-- `GET /series-profiles/{profile_id}/brief`
-- `GET /series-profiles/{profile_id}/resolved-bindings`
-- `POST /episode-templates`
-- `GET /episode-templates`
-- `GET /episode-templates/{template_id}`
-- `PATCH /episode-templates/{template_id}`
-- `GET /episode-templates/{template_id}/history`
+- `POST /v1/series-profiles`
+- `GET /v1/series-profiles`
+- `GET /v1/series-profiles/{profile_id}`
+- `PATCH /v1/series-profiles/{profile_id}`
+- `GET /v1/series-profiles/{profile_id}/history`
+- `GET /v1/series-profiles/{profile_id}/brief`
+- `GET /v1/series-profiles/{profile_id}/resolved-bindings`
+- `POST /v1/episode-templates`
+- `GET /v1/episode-templates`
+- `GET /v1/episode-templates/{template_id}`
+- `PATCH /v1/episode-templates/{template_id}`
+- `GET /v1/episode-templates/{template_id}/history`
 
 ### Optimistic locking and history
 
@@ -399,7 +415,8 @@ adapter (`episodic/api/app.py`) over domain services in
 
 ### Structured brief payloads
 
-`GET /series-profiles/{profile_id}/brief` returns a stable payload containing:
+`GET /v1/series-profiles/{profile_id}/brief` returns a stable payload
+containing:
 
 - `series_profile`: profile metadata, configuration, persisted `guardrails`,
   and current revision.
@@ -416,7 +433,7 @@ The brief endpoint accepts optional query parameters:
   serialized. Omitting it preserves the legacy behaviour of returning all
   matching bindings.
 
-`GET /series-profiles/{profile_id}/resolved-bindings` returns the resolved
+`GET /v1/series-profiles/{profile_id}/resolved-bindings` returns the resolved
 binding set directly. It requires `episode_id`, accepts optional `template_id`,
 and responds with `items`, where each item includes serialized `binding`,
 `document`, and `revision` payloads.
@@ -438,16 +455,16 @@ binding-resolution behavior.
 
 Supported endpoints:
 
-- `POST /series-profiles/{profile_id}/reference-documents`
-- `GET /series-profiles/{profile_id}/reference-documents`
-- `GET /series-profiles/{profile_id}/reference-documents/{document_id}`
-- `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`
-- `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
-- `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
-- `GET /reference-document-revisions/{revision_id}`
-- `POST /reference-bindings`
-- `GET /reference-bindings`
-- `GET /reference-bindings/{binding_id}`
+- `POST /v1/series-profiles/{profile_id}/reference-documents`
+- `GET /v1/series-profiles/{profile_id}/reference-documents`
+- `GET /v1/series-profiles/{profile_id}/reference-documents/{document_id}`
+- `PATCH /v1/series-profiles/{profile_id}/reference-documents/{document_id}`
+- `POST /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `GET /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `GET /v1/reference-document-revisions/{revision_id}`
+- `POST /v1/reference-bindings`
+- `GET /v1/reference-bindings`
+- `GET /v1/reference-bindings/{binding_id}`
 
 Implementation notes:
 
@@ -691,8 +708,8 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `ShowNotesResult`. Callers should catch this exception to handle malformed or
   unexpected LLM output gracefully. It is raised when the response text is not
   valid JSON; when the top-level JSON object does not contain an `entries`
-  list; when an entry in `entries` is not a JSON object; when a required field
-  (`topic` or `summary`) is absent, empty, or not a string; when an optional
+  list; when an entry in `entries` is not a JSON object; when a required field (
+  `topic` or `summary`) is absent, empty, or not a string; when an optional
   field (`timestamp` or `tei_locator`) is present but is not a string or null;
   and when a `timestamp` value does not match the ISO 8601 duration format.
 - `ChapterMarkersGenerator` follows the same boundary in
@@ -896,8 +913,8 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 
 The multi-source ingestion service normalizes heterogeneous source documents,
 applies source weighting heuristics, resolves conflicts, and merges the result
-into a canonical TEI episode. The service is implemented as an orchestrator
-(`ingest_multi_source`) that composes around the existing low-level
+into a canonical TEI episode. The service is implemented as an orchestrator (
+`ingest_multi_source`) that composes around the existing low-level
 `ingest_sources` persistence function.
 
 ### Port protocols

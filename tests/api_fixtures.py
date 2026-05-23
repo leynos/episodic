@@ -84,19 +84,19 @@ def build_api_fixture(client: testing.TestClient) -> ApiFixture:
     """Build common API fixture entities for reference-document endpoint tests."""
     primary_profile_id = post_and_return_id(
         client,
-        "/series-profiles",
+        "/v1/series-profiles",
         profile_body("api-reference-primary"),
         assertion_message="Expected profile creation to return 201.",
     )
     secondary_profile_id = post_and_return_id(
         client,
-        "/series-profiles",
+        "/v1/series-profiles",
         profile_body("api-reference-secondary"),
         assertion_message="Expected profile creation to return 201.",
     )
     template_id = post_and_return_id(
         client,
-        "/episode-templates",
+        "/v1/episode-templates",
         {
             "series_profile_id": primary_profile_id,
             "slug": "api-reference-template",
@@ -110,7 +110,7 @@ def build_api_fixture(client: testing.TestClient) -> ApiFixture:
     )
     secondary_template_id = post_and_return_id(
         client,
-        "/episode-templates",
+        "/v1/episode-templates",
         {
             "series_profile_id": secondary_profile_id,
             "slug": "api-reference-secondary-template",
@@ -139,7 +139,7 @@ def create_reference_document(
 ) -> str:
     """Create one reusable reference document and return its identifier."""
     response = client.simulate_post(
-        f"/series-profiles/{profile_id}/reference-documents",
+        f"/v1/series-profiles/{profile_id}/reference-documents",
         json={
             "kind": kind,
             "lifecycle_state": "active",
@@ -169,7 +169,7 @@ def assert_reference_document_list(
         params["kind"] = kind
 
     response = client.simulate_get(
-        f"/series-profiles/{profile_id}/reference-documents",
+        f"/v1/series-profiles/{profile_id}/reference-documents",
         params=params,
     )
     _assert_status(
@@ -200,7 +200,7 @@ def create_reference_document_revision(
 ) -> str:
     """Create one immutable reference-document revision and return its id."""
     response = client.simulate_post(
-        f"/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
+        f"/v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
         json={
             "content": {"summary": revision.summary},
             "content_hash": revision.content_hash,
@@ -226,7 +226,7 @@ def assert_reference_revision_history(
 ) -> list[dict[str, object]]:
     """List immutable revisions and assert a valid list envelope."""
     response = client.simulate_get(
-        f"/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
+        f"/v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions",
         params={"limit": "10", "offset": "0"},
     )
     _assert_status(
@@ -254,7 +254,7 @@ def create_reference_binding(
 ) -> str:
     """Create one reference binding and return its identifier."""
     response = client.simulate_post(
-        "/reference-bindings",
+        "/v1/reference-bindings",
         json={
             "reference_document_revision_id": revision_id,
             "target_kind": "episode_template",

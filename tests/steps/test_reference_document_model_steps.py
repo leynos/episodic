@@ -65,7 +65,7 @@ def create_profile_and_template(
 ) -> None:
     """Create profile/template entities used for binding checks."""
     profile_response = canonical_api_client.simulate_post(
-        "/series-profiles",
+        "/v1/series-profiles",
         json={
             "slug": "bdd-ref-profile",
             "title": "BDD Reference Profile",
@@ -79,7 +79,7 @@ def create_profile_and_template(
     profile_id = typ.cast("str", profile_response.json["id"])
 
     template_response = canonical_api_client.simulate_post(
-        "/episode-templates",
+        "/v1/episode-templates",
         json={
             "series_profile_id": profile_id,
             "slug": "bdd-ref-template",
@@ -217,7 +217,7 @@ def retrieve_brief(
 ) -> None:
     """Retrieve structured brief payload via API."""
     response = canonical_api_client.simulate_get(
-        f"/series-profiles/{context['profile_id']}/brief",
+        f"/v1/series-profiles/{context['profile_id']}/brief",
         params={"template_id": context["template_id"]},
     )
     assert response.status_code == 200

@@ -589,7 +589,7 @@ context.
 Finalize REST API surfaces with consistent contracts and version routing.
 Completion enables stable API consumption by clients.
 
-- [ ] 4.1.1. Introduce `/v1` as the target API prefix.
+- [x] 4.1.1. Introduce `/v1` as the target API prefix.
   - Route TUI-facing and vertical-slice endpoints under `/v1`.
   - Treat existing unversioned routes as pre-v0.1.0 implementation details
     that do not require compatibility preservation.
@@ -633,10 +633,9 @@ full approval, QA, audio, and export surfaces land. See
 design source-to-script vertical slice], and the [TUI API source-to-script
 vertical slice].
 
-[system design source-to-script vertical slice]:
-episodic-podcast-generation-system-design.md#source-to-script-vertical-slice
-[TUI API source-to-script vertical slice]:
-episodic-tui-api-design.md#source-to-script-vertical-slice
+[system design source-to-script vertical slice]: episodic-podcast-generation-system-design.md#source-to-script-vertical-slice
+
+[TUI API source-to-script vertical slice]: episodic-tui-api-design.md#source-to-script-vertical-slice
 
 - [ ] 4.3.1. Implement source and presenter-profile intake for script
   generation.

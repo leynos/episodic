@@ -15,7 +15,7 @@ def test_series_aligned_host_guest_access_paths(
     fixture = support.build_api_fixture(canonical_api_client)
 
     host_response = canonical_api_client.simulate_post(
-        f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents",
         json={
             "kind": "host_profile",
             "lifecycle_state": "active",
@@ -28,7 +28,7 @@ def test_series_aligned_host_guest_access_paths(
     )
 
     guest_response = canonical_api_client.simulate_post(
-        f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents",
         json={
             "kind": "guest_profile",
             "lifecycle_state": "active",
@@ -38,7 +38,7 @@ def test_series_aligned_host_guest_access_paths(
     assert guest_response.status_code == 201
 
     host_list_response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents",
         params={"kind": "host_profile", "limit": "10", "offset": "0"},
     )
     assert host_list_response.status_code == 200
@@ -49,7 +49,7 @@ def test_series_aligned_host_guest_access_paths(
     assert len(host_list_items) == 1, "Expected one host-profile document."
 
     guest_list_response = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.primary_profile_id}/reference-documents",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents",
         params={"kind": "guest_profile", "limit": "10", "offset": "0"},
     )
     assert guest_list_response.status_code == 200
@@ -60,7 +60,7 @@ def test_series_aligned_host_guest_access_paths(
     assert len(guest_list_items) == 1, "Expected one guest-profile document."
 
     cross_series_get = canonical_api_client.simulate_get(
-        f"/series-profiles/{fixture.secondary_profile_id}/reference-documents/{host_document_id}"
+        f"/v1/series-profiles/{fixture.secondary_profile_id}/reference-documents/{host_document_id}"
     )
     assert cross_series_get.status_code == 404, (
         "Expected cross-series document lookup to return 404."
@@ -80,7 +80,7 @@ def test_reference_document_api_rejects_boolean_expected_lock_version(
     )
 
     response = canonical_api_client.simulate_patch(
-        f"/series-profiles/{fixture.primary_profile_id}/reference-documents/{document_id}",
+        f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents/{document_id}",
         json={
             "expected_lock_version": True,
             "lifecycle_state": "active",
