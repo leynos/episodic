@@ -25,6 +25,12 @@ from architecture_hecate_config import (
 )
 
 
+class _ErrorCase(typ.NamedTuple):
+    exception_factory: Callable[[list[str]], Exception]
+    expected_match: str
+    expected_cause_type: type[BaseException]
+
+
 def test_fixture_config_normal_fixture_excludes_package_barrel(
     tmp_path: Path,
 ) -> None:
@@ -83,22 +89,28 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
     ]
 
 
-# The parametrised pytest fixture signature is intentionally wider than the
-# application limit so each case can name its expected exception contract.
-# pylint: disable=too-many-arguments,too-many-positional-arguments
 @pytest.mark.parametrize(
-    ("exception_factory", "expected_match", "expected_cause_type"),
+    "error_case",
     [
         pytest.param(
-            lambda _cmd: OSError(),
-            "failed to invoke Hecate for fixture package 'allowed_case'",
-            OSError,
+            _ErrorCase(
+                exception_factory=lambda _cmd: OSError(),
+                expected_match="failed to invoke Hecate for fixture package "
+                "'allowed_case'",
+                expected_cause_type=OSError,
+            ),
             id="os_error",
         ),
         pytest.param(
-            lambda cmd: subprocess.TimeoutExpired(cmd, HECATE_TIMEOUT_SECONDS),
-            "Hecate command timed out for fixture package 'allowed_case'",
-            subprocess.TimeoutExpired,
+            _ErrorCase(
+                exception_factory=lambda cmd: subprocess.TimeoutExpired(
+                    cmd,
+                    HECATE_TIMEOUT_SECONDS,
+                ),
+                expected_match="Hecate command timed out for fixture package "
+                "'allowed_case'",
+                expected_cause_type=subprocess.TimeoutExpired,
+            ),
             id="timeout",
         ),
     ],
@@ -106,9 +118,7 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
 def test_fixture_check_wraps_subprocess_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    exception_factory: Callable[[list[str]], Exception],
-    expected_match: str,
-    expected_cause_type: type[BaseException],
+    error_case: _ErrorCase,
 ) -> None:
     """Fixture checks annotate subprocess errors with package context."""
     config_path = write_fixture_config(tmp_path, "allowed_case")
@@ -117,42 +127,46 @@ def test_fixture_check_wraps_subprocess_errors(
         command: list[str],
         **_kwargs: object,
     ) -> subprocess.CompletedProcess[str]:
-        raise exception_factory(command)
+        raise error_case.exception_factory(command)
 
     monkeypatch.setattr(subprocess, "run", raising_run)
 
     with pytest.raises(
         HecateInvocationError,
-        match=expected_match,
+        match=error_case.expected_match,
     ) as exc_info:
         run_hecate_fixture_check("allowed_case", config_path)
 
-    assert isinstance(exc_info.value.__cause__, expected_cause_type)
+    assert isinstance(exc_info.value.__cause__, error_case.expected_cause_type)
 
 
-# pylint: enable=too-many-arguments,too-many-positional-arguments
 @pytest.mark.parametrize(
-    ("exception_factory", "expected_match", "expected_cause_type"),
+    "error_case",
     [
         pytest.param(
-            lambda _cmd: subprocess.SubprocessError(),
-            "failed to invoke Hecate for production packages",
-            subprocess.SubprocessError,
+            _ErrorCase(
+                exception_factory=lambda _cmd: subprocess.SubprocessError(),
+                expected_match="failed to invoke Hecate for production packages",
+                expected_cause_type=subprocess.SubprocessError,
+            ),
             id="subprocess_error",
         ),
         pytest.param(
-            lambda cmd: subprocess.TimeoutExpired(cmd, HECATE_TIMEOUT_SECONDS),
-            "Hecate command timed out for production packages",
-            subprocess.TimeoutExpired,
+            _ErrorCase(
+                exception_factory=lambda cmd: subprocess.TimeoutExpired(
+                    cmd,
+                    HECATE_TIMEOUT_SECONDS,
+                ),
+                expected_match="Hecate command timed out for production packages",
+                expected_cause_type=subprocess.TimeoutExpired,
+            ),
             id="timeout",
         ),
     ],
 )
 def test_production_check_wraps_subprocess_errors(
     monkeypatch: pytest.MonkeyPatch,
-    exception_factory: Callable[[list[str]], Exception],
-    expected_match: str,
-    expected_cause_type: type[BaseException],
+    error_case: _ErrorCase,
 ) -> None:
     """Production checks annotate subprocess errors with gate context."""
 
@@ -160,17 +174,17 @@ def test_production_check_wraps_subprocess_errors(
         command: list[str],
         **_kwargs: object,
     ) -> subprocess.CompletedProcess[str]:
-        raise exception_factory(command)
+        raise error_case.exception_factory(command)
 
     monkeypatch.setattr(subprocess, "run", raising_run)
 
     with pytest.raises(
         HecateInvocationError,
-        match=expected_match,
+        match=error_case.expected_match,
     ) as exc_info:
         run_hecate_production_check()
 
-    assert isinstance(exc_info.value.__cause__, expected_cause_type)
+    assert isinstance(exc_info.value.__cause__, error_case.expected_cause_type)
 
 
 def test_fixture_check_uses_injected_python_and_explicit_arguments(
