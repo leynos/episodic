@@ -569,7 +569,10 @@ request gates and must not be the only proof of routing correctness.
   3 skipped`.
 - [x] (2026-05-24T16:46:52Z) Ran final CodeRabbit review after deterministic
   gates; CodeRabbit reported no findings.
-- [ ] Commit, push, and update the draft pull request.
+- [x] (2026-05-24T16:49:45Z) Committed the documentation and roadmap close-out,
+  pushed branch `2-4-3-configure-celery-queue-routing`, and updated draft pull
+  request #106 with the implementation summary, validation results, CodeRabbit
+  status, execplan link, and Lody session reference.
 
 ## Surprises & Discoveries
 
