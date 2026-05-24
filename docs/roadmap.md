@@ -256,7 +256,7 @@ metering. Completion enables reliable, auditable generation workflows.
   - Define idempotency keys for each workflow step.
   - See
     [LangGraph Integration Principles](episodic-podcast-generation-system-design.md#langgraph-integration-principles).
-- [ ] 2.4.3. Configure Celery queue routing for workload isolation.
+- [x] 2.4.3. Configure Celery queue routing for workload isolation.
   - Route I/O-bound tasks to high-concurrency pools.
   - Route CPU-bound tasks to prefork pools.
 - [ ] 2.4.4. Instrument cost accounting with per-call usage metering.

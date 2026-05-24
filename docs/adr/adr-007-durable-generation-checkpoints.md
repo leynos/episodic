@@ -48,8 +48,10 @@ insert hits the idempotency-key constraint.
 - The graph can prove suspend/resume behaviour without exposing LangGraph
   checkpoint classes in public contracts.
 - Durable checkpoint state survives fresh unit-of-work and graph instances.
-- Queue routing remains a later concern; `TaskResumePort` is the seam that
-  future Celery callbacks will use.
+- Celery queue routing is now handled inside the worker adapter boundary:
+  worker topology owns queue, exchange, exchange type, routing-key metadata,
+  and workload classification. `TaskResumePort` remains the seam that future
+  Celery callbacks will use when LangGraph-to-Celery dispatch lands.
 - Planning may run again on repeated suspend attempts in this slice, but the
   side-effecting execution step is deduplicated by the checkpoint key.
 - The in-memory adapter is suitable for tests and local demos only. It has no

@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
  `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -548,11 +548,28 @@ request gates and must not be the only proof of routing correctness.
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie` all passed. The test run again passed
   with `664 passed, 3 skipped`.
-- [ ] Review whether Milestone 3 orchestration-facing workload intent is
-  required in this slice.
-- [ ] Update documentation and roadmap state.
-- [ ] Run final gates, CodeRabbit review, commit, push, and update the draft
-  pull request.
+- [x] (2026-05-24T16:19:43Z) Reviewed Milestone 3 orchestration-facing
+  workload intent. `GenerationOrchestrationRequest`, `TaskResumePort`, and
+  `resume_generation_orchestration(...)` remain provider-neutral and do not
+  dispatch Celery work yet, so this slice does not add a new route-intent DTO
+  or Vidai Mock scenario.
+- [x] (2026-05-24T16:19:43Z) Updated the design document, users' guide,
+  developers' guide, ADR-003, and ADR-007 to describe strict route-table
+  validation, full queue/exchange route metadata, and the worker-adapter
+  boundary.
+- [x] (2026-05-24T16:30:15Z) Ran documentation gates and CodeRabbit for the
+  documentation milestone. `make markdownlint` and `make nixie` passed, and
+  CodeRabbit reported no findings.
+- [x] (2026-05-24T16:30:15Z) Marked roadmap item `2.4.3` done after the
+  worker and documentation milestones had passed deterministic gates and
+  CodeRabbit review.
+- [x] (2026-05-24T16:46:52Z) Ran final gates: `make check-fmt`,
+  `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
+  `make nixie` all passed. The final test run passed with `664 passed,
+  3 skipped`.
+- [x] (2026-05-24T16:46:52Z) Ran final CodeRabbit review after deterministic
+  gates; CodeRabbit reported no findings.
+- [ ] Commit, push, and update the draft pull request.
 
 ## Surprises & Discoveries
 
@@ -627,8 +644,30 @@ request gates and must not be the only proof of routing correctness.
   structural fields; there is no generated route parser or classifier whose
   behaviour ranges over arbitrary inputs.
 
+- Decision: Do not add orchestration-facing workload intent in this roadmap
+  slice. Rationale: the current LangGraph orchestration exposes request,
+  checkpoint, and resume ports but does not dispatch Celery tasks; adding a DTO
+  now would be speculative and would broaden the worker-boundary task beyond
+  workload isolation.
+
 ## Outcomes & Retrospective
 
-This section remains empty while the ExecPlan is in draft. During
-implementation, record what shipped, what changed from the plan, which gates
-passed, and any follow-up work that remains.
+Roadmap item `2.4.3` shipped as a worker-boundary hardening slice. The Celery
+topology still exposes one topic exchange, `episodic.tasks`, and the two
+durable queues `episodic.io` and `episodic.cpu`; route construction now
+validates task names and workload values before producing Celery route
+metadata. Representative scaffold tasks have an explicit task-name tuple and
+workload map, and task routes include queue, exchange, exchange type, and
+routing key.
+
+The implementation deliberately did not add LangGraph-to-Celery dispatch or a
+new orchestration workload-intent DTO because the current orchestration layer
+does not enqueue Celery work yet. This preserves the documented hexagonal
+boundary: orchestration stays provider-neutral, and the worker adapter owns
+Celery mechanics. Vidai Mock was not used because no LLM-backed behavioural
+route path changed.
+
+Validation completed with `make check-fmt`, `make typecheck`, `make lint`,
+`make test`, `make markdownlint`, and `make nixie`. CodeRabbit reviewed the
+worker milestone, the documentation milestone, and the final state; all
+findings were cleared, and the final review reported no findings.

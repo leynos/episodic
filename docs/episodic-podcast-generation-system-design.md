@@ -92,11 +92,12 @@ dependency object.
 
 The worker data plane now follows the same pattern.
 `episodic/worker/topology.py` defines the canonical RabbitMQ exchange, queue,
-and routing-key taxonomy, `episodic/worker/tasks.py` holds typed representative
-task seams, and `episodic/worker/runtime.py` acts as the Celery composition
-root that reads environment configuration and constructs the worker
-application. ADR-003 records the accepted queue topology, pool split, and
-test-scope decision.
+and routing-key taxonomy, validates explicit task-to-workload route maps, and
+emits Celery route metadata with queue, exchange, exchange type, and routing
+key. `episodic/worker/tasks.py` holds typed representative task seams, and
+`episodic/worker/runtime.py` acts as the Celery composition root that reads
+environment configuration and constructs the worker application. ADR-003
+records the accepted queue topology, pool split, and test-scope decision.
 
 ### Hexagonal architecture enforcement
 
@@ -692,10 +693,15 @@ characteristics.
 
 The current scaffold instantiates this split with one topic exchange,
 `episodic.tasks`, and two queues: `episodic.io` for I/O-bound tasks and
-`episodic.cpu` for CPU-bound tasks. The first implementation validates this
-contract through eager-mode factory and routing tests rather than a broker-
-backed RabbitMQ harness; later roadmap items can layer live dispatch coverage
-on top of the same topology without changing the worker boundary.
+`episodic.cpu` for CPU-bound tasks. Queue bindings use `episodic.io.#` and
+`episodic.cpu.#`; representative diagnostic task routes use
+`episodic.io.diagnostic` and `episodic.cpu.diagnostic`. Route-table
+construction rejects malformed task names and non-`WorkloadClass` workload
+values before Celery can fall back to the default queue. The first
+implementation validates this contract through eager-mode factory and routing
+tests rather than a broker-backed RabbitMQ harness; later roadmap items can
+layer live dispatch coverage on top of the same topology without changing the
+worker boundary.
 
 For selected pure-Python CPU workloads, adapters may optionally use Python 3.14
 interpreter pools within a worker process before escalating to broader process
@@ -788,6 +794,10 @@ In the current worker scaffold, representative Celery tasks use injected
 callable seams instead of importing concrete adapters directly. Future task
 implementations should preserve this pattern by resolving storage, LLM, and
 other infrastructure through ports or composition-root-owned dependencies.
+This roadmap slice does not add LangGraph-to-Celery dispatch. Orchestration
+continues to expose provider-neutral request, checkpoint, and resume DTOs,
+whilst the worker adapter owns Celery queues, routing keys, and pool launch
+profiles.
 
 The first durable content-generation checkpoint implementation stores
 `WorkflowCheckpoint` records in `workflow_checkpoints`. The graph persists the
