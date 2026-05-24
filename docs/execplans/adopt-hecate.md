@@ -170,10 +170,10 @@ The plan signposts these skills for the implementing agent:
 - [x] (2026-05-19 00:00Z) Reviewed Hecate documentation at the pinned SHA and
   verified the project name, CLI entry point, configuration table, exit codes,
   group schema, and Episodic-specific migration mapping.[^1][^2][^3][^4]
-- [x] (2026-05-19 00:00Z) Inspected the current Makefile, CI workflow,
-  `pyproject.toml`, architecture checker package, architecture tests, BDD
-  steps, fixture packages, ADR-014, the system design, the developers' guide,
-  and the roadmap.
+- [x] (2026-05-19 00:00Z) Inspected the current Makefile, Continuous
+  Integration (CI) workflow, `pyproject.toml`, architecture checker package,
+  architecture tests, BDD steps, fixture packages, ADR-014, the system design,
+  the developers' guide, and the roadmap.
 - [x] (2026-05-19 00:00Z) Drafted this plan for approval.
 - [x] (2026-05-19 00:00Z) Validated the planning artefact with
   `make check-fmt`, `make lint`, `make test`, `make markdownlint`, and
