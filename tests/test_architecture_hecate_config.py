@@ -6,13 +6,11 @@ The broader architecture behaviour remains covered in
 `tests/test_architecture_enforcement.py` and the BDD step tests.
 """
 
-# ruff: noqa: I001
-
 import subprocess  # noqa: S404  # Tests validate Hecate subprocess wrapping.
 import tomllib
 import typing as typ
-from pathlib import Path
 from collections.abc import Callable  # noqa: ICN003, TC003
+from pathlib import Path
 
 import pytest
 from architecture_hecate_config import (
