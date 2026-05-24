@@ -11,4 +11,4 @@ __pycache__/
 .agents/mcp/context_pack/packs/.repo.lock
 **/*.rs.bk
 *.swp
-.agents/mcp/context_pack/packs/.repo.lock
+.claude/
