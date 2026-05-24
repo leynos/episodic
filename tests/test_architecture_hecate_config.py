@@ -18,6 +18,7 @@ import pytest
 from architecture_hecate_config import (
     BARREL_OUTBOUND_FIXTURE,
     HECATE_TIMEOUT_SECONDS,
+    REPO_ROOT,
     HecateInvocationError,
     run_hecate_fixture_check,
     run_hecate_production_check,
@@ -205,6 +206,7 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
             "capture_output": True,
             "text": True,
             "timeout": HECATE_TIMEOUT_SECONDS,
+            "cwd": REPO_ROOT,
         }
         return subprocess.CompletedProcess(command, 0, "", "")
 
@@ -251,6 +253,7 @@ def test_production_check_uses_injected_python(
             "capture_output": True,
             "text": True,
             "timeout": HECATE_TIMEOUT_SECONDS,
+            "cwd": REPO_ROOT,
         }
         return subprocess.CompletedProcess(command, 0, "", "")
 

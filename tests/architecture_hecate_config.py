@@ -21,6 +21,7 @@ import textwrap
 from pathlib import Path
 
 FIXTURE_ROOT: Path = Path(__file__).resolve().parent / "fixtures" / "architecture"
+REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 COMPOSITION_ROOT_GROUPS: tuple[str, ...] = (
     "application",
     "composition_root",
@@ -150,6 +151,7 @@ def run_hecate_fixture_check(
             capture_output=True,
             text=True,
             timeout=HECATE_TIMEOUT_SECONDS,
+            cwd=REPO_ROOT,
         )
     except subprocess.TimeoutExpired as exc:
         raise HecateInvocationError(
@@ -195,6 +197,7 @@ def run_hecate_production_check(
             capture_output=True,
             text=True,
             timeout=HECATE_TIMEOUT_SECONDS,
+            cwd=REPO_ROOT,
         )
     except subprocess.TimeoutExpired as exc:
         raise HecateInvocationError(timed_out=True) from exc
