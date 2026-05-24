@@ -834,12 +834,18 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   adapter for durable checkpoint persistence.
 
 `build_generation_orchestration_graph(...)` accepts an optional
-`finish_callback: Callable[[GenerationGraphState], None]` for observability and
-test event recording. The hook fires only on the direct
-`plan -> execute -> finish` path, after finish-node aggregation has produced an
-`orchestration_result` and before the graph returns. It is not invoked on the
+`finish_callback: Callable[[GenerationOrchestrationResult], None]` for
+observability and test event recording. The hook fires only on the direct
+`plan -> execute -> finish` path, after finish-node aggregation has produced
+the domain result and before the graph returns. It is not invoked on the
 checkpoint suspend path. Callback exceptions are logged without replacing the
-already computed graph result.
+already computed graph result. The graph does not serialise concurrent
+invocations of a shared callback; callbacks that mutate shared state must
+provide their own synchronisation.
+
+`GenerationGraphState` is part of the public orchestration API for callers that
+invoke the LangGraph graph directly. Treat it as the framework state carrier
+for graph nodes rather than as a domain DTO exposed through hooks.
 
 ### Maintainer rules
 

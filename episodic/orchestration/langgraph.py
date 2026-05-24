@@ -223,7 +223,9 @@ def _invoke_finish_callback(
 
     Logs a debug event on success and an error event on failure.
     Exceptions are swallowed so that callback failures do not replace
-    the already-computed graph result.
+    the already-computed graph result. The callback is invoked synchronously
+    in the graph execution context; callbacks shared across concurrent graph
+    invocations must provide their own synchronisation.
     """
     try:
         finish_callback(result["orchestration_result"])
@@ -306,7 +308,10 @@ def build_generation_orchestration_graph(
             `GenerationOrchestrationResult` produced by the finish node.
             Invoked only on the direct plan -> execute -> finish path, not
             the checkpoint suspend path. Callback exceptions are logged
-            without replacing the computed graph result.
+            without replacing the computed graph result. The graph does not
+            serialise concurrent invocations of the same callback; callbacks
+            that mutate shared state must be thread-safe or otherwise
+            synchronise their own state.
     """
     graph = StateGraph(GenerationGraphState)
 

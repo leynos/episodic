@@ -1,5 +1,6 @@
 """Property tests for LangGraph orchestration invariants."""
 
+import asyncio
 import string
 
 import hypothesis.strategies as st
@@ -291,3 +292,28 @@ async def test_langgraph_finish_callback_errors_do_not_replace_result() -> None:
     assert state["orchestration_result"] is not None
     assert state["planner_result"] == planner_result
     assert state["action_results"] == (tool_result,)
+
+
+@pytest.mark.asyncio
+async def test_finish_callback_records_concurrent_direct_results() -> None:
+    """Concurrent direct execution invokes the shared finish callback once each."""
+    expected_invocations = 4
+    observed_results: list[GenerationOrchestrationResult] = []
+    graph = build_generation_orchestration_graph(
+        planner=PropGraphPlanner(result=_planner_result()),
+        tool_executor=PropGraphToolExecutor(result=_tool_result()),
+        finish_callback=observed_results.append,
+    )
+
+    states = await asyncio.gather(
+        *(
+            graph.ainvoke(
+                GenerationGraphState(request=_request(f"callback-concurrent-{index}"))
+            )
+            for index in range(expected_invocations)
+        )
+    )
+
+    assert len(observed_results) == expected_invocations
+    assert all(result is not None for result in observed_results)
+    assert [state["orchestration_result"] for state in states] == observed_results
