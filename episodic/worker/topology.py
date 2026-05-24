@@ -7,6 +7,8 @@ import types
 
 from kombu import Exchange, Queue
 
+MIN_DOTTED_TASK_NAME_PARTS = 2
+
 
 class WorkloadClass(enum.StrEnum):
     """Canonical workload classes for routed Celery tasks."""
@@ -87,6 +89,27 @@ def _validate_non_empty_str(attr_path: str, value: str) -> None:
     if not value.strip():
         msg = f"{attr_path} must be a non-empty string."
         raise ValueError(msg)
+
+
+def _validate_task_name(task_name: str) -> None:
+    """Raise ValueError if a task name cannot be routed deliberately."""
+    if not isinstance(task_name, str):
+        msg = "Worker task names must be non-empty dotted names."
+        raise TypeError(msg)
+    task_parts = task_name.split(".")
+    if task_name != task_name.strip() or len(task_parts) < MIN_DOTTED_TASK_NAME_PARTS:
+        msg = "Worker task names must be non-empty dotted names."
+        raise ValueError(msg)
+    if any(not part for part in task_parts):
+        msg = "Worker task names must be non-empty dotted names."
+        raise ValueError(msg)
+
+
+def _validate_task_workload(workload: WorkloadClass) -> None:
+    """Raise TypeError if a task workload was not classified explicitly."""
+    if not isinstance(workload, WorkloadClass):
+        msg = "Worker task workloads must be WorkloadClass values."
+        raise TypeError(msg)
 
 
 def _validate_unique_queue_names(queues: tuple[WorkerQueueSpec, ...]) -> None:
@@ -173,9 +196,13 @@ class WorkerTopology:
         """Build Celery route metadata from task-name to workload mapping."""
         routes: dict[str, dict[str, str]] = {}
         for task_name, workload in task_workloads.items():
+            _validate_task_name(task_name)
+            _validate_task_workload(workload)
             queue = self.queue_for(workload)
             routes[task_name] = {
                 "queue": queue.name,
+                "exchange": self.exchange_name,
+                "exchange_type": self.exchange_type,
                 "routing_key": queue.diagnostic_routing_key,
             }
         return routes

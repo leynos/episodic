@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
  `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -524,7 +524,35 @@ request gates and must not be the only proof of routing correctness.
 - [x] (2026-05-19T19:13:40Z) Committed this ExecPlan, pushed the branch, and
   opened draft pull request
   [#106](https://github.com/leynos/episodic/pull/106) for plan review.
-- [ ] Await explicit plan approval before implementation.
+- [x] (2026-05-24T00:00:00Z) Received explicit approval to proceed with the
+  planned implementation.
+- [x] (2026-05-24T00:00:00Z) Implemented Milestone 1 fail-first
+  route-contract tests and ran `make test` with output captured in
+  `/tmp/test-red-episodic-2-4-3-configure-celery-queue-routing.out`. The run
+  failed as expected with four failures covering missing exchange metadata,
+  missing `SCAFFOLD_TASK_NAMES`, and missing malformed route-table validation.
+- [x] (2026-05-24T15:59:35Z) Implemented Milestone 2 strict route
+  classification and metadata. The worker route builder now validates task
+  names and `WorkloadClass` values, scaffold task names are explicit, route
+  metadata includes `queue`, `exchange`, `exchange_type`, and `routing_key`,
+  and the BDD scenario asserts both exchange and queue targeting.
+- [x] (2026-05-24T15:59:35Z) Ran deterministic gates before CodeRabbit:
+  `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+  `make markdownlint`, and `make nixie` all passed. The post-implementation
+  test run passed with `664 passed, 3 skipped`.
+- [x] (2026-05-24T16:11:21Z) Ran CodeRabbit for the implementation milestone.
+  CodeRabbit reported two minor findings asking for clearer assertion failure
+  messages in `tests/test_worker_routing_contract.py`; both were valid and
+  were applied.
+- [x] (2026-05-24T16:17:32Z) Re-ran gates after applying CodeRabbit findings:
+  `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+  `make markdownlint`, and `make nixie` all passed. The test run again passed
+  with `664 passed, 3 skipped`.
+- [ ] Review whether Milestone 3 orchestration-facing workload intent is
+  required in this slice.
+- [ ] Update documentation and roadmap state.
+- [ ] Run final gates, CodeRabbit review, commit, push, and update the draft
+  pull request.
 
 ## Surprises & Discoveries
 
@@ -561,6 +589,12 @@ request gates and must not be the only proof of routing correctness.
   while the focused rerun and full rerun both passed. Impact: record it as a
   transient validation anomaly rather than a plan regression.
 
+- Observation: adding the fail-first unit coverage to
+  `tests/test_worker_service_scaffold.py` pushed that file over the Pylint
+  module length limit. Impact: the route-table tests were moved into
+  `tests/test_worker_routing_contract.py`, leaving scaffold execution tests in
+  the original module.
+
 ## Decision Log
 
 - Decision: Keep this ExecPlan in draft status and do not implement routing
@@ -587,6 +621,11 @@ request gates and must not be the only proof of routing correctness.
   parsed route inputs are introduced. Rationale: property tests add useful
   rigour for invariants over ranges of inputs, but a fixed constant route table
   is better covered by precise unit and behavioural tests.
+
+- Decision: Do not add property tests for this implementation milestone.
+  Rationale: the change keeps a fixed, explicit route table and validates only
+  structural fields; there is no generated route parser or classifier whose
+  behaviour ranges over arbitrary inputs.
 
 ## Outcomes & Retrospective
 

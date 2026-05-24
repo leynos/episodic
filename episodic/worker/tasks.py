@@ -44,6 +44,7 @@ if typ.TYPE_CHECKING:
 IO_DIAGNOSTIC_TASK_NAME = "episodic.worker.io_diagnostic"
 CPU_DIAGNOSTIC_TASK_NAME = "episodic.worker.cpu_diagnostic"
 MAX_CPU_DIAGNOSTIC_ITERATIONS = 1_000_000
+SCAFFOLD_TASK_NAMES = (IO_DIAGNOSTIC_TASK_NAME, CPU_DIAGNOSTIC_TASK_NAME)
 SCAFFOLD_TASK_WORKLOADS = {
     IO_DIAGNOSTIC_TASK_NAME: WorkloadClass.IO_BOUND,
     CPU_DIAGNOSTIC_TASK_NAME: WorkloadClass.CPU_BOUND,
@@ -240,4 +241,4 @@ def register_scaffold_tasks(
     # the Celery app, so deleting the local names avoids accidental direct calls to
     # those local functions instead of using the registered tasks.
     del run_io_diagnostic, run_cpu_diagnostic
-    return (IO_DIAGNOSTIC_TASK_NAME, CPU_DIAGNOSTIC_TASK_NAME)
+    return SCAFFOLD_TASK_NAMES
