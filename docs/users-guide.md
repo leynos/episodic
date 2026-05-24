@@ -45,10 +45,10 @@ This guide will cover:
   profile. TEI headers automatically capture provenance metadata including
   source priorities, ingestion timestamps, and reviewer identities. Source
   normalisation fan-out now uses metadata-aware asyncio task creation, so
-  custom event-loop task factories can receive operation metadata (
-  `operation_name`, `correlation_id`, `priority_hint`) for diagnostics. Storage
-  identifiers generated during canonical ingestion use time-ordered UUIDv7
-  values for improved chronological locality.
+  custom event-loop task factories can receive operation metadata
+  (`operation_name`, `correlation_id`, `priority_hint`) for diagnostics.
+  Storage identifiers generated during canonical ingestion use time-ordered
+  UUIDv7 values for improved chronological locality.
 - Large canonical TEI XML payloads are compressed with standard-library
   Zstandard in persistence storage while API and domain read paths continue to
   return plain text transparently.
@@ -367,9 +367,10 @@ While we're building out the platform, you can:
 4. **Contribute**: If you're interested in contributing, check out
    [`../AGENTS.md`](../AGENTS.md) for guidelines and code quality standards.
 
-Architecture checks now run as part of the development and CI gates. They do
-not add a public API, but they protect release stability by preventing service
-code from bypassing the documented ports and adapter boundaries.
+Hecate-backed architecture checks now run as part of the development and CI
+gates. They do not add a public API, but they protect release stability by
+preventing service code from bypassing the documented ports and adapter
+boundaries.
 
 ## Questions or Feedback?
 

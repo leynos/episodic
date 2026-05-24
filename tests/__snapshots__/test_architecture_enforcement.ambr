@@ -1,0 +1,10 @@
+# serializer version: 1
+# name: test_checker_diagnostic_output_matches_snapshot
+  '''
+  stdout:
+  ARCH001: tests.fixtures.architecture.domain_imports_storage.domain:3 imports forbidden module tests.fixtures.architecture.domain_imports_storage.storage (domain -> outbound_adapter)
+  
+  stderr:
+  
+  '''
+# ---

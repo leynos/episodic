@@ -37,6 +37,33 @@ The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
 
+## Linting
+
+Run the full lint gate with:
+
+```shell
+make lint
+```
+
+The target runs the Hecate architecture import-boundary checker, Ruff, and a
+focused Pylint 4 pass. The Pylint pass is invoked through
+`uv tool run --python pypy` with the pinned `pylint-pypy-shim` wrapper from
+[github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
+ That wrapper installs the PyPy-specific Astroid compatibility patch before
+delegating to Pylint.
+
+Pylint's message selection is allow-listed in `pyproject.toml` with
+`disable = ["all"]` and explicit `enable` entries for the logging, match,
+refactoring, standard-library, and modified-iteration checks this repository
+cares about. Keep rule rationale comments beside those entries, so future lint
+changes explain why a rule is enabled, instead of only recording its name.
+
+The wrapper disables Pylint's `syntax-error` message for this pass because the
+managed PyPy runtime currently parses Python 3.11 syntax while the project
+targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
+the wrapper and skipped, which keeps parse incompatibilities visible without
+hiding other diagnostics from files that PyPy can analyse.
+
 ## Falcon HTTP runtime
 
 The canonical HTTP adapter has two layers:
@@ -339,9 +366,9 @@ Run the architecture checker directly when changing package boundaries:
 make check-architecture
 ```
 
-`make lint` runs Ruff and then this architecture gate. The checker lives in
-`episodic.architecture` and reports diagnostics as `ARCH001` with the importer,
-imported module, and dependency direction.
+`make lint` runs this architecture gate before Ruff and Pylint. Hecate reads
+`[tool.hecate]` from `pyproject.toml` and reports diagnostics as `ARCH001` with
+the importer, imported module, and dependency direction.
 
 The enforced groups are:
 
@@ -355,8 +382,9 @@ The enforced groups are:
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
 
-When adding a new port or adapter, update the manifest in
-`episodic/architecture/checker.py` in the same change as the package. Add or
+When adding a new port or adapter, update `[tool.hecate]` in `pyproject.toml`
+in the same change as the package. Keep composition-root prefixes before
+broader adapter prefixes because Hecate uses first-match group ordering. Add or
 adjust fixture coverage in `tests/fixtures/architecture/` and run:
 
 ```shell
@@ -708,8 +736,8 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `ShowNotesResult`. Callers should catch this exception to handle malformed or
   unexpected LLM output gracefully. It is raised when the response text is not
   valid JSON; when the top-level JSON object does not contain an `entries`
-  list; when an entry in `entries` is not a JSON object; when a required field (
-  `topic` or `summary`) is absent, empty, or not a string; when an optional
+  list; when an entry in `entries` is not a JSON object; when a required field
+  (`topic` or `summary`) is absent, empty, or not a string; when an optional
   field (`timestamp` or `tei_locator`) is present but is not a string or null;
   and when a `timestamp` value does not match the ISO 8601 duration format.
 - `ChapterMarkersGenerator` follows the same boundary in
@@ -913,8 +941,8 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 
 The multi-source ingestion service normalizes heterogeneous source documents,
 applies source weighting heuristics, resolves conflicts, and merges the result
-into a canonical TEI episode. The service is implemented as an orchestrator (
-`ingest_multi_source`) that composes around the existing low-level
+into a canonical TEI episode. The service is implemented as an orchestrator
+(`ingest_multi_source`) that composes around the existing low-level
 `ingest_sources` persistence function.
 
 ### Port protocols

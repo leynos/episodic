@@ -124,9 +124,9 @@ Boundary rules:
   checkpoint audits are part of the later orchestration enforcement slice.
 
 For screen readers: The following class diagram shows the module categories
-used by the architecture checker, the allowed dependency directions between
-them, and the conceptual forbidden adapter and composition-root dependencies
-that the checker reports as diagnostics.
+used by the Hecate architecture checker, the allowed dependency directions
+between them, and the conceptual forbidden adapter and composition-root
+dependencies that the checker reports as diagnostics.
 
 ```mermaid
 classDiagram
@@ -161,7 +161,7 @@ classDiagram
   }
 
   class ArchitectureChecker {
-    +run_check(paths)
+    +hecate_check(config)
     +classify_module(module_path)
     +validate_dependency(importer_kind, imported_kind)
     +emit_diagnostic(rule_id, importer, imported, reason)
@@ -199,13 +199,13 @@ directions, and checker-enforced forbidden dependency concepts._
 
 Enforcement mechanisms:
 
-- `make check-architecture` runs the repo-local architecture checker in
-  `episodic.architecture`, and `make lint` includes that gate after Ruff.
+- `make check-architecture` runs `hecate check` against `[tool.hecate]` in
+  `pyproject.toml`, and `make lint` includes that gate before Ruff.
 - Architecture tests validate the allowed dependency graph and port contract
   adherence as part of `make test`.
-- The current checker covers canonical domain and port modules, application
-  services, Falcon and worker adapter seams, SQLAlchemy and LLM outbound
-  adapters, and explicit composition roots.
+- The current Hecate policy covers canonical domain and port modules,
+  application services, Falcon and worker adapter seams, SQLAlchemy and LLM
+  outbound adapters, and explicit composition roots.
 - Contract tests exercise port behaviour against adapter implementations, so
   adapters are verified without coupling to infrastructure in the domain.
 - Roadmap item `2.4.5` extends the same mechanism to LangGraph-node-specific
@@ -871,13 +871,13 @@ tiering assigns higher-capability models to planning and cheaper models to
 execution when budgets are tight. External tools integrate through outbound
 ports, including optional
 [Model Context Protocol (MCP)](agentic-systems-with-langgraph-and-celery.md#5-the-interface-layer-model-context-protocol-mcp)
- adapters that expose tool catalogues. Skill-based tool loading narrows the
+adapters that expose tool catalogues. Skill-based tool loading narrows the
 available tool set per workflow, reducing context size and guiding model choice.
 
 Roadmap item `2.4.1` now ships the first narrow implementation of that design
-in `episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort`
-once to obtain strict JSON, parses it into a typed `ExecutionPlan`, and records
-the planning model separately from the execution model selected in
+in `episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort` once
+to obtain strict JSON, parses it into a typed `ExecutionPlan`, and records the
+planning model separately from the execution model selected in
 `GenerationOrchestrationConfig`. `StructuredPlanningOrchestrator` then executes
 the resulting actions through `ToolExecutorPort`, with `ShowNotesToolExecutor`
 and `GuestBiosToolExecutor` serving as the first concrete enrichment tool
@@ -1455,8 +1455,8 @@ Agentic workflow behaviour is configurable per series profile:
 - `reference_document_revisions` stores immutable content versions for each
   reusable reference document, including hashes and author metadata.
 - `reference_document_bindings` links pinned reference revisions to a target
-  context (series profile, episode template, or ingestion run), with an
-  optional `effective_from_episode_id` anchor for forward-only applicability.
+  context (series profile, episode template, or ingestion run), with an optional
+   `effective_from_episode_id` anchor for forward-only applicability.
 - `uploads` records file upload metadata, content hashes, content type, size
   limits, storage location, and idempotency keys before uploaded material is
   attached to ingestion jobs.
@@ -1541,9 +1541,9 @@ hosts may skip episodes and guests may appear across multiple episodes. When
 profile guidance changes mid-series, editors will add a new revision and will
 create a binding with `effective_from_episode_id`; that revision will apply
 from the anchor episode onwards until superseded. Ingestion workflows will
-resolve these bindings and will snapshot selected revisions into
-ingestion-bound `source_documents`, preserving reproducible TEI provenance
-while allowing independent document reuse across jobs.
+resolve these bindings and will snapshot selected revisions into ingestion-bound
+ `source_documents`, preserving reproducible TEI provenance while allowing
+independent document reuse across jobs.
 
 TEI header payloads include an `episodic_provenance` extension with
 `source_priorities`, `ingestion_timestamp`, `reviewer_identities`, and a
@@ -1764,15 +1764,14 @@ and all criteria below are met:
 The canonical persistence layer follows the hexagonal architecture by defining
 Protocol-based port interfaces in `episodic/canonical/ports.py` and
 implementing them as async SQLAlchemy adapters in
-`episodic/canonical/storage/`. Twelve repository protocols
-(`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
-`IngestionJobRepository`, `SourceDocumentRepository`,
+`episodic/canonical/storage/`. Twelve repository protocols define the
+persistence contract: `SeriesProfileRepository`, `TeiHeaderRepository`,
+`EpisodeRepository`, `IngestionJobRepository`, `SourceDocumentRepository`,
 `ApprovalEventRepository`, `EpisodeTemplateRepository`,
 `SeriesProfileHistoryRepository`, `EpisodeTemplateHistoryRepository`,
 `ReferenceDocumentRepository`, `ReferenceDocumentRevisionRepository`, and
-`ReferenceBindingRepository`) define the persistence contract, and
-`CanonicalUnitOfWork` aggregates them behind a transactional boundary with
-`commit()`, `flush()`, and `rollback()` methods.
+`ReferenceBindingRepository`. `CanonicalUnitOfWork` aggregates them behind a
+transactional boundary with `commit()`, `flush()`, and `rollback()` methods.
 
 The `SqlAlchemyUnitOfWork` adapter creates a fresh `AsyncSession` on entry,
 instantiates all repositories bound to that session, and rolls back
@@ -2227,9 +2226,9 @@ Schema drift detection runs in Continuous Integration (CI) via
 `make check-migrations`. The check starts an ephemeral PostgreSQL instance
 using py-pglite, applies all Alembic migrations to it, and then calls
 `alembic.autogenerate.compare_metadata()` to compare the migrated database
-state against the current Object-Relational Mapping (ORM) model metadata
-(`Base.metadata`). If the comparison finds differences, the check exits
-non-zero and the pull request is blocked. This approach was chosen over the
+state against the current Object-Relational Mapping (ORM) model metadata (
+`Base.metadata`). If the comparison finds differences, the check exits non-zero
+and the pull request is blocked. This approach was chosen over the
 `alembic check` Command-Line Interface (CLI) because it reuses the existing
 py-pglite test infrastructure, is fully testable in isolation, and gives
 explicit control over false-positive filtering.

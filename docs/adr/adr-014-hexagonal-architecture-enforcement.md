@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted, amended 2026-05-20 to adopt Hecate as the enforcement engine.
 
 ## Context
 
@@ -18,13 +18,16 @@ nodes, Celery task payloads, and checkpoint state remain roadmap item `2.4.5`.
 
 ## Decision
 
-Add a repo-local architecture checker under `episodic.architecture`.
+Adopt Hecate as the architecture enforcement engine and configure the Episodic
+policy in `[tool.hecate]` in `pyproject.toml`.
 
-The checker parses Python files with `ast`, classifies imports into explicit
-module groups, and emits stable diagnostics with a rule identifier, importer,
-imported module, and dependency direction. `make check-architecture` runs the
-checker, `make lint` includes it after Ruff, and CI exposes it as a named
-architecture gate.
+Hecate parses Python files with `ast`, classifies imports into explicit module
+groups, expands supported package re-exports, and emits stable diagnostics with
+a rule identifier, importer, imported module, and dependency direction.
+`make check-architecture` runs `hecate check`, `make lint` includes that gate
+before Ruff, and Continuous Integration (CI) exposes it through the existing
+lint workflow. Episodic uses `ARCH001` as Hecate's configured rule identifier
+to preserve diagnostic continuity from the original checker.
 
 The first enforced groups are:
 
@@ -72,21 +75,26 @@ published structural surface.
   rather than owning the only copy.
 - `2.4.5` remains responsible for LangGraph-node-specific policies, Celery
   checkpoint payload audits, and deeper orchestration checks.
+- Hecate replaces the former repo-local `episodic.architecture` checker. New
+  architecture groups are added in `pyproject.toml`; generic checker semantics
+  belong upstream in Hecate.
 
 ## References
 
-Roadmap items `1.5.4` and `2.4.5` in `docs/roadmap.md`.[^1] The ExecPlan
-records the implementation path.[^2] Implementation:
-`episodic/architecture/checker.py`.[^3] Tests:
+Roadmap items `1.5.4` and `2.4.5` in `docs/roadmap.md`.[^1] Original ExecPlan:
+`docs/execplans/1-5-4-architectural-enforcement-for-hexagonal-boundaries.md`.[^2]
+Hecate adoption ExecPlan: `docs/execplans/adopt-hecate.md`.[^3] Hecate
+configuration: `[tool.hecate]` in `pyproject.toml`.[^4] Tests:
 `tests/test_architecture_enforcement.py`, `tests/test_port_contracts.py`,
 `tests/features/architecture_enforcement.feature`, and
-`tests/steps/test_architecture_enforcement_steps.py`.[^4]
+`tests/steps/test_architecture_enforcement_steps.py`.[^5]
 
 [^1]: Roadmap items `1.5.4` and `2.4.5` in `docs/roadmap.md`
 [^2]: ExecPlan:
   `docs/execplans/1-5-4-architectural-enforcement-for-hexagonal-boundaries.md`
-[^3]: Implementation: `episodic/architecture/checker.py`
-[^4]: Tests: `tests/test_architecture_enforcement.py`,
+[^3]: Hecate adoption ExecPlan: `docs/execplans/adopt-hecate.md`
+[^4]: Hecate configuration: `[tool.hecate]` in `pyproject.toml`
+[^5]: Tests: `tests/test_architecture_enforcement.py`,
   `tests/test_port_contracts.py`,
   `tests/features/architecture_enforcement.feature`, and
   `tests/steps/test_architecture_enforcement_steps.py`
