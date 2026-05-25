@@ -94,15 +94,31 @@ Versioned API routing:
   including series-profile, episode-template, reusable-reference, and
   binding-resolution routes.
 - Existing unversioned canonical routes are pre-v0.1.0 implementation details.
-  They are not compatibility aliases and should return Falcon's normal
-  `404 Not Found` response.
+  They are not compatibility aliases and should return the shared
+  `404 not_found` error envelope.
 - Health checks remain root-level operator endpoints at `/health/live` and
   `/health/ready`.
 - New terminal user interface (TUI)-facing and vertical-slice REST endpoints
   must be registered under `/v1`.
 - The routing decision follows
   [`adr-009-source-to-script-rest-vertical-slice.md`](adr/adr-009-source-to-script-rest-vertical-slice.md)
-  and [`episodic-tui-api-design.md`](episodic-tui-api-design.md).
+   and [`episodic-tui-api-design.md`](episodic-tui-api-design.md).
+
+REST error contract:
+
+- Every Falcon `HTTPError` raised by the canonical API is serialised as
+  `{"code": "<machine-readable>", "message": "<human>", "details": {...}}` by
+  `episodic/api/errors.py`.
+- Validation helpers attach field-level details where the request parser knows
+  the field and constraint, for example
+  `{"field": "limit", "constraint": "range"}`.
+- Profile/template domain errors are mapped by `map_profile_template_error`.
+  Stale optimistic-lock updates use `revision_conflict` and include `entity_id`
+  plus `expected_revision` when the adapter has that context.
+- Reusable-reference domain errors are mapped by `map_reference_error`.
+  Validation failures use `validation_error`, missing entities use `not_found`,
+  stale revisions use `revision_conflict`, and remaining persistence conflicts
+  use `conflict`.
 
 Testing guidance:
 
@@ -578,7 +594,8 @@ Implementation notes:
   guest documents. Cross-series access is treated as `404 Not Found` for
   profile-scoped routes.
 - Inbound adapters map typed reusable-reference service errors to Falcon HTTP
-  errors through local `_map_reference_error(...)` helpers.
+  errors through `episodic/api/errors.py`, so callers receive the shared REST
+  error envelope instead of Falcon's default `{title, description}` body.
 
 ### Reusable reference-document repositories
 
@@ -812,8 +829,8 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `ShowNotesResult`. Callers should catch this exception to handle malformed or
   unexpected LLM output gracefully. It is raised when the response text is not
   valid JSON; when the top-level JSON object does not contain an `entries`
-  list; when an entry in `entries` is not a JSON object; when a required field
-  (`topic` or `summary`) is absent, empty, or not a string; when an optional
+  list; when an entry in `entries` is not a JSON object; when a required field (
+   `topic` or `summary`) is absent, empty, or not a string; when an optional
   field (`timestamp` or `tei_locator`) is present but is not a string or null;
   and when a `timestamp` value does not match the ISO 8601 duration format.
 - `ChapterMarkersGenerator` follows the same boundary in
@@ -831,7 +848,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `<div type="chapters">` element into the TEI body using the representation
   defined by
   [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md).
-  The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
+   The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
   `@n` stores the required start time, and `@corresp` stores an optional source
   locator. Optional DTO `end` and `duration` values are validated but not
   emitted into TEI until the TEI tooling exposes supported attributes.
@@ -1089,8 +1106,8 @@ checkpoint ids, or idempotency keys.
 
 The multi-source ingestion service normalizes heterogeneous source documents,
 applies source weighting heuristics, resolves conflicts, and merges the result
-into a canonical TEI episode. The service is implemented as an orchestrator
-(`ingest_multi_source`) that composes around the existing low-level
+into a canonical TEI episode. The service is implemented as an orchestrator (
+`ingest_multi_source`) that composes around the existing low-level
 `ingest_sources` persistence function.
 
 ### Port protocols

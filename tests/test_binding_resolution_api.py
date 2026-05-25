@@ -115,7 +115,8 @@ def test_resolved_bindings_endpoint_rejects_bad_episode_id(
     )
     assert response.status_code == 400
     payload = typ.cast("dict[str, object]", response.json)
-    assert payload["description"] == expected_description
+    assert payload["code"] == "validation_error"
+    assert payload["message"] == expected_description
 
 
 def test_resolved_bindings_endpoint_returns_404_for_unknown_profile(

@@ -107,8 +107,16 @@ def _verify_stale_update_rejected_generic(
     assert stale_update_response.status_code == 409, (
         f"Expected stale {spec.entity_label} update to return 409."
     )
-    assert isinstance(stale_update_response.json, dict), (
-        f"Expected stale {spec.entity_label} error as a JSON object."
+    payload = typ.cast("dict[str, object]", stale_update_response.json)
+    assert payload["code"] == "revision_conflict", (
+        f"Expected stale {spec.entity_label} to use revision_conflict."
+    )
+    details = typ.cast("dict[str, object]", payload["details"])
+    assert isinstance(details["entity_id"], str), (
+        f"Expected stale {spec.entity_label} details to include entity_id."
+    )
+    assert details["expected_revision"] == 1, (
+        f"Expected stale {spec.entity_label} details to include expected revision."
     )
 
 

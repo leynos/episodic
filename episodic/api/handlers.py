@@ -24,6 +24,7 @@ from episodic.canonical.profile_templates import (
     RevisionConflictError,
 )
 
+from .errors import map_profile_template_error, validation_error
 from .helpers import parse_uuid
 
 if typ.TYPE_CHECKING:
@@ -80,7 +81,7 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
                 entity_id=parsed_entity_id,
             )
     except EntityNotFoundError as exc:
-        raise falcon.HTTPNotFound(description=str(exc)) from exc
+        raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 
@@ -126,10 +127,7 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episod
                 parent_id=parsed_entity_id,
             )
     except EntityNotFoundError as exc:
-        raise falcon.HTTPNotFound(
-            title="Not Found",
-            description="Parent entity not found",
-        ) from exc
+        raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
     return {"items": [serializer_fn(item) for item in items]}, falcon.HTTP_200
 
 
@@ -188,7 +186,7 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
     for field_name in required_fields:
         if field_name not in payload:
             msg = f"Missing required field: {field_name}"
-            raise falcon.HTTPBadRequest(description=msg)
+            raise validation_error(msg, field=field_name, constraint="required")
 
     update_request = request_builder(parsed_entity_id, payload)
 
@@ -199,9 +197,14 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
                 request=update_request,
             )
     except EntityNotFoundError as exc:
-        raise falcon.HTTPNotFound(description=str(exc)) from exc
+        raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
     except RevisionConflictError as exc:
-        raise falcon.HTTPConflict(description=str(exc)) from exc
+        expected_revision = typ.cast("int | None", payload.get("expected_revision"))
+        raise map_profile_template_error(
+            exc,
+            entity_id=parsed_entity_id,
+            expected_revision=expected_revision,
+        ) from exc
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 
@@ -246,12 +249,14 @@ async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev)
     for field_name in required_fields:
         if field_name not in payload:
             msg = f"Missing required field: {field_name}"
-            raise falcon.HTTPBadRequest(description=msg)
+            raise validation_error(msg, field=field_name, constraint="required")
 
     service_kwargs = kwargs_builder(payload)
     try:
         async with uow_factory() as uow:
             entity, revision = await service_fn(uow, **service_kwargs)
     except (EntityNotFoundError, LookupError) as exc:
+        if isinstance(exc, EntityNotFoundError):
+            raise map_profile_template_error(exc) from exc
         raise falcon.HTTPNotFound(description=str(exc)) from exc
     return serializer_fn(entity, revision), falcon.HTTP_201

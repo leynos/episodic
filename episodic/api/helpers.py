@@ -22,8 +22,6 @@ import re
 import typing as typ
 import uuid
 
-import falcon
-
 from episodic.canonical.profile_templates import (
     AuditMetadata,
     EpisodeTemplateData,
@@ -33,16 +31,13 @@ from episodic.canonical.profile_templates import (
     UpdateEpisodeTemplateRequest,
     UpdateSeriesProfileRequest,
 )
-from episodic.canonical.reference_documents import (
-    ReferenceConflictError,
-    ReferenceDocumentError,
-    ReferenceEntityNotFoundError,
-    ReferenceRevisionConflictError,
-    ReferenceValidationError,
-)
+
+from .errors import validation_error
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    import falcon
 
     from .types import JsonPayload
 
@@ -75,7 +70,7 @@ def parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
         return uuid.UUID(raw_value)
     except (TypeError, ValueError, AttributeError) as exc:
         msg = f"Invalid UUID for {field_name}: {raw_value!r}."
-        raise falcon.HTTPBadRequest(description=msg) from exc
+        raise validation_error(msg, field=field_name, constraint="uuid") from exc
 
 
 def require_payload_dict(payload: object) -> JsonPayload:
@@ -98,7 +93,7 @@ def require_payload_dict(payload: object) -> JsonPayload:
     """
     if not isinstance(payload, dict):
         msg = "JSON object payload is required."
-        raise falcon.HTTPBadRequest(description=msg)
+        raise validation_error(msg, constraint="object")
     return typ.cast("JsonPayload", payload)
 
 
@@ -109,7 +104,7 @@ def require_query_params(req: falcon.Request, *names: str) -> dict[str, str]:
         value = req.get_param(name)
         if value is None:
             msg = f"Missing required query parameter: {name}"
-            raise falcon.HTTPBadRequest(description=msg)
+            raise validation_error(msg, field=name, constraint="required")
         values[name] = value
     return values
 
@@ -124,31 +119,34 @@ def parse_pagination(req: falcon.Request) -> tuple[int, int]:
         offset = 0 if raw_offset is None else int(raw_offset)
     except ValueError as exc:
         msg = "Pagination parameters limit/offset must be integers."
-        raise falcon.HTTPBadRequest(description=msg) from exc
+        field = _pagination_type_error_field(raw_limit, raw_offset)
+        raise validation_error(msg, field=field, constraint="type") from exc
 
     if limit < 1 or limit > _MAX_PAGE_LIMIT:
         msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
-        raise falcon.HTTPBadRequest(description=msg)
+        raise validation_error(msg, field="limit", constraint="range")
     if offset < 0:
         msg = "offset must be a non-negative integer."
-        raise falcon.HTTPBadRequest(description=msg)
+        raise validation_error(msg, field="offset", constraint="range")
     return limit, offset
 
 
-def map_reference_error(
-    exc: ReferenceDocumentError,
-    *,
-    context: str,
-) -> falcon.HTTPError:
-    """Map reusable reference-document domain errors to Falcon HTTP errors."""
-    if isinstance(exc, ReferenceValidationError):
-        return falcon.HTTPBadRequest(description=str(exc))
-    if isinstance(exc, ReferenceEntityNotFoundError):
-        return falcon.HTTPNotFound(description=str(exc))
-    if isinstance(exc, (ReferenceRevisionConflictError, ReferenceConflictError)):
-        return falcon.HTTPConflict(description=str(exc))
-    msg = f"Unexpected {context} error."
-    return falcon.HTTPInternalServerError(description=msg)
+def _pagination_type_error_field(
+    raw_limit: str | None,
+    raw_offset: str | None,
+) -> str:
+    """Return the first pagination field that failed integer parsing."""
+    if raw_limit is not None:
+        try:
+            int(raw_limit)
+        except ValueError:
+            return "limit"
+    if raw_offset is not None:
+        try:
+            int(raw_offset)
+        except ValueError:
+            return "offset"
+    return "limit"
 
 
 def build_audit_metadata(payload: JsonPayload) -> AuditMetadata:
@@ -194,14 +192,18 @@ def parse_expected_revision(payload: JsonPayload) -> int:
     if parsed is not None:
         return parsed
     msg = f"Invalid integer for expected_revision: {raw!r}."
-    raise falcon.HTTPBadRequest(description=msg)
+    raise validation_error(
+        msg,
+        field="expected_revision",
+        constraint="positive-integer",
+    )
 
 
 def _require_field(payload: JsonPayload, field_name: str) -> object:
     """Return a required payload field or raise HTTP 400."""
     if field_name not in payload:
         msg = f"Missing required field: {field_name}"
-        raise falcon.HTTPBadRequest(description=msg)
+        raise validation_error(msg, field=field_name, constraint="required")
     return payload[field_name]
 
 
@@ -270,7 +272,7 @@ def _optional_json_object_field(
     value = payload[field_name]
     if not isinstance(value, dict):
         msg = f"{field_name} must be a JSON object."
-        raise falcon.HTTPBadRequest(description=msg)
+        raise validation_error(msg, field=field_name, constraint="object")
     return typ.cast("dict[str, object]", copy.deepcopy(value))
 
 
