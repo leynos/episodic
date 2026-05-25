@@ -4,7 +4,7 @@ This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
  `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: ACTIVE (implementation in progress)
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -297,16 +297,19 @@ Success is observable when:
   sections, and reusable-reference system-design contract. `make fmt` completed
   in `/tmp/4-1-2-m7-fmt.out`; unrelated formatter churn was restored before the
   commit.
-- [ ] (2026-05-25T00:00Z) Milestone 8: full gate run plus
+- [x] (2026-05-25T00:00Z) Milestone 8: full gate run plus
   `coderabbit review --agent`; mark roadmap item `4.1.2` done. Final gates are
-  in progress. `mbake validate Makefile`, `make check-fmt`,
+  complete. `mbake validate Makefile`, `make check-fmt`,
   `make markdownlint`, `make nixie`, `make build`, `make lint`,
   `make typecheck`, and `make check-migrations` passed in
   `/tmp/4-1-2-*.out`. The first full `make test` pass found a stale assertion
   in `tests/test_lifespan_hooks.py`; that test now expects the documented
   pagination envelope. The rerun passed 720 tests and 3 skips with only the
   pre-existing guest-bios `U+FFFE` property failure remaining in
-  `/tmp/4-1-2-test-after-lifespan.out`.
+  `/tmp/4-1-2-test-after-lifespan.out`. `coderabbit doctor` passed with
+  9 checks and the final `coderabbit review --agent` returned zero findings in
+  `/tmp/4-1-2-coderabbit-review.out`; `docs/roadmap.md` now marks `4.1.2`
+  complete.
 
 ## Surprises and discoveries
 
@@ -469,11 +472,46 @@ Success is observable when:
 
 ## Outcomes and retrospective
 
-To be completed at the end of the implementation. At minimum the section must
-compare against the eight observable-success criteria in
-`Purpose and big picture`, record evidence transcripts from `/tmp/4-1-2-*.out`
-log files, and note any deviation from the original constraint or risk
-inventory.
+Roadmap item `4.1.2` is implemented. Every canonical `/v1` list endpoint now
+uses the documented `{items, limit, offset, total}` envelope, validates
+pagination consistently, and applies the documented filters through API helper
+parsers. The API layer maps validation, not-found, conflict, unauthorized,
+forbidden, and authorization-adapter-failure cases into the
+`{code, message, details}` error envelope while preserving the readiness probe
+status payload exemption.
+
+The role-enforcement scaffold is in place as an inbound-adapter-local
+`AuthorizationPort`, Falcon middleware, and permit-all default adapter wired
+through `ApiDependencies`. Deny and failure behaviours are covered by
+`tests/test_api_authorization.py`; full RBAC and tenancy policy remain roadmap
+item `5.1` as planned.
+
+Evidence:
+
+- Focused milestone suites passed after each implementation slice:
+  `/tmp/4-1-2-m1-green.out`, `/tmp/4-1-2-m2-green.out`,
+  `/tmp/4-1-2-m3-green-after-coderabbit-3.out`,
+  `/tmp/4-1-2-m4-green-after-coderabbit-7.out`,
+  `/tmp/4-1-2-m5-green.out`, and
+  `/tmp/4-1-2-m6-green-after-coderabbit-2.out`.
+- Final deterministic gates passed for Makefile validation, formatting,
+  Markdown linting, Mermaid validation, build, lint plus Hecate architecture
+  check, typecheck, and migration drift:
+  `/tmp/4-1-2-mbake.out`, `/tmp/4-1-2-check-fmt.out`,
+  `/tmp/4-1-2-markdownlint.out`, `/tmp/4-1-2-nixie.out`,
+  `/tmp/4-1-2-build.out`, `/tmp/4-1-2-lint.out`,
+  `/tmp/4-1-2-typecheck.out`, and `/tmp/4-1-2-check-migrations.out`.
+- Full `make test` rerun reached 720 passed and 3 skipped tests, with only the
+  known unrelated guest-bios `U+FFFE` property failure remaining in
+  `/tmp/4-1-2-test-after-lifespan.out`.
+- `coderabbit doctor` passed 9 checks in `/tmp/4-1-2-coderabbit-doctor.out`.
+  The final `coderabbit review --agent` returned zero findings in
+  `/tmp/4-1-2-coderabbit-review.out`.
+
+Deviation: the final full-suite gate is not fully green because of the
+pre-existing `tests/test_guest_bios_properties.py::test_enriched_guest_bios_replaces_prior_guest_bios_div`
+`U+FFFE` Hypothesis failure. This branch did not touch guest-bios production
+code; the failure is recorded as outside `4.1.2` scope.
 
 ## Context and orientation
 

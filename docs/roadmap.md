@@ -599,7 +599,7 @@ Completion enables stable API consumption by clients.
   - Document version routing in the developers' guide.
   - See
     [Proposed REST endpoints](episodic-tui-api-design.md#proposed-rest-endpoints).
-- [ ] 4.1.2. Finalize REST surfaces for previous phase artefacts.
+- [x] 4.1.2. Finalize REST surfaces for previous phase artefacts.
   - Implement pagination, filtering, and role enforcement.
   - Ensure consistent error contracts across all endpoints.
   - See [Error contract](episodic-tui-api-design.md#error-contract).
