@@ -9,8 +9,12 @@ from urllib.parse import urlparse
 
 from celery import Celery
 
+from episodic.logging import get_logger
+
 from .tasks import SCAFFOLD_TASK_WORKLOADS, WorkerDependencies, register_scaffold_tasks
 from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology, WorkloadClass
+
+logger = get_logger(__name__)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -249,6 +253,7 @@ def create_celery_app(
         "episodic.worker", broker=config.broker_url, backend=config.result_backend
     )
     default_queue = topology.queue_for(topology.default_workload)
+    task_routes = _build_task_routes(topology)
     app.conf.update(
         broker_url=config.broker_url,
         result_backend=config.result_backend,
@@ -263,12 +268,29 @@ def create_celery_app(
         task_default_routing_key=default_queue.diagnostic_routing_key,
         task_create_missing_queues=False,
         task_queues=topology.kombu_queues(),
-        task_routes=topology.task_routes(SCAFFOLD_TASK_WORKLOADS),
+        task_routes=task_routes,
     )
     register_scaffold_tasks(app, worker_dependencies)
     return app
 
-
+def _build_task_routes(topology: WorkerTopology) -> dict[str, dict[str, str]]:
+    """Build task routes and log route-table validation context."""
+    logger.info(
+        f"Building Celery worker task routes for {len(SCAFFOLD_TASK_WORKLOADS)} tasks."
+    )
+    try:
+        task_routes = topology.task_routes(SCAFFOLD_TASK_WORKLOADS)
+    except (TypeError, ValueError) as exc:
+        validation_error = str(exc)
+        logger.exception(
+            "Celery worker task route validation failed for "
+            f"tasks={tuple(SCAFFOLD_TASK_WORKLOADS)!r}, "
+            f"workloads={tuple(SCAFFOLD_TASK_WORKLOADS.values())!r}: "
+            f"{validation_error}"
+        )
+        raise
+    logger.info(f"Built Celery worker task routes for {len(task_routes)} tasks.")
+    return task_routes
 def create_celery_app_from_env() -> Celery:
     """Build the Celery worker scaffold from environment configuration."""
     return create_celery_app(load_runtime_config())

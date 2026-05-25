@@ -1,4 +1,9 @@
-"""Typed queue topology for the Celery worker scaffold."""
+"""Typed queue topology and routing contract for the Celery worker scaffold.
+
+The task registry in :mod:`episodic.worker.tasks` supplies task-to-workload
+classifications; this module turns those classifications into Celery queues,
+exchanges, and route metadata consumed by the worker runtime composition root.
+"""
 
 import collections.abc as cabc  # noqa: TC003
 import dataclasses as dc
