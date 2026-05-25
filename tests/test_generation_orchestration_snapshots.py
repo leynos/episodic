@@ -10,7 +10,6 @@ Syrupy snapshots give CI a stable view of orchestration DTO serialisation for
 import dataclasses
 import typing as typ
 
-import hypothesis.strategies as st
 import pytest
 from hypothesis import given, settings
 from syrupy.assertion import SnapshotAssertion
@@ -34,6 +33,7 @@ from episodic.orchestration.langgraph import (
     _action_result_to_payload,
     _planner_result_to_payload,
 )
+from tests._orchestration_property_support import usage_counts_strategy
 
 
 class _UnusedLLMPort:
@@ -244,6 +244,36 @@ def test_execution_plan_freezes_and_validates_steps() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "expected_match"),
+    [
+        ("rationale", "   ", "rationale must be a non-empty string"),
+        (
+            "required_inputs",
+            ("   ",),
+            "required_inputs must be a non-empty string",
+        ),
+    ],
+)
+def test_planned_action_snapshot_fixture_rejects_invalid_fields(
+    field_name: str,
+    field_value: object,
+    expected_match: str,
+) -> None:
+    """Verify invalid planned-action fields cannot enter snapshot fixtures."""
+    kwargs: dict[str, object] = {
+        "action_id": "a1",
+        "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+        "rationale": "test",
+        "model_tier": ModelTier.EXECUTION,
+        "required_inputs": ("script_tei_xml",),
+    }
+    kwargs[field_name] = field_value
+
+    with pytest.raises(ValueError, match=expected_match):
+        PlannedAction(**typ.cast("typ.Any", kwargs))
+
+
 @dataclasses.dataclass(frozen=True)
 class _OrchestrationResultSpec:
     """Parameter object for building the canonical orchestration DTO graph."""
@@ -390,16 +420,9 @@ def test_generation_orchestration_fixture_totals_partial_usage_overrides(
     )
 
 
-_USAGE_COUNTS = st.tuples(
-    st.integers(min_value=0, max_value=100_000),
-    st.integers(min_value=0, max_value=100_000),
-    st.integers(min_value=0, max_value=200_000),
-)
-
-
 @given(
-    planner=_USAGE_COUNTS,
-    action=_USAGE_COUNTS,
+    planner=usage_counts_strategy,
+    action=usage_counts_strategy,
 )
 @settings(max_examples=50)
 def test_generation_orchestration_fixture_total_usage_property(

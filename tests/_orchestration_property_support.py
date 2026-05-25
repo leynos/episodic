@@ -187,6 +187,12 @@ usage_strategy = st.builds(
     output_tokens=st.integers(min_value=0, max_value=10_000),
 )
 
+usage_counts_strategy = st.tuples(
+    st.integers(min_value=0, max_value=1_000_000),
+    st.integers(min_value=0, max_value=1_000_000),
+    st.integers(min_value=0, max_value=2_000_000),
+)
+
 planned_action_strategy = st.builds(
     PlannedAction,
     action_id=prop_text,

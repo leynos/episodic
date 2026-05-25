@@ -33,6 +33,7 @@ from tests._orchestration_property_support import (
     PropGraphToolExecutor,
     PropTokenInputs,
     token_inputs_strategy,
+    usage_counts_strategy,
 )
 
 
@@ -122,14 +123,7 @@ def _assert_usage_rollup(
     )
 
 
-_USAGE_COUNTS = st.tuples(
-    st.integers(min_value=0, max_value=1_000_000),
-    st.integers(min_value=0, max_value=1_000_000),
-    st.integers(min_value=0, max_value=2_000_000),
-)
-
-
-@given(planner=_USAGE_COUNTS, action=_USAGE_COUNTS)
+@given(planner=usage_counts_strategy, action=usage_counts_strategy)
 @settings(max_examples=50)
 def test_build_generation_result_total_usage_property(
     planner: tuple[int, int, int],
