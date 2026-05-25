@@ -5,11 +5,13 @@ processes. Tasks whose inner work can be split into pure-Python items may also
 fan out inside one worker process through the optional interpreter-pool adapter:
 
 ```python
+import os
+
 from episodic.concurrent_interpreters import (
     build_cpu_task_executor_from_environment,
 )
 
-executor = build_cpu_task_executor_from_environment()
+executor = build_cpu_task_executor_from_environment(os.environ)
 try:
     results = await executor.map_ordered(pure_python_fn, items)
 finally:

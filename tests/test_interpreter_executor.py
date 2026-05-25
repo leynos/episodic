@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures as cf
 import operator
+import threading
 import typing as typ
 from unittest import mock
 
@@ -19,10 +20,12 @@ if typ.TYPE_CHECKING:
 
 
 def _square(value: int) -> int:
+    """Return the square of a generated executor input."""
     return value * value
 
 
 def _explode_on_three(value: int) -> int:
+    """Raise on a sentinel value to prove executor errors propagate."""
     if value == 3:
         msg = "bad value: 3"
         raise ValueError(msg)
@@ -30,6 +33,7 @@ def _explode_on_three(value: int) -> int:
 
 
 def _affine(value: int) -> int:
+    """Apply a non-symmetric transform for ordering property tests."""
     return (value * 3) - 7
 
 
@@ -38,6 +42,40 @@ _ORDERED_MAP_TASKS: dict[str, cabc.Callable[[int], int]] = {
     "negate": typ.cast("cabc.Callable[[int], int]", operator.neg),
     "square": _square,
 }
+
+
+class _BlockingMapExecutor(cf.Executor):
+    """Executor test double that exposes map/shutdown ordering."""
+
+    def __init__(self) -> None:
+        self.map_started = threading.Event()
+        self.release_map = threading.Event()
+        self.shutdown_called = threading.Event()
+
+    def map(
+        self,
+        fn: cabc.Callable[..., int],
+        *iterables: cabc.Iterable[typ.Any],
+        **kwargs: object,
+    ) -> cabc.Iterator[int]:
+        """Block mapped work until the test releases it."""
+        del kwargs
+        items = tuple(typ.cast("cabc.Iterable[int]", iterables[0]))
+        self.map_started.set()
+        if not self.release_map.wait(timeout=5):
+            msg = "Timed out waiting for test to release executor.map()."
+            raise TimeoutError(msg)
+        return iter(fn(item) for item in items)
+
+    def shutdown(
+        self,
+        wait: bool = True,  # noqa: FBT001, FBT002
+        *,
+        cancel_futures: bool = False,
+    ) -> None:
+        """Record that shutdown reached the underlying executor."""
+        del wait, cancel_futures
+        self.shutdown_called.set()
 
 
 @pytest.mark.asyncio
@@ -141,6 +179,70 @@ async def test_interpreter_executor_propagates_worker_exception(
 
 
 @pytest.mark.asyncio
+async def test_interpreter_executor_shutdown_waits_for_active_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Concurrent shutdown waits until an active map operation releases the pool."""
+    blocking_executor = _BlockingMapExecutor()
+    monkeypatch.setattr(
+        ci,
+        "_create_interpreter_pool_executor",
+        lambda max_workers: blocking_executor,
+    )
+    executor = ci.InterpreterPoolCpuTaskExecutor()
+    map_task = asyncio.create_task(executor.map_ordered(_square, (2, 4)))
+
+    map_started = await asyncio.to_thread(blocking_executor.map_started.wait, 5)
+    assert map_started, "Expected map_ordered() to reach the underlying executor."
+
+    shutdown_task = asyncio.create_task(asyncio.to_thread(executor.shutdown))
+    await asyncio.sleep(0.05)
+    assert not blocking_executor.shutdown_called.is_set(), (
+        "Expected shutdown() to wait for the active map_ordered() call."
+    )
+
+    blocking_executor.release_map.set()
+    assert await map_task == [4, 16]
+    await shutdown_task
+    assert blocking_executor.shutdown_called.is_set(), (
+        "Expected shutdown() to reach the pool after map_ordered() completes."
+    )
+
+
+@pytest.mark.asyncio
+async def test_interpreter_executor_map_after_shutdown_creates_new_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Calling shutdown before later fan-out does not poison the executor."""
+    created_pools: list[cf.ThreadPoolExecutor] = []
+
+    def fake_create_interpreter_pool_executor(
+        max_workers: int | None,
+    ) -> cf.ThreadPoolExecutor:
+        pool = cf.ThreadPoolExecutor(max_workers=max_workers)
+        created_pools.append(pool)
+        return pool
+
+    monkeypatch.setattr(
+        ci,
+        "_create_interpreter_pool_executor",
+        fake_create_interpreter_pool_executor,
+    )
+    executor = ci.InterpreterPoolCpuTaskExecutor(max_workers=1)
+    executor.shutdown()
+
+    try:
+        results = await executor.map_ordered(_square, (3,))
+    finally:
+        executor.shutdown()
+
+    assert results == [9]
+    assert len(created_pools) == 1, (
+        "Expected post-shutdown mapping to create exactly one new pool."
+    )
+
+
+@pytest.mark.asyncio
 async def test_inline_executor_handles_empty_input() -> None:
     """Inline adapter returns an empty list for empty workloads."""
     executor = ci.InlineCpuTaskExecutor()
@@ -205,17 +307,22 @@ async def test_interpreter_executor_handles_empty_input(
     ],
 )
 def test_builder_selects_executor_based_on_environment(
-    monkeypatch: pytest.MonkeyPatch,
     env_flag: str,
     mock_support: bool | None,  # noqa: FBT001
     expected_type: type[object],
 ) -> None:
     """Builder picks the expected executor for each environment combination."""
-    monkeypatch.setenv("EPISODIC_USE_INTERPRETER_POOL", env_flag)
+    environ = {"EPISODIC_USE_INTERPRETER_POOL": env_flag}
+    capability_detector = ci.interpreter_pool_supported
     if mock_support is not None:
-        monkeypatch.setattr(ci, "interpreter_pool_supported", lambda: mock_support)
 
-    executor = ci.build_cpu_task_executor_from_environment()
+        def capability_detector() -> bool:
+            return mock_support
+
+    executor = ci.build_cpu_task_executor_from_environment(
+        environ,
+        capability_detector=capability_detector,
+    )
 
     assert isinstance(executor, expected_type), (
         f"Expected {expected_type.__name__} based on environment configuration."
@@ -244,16 +351,20 @@ async def test_builder_parses_max_workers_from_environment(
         captured["max_workers"] = max_workers
         return cf.ThreadPoolExecutor(max_workers=1)
 
-    monkeypatch.setenv("EPISODIC_USE_INTERPRETER_POOL", "1")
-    monkeypatch.setenv("EPISODIC_INTERPRETER_POOL_MAX_WORKERS", env_value)
-    monkeypatch.setattr(ci, "interpreter_pool_supported", lambda: True)
     monkeypatch.setattr(
         ci,
         "_create_interpreter_pool_executor",
         fake_create_interpreter_pool_executor,
     )
+    environ = {
+        "EPISODIC_USE_INTERPRETER_POOL": "1",
+        "EPISODIC_INTERPRETER_POOL_MAX_WORKERS": env_value,
+    }
 
-    executor = ci.build_cpu_task_executor_from_environment()
+    executor = ci.build_cpu_task_executor_from_environment(
+        environ,
+        capability_detector=lambda: True,
+    )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
 
     try:

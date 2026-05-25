@@ -129,7 +129,7 @@ class DefaultWeightingStrategy:
         self._cpu_executor = (
             cpu_executor
             if cpu_executor is not None
-            else build_cpu_task_executor_from_environment()
+            else build_cpu_task_executor_from_environment(os.environ)
         )
         if min_parallel_items is None:
             self._min_parallel_items = _parse_min_parallel_items(

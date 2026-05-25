@@ -214,11 +214,13 @@ When adding new worker tasks:
   into independent items, build the task-level executor from the environment:
 
   ```python
+  import os
+
   from episodic.concurrent_interpreters import (
       build_cpu_task_executor_from_environment,
   )
 
-  executor = build_cpu_task_executor_from_environment()
+  executor = build_cpu_task_executor_from_environment(os.environ)
   try:
       results = await executor.map_ordered(pure_python_fn, items)
   finally:
@@ -228,7 +230,7 @@ When adding new worker tasks:
   ```
 
   `EPISODIC_USE_INTERPRETER_POOL=1` enables `InterpreterPoolCpuTaskExecutor`
-  when the Python runtime supports it, and
+  when the injected capability detector reports support, and
   `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps its worker count. Keep
   `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` as task-level fan-out policy, not
   Celery pool configuration. The task-level owner is responsible for executor

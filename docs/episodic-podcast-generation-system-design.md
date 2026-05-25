@@ -718,7 +718,7 @@ sequenceDiagram
     participant InterpreterPoolCpuTaskExecutor
 
     Caller->>DefaultWeightingStrategy: __init__(cpu_executor=None, min_parallel_items=None)
-    DefaultWeightingStrategy->>DefaultWeightingStrategy: build_cpu_task_executor_from_environment()
+    DefaultWeightingStrategy->>DefaultWeightingStrategy: build_cpu_task_executor_from_environment(os.environ)
     DefaultWeightingStrategy-->>CpuTaskExecutor: selected executor instance
 
     Caller->>DefaultWeightingStrategy: compute_weights(sources, series_configuration)

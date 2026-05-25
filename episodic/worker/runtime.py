@@ -38,10 +38,11 @@ class WorkerRuntimeConfig:
     `EPISODIC_INTERPRETER_POOL_MIN_ITEMS`, and
     `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` are task-level companion variables
     consumed by CPU-bound task implementations and related fan-out policy.
-    Task code should use `build_cpu_task_executor_from_environment()` for the
-    executor adapter. These variables are intentionally not surfaced here
-    because they control intra-task parallelism inside a prefork worker
-    process, not inter-task dispatch across Celery worker pools.
+    Task code should pass its environment mapping to
+    `build_cpu_task_executor_from_environment()` for the executor adapter.
+    These variables are intentionally not surfaced here because they control
+    intra-task parallelism inside a prefork worker process, not inter-task
+    dispatch across Celery worker pools.
     """
 
     broker_url: str

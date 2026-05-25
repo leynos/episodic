@@ -8,16 +8,14 @@ feature-flagged and capability-gated so callers can opt in safely.
 from __future__ import annotations
 
 import asyncio
+import collections.abc as cabc
 import concurrent.futures as cf
-import os
 import threading
 import typing as typ
 
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
 _InputT = typ.TypeVar("_InputT")
 _OutputT = typ.TypeVar("_OutputT")
+InterpreterPoolCapability = cabc.Callable[[], bool]
 
 _INTERPRETER_POOL_FEATURE_FLAG = "EPISODIC_USE_INTERPRETER_POOL"
 _INTERPRETER_POOL_MAX_WORKERS_ENV = "EPISODIC_INTERPRETER_POOL_MAX_WORKERS"
@@ -116,7 +114,7 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
     ) -> None:
         self._max_workers = max_workers
         self._executor: cf.Executor | None = None
-        self._executor_lock = threading.Lock()
+        self._executor_lock = threading.RLock()
 
     def _get_executor(self) -> cf.Executor:
         """Create the interpreter pool lazily and reuse it for subsequent calls."""
@@ -130,8 +128,8 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         with self._executor_lock:
             executor = self._executor
             self._executor = None
-        if executor is not None:
-            executor.shutdown(wait=True)
+            if executor is not None:
+                executor.shutdown(wait=True)
 
     @typ.override
     async def map_ordered(
@@ -142,16 +140,25 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         """Dispatch ``task`` across interpreter workers and preserve order."""
         if not items:
             return []
-        executor = self._get_executor()
 
         def map_ordered_sync() -> list[_OutputT]:
-            return list(executor.map(task, items))
+            with self._executor_lock:
+                executor = self._get_executor()
+                return list(executor.map(task, items))
 
         return await asyncio.to_thread(map_ordered_sync)
 
 
-def build_cpu_task_executor_from_environment() -> CpuTaskExecutor:
+def build_cpu_task_executor_from_environment(
+    environ: cabc.Mapping[str, str],
+    *,
+    capability_detector: InterpreterPoolCapability = interpreter_pool_supported,
+) -> CpuTaskExecutor:
     """Select CPU-task adapter based on feature flag and runtime capability.
+
+    ``environ`` is supplied by the caller so environment access stays at the
+    composition boundary. ``capability_detector`` is injectable for tests and
+    runtimes that need to make interpreter-pool support explicit.
 
     The returned object is owned by the caller. Inline executors have no
     resources to release; interpreter-pool executors should be shut down by the
@@ -159,12 +166,12 @@ def build_cpu_task_executor_from_environment() -> CpuTaskExecutor:
     ``try/finally`` and ``getattr(executor, "shutdown", None)`` so the same
     code works for both adapters.
     """
-    if not _flag_enabled(os.getenv(_INTERPRETER_POOL_FEATURE_FLAG)):
+    if not _flag_enabled(environ.get(_INTERPRETER_POOL_FEATURE_FLAG)):
         return InlineCpuTaskExecutor()
-    if not interpreter_pool_supported():
+    if not capability_detector():
         return InlineCpuTaskExecutor()
     max_workers = _parse_optional_positive_int(
-        os.getenv(_INTERPRETER_POOL_MAX_WORKERS_ENV),
+        environ.get(_INTERPRETER_POOL_MAX_WORKERS_ENV),
     )
     return InterpreterPoolCpuTaskExecutor(max_workers=max_workers)
 

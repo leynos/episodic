@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import typing as typ
 
 import episodic.concurrent_interpreters as ci
@@ -33,7 +34,7 @@ def test_eager_cpu_task_body_uses_environment_executor_pattern(
                 raise TypeError(msg)
             items.append(item)
         validated_items = tuple(items)
-        executor = ci.build_cpu_task_executor_from_environment()
+        executor = ci.build_cpu_task_executor_from_environment(os.environ)
         try:
             results = asyncio.run(
                 executor.map_ordered(abs, validated_items),

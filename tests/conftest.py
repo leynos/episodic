@@ -81,7 +81,7 @@ def double_worker_value(value: int) -> int:
 
 async def cpu_task_inner_fan_out(items: tuple[int, ...]) -> list[int]:
     """Mirror the documented CPU task interpreter-pool integration pattern."""
-    executor = ci.build_cpu_task_executor_from_environment()
+    executor = ci.build_cpu_task_executor_from_environment(os.environ)
     try:
         return await executor.map_ordered(double_worker_value, items)
     finally:
