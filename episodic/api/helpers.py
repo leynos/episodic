@@ -18,6 +18,7 @@ Build a typed update request from JSON payload:
 
 import copy
 import dataclasses as dc
+import enum
 import re
 import typing as typ
 import uuid
@@ -129,6 +130,30 @@ def parse_pagination(req: falcon.Request) -> tuple[int, int]:
         msg = "offset must be a non-negative integer."
         raise validation_error(msg, field="offset", constraint="range")
     return limit, offset
+
+
+def parse_optional_uuid_param(req: falcon.Request, name: str) -> uuid.UUID | None:
+    """Parse an optional UUID query parameter by name."""
+    raw_value = req.get_param(name)
+    if raw_value is None:
+        return None
+    return parse_uuid(raw_value, name)
+
+
+def parse_enum_param[EnumT: enum.Enum](
+    req: falcon.Request,
+    name: str,
+    enum_type: type[EnumT],
+) -> EnumT | None:
+    """Parse an optional enum query parameter by name."""
+    raw_value = req.get_param(name)
+    if raw_value is None:
+        return None
+    try:
+        return enum_type(raw_value)
+    except ValueError as exc:
+        msg = f"Invalid enum value for {name}: {raw_value!r}."
+        raise validation_error(msg, field=name, constraint="enum") from exc
 
 
 def _pagination_type_error_field(

@@ -5,11 +5,18 @@ import typing as typ
 import falcon
 
 from episodic.api.errors import map_reference_error
-from episodic.api.helpers import parse_pagination, parse_uuid, require_payload_dict
+from episodic.api.helpers import (
+    parse_enum_param,
+    parse_optional_uuid_param,
+    parse_pagination,
+    parse_uuid,
+    require_payload_dict,
+)
 from episodic.api.serializers import (
     serialize_reference_document,
     serialize_reference_document_revision,
 )
+from episodic.canonical.domain import ReferenceDocumentKind
 from episodic.canonical.reference_documents import (
     ReferenceDocumentCreateData,
     ReferenceDocumentError,
@@ -106,7 +113,7 @@ class ReferenceDocumentsResource:
     ) -> None:
         """List reusable reference documents for one series profile."""
         limit, offset = parse_pagination(req)
-        kind = req.get_param("kind")
+        kind = parse_enum_param(req, "kind", ReferenceDocumentKind)
 
         try:
             async with self._uow_factory() as uow:
@@ -116,7 +123,7 @@ class ReferenceDocumentsResource:
                         owner_series_profile_id=str(
                             parse_uuid(profile_id, "profile_id")
                         ),
-                        kind=kind,
+                        kind=None if kind is None else kind.value,
                         limit=limit,
                         offset=offset,
                     ),
@@ -285,7 +292,10 @@ class ReferenceDocumentRevisionResource:
         revision_id: str,
     ) -> None:
         """Fetch one immutable revision by identifier."""
-        owner_series_profile_id = req.get_param("owner_series_profile_id")
+        owner_series_profile_id = parse_optional_uuid_param(
+            req,
+            "owner_series_profile_id",
+        )
 
         try:
             async with self._uow_factory() as uow:
@@ -295,12 +305,7 @@ class ReferenceDocumentRevisionResource:
                     owner_series_profile_id=(
                         None
                         if owner_series_profile_id is None
-                        else str(
-                            parse_uuid(
-                                owner_series_profile_id,
-                                "owner_series_profile_id",
-                            )
-                        )
+                        else str(owner_series_profile_id)
                     ),
                 )
         except ReferenceDocumentError as exc:

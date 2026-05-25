@@ -80,6 +80,63 @@ def test_invalid_pagination_returns_validation_envelope(
     )
 
 
+def test_invalid_optional_uuid_filter_returns_validation_envelope(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Invalid optional UUID query filters return field-specific details."""
+    response = canonical_api_client.simulate_get(
+        "/v1/episode-templates",
+        params={"series_profile_id": "not-a-uuid"},
+    )
+
+    _assert_error_envelope(
+        response,
+        status_code=400,
+        code="validation_error",
+        field="series_profile_id",
+        constraint="uuid",
+    )
+
+
+def test_invalid_reference_document_kind_filter_returns_validation_envelope(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Invalid document-kind filters return field-specific enum details."""
+    response = canonical_api_client.simulate_get(
+        "/v1/series-profiles/018f0c2a-1234-7000-a000-000000000001/reference-documents",
+        params={"kind": "not-a-kind"},
+    )
+
+    _assert_error_envelope(
+        response,
+        status_code=400,
+        code="validation_error",
+        field="kind",
+        constraint="enum",
+    )
+
+
+def test_invalid_reference_binding_target_kind_returns_validation_envelope(
+    canonical_api_client: testing.TestClient,
+) -> None:
+    """Invalid binding target-kind filters return field-specific enum details."""
+    response = canonical_api_client.simulate_get(
+        "/v1/reference-bindings",
+        params={
+            "target_kind": "not-a-target",
+            "target_id": "018f0c2a-1234-7000-a000-000000000001",
+        },
+    )
+
+    _assert_error_envelope(
+        response,
+        status_code=400,
+        code="validation_error",
+        field="target_kind",
+        constraint="enum",
+    )
+
+
 def test_missing_query_parameter_returns_validation_envelope(
     canonical_api_client: testing.TestClient,
 ) -> None:

@@ -20,8 +20,8 @@ import falcon
 from episodic.api.helpers import (
     build_template_create_kwargs,
     build_template_update_request,
+    parse_optional_uuid_param,
     parse_pagination,
-    parse_uuid,
 )
 from episodic.api.resources.base import (
     UpdateRequestBuilder,
@@ -78,12 +78,7 @@ class EpisodeTemplatesResource(_CreateResourceBase[object]):
             Raised when ``series_profile_id`` is provided but invalid.
         """
         limit, offset = parse_pagination(req)
-        raw_series_profile_id = req.get_param("series_profile_id")
-        series_profile_id = (
-            None
-            if raw_series_profile_id is None
-            else parse_uuid(raw_series_profile_id, "series_profile_id")
-        )
+        series_profile_id = parse_optional_uuid_param(req, "series_profile_id")
 
         async with self._uow_factory() as uow:
             service_fn = partial(

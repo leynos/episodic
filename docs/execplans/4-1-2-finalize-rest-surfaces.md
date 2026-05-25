@@ -277,7 +277,11 @@ Success is observable when:
   clearer test documentation; those were applied, gated, and the final
   follow-up review returned zero findings in
   `/tmp/4-1-2-m4-coderabbit-followup-5.out`.
-- [ ] Milestone 5: filter parameter consistency pass.
+- [x] (2026-05-25T00:00Z) Milestone 5: filter parameter consistency pass.
+  Focused red run showed invalid reference-document `kind` being hidden behind
+  a 404 and invalid binding `target_kind` missing field-level details; focused
+  green run passed 103 `/v1` API tests in `/tmp/4-1-2-m5-green.out`. The final
+  CodeRabbit review returned zero findings in `/tmp/4-1-2-m5-coderabbit.out`.
 - [ ] Milestone 6: authorization scaffold (`AuthorizationPort`, middleware,
   permit-all adapter, `ApiDependencies` wiring).
 - [ ] Milestone 7: documentation alignment (users guide, developers guide,
@@ -414,6 +418,12 @@ Success is observable when:
   parser, pagination parser, payload-dict validator already colocated there); a
   separate module would split a single cohesive set of request-validation
   helpers. Date/Author: 2026-05-23 / planning team.
+
+- Decision: leave `/v1/series-profiles` without additional filters in this
+  pass. Rationale: the design documents specify pagination for the collection
+  but do not define a series-profile filter parameter; adding one would expand
+  the public API beyond the planned REST surface. Date/Author: 2026-05-25 /
+  Codex.
 
 - Decision: do not implement `Idempotency-Key` handling, `Retry-After`, or
   `rate_limited` response codes in this ExecPlan. Rationale: those belong to
