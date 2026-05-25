@@ -297,8 +297,16 @@ Success is observable when:
   sections, and reusable-reference system-design contract. `make fmt` completed
   in `/tmp/4-1-2-m7-fmt.out`; unrelated formatter churn was restored before the
   commit.
-- [ ] Milestone 8: full gate run plus `coderabbit review --agent`; mark
-  roadmap item `4.1.2` done.
+- [ ] (2026-05-25T00:00Z) Milestone 8: full gate run plus
+  `coderabbit review --agent`; mark roadmap item `4.1.2` done. Final gates are
+  in progress. `mbake validate Makefile`, `make check-fmt`,
+  `make markdownlint`, `make nixie`, `make build`, `make lint`,
+  `make typecheck`, and `make check-migrations` passed in
+  `/tmp/4-1-2-*.out`. The first full `make test` pass found a stale assertion
+  in `tests/test_lifespan_hooks.py`; that test now expects the documented
+  pagination envelope. The rerun passed 720 tests and 3 skips with only the
+  pre-existing guest-bios `U+FFFE` property failure remaining in
+  `/tmp/4-1-2-test-after-lifespan.out`.
 
 ## Surprises and discoveries
 
@@ -385,6 +393,14 @@ Success is observable when:
   Impact: the code keeps the deterministic lint-clean `except Exception:`
   branch, with behaviour covered by
   `test_authorization_adapter_exception_returns_503`.
+
+- Observation: the final full-suite gate exposed one stale test assertion in
+  `tests/test_lifespan_hooks.py::test_create_app_keeps_existing_canonical_routes_working`.
+  The route remained available, but the assertion still expected the old
+  `{"items": []}` body after roadmap item `4.1.2` intentionally standardised
+  list responses on `{items, limit, offset, total}`. Impact: the assertion now
+  checks the documented empty pagination envelope, and the focused test passes
+  in `/tmp/4-1-2-lifespan-focused.out`.
 
 ## Decision log
 

@@ -52,4 +52,4 @@ async def test_create_app_keeps_existing_canonical_routes_working(
     response = await canonical_api_async_client.get("/v1/series-profiles")
 
     assert response.status_code == 200
-    assert response.json() == {"items": []}
+    assert response.json() == {"items": [], "limit": 20, "offset": 0, "total": 0}
