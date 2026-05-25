@@ -10,8 +10,11 @@ from __future__ import annotations
 import asyncio
 import collections.abc as cabc
 import concurrent.futures as cf
+import dataclasses as dc
+import logging
 import os
 import threading
+import time
 import typing as typ
 
 _InputT = typ.TypeVar("_InputT")
@@ -20,7 +23,72 @@ InterpreterPoolCapability = cabc.Callable[[], bool]
 
 _INTERPRETER_POOL_FEATURE_FLAG = "EPISODIC_USE_INTERPRETER_POOL"
 _INTERPRETER_POOL_MAX_WORKERS_ENV = "EPISODIC_INTERPRETER_POOL_MAX_WORKERS"
+_METRIC_MAP_CALLS = "interpreter_pool.map.calls"
+_METRIC_MAP_ITEMS = "interpreter_pool.map.items"
+_METRIC_SHUTDOWN_LATENCY_MS = "interpreter_pool.shutdown.latency_ms"
 _TRUTHY_VALUES = frozenset({"1", "on", "true", "yes"})
+_log = logging.getLogger(__name__)
+
+
+class CpuTaskExecutorMetricsPort(typ.Protocol):
+    """Bounded-cardinality metrics sink for CPU task executors."""
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Increment a bounded-cardinality counter."""
+
+    def observe_latency_ms(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Observe a latency or gauge-like measurement in milliseconds."""
+
+
+class CpuTaskExecutorClockPort(typ.Protocol):
+    """Monotonic clock used to measure executor lifecycle timings."""
+
+    def monotonic_seconds(self) -> float:
+        """Return a monotonic timestamp in seconds."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _NoopCpuTaskExecutorMetrics:
+    """Default metrics sink used when no backend is wired."""
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Ignore counter increments."""
+
+    def observe_latency_ms(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Ignore latency observations."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _PerfCounterCpuTaskExecutorClock:
+    """Production executor clock backed by Python's monotonic perf counter."""
+
+    read_seconds: cabc.Callable[[], float] = time.perf_counter
+
+    def monotonic_seconds(self) -> float:
+        """Return the current monotonic timestamp in seconds."""
+        return self.read_seconds()
 
 
 class CpuTaskExecutor(typ.Protocol):
@@ -112,11 +180,17 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         self,
         *,
         max_workers: int | None = None,
+        metrics: CpuTaskExecutorMetricsPort | None = None,
+        clock: CpuTaskExecutorClockPort | None = None,
     ) -> None:
         self._max_workers = max_workers
         self._executor: cf.Executor | None = None
         self._executor_lock = threading.RLock()
         self._is_shutdown = False
+        self._metrics = (
+            metrics if metrics is not None else _NoopCpuTaskExecutorMetrics()
+        )
+        self._clock = clock if clock is not None else _PerfCounterCpuTaskExecutorClock()
 
     def _get_executor(self) -> cf.Executor:
         """Return the interpreter pool, creating it on first use."""
@@ -125,17 +199,50 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                 msg = "InterpreterPoolCpuTaskExecutor has been shut down."
                 raise RuntimeError(msg)
             if self._executor is None:
-                self._executor = _create_interpreter_pool_executor(self._max_workers)
+                try:
+                    self._executor = _create_interpreter_pool_executor(
+                        self._max_workers,
+                    )
+                except Exception:
+                    _log.exception(
+                        "Failed to create interpreter-pool executor",
+                        extra={"max_workers": self._max_workers},
+                    )
+                    raise
+                _log.info(
+                    "Created interpreter-pool executor",
+                    extra={"max_workers": self._max_workers},
+                )
             return self._executor
 
     def shutdown(self) -> None:
         """Shut down the interpreter pool atomically."""
         with self._executor_lock:
+            started = self._clock.monotonic_seconds()
             self._is_shutdown = True
             executor = self._executor
             self._executor = None
             if executor is not None:
-                executor.shutdown(wait=True)
+                outcome = "success"
+                try:
+                    executor.shutdown(wait=True)
+                except Exception:
+                    outcome = "error"
+                    _log.exception(
+                        "Interpreter-pool executor shutdown failed",
+                        extra={"max_workers": self._max_workers},
+                    )
+                    raise
+                finally:
+                    self._metrics.observe_latency_ms(
+                        _METRIC_SHUTDOWN_LATENCY_MS,
+                        (self._clock.monotonic_seconds() - started) * 1000,
+                        labels={"outcome": outcome},
+                    )
+                _log.info(
+                    "Shut down interpreter-pool executor",
+                    extra={"max_workers": self._max_workers},
+                )
 
     @typ.override
     async def map_ordered(
@@ -154,7 +261,31 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         def map_ordered_sync() -> list[_OutputT]:
             with self._executor_lock:
                 executor = self._get_executor()
-                return list(executor.map(task, items))
+                try:
+                    result = list(executor.map(task, items))
+                except Exception:
+                    self._metrics.increment_counter(
+                        _METRIC_MAP_CALLS,
+                        labels={"outcome": "error"},
+                    )
+                    _log.exception(
+                        "Interpreter-pool executor map failed",
+                        extra={
+                            "item_count": len(items),
+                            "max_workers": self._max_workers,
+                        },
+                    )
+                    raise
+                self._metrics.increment_counter(
+                    _METRIC_MAP_CALLS,
+                    labels={"outcome": "success"},
+                )
+                self._metrics.observe_latency_ms(
+                    _METRIC_MAP_ITEMS,
+                    float(len(items)),
+                    labels={"outcome": "success"},
+                )
+                return result
 
         return await asyncio.to_thread(map_ordered_sync)
 
@@ -184,17 +315,31 @@ def build_cpu_task_executor_from_environment(
     """
     environ_ = os.environ if environ is None else environ
     if not _flag_enabled(environ_.get(_INTERPRETER_POOL_FEATURE_FLAG)):
+        _log.info(
+            "Using inline CPU task executor",
+            extra={"reason": "feature_flag_disabled"},
+        )
         return InlineCpuTaskExecutor()
     if not capability_check():
+        _log.info(
+            "Using inline CPU task executor",
+            extra={"reason": "interpreter_pool_unavailable"},
+        )
         return InlineCpuTaskExecutor()
     max_workers = _parse_optional_positive_int(
         environ_.get(_INTERPRETER_POOL_MAX_WORKERS_ENV),
+    )
+    _log.info(
+        "Using interpreter-pool CPU task executor",
+        extra={"max_workers": max_workers},
     )
     return InterpreterPoolCpuTaskExecutor(max_workers=max_workers)
 
 
 __all__ = [
     "CpuTaskExecutor",
+    "CpuTaskExecutorClockPort",
+    "CpuTaskExecutorMetricsPort",
     "InlineCpuTaskExecutor",
     "InterpreterPoolCpuTaskExecutor",
     "build_cpu_task_executor_from_environment",
