@@ -18,7 +18,7 @@ from episodic.canonical.reference_documents import (
     ReferenceDocumentError,
     create_reference_binding,
     get_reference_binding,
-    list_reference_bindings,
+    list_reference_bindings_paged,
 )
 
 if typ.TYPE_CHECKING:
@@ -74,7 +74,7 @@ class ReferenceBindingsResource:
 
         try:
             async with self._uow_factory() as uow:
-                bindings = await list_reference_bindings(
+                bindings, total = await list_reference_bindings_paged(
                     uow,
                     request=ReferenceBindingListRequest(
                         target_kind=params["target_kind"],
@@ -90,6 +90,7 @@ class ReferenceBindingsResource:
             "items": [serialize_reference_binding(item) for item in bindings],
             "limit": limit,
             "offset": offset,
+            "total": total,
         }
         resp.status = falcon.HTTP_200
 

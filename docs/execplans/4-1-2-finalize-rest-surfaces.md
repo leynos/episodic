@@ -258,8 +258,10 @@ Success is observable when:
   harness updates. Focused red run failed on the previous Falcon
   `{title, description}` bodies; focused green run passed 28 tests in
   `/tmp/4-1-2-m1-green.out`.
-- [ ] Milestone 2: pagination `total` plumbing for reference-domain
-  endpoints (additive `count_*` Protocols + SQLAlchemy implementations).
+- [x] (2026-05-25T00:00Z) Milestone 2: pagination `total` plumbing for
+  reference-domain endpoints (additive `count_*` Protocols + SQLAlchemy
+  implementations). Focused red run failed on missing `total`; focused green
+  run passed 70 tests in `/tmp/4-1-2-m2-green.out`.
 - [ ] Milestone 3: pagination retrofit on series-profile, episode-template,
   and resolved-bindings list endpoints.
 - [ ] Milestone 4: history-endpoint pagination retrofit.

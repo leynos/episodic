@@ -80,6 +80,16 @@ async def list_reference_documents(
     request: ReferenceDocumentListRequest,
 ) -> list[ReferenceDocument]:
     """List reusable reference documents for one owning series profile."""
+    documents, _total = await list_reference_documents_paged(uow, request=request)
+    return documents
+
+
+async def list_reference_documents_paged(
+    uow: CanonicalUnitOfWork,
+    *,
+    request: ReferenceDocumentListRequest,
+) -> tuple[list[ReferenceDocument], int]:
+    """List reusable reference documents and their unpaginated total."""
     _validate_pagination(request.limit, request.offset)
     parsed_owner_id = _parse_uuid(
         request.owner_series_profile_id,
@@ -87,12 +97,17 @@ async def list_reference_documents(
     )
     await _require_series_exists(uow, parsed_owner_id)
     parsed_kind = None if request.kind is None else _parse_reference_kind(request.kind)
-    return await uow.reference_documents.list_for_series(
+    documents = await uow.reference_documents.list_for_series(
         parsed_owner_id,
         kind=parsed_kind,
         limit=request.limit,
         offset=request.offset,
     )
+    total = await uow.reference_documents.count_for_series(
+        parsed_owner_id,
+        kind=parsed_kind,
+    )
+    return documents, total
 
 
 async def update_reference_document(

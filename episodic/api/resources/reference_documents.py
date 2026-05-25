@@ -21,8 +21,8 @@ from episodic.canonical.reference_documents import (
     create_reference_document_revision,
     get_reference_document,
     get_reference_document_revision,
-    list_reference_document_revisions,
-    list_reference_documents,
+    list_reference_document_revisions_paged,
+    list_reference_documents_paged,
     update_reference_document,
 )
 
@@ -110,7 +110,7 @@ class ReferenceDocumentsResource:
 
         try:
             async with self._uow_factory() as uow:
-                documents = await list_reference_documents(
+                documents, total = await list_reference_documents_paged(
                     uow,
                     request=ReferenceDocumentListRequest(
                         owner_series_profile_id=str(
@@ -128,6 +128,7 @@ class ReferenceDocumentsResource:
             "items": [serialize_reference_document(item) for item in documents],
             "limit": limit,
             "offset": offset,
+            "total": total,
         }
         resp.status = falcon.HTTP_200
 
@@ -246,7 +247,7 @@ class ReferenceDocumentRevisionsResource:
 
         try:
             async with self._uow_factory() as uow:
-                revisions = await list_reference_document_revisions(
+                revisions, total = await list_reference_document_revisions_paged(
                     uow,
                     request=ReferenceDocumentRevisionListRequest(
                         document_id=str(parse_uuid(document_id, "document_id")),
@@ -266,6 +267,7 @@ class ReferenceDocumentRevisionsResource:
             ],
             "limit": limit,
             "offset": offset,
+            "total": total,
         }
         resp.status = falcon.HTTP_200
 

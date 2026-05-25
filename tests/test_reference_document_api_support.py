@@ -152,6 +152,9 @@ def _assert_binding_list_workflow(
     assert bindings_payload["offset"] == 0, (
         f"expected offset 0 in bindings payload: {bindings_payload}"
     )
+    assert bindings_payload["total"] == 1, (
+        f"expected total 1 in bindings payload: {bindings_payload}"
+    )
     assert len(bindings_items) == 1, (
         f"Expected one binding in list response, got {len(bindings_items)}"
     )

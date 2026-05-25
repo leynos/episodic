@@ -73,6 +73,19 @@ async def list_reference_document_revisions(
     request: ReferenceDocumentRevisionListRequest,
 ) -> list[ReferenceDocumentRevision]:
     """List immutable revisions for one reference document."""
+    revisions, _total = await list_reference_document_revisions_paged(
+        uow,
+        request=request,
+    )
+    return revisions
+
+
+async def list_reference_document_revisions_paged(
+    uow: CanonicalUnitOfWork,
+    *,
+    request: ReferenceDocumentRevisionListRequest,
+) -> tuple[list[ReferenceDocumentRevision], int]:
+    """List immutable revisions and their unpaginated total."""
     _validate_pagination(request.limit, request.offset)
     parsed_document_id = _parse_uuid(request.document_id, "document_id")
     parsed_owner_id = _parse_uuid(
@@ -84,11 +97,15 @@ async def list_reference_document_revisions(
         document_id=parsed_document_id,
         owner_series_profile_id=parsed_owner_id,
     )
-    return await uow.reference_document_revisions.list_for_document(
+    revisions = await uow.reference_document_revisions.list_for_document(
         parsed_document_id,
         limit=request.limit,
         offset=request.offset,
     )
+    total = await uow.reference_document_revisions.count_for_document(
+        parsed_document_id,
+    )
+    return revisions, total
 
 
 async def get_reference_document_revision(

@@ -188,6 +188,11 @@ def assert_reference_document_list(
         f"expected limit 10 in payload: {payload}",
     )
     _assert_equal(payload["offset"], 0, f"expected offset 0 in payload: {payload}")
+    _assert_equal(
+        payload["total"],
+        len(items),
+        f"expected total to match returned items in payload: {payload}",
+    )
     return items
 
 
@@ -243,6 +248,11 @@ def assert_reference_revision_history(
         f"expected limit 10, got {payload['limit']}",
     )
     _assert_equal(payload["offset"], 0, f"expected offset 0, got {payload['offset']}")
+    _assert_equal(
+        payload["total"],
+        len(items),
+        f"expected total to match returned revisions in payload: {payload}",
+    )
     return items
 
 
