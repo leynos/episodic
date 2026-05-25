@@ -79,12 +79,12 @@ Success is observable when:
 ## Constraints
 
 - Preserve hexagonal architecture invariants per ADR 014
-  (`docs/adr/adr-014-hexagonal-architecture-enforcement.md`) and
-  `episodic/architecture/policy.py`. The inbound-adapter group is allowed to
-  import only `domain_ports`, `application`, and itself
-  (`episodic/architecture/policy.py:101`). The architecture check
-  (`make check-architecture`, invoked by `make lint`) must remain green
-  throughout.
+  (`docs/adr/adr-014-hexagonal-architecture-enforcement.md`) and the Hecate
+  configuration in `[tool.hecate]` at `pyproject.toml:437-496`. The
+  inbound-adapter group is allowed to import only `domain_ports`,
+  `application`, and itself (`pyproject.toml:480-486`). The architecture
+  check (`make check-architecture` → `hecate check`, invoked by `make lint`
+  via `Makefile:73,77-78`) must remain green throughout.
 - Domain and application layers must remain framework-agnostic. No Falcon,
   `httpx`, or HTTP-specific types may leak into `episodic.canonical.*`,
   `episodic.generation.*`, or `episodic.llm.*`.
@@ -311,8 +311,8 @@ Success is observable when:
   no `add_error_handler` or `set_error_serializer` call in
   `episodic/api/app.py:61-128`. Impact: introducing one is greenfield.
 
-- Observation: `domain_ports.allowed_groups = {"domain_ports"}` only
-  (`episodic/architecture/policy.py:74`), so any port that references
+- Observation: the `domain_ports` Hecate group allows imports from
+  `domain_ports` only (`pyproject.toml:466`), so any port that references
   HTTP-specific concepts (bearer tokens, scopes) must live outside the
   domain. The `AuthorizationPort` scaffold therefore lives in
   `episodic/api/authorization.py` for this work, with a future migration
@@ -430,13 +430,19 @@ Shared request parsers live at `episodic/api/helpers.py:54-474`
 `parse_expected_revision`). Response serializers live at
 `episodic/api/serializers.py`.
 
-Architecture policy is enforced by `episodic/architecture/policy.py` and
-checked by `make check-architecture` (called from `make lint`). The
-inbound-adapter group covers `episodic.api`, `episodic.worker.tasks`, and
-`episodic.worker.topology` and may only import from the domain-ports,
+Architecture policy is enforced by the Hecate configuration under
+`[tool.hecate]` in `pyproject.toml:437-496`, and checked by `make
+check-architecture` (which runs `hecate check`, called transitively from
+`make lint` via `Makefile:73,77-78`). The inbound-adapter group covers
+`episodic.api`, `episodic.worker.tasks`, and `episodic.worker.topology`
+(`pyproject.toml:480-486`) and may only import from the domain-ports,
 application, and inbound-adapter groups. New API-layer modules
 (`episodic/api/errors.py`, `episodic/api/authorization.py`) automatically
-inherit the inbound-adapter classification.
+inherit the inbound-adapter classification by virtue of their
+`episodic.api` prefix. The repo-local `episodic.architecture` module was
+removed in commit `3403ace` when Hecate replaced it; references in earlier
+ExecPlans (for example, `4.1.1`'s "ARCH001" mentions) now resolve to the
+same diagnostic identifier emitted by Hecate.
 
 Repository contracts of interest:
 
@@ -1001,8 +1007,9 @@ suite, and recommit when fixed.
 If `make check-architecture` fails mid-milestone, treat the failure as
 top priority. The check enforces the hexagonal constraint; the most
 likely cause is an accidental import from `episodic.api` into
-`episodic.canonical`. Run `python -m episodic.architecture` directly to
-get the offending edge.
+`episodic.canonical`. Run `uv run hecate check` directly to see the
+offending edge (the verbose output includes the diagnostic
+identifier `ARCH001` and the source/target group names).
 
 ## Artifacts and notes
 
@@ -1111,3 +1118,13 @@ documentation tooling.
   handlers, RFC 9457 Problem Details, and Falcon ASGI middleware was
   resolved via WebFetch. Plan awaits user approval before
   implementation begins.
+- 2026-05-25: Rebased onto `origin/main` after commit `3403ace`
+  ("Adopt Hecate for architecture checks (#107)") removed the repo-local
+  `episodic/architecture/` module. Updated every reference to
+  `episodic/architecture/policy.py:<line>` to point at the new
+  `[tool.hecate]` configuration in `pyproject.toml:437-496`, replaced
+  `python -m episodic.architecture` recovery guidance with `uv run
+  hecate check`, and confirmed the policy semantics (group prefixes,
+  allowed imports) are byte-equivalent — only the implementation moved
+  from Python module to Hecate TOML configuration. No work-plan change
+  was required.
