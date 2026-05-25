@@ -1,4 +1,12 @@
-"""Tests for StructuredPlanningOrchestrator."""
+"""Behaviour tests for the structured planning orchestrator.
+
+These tests document how `StructuredPlanningOrchestrator` connects the
+structured planner port, tool-executor port, and generation result aggregation
+helpers. They give CI visibility into the orchestration contract: plans are
+produced by `StructuredGenerationPlanner`, actions are dispatched through a
+tool adapter, show-notes tool output is preserved, and planner/action usage is
+rolled up into the final `GenerationOrchestrationResult`.
+"""
 
 import json
 

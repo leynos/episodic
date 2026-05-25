@@ -1,4 +1,11 @@
-"""Hypothesis property tests for orchestration LangGraph token rollups."""
+"""Property tests for orchestration graph usage rollups.
+
+This module uses Hypothesis to exercise the relationships between planner DTOs,
+action results, the LangGraph orchestration wrapper, and the shared
+`build_generation_result` aggregation helper. The tests are useful because they
+check token accounting invariants over many generated inputs, giving CI
+coverage that example-based orchestration tests cannot provide.
+"""
 
 import dataclasses
 import string
