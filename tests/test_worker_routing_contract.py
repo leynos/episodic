@@ -47,15 +47,25 @@ def test_task_routes_reject_malformed_task_names_and_workloads() -> None:
     """Reject malformed task route tables instead of producing fallback routes."""
     from episodic.worker import DEFAULT_WORKER_TOPOLOGY, WorkloadClass
 
-    malformed_task_workloads = {
-        "": WorkloadClass.IO_BOUND,
-        "episodic.worker.cpu_diagnostic": WorkloadClass.CPU_BOUND,
-    }
-    with pytest.raises(
-        ValueError,
-        match=r"Worker task names must be non-empty dotted names\.",
-    ):
-        DEFAULT_WORKER_TOPOLOGY.task_routes(malformed_task_workloads)
+    malformed_task_names = (
+        "",
+        "singlepart",
+        "a..b",
+        ".leading",
+        "trailing.",
+        " valid.name ",
+        "\tname.part",
+    )
+    for malformed_task_name in malformed_task_names:
+        malformed_task_workloads = {
+            malformed_task_name: WorkloadClass.IO_BOUND,
+            "episodic.worker.cpu_diagnostic": WorkloadClass.CPU_BOUND,
+        }
+        with pytest.raises(
+            ValueError,
+            match=r"Worker task names must be non-empty dotted names\.",
+        ):
+            DEFAULT_WORKER_TOPOLOGY.task_routes(malformed_task_workloads)
 
     with pytest.raises(
         TypeError,
