@@ -6,7 +6,6 @@ import asyncio
 import typing as typ
 
 import episodic.concurrent_interpreters as ci
-from tests.conftest import double_worker_value
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -37,7 +36,7 @@ def test_eager_cpu_task_body_uses_environment_executor_pattern(
         executor = ci.build_cpu_task_executor_from_environment()
         try:
             results = asyncio.run(
-                executor.map_ordered(double_worker_value, validated_items),
+                executor.map_ordered(abs, validated_items),
             )
         finally:
             shutdown = getattr(executor, "shutdown", None)
@@ -46,10 +45,10 @@ def test_eager_cpu_task_body_uses_environment_executor_pattern(
         return {"results": results}
 
     task_result = app.tasks["tests.worker.cpu_fanout_probe"].delay({
-        "items": [1, 3, 5],
+        "items": [-1, 3, -5],
     })
 
-    assert task_result.get() == {"results": [2, 6, 10]}
+    assert task_result.get() == {"results": [1, 3, 5]}
     assert captured_interpreter_pool_workers == [2], (
         "Expected eager Celery task body to honour interpreter-pool env."
     )
