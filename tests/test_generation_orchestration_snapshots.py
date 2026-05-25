@@ -5,6 +5,8 @@ Syrupy snapshots give CI a stable view of orchestration DTO serialisation for
 `ShowNotesResult`. Assertions also cover optional fields and usage accounting.
 """
 
+# pylint: disable=too-many-lines
+
 import dataclasses
 import typing as typ
 
@@ -45,6 +47,7 @@ class _UnusedLLMPort:
         )
         raise RuntimeError(msg)
 
+
 def make_show_notes_entry(
     *,
     topic: str = "Structured planning",
@@ -59,6 +62,7 @@ def make_show_notes_entry(
         timestamp=timestamp,
         tei_locator=tei_locator,
     )
+
 
 def make_show_notes_result(
     *,
@@ -177,6 +181,7 @@ def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> N
     serialised = dataclasses.asdict(plan)
     assert serialised == snapshot
 
+
 def test_show_notes_entry_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
@@ -184,6 +189,7 @@ def test_show_notes_entry_serialisation_snapshot(
     entry = make_show_notes_entry()
     serialised = dataclasses.asdict(entry)
     assert serialised == snapshot
+
 
 def test_show_notes_result_serialisation_snapshot(
     snapshot: SnapshotAssertion,
@@ -193,16 +199,19 @@ def test_show_notes_result_serialisation_snapshot(
     serialised = dataclasses.asdict(result)
     assert serialised == snapshot
 
+
 def test_show_notes_entry_normalises_optional_locator() -> None:
     """Verify optional locator normalisation before snapshot serialisation."""
     entry = make_show_notes_entry(tei_locator="   ")
 
     assert entry.tei_locator is None
 
+
 def test_show_notes_entry_rejects_non_iso8601_timestamp() -> None:
     """Verify invalid timestamps cannot enter show-note snapshot fixtures."""
     with pytest.raises(ValueError, match="timestamp"):
         make_show_notes_entry(timestamp="5:30")
+
 
 def test_execution_plan_freezes_and_validates_steps() -> None:
     """Verify plan steps are typed and immutable before nested serialisation."""
@@ -234,6 +243,7 @@ def test_execution_plan_freezes_and_validates_steps() -> None:
             ),
         )
 
+
 @dataclasses.dataclass(frozen=True)
 class _OrchestrationResultSpec:
     """Parameter object for building the canonical orchestration DTO graph."""
@@ -249,6 +259,8 @@ class _OrchestrationResultSpec:
         default_factory=lambda: LLMUsage(1, 2, 3)
     )
     total_usage: LLMUsage | None = None
+
+
 def _make_orchestration_result(
     spec: _OrchestrationResultSpec | None = None,
 ) -> GenerationOrchestrationResult:
@@ -288,12 +300,15 @@ def _make_orchestration_result(
         planner_usage=spec.planner_usage,
         total_usage=total_usage,
     )
+
+
 def test_generation_orchestration_result_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot the aggregate orchestration result without tool-specific data."""
     result = _make_orchestration_result()
     assert dataclasses.asdict(result) == snapshot
+
 
 def test_generation_orchestration_result_with_show_notes_snapshot(
     snapshot: SnapshotAssertion,
@@ -311,6 +326,7 @@ def test_generation_orchestration_result_with_show_notes_snapshot(
         )
     )
     assert dataclasses.asdict(result) == snapshot
+
 
 def test_generation_orchestration_result_freezes_action_results() -> None:
     """Verify aggregation rejects non-action results and freezes valid ones."""
@@ -339,6 +355,7 @@ def test_generation_orchestration_result_freezes_action_results() -> None:
             total_usage=result.total_usage,
         )
 
+
 def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
     """Verify the canonical aggregate keeps planner and action usage aligned."""
     result = _make_orchestration_result()
@@ -352,6 +369,7 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
         total_tokens=result.planner_usage.total_tokens + action_usage.total_tokens,
     )
     assert result.total_usage == expected_usage
+
 
 @pytest.mark.parametrize(
     "spec",
@@ -370,6 +388,7 @@ def test_generation_orchestration_fixture_totals_partial_usage_overrides(
         spec.planner_usage.output_tokens + spec.action_usage.output_tokens,
         spec.planner_usage.total_tokens + spec.action_usage.total_tokens,
     )
+
 
 _USAGE_COUNTS = st.tuples(
     st.integers(min_value=0, max_value=100_000),
@@ -401,6 +420,8 @@ def test_generation_orchestration_fixture_total_usage_property(
         planner[1] + action[1],
         planner[2] + action[2],
     )
+
+
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
     """Snapshot checkpoint payloads used when orchestration pauses and resumes."""
     planned = PlannedAction(

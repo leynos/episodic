@@ -121,6 +121,14 @@ def _assert_usage_rollup(
         f"got {result.total_usage.total_tokens}"
     )
 
+
+_USAGE_COUNTS = st.tuples(
+    st.integers(min_value=0, max_value=1_000_000),
+    st.integers(min_value=0, max_value=1_000_000),
+    st.integers(min_value=0, max_value=2_000_000),
+)
+
+
 @given(planner=_USAGE_COUNTS, action=_USAGE_COUNTS)
 @settings(max_examples=50)
 def test_build_generation_result_total_usage_property(
@@ -129,7 +137,7 @@ def test_build_generation_result_total_usage_property(
 ) -> None:
     """Property test: generation results sum planner and action usage fields."""
     planner_result, actions = _build_planner_and_action(
-        _PropTokenInputs(
+        PropTokenInputs(
             planner_input=planner[0],
             planner_output=planner[1],
             action_input=action[0],
@@ -150,6 +158,8 @@ def test_build_generation_result_total_usage_property(
         planner[1] + action[1],
         planner[2] + action[2],
     )
+
+
 @given(
     tokens=token_inputs_strategy,
     correlation_id=st.text(
