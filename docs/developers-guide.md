@@ -847,6 +847,15 @@ provide their own synchronization.
 invoke the LangGraph graph directly. Treat it as the framework state carrier
 for graph nodes rather than as a domain DTO exposed through hooks.
 
+`resume_generation_orchestration(...)` is the public API for completing a
+checkpointed run. Pass the same `CheckpointPort` used by the suspend path, a
+`TaskResumePort` that returns the externally completed action result, and a
+`ResumeWorkflowCommand` naming the checkpoint. The helper reloads the persisted
+planner result, combines it with the resumed action result, marks the
+checkpoint resumed, and returns the final `GenerationOrchestrationResult`. It
+raises `ValueError` for unknown checkpoints and `TypeError` for malformed
+stored planner-result payloads.
+
 ### Maintainer rules
 
 - Keep the planner strict: parse model output into typed DTOs immediately and

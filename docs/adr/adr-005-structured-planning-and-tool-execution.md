@@ -43,6 +43,11 @@ The accepted design is:
 - Provide a small in-process LangGraph wrapper that sequences
   `plan -> execute -> finish`, leaving checkpointing, suspend-and-resume, and
   queue dispatch to later roadmap items.
+- Allow the graph builder to accept a synchronous
+  `finish_callback: Callable[[GenerationOrchestrationResult], None]` hook for
+  observability and test event recording. The hook receives the aggregated
+  domain result, fires only on the direct `plan -> execute -> finish` path, and
+  is not part of the checkpoint suspend path.
 
 ## Rationale
 
@@ -89,6 +94,10 @@ pattern before chapter markers, guest biographies, or sponsorship copy exist.
 
 - LangGraph remains an implementation detail for orchestration control flow.
   The durable integration boundaries are still the application ports and DTOs.
+- The finish callback is an observation hook rather than a control-flow
+  extension point. Callback exceptions are logged without replacing the
+  computed graph result, and callers that share mutable callback state across
+  concurrent graph invocations must provide their own synchronization.
 
 ## Deferred work
 

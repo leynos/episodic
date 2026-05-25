@@ -1,4 +1,17 @@
-"""Checkpoint payload serialisation helpers for generation orchestration."""
+"""Checkpoint payload serialization helpers for generation orchestration.
+
+This module owns the JSON-compatible payload shape persisted through
+`CheckpointPort` when `langgraph.py` takes the suspend-before-execute path.
+`_checkpoint_resume.py` uses these helpers to store `PlannerResult` values in a
+workflow checkpoint and to rebuild them when
+`resume_generation_orchestration(...)` receives an external task result.
+
+The conversion helpers keep checkpoint payload validation close to the DTOs
+they reconstruct. `_planner_result_to_payload(...)` and
+`_planner_result_from_payload(...)` are the main suspend/resume boundary; the
+plan, action-result, and usage helpers support property tests and snapshot
+coverage for that persisted contract.
+"""
 
 import enum
 import typing as typ

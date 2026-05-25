@@ -1,4 +1,16 @@
-"""Checkpoint suspend and resume logic for generation orchestration."""
+"""Checkpoint suspend and resume logic for generation orchestration.
+
+This module contains the checkpoint side of the LangGraph orchestration path.
+`langgraph.py` calls `_suspend_execute_node(...)` when a `CheckpointPort` is
+provided, so the graph persists the planned execution step and returns a
+`SuspendedWorkflowResult` instead of running tools inline.
+
+`resume_generation_orchestration(...)` is the public API for completing that
+paused workflow. It reloads the checkpoint payload, rebuilds the planner result
+with `_checkpoint_payload` helpers, obtains the external action result from a
+`TaskResumePort`, aggregates the final `GenerationOrchestrationResult`, and
+marks the checkpoint resumed.
+"""
 
 import typing as typ
 import uuid
