@@ -248,9 +248,7 @@ class _OrchestrationResultSpec:
     planner_usage: LLMUsage = dataclasses.field(
         default_factory=lambda: LLMUsage(1, 2, 3)
     )
-    total_usage: LLMUsage = dataclasses.field(
-        default_factory=lambda: LLMUsage(11, 22, 33)
-    )
+    total_usage: LLMUsage | None = None
 def _make_orchestration_result(
     spec: _OrchestrationResultSpec | None = None,
 ) -> GenerationOrchestrationResult:
@@ -279,11 +277,16 @@ def _make_orchestration_result(
         usage=spec.action_usage,
         show_notes_result=spec.show_notes_result,
     )
+    total_usage = spec.total_usage or LLMUsage(
+        spec.planner_usage.input_tokens + spec.action_usage.input_tokens,
+        spec.planner_usage.output_tokens + spec.action_usage.output_tokens,
+        spec.planner_usage.total_tokens + spec.action_usage.total_tokens,
+    )
     return GenerationOrchestrationResult(
         plan=plan,
         action_results=(action_done,),
         planner_usage=spec.planner_usage,
-        total_usage=spec.total_usage,
+        total_usage=total_usage,
     )
 def test_generation_orchestration_result_snapshot(
     snapshot: SnapshotAssertion,
@@ -305,7 +308,6 @@ def test_generation_orchestration_result_with_show_notes_snapshot(
             action_usage=show_notes.usage,
             show_notes_result=show_notes,
             planner_usage=LLMUsage(input_tokens=12, output_tokens=8, total_tokens=20),
-            total_usage=LLMUsage(input_tokens=52, output_tokens=33, total_tokens=85),
         )
     )
     assert dataclasses.asdict(result) == snapshot
@@ -354,12 +356,8 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
 @pytest.mark.parametrize(
     "spec",
     (  # noqa: PT007 - single-parameter values are clearer as direct specs here.
-        _OrchestrationResultSpec(
-            action_usage=LLMUsage(5, 7, 12), total_usage=LLMUsage(6, 9, 15)
-        ),
-        _OrchestrationResultSpec(
-            planner_usage=LLMUsage(5, 7, 12), total_usage=LLMUsage(15, 27, 42)
-        ),
+        _OrchestrationResultSpec(action_usage=LLMUsage(5, 7, 12)),
+        _OrchestrationResultSpec(planner_usage=LLMUsage(5, 7, 12)),
     ),
 )
 def test_generation_orchestration_fixture_totals_partial_usage_overrides(
@@ -367,7 +365,11 @@ def test_generation_orchestration_fixture_totals_partial_usage_overrides(
 ) -> None:
     """Verify total usage is derived from whichever usage values callers supply."""
     result = _make_orchestration_result(spec)
-    assert result.total_usage == spec.total_usage
+    assert result.total_usage == LLMUsage(
+        spec.planner_usage.input_tokens + spec.action_usage.input_tokens,
+        spec.planner_usage.output_tokens + spec.action_usage.output_tokens,
+        spec.planner_usage.total_tokens + spec.action_usage.total_tokens,
+    )
 
 _USAGE_COUNTS = st.tuples(
     st.integers(min_value=0, max_value=100_000),
@@ -392,11 +394,6 @@ def test_generation_orchestration_fixture_total_usage_property(
         _OrchestrationResultSpec(
             action_usage=action_usage,
             planner_usage=planner_usage,
-            total_usage=LLMUsage(
-                planner[0] + action[0],
-                planner[1] + action[1],
-                planner[2] + action[2],
-            ),
         )
     )
     assert result.total_usage == LLMUsage(
