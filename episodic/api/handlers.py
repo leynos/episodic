@@ -89,8 +89,10 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episod
     uow_factory: UowFactory,
     entity_id: str,
     id_field_name: str,
-    service_fn: cabc.Callable[..., cabc.Awaitable[list[EntityT]]],
+    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[list[EntityT], int]]],
     serializer_fn: cabc.Callable[[EntityT], JsonPayload],
+    limit: int,
+    offset: int,
 ) -> tuple[JsonPayload, str]:
     """Handle history-list endpoint behaviour.
 
@@ -102,10 +104,14 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episod
         Raw parent-entity identifier from the request path.
     id_field_name : str
         Name of the identifier field used for validation messages.
-    service_fn : cabc.Callable[..., cabc.Awaitable[list[EntityT]]]
-        Service function that returns history entries for one parent entity.
+    service_fn : cabc.Callable[..., cabc.Awaitable[tuple[list[EntityT], int]]]
+        Service function that returns paged history entries and total count.
     serializer_fn : cabc.Callable[[EntityT], JsonPayload]
         Serializer for a single history entry.
+    limit : int
+        Maximum number of history entries to return.
+    offset : int
+        Number of history entries to skip.
 
     Returns
     -------
@@ -122,13 +128,23 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episod
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     try:
         async with uow_factory() as uow:
-            items = await service_fn(
+            items, total = await service_fn(
                 uow,
                 parent_id=parsed_entity_id,
+                limit=limit,
+                offset=offset,
             )
     except EntityNotFoundError as exc:
         raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
-    return {"items": [serializer_fn(item) for item in items]}, falcon.HTTP_200
+    return (
+        {
+            "items": [serializer_fn(item) for item in items],
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+        },
+        falcon.HTTP_200,
+    )
 
 
 async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared handler signature for resource adapters

@@ -46,6 +46,11 @@ class _KindDispatch:
         cabc.Awaitable[_RevisionedEntry | None],
     ]
     list_history_for_parent: cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]
+    list_history_for_parent_paged: cabc.Callable[
+        [uuid.UUID, int, int],
+        cabc.Awaitable[list[object]],
+    ]
+    count_history_for_parent: cabc.Callable[[uuid.UUID], cabc.Awaitable[int]]
     list_entities: cabc.Callable[
         [uuid.UUID | None, int | None, int],
         cabc.Awaitable[cabc.Sequence[object]],
@@ -83,6 +88,20 @@ def _get_repos_for_kind(
             async def _count_profiles(_: uuid.UUID | None) -> int:
                 return await profile_repo.count()
 
+            async def _list_profile_history_paged(
+                profile_id: uuid.UUID,
+                limit: int,
+                offset: int,
+            ) -> list[object]:
+                return typ.cast(
+                    "list[object]",
+                    await profile_history_repo.list_for_profile_paged(
+                        profile_id,
+                        limit=limit,
+                        offset=offset,
+                    ),
+                )
+
             return _KindDispatch(
                 human_label="Series profile",
                 entity_get=typ.cast(
@@ -97,6 +116,8 @@ def _get_repos_for_kind(
                     "cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]",
                     profile_history_repo.list_for_profile,
                 ),
+                list_history_for_parent_paged=_list_profile_history_paged,
+                count_history_for_parent=profile_history_repo.count_for_profile,
                 list_entities=_list_profiles,
                 count_entities=_count_profiles,
                 get_latest_revisions=profile_history_repo.get_latest_revisions_for_profiles,
@@ -124,6 +145,20 @@ def _get_repos_for_kind(
                     ),
                 )
 
+            async def _list_template_history_paged(
+                template_id: uuid.UUID,
+                limit: int,
+                offset: int,
+            ) -> list[object]:
+                return typ.cast(
+                    "list[object]",
+                    await template_history_repo.list_for_template_paged(
+                        template_id,
+                        limit=limit,
+                        offset=offset,
+                    ),
+                )
+
             return _KindDispatch(
                 human_label="Episode template",
                 entity_get=typ.cast(
@@ -138,6 +173,8 @@ def _get_repos_for_kind(
                     "cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]",
                     template_history_repo.list_for_template,
                 ),
+                list_history_for_parent_paged=_list_template_history_paged,
+                count_history_for_parent=template_history_repo.count_for_template,
                 list_entities=_list_templates,
                 count_entities=template_repo.count,
                 get_latest_revisions=template_history_repo.get_latest_revisions_for_templates,
@@ -217,6 +254,21 @@ async def list_history(
     """
     dispatch = _get_repos_for_kind(uow, kind)
     return await dispatch.list_history_for_parent(parent_id)
+
+
+async def list_history_paged(  # noqa: PLR0913
+    uow: CanonicalUnitOfWork,
+    *,
+    parent_id: uuid.UUID,
+    kind: EntityKind | str,
+    limit: int,
+    offset: int,
+) -> tuple[list[object], int]:
+    """List paged history entries and the total for one parent entity."""
+    dispatch = _get_repos_for_kind(uow, kind)
+    items = await dispatch.list_history_for_parent_paged(parent_id, limit, offset)
+    total = await dispatch.count_history_for_parent(parent_id)
+    return items, total
 
 
 async def list_entities_with_revisions(

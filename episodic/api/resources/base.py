@@ -22,7 +22,7 @@ from episodic.api.handlers import (
     handle_get_history,
     handle_update_entity,
 )
-from episodic.api.helpers import require_payload_dict
+from episodic.api.helpers import parse_pagination, require_payload_dict
 from episodic.api.types import JsonPayload
 from episodic.canonical.profile_templates import (
     UpdateEpisodeTemplateRequest,
@@ -122,7 +122,10 @@ class _GetHistoryResourceBase[HistoryT: object](_ResourceBase, ABC):
 
     @staticmethod
     @abstractmethod
-    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[HistoryT]]]:
+    def _get_service_fn() -> cabc.Callable[
+        ...,
+        cabc.Awaitable[tuple[list[HistoryT], int]],
+    ]:
         """Return the history-list service function for the resource."""
 
     @staticmethod
@@ -137,13 +140,15 @@ class _GetHistoryResourceBase[HistoryT: object](_ResourceBase, ABC):
         **kwargs: str,
     ) -> None:
         """List history entries for one entity."""
-        del req
+        limit, offset = parse_pagination(req)
         resp.media, resp.status = await handle_get_history(
             uow_factory=self._uow_factory,
             entity_id=self._get_entity_id_from_path(**kwargs),
             id_field_name=self._get_id_field_name(),
             service_fn=self._get_service_fn(),
             serializer_fn=self._get_serializer_fn(),
+            limit=limit,
+            offset=offset,
         )
 
 

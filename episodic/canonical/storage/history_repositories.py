@@ -77,6 +77,34 @@ class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):
             self._mapper,
         )
 
+    async def _list_for_parent_paged(
+        self,
+        parent_id: uuid.UUID,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[HistoryEntryT]:
+        """List paged history entries for a parent entity."""
+        result = await self._session.execute(
+            sa
+            .select(self._record_type)
+            .where(self._get_parent_field() == parent_id)
+            .order_by(self._get_revision_field())
+            .offset(offset)
+            .limit(limit)
+        )
+        return [self._mapper(row) for row in result.scalars()]
+
+    async def _count_for_parent(self, parent_id: uuid.UUID) -> int:
+        """Count history entries for a parent entity."""
+        result = await self._session.execute(
+            sa
+            .select(sa.func.count())
+            .select_from(self._record_type)
+            .where(self._get_parent_field() == parent_id)
+        )
+        return int(result.scalar_one())
+
     async def _get_latest_for_parent(
         self,
         parent_id: uuid.UUID,
@@ -150,6 +178,24 @@ class SqlAlchemySeriesProfileHistoryRepository(
         """List history entries for a series profile."""
         return await self._list_for_parent(profile_id)
 
+    async def list_for_profile_paged(
+        self,
+        profile_id: uuid.UUID,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[SeriesProfileHistoryEntry]:
+        """List paged history entries for a series profile."""
+        return await self._list_for_parent_paged(
+            profile_id,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def count_for_profile(self, profile_id: uuid.UUID) -> int:
+        """Count history entries for a series profile."""
+        return await self._count_for_parent(profile_id)
+
     async def get_latest_for_profile(
         self,
         profile_id: uuid.UUID,
@@ -199,6 +245,24 @@ class SqlAlchemyEpisodeTemplateHistoryRepository(
     ) -> list[EpisodeTemplateHistoryEntry]:
         """List history entries for an episode template."""
         return await self._list_for_parent(template_id)
+
+    async def list_for_template_paged(
+        self,
+        template_id: uuid.UUID,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[EpisodeTemplateHistoryEntry]:
+        """List paged history entries for an episode template."""
+        return await self._list_for_parent_paged(
+            template_id,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def count_for_template(self, template_id: uuid.UUID) -> int:
+        """Count history entries for an episode template."""
+        return await self._count_for_parent(template_id)
 
     async def get_latest_for_template(
         self,

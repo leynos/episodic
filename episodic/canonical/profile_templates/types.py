@@ -311,6 +311,17 @@ class _SeriesProfileHistoryRepository(typ.Protocol):
         /,
     ) -> list[SeriesProfileHistoryEntry]: ...
 
+    async def list_for_profile_paged(
+        self,
+        profile_id: uuid.UUID,
+        /,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[SeriesProfileHistoryEntry]: ...
+
+    async def count_for_profile(self, profile_id: uuid.UUID, /) -> int: ...
+
     get_latest_revisions_for_profiles: BulkLatestRevisionsFn
 
 
@@ -328,5 +339,16 @@ class _EpisodeTemplateHistoryRepository(typ.Protocol):
         template_id: uuid.UUID,
         /,
     ) -> list[EpisodeTemplateHistoryEntry]: ...
+
+    async def list_for_template_paged(
+        self,
+        template_id: uuid.UUID,
+        /,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[EpisodeTemplateHistoryEntry]: ...
+
+    async def count_for_template(self, template_id: uuid.UUID, /) -> int: ...
 
     get_latest_revisions_for_templates: BulkLatestRevisionsFn

@@ -269,7 +269,14 @@ Success is observable when:
   parameterized assertions and assertion messages in the pagination regression
   test; those were applied, gated, and the final follow-up review returned zero
   findings in `/tmp/4-1-2-m3-coderabbit-followup-3.out`.
-- [ ] Milestone 4: history-endpoint pagination retrofit.
+- [x] (2026-05-25T00:00Z) Milestone 4: history-endpoint pagination retrofit.
+  Focused red run showed the history resources returning only `{items}` and
+  ignoring invalid `limit`; focused green run passed 94 profile/history-focused
+  tests in `/tmp/4-1-2-m4-green-after-coderabbit-7.out`. CodeRabbit requested
+  additional pagination boundary/default coverage, error-detail assertions, and
+  clearer test documentation; those were applied, gated, and the final
+  follow-up review returned zero findings in
+  `/tmp/4-1-2-m4-coderabbit-followup-5.out`.
 - [ ] Milestone 5: filter parameter consistency pass.
 - [ ] Milestone 6: authorization scaffold (`AuthorizationPort`, middleware,
   permit-all adapter, `ApiDependencies` wiring).

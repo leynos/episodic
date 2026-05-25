@@ -39,7 +39,7 @@ from episodic.canonical.profile_templates import (
     create_series_profile,
     get_entity_with_revision,
     list_entities_with_revisions_paged,
-    list_history,
+    list_history_paged,
     update_series_profile,
 )
 
@@ -225,11 +225,14 @@ class SeriesProfileHistoryResource(_GetHistoryResourceBase[object]):
 
     @staticmethod
     @typ.override
-    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
+    def _get_service_fn() -> cabc.Callable[
+        ...,
+        cabc.Awaitable[tuple[list[object], int]],
+    ]:
         """Return the profile-history list service."""
         return typ.cast(
-            "cabc.Callable[..., cabc.Awaitable[list[object]]]",
-            partial(list_history, kind="series_profile"),
+            "cabc.Callable[..., cabc.Awaitable[tuple[list[object], int]]]",
+            partial(list_history_paged, kind="series_profile"),
         )
 
     @staticmethod
