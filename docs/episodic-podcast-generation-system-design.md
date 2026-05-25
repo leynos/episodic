@@ -1841,28 +1841,29 @@ The reusable reference API (Application Programming Interface) is exposed
 through Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
 `episodic/api/app.py` and `episodic/api/resources/`.
 
-- `POST /series-profiles/{profile_id}/reference-documents` creates one reusable
+- `POST /v1/series-profiles/{profile_id}/reference-documents` creates one
+  reusable
   `ReferenceDocument` for the owning series profile.
-- `GET /series-profiles/{profile_id}/reference-documents` lists reusable
+- `GET /v1/series-profiles/{profile_id}/reference-documents` lists reusable
   documents for that series profile. Optional `kind` filter supports
   `style_guide`, `host_profile`, `guest_profile`, and `research_brief`.
-- `GET /series-profiles/{profile_id}/reference-documents/{document_id}` fetches
-  one reusable reference document when ownership is series-aligned.
-- `PATCH /series-profiles/{profile_id}/reference-documents/{document_id}`
+- `GET /v1/series-profiles/{profile_id}/reference-documents/{document_id}`
+  fetches one reusable reference document when ownership is series-aligned.
+- `PATCH /v1/series-profiles/{profile_id}/reference-documents/{document_id}`
   updates lifecycle state and metadata with optimistic locking; requires
   `expected_lock_version` and returns `409 Conflict` on stale versions.
-- `POST /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `POST /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
   creates one immutable `ReferenceDocumentRevision`.
-- `GET /series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
+- `GET /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
   returns immutable change history for one document.
-- `GET /reference-document-revisions/{revision_id}` fetches one immutable
+- `GET /v1/reference-document-revisions/{revision_id}` fetches one immutable
   revision. Optional query parameter `owner_series_profile_id` enforces
   series-scoped access for clients that need explicit owner checks.
-- `POST /reference-bindings` creates one `ReferenceBinding` for a target
+- `POST /v1/reference-bindings` creates one `ReferenceBinding` for a target
   context (`series_profile`, `episode_template`, or `ingestion_job`).
-- `GET /reference-bindings` lists bindings for one target context using
+- `GET /v1/reference-bindings` lists bindings for one target context using
   required query parameters `target_kind` and `target_id`.
-- `GET /reference-bindings/{binding_id}` fetches one binding by identifier.
+- `GET /v1/reference-bindings/{binding_id}` fetches one binding by identifier.
 - Ingestion workflows snapshot the resolved binding set into
   `source_documents`, linking each provenance record to the consumed
   `reference_document_revision_id`.
@@ -1872,16 +1873,22 @@ Pagination contract for list endpoints:
 - Query parameters: `limit` and `offset`.
 - Defaults: `limit=20`, `offset=0`.
 - Bounds: `1 <= limit <= 100` and `offset >= 0`.
-- Response envelope: `{ "items": [...], "limit": <int>, "offset": <int> }`.
+- Response envelope: `{ "items": […], "limit": <int>, "offset": <int>,
+  "total": <int> }`.
 
 Error contract:
 
+- Error envelope: `{ "code": "<machine-readable>", "message": "<human>",
+  "details": {…} }`.
 - `400 Bad Request` for malformed payloads, invalid UUID/query formats, or
   invalid pagination bounds.
 - `404 Not Found` for unknown entities and cross-series access paths that fail
   series-aligned ownership checks.
 - `409 Conflict` for optimistic-lock mismatches and duplicate revision/binding
   writes that violate persistence constraints.
+
+ADR 009 and `docs/episodic-tui-api-design.md` remain the source of truth for
+tokens, idempotency keys, retry headers, and full role-based access control.
 
 Integration tests run against an in-process PostgreSQL instance provided by
 py-pglite, with Alembic migrations applied before each test function. The test
@@ -1893,8 +1900,8 @@ exercise the same semantics from a scenario-driven perspective.
 
 ### Multi-source ingestion service implementation
 
-The multi-source ingestion service composes a higher-level orchestrator
-(`ingest_multi_source`) around the existing `ingest_sources` persistence
+The multi-source ingestion service composes a higher-level orchestrator (
+`ingest_multi_source`) around the existing `ingest_sources` persistence
 function. Three Protocol-based port interfaces define the pipeline extension
 points:
 

@@ -120,6 +120,19 @@ REST error contract:
   stale revisions use `revision_conflict`, and remaining persistence conflicts
   use `conflict`.
 
+REST pagination and filter contract:
+
+- List resources parse pagination through `parse_pagination`. The shared
+  contract is `limit=20`, `offset=0`, `1 <= limit <= 100`, and `offset >= 0`.
+- List responses return `{"items": […], "limit": <int>, "offset": <int>,
+  "total": <int>}`.
+- Optional UUID query filters use `parse_optional_uuid_param`; invalid values
+  raise `validation_error` with `{"field": "<name>", "constraint": "uuid"}`.
+- Optional enum filters use `parse_enum_param`; invalid values raise
+  `validation_error` with `{"field": "<name>", "constraint": "enum"}`.
+- Resource adapters should validate filters before opening a unit of work, so
+  malformed filters are not hidden behind later `404` or domain errors.
+
 Authorization scaffold:
 
 - Every `/v1` request passes through `AuthorizationMiddleware` before resource

@@ -264,7 +264,7 @@ Success is observable when:
   run passed 70 tests in `/tmp/4-1-2-m2-green.out`.
 - [x] (2026-05-25T00:00Z) Milestone 3: pagination retrofit on series-profile,
   episode-template, and resolved-bindings list endpoints. Focused red run showed
-  `/v1/series-profiles` ignoring `limit`; focused green run passed 68 tests in
+   `/v1/series-profiles` ignoring `limit`; focused green run passed 68 tests in
   `/tmp/4-1-2-m3-green-after-coderabbit-3.out`. CodeRabbit requested stronger
   parameterized assertions and assertion messages in the pagination regression
   test; those were applied, gated, and the final follow-up review returned zero
@@ -286,14 +286,17 @@ Success is observable when:
   (`AuthorizationPort`, middleware, permit-all adapter, `ApiDependencies`
   wiring). Focused red run showed `ApiDependencies` missing authorization
   injection; focused green run passed 111 authorization and `/v1` tests in
-  `/tmp/4-1-2-m6-green-after-coderabbit-2.out`. CodeRabbit follow-ups
-  converted the port to async, added non-`/v1` bypass and adapter-failure
-  coverage, and consolidated denial logging. One requested `BLE001`
-  suppression was not applied because Ruff rejects it as an unused `noqa`
-  (`/tmp/4-1-2-m6-lint-after-coderabbit-15.out`); the catch-all remains covered
+  `/tmp/4-1-2-m6-green-after-coderabbit-2.out`. CodeRabbit follow-ups converted
+  the port to async, added non-`/v1` bypass and adapter-failure coverage, and
+  consolidated denial logging. One requested `BLE001` suppression was not
+  applied because Ruff rejects it as an unused `noqa` (
+  `/tmp/4-1-2-m6-lint-after-coderabbit-15.out`); the catch-all remains covered
   by `tests/test_api_authorization.py`.
-- [ ] Milestone 7: documentation alignment (users guide, developers guide,
-  system design error/pagination sections).
+- [x] (2026-05-25T00:00Z) Milestone 7: documentation alignment. Updated the
+  users guide REST reference, developers guide error/pagination/filter/auth
+  sections, and reusable-reference system-design contract. `make fmt` completed
+  in `/tmp/4-1-2-m7-fmt.out`; unrelated formatter churn was restored before the
+  commit.
 - [ ] Milestone 8: full gate run plus `coderabbit review --agent`; mark
   roadmap item `4.1.2` done.
 
