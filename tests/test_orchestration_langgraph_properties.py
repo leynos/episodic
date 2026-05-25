@@ -19,16 +19,16 @@ from episodic.orchestration import (
     PlannerResult,
     build_generation_orchestration_graph,
 )
-from tests.test_orchestration_properties import (
-    _PropGraphPlanner,
-    _PropGraphToolExecutor,
-    _PropTokenInputs,
-    _token_inputs_strategy,
+from tests._orchestration_property_support import (
+    PropGraphPlanner,
+    PropGraphToolExecutor,
+    PropTokenInputs,
+    token_inputs_strategy,
 )
 
 
 def _build_planner_and_action(
-    tokens: _PropTokenInputs,
+    tokens: PropTokenInputs,
     correlation_id: str,
 ) -> tuple[PlannerResult, list[ActionExecutionResult]]:
     """Build graph planner and action results for one token-input example."""
@@ -81,8 +81,8 @@ async def _run_graph_and_collect(
 ) -> GenerationOrchestrationResult:
     """Run the graph and return its orchestration result."""
     graph = build_generation_orchestration_graph(
-        planner=_PropGraphPlanner(result=planner_result),
-        tool_executor=_PropGraphToolExecutor(result=actions[0]),
+        planner=PropGraphPlanner(result=planner_result),
+        tool_executor=PropGraphToolExecutor(result=actions[0]),
     )
     request = GenerationOrchestrationRequest(
         correlation_id=correlation_id,
@@ -114,7 +114,7 @@ def _assert_usage_rollup(
 
 
 @given(
-    tokens=_token_inputs_strategy,
+    tokens=token_inputs_strategy,
     correlation_id=st.text(
         min_size=1,
         max_size=48,
@@ -124,7 +124,7 @@ def _assert_usage_rollup(
 @settings(max_examples=50)
 @pytest.mark.asyncio
 async def test_langgraph_total_tokens_non_negative(
-    tokens: _PropTokenInputs,
+    tokens: PropTokenInputs,
     correlation_id: str,
 ) -> None:
     """Property test: LangGraph rollups keep total token counts semiring-safe."""

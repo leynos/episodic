@@ -1,31 +1,19 @@
-"""Hypothesis property-based tests for orchestration invariants."""
+"""Hypothesis property-based tests for orchestration DTO payload invariants.
 
-import dataclasses as dc
-import json
-import string
+Issue #72 called out that the PR #69 orchestration suite had strong
+deterministic unit coverage but lacked generative exploration of boundary
+inputs. This module keeps checkpoint and workflow-step key properties together;
+other orchestration properties live in the focused sibling modules.
+"""
 
 import hypothesis.strategies as st
 import pytest
 from hypothesis import given, settings
 
-from episodic.llm import (
-    LLMProviderOperation,
-    LLMResponse,
-    LLMUsage,
-)
 from episodic.orchestration import (
     ActionExecutionResult,
-    ActionKind,
     ExecutionPlan,
-    GenerationOrchestrationConfig,
-    GenerationOrchestrationRequest,
-    ModelTier,
-    PlannedAction,
     PlannerResult,
-    PlanningResponseFormatError,
-    ShowNotesToolExecutor,
-    StructuredGenerationPlanner,
-    UnsupportedActionError,
     WorkflowStepIdentity,
     build_workflow_step_idempotency_key,
 )
@@ -37,151 +25,12 @@ from episodic.orchestration.langgraph import (
     _planner_result_from_payload,
     _planner_result_to_payload,
 )
-from tests._orchestration_fakes import (
-    _config,
-    _FakeLLMPort,
-    _request,
-    _usage,
-)
-
-_ACTION_KIND_SAMPLES: tuple[ActionKind | str, ...] = tuple(ActionKind) + tuple(
-    m.value for m in ActionKind
-)
-_KNOWN_ACTION_KIND_STRINGS = {m.value for m in ActionKind}
-
-
-class _PropGraphPlanner:
-    """Emit canned planner payloads for Hypothesis graph probes."""
-
-    def __init__(self, *, result: PlannerResult) -> None:
-        self._result = result
-
-    async def plan(self, request: GenerationOrchestrationRequest) -> PlannerResult:
-        assert request.script_tei_xml.startswith("<TEI>"), (
-            f"expected TEI input, got {request.script_tei_xml!r}"
-        )
-        assert request.correlation_id, "expected non-empty correlation_id"
-        return self._result
-
-
-class _PropGraphToolExecutor:
-    """Emit canned tool payloads for Hypothesis graph probes."""
-
-    def __init__(self, result: ActionExecutionResult) -> None:
-        self._result = result
-
-    async def execute(
-        self,
-        action: PlannedAction,
-        context: GenerationOrchestrationRequest,
-    ) -> ActionExecutionResult:
-        assert context.script_tei_xml.startswith("<TEI>"), (
-            f"expected TEI input, got {context.script_tei_xml!r}"
-        )
-        assert action.action_kind is ActionKind.GENERATE_SHOW_NOTES
-        return self._result
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _PropTokenInputs:
-    """Bundled token-count inputs for LangGraph property tests."""
-
-    planner_input: int
-    planner_output: int
-    action_input: int
-    action_output: int
-
-
-_token_inputs_strategy: st.SearchStrategy[_PropTokenInputs] = st.builds(
-    _PropTokenInputs,
-    planner_input=st.integers(min_value=0, max_value=10_000),
-    planner_output=st.integers(min_value=0, max_value=10_000),
-    action_input=st.integers(min_value=0, max_value=10_000),
-    action_output=st.integers(min_value=0, max_value=10_000),
-)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _PropStepKeyInputs:
-    """Bundled workflow step identity inputs for idempotency key tests."""
-
-    workflow_id: str
-    workflow_type: str
-    step_name: str
-    action_id: str
-
-
-_step_key_inputs_strategy: st.SearchStrategy[_PropStepKeyInputs] = st.builds(
-    _PropStepKeyInputs,
-    workflow_id=st.text(
-        min_size=1,
-        max_size=32,
-        alphabet=string.ascii_letters + string.digits + "-",
-    ),
-    workflow_type=st.text(
-        min_size=1,
-        max_size=32,
-        alphabet=string.ascii_letters + string.digits + "_",
-    ),
-    step_name=st.text(
-        min_size=1,
-        max_size=32,
-        alphabet=string.ascii_letters + string.digits + "_",
-    ),
-    action_id=st.text(
-        min_size=1,
-        max_size=32,
-        alphabet=string.ascii_letters + string.digits + "-",
-    ),
-)
-
-_prop_text = st.text(
-    min_size=1,
-    max_size=32,
-    alphabet=string.ascii_letters + string.digits + "-_ .",
-).filter(lambda value: bool(value.strip()))
-
-_usage_strategy = st.builds(
-    LLMUsage,
-    input_tokens=st.integers(min_value=0, max_value=10_000),
-    output_tokens=st.integers(min_value=0, max_value=10_000),
-    total_tokens=st.integers(min_value=0, max_value=20_000),
-)
-
-_planned_action_strategy = st.builds(
-    PlannedAction,
-    action_id=_prop_text,
-    action_kind=st.just(ActionKind.GENERATE_SHOW_NOTES),
-    rationale=_prop_text,
-    model_tier=st.just(ModelTier.EXECUTION),
-    required_inputs=st.lists(_prop_text, max_size=4).map(tuple),
-)
-
-_execution_plan_strategy = st.builds(
-    ExecutionPlan,
-    plan_version=_prop_text,
-    selected_planning_model=_prop_text,
-    selected_execution_model=_prop_text,
-    steps=st.lists(_planned_action_strategy, min_size=1, max_size=4).map(tuple),
-)
-
-_planner_result_strategy = st.builds(
-    PlannerResult,
-    plan=_execution_plan_strategy,
-    usage=st.one_of(st.none(), _usage_strategy),
-    model=_prop_text,
-    provider_response_id=_prop_text,
-    finish_reason=st.one_of(st.none(), _prop_text),
-)
-
-_action_result_strategy = st.builds(
-    ActionExecutionResult,
-    action_id=_prop_text,
-    action_kind=st.just(ActionKind.GENERATE_SHOW_NOTES),
-    model_tier=st.just(ModelTier.EXECUTION),
-    model=_prop_text,
-    summary=_prop_text,
-    usage=st.one_of(st.none(), _usage_strategy),
+from tests._orchestration_property_support import (
+    PropStepKeyInputs,
+    action_result_strategy,
+    execution_plan_strategy,
+    planner_result_strategy,
+    step_key_inputs_strategy,
 )
 
 
@@ -199,12 +48,12 @@ def test_step_idempotency_key_negative_attempt_raises_value_error() -> None:
 
 
 @given(
-    inputs=_step_key_inputs_strategy,
+    inputs=step_key_inputs_strategy,
     attempt=st.integers(min_value=0, max_value=100),
 )
 @settings(max_examples=50)
 def test_step_idempotency_keys_are_deterministic(
-    inputs: _PropStepKeyInputs,
+    inputs: PropStepKeyInputs,
     attempt: int,
 ) -> None:
     """Property test: identical workflow step inputs produce identical keys."""
@@ -226,7 +75,7 @@ def test_step_idempotency_keys_are_deterministic(
     assert first.endswith(f":{attempt}")
 
 
-@given(plan=_execution_plan_strategy)
+@given(plan=execution_plan_strategy)
 @settings(max_examples=50)
 def test_execution_plan_checkpoint_payload_round_trips(
     plan: ExecutionPlan,
@@ -235,7 +84,7 @@ def test_execution_plan_checkpoint_payload_round_trips(
     assert _plan_from_payload(_plan_to_payload(plan)) == plan
 
 
-@given(result=_planner_result_strategy)
+@given(result=planner_result_strategy)
 @settings(max_examples=50)
 def test_planner_result_checkpoint_payload_round_trips(
     result: PlannerResult,
@@ -244,102 +93,10 @@ def test_planner_result_checkpoint_payload_round_trips(
     assert _planner_result_from_payload(_planner_result_to_payload(result)) == result
 
 
-@given(result=_action_result_strategy)
+@given(result=action_result_strategy)
 @settings(max_examples=50)
 def test_action_result_checkpoint_payload_round_trips(
     result: ActionExecutionResult,
 ) -> None:
     """Property test: checkpoint action payloads preserve action results."""
     assert _action_result_from_payload(_action_result_to_payload(result)) == result
-
-
-@given(st.lists(st.sampled_from(_ACTION_KIND_SAMPLES), min_size=1, max_size=48))
-@settings(max_examples=50)
-def test_config_normalises_arbitrary_string_and_enum_mixes(
-    kinds: list[ActionKind | str],
-) -> None:
-    """Property test: heterogeneous action vocabularies become ``ActionKind``."""
-    cfg = GenerationOrchestrationConfig(
-        planning_model="hyp-plan-model",
-        execution_model="hyp-exec-model",
-        planning_provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
-        execution_provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
-        enabled_action_kinds=tuple(kinds),
-    )
-    assert all(isinstance(kind, ActionKind) for kind in cfg.enabled_action_kinds)
-
-
-@given(
-    unknown=st.text(min_size=1).filter(
-        lambda s: bool(s.strip()) and s.strip() not in _KNOWN_ACTION_KIND_STRINGS
-    )
-)
-@settings(max_examples=50)
-def test_config_rejects_arbitrary_unknown_action_kind_strings(unknown: str) -> None:
-    """Property test: unknown action strings invalidate configuration."""
-    with pytest.raises(ValueError, match="Unknown action kind"):
-        GenerationOrchestrationConfig(
-            planning_model="hyp-plan-model",
-            execution_model="hyp-exec-model",
-            planning_provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
-            execution_provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
-            enabled_action_kinds=(unknown,),
-        )
-
-
-@given(model_tier=st.sampled_from([t for t in ModelTier if t != ModelTier.EXECUTION]))
-@settings(max_examples=len(ModelTier))
-@pytest.mark.asyncio
-async def test_planned_action_model_tier_rejection_for_all_non_execution_tiers(
-    model_tier: ModelTier,
-) -> None:
-    """Property test: planner tiers besides execution never reach show-notes tool."""
-    fake_llm = _FakeLLMPort([])
-    tool_executor = ShowNotesToolExecutor(llm=fake_llm, config=_config())
-    planning_tier_action = PlannedAction(
-        action_id="action-1",
-        action_kind=ActionKind.GENERATE_SHOW_NOTES,
-        rationale="Hypothesis rejects non-execution tiers.",
-        model_tier=model_tier,
-        required_inputs=("script_tei_xml",),
-    )
-    with pytest.raises(UnsupportedActionError, match=r"requires ModelTier\.EXECUTION"):
-        await tool_executor.execute(planning_tier_action, _request())
-
-
-@given(
-    noise=st.one_of(
-        st.integers(),
-        st.floats(allow_nan=False, allow_infinity=False),
-        st.lists(st.text()),
-        st.text(),
-    )
-)
-@settings(max_examples=50)
-@pytest.mark.asyncio
-async def test_planning_response_format_error_for_arbitrary_non_object_json(
-    noise: object,
-) -> None:
-    """Property test: non-object JSON bodies fail strict planner validation."""
-    blob = json.dumps(noise)
-
-    response = LLMResponse(
-        text=blob,
-        model="gpt-4.1",
-        provider_response_id="hyp-planner-response",
-        finish_reason="stop",
-        usage=_usage(input_tokens=1, output_tokens=1),
-    )
-    planner = StructuredGenerationPlanner(
-        llm=_FakeLLMPort([response]),
-        config=_config(),
-    )
-    request = GenerationOrchestrationRequest(
-        correlation_id="hyp-corr",
-        script_tei_xml="<TEI><body><p>noise</p></body></TEI>",
-    )
-    with pytest.raises(
-        PlanningResponseFormatError,
-        match=r"planner response must be an object",
-    ):
-        await planner.plan(request)

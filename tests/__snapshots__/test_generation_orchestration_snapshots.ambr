@@ -135,3 +135,14 @@
     }),
   })
 # ---
+# name: test_planner_format_error_messages_snapshot
+  dict({
+    'missing_action_id': 'action_id must be a non-empty string.',
+    'missing_plan_version': 'plan_version must be a non-empty string.',
+    'non_list_required_inputs': 'required_inputs must be a list of strings.',
+    'non_list_steps': 'steps must be a list.',
+    'non_object_step': 'step must be an object.',
+    'unknown_action_kind': 'action_kind must be one of: generate_show_notes, generate_guest_bios.',
+    'unknown_model_tier': 'model_tier must be one of: planning, execution.',
+  })
+# ---
