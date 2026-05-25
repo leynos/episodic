@@ -14,6 +14,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.api import ApiDependencies
+    from episodic.api.authorization import AuthorizationPort
 
 
 @pytest.fixture
@@ -34,10 +35,26 @@ def canonical_api_dependencies(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> ApiDependencies:
     """Build typed API dependencies for in-memory ASGI tests."""
+    return build_api_dependencies(session_factory)
+
+
+def build_api_dependencies(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    authorization: AuthorizationPort | None = None,
+) -> ApiDependencies:
+    """Build typed API dependencies with optional authorization override."""
     from episodic.api import ApiDependencies
     from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
-    return ApiDependencies(uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory))
+    if authorization is None:
+        return ApiDependencies(
+            uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory)
+        )
+    return ApiDependencies(
+        uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
+        authorization=authorization,
+    )
 
 
 @pytest_asyncio.fixture

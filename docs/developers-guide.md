@@ -120,6 +120,24 @@ REST error contract:
   stale revisions use `revision_conflict`, and remaining persistence conflicts
   use `conflict`.
 
+Authorization scaffold:
+
+- Every `/v1` request passes through `AuthorizationMiddleware` before resource
+  dispatch. Health checks remain operator endpoints and are not authorized by
+  this scaffold.
+- `ApiDependencies.authorization` accepts an `AuthorizationPort`; production
+  wiring currently defaults to `PermitAll`, so existing clients do not need an
+  `Authorization` header yet.
+- Authorization adapters receive an `AuthorizationContext` containing the HTTP
+  method, request path, and raw `Authorization` header. The port is async, so
+  future policy adapters can call external identity or permission services.
+- Non-permit decisions short-circuit with the canonical error envelope:
+  `unauthorized` returns `401`, and `forbidden` returns `403`.
+- Authorization adapter failures short-circuit with `service_unavailable` and
+  `503`, so policy-backend outages are not reported as resource failures.
+- Roadmap item `5.1` is expected to replace the default permit-all adapter with
+  policy-backed role or scope checks.
+
 Testing guidance:
 
 - Use `tests/test_http_service_scaffold.py` for in-memory ASGI coverage of the

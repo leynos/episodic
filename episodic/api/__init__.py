@@ -11,6 +11,20 @@ Examples
 """
 
 from .app import create_app
+from .authorization import (
+    AuthorizationContext,
+    AuthorizationDecision,
+    AuthorizationPort,
+    PermitAll,
+)
 from .dependencies import ApiDependencies, ReadinessProbe
 
-__all__ = ["ApiDependencies", "ReadinessProbe", "create_app"]
+__all__ = [
+    "ApiDependencies",
+    "AuthorizationContext",
+    "AuthorizationDecision",
+    "AuthorizationPort",
+    "PermitAll",
+    "ReadinessProbe",
+    "create_app",
+]

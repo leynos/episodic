@@ -18,6 +18,7 @@ import typing as typ
 import falcon
 from falcon import asgi
 
+from .authorization import AuthorizationMiddleware
 from .errors import handle_http_error
 from .resources import (
     EpisodeTemplateHistoryResource,
@@ -63,6 +64,7 @@ class _ShutdownHooksMiddleware:
 def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
+    app.add_middleware(AuthorizationMiddleware(dependencies.authorization))
     if dependencies.shutdown_hooks:
         # Falcon supports lifespan middleware at runtime, but its exported
         # middleware type union does not model process_shutdown-only hooks.

@@ -282,8 +282,16 @@ Success is observable when:
   a 404 and invalid binding `target_kind` missing field-level details; focused
   green run passed 103 `/v1` API tests in `/tmp/4-1-2-m5-green.out`. The final
   CodeRabbit review returned zero findings in `/tmp/4-1-2-m5-coderabbit.out`.
-- [ ] Milestone 6: authorization scaffold (`AuthorizationPort`, middleware,
-  permit-all adapter, `ApiDependencies` wiring).
+- [x] (2026-05-25T00:00Z) Milestone 6: authorization scaffold
+  (`AuthorizationPort`, middleware, permit-all adapter, `ApiDependencies`
+  wiring). Focused red run showed `ApiDependencies` missing authorization
+  injection; focused green run passed 111 authorization and `/v1` tests in
+  `/tmp/4-1-2-m6-green-after-coderabbit-2.out`. CodeRabbit follow-ups
+  converted the port to async, added non-`/v1` bypass and adapter-failure
+  coverage, and consolidated denial logging. One requested `BLE001`
+  suppression was not applied because Ruff rejects it as an unused `noqa`
+  (`/tmp/4-1-2-m6-lint-after-coderabbit-15.out`); the catch-all remains covered
+  by `tests/test_api_authorization.py`.
 - [ ] Milestone 7: documentation alignment (users guide, developers guide,
   system design error/pagination sections).
 - [ ] Milestone 8: full gate run plus `coderabbit review --agent`; mark
@@ -367,6 +375,13 @@ Success is observable when:
   keeps Ruff's formatted Python 3.14 syntax; the style-level requests for
   match/case, private-helper docstrings, and richer test assertion messages
   were applied.
+
+- Observation: CodeRabbit requested `# noqa: BLE001` on the authorization
+  middleware catch-all for adapter failures, but Ruff reports that suppression
+  as unused because `BLE001` is not active in this project configuration.
+  Impact: the code keeps the deterministic lint-clean `except Exception:`
+  branch, with behaviour covered by
+  `test_authorization_adapter_exception_returns_503`.
 
 ## Decision log
 
