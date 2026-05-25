@@ -967,11 +967,12 @@ stored planner-result payloads.
   impossible requests, and normalized provider usage is checked again after the
   response returns.
 - `OpenAICompatibleLLMConfig(chars_per_token=...)` controls the preflight
-  estimate. The value defaults to `4.0`, must be finite and greater than zero,
-  and is applied as `ceil(len(prompt_text) / chars_per_token)` across the
-  request prompt and optional system prompt. Tune it by comparing sampled prompt
-  character counts with provider-reported input-token usage for the target
-  model and prompt shape.
+  estimate. The value defaults to `4.0`, must be finite and greater than
+  zero, and is applied as
+  `ceil(len(prompt_text) / chars_per_token)` across the request prompt and
+  optional system prompt. Tune it by comparing sampled prompt character counts
+  with provider-reported input-token usage for the target model and prompt
+  shape.
 - Persisted `guardrails` belong to canonical profile/template state and are
   composed before the adapter call, not inside the vendor transport layer.
 
