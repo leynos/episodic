@@ -1,4 +1,10 @@
-"""OpenAI-compatible LLM adapter test fixtures."""
+"""Shared fixtures for OpenAI-compatible LLM adapter tests.
+
+The helpers in this module build representative `LLMRequest` objects, mock
+provider responses, invalid configs, and configured adapter instances. Adapter
+test modules reuse them to keep transport setup and config construction
+consistent while focusing each test file on one behavioural concern.
+"""
 
 import contextlib
 import json

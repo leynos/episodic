@@ -1,4 +1,9 @@
-"""Unit tests for OpenAI adapter configuration invariants."""
+"""Unit tests for OpenAI adapter configuration invariants.
+
+This module verifies eager validation at the adapter config and token-budget
+DTO boundaries. It uses the shared invalid-config fixture so construction
+rules stay aligned with the adapter factory used by behavioural LLM tests.
+"""
 
 import typing as typ
 

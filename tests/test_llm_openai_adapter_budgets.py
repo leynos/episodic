@@ -1,4 +1,10 @@
-"""Unit tests for OpenAI adapter budget enforcement."""
+"""Unit tests for OpenAI adapter token budget enforcement.
+
+These tests exercise the adapter boundary where provider-neutral `LLMRequest`
+budgets become OpenAI-compatible calls. They cover preflight estimates,
+post-response provider usage checks, and the shared fixtures that simulate
+provider transports without leaving the unit-test layer.
+"""
 
 import typing as typ
 

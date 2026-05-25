@@ -11,6 +11,8 @@ for early rejection, while actual provider usage remains the source of truth
 for post-call budget validation.
 """
 
+# pylint: disable=too-many-lines
+
 import dataclasses as dc
 import json
 import math
@@ -40,12 +42,26 @@ from episodic.llm.ports import (
     LLMTokenBudgetExceededError,
     LLMTransientProviderError,
 )
+from episodic.logging import getLogger
 
 if typ.TYPE_CHECKING:
     from types import TracebackType
 
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _HTTP_BAD_REQUEST_THRESHOLD = 400
+_log = getLogger(__name__)
+
+
+def _operation_label(operation: LLMProviderOperation | str | None) -> str:
+    """Return a stable provider-operation label for logs."""
+    if operation is None:
+        return "default"
+    return operation.value if isinstance(operation, LLMProviderOperation) else operation
+
+
+def _log_error_event(message: str, **fields: object) -> None:
+    """Emit one JSON-encoded ERROR event with bounded diagnostic fields."""
+    _log.error(json.dumps({"event": message, **fields}, sort_keys=True))
 
 
 def _estimate_token_count(chars_per_token: float, *parts: str | None) -> int:
@@ -89,6 +105,17 @@ def _validate_preflight_budget(
             "Estimated input token budget exceeded: "
             f"{estimated_input_tokens} > {token_budget.max_input_tokens}."
         )
+        _log_error_event(
+            "openai_adapter.preflight_budget_exceeded",
+            reason="input",
+            model=request.model,
+            provider_operation=_operation_label(request.provider_operation),
+            estimated_input_tokens=estimated_input_tokens,
+            max_input_tokens=token_budget.max_input_tokens,
+            max_output_tokens=token_budget.max_output_tokens,
+            max_total_tokens=token_budget.max_total_tokens,
+            chars_per_token=chars_per_token,
+        )
         raise LLMTokenBudgetExceededError(msg)
     if token_budget.max_total_tokens is not None:
         projected_total = estimated_input_tokens + token_budget.max_output_tokens
@@ -96,6 +123,18 @@ def _validate_preflight_budget(
             msg = (
                 "Estimated total token budget exceeded: "
                 f"{projected_total} > {token_budget.max_total_tokens}."
+            )
+            _log_error_event(
+                "openai_adapter.preflight_budget_exceeded",
+                reason="total",
+                model=request.model,
+                provider_operation=_operation_label(request.provider_operation),
+                estimated_input_tokens=estimated_input_tokens,
+                projected_total_tokens=projected_total,
+                max_input_tokens=token_budget.max_input_tokens,
+                max_output_tokens=token_budget.max_output_tokens,
+                max_total_tokens=token_budget.max_total_tokens,
+                chars_per_token=chars_per_token,
             )
             raise LLMTokenBudgetExceededError(msg)
 
@@ -248,19 +287,43 @@ def _validate_llm_config(config: OpenAICompatibleLLMConfig) -> None:
         "chars_per_token must be finite and greater than zero "
         f"(got {config.chars_per_token!r})."
     )
-    checks: list[tuple[bool, str]] = [
-        (config.max_attempts <= 0, "max_attempts must be greater than zero."),
-        (config.retry_delay_seconds < 0, "retry_delay_seconds must be non-negative."),
-        (config.timeout_seconds <= 0, "timeout_seconds must be greater than zero."),
+    checks: list[tuple[bool, str, str]] = [
+        (
+            config.max_attempts <= 0,
+            "max_attempts",
+            "max_attempts must be greater than zero.",
+        ),
+        (
+            config.retry_delay_seconds < 0,
+            "retry_delay_seconds",
+            "retry_delay_seconds must be non-negative.",
+        ),
+        (
+            config.timeout_seconds <= 0,
+            "timeout_seconds",
+            "timeout_seconds must be greater than zero.",
+        ),
         (
             not math.isfinite(config.chars_per_token) or config.chars_per_token <= 0,
+            "chars_per_token",
             chars_per_token_msg,
         ),
-        (not config.base_url.strip(), "base_url must be non-empty."),
-        (not config.api_key.strip(), "api_key must be non-empty."),
+        (not config.base_url.strip(), "base_url", "base_url must be non-empty."),
+        (not config.api_key.strip(), "api_key", "api_key must be non-empty."),
     ]
-    for violated, msg in checks:
+    for violated, field_name, msg in checks:
         if violated:
+            _log_error_event(
+                "openai_adapter.config_rejected",
+                field=field_name,
+                provider_operation=_operation_label(config.provider_operation),
+                max_attempts=config.max_attempts,
+                retry_delay_seconds=config.retry_delay_seconds,
+                timeout_seconds=config.timeout_seconds,
+                chars_per_token=repr(config.chars_per_token),
+                base_url_configured=bool(config.base_url.strip()),
+                api_key_configured=bool(config.api_key.strip()),
+            )
             raise ValueError(msg)
 
 

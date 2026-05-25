@@ -963,10 +963,10 @@ stored planner-result payloads.
 - `OpenAICompatibleLLMAdapter` implements `LLMPort` over explicit
   OpenAI-compatible HTTP calls, so OpenRouter-style chat completions and OpenAI
   Responses stay behind the same port.
-- Token budgets are enforced twice: a pre-flight estimate rejects obviously
+- Token budgets are enforced twice: a preflight estimate rejects obviously
   impossible requests, and normalized provider usage is checked again after the
   response returns.
-- `OpenAICompatibleLLMConfig(chars_per_token=...)` controls the pre-flight
+- `OpenAICompatibleLLMConfig(chars_per_token=...)` controls the preflight
   estimate. The value defaults to `4.0`, must be finite and greater than zero,
   and is applied as `ceil(len(prompt_text) / chars_per_token)` across the
   request prompt and optional system prompt. Tune it by comparing sampled prompt
