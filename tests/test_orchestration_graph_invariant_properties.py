@@ -1,6 +1,7 @@
 """Property tests for LangGraph orchestration invariants."""
 
 import asyncio
+import collections
 import string
 
 import hypothesis.strategies as st
@@ -316,4 +317,6 @@ async def test_finish_callback_records_concurrent_direct_results() -> None:
 
     assert len(observed_results) == expected_invocations
     assert all(result is not None for result in observed_results)
-    assert [state["orchestration_result"] for state in states] == observed_results
+    assert collections.Counter(
+        state["orchestration_result"] for state in states
+    ) == collections.Counter(observed_results)

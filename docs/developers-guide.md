@@ -839,9 +839,9 @@ observability and test event recording. The hook fires only on the direct
 `plan -> execute -> finish` path, after finish-node aggregation has produced
 the domain result and before the graph returns. It is not invoked on the
 checkpoint suspend path. Callback exceptions are logged without replacing the
-already computed graph result. The graph does not serialise concurrent
+already computed graph result. The graph does not serialize concurrent
 invocations of a shared callback; callbacks that mutate shared state must
-provide their own synchronisation.
+provide their own synchronization.
 
 `GenerationGraphState` is part of the public orchestration API for callers that
 invoke the LangGraph graph directly. Treat it as the framework state carrier
