@@ -147,7 +147,7 @@ Success is observable when:
 - Architecture: stop and escalate if any change would require an inbound
   adapter to import an outbound adapter, or if domain ports must learn about
   HTTP, Falcon, bearer tokens, or `Authorization` headers.
-- Iterations: stop and escalate after 3 failed attempts to stabilise the same
+- Iterations: stop and escalate after 3 failed attempts to stabilize the same
   failing test cluster.
 - Time: stop and escalate if any single milestone takes longer than 4 hours
   of focused work without producing a green focused-test run.
@@ -226,7 +226,7 @@ Success is observable when:
   inside `episodic/api/authorization.py` (inbound-adapter group); the
   architecture gate will reject any cross-group reach.
 
-- Risk: CodeRabbit may raise actionable concerns about the centralised
+- Risk: CodeRabbit may raise actionable concerns about the centralized
   error handler that conflict with the plan. Severity: low. Likelihood: medium.
   Mitigation: run `coderabbit review --agent` after each major milestone and
   resolve concerns before proceeding.
@@ -350,7 +350,7 @@ Success is observable when:
   fixtures. Impact: the new test coverage is purely additive — there is nothing
   to delete.
 
-- Observation: there is no existing centralised error handler. Evidence:
+- Observation: there is no existing centralized error handler. Evidence:
   no `add_error_handler` or `set_error_serializer` call in
   `episodic/api/app.py:61-128`. Impact: introducing one is greenfield.
 
@@ -421,7 +421,7 @@ Success is observable when:
   `map_reference_error` and adding a profile/template equivalent) in a new
   `episodic/api/errors.py` module. Rationale: Pattern B keeps the dozens of
   `raise falcon.HTTPBadRequest(description=...)` call sites untouched and
-  serialisation centralised; Pattern A is still required for mapping domain
+  serialization centralized; Pattern A is still required for mapping domain
   exception families to status codes. Date/Author: 2026-05-23 / planning team.
 
 - Decision: place the `AuthorizationPort` Protocol and its `PermitAll`
@@ -429,7 +429,7 @@ Success is observable when:
   `ApiDependencies.authorization` (default `PermitAll()`), and install
   `AuthorizationMiddleware` from `episodic/api/app.py`. Rationale: the scaffold
   operates purely on HTTP-request metadata (bearer-token strings, route,
-  method) and need not yet know about series or organisations; keeping it
+  method) and need not yet know about series or organizations; keeping it
   inbound-adapter-local satisfies the architecture policy and defers the
   domain-port relocation to roadmap `5.1` when tenant identifiers enter the
   picture. Date/Author: 2026-05-23 / planning team.
@@ -439,7 +439,7 @@ Success is observable when:
   size for `total`) rather than push pagination into `resolve_bindings`.
   Rationale: the resolved set is built by an in-memory join over
   already-fetched series/template bindings; service-layer pagination would
-  invite premature optimisation. Date/Author: 2026-05-23 / planning team.
+  invite premature optimization. Date/Author: 2026-05-23 / planning team.
 
 - Decision: exempt the `HealthReadyResource` `503` routine-probe-failure
   body `{status, checks}` from the envelope rewrite. Probe-raises paths (where
@@ -662,7 +662,7 @@ External prior art that informs this plan:
 
 ## Plan of work
 
-The work is organised as eight milestones. Each ends with a focused green test
+The work is organized as eight milestones. Each ends with a focused green test
 run, a commit, and a CodeRabbit review on the milestone diff before the next
 milestone begins.
 
