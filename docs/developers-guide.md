@@ -230,7 +230,7 @@ When adding new worker tasks:
   ```
 
   `EPISODIC_USE_INTERPRETER_POOL=1` enables `InterpreterPoolCpuTaskExecutor`
-  when the injected capability detector reports support, and
+  when the injected capability check reports support, and
   `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps its worker count. Keep
   `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` as task-level fan-out policy, not
   Celery pool configuration. The task-level owner is responsible for executor

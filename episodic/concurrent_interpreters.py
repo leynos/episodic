@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import collections.abc as cabc
 import concurrent.futures as cf
+import os
 import threading
 import typing as typ
 
@@ -115,17 +116,22 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         self._max_workers = max_workers
         self._executor: cf.Executor | None = None
         self._executor_lock = threading.RLock()
+        self._is_shutdown = False
 
     def _get_executor(self) -> cf.Executor:
-        """Create the interpreter pool lazily and reuse it for subsequent calls."""
+        """Return the interpreter pool, creating it on first use."""
         with self._executor_lock:
+            if self._is_shutdown:
+                msg = "InterpreterPoolCpuTaskExecutor has been shut down."
+                raise RuntimeError(msg)
             if self._executor is None:
                 self._executor = _create_interpreter_pool_executor(self._max_workers)
             return self._executor
 
     def shutdown(self) -> None:
-        """Shut down the interpreter pool if it has been created."""
+        """Shut down the interpreter pool atomically."""
         with self._executor_lock:
+            self._is_shutdown = True
             executor = self._executor
             self._executor = None
             if executor is not None:
@@ -138,8 +144,12 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         items: tuple[_InputT, ...],
     ) -> list[_OutputT]:
         """Dispatch ``task`` across interpreter workers and preserve order."""
-        if not items:
-            return []
+        with self._executor_lock:
+            if self._is_shutdown:
+                msg = "InterpreterPoolCpuTaskExecutor has been shut down."
+                raise RuntimeError(msg)
+            if not items:
+                return []
 
         def map_ordered_sync() -> list[_OutputT]:
             with self._executor_lock:
@@ -150,15 +160,21 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
 
 
 def build_cpu_task_executor_from_environment(
-    environ: cabc.Mapping[str, str],
+    environ: cabc.Mapping[str, str] | None = None,
     *,
-    capability_detector: InterpreterPoolCapability = interpreter_pool_supported,
+    capability_check: InterpreterPoolCapability = interpreter_pool_supported,
 ) -> CpuTaskExecutor:
     """Select CPU-task adapter based on feature flag and runtime capability.
 
-    ``environ`` is supplied by the caller so environment access stays at the
-    composition boundary. ``capability_detector`` is injectable for tests and
-    runtimes that need to make interpreter-pool support explicit.
+    Parameters
+    ----------
+    environ : collections.abc.Mapping[str, str] | None
+        Environment mapping to inspect. ``None`` falls back to ``os.environ``
+        for backwards-compatible composition-root usage.
+    capability_check : collections.abc.Callable[[], bool]
+        Runtime capability probe for interpreter-pool support. Tests and
+        composition roots can inject this instead of monkeypatching module
+        state.
 
     The returned object is owned by the caller. Inline executors have no
     resources to release; interpreter-pool executors should be shut down by the
@@ -166,12 +182,13 @@ def build_cpu_task_executor_from_environment(
     ``try/finally`` and ``getattr(executor, "shutdown", None)`` so the same
     code works for both adapters.
     """
-    if not _flag_enabled(environ.get(_INTERPRETER_POOL_FEATURE_FLAG)):
+    environ_ = os.environ if environ is None else environ
+    if not _flag_enabled(environ_.get(_INTERPRETER_POOL_FEATURE_FLAG)):
         return InlineCpuTaskExecutor()
-    if not capability_detector():
+    if not capability_check():
         return InlineCpuTaskExecutor()
     max_workers = _parse_optional_positive_int(
-        environ.get(_INTERPRETER_POOL_MAX_WORKERS_ENV),
+        environ_.get(_INTERPRETER_POOL_MAX_WORKERS_ENV),
     )
     return InterpreterPoolCpuTaskExecutor(max_workers=max_workers)
 

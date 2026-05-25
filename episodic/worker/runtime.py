@@ -81,6 +81,7 @@ class WorkerLaunchProfile:
 
 
 def _parse_bool(environ: cabc.Mapping[str, str], *, key: str, default: bool) -> bool:
+    """Parse a boolean environment variable, raising RuntimeError if invalid."""
     value = environ.get(key)
     if value is None:
         return default
@@ -99,6 +100,10 @@ def _parse_positive_int(
     key: str,
     default: int,
 ) -> int:
+    """Parse a positive-integer environment variable.
+
+    Raise RuntimeError if the configured value is invalid.
+    """
     value = environ.get(key)
     if value is None or not value.strip():
         return default
@@ -119,6 +124,7 @@ def _parse_pool(
     key: str,
     default: WorkerPool,
 ) -> WorkerPool:
+    """Parse a WorkerPool environment variable, raising RuntimeError if invalid."""
     value = environ.get(key)
     if value is None or not value.strip():
         return default

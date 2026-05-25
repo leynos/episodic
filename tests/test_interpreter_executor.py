@@ -210,10 +210,10 @@ async def test_interpreter_executor_shutdown_waits_for_active_map(
 
 
 @pytest.mark.asyncio
-async def test_interpreter_executor_map_after_shutdown_creates_new_pool(
+async def test_interpreter_executor_map_after_shutdown_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Calling shutdown before later fan-out does not poison the executor."""
+    """Calling map_ordered after shutdown raises instead of creating a pool."""
     created_pools: list[cf.ThreadPoolExecutor] = []
 
     def fake_create_interpreter_pool_executor(
@@ -231,15 +231,20 @@ async def test_interpreter_executor_map_after_shutdown_creates_new_pool(
     executor = ci.InterpreterPoolCpuTaskExecutor(max_workers=1)
     executor.shutdown()
 
-    try:
-        results = await executor.map_ordered(_square, (3,))
-    finally:
-        executor.shutdown()
+    with pytest.raises(RuntimeError, match="has been shut down"):
+        await executor.map_ordered(_square, (3,))
 
-    assert results == [9]
-    assert len(created_pools) == 1, (
-        "Expected post-shutdown mapping to create exactly one new pool."
+    assert not created_pools, (
+        "Expected post-shutdown mapping to avoid creating a new pool."
     )
+
+
+def test_interpreter_executor_shutdown_is_idempotent() -> None:
+    """Calling shutdown twice is a no-op after the first shutdown."""
+    executor = ci.InterpreterPoolCpuTaskExecutor()
+
+    executor.shutdown()
+    executor.shutdown()
 
 
 @pytest.mark.asyncio
@@ -313,15 +318,15 @@ def test_builder_selects_executor_based_on_environment(
 ) -> None:
     """Builder picks the expected executor for each environment combination."""
     environ = {"EPISODIC_USE_INTERPRETER_POOL": env_flag}
-    capability_detector = ci.interpreter_pool_supported
+    capability_check = ci.interpreter_pool_supported
     if mock_support is not None:
 
-        def capability_detector() -> bool:
+        def capability_check() -> bool:
             return mock_support
 
     executor = ci.build_cpu_task_executor_from_environment(
         environ,
-        capability_detector=capability_detector,
+        capability_check=capability_check,
     )
 
     assert isinstance(executor, expected_type), (
@@ -363,7 +368,7 @@ async def test_builder_parses_max_workers_from_environment(
 
     executor = ci.build_cpu_task_executor_from_environment(
         environ,
-        capability_detector=lambda: True,
+        capability_check=lambda: True,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
 
