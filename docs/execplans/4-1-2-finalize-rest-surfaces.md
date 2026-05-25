@@ -262,8 +262,13 @@ Success is observable when:
   reference-domain endpoints (additive `count_*` Protocols + SQLAlchemy
   implementations). Focused red run failed on missing `total`; focused green
   run passed 70 tests in `/tmp/4-1-2-m2-green.out`.
-- [ ] Milestone 3: pagination retrofit on series-profile, episode-template,
-  and resolved-bindings list endpoints.
+- [x] (2026-05-25T00:00Z) Milestone 3: pagination retrofit on series-profile,
+  episode-template, and resolved-bindings list endpoints. Focused red run showed
+  `/v1/series-profiles` ignoring `limit`; focused green run passed 68 tests in
+  `/tmp/4-1-2-m3-green-after-coderabbit-3.out`. CodeRabbit requested stronger
+  parameterized assertions and assertion messages in the pagination regression
+  test; those were applied, gated, and the final follow-up review returned zero
+  findings in `/tmp/4-1-2-m3-coderabbit-followup-3.out`.
 - [ ] Milestone 4: history-endpoint pagination retrofit.
 - [ ] Milestone 5: filter parameter consistency pass.
 - [ ] Milestone 6: authorization scaffold (`AuthorizationPort`, middleware,
@@ -332,7 +337,7 @@ Success is observable when:
 - Observation: the full `make test` gate for Milestone 1 reproduced the known
   unrelated Hypothesis `U+FFFE` guest-bios failure in
   `tests/test_guest_bios_properties.py::test_enriched_guest_bios_replaces_prior_guest_bios_div`.
-  The same run also found two remaining planned assertion updates in
+   The same run also found two remaining planned assertion updates in
   `tests/test_binding_resolution_api.py`; those were updated to the new
   envelope. Impact: Milestone 1 continues to avoid changing guest-bios
   production code, per the risk inventory.
@@ -347,9 +352,10 @@ Success is observable when:
 - Observation: the follow-up CodeRabbit pass requested Python 3 tuple
   exception syntax in `_status_code`, but the repository targets Python 3.14
   and Ruff formats `except (IndexError, ValueError):` to the PEP 758
-  parenthesis-free form `except IndexError, ValueError:`. Impact: the code keeps
-  Ruff's formatted Python 3.14 syntax; the style-level requests for match/case,
-  private-helper docstrings, and richer test assertion messages were applied.
+  parenthesis-free form `except IndexError, ValueError:`. Impact: the code
+  keeps Ruff's formatted Python 3.14 syntax; the style-level requests for
+  match/case, private-helper docstrings, and richer test assertion messages
+  were applied.
 
 ## Decision log
 

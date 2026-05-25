@@ -74,10 +74,11 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
     assert response.status_code == 200, (
         "Expected resolved-bindings endpoint to return 200."
     )
-    items = typ.cast(
-        "list[dict[str, object]]",
-        typ.cast("dict[str, object]", response.json)["items"],
-    )
+    payload = typ.cast("dict[str, object]", response.json)
+    assert payload["limit"] == 20
+    assert payload["offset"] == 0
+    assert payload["total"] == 2
+    items = typ.cast("list[dict[str, object]]", payload["items"])
     revisions = [typ.cast("dict[str, object]", item["revision"]) for item in items]
     documents = [typ.cast("dict[str, object]", item["document"]) for item in items]
     assert [revision["id"] for revision in revisions] == [

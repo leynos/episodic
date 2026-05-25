@@ -14,6 +14,7 @@ Examples
 from ._generic import (
     get_entity_with_revision,
     list_entities_with_revisions,
+    list_entities_with_revisions_paged,
     list_history,
 )
 from ._typed import (
@@ -36,6 +37,7 @@ __all__: tuple[str, ...] = (
     "get_episode_template",
     "get_series_profile",
     "list_entities_with_revisions",
+    "list_entities_with_revisions_paged",
     "list_episode_template_history",
     "list_episode_templates",
     "list_history",

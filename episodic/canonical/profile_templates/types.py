@@ -270,7 +270,14 @@ class _SeriesProfileRepository(typ.Protocol):
 
     async def get(self, entity_id: uuid.UUID, /) -> SeriesProfile | None: ...
 
-    async def list(self) -> cabc.Sequence[SeriesProfile]: ...
+    async def list(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> cabc.Sequence[SeriesProfile]: ...
+
+    async def count(self) -> int: ...
 
 
 class _EpisodeTemplateRepository(typ.Protocol):
@@ -281,7 +288,12 @@ class _EpisodeTemplateRepository(typ.Protocol):
     async def list(
         self,
         series_profile_id: uuid.UUID | None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> cabc.Sequence[EpisodeTemplate]: ...
+
+    async def count(self, series_profile_id: uuid.UUID | None) -> int: ...
 
 
 class _SeriesProfileHistoryRepository(typ.Protocol):

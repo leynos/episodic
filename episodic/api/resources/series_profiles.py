@@ -19,6 +19,7 @@ import falcon
 from episodic.api.helpers import (
     build_profile_create_kwargs,
     build_profile_update_request,
+    parse_pagination,
     parse_uuid,
 )
 from episodic.api.resources.base import (
@@ -37,7 +38,7 @@ from episodic.canonical.profile_templates import (
     EntityNotFoundError,
     create_series_profile,
     get_entity_with_revision,
-    list_entities_with_revisions,
+    list_entities_with_revisions_paged,
     list_history,
     update_series_profile,
 )
@@ -77,12 +78,22 @@ class SeriesProfilesResource(_CreateResourceBase[object]):
         None
             Response media is set to an ``items`` list and status ``200``.
         """
-        del req
-        service_fn = partial(list_entities_with_revisions, kind="series_profile")
+        limit, offset = parse_pagination(req)
+        service_fn = partial(
+            list_entities_with_revisions_paged,
+            kind="series_profile",
+            limit=limit,
+            offset=offset,
+        )
         async with self._uow_factory() as uow:
-            items = await service_fn(uow)
+            items, total = await service_fn(uow)
 
-        resp.media = {"items": list(starmap(serialize_series_profile, items))}
+        resp.media = {
+            "items": list(starmap(serialize_series_profile, items)),
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+        }
         resp.status = falcon.HTTP_200
 
     @staticmethod

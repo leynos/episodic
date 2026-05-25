@@ -47,9 +47,10 @@ class _KindDispatch:
     ]
     list_history_for_parent: cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]
     list_entities: cabc.Callable[
-        [uuid.UUID | None],
+        [uuid.UUID | None, int | None, int],
         cabc.Awaitable[cabc.Sequence[object]],
     ]
+    count_entities: cabc.Callable[[uuid.UUID | None], cabc.Awaitable[int]]
     get_latest_revisions: cabc.Callable[
         [cabc.Collection[uuid.UUID]],
         cabc.Awaitable[dict[uuid.UUID, int]],
@@ -69,8 +70,18 @@ def _get_repos_for_kind(
                 uow.series_profile_history,
             )
 
-            async def _list_profiles(_: uuid.UUID | None) -> cabc.Sequence[object]:
-                return typ.cast("cabc.Sequence[object]", await profile_repo.list())
+            async def _list_profiles(
+                _: uuid.UUID | None,
+                limit: int | None,
+                offset: int,
+            ) -> cabc.Sequence[object]:
+                return typ.cast(
+                    "cabc.Sequence[object]",
+                    await profile_repo.list(limit=limit, offset=offset),
+                )
+
+            async def _count_profiles(_: uuid.UUID | None) -> int:
+                return await profile_repo.count()
 
             return _KindDispatch(
                 human_label="Series profile",
@@ -87,6 +98,7 @@ def _get_repos_for_kind(
                     profile_history_repo.list_for_profile,
                 ),
                 list_entities=_list_profiles,
+                count_entities=_count_profiles,
                 get_latest_revisions=profile_history_repo.get_latest_revisions_for_profiles,
             )
         case EntityKind.EPISODE_TEMPLATE | "episode_template":
@@ -100,10 +112,16 @@ def _get_repos_for_kind(
 
             async def _list_templates(
                 series_profile_id: uuid.UUID | None,
+                limit: int | None,
+                offset: int,
             ) -> cabc.Sequence[object]:
                 return typ.cast(
                     "cabc.Sequence[object]",
-                    await template_repo.list(series_profile_id),
+                    await template_repo.list(
+                        series_profile_id,
+                        limit=limit,
+                        offset=offset,
+                    ),
                 )
 
             return _KindDispatch(
@@ -121,6 +139,7 @@ def _get_repos_for_kind(
                     template_history_repo.list_for_template,
                 ),
                 list_entities=_list_templates,
+                count_entities=template_repo.count,
                 get_latest_revisions=template_history_repo.get_latest_revisions_for_templates,
             )
         case _:
@@ -228,9 +247,28 @@ async def list_entities_with_revisions(
         Raised when ``kind`` is unsupported.
     """
     dispatch = _get_repos_for_kind(uow, kind)
-    entities = await dispatch.list_entities(series_profile_id)
+    entities = await dispatch.list_entities(series_profile_id, None, 0)
     items = await _with_latest_revisions(
         typ.cast("cabc.Sequence[_VersionedEntity]", entities),
         dispatch.get_latest_revisions,
     )
     return typ.cast("list[tuple[object, int]]", items)
+
+
+async def list_entities_with_revisions_paged(  # noqa: PLR0913  # Generic service mirrors list filters plus pagination.
+    uow: CanonicalUnitOfWork,
+    *,
+    kind: EntityKind | str,
+    limit: int,
+    offset: int,
+    series_profile_id: uuid.UUID | None = None,
+) -> tuple[list[tuple[object, int]], int]:
+    """List entities with latest revisions and their unpaginated total."""
+    dispatch = _get_repos_for_kind(uow, kind)
+    entities = await dispatch.list_entities(series_profile_id, limit, offset)
+    items = await _with_latest_revisions(
+        typ.cast("cabc.Sequence[_VersionedEntity]", entities),
+        dispatch.get_latest_revisions,
+    )
+    total = await dispatch.count_entities(series_profile_id)
+    return typ.cast("list[tuple[object, int]]", items), total

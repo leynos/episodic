@@ -20,6 +20,7 @@ import falcon
 from episodic.api.helpers import (
     build_template_create_kwargs,
     build_template_update_request,
+    parse_pagination,
     parse_uuid,
 )
 from episodic.api.resources.base import (
@@ -36,7 +37,7 @@ from episodic.api.serializers import (
 from episodic.canonical.profile_templates import (
     create_episode_template,
     get_entity_with_revision,
-    list_entities_with_revisions,
+    list_entities_with_revisions_paged,
     list_history,
     update_episode_template,
 )
@@ -76,6 +77,7 @@ class EpisodeTemplatesResource(_CreateResourceBase[object]):
         falcon.HTTPBadRequest
             Raised when ``series_profile_id`` is provided but invalid.
         """
+        limit, offset = parse_pagination(req)
         raw_series_profile_id = req.get_param("series_profile_id")
         series_profile_id = (
             None
@@ -84,13 +86,23 @@ class EpisodeTemplatesResource(_CreateResourceBase[object]):
         )
 
         async with self._uow_factory() as uow:
-            service_fn = partial(list_entities_with_revisions, kind="episode_template")
-            items = await service_fn(
+            service_fn = partial(
+                list_entities_with_revisions_paged,
+                kind="episode_template",
+                limit=limit,
+                offset=offset,
+            )
+            items, total = await service_fn(
                 uow,
                 series_profile_id=series_profile_id,
             )
 
-        resp.media = {"items": list(starmap(serialize_episode_template, items))}
+        resp.media = {
+            "items": list(starmap(serialize_episode_template, items)),
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+        }
         resp.status = falcon.HTTP_200
 
     @staticmethod

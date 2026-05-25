@@ -4,7 +4,7 @@ import typing as typ
 
 import falcon
 
-from episodic.api.helpers import parse_uuid, require_query_params
+from episodic.api.helpers import parse_pagination, parse_uuid, require_query_params
 from episodic.api.serializers import serialize_resolved_binding
 from episodic.canonical.profile_templates import EntityNotFoundError
 from episodic.canonical.reference_documents import resolve_bindings
@@ -19,13 +19,14 @@ class ResolvedBindingsResource:
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
 
-    async def on_get(
+    async def on_get(  # noqa: PLR0914  # Falcon adapter validates and coordinates several route/query inputs.
         self,
         req: falcon.Request,
         resp: falcon.Response,
         profile_id: str,
     ) -> None:
         """Resolve bindings for a series profile plus episode context."""
+        limit, offset = parse_pagination(req)
         parsed_profile_id = parse_uuid(profile_id, "profile_id")
         params = require_query_params(req, "episode_id")
         parsed_episode_id = parse_uuid(params["episode_id"], "episode_id")
@@ -72,5 +73,14 @@ class ResolvedBindingsResource:
         except EntityNotFoundError as exc:
             raise falcon.HTTPNotFound(description=str(exc)) from exc
 
-        resp.media = {"items": [serialize_resolved_binding(item) for item in resolved]}
+        total = len(resolved)
+        resp.media = {
+            "items": [
+                serialize_resolved_binding(item)
+                for item in resolved[offset : offset + limit]
+            ],
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+        }
         resp.status = falcon.HTTP_200
