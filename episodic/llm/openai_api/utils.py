@@ -157,7 +157,7 @@ def _llm_config_checks(
             "timeout_seconds must be greater than zero.",
         ),
         (
-            not _is_positive_number(chars_per_token),
+            not _is_valid_chars_per_token(chars_per_token),
             "chars_per_token",
             chars_per_token_msg,
         ),
@@ -385,13 +385,28 @@ def _require_concrete_usage_counts(
         raise LLMProviderResponseError(msg)
 
 
+def _is_non_empty_string(value: object) -> bool:
+    """Return True when *value* is a non-empty, non-whitespace string."""
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_valid_chars_per_token(value: object) -> bool:
+    """Return True when *value* is a finite positive number (not bool)."""
+    return (
+        isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value > 0
+    )
+
+
 def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
     """Validate OpenAICompatibleLLMConfig field values."""
     base_url: object = config.base_url
     api_key: object = config.api_key
     chars_per_token: object = config.chars_per_token
-    is_base_url_configured = isinstance(base_url, str) and bool(base_url.strip())
-    is_api_key_configured = isinstance(api_key, str) and bool(api_key.strip())
+    is_base_url_configured = _is_non_empty_string(base_url)
+    is_api_key_configured = _is_non_empty_string(api_key)
     rejection_fields = {
         "provider_operation": _operation_label(config.provider_operation),
         "max_attempts": config.max_attempts,
