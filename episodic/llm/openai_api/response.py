@@ -64,14 +64,17 @@ def _check_http_status(response: httpx.Response) -> None:
         raise LLMProviderResponseError(msg)
 
 
-def _decode_json_response(response: httpx.Response) -> dict[str, object]:
+def _decode_json_response(  # pylint: disable=no-else-raise  # keep decode and shape-validation paths visibly separated
+    response: httpx.Response,
+) -> dict[str, object]:
     """Decode and validate the JSON body of a provider response."""
     try:
         payload = response.json()
     except json.JSONDecodeError as exc:
         msg = "Provider returned malformed JSON."
         raise LLMProviderResponseError(msg) from exc
-    if not isinstance(payload, dict):
-        msg = "Provider returned a non-object JSON payload."
-        raise LLMProviderResponseError(msg)
-    return typ.cast("dict[str, object]", payload)
+    else:
+        if not isinstance(payload, dict):
+            msg = "Provider returned a non-object JSON payload."
+            raise LLMProviderResponseError(msg)
+        return typ.cast("dict[str, object]", payload)
