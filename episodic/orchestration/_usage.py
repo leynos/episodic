@@ -12,17 +12,15 @@ def _sum_usage(*usage_values: LLMUsage | None) -> LLMUsage:
     """Return the total token usage across all provided LLMUsage records."""
     input_tokens = 0
     output_tokens = 0
-    total_tokens = 0
     for usage in usage_values:
         if usage is None:
             continue
         input_tokens += usage.input_tokens
         output_tokens += usage.output_tokens
-        total_tokens += usage.total_tokens
     return LLMUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        total_tokens=total_tokens,
+        total_tokens=input_tokens + output_tokens,
     )
 
 

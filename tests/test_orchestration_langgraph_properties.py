@@ -33,7 +33,7 @@ from tests._orchestration_property_support import (
     PropGraphToolExecutor,
     PropTokenInputs,
     token_inputs_strategy,
-    usage_counts_strategy,
+    unconstrained_usage_counts_strategy,
 )
 
 
@@ -123,13 +123,16 @@ def _assert_usage_rollup(
     )
 
 
-@given(planner=usage_counts_strategy, action=usage_counts_strategy)
+@given(
+    planner=unconstrained_usage_counts_strategy,
+    action=unconstrained_usage_counts_strategy,
+)
 @settings(max_examples=50)
 def test_build_generation_result_total_usage_property(
     planner: tuple[int, int, int],
     action: tuple[int, int, int],
 ) -> None:
-    """Property test: generation results sum planner and action usage fields."""
+    """Property test: generation results roll up usage from summed token counts."""
     planner_result, actions = _build_planner_and_action(
         PropTokenInputs(
             planner_input=planner[0],
@@ -147,17 +150,13 @@ def test_build_generation_result_total_usage_property(
 
     result = build_generation_result(planner_result, tuple(actions))
 
-    expected_usage = LLMUsage(
-        planner[0] + action[0],
-        planner[1] + action[1],
-        planner[2] + action[2],
-    )
-    assert result.total_usage == expected_usage, (
-        f"expected total usage {expected_usage!r}, got {result.total_usage!r}"
-    )
+    expected_input_tokens = planner[0] + action[0]
+    expected_output_tokens = planner[1] + action[1]
+    assert result.total_usage.input_tokens == expected_input_tokens
+    assert result.total_usage.output_tokens == expected_output_tokens
     assert result.total_usage.total_tokens == (
-        result.total_usage.input_tokens + result.total_usage.output_tokens
-    ), f"expected internally consistent total usage, got {result.total_usage!r}"
+        expected_input_tokens + expected_output_tokens
+    ), f"expected total usage derived from summed counts, got {result.total_usage!r}"
 
 
 @given(

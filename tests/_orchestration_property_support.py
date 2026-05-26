@@ -198,6 +198,14 @@ usage_counts_strategy: st.SearchStrategy[tuple[int, int, int]] = st.builds(
     output_tokens=st.integers(min_value=0, max_value=1_000_000),
 )
 
+unconstrained_usage_counts_strategy: st.SearchStrategy[tuple[int, int, int]] = (
+    st.tuples(
+        st.integers(min_value=0, max_value=1_000_000),
+        st.integers(min_value=0, max_value=1_000_000),
+        st.integers(min_value=0, max_value=2_000_000),
+    )
+)
+
 planned_action_strategy: st.SearchStrategy[PlannedAction] = st.builds(
     PlannedAction,
     action_id=prop_text,

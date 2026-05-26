@@ -140,10 +140,16 @@ def _make_orchestration_result(
         usage=spec.action_usage,
         show_notes_result=spec.show_notes_result,
     )
+    total_input_tokens = (
+        spec.planner_usage.input_tokens + spec.action_usage.input_tokens
+    )
+    total_output_tokens = (
+        spec.planner_usage.output_tokens + spec.action_usage.output_tokens
+    )
     total_usage = spec.total_usage or LLMUsage(
-        spec.planner_usage.input_tokens + spec.action_usage.input_tokens,
-        spec.planner_usage.output_tokens + spec.action_usage.output_tokens,
-        spec.planner_usage.total_tokens + spec.action_usage.total_tokens,
+        total_input_tokens,
+        total_output_tokens,
+        total_input_tokens + total_output_tokens,
     )
     return GenerationOrchestrationResult(
         plan=plan,

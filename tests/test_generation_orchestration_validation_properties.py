@@ -14,7 +14,10 @@ import pytest
 from hypothesis import given, settings
 
 from episodic.orchestration import ActionKind, ModelTier, PlannedAction
-from tests._generation_orchestration_snapshot_support import _make_show_notes_entry
+from tests._generation_orchestration_snapshot_support import (
+    _make_show_notes_entry,
+    _PlannedActionKwargs,
+)
 
 _ISO_8601_DURATION_PATTERN = re.compile(
     r"^P(?=.*\d(?:\.\d+)?[YMWDHS])"
@@ -41,16 +44,6 @@ _INVALID_DTO_FIELD_TYPES = st.one_of(
     st.lists(st.text(max_size=8), max_size=3),
     st.dictionaries(st.text(max_size=8), st.integers(), max_size=3),
 )
-
-
-class _PlannedActionKwargs(typ.TypedDict):
-    """Keyword arguments for constructing PlannedAction validation cases."""
-
-    action_id: str
-    action_kind: ActionKind
-    rationale: str
-    model_tier: ModelTier
-    required_inputs: tuple[str, ...]
 
 
 @given(timestamp=_NON_ISO_TIMESTAMP_STRINGS)

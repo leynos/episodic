@@ -41,7 +41,7 @@ from tests._generation_orchestration_snapshot_support import (
     _UnusedLLMPort,
     _valid_plan_payload,
 )
-from tests._orchestration_property_support import usage_counts_strategy
+from tests._orchestration_property_support import unconstrained_usage_counts_strategy
 
 
 def test_build_prompt_snapshot(snapshot: SnapshotAssertion) -> None:
@@ -235,10 +235,16 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
 
     assert result.planner_usage is not None
     assert action_usage is not None
+    expected_input_tokens = (
+        result.planner_usage.input_tokens + action_usage.input_tokens
+    )
+    expected_output_tokens = (
+        result.planner_usage.output_tokens + action_usage.output_tokens
+    )
     expected_usage = LLMUsage(
-        input_tokens=result.planner_usage.input_tokens + action_usage.input_tokens,
-        output_tokens=result.planner_usage.output_tokens + action_usage.output_tokens,
-        total_tokens=result.planner_usage.total_tokens + action_usage.total_tokens,
+        input_tokens=expected_input_tokens,
+        output_tokens=expected_output_tokens,
+        total_tokens=expected_input_tokens + expected_output_tokens,
     )
     assert result.total_usage == expected_usage
 
@@ -255,23 +261,29 @@ def test_generation_orchestration_fixture_totals_partial_usage_overrides(
 ) -> None:
     """Verify total usage is derived from whichever usage values callers supply."""
     result = _make_orchestration_result(spec)
+    expected_input_tokens = (
+        spec.planner_usage.input_tokens + spec.action_usage.input_tokens
+    )
+    expected_output_tokens = (
+        spec.planner_usage.output_tokens + spec.action_usage.output_tokens
+    )
     assert result.total_usage == LLMUsage(
-        spec.planner_usage.input_tokens + spec.action_usage.input_tokens,
-        spec.planner_usage.output_tokens + spec.action_usage.output_tokens,
-        spec.planner_usage.total_tokens + spec.action_usage.total_tokens,
+        expected_input_tokens,
+        expected_output_tokens,
+        expected_input_tokens + expected_output_tokens,
     )
 
 
 @given(
-    planner=usage_counts_strategy,
-    action=usage_counts_strategy,
+    planner=unconstrained_usage_counts_strategy,
+    action=unconstrained_usage_counts_strategy,
 )
 @settings(max_examples=50)
 def test_generation_orchestration_fixture_total_usage_property(
     planner: tuple[int, int, int],
     action: tuple[int, int, int],
 ) -> None:
-    """Verify fixture total usage is a token-wise sum for arbitrary inputs."""
+    """Verify fixture total usage rolls up input and output counts independently."""
     planner_usage = LLMUsage(*planner)
     action_usage = LLMUsage(*action)
     result = _make_orchestration_result(
@@ -280,14 +292,13 @@ def test_generation_orchestration_fixture_total_usage_property(
             planner_usage=planner_usage,
         )
     )
-    assert result.total_usage == LLMUsage(
-        planner[0] + action[0],
-        planner[1] + action[1],
-        planner[2] + action[2],
-    )
+    expected_input_tokens = planner[0] + action[0]
+    expected_output_tokens = planner[1] + action[1]
+    assert result.total_usage.input_tokens == expected_input_tokens
+    assert result.total_usage.output_tokens == expected_output_tokens
     assert result.total_usage.total_tokens == (
-        result.total_usage.input_tokens + result.total_usage.output_tokens
-    ), f"expected internally consistent total usage, got {result.total_usage!r}"
+        expected_input_tokens + expected_output_tokens
+    ), f"expected total usage derived from summed counts, got {result.total_usage!r}"
 
 
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
