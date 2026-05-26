@@ -56,13 +56,33 @@ class _PreflightBudgetContext:
 class _OpenAIConfigForValidation(typ.Protocol):
     """Configuration fields required by `_validate_llm_config`."""
 
-    base_url: str
-    api_key: str
-    provider_operation: LLMProviderOperation | str
-    max_attempts: int
-    retry_delay_seconds: float
-    timeout_seconds: float
-    chars_per_token: float
+    @property
+    def base_url(self) -> str:
+        """Return the OpenAI-compatible provider base URL."""
+
+    @property
+    def api_key(self) -> str:
+        """Return the provider API key."""
+
+    @property
+    def provider_operation(self) -> LLMProviderOperation | str:
+        """Return the default provider operation."""
+
+    @property
+    def max_attempts(self) -> int:
+        """Return the maximum retry attempts."""
+
+    @property
+    def retry_delay_seconds(self) -> float:
+        """Return the retry backoff multiplier."""
+
+    @property
+    def timeout_seconds(self) -> float:
+        """Return the provider request timeout."""
+
+    @property
+    def chars_per_token(self) -> float:
+        """Return the preflight token-estimation divisor."""
 
 
 def _operation_label(operation: LLMProviderOperation | str | None) -> str:

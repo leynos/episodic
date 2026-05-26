@@ -490,6 +490,7 @@ name = "outbound_adapter"
 prefixes = [
     "episodic.canonical.adapters",
     "episodic.canonical.storage",
+    "episodic.llm.openai_api",
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]

@@ -378,7 +378,9 @@ The enforced groups are:
   reference-document workflows, and generation services.
 - `inbound_adapter`: Falcon API modules and worker task/topology seams.
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
-  OpenAI-compatible LLM adapters.
+  OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
+  `episodic.llm.openai_api` helper package, and
+  `episodic.llm.openai_client`.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
 
@@ -975,6 +977,27 @@ stored planner-result payloads.
   shape.
 - Persisted `guardrails` belong to canonical profile/template state and are
   composed before the adapter call, not inside the vendor transport layer.
+
+
+### OpenAI-compatible adapter package layout
+
+`episodic.llm.openai_adapter` is the compatibility facade exported to callers.
+The implementation lives in the outbound-adapter package
+`episodic.llm.openai_api`, whose modules split transport concerns by
+responsibility:
+
+- `adapter.py` owns `OpenAICompatibleLLMConfig`,
+  `OpenAICompatibleLLMAdapter`, HTTP client lifecycle, and the retry loop.
+- `request.py` coerces provider operations and builds the operation-specific
+  endpoint path and JSON payload.
+- `response.py` classifies HTTP status codes, decodes JSON bodies, and
+  normalizes OpenAI-compatible payloads through `openai_client` adapters.
+- `utils.py` validates configuration, estimates preflight token counts,
+  enforces token budgets, checks concrete provider usage, and emits structured
+  diagnostic logs.
+- `__init__.py` is a package namespace for these internal helpers; depend on
+  the facade or the `LLMPort` contract rather than importing helper functions
+  directly.
 
 ## Multi-source ingestion
 

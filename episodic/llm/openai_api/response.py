@@ -1,4 +1,15 @@
-"""Response decoding and normalization for OpenAI-compatible providers."""
+"""Response decoding and normalization for OpenAI-compatible providers.
+
+The adapter receives raw `httpx.Response` objects and provider-specific JSON
+payloads, while the rest of the LLM boundary works with provider-neutral
+`LLMResponse` values. This module keeps that translation isolated from
+transport orchestration in `adapter` and request construction in `request`.
+
+HTTP status checks classify retryable provider failures before JSON decoding.
+Decoded payloads are then delegated to the existing OpenAI response adapters in
+`openai_client`, preserving one normalization path for chat completions and
+Responses API payloads.
+"""
 
 import json
 import typing as typ

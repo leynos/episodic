@@ -1,4 +1,16 @@
-"""Async adapter implementation for OpenAI-compatible LLM providers."""
+"""Async OpenAI-compatible LLM port adapter.
+
+This module implements the concrete outbound `LLMPort` used for
+OpenAI-compatible HTTP providers. It composes the sibling `request` module for
+operation-specific paths and payloads, the `response` module for HTTP status
+handling and payload normalization, and `utils` for configuration validation,
+token-budget checks, usage validation, and structured error logging.
+
+`OpenAICompatibleLLMAdapter.generate()` is the adapter boundary: it validates
+the provider-neutral `LLMRequest`, sends the provider request with bounded
+retries, normalizes the provider payload into `LLMResponse`, and enforces the
+configured token budget before returning to application code.
+"""
 
 import dataclasses as dc
 import typing as typ
