@@ -30,6 +30,7 @@ if typ.TYPE_CHECKING:
     import httpx
 
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_HTTP_REDIRECT_THRESHOLD = 300
 _HTTP_BAD_REQUEST_THRESHOLD = 400
 
 
@@ -57,6 +58,15 @@ def _check_http_status(response: httpx.Response) -> None:
     if response.status_code in _RETRYABLE_STATUS_CODES:
         msg = f"Transient provider HTTP status {response.status_code}."
         raise LLMTransientProviderError(msg)
+    if (
+        response.status_code >= _HTTP_REDIRECT_THRESHOLD
+        and response.status_code < _HTTP_BAD_REQUEST_THRESHOLD
+    ):
+        msg = (
+            "Provider returned an unexpected redirect response: "
+            f"{response.status_code}."
+        )
+        raise LLMProviderResponseError(msg)
     if response.status_code >= _HTTP_BAD_REQUEST_THRESHOLD:
         msg = (
             f"Provider returned a non-retryable error response: {response.status_code}."

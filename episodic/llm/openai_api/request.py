@@ -1,4 +1,33 @@
-"""Request construction helpers for OpenAI-compatible LLM operations."""
+"""Build OpenAI-compatible provider request payloads.
+
+This module converts provider-neutral ``LLMRequest`` values into the endpoint
+paths and JSON payload shapes expected by OpenAI-compatible chat-completions and
+Responses API providers. ``OpenAICompatibleLLMAdapter`` imports these helpers to
+keep transport retry logic separate from operation-specific request assembly.
+
+Callers normally use the public adapter facade rather than importing this
+module directly. Internal adapter code calls ``_coerce_operation()`` to
+normalise operation names, ``_path_for_operation()`` to select the provider
+route, and ``_build_payload()`` to build the request body.
+
+Examples
+--------
+Build a chat-completions payload:
+
+>>> from episodic.llm.ports import LLMProviderOperation, LLMRequest
+>>> request = LLMRequest(model="gpt-4o-mini", prompt="Draft an intro.")
+>>> _path_for_operation(LLMProviderOperation.CHAT_COMPLETIONS)
+'/chat/completions'
+>>> payload = _build_payload(request, LLMProviderOperation.CHAT_COMPLETIONS)
+>>> payload["messages"][0]["role"]
+'user'
+
+Build a Responses API payload:
+
+>>> payload = _build_payload(request, LLMProviderOperation.RESPONSES)
+>>> payload["input"]
+'Draft an intro.'
+"""
 
 from episodic.llm.ports import (
     LLMProviderOperation,

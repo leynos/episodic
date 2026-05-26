@@ -324,10 +324,21 @@ def _require_concrete_usage_counts(
 
 def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
     """Validate OpenAICompatibleLLMConfig field values."""
+    base_url: object = config.base_url
+    api_key: object = config.api_key
+    chars_per_token: object = config.chars_per_token
     chars_per_token_msg = (
         "chars_per_token must be finite and greater than zero "
-        f"(got {config.chars_per_token!r})."
+        f"(got {chars_per_token!r})."
     )
+    is_valid_chars_per_token = (
+        isinstance(chars_per_token, int | float)
+        and not isinstance(chars_per_token, bool)
+        and math.isfinite(chars_per_token)
+        and chars_per_token > 0
+    )
+    is_base_url_configured = isinstance(base_url, str) and bool(base_url.strip())
+    is_api_key_configured = isinstance(api_key, str) and bool(api_key.strip())
     checks: list[tuple[bool, str, str]] = [
         (
             config.max_attempts <= 0,
@@ -345,12 +356,12 @@ def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
             "timeout_seconds must be greater than zero.",
         ),
         (
-            not math.isfinite(config.chars_per_token) or config.chars_per_token <= 0,
+            not is_valid_chars_per_token,
             "chars_per_token",
             chars_per_token_msg,
         ),
-        (not config.base_url.strip(), "base_url", "base_url must be non-empty."),
-        (not config.api_key.strip(), "api_key", "api_key must be non-empty."),
+        (not is_base_url_configured, "base_url", "base_url must be non-empty."),
+        (not is_api_key_configured, "api_key", "api_key must be non-empty."),
     ]
     for violated, field_name, msg in checks:
         if violated:
@@ -361,8 +372,8 @@ def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
                 max_attempts=config.max_attempts,
                 retry_delay_seconds=config.retry_delay_seconds,
                 timeout_seconds=config.timeout_seconds,
-                chars_per_token=repr(config.chars_per_token),
-                base_url_configured=bool(config.base_url.strip()),
-                api_key_configured=bool(config.api_key.strip()),
+                chars_per_token=repr(chars_per_token),
+                base_url_configured=is_base_url_configured,
+                api_key_configured=is_api_key_configured,
             )
             raise ValueError(msg)

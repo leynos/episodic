@@ -54,7 +54,37 @@ if typ.TYPE_CHECKING:
 
 @dc.dataclass(frozen=True, slots=True)
 class OpenAICompatibleLLMConfig:
-    """Configuration for the OpenAI-compatible HTTP adapter."""
+    """Configuration for the OpenAI-compatible HTTP adapter.
+
+    Parameters
+    ----------
+    base_url
+        Base provider URL, without an operation path. The adapter strips a
+        trailing slash before appending OpenAI-compatible endpoint paths.
+    api_key
+        Bearer token used for provider HTTP requests.
+    provider_operation
+        Default operation shape to use when a request does not set
+        ``provider_operation``. Accepts ``LLMProviderOperation`` values or their
+        string values.
+    max_attempts
+        Maximum number of attempts for transient HTTP and transport failures.
+    retry_delay_seconds
+        Exponential backoff multiplier, in seconds, used between retry
+        attempts.
+    timeout_seconds
+        Per-request HTTP timeout, in seconds.
+    chars_per_token
+        Positive finite character-per-token divisor used for preflight prompt
+        budget estimation. For example, ``4.0`` estimates one token per four
+        prompt characters.
+
+    Raises
+    ------
+    ValueError
+        Raised by ``_validate_llm_config`` when any configuration value is
+        missing, has the wrong type, or violates the supported numeric bounds.
+    """
 
     base_url: str
     api_key: str
@@ -72,7 +102,27 @@ class OpenAICompatibleLLMConfig:
 
 
 class OpenAICompatibleLLMAdapter(LLMPort):
-    """Call an OpenAI-compatible HTTP endpoint using chat or responses shapes."""
+    """Call an OpenAI-compatible HTTP endpoint.
+
+    Parameters
+    ----------
+    config
+        Validated adapter configuration. Its retry, timeout, operation, and
+        token-estimation settings are copied into the adapter at construction.
+    client
+        Optional ``httpx.AsyncClient`` supplied by the caller. When omitted, the
+        adapter creates its own client and sets ``_owns_client`` to ``True``.
+        When supplied, ``_owns_client`` is ``False`` and caller-owned client
+        lifecycle remains outside the adapter.
+
+    Raises
+    ------
+    ValueError
+        Propagates validation failures raised while constructing
+        ``OpenAICompatibleLLMConfig``.
+    LLMProviderResponseError
+        Raised when the configured provider operation is unsupported.
+    """
 
     def __init__(
         self,
@@ -91,7 +141,14 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         self._chars_per_token = config.chars_per_token
 
     async def __aenter__(self) -> OpenAICompatibleLLMAdapter:
-        """Return the adapter for use as an async context manager."""
+        """Return the adapter for use as an async context manager.
+
+        Returns
+        -------
+        OpenAICompatibleLLMAdapter
+            The current adapter instance. The paired ``__aexit__`` call closes
+            only adapter-owned HTTP clients.
+        """
         return self
 
     async def __aexit__(
@@ -105,12 +162,51 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         await self.aclose()
 
     async def aclose(self) -> None:
-        """Close the adapter-owned HTTP client when present."""
+        """Close the adapter-owned HTTP client when present.
+
+        The method is a no-op for caller-supplied clients because
+        ``_owns_client`` is ``False`` in that case.
+
+        Returns
+        -------
+        None
+            The method completes after any owned client has closed.
+        """
         if self._owns_client:
             await self._client.aclose()
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
-        """Generate text from an OpenAI-compatible provider."""
+        """Generate text from an OpenAI-compatible provider.
+
+        Parameters
+        ----------
+        request
+            Provider-neutral request containing model, prompts, optional token
+            budget, and optional provider operation override. Token budgets use
+            ``chars_per_token`` for preflight input estimation before the HTTP
+            call.
+
+        Returns
+        -------
+        LLMResponse
+            Normalized provider text and concrete usage counts.
+
+        Raises
+        ------
+        LLMTokenBudgetExceededError
+            Raised before the HTTP request when estimated input or projected
+            total tokens exceed the request budget, or after the response when
+            provider-reported usage exceeds the same budget.
+        LLMProviderResponseError
+            Raised for unsupported operations, non-retryable HTTP statuses,
+            malformed or invalid JSON payloads, missing concrete usage counts
+            for budgeted requests, and other provider response contract
+            failures.
+        LLMTransientProviderError
+            Raised after retryable HTTP statuses or transport errors exhaust
+            ``max_attempts``. Retry waits use exponential jitter with
+            ``retry_delay_seconds`` as the multiplier.
+        """
         token_budget = request.token_budget
         if token_budget is not None:
             _validate_preflight_budget(request, token_budget, self._chars_per_token)

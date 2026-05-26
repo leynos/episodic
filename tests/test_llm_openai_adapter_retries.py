@@ -115,6 +115,25 @@ async def test_generate_rejects_non_retryable_http_status(
 
 
 @pytest.mark.asyncio
+async def test_generate_rejects_redirect_http_status(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
+) -> None:
+    """Redirect provider responses surface as response errors."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return openai_json_response({}, 302)
+
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler)
+    ) as adapter:
+        with pytest.raises(LLMProviderResponseError, match="redirect response"):
+            await adapter.generate(openai_request_builder())
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("status_code", [500, 503])
 async def test_generate_retries_retryable_http_5xx_then_fails(
     status_code: int,

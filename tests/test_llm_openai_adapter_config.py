@@ -5,6 +5,7 @@ DTO boundaries. It uses the shared invalid-config fixture so construction
 rules stay aligned with the adapter factory used by behavioural LLM tests.
 """
 
+import json
 import typing as typ
 
 import pytest
@@ -27,8 +28,11 @@ if typ.TYPE_CHECKING:
         ({"chars_per_token": -1.0}, "chars_per_token"),
         ({"chars_per_token": float("nan")}, "chars_per_token"),
         ({"chars_per_token": float("inf")}, "chars_per_token"),
+        ({"chars_per_token": "4.0"}, "chars_per_token"),
         ({"base_url": "   "}, "base_url must be non-empty."),
         ({"api_key": "   "}, "api_key must be non-empty."),
+        ({"base_url": 123}, "base_url must be non-empty."),
+        ({"api_key": object()}, "api_key must be non-empty."),
         ({"base_url": "", "api_key": "k"}, "base_url must be non-empty."),
         ({"base_url": "http://x", "api_key": ""}, "api_key must be non-empty."),
     ],
@@ -53,6 +57,22 @@ def test_openai_adapter_config_rejection_log_snapshot(
         _ = openai_invalid_config_builder({"chars_per_token": 0})
 
     assert openai_log_spy.messages == snapshot
+
+
+def test_openai_adapter_config_type_rejection_logs_stable_event(
+    openai_invalid_config_builder: _OpenAIInvalidConfigBuilder,
+    openai_log_spy: _OpenAILogSpy,
+) -> None:
+    """Wrong-typed config values should use the standard rejection event."""
+    with pytest.raises(ValueError, match=r"base_url must be non-empty\."):
+        _ = openai_invalid_config_builder({"base_url": 123})
+
+    payload = json.loads(openai_log_spy.messages[0])
+    assert payload["event"] == "openai_adapter.config_rejected"
+    assert payload["field"] == "base_url"
+    assert payload["base_url_configured"] is False
+    assert payload["api_key_configured"] is True
+    assert payload["chars_per_token"] == repr(4.0)
 
 
 def test_openai_invalid_config_builder_accepts_provider_operation_override(
