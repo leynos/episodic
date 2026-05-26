@@ -41,7 +41,10 @@ def _map_checkpoint(record: WorkflowCheckpointRecord) -> WorkflowCheckpoint:
 class SqlAlchemyWorkflowCheckpointStore:
     """Durable implementation of the orchestration `CheckpointPort`."""
 
-    def __init__(self, session: "AsyncSession") -> None:  # noqa: UP037
+    def __init__(
+        self,
+        session: "AsyncSession",  # noqa: UP037  # AsyncSession is TYPE_CHECKING-only in __init__.
+    ) -> None:
         self._session = session
 
     async def get(self, checkpoint_id: str) -> WorkflowCheckpoint | None:
