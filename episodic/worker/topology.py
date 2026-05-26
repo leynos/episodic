@@ -2,7 +2,8 @@
 
 The task registry in :mod:`episodic.worker.tasks` supplies task-to-workload
 classifications; this module turns those classifications into Celery queues,
-exchanges, and route metadata consumed by the worker runtime composition root.
+exchanges, and route metadata consumed by
+:func:`episodic.worker.runtime.create_celery_app`.
 """
 
 import collections.abc as cabc  # noqa: TC003

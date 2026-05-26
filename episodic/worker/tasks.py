@@ -1,8 +1,7 @@
 """Representative Celery task seams for the worker scaffold.
 
-This module defines routing inputs (`SCAFFOLD_TASK_NAMES` and
-`SCAFFOLD_TASK_WORKLOADS`) and task registrations that align with the worker
-runtime contract in :mod:`episodic.worker.topology` and
+The task names and workload map in this module exercise the routing contract
+defined by :mod:`episodic.worker.topology` and registered by
 :func:`~episodic.worker.runtime.create_celery_app`.
 
 CPU-bound tasks run on the `episodic.cpu` queue in Celery `prefork` workers.
