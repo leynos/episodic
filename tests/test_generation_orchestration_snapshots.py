@@ -5,8 +5,6 @@ Syrupy snapshots give CI a stable view of orchestration DTO serialisation for
 `ShowNotesResult`. Assertions also cover optional fields and usage accounting.
 """
 
-# pylint: disable=too-many-lines
-
 import dataclasses
 import typing as typ
 
@@ -14,8 +12,7 @@ import pytest
 from hypothesis import given, settings
 from syrupy.assertion import SnapshotAssertion
 
-from episodic.generation.show_notes import ShowNotesEntry, ShowNotesResult
-from episodic.llm import LLMRequest, LLMResponse, LLMUsage
+from episodic.llm import LLMUsage
 from episodic.orchestration import (
     ActionExecutionResult,
     ActionKind,
@@ -26,135 +23,25 @@ from episodic.orchestration import (
     ModelTier,
     PlannedAction,
     PlannerResult,
-    PlanningResponseFormatError,
     StructuredGenerationPlanner,
 )
 from episodic.orchestration.langgraph import (
     _action_result_to_payload,
     _planner_result_to_payload,
 )
+from tests._generation_orchestration_snapshot_support import (
+    OrchestrationResultSpec,
+    PlannedActionKwargs,
+    UnusedLLMPort,
+    capture_plan_format_error,
+    make_orchestration_result,
+    make_show_notes_entry,
+    make_show_notes_result,
+    plan_payload_with_step_field,
+    plan_payload_without_step_field,
+    valid_plan_payload,
+)
 from tests._orchestration_property_support import usage_counts_strategy
-
-
-class _UnusedLLMPort:
-    """LLM shim only required for constructing `StructuredGenerationPlanner`."""
-
-    async def generate(self, request: LLMRequest) -> LLMResponse:
-        """Unreachable for prompt-only assertions."""
-        msg = (
-            "StructuredGenerationPlanner.build_prompt snapshot harness must "
-            f"never await generate ({request=!r})."
-        )
-        raise RuntimeError(msg)
-
-
-def _make_show_notes_entry(
-    *,
-    topic: str = "Structured planning",
-    summary: str = "The episode explains typed orchestration DTOs.",
-    timestamp: str | None = "PT5M30S",
-    tei_locator: str | None = "#segment-structured-planning",
-) -> ShowNotesEntry:
-    """Build the canonical show-notes entry used by serialisation snapshots."""
-    return ShowNotesEntry(
-        topic=topic,
-        summary=summary,
-        timestamp=timestamp,
-        tei_locator=tei_locator,
-    )
-
-
-def _make_show_notes_result(
-    *,
-    entries: tuple[ShowNotesEntry, ...] | None = None,
-) -> ShowNotesResult:
-    """Build the canonical show-notes result used by nested DTO snapshots."""
-    if entries is None:
-        entries = (
-            _make_show_notes_entry(),
-            _make_show_notes_entry(
-                topic="Snapshot coverage",
-                summary="The episode covers regression snapshots for DTO output.",
-                timestamp=None,
-                tei_locator=None,
-            ),
-        )
-    return ShowNotesResult(
-        entries=entries,
-        usage=LLMUsage(input_tokens=40, output_tokens=25, total_tokens=65),
-        model="gpt-4o-mini",
-        provider_response_id="show-notes-001",
-        finish_reason="stop",
-    )
-
-
-class _PlannedActionKwargs(typ.TypedDict):
-    """Typed kwargs for planned-action validation probes."""
-
-    action_id: str
-    action_kind: ActionKind
-    rationale: str
-    model_tier: ModelTier
-    required_inputs: tuple[str, ...]
-
-
-def _valid_plan_payload() -> dict[str, object]:
-    """Return one raw planner payload used as the basis for error snapshots."""
-    return {
-        "plan_version": "1.0",
-        "steps": [
-            {
-                "action_id": "action-1",
-                "action_kind": ActionKind.GENERATE_SHOW_NOTES.value,
-                "rationale": "Generate show notes.",
-                "model_tier": ModelTier.EXECUTION.value,
-                "required_inputs": ["script_tei_xml"],
-            }
-        ],
-    }
-
-
-def _valid_plan_step() -> dict[str, object]:
-    """Return the first valid raw planner step for targeted corruption."""
-    steps = _valid_plan_payload()["steps"]
-    assert isinstance(steps, list)
-    step = steps[0]
-    assert isinstance(step, dict)
-    return typ.cast("dict[str, object]", step)
-
-
-def _plan_payload_with_step_field(field_name: str, value: object) -> dict[str, object]:
-    """Return a planner payload with one step field replaced."""
-    return _valid_plan_payload() | {"steps": [_valid_plan_step() | {field_name: value}]}
-
-
-def _plan_payload_without_step_field(field_name: str) -> dict[str, object]:
-    """Return a planner payload with one required step field omitted."""
-    return _valid_plan_payload() | {
-        "steps": [
-            {
-                key: value
-                for key, value in _valid_plan_step().items()
-                if key != field_name
-            }
-        ]
-    }
-
-
-def _capture_plan_format_error(payload: dict[str, object]) -> str:
-    """Return the structured-planner format error for a malformed payload."""
-    try:
-        StructuredGenerationPlanner._parse_plan(
-            payload,
-            config=GenerationOrchestrationConfig(
-                planning_model="gpt-4.1",
-                execution_model="gpt-4o-mini",
-            ),
-        )
-    except PlanningResponseFormatError as exc:
-        return str(exc)
-    msg = f"Expected PlanningResponseFormatError for payload: {payload!r}"
-    raise AssertionError(msg)
 
 
 def test_build_prompt_snapshot(snapshot: SnapshotAssertion) -> None:
@@ -163,7 +50,7 @@ def test_build_prompt_snapshot(snapshot: SnapshotAssertion) -> None:
         planning_model="gpt-4.1",
         execution_model="gpt-4o-mini",
     )
-    planner = StructuredGenerationPlanner(llm=_UnusedLLMPort(), config=cfg)
+    planner = StructuredGenerationPlanner(llm=UnusedLLMPort(), config=cfg)
     request = GenerationOrchestrationRequest(
         correlation_id="snap-001",
         script_tei_xml="<TEI><text>test</text></TEI>",
@@ -196,7 +83,7 @@ def test_show_notes_entry_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot the serialised shape of one representative show-note entry."""
-    entry = _make_show_notes_entry()
+    entry = make_show_notes_entry()
     serialised = dataclasses.asdict(entry)
     assert serialised == snapshot
 
@@ -205,14 +92,14 @@ def test_show_notes_result_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot nested show-note entries plus deterministic provider metadata."""
-    result = _make_show_notes_result()
+    result = make_show_notes_result()
     serialised = dataclasses.asdict(result)
     assert serialised == snapshot
 
 
 def test_show_notes_entry_normalises_optional_locator() -> None:
     """Verify optional locator normalisation before snapshot serialisation."""
-    entry = _make_show_notes_entry(tei_locator="   ")
+    entry = make_show_notes_entry(tei_locator="   ")
 
     assert entry.tei_locator is None
 
@@ -220,7 +107,7 @@ def test_show_notes_entry_normalises_optional_locator() -> None:
 def test_show_notes_entry_rejects_non_iso8601_timestamp() -> None:
     """Verify invalid timestamps cannot enter show-note snapshot fixtures."""
     with pytest.raises(ValueError, match="timestamp"):
-        _make_show_notes_entry(timestamp="5:30")
+        make_show_notes_entry(timestamp="5:30")
 
 
 def test_execution_plan_freezes_and_validates_steps() -> None:
@@ -271,7 +158,7 @@ def test_planned_action_snapshot_fixture_rejects_invalid_fields(
     expected_match: str,
 ) -> None:
     """Verify invalid planned-action fields cannot enter snapshot fixtures."""
-    kwargs: _PlannedActionKwargs = {
+    kwargs: PlannedActionKwargs = {
         "action_id": "a1",
         "action_kind": ActionKind.GENERATE_SHOW_NOTES,
         "rationale": "test",
@@ -287,69 +174,11 @@ def test_planned_action_snapshot_fixture_rejects_invalid_fields(
         PlannedAction(**kwargs)
 
 
-@dataclasses.dataclass(frozen=True)
-class _OrchestrationResultSpec:
-    """Parameter object for building the canonical orchestration DTO graph."""
-
-    rationale: str = "test"
-    required_inputs: tuple[str, ...] = dataclasses.field(default_factory=tuple)
-    action_summary: str = "test"
-    action_usage: LLMUsage = dataclasses.field(
-        default_factory=lambda: LLMUsage(10, 20, 30)
-    )
-    show_notes_result: ShowNotesResult | None = None
-    planner_usage: LLMUsage = dataclasses.field(
-        default_factory=lambda: LLMUsage(1, 2, 3)
-    )
-    total_usage: LLMUsage | None = None
-
-
-def _make_orchestration_result(
-    spec: _OrchestrationResultSpec | None = None,
-) -> GenerationOrchestrationResult:
-    """Build the canonical orchestration DTO graph used by snapshots."""
-    if spec is None:
-        spec = _OrchestrationResultSpec()
-    planned = PlannedAction(
-        action_id="a1",
-        action_kind=ActionKind.GENERATE_SHOW_NOTES,
-        rationale=spec.rationale,
-        model_tier=ModelTier.EXECUTION,
-        required_inputs=spec.required_inputs,
-    )
-    plan = ExecutionPlan(
-        plan_version="1",
-        selected_planning_model="gpt-4.1",
-        selected_execution_model="gpt-4o-mini",
-        steps=(planned,),
-    )
-    action_done = ActionExecutionResult(
-        action_id="a1",
-        action_kind=ActionKind.GENERATE_SHOW_NOTES,
-        model_tier=ModelTier.EXECUTION,
-        model="gpt-4o-mini",
-        summary=spec.action_summary,
-        usage=spec.action_usage,
-        show_notes_result=spec.show_notes_result,
-    )
-    total_usage = spec.total_usage or LLMUsage(
-        spec.planner_usage.input_tokens + spec.action_usage.input_tokens,
-        spec.planner_usage.output_tokens + spec.action_usage.output_tokens,
-        spec.planner_usage.total_tokens + spec.action_usage.total_tokens,
-    )
-    return GenerationOrchestrationResult(
-        plan=plan,
-        action_results=(action_done,),
-        planner_usage=spec.planner_usage,
-        total_usage=total_usage,
-    )
-
-
 def test_generation_orchestration_result_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot the aggregate orchestration result without tool-specific data."""
-    result = _make_orchestration_result()
+    result = make_orchestration_result()
     assert dataclasses.asdict(result) == snapshot
 
 
@@ -357,9 +186,9 @@ def test_generation_orchestration_result_with_show_notes_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot orchestration aggregation with nested show-note tool output."""
-    show_notes = _make_show_notes_result(entries=(_make_show_notes_entry(),))
-    result = _make_orchestration_result(
-        _OrchestrationResultSpec(
+    show_notes = make_show_notes_result(entries=(make_show_notes_entry(),))
+    result = make_orchestration_result(
+        OrchestrationResultSpec(
             rationale="Generate listener-facing notes from canonical TEI.",
             required_inputs=("script_tei_xml",),
             action_summary="Generated one show-notes entry.",
@@ -401,7 +230,7 @@ def test_generation_orchestration_result_freezes_action_results() -> None:
 
 def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
     """Verify the canonical aggregate keeps planner and action usage aligned."""
-    result = _make_orchestration_result()
+    result = make_orchestration_result()
     action_usage = result.action_results[0].usage
 
     assert result.planner_usage is not None
@@ -417,15 +246,15 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
 @pytest.mark.parametrize(
     "spec",
     (  # noqa: PT007 - single-parameter values are clearer as direct specs here.
-        _OrchestrationResultSpec(action_usage=LLMUsage(5, 7, 12)),
-        _OrchestrationResultSpec(planner_usage=LLMUsage(5, 7, 12)),
+        OrchestrationResultSpec(action_usage=LLMUsage(5, 7, 12)),
+        OrchestrationResultSpec(planner_usage=LLMUsage(5, 7, 12)),
     ),
 )
 def test_generation_orchestration_fixture_totals_partial_usage_overrides(
-    spec: _OrchestrationResultSpec,
+    spec: OrchestrationResultSpec,
 ) -> None:
     """Verify total usage is derived from whichever usage values callers supply."""
-    result = _make_orchestration_result(spec)
+    result = make_orchestration_result(spec)
     assert result.total_usage == LLMUsage(
         spec.planner_usage.input_tokens + spec.action_usage.input_tokens,
         spec.planner_usage.output_tokens + spec.action_usage.output_tokens,
@@ -445,8 +274,8 @@ def test_generation_orchestration_fixture_total_usage_property(
     """Verify fixture total usage is a token-wise sum for arbitrary inputs."""
     planner_usage = LLMUsage(*planner)
     action_usage = LLMUsage(*action)
-    result = _make_orchestration_result(
-        _OrchestrationResultSpec(
+    result = make_orchestration_result(
+        OrchestrationResultSpec(
             action_usage=action_usage,
             planner_usage=planner_usage,
         )
@@ -501,27 +330,27 @@ def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
 def test_planner_format_error_messages_snapshot(snapshot: SnapshotAssertion) -> None:
     """Snapshot representative strict-planner format error messages."""
     assert {
-        "missing_action_id": _capture_plan_format_error(
-            _plan_payload_without_step_field("action_id")
+        "missing_action_id": capture_plan_format_error(
+            plan_payload_without_step_field("action_id")
         ),
-        "missing_plan_version": _capture_plan_format_error({
+        "missing_plan_version": capture_plan_format_error({
             key: value
-            for key, value in _valid_plan_payload().items()
+            for key, value in valid_plan_payload().items()
             if key != "plan_version"
         }),
-        "non_list_required_inputs": _capture_plan_format_error(
-            _plan_payload_with_step_field("required_inputs", "script_tei_xml")
+        "non_list_required_inputs": capture_plan_format_error(
+            plan_payload_with_step_field("required_inputs", "script_tei_xml")
         ),
-        "non_list_steps": _capture_plan_format_error(
-            _valid_plan_payload() | {"steps": "not-a-list"}
+        "non_list_steps": capture_plan_format_error(
+            valid_plan_payload() | {"steps": "not-a-list"}
         ),
-        "non_object_step": _capture_plan_format_error(
-            _valid_plan_payload() | {"steps": ["not-an-object"]}
+        "non_object_step": capture_plan_format_error(
+            valid_plan_payload() | {"steps": ["not-an-object"]}
         ),
-        "unknown_action_kind": _capture_plan_format_error(
-            _plan_payload_with_step_field("action_kind", "unknown_action")
+        "unknown_action_kind": capture_plan_format_error(
+            plan_payload_with_step_field("action_kind", "unknown_action")
         ),
-        "unknown_model_tier": _capture_plan_format_error(
-            _plan_payload_with_step_field("model_tier", "training")
+        "unknown_model_tier": capture_plan_format_error(
+            plan_payload_with_step_field("model_tier", "training")
         ),
     } == snapshot
