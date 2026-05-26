@@ -1,11 +1,10 @@
-"""SQLAlchemy checkpoint adapter for resumable orchestration workflows.
+"""Checkpoint adapter for resumable orchestration workflows.
 
 This adapter implements the orchestration-layer `CheckpointPort` at the
-canonical storage boundary. LangGraph nodes hand it typed
-`WorkflowCheckpoint` DTOs; the adapter maps those DTOs to the
-`workflow_checkpoints` table and relies on the table's unique idempotency key
-to make repeated suspend attempts converge on the first persisted checkpoint.
-It does not import graph code, LLM adapters, or Celery concerns.
+canonical storage boundary. Repeated suspend attempts for the same workflow
+step converge on one durable checkpoint, while resume markers remain governed
+by the caller's unit-of-work decision. It does not import graph code, LLM
+adapters, or Celery concerns.
 """
 
 import typing as typ
@@ -40,7 +39,7 @@ def _map_checkpoint(record: WorkflowCheckpointRecord) -> WorkflowCheckpoint:
 
 
 class SqlAlchemyWorkflowCheckpointStore:
-    """Durable SQLAlchemy implementation of the orchestration `CheckpointPort`."""
+    """Durable implementation of the orchestration `CheckpointPort`."""
 
     def __init__(self, session: "AsyncSession") -> None:  # noqa: UP037
         self._session = session
@@ -85,18 +84,15 @@ class SqlAlchemyWorkflowCheckpointStore:
     async def save_or_reuse(self, checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
         """Persist a checkpoint or return the existing record for its key.
 
-        The insert runs inside a SQL savepoint via ``begin_nested()`` so a
-        unique-constraint conflict on ``idempotency_key`` rolls back only the
-        attempted insert, not the caller's outer unit-of-work transaction.
-        This gives first-write-wins semantics: concurrent callers racing on
-        one idempotency key converge on the existing checkpoint instead of
-        surfacing an ``IntegrityError``.
+        Concurrent callers racing on one idempotency key converge on the first
+        checkpoint that reaches durable storage. The returned checkpoint may be
+        the new record or a previously persisted record, and callers should use
+        its identifier as the authoritative suspend token.
 
-        This method flushes but does not commit. Durability belongs to the
-        caller's unit of work. If the conflict path cannot find the existing
-        checkpoint after the unique constraint fires, the original
-        ``IntegrityError`` is re-raised; that path should be unreachable while
-        the database constraint and lookup use the same key.
+        The method participates in the caller's unit of work and does not make
+        the checkpoint durable on its own. If convergence cannot recover the
+        existing checkpoint for a conflicting key, the storage failure is
+        propagated so the caller can retry or fail the suspend attempt.
         """
         record = WorkflowCheckpointRecord(
             id=uuid.UUID(checkpoint.checkpoint_id),
@@ -108,6 +104,8 @@ class SqlAlchemyWorkflowCheckpointStore:
             status=WorkflowCheckpointStatus(checkpoint.status),
         )
         try:
+            # Keep a duplicate insert attempt isolated from the caller's outer
+            # transaction; the public contract above is convergence by key.
             async with self._session.begin_nested():
                 self._session.add(record)
                 await self._session.flush()
@@ -126,17 +124,21 @@ class SqlAlchemyWorkflowCheckpointStore:
             existing = await self.get_by_idempotency_key(checkpoint.idempotency_key)
             if existing is not None:
                 return existing
+            _log_event(
+                "error",
+                "sql_checkpoint_store.save_or_reuse.conflict_missing_checkpoint",
+                idempotency_key=checkpoint.idempotency_key,
+            )
             raise
         return _map_checkpoint(record)
 
     async def mark_resumed(self, checkpoint_id: str) -> WorkflowCheckpoint:
         """Mark a checkpoint as resumed and return the updated record.
 
-        This method flushes the status update but does not commit it.
-        Durability belongs to the caller's unit of work. If the outer
-        transaction rolls back after the flush, the checkpoint remains in the
-        ``suspended`` state on disk, which is non-destructive and safe for a
-        later retry.
+        The update participates in the caller's unit of work. A committed unit
+        of work records the checkpoint as ``resumed``; a rolled-back unit of
+        work leaves the checkpoint ``suspended`` and available for a later
+        retry.
 
         Raises
         ------

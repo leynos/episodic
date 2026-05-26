@@ -97,19 +97,7 @@ async def _suspend_execute_node(
     checkpoint_port: protocols.CheckpointPort,
     workflow_type: str = "generation_orchestration",
 ) -> dict[str, dto.SuspendedWorkflowResult]:
-    """Persist or reuse a checkpoint before executing the first action.
-
-    The suspend path deliberately performs no pre-save lookup. It always asks
-    the checkpoint port to ``save_or_reuse`` a fresh checkpoint and derives
-    reuse from the returned checkpoint id. The database-backed port enforces
-    the idempotency boundary with the unique ``idempotency_key`` constraint, so
-    concurrent invocations for the same workflow step converge on one
-    checkpoint without a time-of-check/time-of-use window.
-
-    The returned ``SuspendedWorkflowResult`` is valid whether this invocation
-    created the checkpoint or reused a checkpoint created by a concurrent
-    caller.
-    """
+    """Persist or reuse a checkpoint before executing the first action."""
     request, planner_result, action = _validate_suspend_preconditions(state)
     identity = _build_execute_step_identity(
         request=request,
@@ -130,6 +118,11 @@ async def _suspend_execute_node(
         idempotency_key=idempotency_key,
     )
     fresh_id = str(uuid.uuid4())
+    # The suspend path deliberately performs no pre-save lookup. It always
+    # asks the checkpoint port to save a fresh checkpoint and derives reuse
+    # from the returned checkpoint id. Concrete ports own the idempotency
+    # boundary, so concurrent invocations for the same workflow step converge
+    # without a time-of-check/time-of-use window.
     existing = await checkpoint_port.save_or_reuse(
         dto.WorkflowCheckpoint(
             checkpoint_id=fresh_id,
@@ -185,7 +178,7 @@ async def resume_generation_orchestration(
     Raises
     ------
         ValueError: If the command references an unknown checkpoint.
-        TypeError: If the stored checkpoint payload cannot be deserialised into
+        TypeError: If the stored checkpoint payload cannot be deserialized into
             the expected planner-result shape.
     """
     _log_event(
