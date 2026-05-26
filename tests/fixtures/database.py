@@ -95,7 +95,10 @@ async def _pglite_sqlalchemy_manager(
     manager.start()
     try:
         engine = typ.cast("AsyncEngine", manager.get_engine(poolclass=NullPool))
-        await _wait_for_engine_ready(engine)
+        try:
+            await _wait_for_engine_ready(engine)
+        finally:
+            await engine.dispose()
         yield manager
     finally:
         await manager.stop()
@@ -141,8 +144,16 @@ async def pglite_engine(
     pglite_sqlalchemy_manager: SQLAlchemyAsyncPGliteManager,
 ) -> cabc.AsyncIterator[AsyncEngine]:
     """Yield an async SQLAlchemy engine provided by py-pglite's helper manager."""
+    from sqlalchemy.pool import NullPool
+
+    engine = typ.cast(
+        "AsyncEngine", pglite_sqlalchemy_manager.get_engine(poolclass=NullPool)
+    )
     await asyncio.sleep(0)
-    yield typ.cast("AsyncEngine", pglite_sqlalchemy_manager.get_engine())
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture
