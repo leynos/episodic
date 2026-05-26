@@ -1,7 +1,5 @@
 """Response decoding and normalization for OpenAI-compatible providers."""
 
-from __future__ import annotations
-
 import json
 import typing as typ
 
