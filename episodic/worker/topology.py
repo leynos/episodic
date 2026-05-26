@@ -97,18 +97,30 @@ def _validate_non_empty_str(attr_path: str, value: str) -> None:
         raise ValueError(msg)
 
 
-def _validate_task_name(task_name: str) -> None:
-    """Raise ValueError if a task name cannot be routed deliberately."""
+def _validate_task_name_is_str(task_name: object) -> None:
+    """Raise TypeError if task_name is not a str instance."""
     if not isinstance(task_name, str):
         msg = "Worker task names must be non-empty dotted names."
         raise TypeError(msg)
-    task_parts = task_name.split(".")
-    if task_name != task_name.strip() or len(task_parts) < MIN_DOTTED_TASK_NAME_PARTS:
+
+
+def _validate_dotted_parts(task_parts: list[str]) -> None:
+    """Raise ValueError if there are too few parts or any part is empty."""
+    if len(task_parts) < MIN_DOTTED_TASK_NAME_PARTS:
         msg = "Worker task names must be non-empty dotted names."
         raise ValueError(msg)
     if any(not part for part in task_parts):
         msg = "Worker task names must be non-empty dotted names."
         raise ValueError(msg)
+
+
+def _validate_task_name(task_name: str) -> None:
+    """Raise ValueError if a task name cannot be routed deliberately."""
+    _validate_task_name_is_str(task_name)
+    if task_name != task_name.strip():
+        msg = "Worker task names must be non-empty dotted names."
+        raise ValueError(msg)
+    _validate_dotted_parts(task_name.split("."))
 
 
 def _validate_task_workload(workload: WorkloadClass) -> None:
