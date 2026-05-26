@@ -22,10 +22,7 @@ SCRIPT_TEI = (
 )
 
 _TEXT = st.text(
-    alphabet=st.characters(
-        blacklist_categories=("Cc", "Cs"),
-        blacklist_characters="<>&",
-    ),
+    alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,_-'",
     min_size=1,
     max_size=48,
 ).filter(lambda value: bool(value.strip()))

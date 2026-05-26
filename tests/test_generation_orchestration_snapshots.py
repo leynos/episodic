@@ -48,7 +48,7 @@ class _UnusedLLMPort:
         raise RuntimeError(msg)
 
 
-def make_show_notes_entry(
+def _make_show_notes_entry(
     *,
     topic: str = "Structured planning",
     summary: str = "The episode explains typed orchestration DTOs.",
@@ -64,15 +64,15 @@ def make_show_notes_entry(
     )
 
 
-def make_show_notes_result(
+def _make_show_notes_result(
     *,
     entries: tuple[ShowNotesEntry, ...] | None = None,
 ) -> ShowNotesResult:
     """Build the canonical show-notes result used by nested DTO snapshots."""
     if entries is None:
         entries = (
-            make_show_notes_entry(),
-            make_show_notes_entry(
+            _make_show_notes_entry(),
+            _make_show_notes_entry(
                 topic="Snapshot coverage",
                 summary="The episode covers regression snapshots for DTO output.",
                 timestamp=None,
@@ -86,6 +86,16 @@ def make_show_notes_result(
         provider_response_id="show-notes-001",
         finish_reason="stop",
     )
+
+
+class _PlannedActionKwargs(typ.TypedDict):
+    """Typed kwargs for planned-action validation probes."""
+
+    action_id: str
+    action_kind: ActionKind
+    rationale: str
+    model_tier: ModelTier
+    required_inputs: tuple[str, ...]
 
 
 def _valid_plan_payload() -> dict[str, object]:
@@ -186,7 +196,7 @@ def test_show_notes_entry_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot the serialised shape of one representative show-note entry."""
-    entry = make_show_notes_entry()
+    entry = _make_show_notes_entry()
     serialised = dataclasses.asdict(entry)
     assert serialised == snapshot
 
@@ -195,14 +205,14 @@ def test_show_notes_result_serialisation_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot nested show-note entries plus deterministic provider metadata."""
-    result = make_show_notes_result()
+    result = _make_show_notes_result()
     serialised = dataclasses.asdict(result)
     assert serialised == snapshot
 
 
 def test_show_notes_entry_normalises_optional_locator() -> None:
     """Verify optional locator normalisation before snapshot serialisation."""
-    entry = make_show_notes_entry(tei_locator="   ")
+    entry = _make_show_notes_entry(tei_locator="   ")
 
     assert entry.tei_locator is None
 
@@ -210,7 +220,7 @@ def test_show_notes_entry_normalises_optional_locator() -> None:
 def test_show_notes_entry_rejects_non_iso8601_timestamp() -> None:
     """Verify invalid timestamps cannot enter show-note snapshot fixtures."""
     with pytest.raises(ValueError, match="timestamp"):
-        make_show_notes_entry(timestamp="5:30")
+        _make_show_notes_entry(timestamp="5:30")
 
 
 def test_execution_plan_freezes_and_validates_steps() -> None:
@@ -261,17 +271,20 @@ def test_planned_action_snapshot_fixture_rejects_invalid_fields(
     expected_match: str,
 ) -> None:
     """Verify invalid planned-action fields cannot enter snapshot fixtures."""
-    kwargs: dict[str, object] = {
+    kwargs: _PlannedActionKwargs = {
         "action_id": "a1",
         "action_kind": ActionKind.GENERATE_SHOW_NOTES,
         "rationale": "test",
         "model_tier": ModelTier.EXECUTION,
         "required_inputs": ("script_tei_xml",),
     }
-    kwargs[field_name] = field_value
+    if field_name == "rationale":
+        kwargs["rationale"] = typ.cast("str", field_value)
+    else:
+        kwargs["required_inputs"] = typ.cast("tuple[str, ...]", field_value)
 
     with pytest.raises(ValueError, match=expected_match):
-        PlannedAction(**typ.cast("typ.Any", kwargs))
+        PlannedAction(**kwargs)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -344,7 +357,7 @@ def test_generation_orchestration_result_with_show_notes_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot orchestration aggregation with nested show-note tool output."""
-    show_notes = make_show_notes_result(entries=(make_show_notes_entry(),))
+    show_notes = _make_show_notes_result(entries=(_make_show_notes_entry(),))
     result = _make_orchestration_result(
         _OrchestrationResultSpec(
             rationale="Generate listener-facing notes from canonical TEI.",
@@ -443,6 +456,9 @@ def test_generation_orchestration_fixture_total_usage_property(
         planner[1] + action[1],
         planner[2] + action[2],
     )
+    assert result.total_usage.total_tokens == (
+        result.total_usage.input_tokens + result.total_usage.output_tokens
+    ), f"expected internally consistent total usage, got {result.total_usage!r}"
 
 
 def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:

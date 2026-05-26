@@ -181,19 +181,24 @@ def _usage_from_counts(input_tokens: int, output_tokens: int) -> LLMUsage:
     )
 
 
-usage_strategy = st.builds(
+def _usage_count_tuple(input_tokens: int, output_tokens: int) -> tuple[int, int, int]:
+    """Build internally consistent raw token usage counts."""
+    return (input_tokens, output_tokens, input_tokens + output_tokens)
+
+
+usage_strategy: st.SearchStrategy[LLMUsage] = st.builds(
     _usage_from_counts,
     input_tokens=st.integers(min_value=0, max_value=10_000),
     output_tokens=st.integers(min_value=0, max_value=10_000),
 )
 
-usage_counts_strategy = st.tuples(
-    st.integers(min_value=0, max_value=1_000_000),
-    st.integers(min_value=0, max_value=1_000_000),
-    st.integers(min_value=0, max_value=2_000_000),
+usage_counts_strategy: st.SearchStrategy[tuple[int, int, int]] = st.builds(
+    _usage_count_tuple,
+    input_tokens=st.integers(min_value=0, max_value=1_000_000),
+    output_tokens=st.integers(min_value=0, max_value=1_000_000),
 )
 
-planned_action_strategy = st.builds(
+planned_action_strategy: st.SearchStrategy[PlannedAction] = st.builds(
     PlannedAction,
     action_id=prop_text,
     action_kind=st.just(ActionKind.GENERATE_SHOW_NOTES),
@@ -202,7 +207,7 @@ planned_action_strategy = st.builds(
     required_inputs=st.lists(prop_text, max_size=4).map(tuple),
 )
 
-execution_plan_strategy = st.builds(
+execution_plan_strategy: st.SearchStrategy[ExecutionPlan] = st.builds(
     ExecutionPlan,
     plan_version=prop_text,
     selected_planning_model=prop_text,
@@ -210,7 +215,7 @@ execution_plan_strategy = st.builds(
     steps=st.lists(planned_action_strategy, min_size=1, max_size=4).map(tuple),
 )
 
-planner_result_strategy = st.builds(
+planner_result_strategy: st.SearchStrategy[PlannerResult] = st.builds(
     PlannerResult,
     plan=execution_plan_strategy,
     usage=st.one_of(st.none(), usage_strategy),
@@ -219,7 +224,7 @@ planner_result_strategy = st.builds(
     finish_reason=st.one_of(st.none(), prop_text),
 )
 
-action_result_strategy = st.builds(
+action_result_strategy: st.SearchStrategy[ActionExecutionResult] = st.builds(
     ActionExecutionResult,
     action_id=prop_text,
     action_kind=st.just(ActionKind.GENERATE_SHOW_NOTES),

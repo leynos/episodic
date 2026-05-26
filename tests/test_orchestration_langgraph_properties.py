@@ -147,11 +147,17 @@ def test_build_generation_result_total_usage_property(
 
     result = build_generation_result(planner_result, tuple(actions))
 
-    assert result.total_usage == LLMUsage(
+    expected_usage = LLMUsage(
         planner[0] + action[0],
         planner[1] + action[1],
         planner[2] + action[2],
     )
+    assert result.total_usage == expected_usage, (
+        f"expected total usage {expected_usage!r}, got {result.total_usage!r}"
+    )
+    assert result.total_usage.total_tokens == (
+        result.total_usage.input_tokens + result.total_usage.output_tokens
+    ), f"expected internally consistent total usage, got {result.total_usage!r}"
 
 
 @given(
