@@ -1,0 +1,124 @@
+"""Property tests for orchestration snapshot fixture validation boundaries.
+
+These tests complement the Syrupy snapshot assertions by varying invalid DTO
+inputs across ranges. They focus on timestamp, whitespace, and type validation
+so fixture builders cannot silently accept malformed values before
+serialisation.
+"""
+
+import re
+import typing as typ
+
+import hypothesis.strategies as st
+import pytest
+from hypothesis import given, settings
+
+from episodic.orchestration import ActionKind, ModelTier, PlannedAction
+from tests._generation_orchestration_snapshot_support import _make_show_notes_entry
+
+_ISO_8601_DURATION_PATTERN = re.compile(
+    r"^P(?=.*\d(?:\.\d+)?[YMWDHS])"
+    r"(?:\d+(?:\.\d+)?W|"
+    r"(?:\d+(?:\.\d+)?Y)?"
+    r"(?:\d+(?:\.\d+)?M)?"
+    r"(?:\d+(?:\.\d+)?D)?"
+    r"(?:T"
+    r"(?:\d+(?:\.\d+)?H)?"
+    r"(?:\d+(?:\.\d+)?M)?"
+    r"(?:\d+(?:\.\d+)?S)?"
+    r")?"
+    r")$"
+)
+_NON_ISO_TIMESTAMP_STRINGS = st.text(max_size=32).filter(
+    lambda value: _ISO_8601_DURATION_PATTERN.fullmatch(value) is None
+)
+_WHITESPACE_STRINGS = st.text(alphabet=" \t\n\r\f\v", min_size=1, max_size=16)
+_INVALID_DTO_FIELD_TYPES = st.one_of(
+    st.none(),
+    st.booleans(),
+    st.integers(),
+    st.floats(allow_nan=False, allow_infinity=False),
+    st.lists(st.text(max_size=8), max_size=3),
+    st.dictionaries(st.text(max_size=8), st.integers(), max_size=3),
+)
+
+
+@given(timestamp=_NON_ISO_TIMESTAMP_STRINGS)
+@settings(max_examples=50)
+def test_show_notes_entry_rejects_arbitrary_non_iso8601_timestamps(
+    timestamp: str,
+) -> None:
+    """Verify timestamp validation rejects arbitrary non-ISO strings."""
+    with pytest.raises(ValueError, match="timestamp"):
+        _make_show_notes_entry(timestamp=timestamp)
+
+
+@given(timestamp=_INVALID_DTO_FIELD_TYPES)
+@settings(max_examples=25)
+def test_show_notes_entry_rejects_invalid_timestamp_types(timestamp: object) -> None:
+    """Verify timestamp validation rejects non-string, non-None values."""
+    if timestamp is None:
+        timestamp = object()
+
+    with pytest.raises(TypeError, match="expected string or bytes-like object"):
+        _make_show_notes_entry(timestamp=typ.cast("str", timestamp))
+
+
+@given(value=_WHITESPACE_STRINGS)
+@settings(max_examples=25)
+def test_planned_action_rejects_arbitrary_whitespace_rationale(
+    value: str,
+) -> None:
+    """Verify rationale validation rejects arbitrary whitespace strings."""
+    with pytest.raises(ValueError, match="rationale must be a non-empty string"):
+        PlannedAction(
+            action_id="a1",
+            action_kind=ActionKind.GENERATE_SHOW_NOTES,
+            rationale=value,
+            model_tier=ModelTier.EXECUTION,
+            required_inputs=("script_tei_xml",),
+        )
+
+
+@given(value=_WHITESPACE_STRINGS)
+@settings(max_examples=25)
+def test_planned_action_rejects_arbitrary_whitespace_required_inputs(
+    value: str,
+) -> None:
+    """Verify required input validation rejects arbitrary whitespace strings."""
+    with pytest.raises(ValueError, match="required_inputs must be a non-empty string"):
+        PlannedAction(
+            action_id="a1",
+            action_kind=ActionKind.GENERATE_SHOW_NOTES,
+            rationale="test",
+            model_tier=ModelTier.EXECUTION,
+            required_inputs=(value,),
+        )
+
+
+@given(value=_INVALID_DTO_FIELD_TYPES)
+@settings(max_examples=25)
+def test_planned_action_rejects_invalid_rationale_types(value: object) -> None:
+    """Verify rationale validation rejects arbitrary non-string values."""
+    with pytest.raises(ValueError, match="rationale must be a non-empty string"):
+        PlannedAction(
+            action_id="a1",
+            action_kind=ActionKind.GENERATE_SHOW_NOTES,
+            rationale=typ.cast("str", value),
+            model_tier=ModelTier.EXECUTION,
+            required_inputs=("script_tei_xml",),
+        )
+
+
+@given(value=_INVALID_DTO_FIELD_TYPES)
+@settings(max_examples=25)
+def test_planned_action_rejects_invalid_required_input_types(value: object) -> None:
+    """Verify required input validation rejects arbitrary non-string items."""
+    with pytest.raises(ValueError, match="required_inputs must be a non-empty string"):
+        PlannedAction(
+            action_id="a1",
+            action_kind=ActionKind.GENERATE_SHOW_NOTES,
+            rationale="test",
+            model_tier=ModelTier.EXECUTION,
+            required_inputs=typ.cast("tuple[str, ...]", (value,)),
+        )
