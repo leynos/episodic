@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures as cf
-import threading
-import typing as typ
 from unittest import mock
 
 import pytest
@@ -13,14 +11,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import episodic.concurrent_interpreters as ci
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
-
-def _square(value: int) -> int:
-    """Return the square of a generated executor input."""
-    return value * value
+from tests.conftest import BlockingMapExecutor as _BlockingMapExecutor
+from tests.conftest import square_executor_value as _square
 
 
 def _raise_on_negative(value: int) -> int:
@@ -29,40 +21,6 @@ def _raise_on_negative(value: int) -> int:
         msg = "negative values are rejected"
         raise ValueError(msg)
     return value
-
-
-class _BlockingMapExecutor(cf.Executor):
-    """Executor test double that exposes map/shutdown ordering."""
-
-    def __init__(self) -> None:
-        self.map_started = threading.Event()
-        self.release_map = threading.Event()
-        self.shutdown_called = threading.Event()
-
-    def map(
-        self,
-        fn: cabc.Callable[..., int],
-        *iterables: cabc.Iterable[typ.Any],
-        **kwargs: object,
-    ) -> cabc.Iterator[int]:
-        """Block mapped work until the test releases it."""
-        del kwargs
-        items = tuple(typ.cast("cabc.Iterable[int]", iterables[0]))
-        self.map_started.set()
-        if not self.release_map.wait(timeout=5):
-            msg = "Timed out waiting for test to release executor.map()."
-            raise TimeoutError(msg)
-        return iter(fn(item) for item in items)
-
-    def shutdown(
-        self,
-        wait: bool = True,  # noqa: FBT001, FBT002
-        *,
-        cancel_futures: bool = False,
-    ) -> None:
-        """Record that shutdown reached the underlying executor."""
-        del wait, cancel_futures
-        self.shutdown_called.set()
 
 
 @settings(max_examples=25, deadline=None)

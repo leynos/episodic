@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures as cf
 import operator
-import threading
 import typing as typ
 from unittest import mock
 
@@ -14,14 +13,11 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import episodic.concurrent_interpreters as ci
+from tests.conftest import BlockingMapExecutor as _BlockingMapExecutor
+from tests.conftest import square_executor_value as _square
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-
-def _square(value: int) -> int:
-    """Return the square of a generated executor input."""
-    return value * value
 
 
 def _explode_on_three(value: int) -> int:
@@ -42,40 +38,6 @@ _ORDERED_MAP_TASKS: dict[str, cabc.Callable[[int], int]] = {
     "negate": typ.cast("cabc.Callable[[int], int]", operator.neg),
     "square": _square,
 }
-
-
-class _BlockingMapExecutor(cf.Executor):
-    """Executor test double that exposes map/shutdown ordering."""
-
-    def __init__(self) -> None:
-        self.map_started = threading.Event()
-        self.release_map = threading.Event()
-        self.shutdown_called = threading.Event()
-
-    def map(
-        self,
-        fn: cabc.Callable[..., int],
-        *iterables: cabc.Iterable[typ.Any],
-        **kwargs: object,
-    ) -> cabc.Iterator[int]:
-        """Block mapped work until the test releases it."""
-        del kwargs
-        items = tuple(typ.cast("cabc.Iterable[int]", iterables[0]))
-        self.map_started.set()
-        if not self.release_map.wait(timeout=5):
-            msg = "Timed out waiting for test to release executor.map()."
-            raise TimeoutError(msg)
-        return iter(fn(item) for item in items)
-
-    def shutdown(
-        self,
-        wait: bool = True,  # noqa: FBT001, FBT002
-        *,
-        cancel_futures: bool = False,
-    ) -> None:
-        """Record that shutdown reached the underlying executor."""
-        del wait, cancel_futures
-        self.shutdown_called.set()
 
 
 @pytest.mark.asyncio
@@ -245,6 +207,7 @@ def test_interpreter_executor_shutdown_is_idempotent() -> None:
 
     executor.shutdown()
     executor.shutdown()
+    assert executor._is_shutdown is True
 
 
 @pytest.mark.asyncio

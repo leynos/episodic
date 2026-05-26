@@ -51,7 +51,16 @@ class CpuTaskExecutorMetricsPort(typ.Protocol):
         *,
         labels: cabc.Mapping[str, str],
     ) -> None:
-        """Observe a latency or gauge-like measurement in milliseconds."""
+        """Observe a latency measurement in milliseconds."""
+
+    def observe_value(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Observe a non-latency numeric measurement."""
 
 
 class CpuTaskExecutorClockPort(typ.Protocol):
@@ -81,6 +90,15 @@ class _NoopCpuTaskExecutorMetrics:
         labels: cabc.Mapping[str, str],
     ) -> None:
         """Ignore latency observations."""
+
+    def observe_value(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Ignore non-latency observations."""
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -293,12 +311,12 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                     _METRIC_MAP_CALLS,
                     labels={"outcome": "success"},
                 )
-                self._metrics.observe_latency_ms(
+                self._metrics.observe_value(
                     _METRIC_MAP_ITEMS,
                     float(len(items)),
                     labels={"outcome": "success"},
                 )
-                self._metrics.observe_latency_ms(
+                self._metrics.observe_value(
                     _METRIC_POOL_UTILIZATION,
                     float(len(items)),
                     labels={"outcome": "success"},

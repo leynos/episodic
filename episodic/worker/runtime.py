@@ -100,10 +100,7 @@ def _parse_positive_int(
     key: str,
     default: int,
 ) -> int:
-    """Parse a positive-integer environment variable.
-
-    Raise RuntimeError if the configured value is invalid.
-    """
+    """Parse a positive-integer environment variable."""
     value = environ.get(key)
     if value is None or not value.strip():
         return default

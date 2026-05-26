@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures as cf
 import dataclasses as dc
 import os
+import threading
 import typing as typ
 
 import pytest
@@ -77,6 +78,45 @@ class FakeCpuDiagnostic:
 def double_worker_value(value: int) -> int:
     """Double an integer for worker fan-out tests."""
     return value * 2
+
+
+def square_executor_value(value: int) -> int:
+    """Return the square of a generated executor input."""
+    return value * value
+
+
+class BlockingMapExecutor(cf.Executor):
+    """Executor test double that exposes map/shutdown ordering."""
+
+    def __init__(self) -> None:
+        self.map_started = threading.Event()
+        self.release_map = threading.Event()
+        self.shutdown_called = threading.Event()
+
+    def map(
+        self,
+        fn: cabc.Callable[..., int],
+        *iterables: cabc.Iterable[typ.Any],
+        **kwargs: object,
+    ) -> cabc.Iterator[int]:
+        """Block mapped work until the test releases it."""
+        del kwargs
+        items = tuple(typ.cast("cabc.Iterable[int]", iterables[0]))
+        self.map_started.set()
+        if not self.release_map.wait(timeout=5):
+            msg = "Timed out waiting for test to release executor.map()."
+            raise TimeoutError(msg)
+        return iter(fn(item) for item in items)
+
+    def shutdown(
+        self,
+        wait: bool = True,  # noqa: FBT001, FBT002
+        *,
+        cancel_futures: bool = False,
+    ) -> None:
+        """Record that shutdown reached the underlying executor."""
+        del wait, cancel_futures
+        self.shutdown_called.set()
 
 
 async def cpu_task_inner_fan_out(items: tuple[int, ...]) -> list[int]:

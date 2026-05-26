@@ -44,7 +44,17 @@ class _FakeCpuTaskExecutorMetrics:
         *,
         labels: cabc.Mapping[str, str],
     ) -> None:
-        """Record an observed measurement."""
+        """Record an observed latency measurement."""
+        self.observations.append((name, value, dict(labels)))
+
+    def observe_value(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Record an observed non-latency measurement."""
         self.observations.append((name, value, dict(labels)))
 
 
