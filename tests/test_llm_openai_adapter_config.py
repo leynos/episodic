@@ -12,7 +12,9 @@ import pytest
 from episodic.llm import LLMTokenBudget
 
 if typ.TYPE_CHECKING:
-    from openai_test_types import _OpenAIInvalidConfigBuilder
+    from syrupy.assertion import SnapshotAssertion
+
+    from openai_test_types import _OpenAIInvalidConfigBuilder, _OpenAILogSpy
 
 
 @pytest.mark.parametrize(
@@ -39,6 +41,18 @@ def test_openai_adapter_config_rejects_invalid_values(
     """Configuration invariants should fail eagerly at construction time."""
     with pytest.raises(ValueError, match=match):
         _ = openai_invalid_config_builder(config_kwargs)
+
+
+def test_openai_adapter_config_rejection_log_snapshot(
+    openai_invalid_config_builder: _OpenAIInvalidConfigBuilder,
+    openai_log_spy: _OpenAILogSpy,
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Rejected adapter config should emit stable structured diagnostics."""
+    with pytest.raises(ValueError, match="chars_per_token"):
+        _ = openai_invalid_config_builder({"chars_per_token": 0})
+
+    assert openai_log_spy.messages == snapshot
 
 
 def test_openai_invalid_config_builder_accepts_provider_operation_override(

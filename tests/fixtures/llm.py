@@ -28,11 +28,34 @@ if typ.TYPE_CHECKING:
         _OpenAIAdapterFactory,
         _OpenAIInvalidConfigBuilder,
         _OpenAIJsonResponseBuilder,
+        _OpenAILogSpy,
         _OpenAIRequestBuilder,
     )
 
 _OPENAI_TEST_BASE_URL = "https://example.test/v1"
 _OPENAI_TEST_API_KEY = "test-key"
+
+
+class _OpenAIAdapterLogSpy:
+    """Collect structured OpenAI adapter error log payloads."""
+
+    def __init__(self) -> None:
+        """Initialise an empty message list."""
+        self.messages: list[str] = []
+
+    def error(self, message: str) -> None:
+        """Record one ERROR-level log message."""
+        self.messages.append(message)
+
+
+@pytest.fixture
+def openai_log_spy(monkeypatch: pytest.MonkeyPatch) -> _OpenAILogSpy:
+    """Capture OpenAI adapter structured error logs without async handlers."""
+    from episodic.llm.openai_api import utils as openai_utils
+
+    spy = _OpenAIAdapterLogSpy()
+    monkeypatch.setattr(openai_utils, "_log", spy)
+    return spy
 
 
 @pytest.fixture

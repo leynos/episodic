@@ -119,7 +119,7 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         response = _normalize_payload(response_payload, operation)
 
         if token_budget is not None:
-            _validate_usage_budget(response, token_budget)
+            _validate_usage_budget(response, token_budget, operation)
         return response
 
     async def _send_with_retries(

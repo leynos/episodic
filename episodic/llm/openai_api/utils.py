@@ -111,18 +111,46 @@ def _validate_preflight_budget(
             raise LLMTokenBudgetExceededError(msg)
 
 
-def _validate_usage_budget(response: LLMResponse, token_budget: LLMTokenBudget) -> None:
+def _validate_usage_budget(
+    response: LLMResponse,
+    token_budget: LLMTokenBudget,
+    operation: LLMProviderOperation,
+) -> None:
     """Reject responses whose actual usage exceeds the configured budget."""
     if response.usage.input_tokens > token_budget.max_input_tokens:
         msg = (
             "Provider usage exceeded input token budget: "
             f"{response.usage.input_tokens} > {token_budget.max_input_tokens}."
         )
+        _log_error_event(
+            "openai_adapter.usage_budget_exceeded",
+            reason="input",
+            model=response.model,
+            provider_operation=_operation_label(operation),
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            total_tokens=response.usage.total_tokens,
+            max_input_tokens=token_budget.max_input_tokens,
+            max_output_tokens=token_budget.max_output_tokens,
+            max_total_tokens=token_budget.max_total_tokens,
+        )
         raise LLMTokenBudgetExceededError(msg)
     if response.usage.output_tokens > token_budget.max_output_tokens:
         msg = (
             "Provider usage exceeded output token budget: "
             f"{response.usage.output_tokens} > {token_budget.max_output_tokens}."
+        )
+        _log_error_event(
+            "openai_adapter.usage_budget_exceeded",
+            reason="output",
+            model=response.model,
+            provider_operation=_operation_label(operation),
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            total_tokens=response.usage.total_tokens,
+            max_input_tokens=token_budget.max_input_tokens,
+            max_output_tokens=token_budget.max_output_tokens,
+            max_total_tokens=token_budget.max_total_tokens,
         )
         raise LLMTokenBudgetExceededError(msg)
     if (
@@ -132,6 +160,18 @@ def _validate_usage_budget(response: LLMResponse, token_budget: LLMTokenBudget) 
         msg = (
             "Provider usage exceeded total token budget: "
             f"{response.usage.total_tokens} > {token_budget.max_total_tokens}."
+        )
+        _log_error_event(
+            "openai_adapter.usage_budget_exceeded",
+            reason="total",
+            model=response.model,
+            provider_operation=_operation_label(operation),
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            total_tokens=response.usage.total_tokens,
+            max_input_tokens=token_budget.max_input_tokens,
+            max_output_tokens=token_budget.max_output_tokens,
+            max_total_tokens=token_budget.max_total_tokens,
         )
         raise LLMTokenBudgetExceededError(msg)
 

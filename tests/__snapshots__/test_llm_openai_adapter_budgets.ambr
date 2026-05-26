@@ -1,0 +1,11 @@
+# serializer version: 1
+# name: test_generate_preflight_budget_rejection_log_snapshot
+  list([
+    '{"chars_per_token": 4.0, "estimated_input_tokens": 2502, "event": "openai_adapter.preflight_budget_exceeded", "max_input_tokens": 20, "max_output_tokens": 10, "max_total_tokens": 40, "model": "gpt-4o-mini", "provider_operation": "default", "reason": "input"}',
+  ])
+# ---
+# name: test_generate_usage_budget_rejection_log_snapshot
+  list([
+    '{"event": "openai_adapter.usage_budget_exceeded", "input_tokens": 200, "max_input_tokens": 400, "max_output_tokens": 200, "max_total_tokens": 250, "model": "gpt-4o-mini", "output_tokens": 100, "provider_operation": "chat_completions", "reason": "total", "total_tokens": 300}',
+  ])
+# ---
