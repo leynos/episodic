@@ -104,6 +104,16 @@ def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
     )
 
 
+@pytest.fixture
+def usage_budget_transport(
+    request: pytest.FixtureRequest,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+) -> httpx.MockTransport:
+    """Build a mock transport for parametrized usage-budget payloads."""
+    response_payload = typ.cast("dict[str, object]", request.param)
+    return httpx.MockTransport(lambda _r: openai_json_response(response_payload))
+
+
 @pytest.mark.asyncio
 async def test_generate_rejects_prompt_that_exceeds_input_budget(
     openai_adapter_factory: _OpenAIAdapterFactory,
@@ -159,31 +169,34 @@ async def test_generate_preflight_budget_rejection_log_snapshot(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "usage_budget_transport",
+    [
+        pytest.param(_OVER_BUDGET_USAGE_PAYLOAD, id="canonical-usage"),
+        pytest.param(
+            {
+                "id": "chatcmpl-790",
+                "model": "gpt-4o-mini",
+                "choices": [{"message": {"content": "Still too expensive."}}],
+                "usage": {
+                    "prompt_tokens": 180,
+                    "completion_tokens": 120,
+                    "total_tokens": 300,
+                },
+            },
+            id="alternate-usage",
+        ),
+    ],
+    indirect=True,
+)
 async def test_generate_rejects_response_usage_that_exceeds_total_budget(
     openai_adapter_factory: _OpenAIAdapterFactory,
-    openai_json_response: _OpenAIJsonResponseBuilder,
-) -> None:
-    """Reject provider responses that break the configured budget."""
-    transport = httpx.MockTransport(
-        lambda _r: openai_json_response(_OVER_BUDGET_USAGE_PAYLOAD)
-    )
-    async with openai_adapter_factory(transport=transport) as adapter:
-        with pytest.raises(LLMTokenBudgetExceededError, match="total token budget"):
-            await adapter.generate(_OVER_BUDGET_USAGE_REQUEST)
-
-
-@pytest.mark.asyncio
-async def test_generate_usage_budget_rejection_log_snapshot(
-    openai_adapter_factory: _OpenAIAdapterFactory,
-    openai_json_response: _OpenAIJsonResponseBuilder,
     openai_log_spy: _OpenAILogSpy,
     snapshot: SnapshotAssertion,
+    usage_budget_transport: httpx.MockTransport,
 ) -> None:
-    """Provider usage budget failures should emit stable structured diagnostics."""
-    transport = httpx.MockTransport(
-        lambda _r: openai_json_response(_OVER_BUDGET_USAGE_PAYLOAD)
-    )
-    async with openai_adapter_factory(transport=transport) as adapter:
+    """Reject provider budget failures and emit stable structured diagnostics."""
+    async with openai_adapter_factory(transport=usage_budget_transport) as adapter:
         with pytest.raises(LLMTokenBudgetExceededError, match="total token budget"):
             await adapter.generate(_OVER_BUDGET_USAGE_REQUEST)
 
