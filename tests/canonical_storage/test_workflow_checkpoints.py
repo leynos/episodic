@@ -15,10 +15,16 @@ import pytest
 import sqlalchemy as sa
 from hypothesis import HealthCheck, given, settings
 
-from episodic.canonical.storage import SqlAlchemyUnitOfWork, WorkflowCheckpointRecord
+from episodic.canonical.storage import (
+    SqlAlchemyUnitOfWork,
+    SqlAlchemyWorkflowCheckpointStore,
+    WorkflowCheckpointRecord,
+)
 from episodic.orchestration import WorkflowCheckpoint
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -45,6 +51,45 @@ def _checkpoint(
 
 
 _short_delays = st.sampled_from((0.0, 0.001, 0.005))
+
+
+class _RecordingMetrics:
+    """Capture checkpoint metrics for adapter assertions."""
+
+    def __init__(self) -> None:
+        self.counters: list[tuple[str, dict[str, str]]] = []
+        self.latencies: list[tuple[str, float, dict[str, str]]] = []
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Record a counter increment."""
+        self.counters.append((name, dict(labels)))
+
+    def observe_latency_ms(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Record a latency observation."""
+        self.latencies.append((name, value, dict(labels)))
+
+
+class _StepClock:
+    """Deterministic monotonic clock for metric latency assertions."""
+
+    def __init__(self) -> None:
+        self._seconds = 0.0
+
+    def monotonic_seconds(self) -> float:
+        """Return a timestamp that advances by 1 ms on each call."""
+        self._seconds += 0.001
+        return self._seconds
 
 
 @pytest.mark.asyncio
@@ -113,32 +158,84 @@ async def test_checkpoint_store_reuses_idempotency_key(
 
 
 @pytest.mark.asyncio
+async def test_checkpoint_store_records_checkpoint_metrics(
+    session_factory: object,
+) -> None:
+    """Checkpoint operations should record bounded outcome and latency metrics."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    metrics = _RecordingMetrics()
+    key = "corr-storage:generation_orchestration:execute:metrics:0"
+    checkpoint = _checkpoint(idempotency_key=key)
+    duplicate = _checkpoint(checkpoint_id=str(uuid.uuid4()), idempotency_key=key)
+
+    async with factory() as session:
+        store = SqlAlchemyWorkflowCheckpointStore(
+            session,
+            metrics=metrics,
+            clock=_StepClock(),
+        )
+        first = await store.save_or_reuse(checkpoint)
+        second = await store.save_or_reuse(duplicate)
+        await session.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        stored = await uow.workflow_checkpoints.save_or_reuse(_checkpoint())
+        await uow.commit()
+
+    async with factory() as session:
+        store = SqlAlchemyWorkflowCheckpointStore(
+            session,
+            metrics=metrics,
+            clock=_StepClock(),
+        )
+        await store.mark_resumed(stored.checkpoint_id)
+        with pytest.raises(ValueError, match="unknown checkpoint"):
+            await store.mark_resumed(str(uuid.uuid4()))
+        await session.rollback()
+
+    assert second.checkpoint_id == first.checkpoint_id
+    assert metrics.counters == [
+        (
+            "workflow_checkpoint.save_or_reuse.operations",
+            {"outcome": "persisted"},
+        ),
+        (
+            "workflow_checkpoint.save_or_reuse.idempotency_conflicts",
+            {"outcome": "conflict"},
+        ),
+        ("workflow_checkpoint.save_or_reuse.operations", {"outcome": "reused"}),
+        ("workflow_checkpoint.mark_resumed.operations", {"outcome": "marked"}),
+        (
+            "workflow_checkpoint.mark_resumed.operations",
+            {"outcome": "unknown_checkpoint"},
+        ),
+    ]
+    assert [(name, labels) for name, _value, labels in metrics.latencies] == [
+        (
+            "workflow_checkpoint.save_or_reuse.latency_ms",
+            {"outcome": "persisted"},
+        ),
+        ("workflow_checkpoint.save_or_reuse.latency_ms", {"outcome": "reused"}),
+        ("workflow_checkpoint.mark_resumed.latency_ms", {"outcome": "marked"}),
+        (
+            "workflow_checkpoint.mark_resumed.latency_ms",
+            {"outcome": "unknown_checkpoint"},
+        ),
+    ]
+    assert all(value > 0 for _name, value, _labels in metrics.latencies)
+
+
+@pytest.mark.asyncio
 async def test_checkpoint_store_reuses_concurrent_idempotency_key(
     session_factory: object,
 ) -> None:
     """Concurrent saves with one step key should persist one checkpoint."""
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
     key = "corr-storage:generation_orchestration:execute:action-2:0"
-    first = WorkflowCheckpoint(
-        checkpoint_id=str(uuid.uuid4()),
-        workflow_id="corr-storage",
-        workflow_type="generation_orchestration",
-        step_name="execute",
-        idempotency_key=key,
-        payload={"planner_result": {}},
-    )
-    duplicate = WorkflowCheckpoint(
-        checkpoint_id=str(uuid.uuid4()),
-        workflow_id="corr-storage",
-        workflow_type="generation_orchestration",
-        step_name="execute",
-        idempotency_key=key,
-        payload={"planner_result": {}},
-    )
+    first = _checkpoint(checkpoint_id=str(uuid.uuid4()), idempotency_key=key)
+    duplicate = _checkpoint(checkpoint_id=str(uuid.uuid4()), idempotency_key=key)
 
-    async def save_checkpoint(
-        checkpoint: WorkflowCheckpoint,
-    ) -> WorkflowCheckpoint:
+    async def save_checkpoint(checkpoint: WorkflowCheckpoint) -> WorkflowCheckpoint:
         async with SqlAlchemyUnitOfWork(factory) as uow:
             stored = await uow.workflow_checkpoints.save_or_reuse(checkpoint)
             await uow.commit()

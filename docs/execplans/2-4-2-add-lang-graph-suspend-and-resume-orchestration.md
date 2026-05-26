@@ -757,3 +757,15 @@ API, and screen-reader descriptions now precede the suspend-and-resume sequence
 diagrams. The snapshot import comment was already resolved in the current code
 and required no change. Focused checkpoint, migration-drift, and
 malformed-payload tests passed.
+
+Revision note 2026-05-26: PR #98 / issue #91 follow-up documented checkpoint
+atomicity boundaries in the developer guide. The note records
+`save_or_reuse(...)` first-write-wins convergence through the idempotency key,
+the SQLAlchemy nested-savepoint duplicate-key recovery path, and
+`mark_resumed(...)` unit-of-work semantics for commit versus rollback. The
+SQLAlchemy checkpoint store now emits bounded metrics through the shared
+`MetricsPort` for save-or-reuse outcomes, idempotency conflict rates, operation
+latency, mark-resumed outcomes, and `conflict_missing_checkpoint` recovery
+failures. The developer guide also records the required alert: any non-zero
+`workflow_checkpoint.recovery_failures{reason="conflict_missing_checkpoint"}`
+event indicates failed distributed idempotency recovery and should page.

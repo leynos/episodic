@@ -39,6 +39,8 @@ if typ.TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from episodic.observability import MetricsPort, MonotonicClockPort
+
 logger = get_logger(__name__)
 
 
@@ -78,8 +80,16 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for reusable reference binding persistence.
     """
 
-    def __init__(self, session_factory: cabc.Callable[[], AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: cabc.Callable[[], AsyncSession],
+        *,
+        metrics: MetricsPort | None = None,
+        clock: MonotonicClockPort | None = None,
+    ) -> None:
         self._session_factory = session_factory
+        self._metrics = metrics
+        self._clock = clock
         self._session: AsyncSession | None = None
 
     async def __aenter__(self) -> SqlAlchemyUnitOfWork:
@@ -109,7 +119,11 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             SqlAlchemyReferenceDocumentRevisionRepository(self._session)
         )
         self.reference_bindings = SqlAlchemyReferenceBindingRepository(self._session)
-        self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(self._session)
+        self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
+            self._session,
+            metrics=self._metrics,
+            clock=self._clock,
+        )
         return self
 
     async def __aexit__(

@@ -14,6 +14,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import WorkflowCheckpointStatus
+from episodic.observability import (
+    MetricsPort,
+    MonotonicClockPort,
+    NoopMetrics,
+    PerfCounterClock,
+)
 from episodic.orchestration import WorkflowCheckpoint
 from episodic.orchestration._types import _log_event
 
@@ -21,6 +27,13 @@ from .models import WorkflowCheckpointRecord
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
+_METRIC_SAVE_OPERATIONS = "workflow_checkpoint.save_or_reuse.operations"
+_METRIC_SAVE_CONFLICTS = "workflow_checkpoint.save_or_reuse.idempotency_conflicts"
+_METRIC_SAVE_LATENCY_MS = "workflow_checkpoint.save_or_reuse.latency_ms"
+_METRIC_RESUME_OPERATIONS = "workflow_checkpoint.mark_resumed.operations"
+_METRIC_RESUME_LATENCY_MS = "workflow_checkpoint.mark_resumed.latency_ms"
+_METRIC_RECOVERY_FAILURES = "workflow_checkpoint.recovery_failures"
 
 
 def _map_checkpoint(record: WorkflowCheckpointRecord) -> WorkflowCheckpoint:
@@ -44,8 +57,40 @@ class SqlAlchemyWorkflowCheckpointStore:
     def __init__(
         self,
         session: "AsyncSession",  # noqa: UP037  # AsyncSession is TYPE_CHECKING-only in __init__.
+        *,
+        metrics: MetricsPort | None = None,
+        clock: MonotonicClockPort | None = None,
     ) -> None:
         self._session = session
+        self._metrics = metrics or NoopMetrics()
+        self._clock = clock or PerfCounterClock()
+
+    def _record_counter(self, name: str, *, labels: dict[str, str]) -> None:
+        """Record a bounded-cardinality counter through the injected metrics port."""
+        self._metrics.increment_counter(name, labels=labels)
+
+    def _record_latency(
+        self,
+        name: str,
+        started_at: float,
+        *,
+        labels: dict[str, str],
+    ) -> None:
+        """Record elapsed latency through the injected metrics port."""
+        elapsed_ms = (self._clock.monotonic_seconds() - started_at) * 1000
+        self._metrics.observe_latency_ms(name, elapsed_ms, labels=labels)
+
+    def _record_save_outcome(self, started_at: float, outcome: str) -> None:
+        """Record save-or-reuse metrics."""
+        labels = {"outcome": outcome}
+        self._record_counter(_METRIC_SAVE_OPERATIONS, labels=labels)
+        self._record_latency(_METRIC_SAVE_LATENCY_MS, started_at, labels=labels)
+
+    def _record_resume_outcome(self, started_at: float, outcome: str) -> None:
+        """Record mark-resumed metrics."""
+        labels = {"outcome": outcome}
+        self._record_counter(_METRIC_RESUME_OPERATIONS, labels=labels)
+        self._record_latency(_METRIC_RESUME_LATENCY_MS, started_at, labels=labels)
 
     async def get(self, checkpoint_id: str) -> WorkflowCheckpoint | None:
         """Return a checkpoint by identifier."""
@@ -97,6 +142,7 @@ class SqlAlchemyWorkflowCheckpointStore:
         existing checkpoint for a conflicting key, the storage failure is
         propagated so the caller can retry or fail the suspend attempt.
         """
+        started_at = self._clock.monotonic_seconds()
         record = WorkflowCheckpointRecord(
             id=uuid.UUID(checkpoint.checkpoint_id),
             workflow_id=checkpoint.workflow_id,
@@ -118,20 +164,34 @@ class SqlAlchemyWorkflowCheckpointStore:
                     checkpoint_id=checkpoint.checkpoint_id,
                     idempotency_key=checkpoint.idempotency_key,
                 )
+                self._record_save_outcome(started_at, "persisted")
         except IntegrityError:
             _log_event(
                 "warning",
                 "sql_checkpoint_store.save_or_reuse.idempotency_conflict",
                 idempotency_key=checkpoint.idempotency_key,
             )
+            self._record_counter(
+                _METRIC_SAVE_CONFLICTS,
+                labels={"outcome": "conflict"},
+            )
             existing = await self.get_by_idempotency_key(checkpoint.idempotency_key)
             if existing is not None:
+                self._record_save_outcome(started_at, "reused")
                 return existing
             _log_event(
                 "error",
                 "sql_checkpoint_store.save_or_reuse.conflict_missing_checkpoint",
                 idempotency_key=checkpoint.idempotency_key,
             )
+            self._record_counter(
+                _METRIC_RECOVERY_FAILURES,
+                labels={
+                    "operation": "save_or_reuse",
+                    "reason": "conflict_missing_checkpoint",
+                },
+            )
+            self._record_save_outcome(started_at, "recovery_failure")
             raise
         return _map_checkpoint(record)
 
@@ -147,11 +207,13 @@ class SqlAlchemyWorkflowCheckpointStore:
         ------
             ValueError: If ``checkpoint_id`` does not identify a checkpoint.
         """
+        started_at = self._clock.monotonic_seconds()
         record = await self._session.get(
             WorkflowCheckpointRecord,
             uuid.UUID(checkpoint_id),
         )
         if record is None:
+            self._record_resume_outcome(started_at, "unknown_checkpoint")
             msg = f"unknown checkpoint: {checkpoint_id}"
             raise ValueError(msg)
         record.status = WorkflowCheckpointStatus.RESUMED
@@ -161,5 +223,6 @@ class SqlAlchemyWorkflowCheckpointStore:
             "sql_checkpoint_store.mark_resumed",
             checkpoint_id=checkpoint_id,
         )
+        self._record_resume_outcome(started_at, "marked")
         await self._session.refresh(record)
         return _map_checkpoint(record)
