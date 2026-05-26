@@ -43,6 +43,16 @@ _INVALID_DTO_FIELD_TYPES = st.one_of(
 )
 
 
+class _PlannedActionKwargs(typ.TypedDict):
+    """Keyword arguments for constructing PlannedAction validation cases."""
+
+    action_id: str
+    action_kind: ActionKind
+    rationale: str
+    model_tier: ModelTier
+    required_inputs: tuple[str, ...]
+
+
 @given(timestamp=_NON_ISO_TIMESTAMP_STRINGS)
 @settings(max_examples=50)
 def test_show_notes_entry_rejects_arbitrary_non_iso8601_timestamps(
@@ -64,61 +74,63 @@ def test_show_notes_entry_rejects_invalid_timestamp_types(timestamp: object) -> 
         _make_show_notes_entry(timestamp=typ.cast("str", timestamp))
 
 
+@pytest.mark.parametrize(
+    ("field_name", "error_match"),
+    [
+        ("rationale", "rationale must be a non-empty string"),
+        ("required_inputs", "required_inputs must be a non-empty string"),
+    ],
+)
 @given(value=_WHITESPACE_STRINGS)
 @settings(max_examples=25)
-def test_planned_action_rejects_arbitrary_whitespace_rationale(
+def test_planned_action_rejects_arbitrary_whitespace_fields(
+    field_name: str,
+    error_match: str,
     value: str,
 ) -> None:
-    """Verify rationale validation rejects arbitrary whitespace strings."""
-    with pytest.raises(ValueError, match="rationale must be a non-empty string"):
-        PlannedAction(
-            action_id="a1",
-            action_kind=ActionKind.GENERATE_SHOW_NOTES,
-            rationale=value,
-            model_tier=ModelTier.EXECUTION,
-            required_inputs=("script_tei_xml",),
-        )
+    """Verify PlannedAction rejects arbitrary whitespace-only field values."""
+    kwargs: _PlannedActionKwargs = {
+        "action_id": "a1",
+        "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+        "rationale": "test",
+        "model_tier": ModelTier.EXECUTION,
+        "required_inputs": ("script_tei_xml",),
+    }
+    if field_name == "rationale":
+        kwargs["rationale"] = value
+    else:
+        kwargs["required_inputs"] = (value,)
+
+    with pytest.raises(ValueError, match=error_match):
+        PlannedAction(**kwargs)
 
 
-@given(value=_WHITESPACE_STRINGS)
+@pytest.mark.parametrize(
+    ("field_name", "error_match"),
+    [
+        ("rationale", "rationale must be a non-empty string"),
+        ("required_inputs", "required_inputs must be a non-empty string"),
+    ],
+)
+@given(value=_INVALID_DTO_FIELD_TYPES)
 @settings(max_examples=25)
-def test_planned_action_rejects_arbitrary_whitespace_required_inputs(
-    value: str,
+def test_planned_action_rejects_invalid_field_types(
+    field_name: str,
+    error_match: str,
+    value: object,
 ) -> None:
-    """Verify required input validation rejects arbitrary whitespace strings."""
-    with pytest.raises(ValueError, match="required_inputs must be a non-empty string"):
-        PlannedAction(
-            action_id="a1",
-            action_kind=ActionKind.GENERATE_SHOW_NOTES,
-            rationale="test",
-            model_tier=ModelTier.EXECUTION,
-            required_inputs=(value,),
-        )
+    """Verify PlannedAction rejects arbitrary invalid field types."""
+    kwargs: _PlannedActionKwargs = {
+        "action_id": "a1",
+        "action_kind": ActionKind.GENERATE_SHOW_NOTES,
+        "rationale": "test",
+        "model_tier": ModelTier.EXECUTION,
+        "required_inputs": ("script_tei_xml",),
+    }
+    if field_name == "rationale":
+        kwargs["rationale"] = typ.cast("str", value)
+    else:
+        kwargs["required_inputs"] = typ.cast("tuple[str, ...]", (value,))
 
-
-@given(value=_INVALID_DTO_FIELD_TYPES)
-@settings(max_examples=25)
-def test_planned_action_rejects_invalid_rationale_types(value: object) -> None:
-    """Verify rationale validation rejects arbitrary non-string values."""
-    with pytest.raises(ValueError, match="rationale must be a non-empty string"):
-        PlannedAction(
-            action_id="a1",
-            action_kind=ActionKind.GENERATE_SHOW_NOTES,
-            rationale=typ.cast("str", value),
-            model_tier=ModelTier.EXECUTION,
-            required_inputs=("script_tei_xml",),
-        )
-
-
-@given(value=_INVALID_DTO_FIELD_TYPES)
-@settings(max_examples=25)
-def test_planned_action_rejects_invalid_required_input_types(value: object) -> None:
-    """Verify required input validation rejects arbitrary non-string items."""
-    with pytest.raises(ValueError, match="required_inputs must be a non-empty string"):
-        PlannedAction(
-            action_id="a1",
-            action_kind=ActionKind.GENERATE_SHOW_NOTES,
-            rationale="test",
-            model_tier=ModelTier.EXECUTION,
-            required_inputs=typ.cast("tuple[str, ...]", (value,)),
-        )
+    with pytest.raises(ValueError, match=error_match):
+        PlannedAction(**kwargs)
