@@ -80,7 +80,7 @@ def _decode_json_response(  # pylint: disable=no-else-raise  # keep decode and s
     """Decode and validate the JSON body of a provider response."""
     try:
         payload = response.json()
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         msg = "Provider returned malformed JSON."
         raise LLMProviderResponseError(msg) from exc
     else:

@@ -236,6 +236,19 @@ async def test_generate_rejects_malformed_json_response(
 
 
 @pytest.mark.asyncio
+async def test_generate_rejects_malformed_json_bytes_response(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_request_builder: _OpenAIRequestBuilder,
+) -> None:
+    """Invalidly encoded provider JSON bytes use the malformed JSON error path."""
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(_static_content_handler(b"\xff"))
+    ) as adapter:
+        with pytest.raises(LLMProviderResponseError, match="malformed JSON"):
+            await adapter.generate(openai_request_builder())
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("payload", [["not an object"], "scalar", 123])
 async def test_generate_rejects_non_object_json_response(
     payload: object,

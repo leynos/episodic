@@ -22,8 +22,11 @@ if typ.TYPE_CHECKING:
     ("config_kwargs", "match"),
     [
         ({"max_attempts": 0}, "max_attempts"),
+        ({"max_attempts": "3"}, "max_attempts"),
         ({"retry_delay_seconds": -1}, "retry_delay_seconds"),
+        ({"retry_delay_seconds": None}, "retry_delay_seconds"),
         ({"timeout_seconds": 0}, "timeout_seconds"),
+        ({"timeout_seconds": "10"}, "timeout_seconds"),
         ({"chars_per_token": 0}, "chars_per_token"),
         ({"chars_per_token": -1.0}, "chars_per_token"),
         ({"chars_per_token": float("nan")}, "chars_per_token"),
@@ -73,6 +76,29 @@ def test_openai_adapter_config_type_rejection_logs_stable_event(
     assert payload["base_url_configured"] is False
     assert payload["api_key_configured"] is True
     assert payload["chars_per_token"] == repr(4.0)
+
+
+@pytest.mark.parametrize(
+    ("config_kwargs", "field"),
+    [
+        ({"max_attempts": "3"}, "max_attempts"),
+        ({"retry_delay_seconds": None}, "retry_delay_seconds"),
+        ({"timeout_seconds": "10"}, "timeout_seconds"),
+    ],
+)
+def test_openai_adapter_numeric_config_type_rejections_log_stable_event(
+    config_kwargs: dict[str, object],
+    field: str,
+    openai_invalid_config_builder: _OpenAIInvalidConfigBuilder,
+    openai_log_spy: _OpenAILogSpy,
+) -> None:
+    """Wrong-typed numeric config values should use the standard event."""
+    with pytest.raises(ValueError, match=field):
+        _ = openai_invalid_config_builder(config_kwargs)
+
+    payload = json.loads(openai_log_spy.messages[0])
+    assert payload["event"] == "openai_adapter.config_rejected"
+    assert payload["field"] == field
 
 
 def test_openai_invalid_config_builder_accepts_provider_operation_override(
