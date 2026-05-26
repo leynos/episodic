@@ -15,6 +15,13 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 
+def _shutdown_if_supported(executor: ci.CpuTaskExecutor) -> None:
+    """Shut down executor implementations that own runtime resources."""
+    shutdown = getattr(executor, "shutdown", None)
+    if shutdown is not None:
+        shutdown()
+
+
 @dc.dataclass(slots=True)
 class _FakeCpuTaskExecutorMetrics:
     """Capture executor metrics for observability assertions."""
@@ -136,8 +143,11 @@ def test_builder_records_executor_selection_metrics(
     """Builder fallback and pool selections increment bounded counters."""
     metrics = _FakeCpuTaskExecutorMetrics()
 
-    ci.build_cpu_task_executor_from_environment({}, metrics=metrics)
-    ci.build_cpu_task_executor_from_environment(
+    disabled_executor = ci.build_cpu_task_executor_from_environment(
+        {},
+        metrics=metrics,
+    )
+    unsupported_executor = ci.build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
         capability_check=lambda: False,
         metrics=metrics,
@@ -161,6 +171,8 @@ def test_builder_records_executor_selection_metrics(
         "cpu_task_executor.selections",
         {"executor": "interpreter_pool", "reason": "enabled"},
     ) in metrics.counters
+    _shutdown_if_supported(disabled_executor)
+    _shutdown_if_supported(unsupported_executor)
     executor.shutdown()
 
 

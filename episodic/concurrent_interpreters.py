@@ -19,7 +19,7 @@ import typing as typ
 
 _InputT = typ.TypeVar("_InputT")
 _OutputT = typ.TypeVar("_OutputT")
-InterpreterPoolCapability = cabc.Callable[[], bool]
+type InterpreterPoolCapability = cabc.Callable[[], bool]
 
 _INTERPRETER_POOL_FEATURE_FLAG = "EPISODIC_USE_INTERPRETER_POOL"
 _INTERPRETER_POOL_MAX_WORKERS_ENV = "EPISODIC_INTERPRETER_POOL_MAX_WORKERS"
@@ -388,6 +388,7 @@ __all__ = [
     "CpuTaskExecutorClockPort",
     "CpuTaskExecutorMetricsPort",
     "InlineCpuTaskExecutor",
+    "InterpreterPoolCapability",
     "InterpreterPoolCpuTaskExecutor",
     "build_cpu_task_executor_from_environment",
     "interpreter_pool_supported",

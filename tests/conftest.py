@@ -110,6 +110,7 @@ class BlockingMapExecutor(cf.Executor):
 
     def shutdown(
         self,
+        # Suppression matches concurrent.futures.Executor.shutdown.
         wait: bool = True,  # noqa: FBT001, FBT002
         *,
         cancel_futures: bool = False,
