@@ -18,7 +18,7 @@ from episodic.orchestration import (
 )
 
 
-class UnusedLLMPort:
+class _UnusedLLMPort:
     """LLM shim only required for constructing `StructuredGenerationPlanner`."""
 
     @staticmethod
@@ -28,10 +28,10 @@ class UnusedLLMPort:
             "StructuredGenerationPlanner.build_prompt snapshot harness must "
             f"never await generate ({request=!r})."
         )
-        raise RuntimeError(msg)
+        raise AssertionError(msg)
 
 
-class PlannedActionKwargs(typ.TypedDict):
+class _PlannedActionKwargs(typ.TypedDict):
     """Typed kwargs for planned-action validation probes."""
 
     action_id: str
@@ -42,7 +42,7 @@ class PlannedActionKwargs(typ.TypedDict):
 
 
 @dataclasses.dataclass(frozen=True)
-class OrchestrationResultSpec:
+class _OrchestrationResultSpec:
     """Parameter object for building the canonical orchestration DTO graph."""
 
     rationale: str = "test"
@@ -58,7 +58,7 @@ class OrchestrationResultSpec:
     total_usage: LLMUsage | None = None
 
 
-def make_show_notes_entry(
+def _make_show_notes_entry(
     *,
     topic: str = "Structured planning",
     summary: str = "The episode explains typed orchestration DTOs.",
@@ -74,15 +74,15 @@ def make_show_notes_entry(
     )
 
 
-def make_show_notes_result(
+def _make_show_notes_result(
     *,
     entries: tuple[ShowNotesEntry, ...] | None = None,
 ) -> ShowNotesResult:
     """Build the canonical show-notes result used by nested DTO snapshots."""
     if entries is None:
         entries = (
-            make_show_notes_entry(),
-            make_show_notes_entry(
+            _make_show_notes_entry(),
+            _make_show_notes_entry(
                 topic="Snapshot coverage",
                 summary="The episode covers regression snapshots for DTO output.",
                 timestamp=None,
@@ -98,12 +98,12 @@ def make_show_notes_result(
     )
 
 
-def make_orchestration_result(
-    spec: OrchestrationResultSpec | None = None,
+def _make_orchestration_result(
+    spec: _OrchestrationResultSpec | None = None,
 ) -> GenerationOrchestrationResult:
     """Build the canonical orchestration DTO graph used by snapshots."""
     if spec is None:
-        spec = OrchestrationResultSpec()
+        spec = _OrchestrationResultSpec()
     planned = PlannedAction(
         action_id="a1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
@@ -139,7 +139,7 @@ def make_orchestration_result(
     )
 
 
-def valid_plan_payload() -> dict[str, object]:
+def _valid_plan_payload() -> dict[str, object]:
     """Return one raw planner payload used as the basis for error snapshots."""
     return {
         "plan_version": "1.0",
@@ -155,9 +155,9 @@ def valid_plan_payload() -> dict[str, object]:
     }
 
 
-def valid_plan_step() -> dict[str, object]:
+def _valid_plan_step() -> dict[str, object]:
     """Return the first valid raw planner step for targeted corruption."""
-    steps = valid_plan_payload()["steps"]
+    steps = _valid_plan_payload()["steps"]
     if not isinstance(steps, list):
         msg = f"expected steps list in valid plan payload, got {steps!r}"
         raise TypeError(msg)
@@ -168,25 +168,25 @@ def valid_plan_step() -> dict[str, object]:
     return typ.cast("dict[str, object]", step)
 
 
-def plan_payload_with_step_field(field_name: str, value: object) -> dict[str, object]:
+def _plan_payload_with_step_field(field_name: str, value: object) -> dict[str, object]:
     """Return a planner payload with one step field replaced."""
-    return valid_plan_payload() | {"steps": [valid_plan_step() | {field_name: value}]}
+    return _valid_plan_payload() | {"steps": [_valid_plan_step() | {field_name: value}]}
 
 
-def plan_payload_without_step_field(field_name: str) -> dict[str, object]:
+def _plan_payload_without_step_field(field_name: str) -> dict[str, object]:
     """Return a planner payload with one required step field omitted."""
-    return valid_plan_payload() | {
+    return _valid_plan_payload() | {
         "steps": [
             {
                 key: value
-                for key, value in valid_plan_step().items()
+                for key, value in _valid_plan_step().items()
                 if key != field_name
             }
         ]
     }
 
 
-def capture_plan_format_error(payload: dict[str, object]) -> str:
+def _capture_plan_format_error(payload: dict[str, object]) -> str:
     """Return the structured-planner format error for a malformed payload."""
     try:
         StructuredGenerationPlanner._parse_plan(
