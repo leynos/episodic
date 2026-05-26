@@ -1,4 +1,18 @@
-"""Shared fixtures for generation orchestration snapshot tests."""
+"""Shared fixtures and payload builders for orchestration snapshots.
+
+This module centralises the private helpers used by
+`tests/test_generation_orchestration_snapshots.py` so the Syrupy snapshots stay
+stable, readable, and easy to update. `_UnusedLLMPort` lets
+`StructuredGenerationPlanner` build prompts without calling `generate()`.
+`_OrchestrationResultSpec` parameterises the canonical
+`GenerationOrchestrationResult` graph returned by `_make_orchestration_result`.
+
+The show-notes factories build representative nested DTOs for serialisation
+snapshots. The planner payload builders create valid raw planner payloads and
+targeted mutations for strict parsing error cases. `_capture_plan_format_error`
+runs the parser and returns the normalised `PlanningResponseFormatError` text
+used by the companion snapshot tests.
+"""
 
 import dataclasses
 import typing as typ
