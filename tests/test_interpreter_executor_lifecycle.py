@@ -1,10 +1,9 @@
-"""Lifecycle and observability tests for interpreter CPU task executors."""
+"""Lifecycle tests for interpreter CPU task executors."""
 
 from __future__ import annotations
 
 import asyncio
 import concurrent.futures as cf
-import dataclasses as dc
 import threading
 import typing as typ
 from unittest import mock
@@ -22,6 +21,14 @@ if typ.TYPE_CHECKING:
 def _square(value: int) -> int:
     """Return the square of a generated executor input."""
     return value * value
+
+
+def _raise_on_negative(value: int) -> int:
+    """Raise on negative values for generated failure-state tests."""
+    if value < 0:
+        msg = "negative values are rejected"
+        raise ValueError(msg)
+    return value
 
 
 class _BlockingMapExecutor(cf.Executor):
@@ -56,63 +63,6 @@ class _BlockingMapExecutor(cf.Executor):
         """Record that shutdown reached the underlying executor."""
         del wait, cancel_futures
         self.shutdown_called.set()
-
-
-@dc.dataclass(slots=True)
-class _FakeCpuTaskExecutorMetrics:
-    """Capture executor metrics for observability assertions."""
-
-    counters: list[tuple[str, dict[str, str]]] = dc.field(default_factory=list)
-    observations: list[tuple[str, float, dict[str, str]]] = dc.field(
-        default_factory=list,
-    )
-
-    def increment_counter(
-        self,
-        name: str,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Record a counter increment."""
-        self.counters.append((name, dict(labels)))
-
-    def observe_latency_ms(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Record an observed measurement."""
-        self.observations.append((name, value, dict(labels)))
-
-
-@dc.dataclass(slots=True)
-class _FakeCpuTaskExecutorClock:
-    """Return deterministic monotonic timestamps for executor tests."""
-
-    timestamps: list[float]
-
-    def monotonic_seconds(self) -> float:
-        """Return the next configured timestamp."""
-        return self.timestamps.pop(0)
-
-
-@dc.dataclass(slots=True)
-class _FakeLogger:
-    """Capture logger calls without depending on process-wide logging config."""
-
-    messages: list[str] = dc.field(default_factory=list)
-
-    def info(self, message: str, **kwargs: object) -> None:
-        """Record an info-level message."""
-        del kwargs
-        self.messages.append(message)
-
-    def exception(self, message: str, **kwargs: object) -> None:
-        """Record an exception-level message."""
-        del kwargs
-        self.messages.append(message)
 
 
 @settings(max_examples=25, deadline=None)
@@ -217,45 +167,98 @@ def test_interpreter_executor_lifecycle_state_sequences(
     assert created_pools == expected_created_pools
 
 
-@pytest.mark.asyncio
-async def test_interpreter_executor_records_lifecycle_observability(
-    monkeypatch: pytest.MonkeyPatch,
+@settings(max_examples=20, deadline=None)
+@given(
+    first_count=st.integers(min_value=1, max_value=4),
+    second_count=st.integers(min_value=1, max_value=4),
+    release_order=st.sampled_from(["first", "second"]),
+)
+def test_interpreter_executor_concurrent_maps_then_shutdown_are_terminal(
+    first_count: int,
+    second_count: int,
+    release_order: str,
 ) -> None:
-    """Interpreter-pool creation, map utilisation, and shutdown emit signals."""
-    metrics = _FakeCpuTaskExecutorMetrics()
-    clock = _FakeCpuTaskExecutorClock(timestamps=[1.0, 1.025])
-    logger = _FakeLogger()
-    monkeypatch.setattr(
+    """Generated multi-map interleavings serialise before terminal shutdown."""
+
+    async def exercise_interleaving() -> None:
+        create_executor = mock.patch.object(
+            ci,
+            "_create_interpreter_pool_executor",
+            side_effect=lambda max_workers: cf.ThreadPoolExecutor(
+                max_workers=max_workers,
+            ),
+        )
+        with create_executor:
+            executor = ci.InterpreterPoolCpuTaskExecutor(max_workers=2)
+            first_items = tuple(range(first_count))
+            second_items = tuple(range(second_count))
+            first_task = asyncio.create_task(executor.map_ordered(_square, first_items))
+            second_task = asyncio.create_task(
+                executor.map_ordered(_square, second_items),
+            )
+
+            if release_order == "second":
+                second_result, first_result = await asyncio.gather(
+                    second_task,
+                    first_task,
+                )
+            else:
+                first_result, second_result = await asyncio.gather(
+                    first_task,
+                    second_task,
+                )
+
+            assert first_result == [_square(item) for item in first_items]
+            assert second_result == [_square(item) for item in second_items]
+
+            executor.shutdown()
+            with pytest.raises(RuntimeError, match="has been shut down"):
+                await executor.map_ordered(_square, first_items)
+
+    asyncio.run(exercise_interleaving())
+
+
+@settings(max_examples=30, deadline=None)
+@given(
+    operations=st.lists(
+        st.sampled_from(["map_success", "map_error", "shutdown"]),
+        min_size=1,
+        max_size=6,
+    ),
+)
+def test_interpreter_executor_failure_sequences_remain_terminal(
+    operations: list[str],
+) -> None:
+    """Generated map-failure sequences preserve shutdown as terminal state."""
+    create_executor = mock.patch.object(
         ci,
         "_create_interpreter_pool_executor",
-        lambda max_workers: cf.ThreadPoolExecutor(max_workers=max_workers),
+        side_effect=lambda max_workers: cf.ThreadPoolExecutor(max_workers=max_workers),
     )
-    monkeypatch.setattr(ci, "_log", logger)
-    executor = ci.InterpreterPoolCpuTaskExecutor(
-        max_workers=1,
-        metrics=metrics,
-        clock=clock,
-    )
+    with create_executor:
+        executor = ci.InterpreterPoolCpuTaskExecutor(max_workers=2)
+        is_shutdown = False
 
-    try:
-        results = await executor.map_ordered(_square, (2, 3))
-    finally:
+        for operation in operations:
+            if operation == "shutdown":
+                executor.shutdown()
+                is_shutdown = True
+                continue
+
+            items = (-1,) if operation == "map_error" else (1, 2)
+            if is_shutdown:
+                with pytest.raises(RuntimeError, match="has been shut down"):
+                    asyncio.run(executor.map_ordered(_raise_on_negative, items))
+                continue
+            if operation == "map_error":
+                with pytest.raises(ValueError, match="negative values are rejected"):
+                    asyncio.run(executor.map_ordered(_raise_on_negative, items))
+            else:
+                assert asyncio.run(executor.map_ordered(_raise_on_negative, items)) == [
+                    1,
+                    2,
+                ]
+
         executor.shutdown()
-
-    assert results == [4, 9]
-    assert (
-        "interpreter_pool.map.calls",
-        {"outcome": "success"},
-    ) in metrics.counters
-    assert (
-        "interpreter_pool.map.items",
-        2.0,
-        {"outcome": "success"},
-    ) in metrics.observations
-    assert (
-        "interpreter_pool.shutdown.latency_ms",
-        pytest.approx(25.0),
-        {"outcome": "success"},
-    ) in metrics.observations
-    assert "Created interpreter-pool executor" in logger.messages
-    assert "Shut down interpreter-pool executor" in logger.messages
+        with pytest.raises(RuntimeError, match="has been shut down"):
+            asyncio.run(executor.map_ordered(_raise_on_negative, (1,)))

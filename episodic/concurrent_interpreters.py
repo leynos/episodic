@@ -23,8 +23,11 @@ InterpreterPoolCapability = cabc.Callable[[], bool]
 
 _INTERPRETER_POOL_FEATURE_FLAG = "EPISODIC_USE_INTERPRETER_POOL"
 _INTERPRETER_POOL_MAX_WORKERS_ENV = "EPISODIC_INTERPRETER_POOL_MAX_WORKERS"
+_METRIC_EXECUTOR_SELECTIONS = "cpu_task_executor.selections"
+_METRIC_POOL_CREATIONS = "interpreter_pool.creations"
 _METRIC_MAP_CALLS = "interpreter_pool.map.calls"
 _METRIC_MAP_ITEMS = "interpreter_pool.map.items"
+_METRIC_POOL_UTILIZATION = "interpreter_pool.utilization"
 _METRIC_SHUTDOWN_LATENCY_MS = "interpreter_pool.shutdown.latency_ms"
 _TRUTHY_VALUES = frozenset({"1", "on", "true", "yes"})
 _log = logging.getLogger(__name__)
@@ -89,6 +92,9 @@ class _PerfCounterCpuTaskExecutorClock:
     def monotonic_seconds(self) -> float:
         """Return the current monotonic timestamp in seconds."""
         return self.read_seconds()
+
+
+_CPU_TASK_EXECUTOR_METRICS = _NoopCpuTaskExecutorMetrics()
 
 
 class CpuTaskExecutor(typ.Protocol):
@@ -199,16 +205,23 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                 msg = "InterpreterPoolCpuTaskExecutor has been shut down."
                 raise RuntimeError(msg)
             if self._executor is None:
+                outcome = "success"
                 try:
                     self._executor = _create_interpreter_pool_executor(
                         self._max_workers,
                     )
                 except Exception:
+                    outcome = "error"
                     _log.exception(
                         "Failed to create interpreter-pool executor",
                         extra={"max_workers": self._max_workers},
                     )
                     raise
+                finally:
+                    self._metrics.increment_counter(
+                        _METRIC_POOL_CREATIONS,
+                        labels={"outcome": outcome},
+                    )
                 _log.info(
                     "Created interpreter-pool executor",
                     extra={"max_workers": self._max_workers},
@@ -285,6 +298,11 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                     float(len(items)),
                     labels={"outcome": "success"},
                 )
+                self._metrics.observe_latency_ms(
+                    _METRIC_POOL_UTILIZATION,
+                    float(len(items)),
+                    labels={"outcome": "success"},
+                )
                 return result
 
         return await asyncio.to_thread(map_ordered_sync)
@@ -315,12 +333,20 @@ def build_cpu_task_executor_from_environment(
     """
     environ_ = os.environ if environ is None else environ
     if not _flag_enabled(environ_.get(_INTERPRETER_POOL_FEATURE_FLAG)):
+        _CPU_TASK_EXECUTOR_METRICS.increment_counter(
+            _METRIC_EXECUTOR_SELECTIONS,
+            labels={"executor": "inline", "reason": "feature_flag_disabled"},
+        )
         _log.info(
             "Using inline CPU task executor",
             extra={"reason": "feature_flag_disabled"},
         )
         return InlineCpuTaskExecutor()
     if not capability_check():
+        _CPU_TASK_EXECUTOR_METRICS.increment_counter(
+            _METRIC_EXECUTOR_SELECTIONS,
+            labels={"executor": "inline", "reason": "interpreter_pool_unavailable"},
+        )
         _log.info(
             "Using inline CPU task executor",
             extra={"reason": "interpreter_pool_unavailable"},
@@ -328,6 +354,10 @@ def build_cpu_task_executor_from_environment(
         return InlineCpuTaskExecutor()
     max_workers = _parse_optional_positive_int(
         environ_.get(_INTERPRETER_POOL_MAX_WORKERS_ENV),
+    )
+    _CPU_TASK_EXECUTOR_METRICS.increment_counter(
+        _METRIC_EXECUTOR_SELECTIONS,
+        labels={"executor": "interpreter_pool", "reason": "enabled"},
     )
     _log.info(
         "Using interpreter-pool CPU task executor",
