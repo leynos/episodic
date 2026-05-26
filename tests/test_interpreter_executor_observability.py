@@ -9,14 +9,10 @@ import typing as typ
 import pytest
 
 import episodic.concurrent_interpreters as ci
+from tests.conftest import square_executor_value as _square
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-
-def _square(value: int) -> int:
-    """Return the square of an executor input."""
-    return value * value
 
 
 @dc.dataclass(slots=True)
@@ -126,11 +122,6 @@ async def test_interpreter_executor_records_lifecycle_observability(
         {"outcome": "success"},
     ) in metrics.counters
     assert (
-        "interpreter_pool.utilization",
-        2.0,
-        {"outcome": "success"},
-    ) in metrics.observations
-    assert (
         "interpreter_pool.shutdown.latency_ms",
         pytest.approx(25.0),
         {"outcome": "success"},
@@ -144,16 +135,17 @@ def test_builder_records_executor_selection_metrics(
 ) -> None:
     """Builder fallback and pool selections increment bounded counters."""
     metrics = _FakeCpuTaskExecutorMetrics()
-    monkeypatch.setattr(ci, "_CPU_TASK_EXECUTOR_METRICS", metrics)
 
-    ci.build_cpu_task_executor_from_environment({})
+    ci.build_cpu_task_executor_from_environment({}, metrics=metrics)
     ci.build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
         capability_check=lambda: False,
+        metrics=metrics,
     )
     executor = ci.build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
         capability_check=lambda: True,
+        metrics=metrics,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
 
@@ -170,3 +162,33 @@ def test_builder_records_executor_selection_metrics(
         {"executor": "interpreter_pool", "reason": "enabled"},
     ) in metrics.counters
     executor.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_builder_passes_metrics_to_interpreter_executor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Builder-provided metrics receive interpreter executor lifecycle signals."""
+    metrics = _FakeCpuTaskExecutorMetrics()
+    monkeypatch.setattr(
+        ci,
+        "_create_interpreter_pool_executor",
+        lambda max_workers: cf.ThreadPoolExecutor(max_workers=max_workers),
+    )
+    executor = ci.build_cpu_task_executor_from_environment(
+        {"EPISODIC_USE_INTERPRETER_POOL": "1"},
+        capability_check=lambda: True,
+        metrics=metrics,
+    )
+    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
+
+    try:
+        assert await executor.map_ordered(_square, (2,)) == [4]
+    finally:
+        executor.shutdown()
+
+    assert (
+        "interpreter_pool.map.items",
+        1.0,
+        {"outcome": "success"},
+    ) in metrics.observations

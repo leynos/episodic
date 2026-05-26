@@ -27,7 +27,6 @@ _METRIC_EXECUTOR_SELECTIONS = "cpu_task_executor.selections"
 _METRIC_POOL_CREATIONS = "interpreter_pool.creations"
 _METRIC_MAP_CALLS = "interpreter_pool.map.calls"
 _METRIC_MAP_ITEMS = "interpreter_pool.map.items"
-_METRIC_POOL_UTILIZATION = "interpreter_pool.utilization"
 _METRIC_SHUTDOWN_LATENCY_MS = "interpreter_pool.shutdown.latency_ms"
 _TRUTHY_VALUES = frozenset({"1", "on", "true", "yes"})
 _log = logging.getLogger(__name__)
@@ -316,11 +315,6 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                     float(len(items)),
                     labels={"outcome": "success"},
                 )
-                self._metrics.observe_value(
-                    _METRIC_POOL_UTILIZATION,
-                    float(len(items)),
-                    labels={"outcome": "success"},
-                )
                 return result
 
         return await asyncio.to_thread(map_ordered_sync)
@@ -330,6 +324,7 @@ def build_cpu_task_executor_from_environment(
     environ: cabc.Mapping[str, str] | None = None,
     *,
     capability_check: InterpreterPoolCapability = interpreter_pool_supported,
+    metrics: CpuTaskExecutorMetricsPort | None = None,
 ) -> CpuTaskExecutor:
     """Select CPU-task adapter based on feature flag and runtime capability.
 
@@ -342,6 +337,9 @@ def build_cpu_task_executor_from_environment(
         Runtime capability probe for interpreter-pool support. Tests and
         composition roots can inject this instead of monkeypatching module
         state.
+    metrics : CpuTaskExecutorMetricsPort | None
+        Metrics sink for executor selection and interpreter-pool lifecycle
+        observations. ``None`` uses the module default no-op sink.
 
     The returned object is owned by the caller. Inline executors have no
     resources to release; interpreter-pool executors should be shut down by the
@@ -350,8 +348,9 @@ def build_cpu_task_executor_from_environment(
     code works for both adapters.
     """
     environ_ = os.environ if environ is None else environ
+    metrics_ = metrics if metrics is not None else _CPU_TASK_EXECUTOR_METRICS
     if not _flag_enabled(environ_.get(_INTERPRETER_POOL_FEATURE_FLAG)):
-        _CPU_TASK_EXECUTOR_METRICS.increment_counter(
+        metrics_.increment_counter(
             _METRIC_EXECUTOR_SELECTIONS,
             labels={"executor": "inline", "reason": "feature_flag_disabled"},
         )
@@ -361,7 +360,7 @@ def build_cpu_task_executor_from_environment(
         )
         return InlineCpuTaskExecutor()
     if not capability_check():
-        _CPU_TASK_EXECUTOR_METRICS.increment_counter(
+        metrics_.increment_counter(
             _METRIC_EXECUTOR_SELECTIONS,
             labels={"executor": "inline", "reason": "interpreter_pool_unavailable"},
         )
@@ -373,7 +372,7 @@ def build_cpu_task_executor_from_environment(
     max_workers = _parse_optional_positive_int(
         environ_.get(_INTERPRETER_POOL_MAX_WORKERS_ENV),
     )
-    _CPU_TASK_EXECUTOR_METRICS.increment_counter(
+    metrics_.increment_counter(
         _METRIC_EXECUTOR_SELECTIONS,
         labels={"executor": "interpreter_pool", "reason": "enabled"},
     )
@@ -381,7 +380,7 @@ def build_cpu_task_executor_from_environment(
         "Using interpreter-pool CPU task executor",
         extra={"max_workers": max_workers},
     )
-    return InterpreterPoolCpuTaskExecutor(max_workers=max_workers)
+    return InterpreterPoolCpuTaskExecutor(max_workers=max_workers, metrics=metrics_)
 
 
 __all__ = [
