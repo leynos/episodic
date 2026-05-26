@@ -19,6 +19,7 @@ used by preflight budget validation:
 3
 """
 
+import dataclasses
 import json
 import math
 import typing as typ
@@ -36,6 +37,20 @@ from episodic.logging import getLogger
 _log = getLogger(__name__)
 
 type _TokenBudgetLabel = typ.Literal["input", "output", "total"]
+type _PreflightBudgetReason = typ.Literal["input", "total"]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _PreflightBudgetContext:
+    """Preflight budget rejection details for logging and raising."""
+
+    reason: _PreflightBudgetReason
+    msg: str
+    request: LLMRequest
+    token_budget: LLMTokenBudget
+    chars_per_token: float
+    estimated_input_tokens: int
+    projected_total_tokens: int | None = None
 
 
 class _OpenAIConfigForValidation(typ.Protocol):
@@ -91,34 +106,27 @@ def _check_token_limit(actual: int, limit: int, label: str) -> None:
         raise LLMTokenBudgetExceededError(msg)
 
 
-def _raise_preflight_budget_exceeded(  # noqa: PLR0913
-    *,
-    reason: typ.Literal["input", "total"],
-    msg: str,
-    request: LLMRequest,
-    token_budget: LLMTokenBudget,
-    chars_per_token: float,
-    estimated_input_tokens: int,
-    projected_total_tokens: int | None = None,
+def _raise_preflight_budget_exceeded(
+    context: _PreflightBudgetContext,
 ) -> typ.Never:
     """Emit a structured preflight budget error event and raise."""
     token_fields: dict[str, object] = {
-        "estimated_input_tokens": estimated_input_tokens,
+        "estimated_input_tokens": context.estimated_input_tokens,
     }
-    if projected_total_tokens is not None:
-        token_fields["projected_total_tokens"] = projected_total_tokens
+    if context.projected_total_tokens is not None:
+        token_fields["projected_total_tokens"] = context.projected_total_tokens
     _log_error_event(
         "openai_adapter.preflight_budget_exceeded",
-        reason=reason,
-        model=request.model,
-        provider_operation=_operation_label(request.provider_operation),
-        max_input_tokens=token_budget.max_input_tokens,
-        max_output_tokens=token_budget.max_output_tokens,
-        max_total_tokens=token_budget.max_total_tokens,
-        chars_per_token=chars_per_token,
+        reason=context.reason,
+        model=context.request.model,
+        provider_operation=_operation_label(context.request.provider_operation),
+        max_input_tokens=context.token_budget.max_input_tokens,
+        max_output_tokens=context.token_budget.max_output_tokens,
+        max_total_tokens=context.token_budget.max_total_tokens,
+        chars_per_token=context.chars_per_token,
         **token_fields,
     )
-    raise LLMTokenBudgetExceededError(msg)
+    raise LLMTokenBudgetExceededError(context.msg)
 
 
 def _check_input_preflight_budget(
@@ -136,12 +144,14 @@ def _check_input_preflight_budget(
         f"{estimated_input_tokens} > {token_budget.max_input_tokens}."
     )
     _raise_preflight_budget_exceeded(
-        reason="input",
-        msg=msg,
-        request=request,
-        token_budget=token_budget,
-        chars_per_token=chars_per_token,
-        estimated_input_tokens=estimated_input_tokens,
+        _PreflightBudgetContext(
+            reason="input",
+            msg=msg,
+            request=request,
+            token_budget=token_budget,
+            chars_per_token=chars_per_token,
+            estimated_input_tokens=estimated_input_tokens,
+        )
     )
 
 
@@ -164,13 +174,15 @@ def _check_total_preflight_budget(
         f"{projected_total} > {token_budget.max_total_tokens}."
     )
     _raise_preflight_budget_exceeded(
-        reason="total",
-        msg=msg,
-        request=request,
-        token_budget=token_budget,
-        chars_per_token=chars_per_token,
-        estimated_input_tokens=estimated_input_tokens,
-        projected_total_tokens=projected_total,
+        _PreflightBudgetContext(
+            reason="total",
+            msg=msg,
+            request=request,
+            token_budget=token_budget,
+            chars_per_token=chars_per_token,
+            estimated_input_tokens=estimated_input_tokens,
+            projected_total_tokens=projected_total,
+        )
     )
 
 
