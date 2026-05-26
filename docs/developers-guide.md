@@ -230,13 +230,17 @@ When adding new worker tasks:
   ```
 
   `EPISODIC_USE_INTERPRETER_POOL=1` enables `InterpreterPoolCpuTaskExecutor`
-  when the injected capability check reports support, and
+  when the runtime supports interpreter pools, and
   `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps its worker count. Keep
   `EPISODIC_INTERPRETER_POOL_MIN_ITEMS` as task-level fan-out policy, not
   Celery pool configuration. The task-level owner is responsible for executor
   lifetime and cleanup; inline executors do not need shutdown, while
   interpreter-pool executors must be shut down when their fan-out operation or
   explicit worker-scoped owner is finished.
+- Export CPU-task executor metrics through `CpuTaskExecutorMetricsPort`; it is
+  the shared metrics port for executor selection, interpreter-pool lifecycle,
+  map item count, and shutdown-latency collection. Keep labels bounded to
+  low-cardinality outcome and reason values.
 
 ## Database migrations
 

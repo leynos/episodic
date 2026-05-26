@@ -289,7 +289,7 @@ def test_builder_selects_executor_based_on_environment(
 
     executor = ci.build_cpu_task_executor_from_environment(
         environ,
-        capability_check=capability_check,
+        _capability_check=capability_check,
     )
 
     assert isinstance(executor, expected_type), (
@@ -331,7 +331,7 @@ async def test_builder_parses_max_workers_from_environment(
 
     executor = ci.build_cpu_task_executor_from_environment(
         environ,
-        capability_check=lambda: True,
+        _capability_check=lambda: True,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
 

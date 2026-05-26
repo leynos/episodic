@@ -282,6 +282,11 @@ Optional interpreter-pool flags:
 - `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool worker
   count when that path is enabled.
 
+CPU-task executor metrics are exported through the shared
+`CpuTaskExecutorMetricsPort`. Deployments that wire a metrics backend through
+that port can collect executor selection, interpreter-pool lifecycle, map item
+count, and shutdown-latency signals with bounded labels.
+
 Current queue model:
 
 - `episodic.tasks` topic exchange

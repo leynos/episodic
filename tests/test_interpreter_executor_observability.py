@@ -149,13 +149,13 @@ def test_builder_records_executor_selection_metrics(
     )
     unsupported_executor = ci.build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
-        capability_check=lambda: False,
         metrics=metrics,
+        _capability_check=lambda: False,
     )
     executor = ci.build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
-        capability_check=lambda: True,
         metrics=metrics,
+        _capability_check=lambda: True,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
 
@@ -189,8 +189,8 @@ async def test_builder_passes_metrics_to_interpreter_executor(
     )
     executor = ci.build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
-        capability_check=lambda: True,
         metrics=metrics,
+        _capability_check=lambda: True,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
 

@@ -19,7 +19,7 @@ import typing as typ
 
 _InputT = typ.TypeVar("_InputT")
 _OutputT = typ.TypeVar("_OutputT")
-type InterpreterPoolCapability = cabc.Callable[[], bool]
+type _InterpreterPoolCapability = cabc.Callable[[], bool]
 
 _INTERPRETER_POOL_FEATURE_FLAG = "EPISODIC_USE_INTERPRETER_POOL"
 _INTERPRETER_POOL_MAX_WORKERS_ENV = "EPISODIC_INTERPRETER_POOL_MAX_WORKERS"
@@ -62,7 +62,7 @@ class CpuTaskExecutorMetricsPort(typ.Protocol):
         """Observe a non-latency numeric measurement."""
 
 
-class CpuTaskExecutorClockPort(typ.Protocol):
+class _CpuTaskExecutorClockPort(typ.Protocol):
     """Monotonic clock used to measure executor lifecycle timings."""
 
     def monotonic_seconds(self) -> float:
@@ -204,7 +204,7 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         *,
         max_workers: int | None = None,
         metrics: CpuTaskExecutorMetricsPort | None = None,
-        clock: CpuTaskExecutorClockPort | None = None,
+        clock: _CpuTaskExecutorClockPort | None = None,
     ) -> None:
         self._max_workers = max_workers
         self._executor: cf.Executor | None = None
@@ -323,8 +323,8 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
 def build_cpu_task_executor_from_environment(
     environ: cabc.Mapping[str, str] | None = None,
     *,
-    capability_check: InterpreterPoolCapability = interpreter_pool_supported,
     metrics: CpuTaskExecutorMetricsPort | None = None,
+    _capability_check: _InterpreterPoolCapability = interpreter_pool_supported,
 ) -> CpuTaskExecutor:
     """Select CPU-task adapter based on feature flag and runtime capability.
 
@@ -333,10 +333,6 @@ def build_cpu_task_executor_from_environment(
     environ : collections.abc.Mapping[str, str] | None
         Environment mapping to inspect. ``None`` falls back to ``os.environ``
         for backwards-compatible composition-root usage.
-    capability_check : collections.abc.Callable[[], bool]
-        Runtime capability probe for interpreter-pool support. Tests and
-        composition roots can inject this instead of monkeypatching module
-        state.
     metrics : CpuTaskExecutorMetricsPort | None
         Metrics sink for executor selection and interpreter-pool lifecycle
         observations. ``None`` uses the module default no-op sink.
@@ -359,7 +355,7 @@ def build_cpu_task_executor_from_environment(
             extra={"reason": "feature_flag_disabled"},
         )
         return InlineCpuTaskExecutor()
-    if not capability_check():
+    if not _capability_check():
         metrics_.increment_counter(
             _METRIC_EXECUTOR_SELECTIONS,
             labels={"executor": "inline", "reason": "interpreter_pool_unavailable"},
@@ -385,10 +381,8 @@ def build_cpu_task_executor_from_environment(
 
 __all__ = [
     "CpuTaskExecutor",
-    "CpuTaskExecutorClockPort",
     "CpuTaskExecutorMetricsPort",
     "InlineCpuTaskExecutor",
-    "InterpreterPoolCapability",
     "InterpreterPoolCpuTaskExecutor",
     "build_cpu_task_executor_from_environment",
     "interpreter_pool_supported",
