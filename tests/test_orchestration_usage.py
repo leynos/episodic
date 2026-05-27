@@ -18,7 +18,10 @@ def test_sum_usage_derives_total_from_summed_input_and_output_counts() -> None:
 
     total_usage = _sum_usage(planner_usage, action_usage)
 
-    assert total_usage == LLMUsage(input_tokens=13, output_tokens=12, total_tokens=25)
+    expected_usage = LLMUsage(input_tokens=13, output_tokens=12, total_tokens=25)
+    assert total_usage == expected_usage, (
+        f"unexpected LLM token usage: {total_usage!r}, expected {expected_usage!r}"
+    )
 
 
 def test_sum_usage_logs_component_and_aggregate_total_mismatches(
@@ -45,14 +48,20 @@ def test_sum_usage_logs_component_and_aggregate_total_mismatches(
         "orchestration.usage_sum.component_total_mismatch",
         "orchestration.usage_sum.aggregate_total_mismatch",
     ]
-    assert all(event[0] == "warning" for event in logged_events)
+    assert all(event[0] == "warning" for event in logged_events), (
+        f"expected all logged events to be warnings, got: {logged_events!r}"
+    )
     aggregate_fields = logged_events[-1][2]
-    assert aggregate_fields == {
+    expected_aggregate_fields = {
         "reported_total_tokens": 141,
         "derived_total_tokens": 25,
         "summed_input_tokens": 13,
         "summed_output_tokens": 12,
     }
+    assert aggregate_fields == expected_aggregate_fields, (
+        "aggregate fields mismatch: "
+        f"expected {expected_aggregate_fields!r}, got {aggregate_fields!r}"
+    )
 
 
 def test_sum_usage_skips_logging_when_provider_totals_are_consistent(
@@ -76,5 +85,8 @@ def test_sum_usage_skips_logging_when_provider_totals_are_consistent(
         LLMUsage(input_tokens=3, output_tokens=7, total_tokens=10),
     )
 
-    assert total_usage == LLMUsage(input_tokens=13, output_tokens=12, total_tokens=25)
-    assert not logged_events
+    expected_usage = LLMUsage(input_tokens=13, output_tokens=12, total_tokens=25)
+    assert total_usage == expected_usage, (
+        f"unexpected LLM token usage: {total_usage!r}, expected {expected_usage!r}"
+    )
+    assert not logged_events, f"expected no logged events but found {logged_events!r}"
