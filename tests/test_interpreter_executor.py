@@ -287,8 +287,9 @@ def test_builder_selects_executor_based_on_environment(
         def capability_check() -> bool:
             return mock_support
 
-    executor = ci.build_cpu_task_executor_from_environment(
+    executor = ci._build_cpu_task_executor_from_environment(
         environ,
+        metrics=ci._CPU_TASK_EXECUTOR_METRICS,
         _capability_check=capability_check,
     )
 
@@ -329,8 +330,9 @@ async def test_builder_parses_max_workers_from_environment(
         "EPISODIC_INTERPRETER_POOL_MAX_WORKERS": env_value,
     }
 
-    executor = ci.build_cpu_task_executor_from_environment(
+    executor = ci._build_cpu_task_executor_from_environment(
         environ,
+        metrics=ci._CPU_TASK_EXECUTOR_METRICS,
         _capability_check=lambda: True,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)

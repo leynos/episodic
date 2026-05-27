@@ -320,11 +320,51 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
         return await asyncio.to_thread(map_ordered_sync)
 
 
+def _build_cpu_task_executor_from_environment(
+    environ: cabc.Mapping[str, str],
+    *,
+    metrics: CpuTaskExecutorMetricsPort,
+    _capability_check: _InterpreterPoolCapability,
+) -> CpuTaskExecutor:
+    """Build CPU-task adapter from environment with an injectable capability check."""
+    if not _flag_enabled(environ.get(_INTERPRETER_POOL_FEATURE_FLAG)):
+        metrics.increment_counter(
+            _METRIC_EXECUTOR_SELECTIONS,
+            labels={"executor": "inline", "reason": "feature_flag_disabled"},
+        )
+        _log.info(
+            "Using inline CPU task executor",
+            extra={"reason": "feature_flag_disabled"},
+        )
+        return InlineCpuTaskExecutor()
+    if not _capability_check():
+        metrics.increment_counter(
+            _METRIC_EXECUTOR_SELECTIONS,
+            labels={"executor": "inline", "reason": "interpreter_pool_unavailable"},
+        )
+        _log.info(
+            "Using inline CPU task executor",
+            extra={"reason": "interpreter_pool_unavailable"},
+        )
+        return InlineCpuTaskExecutor()
+    max_workers = _parse_optional_positive_int(
+        environ.get(_INTERPRETER_POOL_MAX_WORKERS_ENV),
+    )
+    metrics.increment_counter(
+        _METRIC_EXECUTOR_SELECTIONS,
+        labels={"executor": "interpreter_pool", "reason": "enabled"},
+    )
+    _log.info(
+        "Using interpreter-pool CPU task executor",
+        extra={"max_workers": max_workers},
+    )
+    return InterpreterPoolCpuTaskExecutor(max_workers=max_workers, metrics=metrics)
+
+
 def build_cpu_task_executor_from_environment(
     environ: cabc.Mapping[str, str] | None = None,
     *,
     metrics: CpuTaskExecutorMetricsPort | None = None,
-    _capability_check: _InterpreterPoolCapability = interpreter_pool_supported,
 ) -> CpuTaskExecutor:
     """Select CPU-task adapter based on feature flag and runtime capability.
 
@@ -345,38 +385,11 @@ def build_cpu_task_executor_from_environment(
     """
     environ_ = os.environ if environ is None else environ
     metrics_ = metrics if metrics is not None else _CPU_TASK_EXECUTOR_METRICS
-    if not _flag_enabled(environ_.get(_INTERPRETER_POOL_FEATURE_FLAG)):
-        metrics_.increment_counter(
-            _METRIC_EXECUTOR_SELECTIONS,
-            labels={"executor": "inline", "reason": "feature_flag_disabled"},
-        )
-        _log.info(
-            "Using inline CPU task executor",
-            extra={"reason": "feature_flag_disabled"},
-        )
-        return InlineCpuTaskExecutor()
-    if not _capability_check():
-        metrics_.increment_counter(
-            _METRIC_EXECUTOR_SELECTIONS,
-            labels={"executor": "inline", "reason": "interpreter_pool_unavailable"},
-        )
-        _log.info(
-            "Using inline CPU task executor",
-            extra={"reason": "interpreter_pool_unavailable"},
-        )
-        return InlineCpuTaskExecutor()
-    max_workers = _parse_optional_positive_int(
-        environ_.get(_INTERPRETER_POOL_MAX_WORKERS_ENV),
+    return _build_cpu_task_executor_from_environment(
+        environ_,
+        metrics=metrics_,
+        _capability_check=interpreter_pool_supported,
     )
-    metrics_.increment_counter(
-        _METRIC_EXECUTOR_SELECTIONS,
-        labels={"executor": "interpreter_pool", "reason": "enabled"},
-    )
-    _log.info(
-        "Using interpreter-pool CPU task executor",
-        extra={"max_workers": max_workers},
-    )
-    return InterpreterPoolCpuTaskExecutor(max_workers=max_workers, metrics=metrics_)
 
 
 __all__ = [

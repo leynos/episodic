@@ -147,12 +147,12 @@ def test_builder_records_executor_selection_metrics(
         {},
         metrics=metrics,
     )
-    unsupported_executor = ci.build_cpu_task_executor_from_environment(
+    unsupported_executor = ci._build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
         metrics=metrics,
         _capability_check=lambda: False,
     )
-    executor = ci.build_cpu_task_executor_from_environment(
+    executor = ci._build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
         metrics=metrics,
         _capability_check=lambda: True,
@@ -187,7 +187,7 @@ async def test_builder_passes_metrics_to_interpreter_executor(
         "_create_interpreter_pool_executor",
         lambda max_workers: cf.ThreadPoolExecutor(max_workers=max_workers),
     )
-    executor = ci.build_cpu_task_executor_from_environment(
+    executor = ci._build_cpu_task_executor_from_environment(
         {"EPISODIC_USE_INTERPRETER_POOL": "1"},
         metrics=metrics,
         _capability_check=lambda: True,
