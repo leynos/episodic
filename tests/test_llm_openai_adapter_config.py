@@ -97,8 +97,13 @@ def test_openai_adapter_numeric_config_type_rejections_log_stable_event(
         _ = openai_invalid_config_builder(config_kwargs)
 
     payload = json.loads(openai_log_spy.messages[0])
-    assert payload["event"] == "openai_adapter.config_rejected"
-    assert payload["field"] == field
+    assert payload["event"] == "openai_adapter.config_rejected", (
+        "Expected config rejection log event "
+        f"'openai_adapter.config_rejected', got {payload['event']!r}."
+    )
+    assert payload["field"] == field, (
+        f"Expected config rejection field {field!r}, got {payload['field']!r}."
+    )
 
 
 def test_openai_invalid_config_builder_accepts_provider_operation_override(
