@@ -112,6 +112,9 @@ def _validate_dotted_parts(task_parts: list[str]) -> None:
     if any(not part for part in task_parts):
         msg = "Worker task names must be non-empty dotted names."
         raise ValueError(msg)
+    if any(any(char.isspace() for char in part) for part in task_parts):
+        msg = "Worker task names must be non-empty dotted names."
+        raise ValueError(msg)
 
 
 def _validate_task_name(task_name: str) -> None:

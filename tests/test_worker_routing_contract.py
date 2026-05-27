@@ -77,6 +77,7 @@ def test_task_routes_reject_malformed_task_names_and_workloads() -> None:
         "trailing.",
         " valid.name ",
         "\tname.part",
+        "episodic.worker. io",
     )
     for malformed_task_name in malformed_task_names:
         malformed_task_workloads = {
