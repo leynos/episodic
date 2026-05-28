@@ -51,6 +51,12 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
     ----------
     session_factory : collections.abc.Callable[[], AsyncSession]
         Factory that produces new async sessions for the unit-of-work scope.
+    metrics : MetricsPort | None, optional
+        Optional metrics collector used to record UoW counters and timings,
+        forwarded to the workflow checkpoint store.  Defaults to *None*.
+    clock : MonotonicClockPort | None, optional
+        Optional monotonic clock used to measure elapsed operation time,
+        forwarded to the workflow checkpoint store.  Defaults to *None*.
 
     Attributes
     ----------
