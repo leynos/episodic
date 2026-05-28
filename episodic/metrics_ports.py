@@ -6,13 +6,8 @@ so feature-specific ports such as ``ChronoMetricsPort`` and
 duplicating identical method signatures.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
 
 
 class BoundedMetricsPort(typ.Protocol):
@@ -22,7 +17,7 @@ class BoundedMetricsPort(typ.Protocol):
         self,
         name: str,
         *,
-        labels: cabc.Mapping[str, str],
+        labels: dict[str, str],
     ) -> None:
         """Increment a bounded-cardinality counter."""
 
@@ -31,7 +26,7 @@ class BoundedMetricsPort(typ.Protocol):
         name: str,
         value: float,
         *,
-        labels: cabc.Mapping[str, str],
+        labels: dict[str, str],
     ) -> None:
         """Observe a latency measurement in milliseconds."""
 
@@ -44,7 +39,7 @@ class BoundedValueMetricsPort(BoundedMetricsPort, typ.Protocol):
         name: str,
         value: float,
         *,
-        labels: cabc.Mapping[str, str],
+        labels: dict[str, str],
     ) -> None:
         """Observe a non-latency numeric measurement."""
 
@@ -57,7 +52,7 @@ class NoopBoundedMetrics:
         self,
         name: str,
         *,
-        labels: cabc.Mapping[str, str],
+        labels: dict[str, str],
     ) -> None:
         """Ignore counter increments."""
 
@@ -66,7 +61,7 @@ class NoopBoundedMetrics:
         name: str,
         value: float,
         *,
-        labels: cabc.Mapping[str, str],
+        labels: dict[str, str],
     ) -> None:
         """Ignore latency observations."""
 
@@ -80,7 +75,7 @@ class NoopBoundedValueMetrics(NoopBoundedMetrics):
         name: str,
         value: float,
         *,
-        labels: cabc.Mapping[str, str],
+        labels: dict[str, str],
     ) -> None:
         """Ignore non-latency observations."""
 

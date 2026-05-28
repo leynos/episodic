@@ -5,8 +5,6 @@ inline execution and interpreter-pool execution. The interpreter adapter is
 feature-flagged and capability-gated so callers can opt in safely.
 """
 
-from __future__ import annotations
-
 import asyncio
 import collections.abc as cabc
 import concurrent.futures as cf
