@@ -71,11 +71,25 @@ def test_openai_adapter_config_type_rejection_logs_stable_event(
         _ = openai_invalid_config_builder({"base_url": 123})
 
     payload = json.loads(openai_log_spy.messages[0])
-    assert payload["event"] == "openai_adapter.config_rejected"
-    assert payload["field"] == "base_url"
-    assert payload["base_url_configured"] is False
-    assert payload["api_key_configured"] is True
-    assert payload["chars_per_token"] == repr(4.0)
+    assert payload["event"] == "openai_adapter.config_rejected", (
+        "Expected config rejection log event "
+        f"'openai_adapter.config_rejected', got {payload['event']!r}."
+    )
+    assert payload["field"] == "base_url", (
+        f"Expected rejected field 'base_url', got {payload['field']!r}."
+    )
+    assert payload["base_url_configured"] is False, (
+        "Expected base_url_configured to be False, "
+        f"got {payload['base_url_configured']!r}."
+    )
+    assert payload["api_key_configured"] is True, (
+        "Expected api_key_configured to be True, "
+        f"got {payload['api_key_configured']!r}."
+    )
+    assert payload["chars_per_token"] == repr(4.0), (
+        "Expected chars_per_token payload value to include '4.0', "
+        f"got {payload['chars_per_token']!r}."
+    )
 
 
 @pytest.mark.parametrize(
