@@ -87,7 +87,7 @@ def test_openai_adapter_config_type_rejection_logs_stable_event(
         f"got {payload['api_key_configured']!r}."
     )
     assert payload["chars_per_token"] == repr(4.0), (
-        "Expected chars_per_token payload value to include '4.0', "
+        "Expected chars_per_token payload value to be '4.0', "
         f"got {payload['chars_per_token']!r}."
     )
 
