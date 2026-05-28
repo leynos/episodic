@@ -1,10 +1,25 @@
-"""Celery runtime composition root for the worker scaffold."""
+"""Celery runtime composition root for the worker scaffold.
 
+This module is the composition root that boots the Celery worker application.
+It reads environment configuration via :func:`load_runtime_config`, delegates
+queue and route taxonomy to :mod:`episodic.worker.topology`, and registers typed
+task seams from :mod:`episodic.worker.tasks` via
+:func:`~episodic.worker.tasks.register_scaffold_tasks`.
+
+:func:`_build_task_routes` materialises the route table from
+:class:`~episodic.worker.topology.WorkerTopology` and logs validation context
+so that startup failures carry enough diagnostic information to identify the
+offending task name or workload classification.
+
+:func:`create_celery_app_from_env` is the Celery runtime entrypoint; it
+chains :func:`load_runtime_config` and :func:`create_celery_app`.
+"""
+
+import collections.abc as cabc  # noqa: TC003
 import dataclasses as dc
 import enum
 import importlib
 import os
-import typing as typ
 from urllib.parse import urlparse
 
 from celery import Celery
@@ -15,9 +30,6 @@ from .tasks import SCAFFOLD_TASK_WORKLOADS, WorkerDependencies, register_scaffol
 from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology, WorkloadClass
 
 logger = get_logger(__name__)
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
 
 
 class WorkerPool(enum.StrEnum):
@@ -273,19 +285,20 @@ def create_celery_app(
     register_scaffold_tasks(app, worker_dependencies)
     return app
 
-def _build_task_routes(topology: WorkerTopology) -> dict[str, dict[str, str]]:
+def _build_task_routes(
+    topology: WorkerTopology,
+    task_workloads: cabc.Mapping[str, WorkloadClass] = SCAFFOLD_TASK_WORKLOADS,
+) -> dict[str, dict[str, str]]:
     """Build task routes and log route-table validation context."""
-    logger.info(
-        f"Building Celery worker task routes for {len(SCAFFOLD_TASK_WORKLOADS)} tasks."
-    )
+    logger.info(f"Building Celery worker task routes for {len(task_workloads)} tasks.")
     try:
-        task_routes = topology.task_routes(SCAFFOLD_TASK_WORKLOADS)
+        task_routes = topology.task_routes(task_workloads)
     except (TypeError, ValueError) as exc:
         validation_error = str(exc)
         logger.exception(
             "Celery worker task route validation failed for "
-            f"tasks={tuple(SCAFFOLD_TASK_WORKLOADS)!r}, "
-            f"workloads={tuple(SCAFFOLD_TASK_WORKLOADS.values())!r}: "
+            f"tasks={tuple(task_workloads)!r}, "
+            f"workloads={tuple(task_workloads.values())!r}: "
             f"{validation_error}"
         )
         raise

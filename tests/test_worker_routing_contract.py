@@ -130,22 +130,20 @@ def test_create_celery_app_logs_task_route_validation_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Log invalid route-table context before propagating startup failures."""
-    from episodic.worker import WorkloadClass, create_celery_app, load_runtime_config
+    from episodic.worker import WorkloadClass
     from episodic.worker import runtime as runtime_module
 
     logger = _FakeWorkerLogger(infos=[], exceptions=[])
     monkeypatch.setattr(runtime_module, "logger", logger)
-    monkeypatch.setattr(
-        runtime_module,
-        "SCAFFOLD_TASK_WORKLOADS",
-        {typ.cast("str", 42): WorkloadClass.IO_BOUND},
-    )
 
     with pytest.raises(
         TypeError,
         match=r"Worker task names must be non-empty dotted names\.",
     ):
-        create_celery_app(load_runtime_config(_runtime_environ()))
+        runtime_module._build_task_routes(
+            runtime_module.DEFAULT_WORKER_TOPOLOGY,
+            {typ.cast("str", 42): WorkloadClass.IO_BOUND},
+        )
 
     assert logger.infos == ["Building Celery worker task routes for 1 tasks."]
     assert len(logger.exceptions) == 1
