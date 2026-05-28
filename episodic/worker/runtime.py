@@ -287,9 +287,10 @@ def create_celery_app(
 
 def _build_task_routes(
     topology: WorkerTopology,
-    task_workloads: cabc.Mapping[str, WorkloadClass] = SCAFFOLD_TASK_WORKLOADS,
+    task_workloads: cabc.Mapping[str, WorkloadClass] | None = None,
 ) -> dict[str, dict[str, str]]:
     """Build task routes and log route-table validation context."""
+    task_workloads = task_workloads or SCAFFOLD_TASK_WORKLOADS
 
     def _log_info(message: str, *args: object) -> None:
         try:
