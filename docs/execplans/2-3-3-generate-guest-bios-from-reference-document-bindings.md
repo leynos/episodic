@@ -1,9 +1,8 @@
 # Generate guest bios from reference document bindings
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -175,9 +174,9 @@ enrichment.
   parsed `tei_rapporteur` payloads.
 - [x] 2026-05-14: Ran focused validation for milestone 2/3 with `set -o
   pipefail`, including `uv run pytest tests/test_guest_bios.py
-  tests/test_guest_bios_properties.py -q`, `make check-fmt`, `make
-  typecheck`, `make lint`, `make markdownlint`, and `make
-  nixie`. Ran `coderabbit review --agent`; it completed with zero findings.
+  tests/test_guest_bios_properties.py -q`, `make check-fmt`, `make typecheck`, `
+  make lint`, `make markdownlint`, and `make nixie`. Ran `coderabbit review
+  --agent`; it completed with zero findings.
 - [x] 2026-05-14: Added
   `generate_guest_bios_from_reference_bindings(...)` to resolve existing
   reference bindings through the canonical unit of work, project only
@@ -227,8 +226,8 @@ enrichment.
 ### TEI personography is richer than the roadmap target
 
 Firecrawl research against the official TEI P5 guidelines found that `<person>`
-can describe identifiable people and can contain person-related children such
-as `<persName>`, `<occupation>`, `<affiliation>`, and `<note>`. That model is
+can describe identifiable people and can contain person-related children such as
+`<persName>`, `<occupation>`, `<affiliation>`, and `<note>`. That model is
 suitable for a formal personography or participant description, but the roadmap
 item asks for biographical summaries "within TEI body".
 
@@ -265,10 +264,10 @@ parser/emitter dependency.
 
 - Decision: represent guest biographies in the TEI body as a
   `<div type="guest-bios">` containing a `<list>` of `<item>` entries unless
-  the representation prototype fails. Rationale: this follows ADR 004's
-  accepted `<div type="..."><list><item>...</item></list></div>` enrichment
-  convention and satisfies the roadmap requirement to format biographies inside
-  the TEI body. Date/Author: 2026-05-10 / ExecPlan draft.
+  the representation prototype fails. Rationale: this follows ADR 004's accepted
+  `<div type="..."><list><item>...</item></list></div>` enrichment convention
+  and satisfies the roadmap requirement to format biographies inside the TEI
+  body. Date/Author: 2026-05-10 / ExecPlan draft.
 - Decision: carry the source reference-document revision through generated
   biography results and TEI output using TEI linking attributes already
   supported by the local body model, preferring `@corresp` where possible.
@@ -340,10 +339,9 @@ Create `episodic/generation/guest_bios.py` following the structure of
 - `GuestBiosResponseFormatError`, raised for malformed LLM output.
 
 Implement strict JSON parsing. The LLM response should be constrained to a
-single object with a `guests` list, where each item has at least
-`display_name`, `bio`, and `reference_document_revision_id`. Reject missing,
-blank, duplicate, or unknown revision identifiers, so the generator cannot
-silently invent guests.
+single object with a `guests` list, where each item has at least `display_name`,
+`bio`, and `reference_document_revision_id`. Reject missing, blank, duplicate,
+or unknown revision identifiers, so the generator cannot silently invent guests.
 
 Use `LLMPort` only. Build prompts from a projection of TEI script context,
 episode template structure, and resolved guest profile content. Keep the prompt

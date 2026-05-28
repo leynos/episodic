@@ -793,8 +793,8 @@ adapter implementations.
 In the current worker scaffold, representative Celery tasks use injected
 callable seams instead of importing concrete adapters directly. Future task
 implementations should preserve this pattern by resolving storage, LLM, and
-other infrastructure through ports or composition-root-owned dependencies.
-This roadmap slice does not add LangGraph-to-Celery dispatch. Orchestration
+other infrastructure through ports or composition-root-owned dependencies. This
+roadmap slice does not add LangGraph-to-Celery dispatch. Orchestration
 continues to expose provider-neutral request, checkpoint, and resume DTOs,
 whilst the worker adapter owns Celery queues, routing keys, and pool launch
 profiles.
@@ -1774,13 +1774,13 @@ and all criteria below are met:
 The canonical persistence layer follows the hexagonal architecture by defining
 Protocol-based port interfaces in `episodic/canonical/ports.py` and
 implementing them as async SQLAlchemy adapters in
-`episodic/canonical/storage/`. Twelve repository protocols define the
-persistence contract: `SeriesProfileRepository`, `TeiHeaderRepository`,
-`EpisodeRepository`, `IngestionJobRepository`, `SourceDocumentRepository`,
-`ApprovalEventRepository`, `EpisodeTemplateRepository`,
-`SeriesProfileHistoryRepository`, `EpisodeTemplateHistoryRepository`,
-`ReferenceDocumentRepository`, `ReferenceDocumentRevisionRepository`, and
-`ReferenceBindingRepository`. `CanonicalUnitOfWork` aggregates them behind a
+`episodic/canonical/storage/`. Twelve repository protocols
+(`SeriesProfileRepository`, `TeiHeaderRepository`, `EpisodeRepository`,
+`IngestionJobRepository`, `SourceDocumentRepository`, `ApprovalEventRepository`,
+`EpisodeTemplateRepository`, `SeriesProfileHistoryRepository`,
+`EpisodeTemplateHistoryRepository`, `ReferenceDocumentRepository`,
+`ReferenceDocumentRevisionRepository`, and `ReferenceBindingRepository`) define
+the persistence contract, and `CanonicalUnitOfWork` aggregates them behind a
 transactional boundary with `commit()`, `flush()`, and `rollback()` methods.
 
 The `SqlAlchemyUnitOfWork` adapter creates a fresh `AsyncSession` on entry,

@@ -1,7 +1,7 @@
 # Update tei-rapporteur pin and remove local Text Encoding Initiative (TEI) typing shims
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises and discoveries`,
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises and discoveries`,
 `Decision log`, and `Outcomes and retrospective` must be kept up to date as
 work proceeds.
 

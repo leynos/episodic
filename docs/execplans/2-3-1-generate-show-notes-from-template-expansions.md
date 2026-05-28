@@ -1,9 +1,8 @@
 # Generate show notes from template expansions
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETED
 
@@ -195,8 +194,8 @@ implementation details. If future upstream regressions appear, start with PR
 
 - Decision: represent show notes in TEI as a `<div type="notes">` container
   with `<list>` and `<item>` children. Rationale: TEI P5 guidelines use `<div>`
-  with a `@type` attribute to denote functional divisions of text. A `<list>`
-  of `<item>` elements is the natural TEI idiom for enumerating topics.
+  with a `@type` attribute to denote functional divisions of text. A `<list>` of
+  `<item>` elements is the natural TEI idiom for enumerating topics.
   Timestamps and locators attach as attributes on `<item>`. tei-rapporteur
   `ffb25c6` added code support for `<div>`, `<list>`, `<item>`, and `<label>`
   at the Rust core, parser, emitter, and PyO3 projection layers; `016ef253`
@@ -529,8 +528,8 @@ structure metadata. The prompt instructs the model to extract key topics and
 optional timestamps, and to return a JSON object with an `entries` array.
 
 The `generate(...)` method builds the prompt, constructs an `LLMRequest` with
-the configured model, system prompt, provider operation, and token budget,
-calls `self.llm.generate(request)`, and parses the response via
+the configured model, system prompt, provider operation, and token budget, calls
+`self.llm.generate(request)`, and parses the response via
 `_result_from_response(...)`.
 
 The default system prompt should read:
@@ -854,9 +853,9 @@ does not modify existing code. If a stage fails:
 2. Rerun the targeted tests for that stage.
 3. Rerun the full Stage H gate sequence before closing the work.
 
-If TEI enrichment via `tei_rapporteur` proves infeasible, the fallback is to
-use `xml.etree.ElementTree` for XML manipulation and validate well-formedness
-with `ET.fromstring(...)`. Document the gap in the ADR and in the decision log.
+If TEI enrichment via `tei_rapporteur` proves infeasible, the fallback is to use
+`xml.etree.ElementTree` for XML manipulation and validate well-formedness with
+`ET.fromstring(...)`. Document the gap in the ADR and in the decision log.
 
 ## Artefacts and notes
 

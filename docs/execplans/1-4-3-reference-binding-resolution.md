@@ -1,9 +1,8 @@
 # Implement reference-binding resolution
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
@@ -35,8 +34,8 @@ After implementation, the system will:
    ingestion job to the exact reference content it consumed.
 3. Expose resolution behaviour through the existing
    `GET /series-profiles/{profile_id}/brief` endpoint, which will accept an
-   optional `episode_id` query parameter to control which episode context
-   drives `effective_from_episode_id` precedence.
+   optional `episode_id` query parameter to control which episode context drives
+   `effective_from_episode_id` precedence.
 4. Expose a new dedicated resolution endpoint
    `GET /series-profiles/{profile_id}/resolved-bindings` that returns the
    resolved set of bindings for a profile/template/episode combination without

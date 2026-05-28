@@ -432,7 +432,7 @@ within a Hexagonal Architecture if used with discipline:
 
 Normative orchestration guardrails are defined in
 [Orchestration guardrails](episodic-podcast-generation-system-design.md#orchestration-guardrails)
- and serve as the source of truth for port-only dependencies, checkpoint
+and serve as the source of truth for port-only dependencies, checkpoint
 payload boundaries, and idempotency requirements. This document focuses on
 boundary risks and alignment, while implementation details should defer to the
 system design guardrails.

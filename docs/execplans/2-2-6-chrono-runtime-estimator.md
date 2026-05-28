@@ -1,9 +1,8 @@
 # Implement Chrono runtime estimation
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -782,8 +781,8 @@ git add episodic/qa tests docs
 git commit -F "$COMMIT_MSG_FILE"
 ```
 
-Create the commit message in a temporary file from `mktemp -d`, then commit
-with `git commit -F`; do not pass the message with `git commit -m`.
+Create the commit message in a temporary file from `mktemp -d`, then commit with
+`git commit -F`; do not pass the message with `git commit -m`.
 
 For the follow-on strict TEI P5 work, first create the ADR and upstream
 `tei-rapporteur` requests before changing Chrono:

@@ -8,7 +8,7 @@ supplement addresses token usage tracking, per-task cost modelling, anomaly
 handling, and feedback loops for budget enforcement. Port definitions for
 `BudgetPort` and `CostLedgerPort` live in
 [Orchestration ports and adapters](episodic-podcast-generation-system-design.md#orchestration-ports-and-adapters).
- The strategies below ensure that a **Generation 2** agentic system remains not
+The strategies below ensure that a **Generation 2** agentic system remains not
 only intelligent and scalable, but also **cost-aware** and economically
 efficient.
 
@@ -52,9 +52,9 @@ By attaching such a callback to every LLM invocation (via the LangGraph config
 or LangChain `callbacks` list), **token usage is tracked per task** and
 centrally aggregated. This approach can be extended to *all* model
 interactions. For instance, enabling `stream_usage=True` on OpenAI chat models
-ensures the usage info is populated in the
-callback([1](https://forum.langchain.com/t/how-to-obtain-token-usage-from-langgraph/1727#:~:text=Thanks%20for%20your%20help%2C%20I,I%20just%20needed%20to%20add)).
- In addition, structured logging can record each call’s token count alongside
+ensures the usage info is populated in the callback(
+[1](https://forum.langchain.com/t/how-to-obtain-token-usage-from-langgraph/1727#:~:text=Thanks%20for%20your%20help%2C%20I,I%20just%20needed%20to%20add)).
+In addition, structured logging can record each call’s token count alongside
 task identifiers, making it easier to analyse cost per user query or per agent
 run.
 
@@ -86,15 +86,15 @@ services. The system can export metrics such as *tokens_per_request*,
 usage and cost for each trace, giving a unified view of spend across the entire
 application(
 [2](https://docs.langchain.com/langsmith/cost-tracking#:~:text=Building%20agents%20at%20scale%20introduces,This%20guide%20covers)).
- In production, one might send these metrics to a time-series database
+In production, one might send these metrics to a time-series database
 (Prometheus, CloudWatch) or use LangSmith/Langfuse tracers to visualize
 per-task costs. By monitoring these metrics, operators can detect anomalies
 (e.g. a sudden spike in tokens/minute) and also enforce rate limits. For
 example, concurrency in LangGraph should be configured with awareness of rate
 limits: if multiple nodes call an API in parallel, they might hit provider
-limits
-faster([3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=This%20shift%20creates%20several%20practical,implications)).
- Tracking the call rate via metrics allows dynamic throttling – e.g. if calls
+limits faster(
+[3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=This%20shift%20creates%20several%20practical,implications)).
+Tracking the call rate via metrics allows dynamic throttling – e.g. if calls
 per minute approach the API’s cap, new calls can be delayed or queued to avoid
 429 errors. Overall, a combination of **callback logging and external
 monitoring** provides transparency into token usage, retry overhead, and
@@ -202,17 +202,17 @@ While timeouts alone don’t track tokens, they prevent a hung process from
 accumulating unlimited cost.
 
 **Unexpected Parallel Fan-Out:** One advantage of LangGraph is the ability to
-execute nodes in parallel for
-speed([3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=What%20is%20parallelization%20in%20LangGraph%3F)
- )(
+execute nodes in parallel for speed(
+[3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=What%20is%20parallelization%20in%20LangGraph%3F)
+)(
 [3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=This%20shift%20creates%20several%20practical,implications)).
- However, if misused, parallel fan-out can spawn a large number of simultaneous
+However, if misused, parallel fan-out can spawn a large number of simultaneous
 calls, consuming resources and quota in a burst. For example, an agent might
 naively launch dozens of search queries or sub-agents at once when a smaller
 number would do. To control this, LangGraph provides a `max_concurrency`
-configuration to cap how many nodes run in
-parallel([3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=,off)).
- Setting reasonable limits (based on API rate limits and budget) prevents an
+configuration to cap how many nodes run in parallel(
+[3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=,off)).
+Setting reasonable limits (based on API rate limits and budget) prevents an
 explosion of parallel tasks from *overwhelming quotas*. At the infrastructure
 level, the message broker (RabbitMQ) can also help: tasks can be routed into
 separate queues with limited worker processes for certain expensive operations,
@@ -241,9 +241,9 @@ particular tool caused an infinite loop, or a user input consistently triggers
 a pathological case. Moreover, the system can raise immediate **alerts** when
 tasks land in the DLQ or when failure rates exceed a threshold. Best practices
 include setting up notifications if, say, more than X tasks per hour go to
-dead-letter (indicating a systemic
-issue)([4](https://blog.gitguardian.com/celery-tasks-retries-errors/#:~:text=A%20Deep%20Dive%20into%20Celery,This)).
- Additionally, **threshold guards** can be baked into the code: for instance,
+dead-letter (indicating a systemic issue)(
+[4](https://blog.gitguardian.com/celery-tasks-retries-errors/#:~:text=A%20Deep%20Dive%20into%20Celery,This)).
+Additionally, **threshold guards** can be baked into the code: for instance,
 if an agent’s `total_cost` in state exceeds a safe limit, have the next node
 intentionally throw an exception to halt the process (this exception would be
 caught and could route to DLQ or an error handler). This proactive fail-fast
@@ -257,8 +257,8 @@ should trigger to limit damage:
   the frequency of LLM calls by introducing delays or using a token bucket
   algorithm per user. If an infinite loop is making rapid-fire calls, a rate
   limiter will slow it down and give an opportunity for other monitors to
-  intervene (or for the loop to self-terminate when hitting other
-  limits)([3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=This%20shift%20creates%20several%20practical,implications)).
+  intervene (or for the loop to self-terminate when hitting other limits)(
+  [3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=This%20shift%20creates%20several%20practical,implications)).
 
 - **Graceful Degradation:** Scale back the task complexity dynamically. If a
   particular workflow is consuming too many resources, the system can switch to
@@ -444,8 +444,8 @@ managing and limiting the costs of its computations.
   handlers capturing token usage and implementing rate limit logic.
 
 - *LangChain Forum – Token Usage in LangGraph* – Discussion on enabling usage
-  tracking (e.g. `stream_usage=True`) to obtain token counts for agent
-  calls([1](https://forum.langchain.com/t/how-to-obtain-token-usage-from-langgraph/1727#:~:text=Thanks%20for%20your%20help%2C%20I,I%20just%20needed%20to%20add)).
+  tracking (e.g. `stream_usage=True`) to obtain token counts for agent calls(
+  [1](https://forum.langchain.com/t/how-to-obtain-token-usage-from-langgraph/1727#:~:text=Thanks%20for%20your%20help%2C%20I,I%20just%20needed%20to%20add)).
 
 - *A.I. Practitioner – Scaling LangGraph Agents (Part 4)* – Notes on parallel
   execution trade-offs, including concurrency limits to avoid rapid quota
@@ -453,8 +453,8 @@ managing and limiting the costs of its computations.
   [3](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization#:~:text=This%20shift%20creates%20several%20practical,implications)).
 
 - *LangSmith Documentation – Cost Tracking* – Describes automatic recording of
-  LLM token usage and unified cost views for monitoring and
-  alerts([2](https://docs.langchain.com/langsmith/cost-tracking#:~:text=Building%20agents%20at%20scale%20introduces,This%20guide%20covers)).
+  LLM token usage and unified cost views for monitoring and alerts(
+  [2](https://docs.langchain.com/langsmith/cost-tracking#:~:text=Building%20agents%20at%20scale%20introduces,This%20guide%20covers)).
 
 - Stack Overflow – *Routing Celery failed tasks to Dead Letter Queue* – Best
   practices on using RabbitMQ Dead Letter Exchanges to capture failed tasks for

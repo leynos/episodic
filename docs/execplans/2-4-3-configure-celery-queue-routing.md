@@ -1,16 +1,16 @@
 # Configure Celery queue routing for workload isolation
 
 This ExecPlan (execution plan) is a living document. The sections `Constraints`,
- `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
 ## Purpose / big picture
 
-Roadmap item `2.4.3` configures Celery queue routing, so the generation platform
-can isolate I/O-bound and CPU-bound work. I/O-bound work is work that spends
-most of its time waiting on network or storage operations, such as Large
+Roadmap item `2.4.3` configures Celery queue routing, so the generation
+platform can isolate I/O-bound and CPU-bound work. I/O-bound work is work that
+spends most of its time waiting on network or storage operations, such as Large
 Language Model (LLM) calls, tool calls, database calls, or resume callbacks.
 CPU-bound work is work that spends most of its time using processor cycles,
 such as local parsing, scoring, transcript analysis, or other deterministic
@@ -480,10 +480,10 @@ Use Vidai Mock for any behavioural test that proves route intent through an
 LLM-backed generation flow. Do not use Vidai Mock for pure topology, runtime,
 or Celery app configuration tests.
 
-Use property tests only when an introduced route resolver, parser, or classifier
-has a meaningful invariant over a range of inputs. A fixed mapping from
-constant task names to constant workload classes does not need property tests
-unless it gains generated input handling.
+Use property tests only when an introduced route resolver, parser, or
+classifier has a meaningful invariant over a range of inputs. A fixed mapping
+from constant task names to constant workload classes does not need property
+tests unless it gains generated input handling.
 
 Do not require live RabbitMQ for default validation. If an optional
 broker-backed target is added later, it must be separate from the default pull
@@ -514,16 +514,16 @@ request gates and must not be the only proof of routing correctness.
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie`. The first `make test` run hit one
   transient async fixture timeout after 660 passes; the focused failing test
-  passed on rerun, and the full `make test` rerun passed with `661 passed,
-  3 skipped`.
+  passed on rerun, and the full `make test` rerun passed with
+  `661 passed, 3 skipped`.
 - [x] (2026-05-19T18:48:27Z) Ran `coderabbit review --agent` for the planning
   milestone and applied all eight minor/trivial prose findings.
 - [x] (2026-05-19T19:00:12Z) Ran a CodeRabbit confirmation pass, applied two
   additional minor prose findings, and reran `make markdownlint` plus
   `make nixie` successfully.
 - [x] (2026-05-19T19:13:40Z) Committed this ExecPlan, pushed the branch, and
-  opened draft pull request
-  [#106](https://github.com/leynos/episodic/pull/106) for plan review.
+  opened draft pull request [#106](https://github.com/leynos/episodic/pull/106)
+  for plan review.
 - [x] (2026-05-24T00:00:00Z) Received explicit approval to proceed with the
   planned implementation.
 - [x] (2026-05-24T00:00:00Z) Implemented Milestone 1 fail-first
@@ -542,8 +542,8 @@ request gates and must not be the only proof of routing correctness.
   test run passed with `664 passed, 3 skipped`.
 - [x] (2026-05-24T16:11:21Z) Ran CodeRabbit for the implementation milestone.
   CodeRabbit reported two minor findings asking for clearer assertion failure
-  messages in `tests/test_worker_routing_contract.py`; both were valid and
-  were applied.
+  messages in `tests/test_worker_routing_contract.py`; both were valid and were
+  applied.
 - [x] (2026-05-24T16:17:32Z) Re-ran gates after applying CodeRabbit findings:
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie` all passed. The test run again passed
@@ -565,8 +565,8 @@ request gates and must not be the only proof of routing correctness.
   CodeRabbit review.
 - [x] (2026-05-24T16:46:52Z) Ran final gates: `make check-fmt`,
   `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
-  `make nixie` all passed. The final test run passed with `664 passed,
-  3 skipped`.
+  `make nixie` all passed. The final test run passed with
+  `664 passed, 3 skipped`.
 - [x] (2026-05-24T16:46:52Z) Ran final CodeRabbit review after deterministic
   gates; CodeRabbit reported no findings.
 - [x] (2026-05-24T16:49:45Z) Committed the documentation and roadmap close-out,

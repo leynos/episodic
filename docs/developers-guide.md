@@ -173,8 +173,8 @@ Queue contract:
   `episodic.io`, exchange `episodic.tasks`, exchange type `topic`, and routing
   key `episodic.io.diagnostic`.
 - CPU diagnostic route: `episodic.worker.cpu_diagnostic` routes to queue
-  `episodic.cpu`, exchange `episodic.tasks`, exchange type `topic`, and
-  routing key `episodic.cpu.diagnostic`.
+  `episodic.cpu`, exchange `episodic.tasks`, exchange type `topic`, and routing
+  key `episodic.cpu.diagnostic`.
 
 ### Python dependencies
 
