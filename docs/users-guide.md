@@ -175,7 +175,7 @@ Reusable reference-document workflows currently support:
   Stale updates return `409 Conflict`.
 - Creating and listing immutable document revisions at
   `POST /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`
-   and
+  and
   `GET /v1/series-profiles/{profile_id}/reference-documents/{document_id}/revisions`.
 - Creating, listing, and fetching target bindings at
   `POST /v1/reference-bindings`, `GET /v1/reference-bindings`, and
@@ -281,6 +281,15 @@ Optional interpreter-pool flags:
   interpreter-pool dispatch activates.
 - `EPISODIC_INTERPRETER_POOL_MAX_WORKERS` caps the interpreter-pool worker
   count when that path is enabled.
+
+CPU-task executor metrics are exported through the shared
+`CpuTaskExecutorMetricsPort`, which extends `BoundedValueMetricsPort` in
+`episodic/metrics_ports.py`. Deployments that wire a metrics backend through
+that port can collect executor selection, interpreter-pool lifecycle, map item
+count, and shutdown-latency signals with bounded labels. In ingestion
+pipelines, pass the same metrics sink to
+`DefaultWeightingStrategy(metrics=...)` so weighting fan-out records executor
+observability in production.
 
 Current queue model:
 

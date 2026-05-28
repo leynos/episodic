@@ -417,13 +417,13 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 
 #### Speech synthesis contracts
 
-The speech synthesis boundary separates authorial data from provider
-parameters. `TTSPort` remains the single-speaker segment renderer used for
-ordinary narration and partial regeneration. `DialogueSpeechPort` is a separate
-optional port for providers that render multiple speaker turns as one
-conversation-aware artefact. This split preserves editability for per-segment
-stems whilst allowing providers such as Inworld Realtime or ElevenLabs
-text-to-dialogue to use conversational context when the series profile opts in.
+The speech synthesis boundary separates authorial data from provider parameters.
+`TTSPort` remains the single-speaker segment renderer used for ordinary
+narration and partial regeneration. `DialogueSpeechPort` is a separate optional
+port for providers that render multiple speaker turns as one conversation-aware
+artefact. This split preserves editability for per-segment stems whilst
+allowing providers such as Inworld Realtime or ElevenLabs text-to-dialogue to
+use conversational context when the series profile opts in.
 
 Every speech request is derived from canonical TEI P5:
 
@@ -491,11 +491,11 @@ per-segment stems for workflows that require surgical partial regeneration.
   provider calls so renders remain correlated end to end, with spans around
   pronunciation lookup and provider dispatch.
 - Classify failures as transport, provider, capability, pronunciation
-  resolution, validation, or post-render so dashboards and alerts remain
-  stable across vendors.
+  resolution, validation, or post-render so dashboards and alerts remain stable
+  across vendors.
 - Alert on synthesis failures and capability mismatches using aggregate
-  metrics: page when the failure rate exceeds 5 percent over 15 minutes or
-  five consecutive renders fail, warn when repeated unsupported-capability
+  metrics: page when the failure rate exceeds 5 percent over 15 minutes or five
+  consecutive renders fail, warn when repeated unsupported-capability
   diagnostics reach three in 30 minutes, and page when an approved
   pronunciation cannot be resolved.
 
@@ -549,10 +549,10 @@ erDiagram
   SPEECH_RENDER_REQUESTS ||--o{ SPEECH_RENDER_ARTIFACTS : produces
 ```
 
-_Caption: Speech synthesis entity relationships. Pronunciation entries have
-one or more realizations; voice personas and provider capabilities are selected
-for speech render requests; each speech render request produces one or more
-speech render artefacts._
+_Caption: Speech synthesis entity relationships. Pronunciation entries have one
+or more realizations; voice personas and provider capabilities are selected for
+speech render requests; each speech render request produces one or more speech
+render artefacts._
 
 #### Pronunciation repository
 
@@ -717,8 +717,8 @@ sequenceDiagram
     participant InlineCpuTaskExecutor
     participant InterpreterPoolCpuTaskExecutor
 
-    Caller->>DefaultWeightingStrategy: __init__(cpu_executor=None, min_parallel_items=None)
-    DefaultWeightingStrategy->>DefaultWeightingStrategy: build_cpu_task_executor_from_environment()
+    Caller->>DefaultWeightingStrategy: __init__(cpu_executor=None, metrics=None, min_parallel_items=None)
+    DefaultWeightingStrategy->>DefaultWeightingStrategy: build_cpu_task_executor_from_environment(os.environ, metrics=metrics)
     DefaultWeightingStrategy-->>CpuTaskExecutor: selected executor instance
 
     Caller->>DefaultWeightingStrategy: compute_weights(sources, series_configuration)
@@ -874,8 +874,8 @@ ports, including optional
 adapters that expose tool catalogues. Skill-based tool loading narrows the
 available tool set per workflow, reducing context size and guiding model choice.
 
-Roadmap item `2.4.1` now ships the first narrow implementation of that design
-in `episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort` once
+Roadmap item `2.4.1` now ships the first narrow implementation of that design in
+`episodic/orchestration/`. `StructuredGenerationPlanner` calls `LLMPort` once
 to obtain strict JSON, parses it into a typed `ExecutionPlan`, and records the
 planning model separately from the execution model selected in
 `GenerationOrchestrationConfig`. `StructuredPlanningOrchestrator` then executes
@@ -1456,7 +1456,7 @@ Agentic workflow behaviour is configurable per series profile:
   reusable reference document, including hashes and author metadata.
 - `reference_document_bindings` links pinned reference revisions to a target
   context (series profile, episode template, or ingestion run), with an optional
-   `effective_from_episode_id` anchor for forward-only applicability.
+  `effective_from_episode_id` anchor for forward-only applicability.
 - `uploads` records file upload metadata, content hashes, content type, size
   limits, storage location, and idempotency keys before uploaded material is
   attached to ingestion jobs.
@@ -1542,7 +1542,7 @@ profile guidance changes mid-series, editors will add a new revision and will
 create a binding with `effective_from_episode_id`; that revision will apply
 from the anchor episode onwards until superseded. Ingestion workflows will
 resolve these bindings and will snapshot selected revisions into ingestion-bound
- `source_documents`, preserving reproducible TEI provenance while allowing
+`source_documents`, preserving reproducible TEI provenance while allowing
 independent document reuse across jobs.
 
 TEI header payloads include an `episodic_provenance` extension with

@@ -123,6 +123,10 @@ Delivered artefacts:
   `EPISODIC_INTERPRETER_POOL_MIN_ITEMS`.
 - Benchmark CLI added at `episodic/benchmarks/interpreters.py`.
 - User and architecture docs updated with feature-flag guidance.
+- PR `#99` resolved the Celery integration gap called out in `Surprises &
+  discoveries` for issue `#66`: CPU-bound Celery tasks now have documented
+  task-level guidance and tests showing how to call
+  `build_cpu_task_executor_from_environment()` from within an eager task body.
 
 Validation evidence:
 

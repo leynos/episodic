@@ -1,60 +1,14 @@
 """Tests for the Celery worker scaffold."""
 
-import dataclasses as dc
 import typing as typ
 
 import pytest
 
+import episodic.concurrent_interpreters as ci
+from tests.conftest import FakeCpuDiagnostic, FakeIoDiagnostic, cpu_task_inner_fan_out
+
 if typ.TYPE_CHECKING:
     from kombu import Queue
-
-    from episodic.worker import (
-        CpuDiagnosticRequest,
-        CpuDiagnosticResult,
-        IoDiagnosticRequest,
-        IoDiagnosticResult,
-    )
-
-
-@dc.dataclass(slots=True)
-class _FakeIoDiagnostic:
-    """Record an I/O-bound diagnostic request and return a canned response."""
-
-    seen_messages: list[str]
-
-    def __call__(self, request: IoDiagnosticRequest) -> IoDiagnosticResult:
-        from episodic.worker import IoDiagnosticResult
-
-        self.seen_messages.append(request.message)
-        return IoDiagnosticResult(
-            message=request.message,
-            correlation_id=request.correlation_id,
-            worker_kind="io-bound",
-        )
-
-
-@dc.dataclass(slots=True)
-class _FakeCpuDiagnostic:
-    """Record a CPU-bound diagnostic request and return a canned response."""
-
-    seen_iterations: list[int]
-
-    def __call__(self, request: CpuDiagnosticRequest) -> CpuDiagnosticResult:
-        from episodic.worker import CpuDiagnosticResult
-
-        self.seen_iterations.append(request.iterations)
-        return CpuDiagnosticResult(
-            digest=f"digest-{request.iterations}",
-            iterations=request.iterations,
-            worker_kind="cpu-bound",
-        )
-
-
-def _runtime_environ() -> dict[str, str]:
-    return {
-        "EPISODIC_CELERY_BROKER_URL": "amqp://guest:guest@localhost:5672//",
-        "EPISODIC_CELERY_ALWAYS_EAGER": "true",
-    }
 
 
 def test_worker_topology_defines_io_and_cpu_queues() -> None:
@@ -202,18 +156,21 @@ def test_load_runtime_config_rejects_invalid_env_values(
     env_key: str,
     env_value: str,
     expected_message: str,
+    runtime_environ: dict[str, str],
 ) -> None:
     """Reject invalid environment values through runtime configuration."""
     from episodic.worker import load_runtime_config
 
     with pytest.raises(RuntimeError, match=expected_message):
         load_runtime_config({
-            **_runtime_environ(),
+            **runtime_environ,
             env_key: env_value,
         })
 
 
-def test_build_worker_launch_profiles_maps_workloads_to_distinct_pools() -> None:
+def test_build_worker_launch_profiles_maps_workloads_to_distinct_pools(
+    runtime_environ: dict[str, str],
+) -> None:
     """Capture the documented pool split between I/O and CPU workloads."""
     from episodic.worker import (
         WorkerPool,
@@ -223,7 +180,7 @@ def test_build_worker_launch_profiles_maps_workloads_to_distinct_pools() -> None
     )
 
     config = load_runtime_config({
-        **_runtime_environ(),
+        **runtime_environ,
         "EPISODIC_CELERY_IO_POOL": "eventlet",
         "EPISODIC_CELERY_IO_CONCURRENCY": "128",
         "EPISODIC_CELERY_CPU_CONCURRENCY": "6",
@@ -239,7 +196,44 @@ def test_build_worker_launch_profiles_maps_workloads_to_distinct_pools() -> None
     assert profiles[WorkloadClass.CPU_BOUND].queue_name == "episodic.cpu"
 
 
-def test_create_celery_app_registers_task_routes_and_queues() -> None:
+@pytest.mark.asyncio
+async def test_cpu_task_inner_fan_out_uses_environment_executor_pattern(
+    captured_interpreter_pool_workers: list[int | None],
+) -> None:
+    """Exercise the documented CPU task interpreter-pool integration seam."""
+    results = await cpu_task_inner_fan_out((1, 3, 5))
+
+    assert results == [2, 6, 10], (
+        "Expected task-level executor fan-out to preserve input ordering."
+    )
+    assert captured_interpreter_pool_workers == [2], (
+        "Expected task-level executor creation to honour interpreter-pool env."
+    )
+
+
+@pytest.mark.asyncio
+async def test_cpu_task_inner_fan_out_falls_back_when_flag_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep CPU task fan-out runnable when interpreter-pool dispatch is off."""
+    monkeypatch.delenv("EPISODIC_USE_INTERPRETER_POOL", raising=False)
+    monkeypatch.setattr(ci, "interpreter_pool_supported", lambda: True)
+    monkeypatch.setattr(
+        ci,
+        "_create_interpreter_pool_executor",
+        pytest.fail,
+    )
+
+    results = await cpu_task_inner_fan_out((2, 4))
+
+    assert results == [4, 8], (
+        "Expected documented task-level pattern to fall back to inline execution."
+    )
+
+
+def test_create_celery_app_registers_task_routes_and_queues(
+    runtime_environ: dict[str, str],
+) -> None:
     """Configure the documented queue topology on the Celery app."""
     from episodic.worker import (
         CPU_DIAGNOSTIC_TASK_NAME,
@@ -249,7 +243,7 @@ def test_create_celery_app_registers_task_routes_and_queues() -> None:
         load_runtime_config,
     )
 
-    app = create_celery_app(load_runtime_config(_runtime_environ()))
+    app = create_celery_app(load_runtime_config(runtime_environ))
     queues = typ.cast("tuple[Queue, ...]", app.conf.task_queues)
 
     assert app.conf.task_default_exchange == DEFAULT_WORKER_TOPOLOGY.exchange_name
@@ -283,7 +277,9 @@ def test_create_celery_app_registers_task_routes_and_queues() -> None:
     assert CPU_DIAGNOSTIC_TASK_NAME in app.tasks
 
 
-def test_create_celery_app_executes_representative_tasks_through_dependencies() -> None:
+def test_create_celery_app_executes_representative_tasks_through_dependencies(
+    runtime_environ: dict[str, str],
+) -> None:
     """Run eager tasks and prove that the task bodies depend on typed seams."""
     from episodic.worker import (
         CPU_DIAGNOSTIC_TASK_NAME,
@@ -293,10 +289,10 @@ def test_create_celery_app_executes_representative_tasks_through_dependencies() 
         load_runtime_config,
     )
 
-    io_handler = _FakeIoDiagnostic(seen_messages=[])
-    cpu_handler = _FakeCpuDiagnostic(seen_iterations=[])
+    io_handler = FakeIoDiagnostic(seen_messages=[])
+    cpu_handler = FakeCpuDiagnostic(seen_iterations=[])
     app = create_celery_app(
-        load_runtime_config(_runtime_environ()),
+        load_runtime_config(runtime_environ),
         WorkerDependencies(
             io_diagnostic=io_handler,
             cpu_diagnostic=cpu_handler,

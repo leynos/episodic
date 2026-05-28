@@ -86,6 +86,11 @@ story across developer machines and CI runners.
   process fan-out and the repository's opt-in interpreter-pool path for
   selected pure-Python workloads, with the enabling knobs documented in the
   same place.
+- CPU tasks running in `prefork` workers may optionally delegate inner fan-out
+  to `InterpreterPoolCpuTaskExecutor`, enabled with
+  `EPISODIC_USE_INTERPRETER_POOL`, dispatched with
+  `EPISODIC_INTERPRETER_POOL_MIN_ITEMS`, and capped with
+  `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`.
 - Future roadmap items can add Celery tasks by extending typed dependency seams
   rather than introducing ad hoc globals.
 
@@ -103,7 +108,9 @@ story across developer machines and CI runners.
 ## References
 
 - [docs/execplans/1-5-2-scaffold-celery-workers-with-rabbit-mq-integration.md](../execplans/1-5-2-scaffold-celery-workers-with-rabbit-mq-integration.md)
+- [docs/execplans/upgrade-python-to-3-14-adopt-concurrent-interpreters.md](../execplans/upgrade-python-to-3-14-adopt-concurrent-interpreters.md)
 - [docs/episodic-podcast-generation-system-design.md](../episodic-podcast-generation-system-design.md)
+- [episodic/concurrent_interpreters.py](../../episodic/concurrent_interpreters.py)
 - [episodic/worker/topology.py](../../episodic/worker/topology.py)
 - [episodic/worker/runtime.py](../../episodic/worker/runtime.py)
 - [episodic/worker/tasks.py](../../episodic/worker/tasks.py)

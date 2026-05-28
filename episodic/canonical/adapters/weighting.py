@@ -22,6 +22,7 @@ from episodic.canonical.adapters._coercion import coerce_float
 from episodic.canonical.ingestion import NormalizedSource, WeightingResult
 from episodic.concurrent_interpreters import (
     CpuTaskExecutor,
+    CpuTaskExecutorMetricsPort,
     build_cpu_task_executor_from_environment,
 )
 
@@ -118,6 +119,11 @@ class DefaultWeightingStrategy:
     Coefficients are read from the series configuration under the
     ``"weighting"`` key, falling back to defaults (quality=0.5, freshness=0.3,
     reliability=0.2) when absent. Results are clamped to [0, 1].
+
+    When ``cpu_executor`` is omitted, the strategy builds one from the process
+    environment and forwards optional ``metrics`` to
+    ``build_cpu_task_executor_from_environment`` so production deployments can
+    collect interpreter-pool observability at the composition root.
     """
 
     def __init__(
@@ -125,11 +131,29 @@ class DefaultWeightingStrategy:
         *,
         cpu_executor: CpuTaskExecutor | None = None,
         min_parallel_items: int | None = None,
+        metrics: CpuTaskExecutorMetricsPort | None = None,
     ) -> None:
+        """Initialise the weighting strategy.
+
+        Parameters
+        ----------
+        cpu_executor : CpuTaskExecutor | None
+            Optional executor override. When omitted, the strategy selects one
+            from the process environment.
+        min_parallel_items : int | None
+            Minimum source count before interpreter-backed dispatch is attempted.
+            ``None`` reads ``EPISODIC_INTERPRETER_POOL_MIN_ITEMS``.
+        metrics : CpuTaskExecutorMetricsPort | None
+            Metrics sink forwarded to the environment-built executor. Ignored
+            when ``cpu_executor`` is supplied explicitly.
+        """
         self._cpu_executor = (
             cpu_executor
             if cpu_executor is not None
-            else build_cpu_task_executor_from_environment()
+            else build_cpu_task_executor_from_environment(
+                os.environ,
+                metrics=metrics,
+            )
         )
         if min_parallel_items is None:
             self._min_parallel_items = _parse_min_parallel_items(
