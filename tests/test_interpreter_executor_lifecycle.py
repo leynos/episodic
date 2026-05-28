@@ -1,7 +1,5 @@
 """Lifecycle tests for interpreter CPU task executors."""
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures as cf
 from unittest import mock

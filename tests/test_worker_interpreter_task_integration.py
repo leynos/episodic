@@ -1,7 +1,5 @@
 """Celery task-boundary tests for interpreter-backed CPU fan-out."""
 
-from __future__ import annotations
-
 import asyncio
 import os
 import typing as typ

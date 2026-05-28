@@ -1,7 +1,5 @@
 """Observability tests for interpreter CPU task executors."""
 
-from __future__ import annotations
-
 import concurrent.futures as cf
 import dataclasses as dc
 import typing as typ
