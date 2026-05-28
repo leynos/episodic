@@ -104,15 +104,17 @@ def _validate_task_name_is_str(task_name: object) -> None:
         raise TypeError(msg)
 
 
+def _part_is_invalid(part: str) -> bool:
+    """Return True if a dotted-name segment is empty or contains whitespace."""
+    return not part or any(char.isspace() for char in part)
+
+
 def _validate_dotted_parts(task_parts: list[str]) -> None:
-    """Raise ValueError if there are too few parts or any part is empty."""
+    """Raise ValueError if there are too few parts or any part is invalid."""
     if len(task_parts) < MIN_DOTTED_TASK_NAME_PARTS:
         msg = "Worker task names must be non-empty dotted names."
         raise ValueError(msg)
-    if any(not part for part in task_parts):
-        msg = "Worker task names must be non-empty dotted names."
-        raise ValueError(msg)
-    if any(any(char.isspace() for char in part) for part in task_parts):
+    if any(_part_is_invalid(part) for part in task_parts):
         msg = "Worker task names must be non-empty dotted names."
         raise ValueError(msg)
 
