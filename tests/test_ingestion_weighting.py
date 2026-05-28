@@ -1,5 +1,6 @@
 """Unit tests for weighting strategy adapters."""
 
+import dataclasses as dc
 import typing as typ
 
 import pytest
@@ -30,6 +31,40 @@ class RecordingCpuTaskExecutor:
         """Map inputs and record invocation count for assertions."""
         self.map_calls += 1
         return [task(item) for item in items]
+
+
+@dc.dataclass(slots=True)
+class _RecordingCpuTaskExecutorMetrics:
+    """Capture executor selection metrics for composition-root wiring tests."""
+
+    counters: list[tuple[str, dict[str, str]]] = dc.field(default_factory=list)
+
+    def increment_counter(
+        self,
+        name: str,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Record a counter increment."""
+        self.counters.append((name, dict(labels)))
+
+    def observe_latency_ms(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Record a latency observation."""
+
+    def observe_value(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Record a scalar observation."""
 
 
 @pytest.fixture
@@ -163,3 +198,30 @@ async def test_weighting_strategy_threshold_dispatch(
     assert [result.computed_weight for result in results] == pytest.approx(
         expected_weights,
     ), "Expected deterministic computed weights for both dispatch paths."
+
+
+def test_default_weighting_strategy_forwards_metrics_to_executor_builder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Composition roots can wire executor metrics through the strategy."""
+    metrics = _RecordingCpuTaskExecutorMetrics()
+    captured: dict[str, object] = {}
+
+    def fake_build_cpu_task_executor_from_environment(
+        environ: cabc.Mapping[str, str],
+        *,
+        metrics: object = None,
+    ) -> RecordingCpuTaskExecutor:
+        captured["metrics"] = metrics
+        return RecordingCpuTaskExecutor()
+
+    monkeypatch.setattr(
+        "episodic.canonical.adapters.weighting.build_cpu_task_executor_from_environment",
+        fake_build_cpu_task_executor_from_environment,
+    )
+
+    DefaultWeightingStrategy(metrics=metrics)
+
+    assert captured["metrics"] is metrics, (
+        "Expected strategy construction to forward metrics to the executor builder."
+    )

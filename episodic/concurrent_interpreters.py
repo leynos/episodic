@@ -17,6 +17,11 @@ import threading
 import time
 import typing as typ
 
+from episodic.metrics_ports import (
+    BoundedValueMetricsPort,
+    NoopBoundedValueMetrics,
+)
+
 _InputT = typ.TypeVar("_InputT")
 _OutputT = typ.TypeVar("_OutputT")
 type _InterpreterPoolCapability = cabc.Callable[[], bool]
@@ -32,34 +37,8 @@ _TRUTHY_VALUES = frozenset({"1", "on", "true", "yes"})
 _log = logging.getLogger(__name__)
 
 
-class CpuTaskExecutorMetricsPort(typ.Protocol):
+class CpuTaskExecutorMetricsPort(BoundedValueMetricsPort, typ.Protocol):
     """Bounded-cardinality metrics sink for CPU task executors."""
-
-    def increment_counter(
-        self,
-        name: str,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Increment a bounded-cardinality counter."""
-
-    def observe_latency_ms(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Observe a latency measurement in milliseconds."""
-
-    def observe_value(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Observe a non-latency numeric measurement."""
 
 
 class _CpuTaskExecutorClockPort(typ.Protocol):
@@ -70,34 +49,8 @@ class _CpuTaskExecutorClockPort(typ.Protocol):
 
 
 @dc.dataclass(frozen=True, slots=True)
-class _NoopCpuTaskExecutorMetrics:
+class _NoopCpuTaskExecutorMetrics(NoopBoundedValueMetrics):
     """Default metrics sink used when no backend is wired."""
-
-    def increment_counter(
-        self,
-        name: str,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Ignore counter increments."""
-
-    def observe_latency_ms(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Ignore latency observations."""
-
-    def observe_value(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Ignore non-latency observations."""
 
 
 @dc.dataclass(frozen=True, slots=True)

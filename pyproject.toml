@@ -462,6 +462,7 @@ prefixes = [
     "episodic.canonical.reference_protocols",
     "episodic.canonical.unit_of_work_protocols",
     "episodic.llm.ports",
+    "episodic.metrics_ports",
 ]
 allowed = ["domain_ports"]
 

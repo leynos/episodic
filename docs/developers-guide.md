@@ -49,7 +49,7 @@ The target runs the Hecate architecture import-boundary checker, Ruff, and a
 focused Pylint 4 pass. The Pylint pass is invoked through
 `uv tool run --python pypy` with the pinned `pylint-pypy-shim` wrapper from
 [github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
- That wrapper installs the PyPy-specific Astroid compatibility patch before
+That wrapper installs the PyPy-specific Astroid compatibility patch before
 delegating to Pylint.
 
 Pylint's message selection is allow-listed in `pyproject.toml` with
@@ -237,10 +237,14 @@ When adding new worker tasks:
   lifetime and cleanup; inline executors do not need shutdown, while
   interpreter-pool executors must be shut down when their fan-out operation or
   explicit worker-scoped owner is finished.
-- Export CPU-task executor metrics through `CpuTaskExecutorMetricsPort`; it is
-  the shared metrics port for executor selection, interpreter-pool lifecycle,
-  map item count, and shutdown-latency collection. Keep labels bounded to
-  low-cardinality outcome and reason values.
+- Export CPU-task executor metrics through `CpuTaskExecutorMetricsPort`; it
+  extends the shared `BoundedValueMetricsPort` in `episodic/metrics_ports.py`
+  for executor selection, interpreter-pool lifecycle, map item count, and
+  shutdown-latency collection. Keep labels bounded to low-cardinality outcome
+  and reason values. Wire production backends through
+  `DefaultWeightingStrategy(metrics=...)` or by calling
+  `build_cpu_task_executor_from_environment(..., metrics=...)` directly at the
+  composition root.
 
 ## Database migrations
 
@@ -269,7 +273,7 @@ The `make check-migrations` target detects drift between the ORM models and the
 applied migration history. It starts an ephemeral Postgres via py-pglite,
 applies all Alembic migrations, and uses
 `alembic.autogenerate.compare_metadata()` to compare the migrated schema against
- `Base.metadata`. If they differ, the check exits non-zero and reports the
+`Base.metadata`. If they differ, the check exits non-zero and reports the
 discrepancies.
 
 Run it locally before committing model changes:
@@ -339,7 +343,7 @@ Key expectations:
   fixtures raise a clear error instead of silently skipping tests.
 - `make check-migrations` uses the same database technology, but a separate
   bootstrap path. `episodic/canonical/storage/migration_check.py` starts a plain
-   `PGliteManager`, creates an async SQLAlchemy engine from
+  `PGliteManager`, creates an async SQLAlchemy engine from
   `config.get_connection_string()`, applies Alembic migrations, and compares
   the migrated schema against `Base.metadata`.
 
@@ -387,7 +391,7 @@ The `SqlAlchemyUnitOfWork` manages transaction boundaries:
 
 Database-level constraints (unique slugs, foreign keys, and CHECK constraints
 such as the weight bound on source documents) are enforced by Postgres and raise
- `sqlalchemy.exc.IntegrityError` on violation.
+`sqlalchemy.exc.IntegrityError` on violation.
 
 ### Architecture enforcement
 
@@ -606,10 +610,11 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 
 - `episodic/qa/chrono.py` contains `ChronoRuntimeEstimator`, typed
   request/result objects, estimator metadata, the deterministic local
-  spoken-runtime heuristic, `ChronoMetricsPort`, and `ChronoClockPort`. The
-  module delegates TEI P5 parsing and spoken-text extraction to
-  `tei-rapporteur`; it must not add a separate XML parser or local TEI
-  traversal path.
+  spoken-runtime heuristic, `ChronoMetricsPort`, and `ChronoClockPort`.
+  `ChronoMetricsPort` extends the shared `BoundedMetricsPort` in
+  `episodic/metrics_ports.py`. The module delegates TEI P5 parsing and
+  spoken-text extraction to `tei-rapporteur`; it must not add a separate XML
+  parser or local TEI traversal path.
 - `episodic/qa/chrono_langgraph.py` contains the in-process LangGraph seam for
   running Chrono as a QA graph node without attaching Large Language Model
   (LLM) usage metadata.
@@ -786,7 +791,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `<div type="chapters">` element into the TEI body using the representation
   defined by
   [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md).
-   The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
+  The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
   `@n` stores the required start time, and `@corresp` stores an optional source
   locator. Optional DTO `end` and `duration` values are validated but not
   emitted into TEI until the TEI tooling exposes supported attributes.
@@ -963,13 +968,12 @@ stored planner-result payloads.
 ### Testing the orchestration slice
 
 - Unit coverage for DTO validation, planner behaviour, orchestration dispatch,
-  show-notes execution, guest-bio execution, and properties lives in the
-  focused `tests/test_orchestration_*.py`, `tests/test_show_notes_executor.py`,
-  and `tests/test_guest_bios_executor.py` modules.
+  show-notes execution, guest-bio execution, and properties lives in the focused
+  `tests/test_orchestration_*.py`, `tests/test_show_notes_executor.py`, and
+  `tests/test_guest_bios_executor.py` modules.
 - Issue `#72` property coverage lives in
   `tests/test_orchestration_properties.py` and the focused sibling modules for
-  config/model-tier boundaries, planner format errors, and LangGraph
-  invariants.
+  config/model-tier boundaries, planner format errors, and LangGraph invariants.
 - `tests/test_generation_orchestration_snapshots.py` pins planner format-error
   messages and orchestration artefacts with Syrupy snapshots.
 - LangGraph seam coverage lives in
@@ -1037,7 +1041,9 @@ testing and initial deployments:
   coefficients from the series configuration or defaults. The configuration
   dictionary may contain a `"weighting"` key with `"quality_coefficient"`
   (default 0.5), `"freshness_coefficient"` (default 0.3), and
-  `"reliability_coefficient"` (default 0.2).
+  `"reliability_coefficient"` (default 0.2). Pass optional `metrics=` when
+  constructing the strategy so production deployments can wire
+  `CpuTaskExecutorMetricsPort` through to the environment-built executor.
 - `HighestWeightConflictResolver` — selects the highest-weighted source as
   canonical; all others are rejected with provenance preserved.
 
@@ -1140,9 +1146,9 @@ def configure_logging(
 ```
 
 `level` is matched case-insensitively against `LogLevel` members. Returns a
-`tuple[LogLevel, bool]` — the normalized effective level and a flag that is `True`
-when the default (`INFO`) was substituted because the input was absent or
-unrecognized. The first element is always a `LogLevel` member; because
+`tuple[LogLevel, bool]` — the normalized effective level and a flag that is
+`True` when the default (`INFO`) was substituted because the input was absent
+or unrecognized. The first element is always a `LogLevel` member; because
 `LogLevel` is a `StrEnum`, those values are also `str` instances. Passing
 `"WARN"` (any case) normalizes to `WARNING` and emits a `DeprecationWarning`.
 The `force` parameter is forwarded directly to `femtologging.basicConfig`.

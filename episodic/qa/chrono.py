@@ -37,6 +37,8 @@ import typing as typ
 
 import tei_rapporteur as _tei
 
+from episodic.metrics_ports import BoundedMetricsPort, NoopBoundedMetrics
+
 if typ.TYPE_CHECKING:
     from collections import abc as cabc
 
@@ -50,25 +52,8 @@ _METRIC_EVALUATIONS = "chrono.runtime_estimator.evaluations"
 _METRIC_LATENCY_MS = "chrono.runtime_estimator.latency_ms"
 
 
-class ChronoMetricsPort(typ.Protocol):
+class ChronoMetricsPort(BoundedMetricsPort, typ.Protocol):
     """Bounded-cardinality metrics sink for Chrono runtime estimation."""
-
-    def increment_counter(
-        self,
-        name: str,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Increment a bounded-cardinality counter."""
-
-    def observe_latency_ms(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Observe a latency measurement in milliseconds."""
 
 
 class ChronoClockPort(typ.Protocol):
@@ -79,25 +64,8 @@ class ChronoClockPort(typ.Protocol):
 
 
 @dc.dataclass(frozen=True, slots=True)
-class _NoopChronoMetrics:
+class _NoopChronoMetrics(NoopBoundedMetrics):
     """Default metrics sink used when no backend is wired."""
-
-    def increment_counter(
-        self,
-        name: str,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Ignore counter increments."""
-
-    def observe_latency_ms(
-        self,
-        name: str,
-        value: float,
-        *,
-        labels: cabc.Mapping[str, str],
-    ) -> None:
-        """Ignore latency observations."""
 
 
 @dc.dataclass(frozen=True, slots=True)
