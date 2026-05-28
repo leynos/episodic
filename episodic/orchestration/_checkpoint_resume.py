@@ -118,6 +118,11 @@ async def _suspend_execute_node(
         idempotency_key=idempotency_key,
     )
     fresh_id = str(uuid.uuid4())
+    # The suspend path deliberately performs no pre-save lookup. It always
+    # asks the checkpoint port to save a fresh checkpoint and derives reuse
+    # from the returned checkpoint id. Concrete ports own the idempotency
+    # boundary, so concurrent invocations for the same workflow step converge
+    # without a time-of-check/time-of-use window.
     existing = await checkpoint_port.save_or_reuse(
         dto.WorkflowCheckpoint(
             checkpoint_id=fresh_id,
@@ -163,10 +168,17 @@ async def resume_generation_orchestration(
     single result. Any future model that allows one checkpoint to cover
     multiple `planner_result.plan.steps` entries must update this code path.
 
+    The resume action executes before the checkpoint is marked ``resumed``. If
+    the action completes and `checkpoint_port.mark_resumed` fails or the caller
+    rolls back the unit of work, the checkpoint remains ``suspended``. That
+    partial failure is non-destructive, but retry safety then depends on the
+    concrete `TaskResumePort` adapter treating duplicate resume commands
+    idempotently.
+
     Raises
     ------
         ValueError: If the command references an unknown checkpoint.
-        TypeError: If the stored checkpoint payload cannot be deserialised into
+        TypeError: If the stored checkpoint payload cannot be deserialized into
             the expected planner-result shape.
     """
     _log_event(

@@ -937,6 +937,47 @@ checkpoint resumed, and returns the final `GenerationOrchestrationResult`. It
 raises `ValueError` for unknown checkpoints and `TypeError` for malformed
 stored planner-result payloads.
 
+### Checkpoint atomicity and observability
+
+Durable checkpoint suspend uses `CheckpointPort.save_or_reuse(...)` as the
+atomic idempotency boundary. Callers do not perform a pre-save lookup. They
+construct a fresh `WorkflowCheckpoint`, call `save_or_reuse(...)`, and treat
+the returned checkpoint identifier as authoritative. The SQLAlchemy adapter
+inserts inside a nested savepoint and relies on the `idempotency_key`
+uniqueness constraint for first-write-wins convergence. Concurrent suspend
+attempts for the same workflow step therefore either persist the first
+checkpoint or reuse the checkpoint that already owns the idempotency key.
+
+`mark_resumed(...)` participates in the caller's unit of work. A committed unit
+of work records the checkpoint as `resumed`; a rolled-back unit leaves the
+checkpoint `suspended`, so the recovery path is non-destructive. Any retry
+after a resume-side partial failure depends on the concrete `TaskResumePort`
+adapter treating duplicate resume commands idempotently.
+
+Checkpoint storage metrics use the shared `MetricsPort` contract from
+`episodic.observability` and must keep labels bounded. The SQLAlchemy adapter
+emits:
+
+- `workflow_checkpoint.save_or_reuse.operations` with `outcome` values
+  `persisted`, `reused`, or `recovery_failure`.
+- `workflow_checkpoint.save_or_reuse.idempotency_conflicts` with `outcome` set
+  to `conflict`.
+- `workflow_checkpoint.save_or_reuse.latency_ms` with the same `outcome` labels
+  as the save operation counter.
+- `workflow_checkpoint.mark_resumed.operations` and
+  `workflow_checkpoint.mark_resumed.latency_ms` with `outcome` values `marked`
+  or `unknown_checkpoint`.
+- `workflow_checkpoint.recovery_failures` with `operation=save_or_reuse` and
+  `reason=conflict_missing_checkpoint`.
+
+Production alerting should page on any non-zero
+`workflow_checkpoint.recovery_failures{reason="conflict_missing_checkpoint"}`
+event, because it means duplicate-key convergence failed after the database
+reported an idempotency conflict. Trend
+`workflow_checkpoint.save_or_reuse.idempotency_conflicts` and save latency for
+load and retry pressure, but do not label checkpoint metrics with workflow ids,
+checkpoint ids, or idempotency keys.
+
 ### Maintainer rules
 
 - Keep the planner strict: parse model output into typed DTOs immediately and
