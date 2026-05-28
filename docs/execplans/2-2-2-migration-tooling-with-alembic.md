@@ -430,7 +430,7 @@ Add migration check step to `.github/workflows/ci.yml`.
 ### Step 8: Update documentation
 
 Edit `docs/developers-guide.md`,
-`docs/episodic-podcast-generation-system- design.md`, `docs/users-guide.md`, and
+`docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`, and
 `docs/roadmap.md` as described in Stage E.
 
 ### Step 9: Run quality gates

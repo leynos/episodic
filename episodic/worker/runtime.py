@@ -290,19 +290,43 @@ def _build_task_routes(
     task_workloads: cabc.Mapping[str, WorkloadClass] = SCAFFOLD_TASK_WORKLOADS,
 ) -> dict[str, dict[str, str]]:
     """Build task routes and log route-table validation context."""
-    logger.info(f"Building Celery worker task routes for {len(task_workloads)} tasks.")
+
+    def _log_info(message: str, *args: object) -> None:
+        try:
+            logger.info(message, *args)
+        except TypeError:
+            logger.info(message % args)
+
+    _log_info(
+        "Building Celery worker task routes for %s tasks.",
+        len(task_workloads),
+    )
     try:
         task_routes = topology.task_routes(task_workloads)
     except (TypeError, ValueError) as exc:
         validation_error = str(exc)
-        logger.exception(
-            "Celery worker task route validation failed for "
-            f"tasks={tuple(task_workloads)!r}, "
-            f"workloads={tuple(task_workloads.values())!r}: "
-            f"{validation_error}"
-        )
+        log_exception = logger.exception
+        try:
+            log_exception(
+                (
+                    "Celery worker task route validation failed for "
+                    "tasks=%r, workloads=%r: %s"
+                ),
+                tuple(task_workloads),
+                tuple(task_workloads.values()),
+                validation_error,
+            )
+        except TypeError:
+            log_exception(
+                "Celery worker task route validation failed for tasks="
+                f"{tuple(task_workloads)!r}, workloads="
+                f"{tuple(task_workloads.values())!r}: {validation_error}",
+            )
         raise
-    logger.info(f"Built Celery worker task routes for {len(task_routes)} tasks.")
+    _log_info(
+        "Built Celery worker task routes for %s tasks.",
+        len(task_routes),
+    )
     return task_routes
 def create_celery_app_from_env() -> Celery:
     """Build the Celery worker scaffold from environment configuration."""
