@@ -1,4 +1,14 @@
-"""Tests for StructuredPlanningOrchestrator."""
+"""Behaviour tests for the structured planning orchestrator.
+
+These tests document how `StructuredPlanningOrchestrator` connects the
+structured planner port, tool-executor port, and generation result aggregation
+helpers. They give CI visibility into the orchestration contract: plans are
+produced by `StructuredGenerationPlanner`, actions are dispatched through a
+tool adapter, show-notes tool output is preserved, and planner/action usage is
+rolled up into the final `GenerationOrchestrationResult`.
+"""
+
+import json
 
 import pytest
 
@@ -8,6 +18,8 @@ from episodic.orchestration import (
     ModelTier,
     PlannedAction,
     RoutingToolExecutor,
+    ShowNotesFormatError,
+    ShowNotesToolExecutor,
     StructuredGenerationPlanner,
     StructuredPlanningOrchestrator,
     ToolExecutionError,
@@ -56,6 +68,95 @@ async def test_orchestrator_dispatches_through_tool_port() -> None:
     assert context.correlation_id == "corr-123"
     assert result.action_results == (tool_result,)
     assert result.total_usage == _usage(input_tokens=32, output_tokens=18)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_aggregates_show_notes_tool_output() -> None:
+    """Orchestrator should aggregate real show-notes tool output and usage."""
+    planner_llm = _FakeLLMPort([
+        _response(
+            _plan_payload(),
+            model="gpt-4.1",
+            usage=_usage(input_tokens=20, output_tokens=10),
+        )
+    ])
+    show_notes_llm = _FakeLLMPort([
+        _response(
+            json.dumps({
+                "entries": [
+                    {
+                        "topic": "Structured planning",
+                        "summary": "The hosts explain typed orchestration outputs.",
+                        "timestamp": "PT5M30S",
+                        "tei_locator": "#structured-planning",
+                    }
+                ]
+            }),
+            model="gpt-4o-mini",
+            usage=_usage(input_tokens=18, output_tokens=7),
+        )
+    ])
+    planner = StructuredGenerationPlanner(llm=planner_llm, config=_config())
+    tool_executor = ShowNotesToolExecutor(llm=show_notes_llm, config=_config())
+    orchestrator = StructuredPlanningOrchestrator(
+        planner=planner,
+        tool_executor=tool_executor,
+    )
+
+    result = await orchestrator.orchestrate(_request())
+
+    assert result.plan.plan_version == "1.0"
+    assert result.planner_usage == _usage(input_tokens=20, output_tokens=10)
+    assert result.total_usage == _usage(input_tokens=38, output_tokens=17)
+    assert len(result.action_results) == 1
+
+    action_result = result.action_results[0]
+    assert action_result.action_kind is ActionKind.GENERATE_SHOW_NOTES
+    assert action_result.show_notes_result is not None
+    assert action_result.show_notes_result.usage == _usage(
+        input_tokens=18,
+        output_tokens=7,
+    )
+    assert action_result.show_notes_result.entries[0].tei_locator == (
+        "#structured-planning"
+    )
+    assert show_notes_llm.requests[0].model == "gpt-4o-mini"
+    assert "template_structure" in show_notes_llm.requests[0].prompt
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_propagates_show_notes_format_errors() -> None:
+    """Malformed show-notes output should fail the orchestration run clearly."""
+    planner_llm = _FakeLLMPort([
+        _response(
+            _plan_payload(),
+            model="gpt-4.1",
+            usage=_usage(input_tokens=20, output_tokens=10),
+        )
+    ])
+    show_notes_llm = _FakeLLMPort([
+        _response(
+            json.dumps({"entries": [{"topic": "Missing summary"}]}),
+            model="gpt-4o-mini",
+            usage=_usage(input_tokens=18, output_tokens=7),
+        )
+    ])
+    planner = StructuredGenerationPlanner(llm=planner_llm, config=_config())
+    tool_executor = ShowNotesToolExecutor(llm=show_notes_llm, config=_config())
+    orchestrator = StructuredPlanningOrchestrator(
+        planner=planner,
+        tool_executor=tool_executor,
+    )
+
+    with pytest.raises(
+        ShowNotesFormatError,
+        match="malformed structured JSON",
+    ) as exc_info:
+        await orchestrator.orchestrate(_request())
+
+    assert exc_info.value.__cause__ is not None
+    assert "summary" in str(exc_info.value.__cause__)
+    assert len(show_notes_llm.requests) == 1
 
 
 @pytest.mark.asyncio

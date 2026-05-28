@@ -1,5 +1,13 @@
-"""Hypothesis property tests for orchestration LangGraph token rollups."""
+"""Property tests for orchestration graph usage rollups.
 
+This module uses Hypothesis to exercise the relationships between planner DTOs,
+action results, the LangGraph orchestration wrapper, and the shared
+`build_generation_result` aggregation helper. The tests are useful because they
+check token accounting invariants over many generated inputs, giving CI
+coverage that example-based orchestration tests cannot provide.
+"""
+
+import dataclasses
 import string
 
 import hypothesis.strategies as st
@@ -18,12 +26,14 @@ from episodic.orchestration import (
     PlannedAction,
     PlannerResult,
     build_generation_orchestration_graph,
+    build_generation_result,
 )
 from tests._orchestration_property_support import (
     PropGraphPlanner,
     PropGraphToolExecutor,
     PropTokenInputs,
     token_inputs_strategy,
+    unconstrained_usage_counts_strategy,
 )
 
 
@@ -111,6 +121,42 @@ def _assert_usage_rollup(
         f"expected {expected_total_tokens}, "
         f"got {result.total_usage.total_tokens}"
     )
+
+
+@given(
+    planner=unconstrained_usage_counts_strategy,
+    action=unconstrained_usage_counts_strategy,
+)
+@settings(max_examples=50)
+def test_build_generation_result_total_usage_property(
+    planner: tuple[int, int, int],
+    action: tuple[int, int, int],
+) -> None:
+    """Property test: generation results roll up usage from summed token counts."""
+    planner_result, actions = _build_planner_and_action(
+        PropTokenInputs(
+            planner_input=planner[0],
+            planner_output=planner[1],
+            action_input=action[0],
+            action_output=action[1],
+        ),
+        "usage-property",
+    )
+    planner_result = dataclasses.replace(
+        planner_result,
+        usage=LLMUsage(*planner),
+    )
+    actions[0] = dataclasses.replace(actions[0], usage=LLMUsage(*action))
+
+    result = build_generation_result(planner_result, tuple(actions))
+
+    expected_input_tokens = planner[0] + action[0]
+    expected_output_tokens = planner[1] + action[1]
+    assert result.total_usage.input_tokens == expected_input_tokens
+    assert result.total_usage.output_tokens == expected_output_tokens
+    assert result.total_usage.total_tokens == (
+        expected_input_tokens + expected_output_tokens
+    ), f"expected total usage derived from summed counts, got {result.total_usage!r}"
 
 
 @given(
