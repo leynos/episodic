@@ -285,6 +285,7 @@ def create_celery_app(
     register_scaffold_tasks(app, worker_dependencies)
     return app
 
+
 def _build_task_routes(
     topology: WorkerTopology,
     task_workloads: cabc.Mapping[str, WorkloadClass] | None = None,
@@ -329,6 +330,8 @@ def _build_task_routes(
         len(task_routes),
     )
     return task_routes
+
+
 def create_celery_app_from_env() -> Celery:
     """Build the Celery worker scaffold from environment configuration."""
     return create_celery_app(load_runtime_config())

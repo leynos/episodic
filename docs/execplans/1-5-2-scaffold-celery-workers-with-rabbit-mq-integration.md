@@ -143,8 +143,7 @@ Success is observable in the following ways:
   medium. Mitigation: decide early whether the scaffold includes an
   `LLMPort-facing` task. If not, document explicitly why Vidai Mock is not
   exercised in this slice; if yes, route all behavioural coverage for that task
-  through
-  Vidai Mock.
+  through Vidai Mock.
 
 ## Progress
 

@@ -218,9 +218,9 @@ When adding new worker tasks:
   adapters directly into task code.
 - Extend the explicit task-name tuple and workload map together, then update
   the topology-backed routing tests so the new task's queue assignment remains
-  deliberate. Unknown or malformed task names, and non-`WorkloadClass`
-  workload values, must fail during route-table construction instead of falling
-  through to Celery's default queue.
+  deliberate. Unknown or malformed task names, and non-`WorkloadClass` workload
+  values, must fail during route-table construction instead of falling through
+  to Celery's default queue.
 - For CPU-bound tasks on `episodic.cpu` that can split pure-Python inner work
   into independent items, build the task-level executor from the environment:
 

@@ -853,10 +853,11 @@ does not modify existing code. If a stage fails:
 2. Rerun the targeted tests for that stage.
 3. Rerun the full Stage H gate sequence before closing the work.
 
-If TEI enrichment via `tei_rapporteur` proves infeasible, stop implementation and
-escalate immediately. Record the capability gap in the ADR and decision log, then
-implement the missing TEI parsing support in `tei_rapporteur` before resuming.
-TEI parsing must continue to use TEI-P5 handling through `tei_rapporteur` only.
+If TEI enrichment via `tei_rapporteur` proves infeasible, stop implementation
+and escalate immediately. Record the capability gap in the ADR and decision
+log, then implement the missing TEI parsing support in `tei_rapporteur` before
+resuming. TEI parsing must continue to use TEI-P5 handling through
+`tei_rapporteur` only.
 
 ## Artefacts and notes
 
