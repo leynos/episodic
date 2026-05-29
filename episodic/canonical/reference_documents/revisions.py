@@ -12,13 +12,14 @@ from .helpers import (
     _require_reference_revision,
     _validate_pagination,
 )
-from .types import (
-    ReferenceDocumentRevisionData,
-    ReferenceDocumentRevisionListRequest,
-)
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+
+    from .types import (
+        ReferenceDocumentRevisionData,
+        ReferenceDocumentRevisionListRequest,
+    )
 
 
 async def create_reference_document_revision(

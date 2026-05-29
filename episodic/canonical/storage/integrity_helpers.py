@@ -9,12 +9,12 @@ that should propagate unchanged.
 
 import typing as typ
 
-from sqlalchemy.exc import IntegrityError
-
 from episodic.canonical.constraints import REVISION_CONSTRAINT_NAMES
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from sqlalchemy.exc import IntegrityError
 
 
 def _exception_chain(exc: object) -> cabc.Iterator[object]:

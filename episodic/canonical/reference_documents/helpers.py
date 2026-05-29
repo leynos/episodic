@@ -155,5 +155,3 @@ class _BindingTargetAlignment:
     episode_template_id: uuid.UUID | None
     ingestion_job_id: uuid.UUID | None
     document_owner_series_id: uuid.UUID
-
-
