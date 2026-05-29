@@ -174,8 +174,8 @@ enrichment.
   parsed `tei_rapporteur` payloads.
 - [x] 2026-05-14: Ran focused validation for milestone 2/3 with `set -o
   pipefail`, including `uv run pytest tests/test_guest_bios.py
-  tests/test_guest_bios_properties.py -q`, `make check-fmt`, `make typecheck`, `
-  make lint`, `make markdownlint`, and `make nixie`. Ran `coderabbit review
+  tests/test_guest_bios_properties.py -q`, `make check-fmt`, `make typecheck`,
+  `make lint`, `make markdownlint`, and `make nixie`. Ran `coderabbit review
   --agent`; it completed with zero findings.
 - [x] 2026-05-14: Added
   `generate_guest_bios_from_reference_bindings(...)` to resolve existing
