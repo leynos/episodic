@@ -9,11 +9,13 @@ and the atomicity guarantees expected by orchestration suspend/resume paths.
 import asyncio
 import typing as typ
 import uuid
+from unittest import mock
 
 import hypothesis.strategies as st
 import pytest
 import sqlalchemy as sa
 from hypothesis import HealthCheck, given, settings
+from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.storage import (
     SqlAlchemyUnitOfWork,
@@ -223,6 +225,70 @@ async def test_checkpoint_store_records_checkpoint_metrics(
         ),
     ]
     assert all(value > 0 for _name, value, _labels in metrics.latencies)
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_store_records_recovery_failure_metrics() -> None:
+    """Persisted conflict without a recoverable checkpoint records failure metrics."""
+    metrics = _RecordingMetrics()
+    clock = _StepClock()
+    checkpoint = _checkpoint(
+        idempotency_key="corr-storage:generation_orchestration:execute:race:0"
+    )
+
+    # Construct an IntegrityError that mirrors what SQLAlchemy raises when the
+    # database rejects a duplicate idempotency key.
+    integrity_error = IntegrityError(
+        statement="INSERT INTO workflow_checkpoints ...",
+        params={},
+        orig=Exception("UNIQUE constraint failed: idempotency_key"),
+    )
+
+    # The `begin_nested()` call returns an async context manager. The session
+    # `flush()` inside that context manager raises IntegrityError so the savepoint
+    # rolls back and the error propagates to the adapter's except branch.
+    savepoint_cm = mock.MagicMock()
+    savepoint_cm.__aenter__ = mock.AsyncMock(return_value=savepoint_cm)
+    savepoint_cm.__aexit__ = mock.AsyncMock(return_value=None)
+
+    # `execute()` is awaited and must return an object whose `scalar_one_or_none()`
+    # returns `None`, simulating the conflicting row vanishing before recovery.
+    empty_result = mock.MagicMock()
+    empty_result.scalar_one_or_none.return_value = None
+
+    session = mock.MagicMock()
+    session.begin_nested = mock.MagicMock(return_value=savepoint_cm)
+    session.add = mock.MagicMock()
+    session.flush = mock.AsyncMock(side_effect=integrity_error)
+    session.execute = mock.AsyncMock(return_value=empty_result)
+
+    store = SqlAlchemyWorkflowCheckpointStore(
+        typ.cast("AsyncSession", session),
+        metrics=metrics,
+        clock=clock,
+    )
+
+    with pytest.raises(IntegrityError):
+        await store.save_or_reuse(checkpoint)
+
+    assert (
+        "workflow_checkpoint.save_or_reuse.idempotency_conflicts",
+        {"outcome": "conflict"},
+    ) in metrics.counters
+    assert (
+        "workflow_checkpoint.recovery_failures",
+        {"operation": "save_or_reuse", "reason": "conflict_missing_checkpoint"},
+    ) in metrics.counters
+    assert (
+        "workflow_checkpoint.save_or_reuse.operations",
+        {"outcome": "recovery_failure"},
+    ) in metrics.counters
+    assert [(name, labels) for name, _value, labels in metrics.latencies] == [
+        (
+            "workflow_checkpoint.save_or_reuse.latency_ms",
+            {"outcome": "recovery_failure"},
+        ),
+    ]
 
 
 @pytest.mark.asyncio
