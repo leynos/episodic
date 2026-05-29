@@ -3,8 +3,9 @@
 Orchestrates the creation of a ``ReferenceBinding``: parses identifiers via
 ``_binding_validation``, loads the required revision and document, validates
 target ownership and episode constraints, constructs the domain object, and
-persists it. Maps SQLAlchemy ``IntegrityError`` violations to typed
-``ReferenceConflictError`` exceptions.
+persists it. Duplicate target/revision conflicts are translated to
+``ReferenceConflictError`` by the storage adapter, so this module no longer
+inspects SQLAlchemy ``IntegrityError`` exceptions.
 
 Does not implement query operations. The public entry point
 ``create_reference_binding`` is re-exported through the ``bindings`` façade.
@@ -14,14 +15,6 @@ import datetime as dt
 import typing as typ
 import uuid
 
-from sqlalchemy.exc import IntegrityError
-
-from episodic.canonical.constraints import (
-    UQ_REF_DOC_BINDINGS_JOB_REV,
-    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
-)
 from episodic.canonical.domain import ReferenceBinding
 
 from ._binding_validation import (
@@ -32,13 +25,11 @@ from ._binding_validation import (
 )
 from .helpers import (
     _BindingTargetAlignment,
-    _constraint_name,
     _require_reference_document,
     _require_reference_revision,
 )
 from .types import (
     ReferenceBindingData,
-    ReferenceConflictError,
     ReferenceValidationError,
     _ParsedBindingIds,
 )
@@ -47,14 +38,6 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
-
-
-_BINDING_CONSTRAINT_NAMES = {
-    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
-    UQ_REF_DOC_BINDINGS_JOB_REV,
-}
 
 
 def _new_binding(
@@ -90,15 +73,14 @@ def _new_binding(
 
 
 async def _persist_binding(uow: CanonicalUnitOfWork, binding: ReferenceBinding) -> None:
-    try:
-        await uow.reference_bindings.add(binding)
-        await uow.commit()
-    except IntegrityError as exc:
-        await uow.rollback()
-        if _constraint_name(exc) not in _BINDING_CONSTRAINT_NAMES:
-            raise
-        msg = "Reference binding conflict: duplicate target/revision binding."
-        raise ReferenceConflictError(msg) from exc
+    """Persist a binding through the repository.
+
+    Duplicate-target binding violations are translated into
+    ``ReferenceConflictError`` by the storage adapter, so the service does not
+    need to inspect ORM exceptions.
+    """
+    await uow.reference_bindings.add(binding)
+    await uow.commit()
 
 
 async def create_reference_binding(
