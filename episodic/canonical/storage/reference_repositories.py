@@ -3,7 +3,14 @@
 import typing as typ
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 
+from episodic.canonical.constraints import (
+    UQ_REF_DOC_BINDINGS_JOB_REV,
+    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
+    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
+    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
+)
 from episodic.canonical.domain import (
     ReferenceBinding,
     ReferenceBindingTargetKind,
@@ -11,12 +18,14 @@ from episodic.canonical.domain import (
     ReferenceDocumentKind,
     ReferenceDocumentRevision,
 )
+from episodic.canonical.reference_documents.types import ReferenceConflictError
 from episodic.canonical.reference_protocols import (
     ReferenceBindingRepository,
     ReferenceDocumentRepository,
     ReferenceDocumentRevisionRepository,
 )
 
+from .integrity_helpers import constraint_name
 from .reference_mappers import (
     _reference_binding_from_record,
     _reference_binding_to_record,
@@ -35,6 +44,16 @@ from .repository_base import _RepositoryBase
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
+
+_REVISION_CONTENT_HASH_CONSTRAINT = "uq_reference_document_revisions_document_hash"
+_BINDING_CONFLICT_CONSTRAINTS = frozenset(
+    {
+        UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
+        UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
+        UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
+        UQ_REF_DOC_BINDINGS_JOB_REV,
+    }
+)
 
 
 class SqlAlchemyReferenceDocumentRepository(
@@ -144,8 +163,24 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
     """Persist reusable reference document revisions using SQLAlchemy."""
 
     async def add(self, revision: ReferenceDocumentRevision) -> None:
-        """Add an immutable reusable reference revision record."""
-        await self._add_record(_reference_document_revision_to_record(revision))
+        """Add an immutable reusable reference revision record.
+
+        The insert runs inside a savepoint and is flushed immediately so a
+        duplicate ``content_hash`` is surfaced here rather than at commit. A
+        matching constraint violation is translated to
+        :class:`ReferenceConflictError`; any other ``IntegrityError`` is
+        propagated unchanged so callers can decide how to handle it.
+        """
+        record = _reference_document_revision_to_record(revision)
+        try:
+            async with self._session.begin_nested():
+                self._session.add(record)
+                await self._session.flush()
+        except IntegrityError as exc:
+            if constraint_name(exc) == _REVISION_CONTENT_HASH_CONSTRAINT:
+                msg = "Reference document revision conflict: duplicate content hash."
+                raise ReferenceConflictError(msg) from exc
+            raise
 
     async def get(self, revision_id: uuid.UUID) -> ReferenceDocumentRevision | None:
         """Fetch a reusable reference revision by identifier."""
@@ -222,8 +257,24 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
                 raise ValueError(msg)
 
     async def add(self, binding: ReferenceBinding) -> None:
-        """Add a reusable reference binding record."""
-        await self._add_record(_reference_binding_to_record(binding))
+        """Add a reusable reference binding record.
+
+        The insert runs inside a savepoint and is flushed immediately so a
+        duplicate target/revision binding fails fast. Conflicts on any of the
+        binding uniqueness constraints are translated to
+        :class:`ReferenceConflictError`; unrelated ``IntegrityError`` instances
+        are re-raised so callers can diagnose them.
+        """
+        record = _reference_binding_to_record(binding)
+        try:
+            async with self._session.begin_nested():
+                self._session.add(record)
+                await self._session.flush()
+        except IntegrityError as exc:
+            if constraint_name(exc) in _BINDING_CONFLICT_CONSTRAINTS:
+                msg = "Reference binding conflict: duplicate target/revision binding."
+                raise ReferenceConflictError(msg) from exc
+            raise
 
     async def get(self, binding_id: uuid.UUID) -> ReferenceBinding | None:
         """Fetch a reusable reference binding by identifier."""

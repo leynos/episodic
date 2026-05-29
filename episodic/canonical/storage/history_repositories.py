@@ -4,6 +4,7 @@ import dataclasses as dc
 import typing as typ
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import (
     EpisodeTemplateHistoryEntry,
@@ -13,6 +14,7 @@ from episodic.canonical.history_protocols import (
     EpisodeTemplateHistoryRepository,
     SeriesProfileHistoryRepository,
 )
+from episodic.canonical.profile_templates.types import RevisionConflictError
 
 from .history_mappers import (
     _episode_template_history_from_record,
@@ -21,6 +23,7 @@ from .history_mappers import (
     _series_profile_history_to_record,
 )
 from .history_models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
+from .integrity_helpers import is_revision_conflict_integrity_error
 from .repository_base import _RepositoryBase
 
 if typ.TYPE_CHECKING:
@@ -65,8 +68,26 @@ class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):
         return getattr(self._record_type, revision_field_name)
 
     async def _add_history_entry(self, entry: HistoryEntryT) -> None:
-        """Persist a history entry record."""
-        await self._add_record(self._record_builder(entry))
+        """Persist a history entry record.
+
+        The insert runs inside a savepoint and is flushed immediately so a
+        ``(parent_id, revision)`` collision surfaces here. A matching
+        constraint violation is translated to :class:`RevisionConflictError`
+        carrying the parent entity identifier so service-layer callers can
+        report optimistic-lock conflicts without depending on SQLAlchemy.
+        """
+        record = self._record_builder(entry)
+        try:
+            async with self._session.begin_nested():
+                self._session.add(record)
+                await self._session.flush()
+        except IntegrityError as exc:
+            if not is_revision_conflict_integrity_error(exc, self._parent_id_field):
+                raise
+            parent_id = getattr(entry, self._parent_id_field, None)
+            entity_id = None if parent_id is None else str(parent_id)
+            msg = "Revision conflict: concurrent history insert detected."
+            raise RevisionConflictError(msg, entity_id=entity_id) from exc
 
     async def _list_for_parent(self, parent_id: uuid.UUID) -> list[HistoryEntryT]:
         """List history entries for a parent entity."""
