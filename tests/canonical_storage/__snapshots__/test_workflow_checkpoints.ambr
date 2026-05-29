@@ -1,0 +1,101 @@
+# serializer version: 1
+# name: test_checkpoint_store_records_checkpoint_metrics
+  dict({
+    'counters': list([
+      dict({
+        'labels': dict({
+          'outcome': 'persisted',
+        }),
+        'name': 'workflow_checkpoint.save_or_reuse.operations',
+      }),
+      dict({
+        'labels': dict({
+          'outcome': 'conflict',
+        }),
+        'name': 'workflow_checkpoint.save_or_reuse.idempotency_conflicts',
+      }),
+      dict({
+        'labels': dict({
+          'outcome': 'reused',
+        }),
+        'name': 'workflow_checkpoint.save_or_reuse.operations',
+      }),
+      dict({
+        'labels': dict({
+          'outcome': 'marked',
+        }),
+        'name': 'workflow_checkpoint.mark_resumed.operations',
+      }),
+      dict({
+        'labels': dict({
+          'outcome': 'unknown_checkpoint',
+        }),
+        'name': 'workflow_checkpoint.mark_resumed.operations',
+      }),
+    ]),
+    'latencies': list([
+      dict({
+        'labels': dict({
+          'outcome': 'persisted',
+        }),
+        'name': 'workflow_checkpoint.save_or_reuse.latency_ms',
+        'value': 1.0,
+      }),
+      dict({
+        'labels': dict({
+          'outcome': 'reused',
+        }),
+        'name': 'workflow_checkpoint.save_or_reuse.latency_ms',
+        'value': 1.0,
+      }),
+      dict({
+        'labels': dict({
+          'outcome': 'marked',
+        }),
+        'name': 'workflow_checkpoint.mark_resumed.latency_ms',
+        'value': 1.0,
+      }),
+      dict({
+        'labels': dict({
+          'outcome': 'unknown_checkpoint',
+        }),
+        'name': 'workflow_checkpoint.mark_resumed.latency_ms',
+        'value': 1.0,
+      }),
+    ]),
+  })
+# ---
+# name: test_checkpoint_store_records_recovery_failure_metrics
+  dict({
+    'counters': list([
+      dict({
+        'labels': dict({
+          'outcome': 'conflict',
+        }),
+        'name': 'workflow_checkpoint.save_or_reuse.idempotency_conflicts',
+      }),
+      dict({
+        'labels': dict({
+          'operation': 'save_or_reuse',
+          'reason': 'conflict_missing_checkpoint',
+        }),
+        'name': 'workflow_checkpoint.recovery_failures',
+      }),
+      dict({
+        'labels': dict({
+          'outcome': 'recovery_failure',
+        }),
+        'name': 'workflow_checkpoint.save_or_reuse.operations',
+      }),
+    ]),
+    'latencies': list([
+      dict({
+        'labels': dict({
+          'outcome': 'recovery_failure',
+        }),
+        'name': 'workflow_checkpoint.save_or_reuse.latency_ms',
+        'value': 1.0,
+      }),
+    ]),
+  })
+# ---

@@ -28,6 +28,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from syrupy.assertion import SnapshotAssertion
 
 
 def _checkpoint(
@@ -80,6 +81,24 @@ class _RecordingMetrics:
     ) -> None:
         """Record a latency observation."""
         self.latencies.append((name, value, dict(labels)))
+
+    def as_snapshot(self) -> dict[str, list[dict[str, object]]]:
+        """Return the recorded metrics in a stable, snapshot-friendly form.
+
+        Counter and latency tuples flatten into ordered dictionaries so syrupy's
+        ``.ambr`` output stays deterministic and human-readable. ``_StepClock``
+        already advances by exactly 1 ms per call, so the latency values appear
+        verbatim in the snapshot and need no further redaction.
+        """
+        return {
+            "counters": [
+                {"name": name, "labels": labels} for name, labels in self.counters
+            ],
+            "latencies": [
+                {"name": name, "value": value, "labels": labels}
+                for name, value, labels in self.latencies
+            ],
+        }
 
 
 class _StepClock:
@@ -162,6 +181,7 @@ async def test_checkpoint_store_reuses_idempotency_key(
 @pytest.mark.asyncio
 async def test_checkpoint_store_records_checkpoint_metrics(
     session_factory: object,
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Checkpoint operations should record bounded outcome and latency metrics."""
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
@@ -196,39 +216,13 @@ async def test_checkpoint_store_records_checkpoint_metrics(
         await session.rollback()
 
     assert second.checkpoint_id == first.checkpoint_id
-    assert metrics.counters == [
-        (
-            "workflow_checkpoint.save_or_reuse.operations",
-            {"outcome": "persisted"},
-        ),
-        (
-            "workflow_checkpoint.save_or_reuse.idempotency_conflicts",
-            {"outcome": "conflict"},
-        ),
-        ("workflow_checkpoint.save_or_reuse.operations", {"outcome": "reused"}),
-        ("workflow_checkpoint.mark_resumed.operations", {"outcome": "marked"}),
-        (
-            "workflow_checkpoint.mark_resumed.operations",
-            {"outcome": "unknown_checkpoint"},
-        ),
-    ]
-    assert [(name, labels) for name, _value, labels in metrics.latencies] == [
-        (
-            "workflow_checkpoint.save_or_reuse.latency_ms",
-            {"outcome": "persisted"},
-        ),
-        ("workflow_checkpoint.save_or_reuse.latency_ms", {"outcome": "reused"}),
-        ("workflow_checkpoint.mark_resumed.latency_ms", {"outcome": "marked"}),
-        (
-            "workflow_checkpoint.mark_resumed.latency_ms",
-            {"outcome": "unknown_checkpoint"},
-        ),
-    ]
-    assert all(value > 0 for _name, value, _labels in metrics.latencies)
+    assert metrics.as_snapshot() == snapshot
 
 
 @pytest.mark.asyncio
-async def test_checkpoint_store_records_recovery_failure_metrics() -> None:
+async def test_checkpoint_store_records_recovery_failure_metrics(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Persisted conflict without a recoverable checkpoint records failure metrics."""
     metrics = _RecordingMetrics()
     clock = _StepClock()
@@ -271,24 +265,7 @@ async def test_checkpoint_store_records_recovery_failure_metrics() -> None:
     with pytest.raises(IntegrityError):
         await store.save_or_reuse(checkpoint)
 
-    assert (
-        "workflow_checkpoint.save_or_reuse.idempotency_conflicts",
-        {"outcome": "conflict"},
-    ) in metrics.counters
-    assert (
-        "workflow_checkpoint.recovery_failures",
-        {"operation": "save_or_reuse", "reason": "conflict_missing_checkpoint"},
-    ) in metrics.counters
-    assert (
-        "workflow_checkpoint.save_or_reuse.operations",
-        {"outcome": "recovery_failure"},
-    ) in metrics.counters
-    assert [(name, labels) for name, _value, labels in metrics.latencies] == [
-        (
-            "workflow_checkpoint.save_or_reuse.latency_ms",
-            {"outcome": "recovery_failure"},
-        ),
-    ]
+    assert metrics.as_snapshot() == snapshot
 
 
 @pytest.mark.asyncio
