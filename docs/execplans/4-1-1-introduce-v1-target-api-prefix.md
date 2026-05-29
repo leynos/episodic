@@ -1,7 +1,7 @@
 # Introduce the `/v1` target API prefix
 
 This ExecPlan (execution plan) is a living document. The sections `Constraints`,
- `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
@@ -482,7 +482,7 @@ The final implementation should include short transcripts in this plan's
   `/tmp/v1-red-api-tests-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
 - [x] 2026-05-20T13:43:00+02:00: Prefixed canonical Falcon API route
   registrations in `episodic/api/app.py` under `/v1`, leaving `/health/live` and
-   `/health/ready` unchanged at the root.
+  `/health/ready` unchanged at the root.
 - [x] 2026-05-20T13:45:00+02:00: Added explicit route-versioning contract
   coverage in `tests/test_api_route_versioning.py` for unversioned canonical
   route `404` responses and for `/v1/health/live` remaining unregistered.
@@ -508,7 +508,7 @@ The final implementation should include short transcripts in this plan's
 - [x] Update API BDD steps and direct API tests to use `/v1`.
 - [x] 2026-05-20T14:13:00+02:00: Re-ran `coderabbit review --agent` after
   clearing readability concerns in `tests/test_api_route_versioning.py`. Result:
-   `review_completed` with zero findings. Log:
+  `review_completed` with zero findings. Log:
   `/tmp/coderabbit-review-after-test-readability-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
 - [x] 2026-05-20T14:14:00+02:00: Updated `docs/developers-guide.md` with
   versioned API routing guidance, added ADR 009 to the accepted-design list,
@@ -584,9 +584,9 @@ The final implementation should include short transcripts in this plan's
   `/tmp/coderabbit-review-followup-fixes-episodic-4-1-1-introduce-v1-target-api-prefix.out`.
 - [x] 2026-05-22T21:17:00+02:00: Verified the latest failed-check findings
   with Wyvern and scribe agents. The `/v1/health/ready` and users-guide path
-  findings were stale. The still-valid issues were route contract tests
-  relying only on status codes and remaining first-use acronym expansions in
-  this ExecPlan. Added response payload assertions to
+  findings were stale. The still-valid issues were route contract tests relying
+  only on status codes and remaining first-use acronym expansions in this
+  ExecPlan. Added response payload assertions to
   `tests/test_api_route_versioning.py` and expanded the remaining acronyms.
   `tests/test_api_route_versioning.py` passed with 8 tests. Log:
   `/tmp/route-versioning-contract-behaviour-episodic-4-1-1-introduce-v1-target-api-prefix.out`.

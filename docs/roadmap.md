@@ -359,7 +359,7 @@ for script, speaker turns, pronunciation guidance, and render provenance; TTS
 requests are projections of TEI-backed data rather than a parallel script
 schema. See
 [Audio Synthesis Pipeline](episodic-podcast-generation-system-design.md#audio-synthesis-pipeline)
- for design context.
+for design context.
 
 ### 3.1. Speech capability contracts
 

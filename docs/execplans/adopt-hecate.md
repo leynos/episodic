@@ -1,7 +1,7 @@
 # Adopt Hecate for hexagonal architecture checks
 
 This ExecPlan (execution plan) is a living document. The sections `Constraints`,
- `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
@@ -53,7 +53,7 @@ The plan signposts these skills for the implementing agent:
   gate.
 - Pin Hecate to
   `git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12`
-   unless explicit approval is given to use a different revision.
+  unless explicit approval is given to use a different revision.
 - Put the production architecture policy in `pyproject.toml` under
   `[tool.hecate]`, because Hecate discovers that table from the project root.
 - Keep composition-root prefixes before broader adapter prefixes. Hecate group
@@ -70,8 +70,8 @@ The plan signposts these skills for the implementing agent:
 - On implementation, record the decision to adopt Hecate in an Architecture
   Decision Record (ADR) or by superseding
   `docs/adr/adr-014-hexagonal-architecture-enforcement.md`, then update
-  `docs/episodic-podcast-generation-system-design.md` to reference the
-  accepted decision.
+  `docs/episodic-podcast-generation-system-design.md` to reference the accepted
+  decision.
 - On implementation, update `docs/users-guide.md` only for user-visible command
   or diagnostic behaviour, update `docs/developers-guide.md` for
   maintainer-facing conventions, and update component architecture
@@ -200,15 +200,16 @@ The plan signposts these skills for the implementing agent:
   state for commit.
 - [x] (2026-05-22 00:00Z) Addressed post-rebase review comments by adding
   direct fixture-config tests for the package-barrel special case, factoring
-  repeated fixture group permission lists into named constants, fixing malformed
-  roadmap link definitions, and expanding first-use acronyms in Markdown.
+  repeated fixture group permission lists into named constants, fixing
+  malformed roadmap link definitions, and expanding first-use acronyms in
+  Markdown.
 - [x] (2026-05-22 00:00Z) Validated review fixes with `make check-fmt`,
-  `make test`, `make typecheck`, `make lint`, `make markdownlint`, `make nixie`,
-  and `coderabbit review --agent`.
+  `make test`, `make typecheck`, `make lint`, `make markdownlint`,
+  `make nixie`, and `coderabbit review --agent`.
 - [x] (2026-05-22 00:00Z) Addressed follow-up review findings by expanding
   architecture test module documentation, adding explicit Hecate subprocess
-  invocation errors, making the Python executable injectable in the test helper,
-  adding unit coverage for generated TOML, subprocess failures, command
+  invocation errors, making the Python executable injectable in the test
+  helper, adding unit coverage for generated TOML, subprocess failures, command
   arguments, and snapshotting one full Hecate diagnostic.
 - [x] (2026-05-22 00:00Z) Validated follow-up review fixes with
   `make check-fmt`, `make lint`, `make typecheck`, `make test`,
@@ -250,7 +251,7 @@ The plan signposts these skills for the implementing agent:
 - Observation: the first full `make test` validation run timed out once while
   setting up
   `tests/test_reference_document_service_validation.py::test_list_endpoints_reject_invalid_pagination`,
-   but a focused rerun of that test passed and the full gate passed on rerun.
+  but a focused rerun of that test passed and the full gate passed on rerun.
   Impact: the timeout was treated as transient and is recorded here because the
   plan itself only changed Markdown.
 
@@ -294,10 +295,10 @@ The plan signposts these skills for the implementing agent:
   ready for review with local gates and CodeRabbit clear.
 
 - Observation: post-rebase review identified that the generated fixture policy
-  could drift from the intended group layout and that the special package-barrel
-  fixture was only indirectly covered. Impact: the helper now names the shared
-  fixture group permission lists, and tests parse the generated TOML for both a
-  normal fixture and the package-barrel fixture.
+  could drift from the intended group layout and that the special
+  package-barrel fixture was only indirectly covered. Impact: the helper now
+  names the shared fixture group permission lists, and tests parse the
+  generated TOML for both a normal fixture and the package-barrel fixture.
 
 - Observation: Hecate exposes importable symbols, but this branch's tests
   intentionally exercise the command-line interface contract used by
@@ -462,7 +463,7 @@ uv run hecate check 2>&1 | tee /tmp/hecate-episodic-feat-plan-hecate-adoption.ou
 ```
 
 Expected result: `hecate check` exits `0` on the production package. If it exits
- `1`, inspect the diagnostics and decide whether the issue is a real boundary
+`1`, inspect the diagnostics and decide whether the issue is a real boundary
 leak or a policy translation problem. If it exits `2`, fix the config or
 dependency installation before proceeding.
 
