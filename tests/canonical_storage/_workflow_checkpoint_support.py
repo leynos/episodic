@@ -5,7 +5,7 @@ Hosts the deterministic ``_RecordingMetrics`` and ``_StepClock`` fakes used by
 the test module stays focused on behaviour rather than infrastructure.
 """
 
-import types
+import dataclasses
 import typing as typ
 import uuid
 from unittest import mock
@@ -106,15 +106,20 @@ def make_integrity_error() -> IntegrityError:
     )
 
 
-def make_vanishing_conflict_session() -> types.SimpleNamespace:
+@dataclasses.dataclass(frozen=True)
+class VanishingConflictSession:
+    """Carries the session and empty-result mocks for the recovery-failure path."""
+
+    session: mock.MagicMock
+    empty_result: mock.MagicMock
+
+
+def make_vanishing_conflict_session() -> VanishingConflictSession:
     """Return mock session and result for the recovery-failure path.
 
     ``flush()`` raises an ``IntegrityError`` (duplicate idempotency key) and
     the subsequent ``execute()`` returns no row, simulating the conflicting
     checkpoint vanishing before recovery can read it back.
-
-    Returns a ``SimpleNamespace`` with ``.session`` and ``.empty_result``
-    attributes so callers can assert against them after the fact.
     """
     savepoint_cm = mock.MagicMock()
     savepoint_cm.__aenter__ = mock.AsyncMock(return_value=savepoint_cm)
@@ -128,4 +133,4 @@ def make_vanishing_conflict_session() -> types.SimpleNamespace:
     session.add = mock.MagicMock()
     session.flush = mock.AsyncMock(side_effect=make_integrity_error())
     session.execute = mock.AsyncMock(return_value=empty_result)
-    return types.SimpleNamespace(session=session, empty_result=empty_result)
+    return VanishingConflictSession(session=session, empty_result=empty_result)
