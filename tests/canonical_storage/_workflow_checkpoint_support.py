@@ -106,7 +106,7 @@ def make_integrity_error() -> IntegrityError:
     )
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class VanishingConflictSession:
     """Carries the session and empty-result mocks for the recovery-failure path."""
 
