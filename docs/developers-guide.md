@@ -978,7 +978,6 @@ stored planner-result payloads.
 - Persisted `guardrails` belong to canonical profile/template state and are
   composed before the adapter call, not inside the vendor transport layer.
 
-
 ### OpenAI-compatible adapter package layout
 
 `episodic.llm.openai_adapter` is the compatibility facade exported to callers.

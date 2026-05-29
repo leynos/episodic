@@ -64,7 +64,7 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
         self.server.state.call_count += 1
         self.server.state.requests.append(typ.cast("dict[str, object]", payload))
 
-        if self.server.state.call_count == 1:
+        if self.server.fail_first and self.server.state.call_count == 1:
             self.send_response(HTTPStatus.TOO_MANY_REQUESTS)
             self.send_header("content-type", "application/json")
             self.end_headers()
@@ -103,65 +103,70 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
 class _MockLLMServer(ThreadingHTTPServer):
     """HTTP server carrying mutable test state."""
 
+    # pylint: disable-next=too-many-arguments
     def __init__(
         self,
         server_address: tuple[str, int],
         handler_class: type[BaseHTTPRequestHandler],
         *,
         state: MockServerState,
+        fail_first: bool = False,
     ) -> None:
         super().__init__(server_address, handler_class)
         self.state = state
+        self.fail_first = fail_first
 
 
-class _AlwaysSucceedHandler(BaseHTTPRequestHandler):
-    """Serve a successful OpenAI-compatible response immediately."""
-
-    server: _AlwaysSucceedServer
-
-    def do_POST(self) -> None:
-        content_length = int(self.headers["content-length"])
-        raw_body = self.rfile.read(content_length)
-        payload = json.loads(raw_body.decode("utf-8"))
-        self.server.state.call_count += 1
-        self.server.state.requests.append(typ.cast("dict[str, object]", payload))
-        self.send_response(HTTPStatus.OK)
-        self.send_header("content-type", "application/json")
-        self.end_headers()
-        self.wfile.write(
-            json.dumps({
-                "id": "chatcmpl-ratio",
-                "model": "gpt-4o-mini",
-                "choices": [
-                    {
-                        "message": {"content": "BDD generated episode draft."},
-                        "finish_reason": "stop",
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": 40,
-                    "completion_tokens": 12,
-                    "total_tokens": 52,
-                },
-            }).encode("utf-8")
-        )
-
-    # Required stdlib override signature for keyword-compatible dispatch.
-    def log_message(self, message_format: str, *args: object) -> None:  # ty: ignore[invalid-method-override]
-        """Suppress stdlib HTTP server request logging in tests."""
-        del message_format, args
+def _start_mock_server(context: LLMAdapterContext, *, fail_first: bool) -> None:
+    """Start a mock LLM server and populate *context* with connection details."""
+    server = _MockLLMServer(
+        ("127.0.0.1", 0),
+        _MockLLMHandler,
+        state=context.server_state,
+        fail_first=fail_first,
+    )
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    context.server = server
+    context.server_thread = server_thread
+    context.base_url = f"http://127.0.0.1:{server.server_address[1]}/v1"
 
 
-class _AlwaysSucceedServer(ThreadingHTTPServer):
-    def __init__(
-        self,
-        server_address: tuple[str, int],
-        handler_class: type[BaseHTTPRequestHandler],
-        *,
-        state: MockServerState,
-    ) -> None:
-        super().__init__(server_address, handler_class)
-        self.state = state
+# pylint: disable-next=too-many-arguments
+def _run_generate(
+    runner: asyncio.Runner,
+    context: LLMAdapterContext,
+    *,
+    max_attempts: int,
+    retry_delay_seconds: float = 0,
+    chars_per_token: float = 4.0,
+    token_budget: LLMTokenBudget,
+) -> None:
+    """Run ``adapter.generate()`` via *runner* and store the result in *context*."""
+
+    async def _generate() -> None:
+        async with OpenAICompatibleLLMAdapter(
+            config=OpenAICompatibleLLMConfig(
+                base_url=context.base_url,
+                api_key="test-key",
+                max_attempts=max_attempts,
+                retry_delay_seconds=retry_delay_seconds,
+                chars_per_token=chars_per_token,
+            ),
+        ) as adapter:
+            response = await adapter.generate(
+                LLMRequest(
+                    model="gpt-4o-mini",
+                    prompt=typ.cast("RenderedPrompt", context.rendered_prompt).text,
+                    system_prompt=typ.cast(
+                        "RenderedPrompt", context.guardrail_prompt
+                    ).text,
+                    token_budget=token_budget,
+                ),
+            )
+        context.generated_text = response.text
+
+    _run_async_step(runner, _generate)
 
 
 def _run_async_step(
@@ -203,18 +208,7 @@ def test_llm_adapter_custom_chars_per_token() -> None:
 @given("an OpenAI-compatible mock LLM server is running")
 def mock_llm_server(context: LLMAdapterContext) -> None:
     """Start a localhost HTTP server with one transient failure."""
-    server = _MockLLMServer(
-        ("127.0.0.1", 0),
-        _MockLLMHandler,
-        state=context.server_state,
-    )
-    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread.start()
-
-    context.server = server
-    context.server_thread = server_thread
-    port = server.server_address[1]
-    context.base_url = f"http://127.0.0.1:{port}/v1"
+    _start_mock_server(context, fail_first=True)
 
 
 @given("a rendered series prompt and persisted guardrail prompt are available")
@@ -258,33 +252,16 @@ def adapter_generates(
     context: LLMAdapterContext,
 ) -> None:
     """Generate text through the adapter over real HTTP."""
-
-    async def _generate() -> None:
-        async with OpenAICompatibleLLMAdapter(
-            config=OpenAICompatibleLLMConfig(
-                base_url=context.base_url,
-                api_key="test-key",
-                max_attempts=2,
-                retry_delay_seconds=0,
-            ),
-        ) as adapter:
-            response = await adapter.generate(
-                LLMRequest(
-                    model="gpt-4o-mini",
-                    prompt=typ.cast("RenderedPrompt", context.rendered_prompt).text,
-                    system_prompt=typ.cast(
-                        "RenderedPrompt", context.guardrail_prompt
-                    ).text,
-                    token_budget=LLMTokenBudget(
-                        max_input_tokens=500,
-                        max_output_tokens=200,
-                        max_total_tokens=700,
-                    ),
-                ),
-            )
-        context.generated_text = response.text
-
-    _run_async_step(_function_scoped_runner, _generate)
+    _run_generate(
+        _function_scoped_runner,
+        context,
+        max_attempts=2,
+        token_budget=LLMTokenBudget(
+            max_input_tokens=500,
+            max_output_tokens=200,
+            max_total_tokens=700,
+        ),
+    )
 
 
 @then("the adapter retries once and returns the generated text")
@@ -334,17 +311,7 @@ def assert_guardrail_prompt(context: LLMAdapterContext) -> None:
 @given("an OpenAI-compatible mock LLM server is running without transient failures")
 def mock_llm_server_always_succeeds(context: LLMAdapterContext) -> None:
     """Start a localhost HTTP server that always responds successfully."""
-    server = _AlwaysSucceedServer(
-        ("127.0.0.1", 0),
-        _AlwaysSucceedHandler,
-        state=context.server_state,
-    )
-    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread.start()
-    context.server = server
-    context.server_thread = server_thread
-    port = server.server_address[1]
-    context.base_url = f"http://127.0.0.1:{port}/v1"
+    _start_mock_server(context, fail_first=False)
 
 
 @when(
@@ -356,34 +323,17 @@ def adapter_generates_custom_ratio(
     context: LLMAdapterContext,
 ) -> None:
     """Generate text with chars_per_token=2.0 over real HTTP."""
-
-    async def _generate() -> None:
-        async with OpenAICompatibleLLMAdapter(
-            config=OpenAICompatibleLLMConfig(
-                base_url=context.base_url,
-                api_key="test-key",
-                max_attempts=1,
-                retry_delay_seconds=0,
-                chars_per_token=2.0,
-            ),
-        ) as adapter:
-            response = await adapter.generate(
-                LLMRequest(
-                    model="gpt-4o-mini",
-                    prompt=typ.cast("RenderedPrompt", context.rendered_prompt).text,
-                    system_prompt=typ.cast(
-                        "RenderedPrompt", context.guardrail_prompt
-                    ).text,
-                    token_budget=LLMTokenBudget(
-                        max_input_tokens=2000,
-                        max_output_tokens=200,
-                        max_total_tokens=2200,
-                    ),
-                ),
-            )
-        context.generated_text = response.text
-
-    _run_async_step(_function_scoped_runner, _generate)
+    _run_generate(
+        _function_scoped_runner,
+        context,
+        max_attempts=1,
+        chars_per_token=2.0,
+        token_budget=LLMTokenBudget(
+            max_input_tokens=2000,
+            max_output_tokens=200,
+            max_total_tokens=2200,
+        ),
+    )
 
 
 @then("the adapter returns the generated text on the first attempt")
