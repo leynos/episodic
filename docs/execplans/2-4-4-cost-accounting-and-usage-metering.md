@@ -948,9 +948,33 @@ class CostRecorder:
     engine: PricingEngine
     clock: WallClockPort
 
-    async def pin_run_pricing(self, *, workflow_run_id: str, providers: tuple[str, ...], billing_period_key: BillingPeriodKey | None = None) -> None: ...
-    async def record_provider_call(self, *, workflow_run_id: str, workflow_node: str, retry_attempt: int, logical_call_id: str, provider_name: str, model: str, operation: str, response: LLMResponse) -> CostLedgerEntryId: ...
-    async def finalize_run(self, *, workflow_run_id: str, workflow_node: str | None = None) -> CostLedgerEntryId: ...
+    async def pin_run_pricing(
+        self,
+        *,
+        workflow_run_id: str,
+        providers: tuple[str, ...],
+        billing_period_key: BillingPeriodKey | None = None,
+    ) -> None: ...
+
+    async def record_provider_call(
+        self,
+        *,
+        workflow_run_id: str,
+        workflow_node: str,
+        retry_attempt: int,
+        logical_call_id: str,
+        provider_name: str,
+        model: str,
+        operation: str,
+        response: LLMResponse,
+    ) -> CostLedgerEntryId: ...
+
+    async def finalize_run(
+        self,
+        *,
+        workflow_run_id: str,
+        workflow_node: str | None = None,
+    ) -> CostLedgerEntryId: ...
 ```
 
 In `episodic.llm.ports`:
