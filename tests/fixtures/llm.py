@@ -50,7 +50,13 @@ class _OpenAIAdapterLogSpy:
 
 @pytest.fixture
 def openai_log_spy(monkeypatch: pytest.MonkeyPatch) -> _OpenAILogSpy:
-    """Capture OpenAI adapter structured error logs without async handlers."""
+    """Capture OpenAI adapter structured error logs without async handlers.
+
+    Tests using this fixture must belong to the ``openai_log_spy`` xdist group
+    (``@pytest.mark.xdist_group(name="openai_log_spy")``) so they run
+    sequentially in a single worker and do not race on the monkeypatched
+    module-level ``_log`` reference.
+    """
     from episodic.llm.openai_api import utils as openai_utils
 
     spy = _OpenAIAdapterLogSpy()

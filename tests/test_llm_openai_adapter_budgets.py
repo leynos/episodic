@@ -30,6 +30,8 @@ if typ.TYPE_CHECKING:
         _OpenAILogSpy,
     )
 
+pytestmark = pytest.mark.xdist_group(name="openai_log_spy")
+
 _OVER_BUDGET_USAGE_PAYLOAD: dict[str, object] = {
     "id": "chatcmpl-789",
     "model": "gpt-4o-mini",
