@@ -7,6 +7,9 @@ the test module stays focused on behaviour rather than infrastructure.
 
 import typing as typ
 import uuid
+from unittest import mock
+
+from sqlalchemy.exc import IntegrityError
 
 from episodic.orchestration import WorkflowCheckpoint
 
@@ -91,3 +94,34 @@ class StepClock:
         """Return a timestamp that advances by 1 ms on each call."""
         self._seconds += 0.001
         return self._seconds
+
+
+def make_integrity_error() -> IntegrityError:
+    """Return an IntegrityError mirroring a duplicate idempotency-key rejection."""
+    return IntegrityError(
+        statement="INSERT INTO workflow_checkpoints ...",
+        params={},
+        orig=Exception("UNIQUE constraint failed: idempotency_key"),
+    )
+
+
+def make_vanishing_conflict_session() -> mock.MagicMock:
+    """Return a mock AsyncSession for the recovery-failure path.
+
+    ``flush()`` raises an ``IntegrityError`` (duplicate idempotency key) and
+    the subsequent ``execute()`` returns no row, simulating the conflicting
+    checkpoint vanishing before recovery can read it back.
+    """
+    savepoint_cm = mock.MagicMock()
+    savepoint_cm.__aenter__ = mock.AsyncMock(return_value=savepoint_cm)
+    savepoint_cm.__aexit__ = mock.AsyncMock(return_value=None)
+
+    empty_result = mock.MagicMock()
+    empty_result.scalar_one_or_none.return_value = None
+
+    session = mock.MagicMock()
+    session.begin_nested = mock.MagicMock(return_value=savepoint_cm)
+    session.add = mock.MagicMock()
+    session.flush = mock.AsyncMock(side_effect=make_integrity_error())
+    session.execute = mock.AsyncMock(return_value=empty_result)
+    return session

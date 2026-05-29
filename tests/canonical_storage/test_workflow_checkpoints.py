@@ -9,7 +9,6 @@ and the atomicity guarantees expected by orchestration suspend/resume paths.
 import asyncio
 import typing as typ
 import uuid
-from unittest import mock
 
 import hypothesis.strategies as st
 import pytest
@@ -26,6 +25,7 @@ from tests.canonical_storage._workflow_checkpoint_support import (
     RecordingMetrics,
     StepClock,
     make_checkpoint,
+    make_vanishing_conflict_session,
 )
 
 if typ.TYPE_CHECKING:
@@ -150,41 +150,14 @@ async def test_checkpoint_store_records_recovery_failure_metrics(
 ) -> None:
     """Persisted conflict without a recoverable checkpoint records failure metrics."""
     metrics = RecordingMetrics()
-    clock = StepClock()
     checkpoint = make_checkpoint(
         idempotency_key="corr-storage:generation_orchestration:execute:race:0"
     )
 
-    # Construct an IntegrityError that mirrors what SQLAlchemy raises when the
-    # database rejects a duplicate idempotency key.
-    integrity_error = IntegrityError(
-        statement="INSERT INTO workflow_checkpoints ...",
-        params={},
-        orig=Exception("UNIQUE constraint failed: idempotency_key"),
-    )
-
-    # The `begin_nested()` call returns an async context manager. The session
-    # `flush()` inside that context manager raises IntegrityError so the savepoint
-    # rolls back and the error propagates to the adapter's except branch.
-    savepoint_cm = mock.MagicMock()
-    savepoint_cm.__aenter__ = mock.AsyncMock(return_value=savepoint_cm)
-    savepoint_cm.__aexit__ = mock.AsyncMock(return_value=None)
-
-    # `execute()` is awaited and must return an object whose `scalar_one_or_none()`
-    # returns `None`, simulating the conflicting row vanishing before recovery.
-    empty_result = mock.MagicMock()
-    empty_result.scalar_one_or_none.return_value = None
-
-    session = mock.MagicMock()
-    session.begin_nested = mock.MagicMock(return_value=savepoint_cm)
-    session.add = mock.MagicMock()
-    session.flush = mock.AsyncMock(side_effect=integrity_error)
-    session.execute = mock.AsyncMock(return_value=empty_result)
-
     store = SqlAlchemyWorkflowCheckpointStore(
-        typ.cast("AsyncSession", session),
+        typ.cast("AsyncSession", make_vanishing_conflict_session()),
         metrics=metrics,
-        clock=clock,
+        clock=StepClock(),
     )
 
     with pytest.raises(IntegrityError):
