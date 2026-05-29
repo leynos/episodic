@@ -153,9 +153,10 @@ async def test_checkpoint_store_records_recovery_failure_metrics(
     checkpoint = make_checkpoint(
         idempotency_key="corr-storage:generation_orchestration:execute:race:0"
     )
+    mocks = make_vanishing_conflict_session()
 
     store = SqlAlchemyWorkflowCheckpointStore(
-        typ.cast("AsyncSession", make_vanishing_conflict_session()),
+        typ.cast("AsyncSession", mocks.session),
         metrics=metrics,
         clock=StepClock(),
     )
@@ -163,6 +164,8 @@ async def test_checkpoint_store_records_recovery_failure_metrics(
     with pytest.raises(IntegrityError):
         await store.save_or_reuse(checkpoint)
 
+    assert mocks.session.execute.await_count == 1
+    mocks.empty_result.scalar_one_or_none.assert_called_once()
     assert metrics.as_snapshot() == snapshot
 
 
