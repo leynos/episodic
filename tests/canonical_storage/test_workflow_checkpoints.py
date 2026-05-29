@@ -59,7 +59,7 @@ async def test_checkpoint_store_persists_across_unit_of_work(
 
 
 @pytest.mark.asyncio
-async def test_checkpoint_store_get_returns_none_for_missingmake_checkpoint(
+async def test_checkpoint_store_get_returns_none_for_missing_checkpoint(
     session_factory: object,
 ) -> None:
     """`get` should return None when the checkpoint does not exist."""
