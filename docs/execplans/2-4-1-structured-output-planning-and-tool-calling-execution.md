@@ -1,9 +1,8 @@
 # Implement structured-output planning and tool-calling execution
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -232,7 +231,7 @@ and roadmap item `2.4.1` is marked done.
   conceptually, stating that planning uses structured output and execution uses
   tool calling. Evidence:
   `docs/episodic-podcast-generation-system-design.md#langgraph-integration-principles`
-   on 2026-04-16. Impact: the ADR and implementation should align to that
+  on 2026-04-16. Impact: the ADR and implementation should align to that
   existing design language rather than invent new terms.
 
 - Observation: `docs/users-guide.md` and `docs/developers-guide.md` mention

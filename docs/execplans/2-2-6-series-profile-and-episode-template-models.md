@@ -1,9 +1,8 @@
 # Implement series profile and episode template models, Representational State Transfer (REST) endpoints, and change history
 
-This Execution Plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 No `PLANS.md` file is present in the repository root.
 
@@ -119,10 +118,9 @@ Success is observable when:
   based on repository state and checked-in documentation.
 
 - Observation: as of 2026-02-20, `docs/roadmap.md` tracks this capability under
-  item `2.2.8`, while this ExecPlan filename was requested as `2-2-6`.
-  Evidence: `docs/roadmap.md` section `2.2 Key activities`. Impact:
-  implementation must mark the matching text entry done rather than relying
-  only on numeric labels.
+  item `2.2.8`, while this ExecPlan filename was requested as `2-2-6`. Evidence:
+  `docs/roadmap.md` section `2.2 Key activities`. Impact: implementation must
+  mark the matching text entry done rather than relying only on numeric labels.
 
 - Observation: creating history entries in the same transaction as new profile
   and template rows requires explicit `flush()` before history insertion in

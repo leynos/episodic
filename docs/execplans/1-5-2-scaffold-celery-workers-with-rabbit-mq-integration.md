@@ -1,9 +1,8 @@
 # Scaffold Celery workers with RabbitMQ integration
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -142,7 +141,7 @@ Success is observable in the following ways:
 - Risk: Vidai Mock integration may be underspecified for worker contexts if no
   current inference-facing task scaffold exists. Severity: low. Likelihood:
   medium. Mitigation: decide early whether the scaffold includes an
-  `LLMPort`-facing task. If not, document explicitly why Vidai Mock is not
+  `LLMPort-facing` task. If not, document explicitly why Vidai Mock is not
   exercised in this slice; if yes, route all behavioural coverage for that task
   through Vidai Mock.
 

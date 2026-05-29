@@ -107,8 +107,8 @@ Success is observable when:
   `ix_source_documents_ingestion_job_id`, `ix_approval_events_episode_id`) on
   foreign key columns, but the ORM models did not declare `index=True` on those
   columns. `compare_metadata()` reported these as `remove_index` diffs (false
-  positives from the drift check perspective). Evidence: First test run showed
-  4 `remove_index` differences. Impact: Added `index=True` to the four FK
+  positives from the drift check perspective). Evidence: First test run showed 4
+  `remove_index` differences. Impact: Added `index=True` to the four FK
   columns in `episodic/canonical/storage/models.py` to align models with the
   migration. This is the correct fix since models should be the source of truth.
 
@@ -374,7 +374,7 @@ and `migrated_engine` fixtures. Import `detect_schema_drift` from
 
 For "an unmigrated table has been added to the ORM metadata", use
 `sa.Table("_test_drift_table", Base.metadata, sa.Column("id", sa.Integer, primary_key=True))`
- and store the table reference in a context dict so it can be removed from
+and store the table reference in a context dict so it can be removed from
 `Base.metadata` after the scenario.
 
 ### Step 3: Create the unit test file
@@ -430,8 +430,8 @@ Add migration check step to `.github/workflows/ci.yml`.
 ### Step 8: Update documentation
 
 Edit `docs/developers-guide.md`,
-`docs/episodic-podcast-generation-system- design.md`, `docs/users-guide.md`,
-and `docs/roadmap.md` as described in Stage E.
+`docs/episodic-podcast-generation-system-design.md`, `docs/users-guide.md`, and
+`docs/roadmap.md` as described in Stage E.
 
 ### Step 9: Run quality gates
 

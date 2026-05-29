@@ -162,9 +162,9 @@ generation runs via the API. Success is observable when generated scripts
 achieve defined quality thresholds, pass brand guideline checks, and cost
 ledgers report per-episode spend with budget breach alerts. See
 [Content Generation Orchestrator](episodic-podcast-generation-system-design.md#content-generation-orchestrator)
- and
+and
 [Quality Assurance Stack](episodic-podcast-generation-system-design.md#quality-assurance-stack)
- for design context.
+for design context.
 
 ### 2.1. LLM adapter and guardrails
 
@@ -256,7 +256,7 @@ metering. Completion enables reliable, auditable generation workflows.
   - Define idempotency keys for each workflow step.
   - See
     [LangGraph Integration Principles](episodic-podcast-generation-system-design.md#langgraph-integration-principles).
-- [ ] 2.4.3. Configure Celery queue routing for workload isolation.
+- [x] 2.4.3. Configure Celery queue routing for workload isolation.
   - Route I/O-bound tasks to high-concurrency pools.
   - Route CPU-bound tasks to prefork pools.
 - [ ] 2.4.4. Instrument cost accounting with per-call usage metering.
@@ -637,7 +637,6 @@ design source-to-script vertical slice], and the [TUI API source-to-script
 vertical slice].
 
 [system design source-to-script vertical slice]: episodic-podcast-generation-system-design.md#source-to-script-vertical-slice
-
 [TUI API source-to-script vertical slice]: episodic-tui-api-design.md#source-to-script-vertical-slice
 
 - [ ] 4.3.1. Implement source and presenter-profile intake for script
@@ -836,7 +835,7 @@ boundaries enforce clean architecture, and observability instruments all layers
 with logging, metrics, and distributed tracing. See
 [infrastructure-design.md](infrastructure-design.md) and
 [Architectural Summary](episodic-podcast-generation-system-design.md#architectural-summary)
- for design context.
+for design context.
 
 ### 6.1. Infrastructure provisioning
 

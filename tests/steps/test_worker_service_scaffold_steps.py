@@ -153,7 +153,7 @@ def _assert_task_contract(
     assert assertion.actual_result == assertion.expected_result
 
 
-@then("the I/O-bound task targets the I/O queue and succeeds")
+@then("the I/O-bound task targets the I/O exchange and queue and succeeds")
 def then_io_task_targets_io_queue(
     worker_service_scaffold_context: WorkerServiceScaffoldContext,
 ) -> None:
@@ -166,6 +166,8 @@ def then_io_task_targets_io_queue(
             task_name=IO_DIAGNOSTIC_TASK_NAME,
             expected_route={
                 "queue": "episodic.io",
+                "exchange": "episodic.tasks",
+                "exchange_type": "topic",
                 "routing_key": "episodic.io.diagnostic",
             },
             actual_result=worker_service_scaffold_context.io_result,
@@ -178,7 +180,7 @@ def then_io_task_targets_io_queue(
     )
 
 
-@then("the CPU-bound task targets the CPU queue and succeeds")
+@then("the CPU-bound task targets the CPU exchange and queue and succeeds")
 def then_cpu_task_targets_cpu_queue(
     worker_service_scaffold_context: WorkerServiceScaffoldContext,
 ) -> None:
@@ -191,6 +193,8 @@ def then_cpu_task_targets_cpu_queue(
             task_name=CPU_DIAGNOSTIC_TASK_NAME,
             expected_route={
                 "queue": "episodic.cpu",
+                "exchange": "episodic.tasks",
+                "exchange_type": "topic",
                 "routing_key": "episodic.cpu.diagnostic",
             },
             actual_result=worker_service_scaffold_context.cpu_result,

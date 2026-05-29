@@ -308,14 +308,14 @@ While httpx.AsyncClient is suitable for many testing scenarios, Falcon provides
 falcon.testing.ASGIConductor for more fine-grained control over the ASGI
 application lifecycle.[^2] This tool is particularly valuable when testing
 streaming protocols like Server-Sent Events (SSE) or WebSockets, and for
-verifying the behaviour of ASGI middleware lifespan events (process\_startup
-and process\_shutdown).[^3] The ASGIConductor uses coroutines for its
-operations, which means it integrates naturally with async def test functions.
-However, this also implies that pytest-asyncio is not merely a convenience but
-a strict prerequisite for using ASGIConductor within a pytest environment.
-pytest itself does not natively execute async def tests or manage the await
-calls; pytest-asyncio provides the event loop and necessary wrappers to enable
-this functionality. Falcon's documentation explicitly directs users to
+verifying the behaviour of ASGI middleware lifespan events (process\_startup and
+process\_shutdown).[^3] The ASGIConductor uses coroutines for its operations,
+which means it integrates naturally with async def test functions. However,
+this also implies that pytest-asyncio is not merely a convenience but a strict
+prerequisite for using ASGIConductor within a pytest environment. pytest itself
+does not natively execute async def tests or manage the await calls;
+pytest-asyncio provides the event loop and necessary wrappers to enable this
+functionality. Falcon's documentation explicitly directs users to
 pytest-asyncio when using ASGIConductor with pytest.
 
 ### Using ASGIConductor as a context manager

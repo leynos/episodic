@@ -9,13 +9,13 @@ available today and how to exercise it.
 - `tei-core` now models the top-level `TeiDocument` together with its
   `TeiHeader` and body-aware `TeiText`. The text model records ordered
   paragraphs (`P`), utterances with optional speaker references, and structural
-  divisions (`Div`) containing paragraphs, utterances, lists
-  (`List`/`Item`/`Label`), and nested subdivisions. Each `Div` keeps a required
-  `@type` (`DivType`), an optional `@subtype`, an optional `@xml:id`, and an
-  optional `Head` wrapper for a single leading `<head>` element in the Episodic
-  profile. Each block stores a sequence of `Inline` nodes, allowing clients to
-  mix plain text with emphasized `<hi>` spans and `<pause/>` cues without
-  hand-rolling XML. Plain strings flow through `P::from_text_segments`,
+  divisions (`Div`) containing paragraphs, utterances, lists (`List`/`Item`/
+  `Label`), and nested subdivisions. Each `Div` keeps a required `@type`
+  (`DivType`), an optional `@subtype`, an optional `@xml:id`, and an optional
+  `Head` wrapper for a single leading `<head>` element in the Episodic profile.
+  Each block stores a sequence of `Inline` nodes, allowing clients to mix plain
+  text with emphasized `<hi>` spans and `<pause/>` cues without hand-rolling
+  XML. Plain strings flow through `P::from_text_segments`,
   `Utterance::from_text_segments`, `Item::from_text_segments`,
   `Label::from_text`, and `Head::from_text`; the older `new` constructors
   remain as deprecated shims for existing callers where applicable.

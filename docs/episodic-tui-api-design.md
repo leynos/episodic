@@ -626,11 +626,11 @@ Three mechanisms control backpressure, applied in escalating order:
    set to a small value to prevent client message spam.
 2. **Event compaction.** When the gap between the most recent event
    `seq` and the last acknowledged `seq` exceeds a configurable soft threshold
-   (for example, 500 events), the server begins compacting high-frequency
-   events (`token.delta`, `node.progress`) into periodic aggregates before
-   sending them. The server does not notify the client when compaction
-   activates; compacted events are indistinguishable from normal events apart
-   from coarser granularity.
+   (for example, 500 events), the server begins compacting high-frequency events
+   (`token.delta`, `node.progress`) into periodic aggregates before sending
+   them. The server does not notify the client when compaction activates;
+   compacted events are indistinguishable from normal events apart from coarser
+   granularity.
 3. **Acknowledgement-gated disconnect.** The server maintains a bounded
    ring buffer per run subscription (for example, the last 2000 events). If the
    acknowledgement lag exceeds a hard threshold (for example, 1500 events)

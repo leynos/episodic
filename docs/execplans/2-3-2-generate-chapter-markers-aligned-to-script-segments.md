@@ -1,9 +1,8 @@
 # Generate chapter markers aligned to script segments
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -309,17 +308,17 @@ between show-notes and chapter-marker modules, so
 `episodic/generation/tei_payload.py` now owns mapping/list/string validation
 plus body block and div detection helpers.
 
-Inline follow-up review was verified against the current branch before
-editing. The users' guide configuration note and empty-result equality test
-were already present. Remaining work split the large chapter-marker test module
-into DTO, generator/parser, and TEI enrichment files; removed the private
-pytest-asyncio runner dependency from the chapter-marker BDD step; and kept the
-ADR ExecPlan footnote marker contiguous for GitHub rendering.
+Inline follow-up review was verified against the current branch before editing.
+The users' guide configuration note and empty-result equality test were already
+present. Remaining work split the large chapter-marker test module into DTO,
+generator/parser, and TEI enrichment files; removed the private pytest-asyncio
+runner dependency from the chapter-marker BDD step; and kept the ADR ExecPlan
+footnote marker contiguous for GitHub rendering.
 
 The full gate sequence was then rerun on the segment-alignment follow-up tree.
 An initial `make test` run hit a transient async fixture timeout in
 `tests/test_profile_template_service.py::TestEpisodeTemplateService::test_update_episode_template_revision_conflict_raises`;
- that single test passed when rerun directly. A subsequent full `make test` run
+that single test passed when rerun directly. A subsequent full `make test` run
 passed with 485 tests and 3 skipped. Final validation passed:
 
 - `make check-fmt`

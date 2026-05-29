@@ -1,4 +1,10 @@
-"""Typed queue topology for the Celery worker scaffold."""
+"""Typed queue topology and routing contract for the Celery worker scaffold.
+
+The task registry in :mod:`episodic.worker.tasks` supplies task-to-workload
+classifications; this module turns those classifications into Celery queues,
+exchanges, and route metadata consumed by
+:func:`episodic.worker.runtime.create_celery_app`.
+"""
 
 import collections.abc as cabc  # noqa: TC003
 import dataclasses as dc
@@ -6,6 +12,8 @@ import enum
 import types
 
 from kombu import Exchange, Queue
+
+MIN_DOTTED_TASK_NAME_PARTS = 2
 
 
 class WorkloadClass(enum.StrEnum):
@@ -87,6 +95,44 @@ def _validate_non_empty_str(attr_path: str, value: str) -> None:
     if not value.strip():
         msg = f"{attr_path} must be a non-empty string."
         raise ValueError(msg)
+
+
+def _validate_task_name_is_str(task_name: object) -> None:
+    """Raise TypeError if task_name is not a str instance."""
+    if not isinstance(task_name, str):
+        msg = "Worker task names must be non-empty dotted names."
+        raise TypeError(msg)
+
+
+def _part_is_invalid(part: str) -> bool:
+    """Return True if a dotted-name segment is empty or contains whitespace."""
+    return not part or any(char.isspace() for char in part)
+
+
+def _validate_dotted_parts(task_parts: list[str]) -> None:
+    """Raise ValueError if there are too few parts or any part is invalid."""
+    if len(task_parts) < MIN_DOTTED_TASK_NAME_PARTS:
+        msg = "Worker task names must be non-empty dotted names."
+        raise ValueError(msg)
+    if any(_part_is_invalid(part) for part in task_parts):
+        msg = "Worker task names must be non-empty dotted names."
+        raise ValueError(msg)
+
+
+def _validate_task_name(task_name: str) -> None:
+    """Raise ValueError if a task name cannot be routed deliberately."""
+    _validate_task_name_is_str(task_name)
+    if task_name != task_name.strip():
+        msg = "Worker task names must be non-empty dotted names."
+        raise ValueError(msg)
+    _validate_dotted_parts(task_name.split("."))
+
+
+def _validate_task_workload(workload: WorkloadClass) -> None:
+    """Raise TypeError if a task workload was not classified explicitly."""
+    if not isinstance(workload, WorkloadClass):
+        msg = "Worker task workloads must be WorkloadClass values."
+        raise TypeError(msg)
 
 
 def _validate_unique_queue_names(queues: tuple[WorkerQueueSpec, ...]) -> None:
@@ -173,9 +219,13 @@ class WorkerTopology:
         """Build Celery route metadata from task-name to workload mapping."""
         routes: dict[str, dict[str, str]] = {}
         for task_name, workload in task_workloads.items():
+            _validate_task_name(task_name)
+            _validate_task_workload(workload)
             queue = self.queue_for(workload)
             routes[task_name] = {
                 "queue": queue.name,
+                "exchange": self.exchange_name,
+                "exchange_type": self.exchange_type,
                 "routing_key": queue.diagnostic_routing_key,
             }
         return routes

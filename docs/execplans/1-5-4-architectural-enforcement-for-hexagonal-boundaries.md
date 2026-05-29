@@ -1,9 +1,8 @@
 # Implement architectural enforcement for hexagonal boundaries
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: SHIPPED - implementation complete
 
@@ -92,8 +91,8 @@ Implementation approval rule:
   behavioural tests.
 - Use Vidai Mock for behavioural testing of inference services. This roadmap
   item does not need to invoke an inference path merely to mention Vidai Mock.
-  If an implementation change causes a behavioural test to exercise
-  `LLMPort`-backed inference directly, that behaviour test must use Vidai Mock.
+  If an implementation change causes a behavioural test to exercise `LLMPort`
+  -backed inference directly, that behaviour test must use Vidai Mock.
 - Keep existing public API and runtime behaviour stable. This work adds
   enforcement, not new user-facing endpoints or protocol changes.
 - Record the enforcement design in a new ADR under `docs/adr/`.
@@ -244,8 +243,8 @@ Implementation approval rule:
 - Observation: Post-turn hooks run in a narrower `PATH` than the interactive
   shell, so Makefile targets that required global `ruff`, `ty`, or
   `markdownlint-cli2` binaries failed before reaching the actual checks.
-  Impact: the Makefile now invokes Python developer tools through `uv`, pins
-  the `ty` tool runner to the already validated `0.0.32` version, and invokes
+  Impact: the Makefile now invokes Python developer tools through `uv`, pins the
+  `ty` tool runner to the already validated `0.0.32` version, and invokes
   Markdown lint through `npx -y markdownlint-cli2`.
 
 - Observation: The hook environment can also omit `uv` from `PATH`, and the

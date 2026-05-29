@@ -1,9 +1,8 @@
 # Add LangGraph suspend-and-resume orchestration
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -143,9 +142,8 @@ Success is observable in these behaviours:
   accounting boundary, Vidai Mock behavioural test pattern, and the existing
   `2.4.1` ExecPlan.
 - [x] (2026-05-07 23:54Z) Inspected the existing orchestration seam in
-  `episodic/orchestration/generation.py`,
-  `episodic/orchestration/langgraph.py`, `episodic/orchestration/_dto.py`, and
-  `episodic/orchestration/_protocols.py`.
+  `episodic/orchestration/generation.py`, `episodic/orchestration/langgraph.py`,
+  `episodic/orchestration/_dto.py`, and `episodic/orchestration/_protocols.py`.
 - [x] (2026-05-07 23:54Z) Drafted this pre-implementation ExecPlan for roadmap
   item `2.4.2`.
 - [x] (2026-05-08 00:04Z) Ran planning-change validation gates:
@@ -197,8 +195,8 @@ Success is observable in these behaviours:
   leaving Python files unchanged. The explicit required gates pass.
 - [x] (2026-05-08 01:16Z) Stage G partial: `make check-fmt`,
   `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
-  `make nixie` passed before marking the roadmap item done. `make test`
-  reported `446 passed, 3 skipped`.
+  `make nixie` passed before marking the roadmap item done. `make test` reported
+  `446 passed, 3 skipped`.
 - [x] Stage G: run all validation gates, mark roadmap item `2.4.2` done, and
   commit the implementation.
 
@@ -218,11 +216,11 @@ Success is observable in these behaviours:
 
 - Observation: `workflow_checkpoints` exists in the design document but not in
   the current SQLAlchemy model set. Evidence:
-  `docs/episodic-podcast-generation-system-design.md` describes the table,
-  while `episodic/canonical/storage/models.py` currently exposes canonical
-  tables such as `approval_events` and `episode_templates`. Impact: the
-  implementation probably needs a small migration and repository adapter
-  dedicated to checkpoint records.
+  `docs/episodic-podcast-generation-system-design.md` describes the table, while
+  `episodic/canonical/storage/models.py` currently exposes canonical tables
+  such as `approval_events` and `episode_templates`. Impact: the implementation
+  probably needs a small migration and repository adapter dedicated to
+  checkpoint records.
 
 - Observation: `langgraph` is already declared as a runtime dependency.
   Evidence: `pyproject.toml` contains `langgraph>=1.1,<2.0`. Impact: the

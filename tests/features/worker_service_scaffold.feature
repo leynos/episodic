@@ -5,8 +5,8 @@ Feature: Celery worker scaffold
     When the Celery worker app is created from environment configuration
     And an operator inspects the worker routing
     And the operator dispatches the representative diagnostic tasks
-    Then the I/O-bound task targets the I/O queue and succeeds
-    And the CPU-bound task targets the CPU queue and succeeds
+    Then the I/O-bound task targets the I/O exchange and queue and succeeds
+    And the CPU-bound task targets the CPU exchange and queue and succeeds
     And the worker launch profiles map I/O and CPU workloads to distinct pools
 
   Scenario: App creation fails without broker config

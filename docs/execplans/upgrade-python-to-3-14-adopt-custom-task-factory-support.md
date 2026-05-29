@@ -133,10 +133,10 @@ Validation summary:
 
 ## Context and orientation
 
-Python 3.14 extends task-creation plumbing so keyword arguments can flow
-through `asyncio.create_task()` and `TaskGroup.create_task()` into custom loop
-task factories. Episodic currently uses async orchestration in canonical
-ingestion but lacks central task instrumentation.
+Python 3.14 extends task-creation plumbing so keyword arguments can flow through
+`asyncio.create_task()` and `TaskGroup.create_task()` into custom loop task
+factories. Episodic currently uses async orchestration in canonical ingestion
+but lacks central task instrumentation.
 
 Relevant files:
 
@@ -158,9 +158,9 @@ instances correctly. Include negative tests for unsupported keys or defaults.
 
 Stage C implements utilities and migration. Add a shared helper for task
 creation that forwards metadata kwargs, then migrate one code path (for
-example, source normalization fan-out in ingestion service) to
-`TaskGroup`/create_task with metadata. Keep result ordering and exception
-behaviour explicit.
+example, source normalization fan-out in ingestion service) to `TaskGroup`
+/create_task with metadata. Keep result ordering and exception behaviour
+explicit.
 
 Stage D validates and documents. Run full gates and add short developer
 guidance for when to use task metadata and when to avoid it.

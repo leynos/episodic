@@ -167,8 +167,14 @@ Optional interpreter-pool flags:
 Queue contract:
 
 - Exchange: `episodic.tasks` (`topic`)
-- I/O queue: `episodic.io`, routed via `episodic.io.diagnostic`
-- CPU queue: `episodic.cpu`, routed via `episodic.cpu.diagnostic`
+- I/O queue: `episodic.io`, bound with `episodic.io.#`
+- CPU queue: `episodic.cpu`, bound with `episodic.cpu.#`
+- I/O diagnostic route: `episodic.worker.io_diagnostic` routes to queue
+  `episodic.io`, exchange `episodic.tasks`, exchange type `topic`, and routing
+  key `episodic.io.diagnostic`.
+- CPU diagnostic route: `episodic.worker.cpu_diagnostic` routes to queue
+  `episodic.cpu`, exchange `episodic.tasks`, exchange type `topic`, and routing
+  key `episodic.cpu.diagnostic`.
 
 ### Python dependencies
 
@@ -194,6 +200,8 @@ Testing guidance:
 
 - Use `tests/test_worker_service_scaffold.py` for unit coverage of topology,
   runtime parsing, Celery app assembly, and eager task execution.
+- Use `tests/test_worker_routing_contract.py` for route-table completeness,
+  exchange metadata, and malformed route validation.
 - Use `tests/features/worker_service_scaffold.feature` and
   `tests/steps/test_worker_service_scaffold_steps.py` for contract-level
   behavioural coverage.
@@ -208,8 +216,11 @@ When adding new worker tasks:
   in `episodic/worker/tasks.py` or a sibling worker-only module.
 - Depend on ports or injected callables rather than importing concrete
   adapters directly into task code.
-- Extend `SCAFFOLD_TASK_WORKLOADS` and the topology-backed routing metadata, so
-  the new task's queue assignment remains explicit.
+- Extend the explicit task-name tuple and workload map together, then update
+  the topology-backed routing tests so the new task's queue assignment remains
+  deliberate. Unknown or malformed task names, and non-`WorkloadClass` workload
+  values, must fail during route-table construction instead of falling through
+  to Celery's default queue.
 - For CPU-bound tasks on `episodic.cpu` that can split pure-Python inner work
   into independent items, build the task-level executor from the environment:
 

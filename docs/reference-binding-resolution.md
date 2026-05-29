@@ -130,8 +130,8 @@ async with SqlAlchemyUnitOfWork(session_factory) as uow:
     )
 ```
 
-Legacy keyword arguments such as `ingestion_job_id`, `canonical_episode_id`,
-and `created_at` are no longer accepted directly by
+Legacy keyword arguments such as `ingestion_job_id`, `canonical_episode_id`, and
+`created_at` are no longer accepted directly by
 `snapshot_resolved_bindings()`. Callers must pass a `SnapshotContext` instance
 instead.
 

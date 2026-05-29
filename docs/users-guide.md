@@ -294,12 +294,22 @@ observability in production.
 Current queue model:
 
 - `episodic.tasks` topic exchange
-- `episodic.io` queue for I/O-bound workloads
-- `episodic.cpu` queue for CPU-bound workloads
+- `episodic.io` queue for I/O-bound workloads, bound with `episodic.io.#`
+- `episodic.cpu` queue for CPU-bound workloads, bound with `episodic.cpu.#`
+
+Representative tasks route explicitly:
+
+- `episodic.worker.io_diagnostic` uses queue `episodic.io`, exchange
+  `episodic.tasks`, exchange type `topic`, and routing key
+  `episodic.io.diagnostic`.
+- `episodic.worker.cpu_diagnostic` uses queue `episodic.cpu`, exchange
+  `episodic.tasks`, exchange type `topic`, and routing key
+  `episodic.cpu.diagnostic`.
 
 The current scaffold provides representative diagnostic tasks so routing and
 runtime wiring can be verified before later roadmap items add workflow-specific
-jobs.
+jobs. The default validation path is contract-level and eager-mode; it does not
+require a live RabbitMQ broker.
 
 ### Quality & Compliance
 

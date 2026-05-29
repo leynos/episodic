@@ -309,6 +309,6 @@ No new dependencies are required.
 
 ## Revision note
 
-Extended the completed plan with series-aligned host/guest profile semantics
-and `effective_from_episode_id` applicability rules, then updated the design
+Extended the completed plan with series-aligned host/guest profile semantics and
+`effective_from_episode_id` applicability rules, then updated the design
 document, roadmap, and reusable-reference ER diagram accordingly.

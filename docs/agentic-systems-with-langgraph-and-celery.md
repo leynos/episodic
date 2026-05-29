@@ -96,12 +96,12 @@ systems require a high-performance, external store. Redis is the standard
 choice here.10 The langgraph-checkpoint-redis library utilizes Redis’s advanced
 data structures to serialize the graph state.
 
-| **Feature**     | **In-Memory Checkpointer**         | **Redis Checkpointer**                                                    |
-| --------------- | ---------------------------------- | ------------------------------------------------------------------------- |
-| **Durability**  | Lost on process restart.           | Persists across restarts and deployments.                                 |
-| **Scalability** | Single server only.                | Horizontal scaling across multiple API workers.                           |
-| **Time Travel** | Limited to current session memory. | Allows reverting to any previous state (“Time Travel”) for debugging.     |
-| **Concurrency** | Not thread-safe across processes.  | Supports distributed locking and atomic writes.                           |
+| **Feature**     | **In-Memory Checkpointer**         | **Redis Checkpointer**                                                |
+| --------------- | ---------------------------------- | --------------------------------------------------------------------- |
+| **Durability**  | Lost on process restart.           | Persists across restarts and deployments.                             |
+| **Scalability** | Single server only.                | Horizontal scaling across multiple API workers.                       |
+| **Time Travel** | Limited to current session memory. | Allows reverting to any previous state (“Time Travel”) for debugging. |
+| **Concurrency** | Not thread-safe across processes.  | Supports distributed locking and atomic writes.                       |
 
 The use of Redis ensures that an agent’s “brain” is not tied to a specific
 Python process. If the Kubernetes pod hosting the LangGraph API is recycled,

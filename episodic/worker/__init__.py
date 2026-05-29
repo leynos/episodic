@@ -12,6 +12,7 @@ from .runtime import (
 from .tasks import (
     CPU_DIAGNOSTIC_TASK_NAME,
     IO_DIAGNOSTIC_TASK_NAME,
+    SCAFFOLD_TASK_NAMES,
     CpuDiagnosticRequest,
     CpuDiagnosticResult,
     IoDiagnosticRequest,
@@ -24,6 +25,7 @@ __all__ = [
     "CPU_DIAGNOSTIC_TASK_NAME",
     "DEFAULT_WORKER_TOPOLOGY",
     "IO_DIAGNOSTIC_TASK_NAME",
+    "SCAFFOLD_TASK_NAMES",
     "CpuDiagnosticRequest",
     "CpuDiagnosticResult",
     "IoDiagnosticRequest",

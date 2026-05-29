@@ -1,19 +1,35 @@
-"""Celery runtime composition root for the worker scaffold."""
+"""Celery runtime composition root for the worker scaffold.
 
+This module is the composition root that boots the Celery worker application.
+It reads environment configuration via :func:`load_runtime_config`, delegates
+queue and route taxonomy to :mod:`episodic.worker.topology`, and registers typed
+task seams from :mod:`episodic.worker.tasks` via
+:func:`~episodic.worker.tasks.register_scaffold_tasks`.
+
+:func:`_build_task_routes` materialises the route table from
+:class:`~episodic.worker.topology.WorkerTopology` and logs validation context
+so that startup failures carry enough diagnostic information to identify the
+offending task name or workload classification.
+
+:func:`create_celery_app_from_env` is the Celery runtime entrypoint; it
+chains :func:`load_runtime_config` and :func:`create_celery_app`.
+"""
+
+import collections.abc as cabc  # noqa: TC003
 import dataclasses as dc
 import enum
 import importlib
 import os
-import typing as typ
 from urllib.parse import urlparse
 
 from celery import Celery
 
+from episodic.logging import get_logger
+
 from .tasks import SCAFFOLD_TASK_WORKLOADS, WorkerDependencies, register_scaffold_tasks
 from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology, WorkloadClass
 
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+logger = get_logger(__name__)
 
 
 class WorkerPool(enum.StrEnum):
@@ -249,6 +265,7 @@ def create_celery_app(
         "episodic.worker", broker=config.broker_url, backend=config.result_backend
     )
     default_queue = topology.queue_for(topology.default_workload)
+    task_routes = _build_task_routes(topology)
     app.conf.update(
         broker_url=config.broker_url,
         result_backend=config.result_backend,
@@ -263,10 +280,57 @@ def create_celery_app(
         task_default_routing_key=default_queue.diagnostic_routing_key,
         task_create_missing_queues=False,
         task_queues=topology.kombu_queues(),
-        task_routes=topology.task_routes(SCAFFOLD_TASK_WORKLOADS),
+        task_routes=task_routes,
     )
     register_scaffold_tasks(app, worker_dependencies)
     return app
+
+
+def _build_task_routes(
+    topology: WorkerTopology,
+    task_workloads: cabc.Mapping[str, WorkloadClass] | None = None,
+) -> dict[str, dict[str, str]]:
+    """Build task routes and log route-table validation context."""
+    if task_workloads is None:
+        task_workloads = SCAFFOLD_TASK_WORKLOADS
+
+    def _log_info(message: str, *args: object) -> None:
+        try:
+            logger.info(message, *args)
+        except TypeError:
+            logger.info(message % args)
+
+    _log_info(
+        "Building Celery worker task routes for %s tasks.",
+        len(task_workloads),
+    )
+    try:
+        task_routes = topology.task_routes(task_workloads)
+    except (TypeError, ValueError) as exc:
+        validation_error = str(exc)
+        log_exception = logger.exception
+        try:
+            log_exception(
+                (
+                    "Celery worker task route validation failed for "
+                    "tasks=%r, workloads=%r: %s"
+                ),
+                tuple(task_workloads),
+                tuple(task_workloads.values()),
+                validation_error,
+            )
+        except TypeError:
+            log_exception(
+                "Celery worker task route validation failed for tasks="
+                f"{tuple(task_workloads)!r}, workloads="
+                f"{tuple(task_workloads.values())!r}: {validation_error}",
+            )
+        raise
+    _log_info(
+        "Built Celery worker task routes for %s tasks.",
+        len(task_routes),
+    )
+    return task_routes
 
 
 def create_celery_app_from_env() -> Celery:

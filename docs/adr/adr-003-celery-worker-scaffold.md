@@ -27,7 +27,9 @@ clear scope decision.
 The worker scaffold now follows these rules:
 
 1. `episodic/worker/topology.py` is the single source of truth for the
-   exchange, queues, workload classes, and task-route metadata.
+   exchange, queues, workload classes, and task-route metadata. Route-table
+   construction rejects malformed task names and workload values that are not
+   `WorkloadClass` members.
 2. `episodic/worker/runtime.py` is the Celery composition root. It reads
    environment variables, validates RabbitMQ-backed configuration, exposes
    worker launch profiles, and builds the Celery application through
@@ -37,9 +39,11 @@ The worker scaffold now follows these rules:
    diagnostic, not business-complete workflow implementations.
 4. The canonical queue topology uses one topic exchange, `episodic.tasks`, and
    two queues:
-   - `episodic.io` for I/O-bound tasks, routed with
+   - `episodic.io` for I/O-bound tasks, bound with `episodic.io.#` and used by
+     the `episodic.worker.io_diagnostic` route through
      `episodic.io.diagnostic`;
-   - `episodic.cpu` for CPU-bound tasks, routed with
+   - `episodic.cpu` for CPU-bound tasks, bound with `episodic.cpu.#` and used
+     by the `episodic.worker.cpu_diagnostic` route through
      `episodic.cpu.diagnostic`.
 5. The initial worker-profile split is:
    - I/O-bound workloads default to the `gevent` pool with high concurrency;
@@ -53,9 +57,10 @@ The worker scaffold now follows these rules:
      workers with `EPISODIC_INTERPRETER_POOL_MAX_WORKERS`.
 6. Behavioural coverage for this roadmap slice remains contract-level rather
    than broker-backed. Tests create the Celery app from environment
-   configuration, inspect routing metadata, and execute representative tasks in
-   eager mode. A live RabbitMQ dispatch path is deferred until the repository
-   has a stable broker fixture strategy.
+   configuration, inspect queue, exchange, exchange type, and routing-key
+   metadata, and execute representative tasks in eager mode. A live RabbitMQ
+   dispatch path is deferred until the repository has a stable broker fixture
+   strategy.
 
 ## Rationale
 
