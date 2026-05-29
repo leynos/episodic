@@ -4,6 +4,14 @@ These protocols centralise counter, latency, and scalar observation contracts
 so feature-specific ports such as ``ChronoMetricsPort`` and
 ``CpuTaskExecutorMetricsPort`` reuse one implementation strategy instead of
 duplicating identical method signatures.
+
+:class:`BoundedMetricsPort` is a narrower structural subtype of
+:class:`episodic.observability.MetricsPort` whose label parameters are typed
+as ``dict[str, str]`` rather than ``collections.abc.Mapping[str, str]``. New
+code should prefer :class:`episodic.observability.MetricsPort`; the protocols
+in this module are retained for the feature-specific ports that historically
+extended :class:`BoundedMetricsPort` and for adapters that build their label
+mappings as concrete ``dict`` instances.
 """
 
 import dataclasses as dc
