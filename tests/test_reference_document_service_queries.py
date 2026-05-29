@@ -69,9 +69,7 @@ async def test_get_reference_binding_returns_persisted_binding(
     service_fixture: ServiceFixture,
 ) -> None:
     """Return a persisted ReferenceBinding with matching id and target fields."""
-    _, rev_id = await _create_document_and_revision(
-        session_factory, service_fixture
-    )
+    _, rev_id = await _create_document_and_revision(session_factory, service_fixture)
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         created = await create_reference_binding(
