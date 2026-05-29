@@ -1,6 +1,12 @@
 """Types and errors for reusable reference-document services."""
 
 import dataclasses as dc
+import typing as typ
+
+if typ.TYPE_CHECKING:
+    import uuid
+
+    from episodic.canonical.domain import ReferenceBindingTargetKind
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -94,3 +100,15 @@ class ReferenceRevisionConflictError(ReferenceDocumentError):
 
 class ReferenceConflictError(ReferenceDocumentError):
     """Raised when persistence constraints reject a write."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ParsedBindingIds:
+    """Parsed and validated UUID/enum fields from a ReferenceBindingData payload."""
+
+    revision_id: uuid.UUID
+    target_kind: ReferenceBindingTargetKind
+    series_profile_id: uuid.UUID | None
+    episode_template_id: uuid.UUID | None
+    ingestion_job_id: uuid.UUID | None
+    effective_from_episode_id: uuid.UUID | None
