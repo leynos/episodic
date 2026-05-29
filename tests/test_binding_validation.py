@@ -66,32 +66,29 @@ class TestParseBindingIds:
         assert result.ingestion_job_id is None
         assert result.effective_from_episode_id is None
 
-    def test_it_rejects_invalid_uuid(self) -> None:
-        """Raise ReferenceValidationError when a UUID field is malformed."""
+    @pytest.mark.parametrize(
+        ("revision_id", "target_kind_str", "expected_match"),
+        [
+            ("not-a-uuid", "series_profile", "Invalid UUID"),
+            (str(uuid.uuid4()), "not-a-kind", "Unsupported"),
+        ],
+    )
+    def test_it_rejects_invalid_input(
+        self,
+        revision_id: str,
+        target_kind_str: str,
+        expected_match: str,
+    ) -> None:
+        """Raise ReferenceValidationError for malformed UUID or unknown target kind."""
         data = ReferenceBindingData(
-            reference_document_revision_id="not-a-uuid",
-            target_kind="series_profile",
+            reference_document_revision_id=revision_id,
+            target_kind=target_kind_str,
             series_profile_id=None,
             episode_template_id=None,
             ingestion_job_id=None,
             effective_from_episode_id=None,
         )
-
-        with pytest.raises(ReferenceValidationError, match="Invalid UUID"):
-            _parse_binding_ids(data)
-
-    def test_it_rejects_invalid_target_kind(self) -> None:
-        """Raise ReferenceValidationError for an unknown target kind."""
-        data = ReferenceBindingData(
-            reference_document_revision_id=str(uuid.uuid4()),
-            target_kind="not-a-kind",
-            series_profile_id=None,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-        )
-
-        with pytest.raises(ReferenceValidationError, match="Unsupported"):
+        with pytest.raises(ReferenceValidationError, match=expected_match):
             _parse_binding_ids(data)
 
 
@@ -109,34 +106,37 @@ class TestAssertBindingTargetShape:
             },
         )
 
-    def test_it_rejects_zero_populated_targets(self) -> None:
-        """Raise when no target identifiers are populated."""
-        with pytest.raises(
-            ReferenceValidationError,
-            match="must set exactly one target identifier",
-        ):
-            _assert_binding_target_shape(
-                ReferenceBindingTargetKind.SERIES_PROFILE,
+    @pytest.mark.parametrize(
+        ("target_map", "expected_match"),
+        [
+            (
                 {
                     ReferenceBindingTargetKind.SERIES_PROFILE: None,
                     ReferenceBindingTargetKind.EPISODE_TEMPLATE: None,
                     ReferenceBindingTargetKind.INGESTION_JOB: None,
                 },
-            )
-
-    def test_it_rejects_target_kind_mismatch(self) -> None:
-        """Raise when the populated target does not match target_kind."""
-        with pytest.raises(
-            ReferenceValidationError,
-            match="target_kind does not match populated target",
-        ):
-            _assert_binding_target_shape(
-                ReferenceBindingTargetKind.SERIES_PROFILE,
+                "must set exactly one target identifier",
+            ),
+            (
                 {
                     ReferenceBindingTargetKind.SERIES_PROFILE: None,
                     ReferenceBindingTargetKind.EPISODE_TEMPLATE: uuid.uuid4(),
                     ReferenceBindingTargetKind.INGESTION_JOB: None,
                 },
+                "target_kind does not match populated target",
+            ),
+        ],
+    )
+    def test_it_rejects_invalid_shape(
+        self,
+        target_map: dict[ReferenceBindingTargetKind, uuid.UUID | None],
+        expected_match: str,
+    ) -> None:
+        """Raise ReferenceValidationError for zero or mismatched populated targets."""
+        with pytest.raises(ReferenceValidationError, match=expected_match):
+            _assert_binding_target_shape(
+                ReferenceBindingTargetKind.SERIES_PROFILE,
+                target_map,
             )
 
 
