@@ -19,6 +19,7 @@ used by preflight budget validation:
 3
 """
 
+import contextvars
 import dataclasses
 import json
 import math
@@ -35,6 +36,10 @@ from episodic.llm.ports import (
 from episodic.logging import getLogger
 
 _log = getLogger(__name__)
+
+_log_override: contextvars.ContextVar[typ.Any | None] = contextvars.ContextVar(
+    "openai_adapter_log_override", default=None
+)
 
 type _TokenBudgetLabel = typ.Literal["input", "output", "total"]
 type _PreflightBudgetReason = typ.Literal["input", "total"]
@@ -100,7 +105,8 @@ def _operation_label(operation: LLMProviderOperation | str | None) -> str:
 
 def _log_error_event(message: str, **fields: object) -> None:
     """Emit one JSON-encoded ERROR event with bounded diagnostic fields."""
-    _log.error(json.dumps({"event": message, **fields}, sort_keys=True))
+    effective_log = _log_override.get() or _log
+    effective_log.error(json.dumps({"event": message, **fields}, sort_keys=True))
 
 
 def _is_positive_int(value: object) -> bool:

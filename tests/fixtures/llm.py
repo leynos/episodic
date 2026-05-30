@@ -6,6 +6,7 @@ test modules reuse them to keep transport setup and config construction
 consistent while focusing each test file on one behavioural concern.
 """
 
+import collections.abc as cabc
 import contextlib
 import json
 import typing as typ
@@ -49,19 +50,18 @@ class _OpenAIAdapterLogSpy:
 
 
 @pytest.fixture
-def openai_log_spy(monkeypatch: pytest.MonkeyPatch) -> _OpenAILogSpy:
-    """Capture OpenAI adapter structured error logs without async handlers.
+def openai_log_spy() -> cabc.Generator[_OpenAILogSpy]:
+    """Capture OpenAI adapter structured error logs via ContextVar isolation.
 
-    Tests using this fixture must belong to the ``openai_log_spy`` xdist group
-    (``@pytest.mark.xdist_group(name="openai_log_spy")``) so they run
-    sequentially in a single worker and do not race on the monkeypatched
-    module-level ``_log`` reference.
+    Uses ``_log_override`` to redirect log output within the current Python
+    context only. No xdist grouping or serialisation is required.
     """
     from episodic.llm.openai_api import utils as openai_utils
 
     spy = _OpenAIAdapterLogSpy()
-    monkeypatch.setattr(openai_utils, "_log", spy)
-    return spy
+    token = openai_utils._log_override.set(spy)
+    yield spy
+    openai_utils._log_override.reset(token)
 
 
 @pytest.fixture

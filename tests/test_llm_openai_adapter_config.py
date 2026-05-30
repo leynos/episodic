@@ -17,8 +17,6 @@ if typ.TYPE_CHECKING:
 
     from openai_test_types import _OpenAIInvalidConfigBuilder, _OpenAILogSpy
 
-pytestmark = pytest.mark.xdist_group(name="openai_log_spy")
-
 
 @pytest.mark.parametrize(
     ("config_kwargs", "match"),
