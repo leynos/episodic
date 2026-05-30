@@ -252,7 +252,7 @@ Success is observable when:
   conventions for authentication.
 - [x] (2026-05-23T17:30Z) Drafted this ExecPlan.
 - [x] (2026-05-25T00:00Z) User approved implementation and requested
-  `leta` workspace initialisation plus CodeRabbit review after each major
+  `leta` workspace initialization plus CodeRabbit review after each major
   milestone.
 - [x] (2026-05-25T00:00Z) Milestone 1: central error envelope wiring and test
   harness updates. Focused red run failed on the previous Falcon
@@ -360,7 +360,7 @@ Success is observable when:
   The `AuthorizationPort` scaffold therefore lives in
   `episodic/api/authorization.py` for this work, with a future migration to
   `episodic/canonical/ports.py` planned alongside roadmap `5.1` when the port
-  operates on series and organisation identifiers.
+  operates on series and organization identifiers.
 
 - Observation: Falcon ASGI accepts only coroutine error handlers registered via
   `App.add_error_handler`; a synchronous handler raises
@@ -400,7 +400,7 @@ Success is observable when:
 - Observation: the final full-suite gate exposed one stale test assertion in
   `tests/test_lifespan_hooks.py::test_create_app_keeps_existing_canonical_routes_working`.
   The route remained available, but the assertion still expected the old
-  `{"items": []}` body after roadmap item `4.1.2` intentionally standardised
+  `{"items": []}` body after roadmap item `4.1.2` intentionally standardized
   list responses on `{items, limit, offset, total}`. Impact: the assertion now
   checks the documented empty pagination envelope, and the focused test passes
   in `/tmp/4-1-2-lifespan-focused.out`.
@@ -703,7 +703,7 @@ Production changes:
    - a dataclass `ErrorEnvelope(code, message, details)`;
    - a single Falcon error handler
      `handle_http_error(req, resp, exc, params)` that converts every
-     `falcon.HTTPError` instance into an `ErrorEnvelope` and serialises
+     `falcon.HTTPError` instance into an `ErrorEnvelope` and serializes
      it as the response body;
    - the per-family classification helpers `map_profile_template_error`
      (for `EntityNotFoundError` and `RevisionConflictError` from
