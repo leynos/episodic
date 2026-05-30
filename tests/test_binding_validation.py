@@ -125,6 +125,14 @@ class TestAssertBindingTargetShape:
                 },
                 "target_kind does not match populated target",
             ),
+            (
+                {
+                    ReferenceBindingTargetKind.SERIES_PROFILE: uuid.uuid4(),
+                    ReferenceBindingTargetKind.EPISODE_TEMPLATE: uuid.uuid4(),
+                    ReferenceBindingTargetKind.INGESTION_JOB: None,
+                },
+                "must set exactly one target identifier",
+            ),
         ],
     )
     def test_it_rejects_invalid_shape(

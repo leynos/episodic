@@ -7,8 +7,13 @@ import uuid
 import pytest
 
 from episodic.canonical.domain import (
+    ApprovalState,
+    CanonicalEpisode,
+    EpisodeStatus,
     ReferenceBinding,
     ReferenceBindingTargetKind,
+    SeriesProfile,
+    TeiHeader,
 )
 from episodic.canonical.profile_templates._brief_reference_documents import (
     _load_legacy_reference_documents,
@@ -29,13 +34,57 @@ if typ.TYPE_CHECKING:
 async def test_validate_episode_for_brief_rejects_mismatched_series(
     session_factory: cabc.Callable[[], AsyncSession],
 ) -> None:
-    """Raise EntityNotFoundError when episode does not belong to profile."""
+    """Raise EntityNotFoundError when episode exists but owns a different profile."""
+    now = dt.datetime.now(tz=dt.UTC)
+    series_id = uuid.uuid4()
+    other_profile_id = uuid.uuid4()
+    episode_id = uuid.uuid4()
+    header_id = uuid.uuid4()
+
+    series = SeriesProfile(
+        id=series_id,
+        slug="test-series",
+        title="Test Series",
+        description=None,
+        configuration={},
+        guardrails={},
+        created_at=now,
+        updated_at=now,
+    )
+    header = TeiHeader(
+        id=header_id,
+        title="Test Header",
+        payload={},
+        raw_xml="<teiHeader/>",
+        created_at=now,
+        updated_at=now,
+    )
+    episode = CanonicalEpisode(
+        id=episode_id,
+        series_profile_id=series_id,
+        tei_header_id=header_id,
+        title="Test Episode",
+        tei_xml="<TEI/>",
+        status=EpisodeStatus.DRAFT,
+        approval_state=ApprovalState.DRAFT,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.flush()
+        await uow.tei_headers.add(header)
+        await uow.flush()
+        await uow.episodes.add(episode)
+        await uow.commit()
+
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(EntityNotFoundError, match="not found"):
             await _validate_episode_for_brief(
                 uow,
-                episode_id=uuid.uuid4(),
-                profile_id=uuid.uuid4(),
+                episode_id=episode_id,
+                profile_id=other_profile_id,
             )
 
 

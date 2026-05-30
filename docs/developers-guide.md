@@ -657,7 +657,7 @@ sub-modules reference a single definition.
 - `brief.py` — orchestration entry point; exports only `build_series_brief`.
 - `_brief_serializers.py` — pure data-shaping transforms to brief payloads
   (no database dependencies).
-- `_brief_loaders.py` — entity loading, binding serialisation with owner
+- `_brief_loaders.py` — entity loading, binding serialization with owner
   alignment, and template-item resolution.
 - `_brief_reference_documents.py` — episode-aware and legacy reference
   document resolution strategies.
