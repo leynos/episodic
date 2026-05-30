@@ -2,6 +2,7 @@
 
 import typing as typ
 
+import pytest
 from falcon import testing
 
 from episodic.api import create_app
@@ -71,21 +72,59 @@ def test_default_authorization_permits_v1_without_header(
     )
 
 
-def test_deny_all_authorization_returns_unauthorized_envelope(
+@pytest.mark.parametrize(
+    ("adapter_factory", "expected_status", "expected_payload"),
+    [
+        (
+            DenyAllAuthorization,
+            401,
+            {
+                "code": "unauthorized",
+                "message": "Authorization is required.",
+                "details": {},
+            },
+        ),
+        (
+            ForbidSeriesProfilesAuthorization,
+            403,
+            {
+                "code": "forbidden",
+                "message": "Access to this resource is forbidden.",
+                "details": {},
+            },
+        ),
+        (
+            RaisingAuthorization,
+            503,
+            {
+                "code": "service_unavailable",
+                "message": "Authorization service is unavailable.",
+                "details": {},
+            },
+        ),
+    ],
+    ids=["unauthorized", "forbidden", "service_unavailable"],
+)
+def test_authorization_decision_serializes_to_canonical_envelope(
     session_factory: async_sessionmaker[AsyncSession],
+    adapter_factory: type[AuthorizationPort],
+    expected_status: int,
+    expected_payload: dict[str, object],
 ) -> None:
-    """Deny-all authorization returns the canonical 401 envelope."""
-    client = _build_client(session_factory, DenyAllAuthorization())
+    """Each non-permit decision returns the matching error envelope."""
+    client = _build_client(session_factory, adapter_factory())
 
     response = client.simulate_get("/v1/series-profiles")
 
-    assert response.status_code == 401, "Expected denied request to return HTTP 401."
+    assert response.status_code == expected_status, (
+        f"Expected HTTP {expected_status} for "
+        f"{adapter_factory.__name__}; got {response.status_code}."
+    )
     payload = typ.cast("dict[str, object]", response.json)
-    assert payload == {
-        "code": "unauthorized",
-        "message": "Authorization is required.",
-        "details": {},
-    }
+    assert payload == expected_payload, (
+        f"Expected envelope {expected_payload} for "
+        f"{adapter_factory.__name__}; got {payload}."
+    )
 
 
 def test_non_v1_paths_bypass_authorization(
@@ -99,39 +138,3 @@ def test_non_v1_paths_bypass_authorization(
     assert response.status_code == 200, (
         "Expected liveness endpoint to bypass authorization middleware."
     )
-
-
-def test_forbidden_authorization_returns_forbidden_envelope(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Forbidden authorization returns the canonical 403 envelope."""
-    client = _build_client(session_factory, ForbidSeriesProfilesAuthorization())
-
-    response = client.simulate_get("/v1/series-profiles")
-
-    assert response.status_code == 403, "Expected forbidden request to return HTTP 403."
-    payload = typ.cast("dict[str, object]", response.json)
-    assert payload == {
-        "code": "forbidden",
-        "message": "Access to this resource is forbidden.",
-        "details": {},
-    }
-
-
-def test_authorization_adapter_exception_returns_503(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Authorization adapter failures return the canonical 503 envelope."""
-    client = _build_client(session_factory, RaisingAuthorization())
-
-    response = client.simulate_get("/v1/series-profiles")
-
-    assert response.status_code == 503, (
-        "Expected authorization backend failure to return HTTP 503."
-    )
-    payload = typ.cast("dict[str, object]", response.json)
-    assert payload == {
-        "code": "service_unavailable",
-        "message": "Authorization service is unavailable.",
-        "details": {},
-    }

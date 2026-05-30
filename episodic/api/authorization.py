@@ -105,7 +105,13 @@ class AuthorizationMiddleware:
                 }
                 resp.status = falcon.HTTP_403
             case _:
-                typ.assert_never(decision)
+                _log_authorization_denial(decision, context)
+                resp.media = {
+                    "code": "internal_error",
+                    "message": "Unexpected authorization decision.",
+                    "details": {},
+                }
+                resp.status = falcon.HTTP_503
         resp.complete = True
 
 

@@ -334,7 +334,7 @@ def _status_code(exc: falcon.HTTPError) -> int:
         return exc.status
     try:
         return int(exc.status.split(" ", maxsplit=1)[0])
-    except IndexError, ValueError:
+    except IndexError, ValueError:  # parsed as tuple in Python 3
         return 500
 
 

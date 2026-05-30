@@ -106,7 +106,7 @@ Versioned API routing:
 
 REST error contract:
 
-- Every Falcon `HTTPError` raised by the canonical API is serialised as
+- Every Falcon `HTTPError` raised by the canonical API is serialized as
   `{"code": "<machine-readable>", "message": "<human>", "details": {...}}` by
   `episodic/api/errors.py`.
 - Validation helpers attach field-level details where the request parser knows

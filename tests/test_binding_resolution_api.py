@@ -75,9 +75,16 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
         "Expected resolved-bindings endpoint to return 200."
     )
     payload = typ.cast("dict[str, object]", response.json)
-    assert payload["limit"] == 20
-    assert payload["offset"] == 0
-    assert payload["total"] == 2
+    assert payload["limit"] == 20, (
+        f"expected limit == 20, got {payload['limit']!r}; payload={payload}"
+    )
+    assert payload["offset"] == 0, (
+        f"expected offset == 0, got {payload['offset']!r}; payload={payload}"
+    )
+    assert payload["total"] == 2, (
+        f"expected total == 2 (series + template binding), "
+        f"got {payload['total']!r}; payload={payload}"
+    )
     items = typ.cast("list[dict[str, object]]", payload["items"])
     revisions = [typ.cast("dict[str, object]", item["revision"]) for item in items]
     documents = [typ.cast("dict[str, object]", item["document"]) for item in items]
@@ -85,8 +92,14 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
         series_revision_id,
         template_revision_id,
     ], "Expected resolved-bindings endpoint to return both resolved revisions."
-    assert documents[0]["kind"] == "style_guide"
-    assert documents[1]["kind"] == "guest_profile"
+    assert documents[0]["kind"] == "style_guide", (
+        f"expected first resolved document kind == 'style_guide', "
+        f"got {documents[0]['kind']!r}"
+    )
+    assert documents[1]["kind"] == "guest_profile", (
+        f"expected second resolved document kind == 'guest_profile', "
+        f"got {documents[1]['kind']!r}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -114,10 +127,17 @@ def test_resolved_bindings_endpoint_rejects_bad_episode_id(
         f"/v1/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
         params=params,
     )
-    assert response.status_code == 400
+    assert response.status_code == 400, (
+        f"expected HTTP 400 for params={params}, got {response.status_code}"
+    )
     payload = typ.cast("dict[str, object]", response.json)
-    assert payload["code"] == "validation_error"
-    assert payload["message"] == expected_description
+    assert payload["code"] == "validation_error", (
+        f"expected code 'validation_error', got {payload.get('code')!r}; "
+        f"payload={payload}"
+    )
+    assert payload["message"] == expected_description, (
+        f"expected message {expected_description!r}, got {payload.get('message')!r}"
+    )
 
 
 def test_resolved_bindings_endpoint_returns_404_for_unknown_profile(

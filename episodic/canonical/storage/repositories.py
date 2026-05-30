@@ -119,7 +119,7 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
             sa
             .select(SeriesProfileRecord)
             .where(sa.true())
-            .order_by(SeriesProfileRecord.created_at)
+            .order_by(SeriesProfileRecord.created_at, SeriesProfileRecord.id)
             .offset(offset)
         )
         if limit is not None:
@@ -335,7 +335,7 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
             sa
             .select(EpisodeTemplateRecord)
             .where(where_clause)
-            .order_by(EpisodeTemplateRecord.created_at)
+            .order_by(EpisodeTemplateRecord.created_at, EpisodeTemplateRecord.id)
             .offset(offset)
         )
         if limit is not None:

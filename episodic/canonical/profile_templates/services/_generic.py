@@ -256,7 +256,7 @@ async def list_history(
     return await dispatch.list_history_for_parent(parent_id)
 
 
-async def list_history_paged(  # noqa: PLR0913
+async def list_history_paged(  # noqa: PLR0913  # Generic service mirrors parent + kind selectors plus pagination.
     uow: CanonicalUnitOfWork,
     *,
     parent_id: uuid.UUID,

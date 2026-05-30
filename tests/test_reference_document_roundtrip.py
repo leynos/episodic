@@ -57,10 +57,18 @@ def test_reference_document_lists_report_total_across_pages(
         f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents",
         params={"limit": "2", "offset": "0"},
     )
-    assert first_page_response.status_code == 200
+    assert first_page_response.status_code == 200, (
+        f"expected 200 for first reference-document page, "
+        f"got {first_page_response.status_code}"
+    )
     first_page = typ.cast("dict[str, object]", first_page_response.json)
-    assert len(typ.cast("list[object]", first_page["items"])) == 2
-    assert first_page["total"] == 3
+    assert len(typ.cast("list[object]", first_page["items"])) == 2, (
+        f"expected 2 items on the first reference-document page; payload={first_page}"
+    )
+    assert first_page["total"] == 3, (
+        f"expected total 3 reference documents, "
+        f"got {first_page['total']!r}; payload={first_page}"
+    )
 
     revision_ids = [
         support.create_reference_document_revision(
@@ -80,10 +88,18 @@ def test_reference_document_lists_report_total_across_pages(
         f"{document_ids[0]}/revisions",
         params={"limit": "1", "offset": "0"},
     )
-    assert revision_page_response.status_code == 200
+    assert revision_page_response.status_code == 200, (
+        f"expected 200 for reference-revision page, "
+        f"got {revision_page_response.status_code}"
+    )
     revision_page = typ.cast("dict[str, object]", revision_page_response.json)
-    assert len(typ.cast("list[object]", revision_page["items"])) == 1
-    assert revision_page["total"] == 2
+    assert len(typ.cast("list[object]", revision_page["items"])) == 1, (
+        f"expected 1 item on the first reference-revision page; payload={revision_page}"
+    )
+    assert revision_page["total"] == 2, (
+        f"expected total 2 reference revisions, "
+        f"got {revision_page['total']!r}; payload={revision_page}"
+    )
 
     for revision_id in revision_ids:
         support.create_reference_binding(
@@ -101,7 +117,15 @@ def test_reference_document_lists_report_total_across_pages(
             "offset": "0",
         },
     )
-    assert binding_page_response.status_code == 200
+    assert binding_page_response.status_code == 200, (
+        f"expected 200 for reference-binding page, "
+        f"got {binding_page_response.status_code}"
+    )
     binding_page = typ.cast("dict[str, object]", binding_page_response.json)
-    assert len(typ.cast("list[object]", binding_page["items"])) == 1
-    assert binding_page["total"] == 2
+    assert len(typ.cast("list[object]", binding_page["items"])) == 1, (
+        f"expected 1 item on the first reference-binding page; payload={binding_page}"
+    )
+    assert binding_page["total"] == 2, (
+        f"expected total 2 reference bindings, "
+        f"got {binding_page['total']!r}; payload={binding_page}"
+    )
