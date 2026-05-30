@@ -14,10 +14,8 @@ import typing as typ
 import httpx
 import pytest
 
-from episodic.llm import (
-    LLMProviderOperation,
-    LLMRequest,
-    LLMTokenBudget,
+from episodic.llm import LLMProviderOperation, LLMRequest, LLMTokenBudget
+from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )

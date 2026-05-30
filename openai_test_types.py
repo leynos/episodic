@@ -6,8 +6,8 @@ import typing as typ
 
 import httpx
 
-from episodic.llm import (
-    LLMRequest,
+from episodic.llm import LLMRequest
+from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )

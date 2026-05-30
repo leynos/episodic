@@ -17,9 +17,8 @@ from episodic.canonical.prompts import (
     render_series_brief_prompt,
     render_series_guardrail_prompt,
 )
-from episodic.llm import (
-    LLMRequest,
-    LLMTokenBudget,
+from episodic.llm import LLMRequest, LLMTokenBudget
+from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
