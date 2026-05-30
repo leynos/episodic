@@ -117,6 +117,16 @@ class _MockLLMServer(ThreadingHTTPServer):
         self.fail_first = fail_first
 
 
+@dc.dataclass(frozen=True, slots=True, kw_only=True)
+class _GenerateOptions:
+    """Per-call generation parameters for the BDD adapter helper."""
+
+    max_attempts: int
+    token_budget: LLMTokenBudget
+    retry_delay_seconds: float = 0.0
+    chars_per_token: float = 4.0
+
+
 def _start_mock_server(context: LLMAdapterContext, *, fail_first: bool) -> None:
     """Start a mock LLM server and populate *context* with connection details."""
     server = _MockLLMServer(
@@ -132,15 +142,10 @@ def _start_mock_server(context: LLMAdapterContext, *, fail_first: bool) -> None:
     context.base_url = f"http://127.0.0.1:{server.server_address[1]}/v1"
 
 
-# pylint: disable-next=too-many-arguments
 def _run_generate(
     runner: asyncio.Runner,
     context: LLMAdapterContext,
-    *,
-    max_attempts: int,
-    retry_delay_seconds: float = 0,
-    chars_per_token: float = 4.0,
-    token_budget: LLMTokenBudget,
+    options: _GenerateOptions,
 ) -> None:
     """Run ``adapter.generate()`` via *runner* and store the result in *context*."""
 
@@ -149,9 +154,9 @@ def _run_generate(
             config=OpenAICompatibleLLMConfig(
                 base_url=context.base_url,
                 api_key="test-key",
-                max_attempts=max_attempts,
-                retry_delay_seconds=retry_delay_seconds,
-                chars_per_token=chars_per_token,
+                max_attempts=options.max_attempts,
+                retry_delay_seconds=options.retry_delay_seconds,
+                chars_per_token=options.chars_per_token,
             ),
         ) as adapter:
             response = await adapter.generate(
@@ -161,7 +166,7 @@ def _run_generate(
                     system_prompt=typ.cast(
                         "RenderedPrompt", context.guardrail_prompt
                     ).text,
-                    token_budget=token_budget,
+                    token_budget=options.token_budget,
                 ),
             )
         context.generated_text = response.text
@@ -255,11 +260,13 @@ def adapter_generates(
     _run_generate(
         _function_scoped_runner,
         context,
-        max_attempts=2,
-        token_budget=LLMTokenBudget(
-            max_input_tokens=500,
-            max_output_tokens=200,
-            max_total_tokens=700,
+        _GenerateOptions(
+            max_attempts=2,
+            token_budget=LLMTokenBudget(
+                max_input_tokens=500,
+                max_output_tokens=200,
+                max_total_tokens=700,
+            ),
         ),
     )
 
@@ -326,12 +333,14 @@ def adapter_generates_custom_ratio(
     _run_generate(
         _function_scoped_runner,
         context,
-        max_attempts=1,
-        chars_per_token=2.0,
-        token_budget=LLMTokenBudget(
-            max_input_tokens=2000,
-            max_output_tokens=200,
-            max_total_tokens=2200,
+        _GenerateOptions(
+            max_attempts=1,
+            chars_per_token=2.0,
+            token_budget=LLMTokenBudget(
+                max_input_tokens=2000,
+                max_output_tokens=200,
+                max_total_tokens=2200,
+            ),
         ),
     )
 
