@@ -35,6 +35,7 @@ from episodic.llm.openai_api.response import (
     _normalize_payload,
 )
 from episodic.llm.openai_api.utils import (
+    _log_error_event,
     _require_concrete_usage_counts,
     _validate_llm_config,
     _validate_preflight_budget,
@@ -251,6 +252,12 @@ class OpenAICompatibleLLMAdapter(LLMPort):
                 with attempt:
                     return await self._send_once(path=path, payload=payload)
         except RetryError as exc:
+            last = exc.last_attempt.exception()
+            _log_error_event(
+                "openai_adapter.retries_exhausted",
+                max_attempts=self._max_attempts,
+                last_error_type=type(last).__name__ if last is not None else "unknown",
+            )
             msg = "Transient provider failure after exhausting retries."
             raise LLMTransientProviderError(msg) from exc
         # Unreachable: AsyncRetrying always raises RetryError on exhaustion
