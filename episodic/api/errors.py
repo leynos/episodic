@@ -147,42 +147,33 @@ def validation_error(
     )
 
 
-# pylint: disable-next=too-many-arguments,too-many-positional-arguments  # Falcon ASGI owns this handler signature.
-async def handle_http_error(  # noqa: PLR0913, PLR0917, RUF029  # Falcon ASGI requires coroutine error handlers.
+def serialize_http_error(
     req: falcon.Request,
-    resp: falcon.Response | None,
+    resp: falcon.Response,
     exc: falcon.HTTPError,
-    params: dict[str, object],
-    ws: object | None = None,
 ) -> None:
-    """Serialise Falcon HTTP errors as the documented envelope.
+    """Serialize Falcon HTTP errors as the documented response envelope.
+
+    Wired through :meth:`falcon.asgi.App.set_error_serializer`. Falcon's
+    default error handler sets ``resp.status`` from ``exc.status`` before
+    invoking the serializer, so this function only needs to populate
+    ``resp.media`` with the ``{code, message, details}`` envelope. Falcon
+    accepts both sync and async serializers; a sync function keeps the
+    body free of unnecessary coroutine machinery.
 
     Parameters
     ----------
     req : falcon.Request
-        Incoming request. Unused by this handler.
-    resp : falcon.Response | None
-        Response object populated with the error envelope. ``None`` for
-        WebSocket error handling paths.
+        Incoming request. Unused by this serializer.
+    resp : falcon.Response
+        Response populated with the error envelope.
     exc : falcon.HTTPError
         Falcon error raised by a resource, hook, or middleware component.
-    params : dict[str, object]
-        Route parameters supplied by Falcon. Unused by this handler.
-    ws : object | None
-        Optional WebSocket object supplied by Falcon ASGI. Unused here.
-
-    Notes
-    -----
-    Falcon ASGI requires registered error handlers to be coroutine functions,
-    even when the handler body performs only synchronous response mutation.
     """
-    del req, params, ws
-    if resp is None:
-        return
+    del req
     code = _error_code(exc)
     message = _error_message(exc)
     details = _error_details(exc)
-    resp.status = exc.status
     resp.media = ErrorEnvelope(code, message, details).as_json()
 
 

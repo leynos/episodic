@@ -17,6 +17,7 @@ import uuid
 from abc import ABC, abstractmethod
 
 from episodic.api.handlers import (
+    HistoryRequest,
     handle_create_entity,
     handle_get_entity,
     handle_get_history,
@@ -140,15 +141,15 @@ class _GetHistoryResourceBase[HistoryT: object](_ResourceBase, ABC):
         **kwargs: str,
     ) -> None:
         """List history entries for one entity."""
-        limit, offset = parse_pagination(req)
         resp.media, resp.status = await handle_get_history(
-            uow_factory=self._uow_factory,
-            entity_id=self._get_entity_id_from_path(**kwargs),
-            id_field_name=self._get_id_field_name(),
-            service_fn=self._get_service_fn(),
-            serializer_fn=self._get_serializer_fn(),
-            limit=limit,
-            offset=offset,
+            self._uow_factory,
+            HistoryRequest(
+                entity_id=self._get_entity_id_from_path(**kwargs),
+                id_field_name=self._get_id_field_name(),
+                service_fn=self._get_service_fn(),
+                serializer_fn=self._get_serializer_fn(),
+                page=parse_pagination(req),
+            ),
         )
 
 

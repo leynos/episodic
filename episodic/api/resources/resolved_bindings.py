@@ -26,7 +26,7 @@ class ResolvedBindingsResource:
         profile_id: str,
     ) -> None:
         """Resolve bindings for a series profile plus episode context."""
-        limit, offset = parse_pagination(req)
+        page = parse_pagination(req)
         parsed_profile_id = parse_uuid(profile_id, "profile_id")
         params = require_query_params(req, "episode_id")
         parsed_episode_id = parse_uuid(params["episode_id"], "episode_id")
@@ -77,10 +77,10 @@ class ResolvedBindingsResource:
         resp.media = {
             "items": [
                 serialize_resolved_binding(item)
-                for item in resolved[offset : offset + limit]
+                for item in resolved[page.offset : page.offset + page.limit]
             ],
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
             "total": total,
         }
         resp.status = falcon.HTTP_200

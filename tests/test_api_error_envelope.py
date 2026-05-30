@@ -1,44 +1,50 @@
 """Integration coverage for the canonical REST error envelope."""
 
+import dataclasses as dc
 import typing as typ
 
 if typ.TYPE_CHECKING:
     from falcon import testing
 
 
-# pylint: disable-next=too-many-arguments  # Test helper keeps assertions explicit at call sites.
+@dc.dataclass(frozen=True, slots=True)
+class _Expected:
+    """Expected envelope fields for ``_assert_error_envelope``."""
+
+    status_code: int
+    code: str
+    field: str | None = None
+    constraint: str | None = None
+
+
 def _assert_error_envelope(
     response: testing.Result,
-    *,
-    status_code: int,
-    code: str,
-    field: str | None = None,
-    constraint: str | None = None,
+    expected: _Expected,
 ) -> dict[str, object]:
     """Assert the common API error envelope and return its payload."""
-    assert response.status_code == status_code, (
-        f"expected status {status_code}, got {response.status_code}"
+    assert response.status_code == expected.status_code, (
+        f"expected status {expected.status_code}, got {response.status_code}"
     )
     payload = typ.cast("dict[str, object]", response.json)
     expected_keys = {"code", "message", "details"}
     assert set(payload) == expected_keys, (
         f"expected envelope keys {expected_keys}, got {set(payload)}"
     )
-    assert payload["code"] == code, (
-        f"expected error code {code!r}, got {payload['code']!r}"
+    assert payload["code"] == expected.code, (
+        f"expected error code {expected.code!r}, got {payload['code']!r}"
     )
     assert isinstance(payload["message"], str), (
         f"expected string message, got {type(payload['message']).__name__}"
     )
     details = typ.cast("dict[str, object]", payload["details"])
-    if field is not None:
-        assert details["field"] == field, (
-            f"expected details field {field!r}, got {details.get('field')!r}"
+    if expected.field is not None:
+        assert details["field"] == expected.field, (
+            f"expected details field {expected.field!r}, got {details.get('field')!r}"
         )
-    if constraint is not None:
-        assert details["constraint"] == constraint, (
-            "expected details constraint "
-            f"{constraint!r}, got {details.get('constraint')!r}"
+    if expected.constraint is not None:
+        assert details["constraint"] == expected.constraint, (
+            f"expected details constraint {expected.constraint!r}, "
+            f"got {details.get('constraint')!r}"
         )
     return payload
 
@@ -51,10 +57,12 @@ def test_invalid_uuid_returns_validation_envelope(
 
     _assert_error_envelope(
         response,
-        status_code=400,
-        code="validation_error",
-        field="profile_id",
-        constraint="uuid",
+        _Expected(
+            status_code=400,
+            code="validation_error",
+            field="profile_id",
+            constraint="uuid",
+        ),
     )
 
 
@@ -73,10 +81,12 @@ def test_invalid_pagination_returns_validation_envelope(
 
     _assert_error_envelope(
         response,
-        status_code=400,
-        code="validation_error",
-        field="limit",
-        constraint="range",
+        _Expected(
+            status_code=400,
+            code="validation_error",
+            field="limit",
+            constraint="range",
+        ),
     )
 
 
@@ -91,10 +101,12 @@ def test_invalid_optional_uuid_filter_returns_validation_envelope(
 
     _assert_error_envelope(
         response,
-        status_code=400,
-        code="validation_error",
-        field="series_profile_id",
-        constraint="uuid",
+        _Expected(
+            status_code=400,
+            code="validation_error",
+            field="series_profile_id",
+            constraint="uuid",
+        ),
     )
 
 
@@ -109,10 +121,12 @@ def test_invalid_reference_document_kind_filter_returns_validation_envelope(
 
     _assert_error_envelope(
         response,
-        status_code=400,
-        code="validation_error",
-        field="kind",
-        constraint="enum",
+        _Expected(
+            status_code=400,
+            code="validation_error",
+            field="kind",
+            constraint="enum",
+        ),
     )
 
 
@@ -130,10 +144,12 @@ def test_invalid_reference_binding_target_kind_returns_validation_envelope(
 
     _assert_error_envelope(
         response,
-        status_code=400,
-        code="validation_error",
-        field="target_kind",
-        constraint="enum",
+        _Expected(
+            status_code=400,
+            code="validation_error",
+            field="target_kind",
+            constraint="enum",
+        ),
     )
 
 
@@ -147,10 +163,12 @@ def test_missing_query_parameter_returns_validation_envelope(
 
     _assert_error_envelope(
         response,
-        status_code=400,
-        code="validation_error",
-        field="episode_id",
-        constraint="required",
+        _Expected(
+            status_code=400,
+            code="validation_error",
+            field="episode_id",
+            constraint="required",
+        ),
     )
 
 
@@ -162,4 +180,4 @@ def test_unknown_identifier_returns_not_found_envelope(
         "/v1/series-profiles/018f0c2a-1234-7000-a000-000000000001"
     )
 
-    _assert_error_envelope(response, status_code=404, code="not_found")
+    _assert_error_envelope(response, _Expected(status_code=404, code="not_found"))

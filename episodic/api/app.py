@@ -15,11 +15,10 @@ app = create_app(dependencies)  # Returns a Falcon ASGI app with API routes.
 import asyncio
 import typing as typ
 
-import falcon
 from falcon import asgi
 
 from .authorization import AuthorizationMiddleware
-from .errors import handle_http_error
+from .errors import serialize_http_error
 from .resources import (
     EpisodeTemplateHistoryResource,
     EpisodeTemplateResource,
@@ -71,7 +70,7 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
         app.add_middleware(
             typ.cast("typ.Any", _ShutdownHooksMiddleware(dependencies.shutdown_hooks))
         )
-    app.add_error_handler(falcon.HTTPError, handle_http_error)
+    app.set_error_serializer(serialize_http_error)
 
     uow_factory = dependencies.uow_factory
 

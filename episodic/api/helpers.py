@@ -23,6 +23,7 @@ import re
 import typing as typ
 import uuid
 
+from episodic.canonical.pagination import Pagination
 from episodic.canonical.profile_templates import (
     AuditMetadata,
     EpisodeTemplateData,
@@ -110,18 +111,18 @@ def require_query_params(req: falcon.Request, *names: str) -> dict[str, str]:
     return values
 
 
-def parse_pagination(req: falcon.Request) -> tuple[int, int]:
+def parse_pagination(req: falcon.Request) -> Pagination:
     """Parse and validate common `limit`/`offset` query parameters."""
-    raw_limit = req.get_param("limit")
-    raw_offset = req.get_param("offset")
-
-    try:
-        limit = _DEFAULT_PAGE_LIMIT if raw_limit is None else int(raw_limit)
-        offset = 0 if raw_offset is None else int(raw_offset)
-    except ValueError as exc:
-        msg = "Pagination parameters limit/offset must be integers."
-        field = _pagination_type_error_field(raw_limit, raw_offset)
-        raise validation_error(msg, field=field, constraint="type") from exc
+    limit = _parse_int_query_param(
+        req.get_param("limit"),
+        name="limit",
+        default=_DEFAULT_PAGE_LIMIT,
+    )
+    offset = _parse_int_query_param(
+        req.get_param("offset"),
+        name="offset",
+        default=0,
+    )
 
     if limit < 1 or limit > _MAX_PAGE_LIMIT:
         msg = f"limit must be between 1 and {_MAX_PAGE_LIMIT}."
@@ -129,7 +130,7 @@ def parse_pagination(req: falcon.Request) -> tuple[int, int]:
     if offset < 0:
         msg = "offset must be a non-negative integer."
         raise validation_error(msg, field="offset", constraint="range")
-    return limit, offset
+    return Pagination(limit=limit, offset=offset)
 
 
 def parse_optional_uuid_param(req: falcon.Request, name: str) -> uuid.UUID | None:
@@ -156,22 +157,25 @@ def parse_enum_param[EnumT: enum.Enum](
         raise validation_error(msg, field=name, constraint="enum") from exc
 
 
-def _pagination_type_error_field(
-    raw_limit: str | None,
-    raw_offset: str | None,
-) -> str:
-    """Return the first pagination field that failed integer parsing."""
-    if raw_limit is not None:
-        try:
-            int(raw_limit)
-        except ValueError:
-            return "limit"
-    if raw_offset is not None:
-        try:
-            int(raw_offset)
-        except ValueError:
-            return "offset"
-    return "limit"
+def _parse_int_query_param(
+    raw_value: str | None,
+    *,
+    name: str,
+    default: int,
+) -> int:
+    """Parse an optional integer query parameter or raise ``validation_error``.
+
+    Returns ``default`` when the caller omitted the parameter. Otherwise
+    attempts ``int(raw_value)`` and raises a typed envelope error with the
+    field name and ``constraint="type"`` when parsing fails.
+    """
+    if raw_value is None:
+        return default
+    try:
+        return int(raw_value)
+    except ValueError as exc:
+        msg = f"{name} must be an integer."
+        raise validation_error(msg, field=name, constraint="type") from exc
 
 
 def build_audit_metadata(payload: JsonPayload) -> AuditMetadata:

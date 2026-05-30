@@ -15,6 +15,7 @@ Examples
 ... )
 """
 
+import dataclasses as dc
 import typing as typ
 
 import falcon
@@ -31,6 +32,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from episodic.canonical.pagination import Pagination
     from episodic.canonical.profile_templates import (
         UpdateEpisodeTemplateRequest,
         UpdateSeriesProfileRequest,
@@ -85,14 +87,25 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 
-async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared handler signature for resource adapters
+@dc.dataclass(frozen=True, slots=True)
+class HistoryRequest[EntityT]:
+    """Per-call inputs for :func:`handle_get_history`.
+
+    Bundling these fields keeps the public handler signature small while
+    preserving the shared-base resource pattern that the canonical history
+    resources rely on.
+    """
+
+    entity_id: str
+    id_field_name: str
+    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[list[EntityT], int]]]
+    serializer_fn: cabc.Callable[[EntityT], JsonPayload]
+    page: Pagination
+
+
+async def handle_get_history[EntityT](
     uow_factory: UowFactory,
-    entity_id: str,
-    id_field_name: str,
-    service_fn: cabc.Callable[..., cabc.Awaitable[tuple[list[EntityT], int]]],
-    serializer_fn: cabc.Callable[[EntityT], JsonPayload],
-    limit: int,
-    offset: int,
+    request: HistoryRequest[EntityT],
 ) -> tuple[JsonPayload, str]:
     """Handle history-list endpoint behaviour.
 
@@ -100,18 +113,9 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episod
     ----------
     uow_factory : UowFactory
         Factory that creates unit-of-work instances.
-    entity_id : str
-        Raw parent-entity identifier from the request path.
-    id_field_name : str
-        Name of the identifier field used for validation messages.
-    service_fn : cabc.Callable[..., cabc.Awaitable[tuple[list[EntityT], int]]]
-        Service function that returns paged history entries and total count.
-    serializer_fn : cabc.Callable[[EntityT], JsonPayload]
-        Serializer for a single history entry.
-    limit : int
-        Maximum number of history entries to return.
-    offset : int
-        Number of history entries to skip.
+    request : HistoryRequest[EntityT]
+        Parsed history-list inputs: parent identifier, service callable,
+        serializer, and pagination.
 
     Returns
     -------
@@ -121,30 +125,54 @@ async def handle_get_history[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episod
     Raises
     ------
     falcon.HTTPBadRequest
-        Raised when ``entity_id`` is not a valid UUID.
+        Raised when ``request.entity_id`` is not a valid UUID.
     falcon.HTTPNotFound
         Raised when the parent entity is not found.
     """
-    parsed_entity_id = parse_uuid(entity_id, id_field_name)
+    parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
     try:
         async with uow_factory() as uow:
-            items, total = await service_fn(
+            items, total = await request.service_fn(
                 uow,
                 parent_id=parsed_entity_id,
-                limit=limit,
-                offset=offset,
+                page=request.page,
             )
     except EntityNotFoundError as exc:
         raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
     return (
         {
-            "items": [serializer_fn(item) for item in items],
-            "limit": limit,
-            "offset": offset,
+            "items": [request.serializer_fn(item) for item in items],
+            "limit": request.page.limit,
+            "offset": request.page.offset,
             "total": total,
         },
         falcon.HTTP_200,
     )
+
+
+def _require_payload_fields(
+    payload: JsonPayload, required_fields: cabc.Sequence[str]
+) -> None:
+    """Raise ``validation_error`` for the first missing required payload field."""
+    for field_name in required_fields:
+        if field_name not in payload:
+            msg = f"Missing required field: {field_name}"
+            raise validation_error(msg, field=field_name, constraint="required")
+
+
+def _raise_mapped_update_error(
+    exc: EntityNotFoundError | RevisionConflictError,
+    *,
+    entity_id: uuid.UUID,
+    payload: JsonPayload,
+) -> typ.NoReturn:
+    """Re-raise a domain update error as a typed envelope-aware Falcon error."""
+    expected_revision: int | None = None
+    if isinstance(exc, RevisionConflictError):
+        expected_revision = typ.cast("int | None", payload.get("expected_revision"))
+    raise map_profile_template_error(
+        exc, entity_id=entity_id, expected_revision=expected_revision
+    ) from exc
 
 
 async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodic-dev): https://github.com/leynos/episodic/issues/1234 explicit shared handler signature for resource adapters
@@ -199,28 +227,13 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
         Raised when optimistic-lock revision preconditions fail.
     """
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
-    for field_name in required_fields:
-        if field_name not in payload:
-            msg = f"Missing required field: {field_name}"
-            raise validation_error(msg, field=field_name, constraint="required")
-
+    _require_payload_fields(payload, required_fields)
     update_request = request_builder(parsed_entity_id, payload)
-
     try:
         async with uow_factory() as uow:
-            entity, revision = await service_fn(
-                uow,
-                request=update_request,
-            )
-    except EntityNotFoundError as exc:
-        raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
-    except RevisionConflictError as exc:
-        expected_revision = typ.cast("int | None", payload.get("expected_revision"))
-        raise map_profile_template_error(
-            exc,
-            entity_id=parsed_entity_id,
-            expected_revision=expected_revision,
-        ) from exc
+            entity, revision = await service_fn(uow, request=update_request)
+    except (EntityNotFoundError, RevisionConflictError) as exc:
+        _raise_mapped_update_error(exc, entity_id=parsed_entity_id, payload=payload)
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 

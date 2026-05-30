@@ -72,7 +72,7 @@ class ReferenceBindingsResource:
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """List reusable reference bindings for one target context."""
         params = require_query_params(req, "target_kind", "target_id")
-        limit, offset = parse_pagination(req)
+        page = parse_pagination(req)
         target_kind = typ.cast(
             "ReferenceBindingTargetKind",
             parse_enum_param(req, "target_kind", ReferenceBindingTargetKind),
@@ -85,8 +85,8 @@ class ReferenceBindingsResource:
                     request=ReferenceBindingListRequest(
                         target_kind=target_kind.value,
                         target_id=str(parse_uuid(params["target_id"], "target_id")),
-                        limit=limit,
-                        offset=offset,
+                        limit=page.limit,
+                        offset=page.offset,
                     ),
                 )
         except ReferenceDocumentError as exc:
@@ -94,8 +94,8 @@ class ReferenceBindingsResource:
 
         resp.media = {
             "items": [serialize_reference_binding(item) for item in bindings],
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
             "total": total,
         }
         resp.status = falcon.HTTP_200

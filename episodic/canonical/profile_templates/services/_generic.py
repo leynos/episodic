@@ -27,6 +27,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from episodic.canonical.pagination import Pagination
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
     type _RevisionFetcher = cabc.Callable[
@@ -256,17 +257,18 @@ async def list_history(
     return await dispatch.list_history_for_parent(parent_id)
 
 
-async def list_history_paged(  # noqa: PLR0913  # Generic service mirrors parent + kind selectors plus pagination.
+async def list_history_paged(
     uow: CanonicalUnitOfWork,
     *,
     parent_id: uuid.UUID,
     kind: EntityKind | str,
-    limit: int,
-    offset: int,
+    page: Pagination,
 ) -> tuple[list[object], int]:
     """List paged history entries and the total for one parent entity."""
     dispatch = _get_repos_for_kind(uow, kind)
-    items = await dispatch.list_history_for_parent_paged(parent_id, limit, offset)
+    items = await dispatch.list_history_for_parent_paged(
+        parent_id, page.limit, page.offset
+    )
     total = await dispatch.count_history_for_parent(parent_id)
     return items, total
 
@@ -307,17 +309,16 @@ async def list_entities_with_revisions(
     return typ.cast("list[tuple[object, int]]", items)
 
 
-async def list_entities_with_revisions_paged(  # noqa: PLR0913  # Generic service mirrors list filters plus pagination.
+async def list_entities_with_revisions_paged(
     uow: CanonicalUnitOfWork,
     *,
     kind: EntityKind | str,
-    limit: int,
-    offset: int,
+    page: Pagination,
     series_profile_id: uuid.UUID | None = None,
 ) -> tuple[list[tuple[object, int]], int]:
     """List entities with latest revisions and their unpaginated total."""
     dispatch = _get_repos_for_kind(uow, kind)
-    entities = await dispatch.list_entities(series_profile_id, limit, offset)
+    entities = await dispatch.list_entities(series_profile_id, page.limit, page.offset)
     items = await _with_latest_revisions(
         typ.cast("cabc.Sequence[_VersionedEntity]", entities),
         dispatch.get_latest_revisions,

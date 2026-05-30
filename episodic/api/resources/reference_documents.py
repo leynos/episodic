@@ -112,7 +112,7 @@ class ReferenceDocumentsResource:
         profile_id: str,
     ) -> None:
         """List reusable reference documents for one series profile."""
-        limit, offset = parse_pagination(req)
+        page = parse_pagination(req)
         kind = parse_enum_param(req, "kind", ReferenceDocumentKind)
 
         try:
@@ -124,8 +124,8 @@ class ReferenceDocumentsResource:
                             parse_uuid(profile_id, "profile_id")
                         ),
                         kind=None if kind is None else kind.value,
-                        limit=limit,
-                        offset=offset,
+                        limit=page.limit,
+                        offset=page.offset,
                     ),
                 )
         except ReferenceDocumentError as exc:
@@ -133,8 +133,8 @@ class ReferenceDocumentsResource:
 
         resp.media = {
             "items": [serialize_reference_document(item) for item in documents],
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
             "total": total,
         }
         resp.status = falcon.HTTP_200
@@ -250,7 +250,7 @@ class ReferenceDocumentRevisionsResource:
         document_id: str,
     ) -> None:
         """List immutable revisions for one reusable reference document."""
-        limit, offset = parse_pagination(req)
+        page = parse_pagination(req)
 
         try:
             async with self._uow_factory() as uow:
@@ -261,8 +261,8 @@ class ReferenceDocumentRevisionsResource:
                         owner_series_profile_id=str(
                             parse_uuid(profile_id, "profile_id")
                         ),
-                        limit=limit,
-                        offset=offset,
+                        limit=page.limit,
+                        offset=page.offset,
                     ),
                 )
         except ReferenceDocumentError as exc:
@@ -272,8 +272,8 @@ class ReferenceDocumentRevisionsResource:
             "items": [
                 serialize_reference_document_revision(item) for item in revisions
             ],
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
             "total": total,
         }
         resp.status = falcon.HTTP_200

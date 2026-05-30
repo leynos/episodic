@@ -458,6 +458,7 @@ prefixes = [
     "episodic.canonical.ingestion_ports",
     "episodic.canonical.entity_protocols",
     "episodic.canonical.history_protocols",
+    "episodic.canonical.pagination",
     "episodic.canonical.ports",
     "episodic.canonical.reference_protocols",
     "episodic.canonical.unit_of_work_protocols",

@@ -77,15 +77,14 @@ class EpisodeTemplatesResource(_CreateResourceBase[object]):
         falcon.HTTPBadRequest
             Raised when ``series_profile_id`` is provided but invalid.
         """
-        limit, offset = parse_pagination(req)
+        page = parse_pagination(req)
         series_profile_id = parse_optional_uuid_param(req, "series_profile_id")
 
         async with self._uow_factory() as uow:
             service_fn = partial(
                 list_entities_with_revisions_paged,
                 kind="episode_template",
-                limit=limit,
-                offset=offset,
+                page=page,
             )
             items, total = await service_fn(
                 uow,
@@ -94,8 +93,8 @@ class EpisodeTemplatesResource(_CreateResourceBase[object]):
 
         resp.media = {
             "items": list(starmap(serialize_episode_template, items)),
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
             "total": total,
         }
         resp.status = falcon.HTTP_200

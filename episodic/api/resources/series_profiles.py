@@ -78,20 +78,19 @@ class SeriesProfilesResource(_CreateResourceBase[object]):
         None
             Response media is set to an ``items`` list and status ``200``.
         """
-        limit, offset = parse_pagination(req)
+        page = parse_pagination(req)
         service_fn = partial(
             list_entities_with_revisions_paged,
             kind="series_profile",
-            limit=limit,
-            offset=offset,
+            page=page,
         )
         async with self._uow_factory() as uow:
             items, total = await service_fn(uow)
 
         resp.media = {
             "items": list(starmap(serialize_series_profile, items)),
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
             "total": total,
         }
         resp.status = falcon.HTTP_200
