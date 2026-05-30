@@ -263,9 +263,9 @@ def adapter_generates(
         _GenerateOptions(
             max_attempts=2,
             token_budget=LLMTokenBudget(
-                max_input_tokens=500,
+                max_input_tokens=230,
                 max_output_tokens=200,
-                max_total_tokens=700,
+                max_total_tokens=430,
             ),
         ),
     )
@@ -337,9 +337,9 @@ def adapter_generates_custom_ratio(
             max_attempts=1,
             chars_per_token=2.0,
             token_budget=LLMTokenBudget(
-                max_input_tokens=2000,
+                max_input_tokens=460,
                 max_output_tokens=200,
-                max_total_tokens=2200,
+                max_total_tokens=660,
             ),
         ),
     )
