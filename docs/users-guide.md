@@ -197,7 +197,6 @@ Reusable reference-document workflows currently support:
   provenance-backed `source_documents`, so audit trails record the exact
   reference revisions consumed for that episode build.
 
-
 ### REST API reference
 
 Client-facing canonical API resources use the `/v1` prefix. List endpoints use
