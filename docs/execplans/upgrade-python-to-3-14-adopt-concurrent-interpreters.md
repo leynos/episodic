@@ -126,7 +126,8 @@ Delivered artefacts:
 - PR `#99` resolved the Celery integration gap called out in `Surprises &
   discoveries` for issue `#66`: CPU-bound Celery tasks now have documented
   task-level guidance and tests showing how to call
-  `build_cpu_task_executor_from_environment()` from within an eager task body.
+  `build_cpu_task_executor_from_environment()` from within an eager task
+  body.
 
 Validation evidence:
 

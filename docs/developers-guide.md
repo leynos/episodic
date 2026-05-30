@@ -257,6 +257,33 @@ When adding new worker tasks:
   `build_cpu_task_executor_from_environment(..., metrics=...)` directly at the
   composition root.
 
+## Observability port abstractions
+
+Two canonical observability ports live in `episodic/observability.py` and
+must be the default when adding new operational instrumentation:
+
+- `MetricsPort` is the canonical bounded-cardinality metrics interface. Its
+  `labels` parameters are typed as `collections.abc.Mapping[str, str]` so
+  callers can pass `dict` or any read-only mapping value, which keeps
+  adapter wiring flexible at the boundary.
+- `MonotonicClockPort` is the canonical clock port for measuring elapsed
+  operation time. Feature modules (for example `episodic.qa.chrono`) must
+  reuse this port rather than declaring parallel hierarchies. The matching
+  default adapter `PerfCounterClock` is exported from the same module.
+
+`episodic/metrics_ports.py` retains the narrower
+`BoundedMetricsPort` and `BoundedValueMetricsPort` protocols, whose
+`labels` parameters are typed as `dict[str, str]`. They exist for the
+feature-specific ports (`ChronoMetricsPort`, `CpuTaskExecutorMetricsPort`)
+that historically extended them. New code should depend on the canonical
+`MetricsPort` unless extending one of those existing feature ports.
+
+Adapters that satisfy `MetricsPort` also satisfy `BoundedMetricsPort` for
+callers that construct their label dictionaries as concrete `dict`
+instances. Tests should reuse `episodic.observability.NoopMetrics` and
+`PerfCounterClock` (or the feature-specific noops, such as the private
+`_NoopChronoMetrics`) as default test doubles for the boundary.
+
 ## Database migrations
 
 Database migrations are managed with Alembic. The migration environment lives
@@ -621,11 +648,12 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
 
 - `episodic/qa/chrono.py` contains `ChronoRuntimeEstimator`, typed
   request/result objects, estimator metadata, the deterministic local
-  spoken-runtime heuristic, `ChronoMetricsPort`, and `ChronoClockPort`.
-  `ChronoMetricsPort` extends the shared `BoundedMetricsPort` in
-  `episodic/metrics_ports.py`. The module delegates TEI P5 parsing and
-  spoken-text extraction to `tei-rapporteur`; it must not add a separate XML
-  parser or local TEI traversal path.
+  spoken-runtime heuristic, and `ChronoMetricsPort`. `ChronoMetricsPort`
+  extends the shared `BoundedMetricsPort` in `episodic/metrics_ports.py`. The
+  clock boundary reuses `MonotonicClockPort` from `episodic/observability.py`
+  rather than declaring a parallel hierarchy. The module delegates TEI P5
+  parsing and spoken-text extraction to `tei-rapporteur`; it must not add a
+  separate XML parser or local TEI traversal path.
 - `episodic/qa/chrono_langgraph.py` contains the in-process LangGraph seam for
   running Chrono as a QA graph node without attaching Large Language Model
   (LLM) usage metadata.
@@ -652,8 +680,9 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   and words-per-minute setting are the comparison baseline for later
   implementations.
 - Wire Chrono operational metrics through `ChronoMetricsPort` and measure
-  latency through `ChronoClockPort`. Keep labels bounded to outcome and error
-  class, and record estimator latency without including script text or other
+  latency through the shared `MonotonicClockPort` from
+  `episodic.observability`. Keep labels bounded to outcome and error class,
+  and record estimator latency without including script text or other
   high-cardinality payload data. Keep the deterministic spoken-runtime
   calculation free of logging, metrics, and wall-clock reads; those side
   effects belong at the estimator orchestration boundary.

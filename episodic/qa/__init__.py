@@ -1,7 +1,8 @@
 """Quality-assurance evaluator contracts and orchestration helpers."""
 
+from episodic.observability import MonotonicClockPort
+
 from .chrono import (
-    ChronoClockPort,
     ChronoEstimatorConfig,
     ChronoEstimatorMetadata,
     ChronoEvaluationRequest,
@@ -25,7 +26,6 @@ from .pedante import (
 )
 
 __all__: list[str] = [
-    "ChronoClockPort",
     "ChronoEstimatorConfig",
     "ChronoEstimatorMetadata",
     "ChronoEvaluationRequest",
@@ -34,6 +34,7 @@ __all__: list[str] = [
     "ChronoRuntimeEstimator",
     "ClaimKind",
     "FindingSeverity",
+    "MonotonicClockPort",
     "PedanteEvaluationRequest",
     "PedanteEvaluationResult",
     "PedanteEvaluator",

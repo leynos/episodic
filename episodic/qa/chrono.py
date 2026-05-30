@@ -17,9 +17,10 @@ Main entry points:
 - ``ChronoRuntimeEstimate`` and ``ChronoEstimatorMetadata``: Output contracts
   carrying the predicted seconds and comparison metadata for later estimator
   versions.
-- ``ChronoMetricsPort`` and ``ChronoClockPort``: Boundary ports for operational
-  side effects. They keep latency measurement and metrics outside the
-  deterministic estimation helper.
+- ``ChronoMetricsPort``: Feature-specific bounded-cardinality metrics port that
+  narrows ``BoundedMetricsPort`` to Chrono's runtime estimator. The clock
+  boundary reuses the canonical ``MonotonicClockPort`` from
+  :mod:`episodic.observability` rather than declaring a parallel port.
 - ``tokenize_spoken_words``: Public tokenizer helper used by property tests and
   callers that need to compare Chrono's simple word-count heuristic directly.
 
@@ -32,15 +33,12 @@ runtime policy.
 import dataclasses as dc
 import logging
 import re
-import time
 import typing as typ
 
 import tei_rapporteur as _tei
 
 from episodic.metrics_ports import BoundedMetricsPort, NoopBoundedMetrics
-
-if typ.TYPE_CHECKING:
-    from collections import abc as cabc
+from episodic.observability import MonotonicClockPort, PerfCounterClock
 
 SPOKEN_WORD_REGEX = r"[A-Za-z][A-Za-z0-9'-]*"
 _log = logging.getLogger(__name__)
@@ -53,30 +51,17 @@ _METRIC_LATENCY_MS = "chrono.runtime_estimator.latency_ms"
 
 
 class ChronoMetricsPort(BoundedMetricsPort, typ.Protocol):
-    """Bounded-cardinality metrics sink for Chrono runtime estimation."""
+    """Bounded-cardinality metrics sink for Chrono runtime estimation.
 
-
-class ChronoClockPort(typ.Protocol):
-    """Monotonic clock used to measure Chrono orchestration latency."""
-
-    def monotonic_seconds(self) -> float:
-        """Return a monotonic timestamp in seconds."""
+    This protocol narrows :class:`episodic.metrics_ports.BoundedMetricsPort` to
+    name Chrono's metrics boundary; it does not introduce new methods. Adapters
+    that satisfy ``BoundedMetricsPort`` therefore satisfy this port as well.
+    """
 
 
 @dc.dataclass(frozen=True, slots=True)
 class _NoopChronoMetrics(NoopBoundedMetrics):
     """Default metrics sink used when no backend is wired."""
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _PerfCounterChronoClock:
-    """Production Chrono clock backed by Python's monotonic perf counter."""
-
-    read_seconds: cabc.Callable[[], float] = time.perf_counter
-
-    def monotonic_seconds(self) -> float:
-        """Return the current monotonic timestamp in seconds."""
-        return self.read_seconds()
 
 
 def _ensure_non_empty_string(value: str, field_name: str) -> None:
@@ -226,7 +211,7 @@ class ChronoRuntimeEstimator:
 
     config: ChronoEstimatorConfig = dc.field(default_factory=ChronoEstimatorConfig)
     metrics: ChronoMetricsPort = dc.field(default_factory=_NoopChronoMetrics)
-    clock: ChronoClockPort = dc.field(default_factory=_PerfCounterChronoClock)
+    clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
 
     def estimate(self, request: ChronoEvaluationRequest) -> ChronoRuntimeEstimate:
         """Return a deterministic spoken-runtime estimate and metadata."""

@@ -1,4 +1,24 @@
-"""Shared observability ports for bounded metrics and monotonic timing."""
+"""Shared observability ports for bounded metrics and monotonic timing.
+
+This module defines the canonical observability ports that adapters and
+services across the codebase wire against:
+
+- :class:`MetricsPort` is the canonical metrics interface for new code. Its
+  label parameters are typed as ``collections.abc.Mapping[str, str]`` so
+  callers can pass either ``dict`` or read-only mapping values, which keeps
+  the port aligned with structural typing best practice for input parameters.
+- :class:`MonotonicClockPort` is the canonical clock port for measuring
+  elapsed operation time. Feature modules (for example
+  :mod:`episodic.qa.chrono`) reuse this port directly rather than declaring
+  parallel hierarchies.
+
+:class:`episodic.metrics_ports.BoundedMetricsPort` is a deliberately narrower
+structural subtype with ``dict[str, str]`` labels, retained because feature-
+specific ports (such as :class:`episodic.qa.chrono.ChronoMetricsPort`)
+historically extend it. Any adapter that satisfies :class:`MetricsPort` also
+satisfies :class:`BoundedMetricsPort` for callers that build their label
+dicts as concrete ``dict`` instances.
+"""
 
 from __future__ import annotations
 
