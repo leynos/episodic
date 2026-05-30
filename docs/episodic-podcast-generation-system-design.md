@@ -1900,8 +1900,8 @@ exercise the same semantics from a scenario-driven perspective.
 
 ### Multi-source ingestion service implementation
 
-The multi-source ingestion service composes a higher-level orchestrator (
-`ingest_multi_source`) around the existing `ingest_sources` persistence
+The multi-source ingestion service composes a higher-level orchestrator
+(`ingest_multi_source`) around the existing `ingest_sources` persistence
 function. Three Protocol-based port interfaces define the pipeline extension
 points:
 
