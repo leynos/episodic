@@ -1,7 +1,7 @@
 """Shared test doubles for workflow checkpoint store tests.
 
-Hosts the deterministic ``_RecordingMetrics`` and ``_StepClock`` fakes used by
-``test_workflow_checkpoints.py`` and the ``_checkpoint`` fixture builder, so
+Hosts the deterministic ``RecordingMetrics`` and ``StepClock`` fakes used by
+``test_workflow_checkpoints.py`` and the ``make_checkpoint`` fixture builder, so
 the test module stays focused on behaviour rather than infrastructure.
 """
 
