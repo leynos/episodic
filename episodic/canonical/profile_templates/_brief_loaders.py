@@ -1,4 +1,16 @@
-"""Entity loaders and binding serialisation for structured-brief assembly."""
+"""Entity loaders and binding serialisation for structured-brief assembly.
+
+Provides helpers to bulk-load ``ReferenceDocumentRevision`` and
+``ReferenceDocument`` entities from the unit of work, validate that all
+expected IDs were resolved, and serialise a collection of
+``ReferenceBinding`` objects into brief payload mappings after verifying
+document ownership.
+
+Does not perform reference-document resolution or episode-aware logic; those
+responsibilities belong to ``_brief_reference_documents``. Consumed by
+``brief`` and ``_brief_reference_documents``; not part of the public package
+API.
+"""
 
 import typing as typ
 

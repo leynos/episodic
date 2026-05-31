@@ -1,3 +1,17 @@
+"""Façade re-exporting binding services from focused sub-modules.
+
+The implementation is split across three private sub-modules:
+
+- ``_binding_validation`` — UUID/enum parsing, target-shape and
+  effective-from constraints.
+- ``_binding_creation`` — ``create_reference_binding`` orchestrator and
+  persistence helpers.
+- ``_binding_queries`` — ``get_reference_binding`` and
+  ``list_reference_bindings``.
+
+All callers should import exclusively from this façade or from
+``reference_documents.services`` / ``reference_documents.__init__``.
+"""
 
 
 async def list_reference_bindings_paged(

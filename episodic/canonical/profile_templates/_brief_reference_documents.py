@@ -1,4 +1,18 @@
-"""Reference-document resolution strategies for structured-brief assembly."""
+"""Reference-document resolution strategies for structured-brief assembly.
+
+Provides two resolution paths selected by ``_load_reference_documents_for_brief``:
+
+- Episode-aware path (``_load_episode_aware_reference_documents``): validates
+  episode ownership, resolves bindings via effective-episode precedence
+  (``resolve_bindings``), then appends template-scoped bindings.
+- Legacy path (``_load_legacy_reference_documents``): aggregates all
+  ``SERIES_PROFILE`` and ``EPISODE_TEMPLATE`` bindings without episode
+  filtering.
+
+Serialisation is delegated to ``_brief_loaders`` and
+``_brief_serializers``. Consumed solely by ``brief``; not part of the
+public package API.
+"""
 
 import typing as typ
 

@@ -1,4 +1,14 @@
-"""Binding-target validation helpers for reference-document services."""
+"""Binding-target validation helpers for reference-document services.
+
+Validates that binding payloads reference existing, correctly owned domain
+entities. Parses raw string fields (UUIDs, target kind) into typed values,
+enforces the single-target-identifier invariant, and checks that any
+``effective_from_episode_id`` is only present for ``SERIES_PROFILE`` targets.
+
+Does not create or persist any entities. Consumed by ``_binding_creation``
+during the ``create_reference_binding`` orchestration flow; the public surface
+is exposed through the ``bindings`` façade.
+"""
 
 import dataclasses as dc
 import typing as typ

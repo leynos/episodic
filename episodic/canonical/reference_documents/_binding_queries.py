@@ -1,4 +1,11 @@
-"""Binding query operations for reference-document services."""
+"""Binding query operations for reference-document services.
+
+Provides ``get_reference_binding`` (fetch by UUID, raises
+``ReferenceEntityNotFoundError`` when absent) and ``list_reference_bindings``
+(paginated listing for a given target kind and target UUID). Does not perform
+writes or validation beyond parsing. Both functions are re-exported through
+the ``bindings`` façade.
+"""
 
 import typing as typ
 

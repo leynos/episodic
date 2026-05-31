@@ -1,4 +1,16 @@
-"""Types and errors for reusable reference-document services."""
+"""Types and errors for reusable reference-document services.
+
+Defines the data-transfer objects, typed error hierarchy, and shared internal
+types used across the ``reference_documents`` sub-modules:
+
+- Input DTOs: ``ReferenceDocumentCreateData``, ``ReferenceDocumentRevisionData``,
+  ``ReferenceBindingData``, ``ReferenceBindingListRequest``.
+- Error types: ``ReferenceDocumentError``, ``ReferenceValidationError``,
+  ``ReferenceConflictError``, ``ReferenceEntityNotFoundError``,
+  ``ReferenceRevisionConflictError``.
+- Internal: ``_ParsedBindingIds`` (parsed/validated binding payload fields,
+  used by ``_binding_validation`` and ``_binding_creation``).
+"""
 
 import dataclasses as dc
 import typing as typ

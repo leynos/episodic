@@ -1,4 +1,14 @@
-"""Binding creation orchestration for reference-document services."""
+"""Binding creation orchestration for reference-document services.
+
+Orchestrates the creation of a ``ReferenceBinding``: parses identifiers via
+``_binding_validation``, loads the required revision and document, validates
+target ownership and episode constraints, constructs the domain object, and
+persists it. Maps SQLAlchemy ``IntegrityError`` violations to typed
+``ReferenceConflictError`` exceptions.
+
+Does not implement query operations. The public entry point
+``create_reference_binding`` is re-exported through the ``bindings`` façade.
+"""
 
 import datetime as dt
 import typing as typ
