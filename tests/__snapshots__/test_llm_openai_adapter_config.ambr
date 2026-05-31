@@ -1,0 +1,6 @@
+# serializer version: 1
+# name: test_openai_adapter_config_rejection_log_snapshot
+  list([
+    '{"api_key_configured": true, "base_url_configured": true, "chars_per_token": "0", "event": "openai_adapter.config_rejected", "field": "chars_per_token", "max_attempts": 3, "provider_operation": "chat_completions", "retry_delay_seconds": 0.5, "timeout_seconds": 30.0}',
+  ])
+# ---

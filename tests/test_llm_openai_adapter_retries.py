@@ -115,6 +115,25 @@ async def test_generate_rejects_non_retryable_http_status(
 
 
 @pytest.mark.asyncio
+async def test_generate_rejects_redirect_http_status(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
+) -> None:
+    """Redirect provider responses surface as response errors."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return openai_json_response({}, 302)
+
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler)
+    ) as adapter:
+        with pytest.raises(LLMProviderResponseError, match="redirect response"):
+            await adapter.generate(openai_request_builder())
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("status_code", [500, 503])
 async def test_generate_retries_retryable_http_5xx_then_fails(
     status_code: int,
@@ -211,6 +230,19 @@ async def test_generate_rejects_malformed_json_response(
     """Malformed provider JSON surfaces as a non-retryable response error."""
     async with openai_adapter_factory(
         transport=httpx.MockTransport(_static_content_handler(b"not-json"))
+    ) as adapter:
+        with pytest.raises(LLMProviderResponseError, match="malformed JSON"):
+            await adapter.generate(openai_request_builder())
+
+
+@pytest.mark.asyncio
+async def test_generate_rejects_malformed_json_bytes_response(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_request_builder: _OpenAIRequestBuilder,
+) -> None:
+    """Invalidly encoded provider JSON bytes use the malformed JSON error path."""
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(_static_content_handler(b"\xff"))
     ) as adapter:
         with pytest.raises(LLMProviderResponseError, match="malformed JSON"):
             await adapter.generate(openai_request_builder())

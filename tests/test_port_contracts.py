@@ -16,7 +16,10 @@ from episodic.canonical.ingestion_ports import (
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
-from episodic.llm import OpenAICompatibleLLMAdapter, OpenAICompatibleLLMConfig
+from episodic.llm.openai_adapter import (
+    OpenAICompatibleLLMAdapter,
+    OpenAICompatibleLLMConfig,
+)
 from episodic.llm.ports import LLMPort
 
 if typ.TYPE_CHECKING:

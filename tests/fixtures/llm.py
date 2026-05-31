@@ -1,5 +1,12 @@
-"""OpenAI-compatible LLM adapter test fixtures."""
+"""Shared fixtures for OpenAI-compatible LLM adapter tests.
 
+The helpers in this module build representative `LLMRequest` objects, mock
+provider responses, invalid configs, and configured adapter instances. Adapter
+test modules reuse them to keep transport setup and config construction
+consistent while focusing each test file on one behavioural concern.
+"""
+
+import collections.abc as cabc
 import contextlib
 import json
 import typing as typ
@@ -7,10 +14,8 @@ import typing as typ
 import httpx
 import pytest
 
-from episodic.llm import (
-    LLMProviderOperation,
-    LLMRequest,
-    LLMTokenBudget,
+from episodic.llm import LLMProviderOperation, LLMRequest, LLMTokenBudget
+from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
@@ -22,11 +27,39 @@ if typ.TYPE_CHECKING:
         _OpenAIAdapterFactory,
         _OpenAIInvalidConfigBuilder,
         _OpenAIJsonResponseBuilder,
+        _OpenAILogSpy,
         _OpenAIRequestBuilder,
     )
 
 _OPENAI_TEST_BASE_URL = "https://example.test/v1"
 _OPENAI_TEST_API_KEY = "test-key"
+
+
+class _OpenAIAdapterLogSpy:
+    """Collect structured OpenAI adapter error log payloads."""
+
+    def __init__(self) -> None:
+        """Initialise an empty message list."""
+        self.messages: list[str] = []
+
+    def error(self, message: str) -> None:
+        """Record one ERROR-level log message."""
+        self.messages.append(message)
+
+
+@pytest.fixture
+def openai_log_spy() -> cabc.Generator[_OpenAILogSpy]:
+    """Capture OpenAI adapter structured error logs via ContextVar isolation.
+
+    Uses ``_log_override`` to redirect log output within the current Python
+    context only. No xdist grouping or serialisation is required.
+    """
+    from episodic.llm.openai_api import utils as openai_utils
+
+    spy = _OpenAIAdapterLogSpy()
+    token = openai_utils._log_override.set(spy)
+    yield spy
+    openai_utils._log_override.reset(token)
 
 
 @pytest.fixture
@@ -84,6 +117,7 @@ def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
             "provider_operation",
             "retry_delay_seconds",
             "timeout_seconds",
+            "chars_per_token",
         }
         unexpected_keys = set(config_kwargs) - allowed_keys
         if unexpected_keys:
@@ -109,6 +143,9 @@ def openai_invalid_config_builder() -> _OpenAIInvalidConfigBuilder:
             retry_delay_seconds=typ.cast(
                 "float", merged_config.get("retry_delay_seconds", 0.5)
             ),
+            chars_per_token=typ.cast(
+                "float", merged_config.get("chars_per_token", 4.0)
+            ),
         )
 
     return _build_invalid_config
@@ -126,6 +163,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
         max_attempts: int = 3,
         retry_delay_seconds: float = 0.5,
         timeout_seconds: float = 30.0,
+        chars_per_token: float = 4.0,
     ) -> cabc.AsyncIterator[OpenAICompatibleLLMAdapter]:
         async with httpx.AsyncClient(
             transport=transport,
@@ -139,6 +177,7 @@ def openai_adapter_factory() -> _OpenAIAdapterFactory:
                     max_attempts=max_attempts,
                     retry_delay_seconds=retry_delay_seconds,
                     timeout_seconds=timeout_seconds,
+                    chars_per_token=chars_per_token,
                 ),
                 client=client,
             )

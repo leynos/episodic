@@ -2,6 +2,7 @@
 
 import json
 import os
+import socket
 import subprocess  # noqa: S404
 import typing as typ
 from shutil import which
@@ -16,8 +17,10 @@ if typ.TYPE_CHECKING:
 
 
 def artifact_server_port() -> str:
-    """Ask act to bind the artifact server to an ephemeral local port."""
-    return "0"
+    """Return a concrete free port for act's artifact server."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return str(sock.getsockname()[1])
 
 
 def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:

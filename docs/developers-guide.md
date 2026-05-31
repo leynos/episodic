@@ -498,7 +498,9 @@ The enforced groups are:
   reference-document workflows, and generation services.
 - `inbound_adapter`: Falcon API modules and worker task/topology seams.
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
-  OpenAI-compatible LLM adapters.
+  OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
+  `episodic.llm.openai_api` helper package, and
+  `episodic.llm.openai_client`.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
 
@@ -1127,11 +1129,41 @@ checkpoint ids, or idempotency keys.
 - `OpenAICompatibleLLMAdapter` implements `LLMPort` over explicit
   OpenAI-compatible HTTP calls, so OpenRouter-style chat completions and OpenAI
   Responses stay behind the same port.
-- Token budgets are enforced twice: a pre-flight estimate rejects obviously
+- Token budgets are enforced twice: a preflight estimate rejects obviously
   impossible requests, and normalized provider usage is checked again after the
   response returns.
+- `OpenAICompatibleLLMConfig(chars_per_token=...)` controls the preflight
+  estimate. The value defaults to `4.0`, must be finite and greater than
+  zero, and is applied as
+  `ceil(len(prompt_text) / chars_per_token)` across the request prompt and
+  optional system prompt. Tune it by comparing sampled prompt character counts
+  with provider-reported input-token usage for the target model and prompt
+  shape.
 - Persisted `guardrails` belong to canonical profile/template state and are
   composed before the adapter call, not inside the vendor transport layer.
+
+### OpenAI-compatible adapter package layout
+
+`episodic.llm.openai_adapter` is the compatibility facade exported to callers.
+The implementation lives in the outbound-adapter package
+`episodic.llm.openai_api`, whose modules split transport concerns by
+responsibility. Keep the split focused on adapter reuse points: request
+construction, response normalization, and validation helpers are imported both
+by the facade compatibility tests and by the async adapter, while the adapter
+module remains responsible for HTTP lifecycle and retry orchestration.
+
+- `adapter.py` owns `OpenAICompatibleLLMConfig`,
+  `OpenAICompatibleLLMAdapter`, HTTP client lifecycle, and the retry loop.
+- `request.py` coerces provider operations and builds the operation-specific
+  endpoint path and JSON payload.
+- `response.py` classifies HTTP status codes, decodes JSON bodies, and
+  normalizes OpenAI-compatible payloads through `openai_client` adapters.
+- `utils.py` validates configuration, estimates preflight token counts,
+  enforces token budgets, checks concrete provider usage, and emits structured
+  diagnostic logs.
+- `__init__.py` is a package namespace for these internal helpers; depend on
+  the facade or the `LLMPort` contract rather than importing helper functions
+  directly.
 
 ## Multi-source ingestion
 

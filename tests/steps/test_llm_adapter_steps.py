@@ -17,9 +17,8 @@ from episodic.canonical.prompts import (
     render_series_brief_prompt,
     render_series_guardrail_prompt,
 )
-from episodic.llm import (
-    LLMRequest,
-    LLMTokenBudget,
+from episodic.llm import LLMRequest, LLMTokenBudget
+from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
@@ -64,7 +63,7 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
         self.server.state.call_count += 1
         self.server.state.requests.append(typ.cast("dict[str, object]", payload))
 
-        if self.server.state.call_count == 1:
+        if self.server.fail_first and self.server.state.call_count == 1:
             self.send_response(HTTPStatus.TOO_MANY_REQUESTS)
             self.send_header("content-type", "application/json")
             self.end_headers()
@@ -103,15 +102,75 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
 class _MockLLMServer(ThreadingHTTPServer):
     """HTTP server carrying mutable test state."""
 
+    # pylint: disable-next=too-many-arguments
     def __init__(
         self,
         server_address: tuple[str, int],
         handler_class: type[BaseHTTPRequestHandler],
         *,
         state: MockServerState,
+        fail_first: bool = False,
     ) -> None:
         super().__init__(server_address, handler_class)
         self.state = state
+        self.fail_first = fail_first
+
+
+@dc.dataclass(frozen=True, slots=True, kw_only=True)
+class _GenerateOptions:
+    """Per-call generation parameters for the BDD adapter helper."""
+
+    max_attempts: int
+    token_budget: LLMTokenBudget
+    retry_delay_seconds: float = 0.0
+    chars_per_token: float = 4.0
+
+
+def _start_mock_server(context: LLMAdapterContext, *, fail_first: bool) -> None:
+    """Start a mock LLM server and populate *context* with connection details."""
+    server = _MockLLMServer(
+        ("127.0.0.1", 0),
+        _MockLLMHandler,
+        state=context.server_state,
+        fail_first=fail_first,
+    )
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    context.server = server
+    context.server_thread = server_thread
+    context.base_url = f"http://127.0.0.1:{server.server_address[1]}/v1"
+
+
+def _run_generate(
+    runner: asyncio.Runner,
+    context: LLMAdapterContext,
+    options: _GenerateOptions,
+) -> None:
+    """Run ``adapter.generate()`` via *runner* and store the result in *context*."""
+
+    async def _generate() -> None:
+        async with OpenAICompatibleLLMAdapter(
+            config=OpenAICompatibleLLMConfig(
+                base_url=context.base_url,
+                api_key="test-key",
+                max_attempts=options.max_attempts,
+                retry_delay_seconds=options.retry_delay_seconds,
+                chars_per_token=options.chars_per_token,
+            ),
+        ) as adapter:
+            response = await adapter.generate(
+                LLMRequest(
+                    model="gpt-4o-mini",
+                    prompt=typ.cast("RenderedPrompt", context.rendered_prompt).text,
+                    system_prompt=typ.cast(
+                        "RenderedPrompt", context.guardrail_prompt
+                    ).text,
+                    token_budget=options.token_budget,
+                ),
+            )
+        context.generated_text = response.text
+
+    _run_async_step(runner, _generate)
 
 
 def _run_async_step(
@@ -142,21 +201,18 @@ def test_llm_adapter_behaviour() -> None:
     """Run the LLM adapter behaviour scenario."""
 
 
+@scenario(
+    "../features/llm_adapter.feature",
+    "Adapter applies a configured chars-per-token ratio for token estimation",
+)
+def test_llm_adapter_custom_chars_per_token() -> None:
+    """Run the custom chars-per-token BDD scenario."""
+
+
 @given("an OpenAI-compatible mock LLM server is running")
 def mock_llm_server(context: LLMAdapterContext) -> None:
     """Start a localhost HTTP server with one transient failure."""
-    server = _MockLLMServer(
-        ("127.0.0.1", 0),
-        _MockLLMHandler,
-        state=context.server_state,
-    )
-    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread.start()
-
-    context.server = server
-    context.server_thread = server_thread
-    port = server.server_address[1]
-    context.base_url = f"http://127.0.0.1:{port}/v1"
+    _start_mock_server(context, fail_first=True)
 
 
 @given("a rendered series prompt and persisted guardrail prompt are available")
@@ -200,33 +256,18 @@ def adapter_generates(
     context: LLMAdapterContext,
 ) -> None:
     """Generate text through the adapter over real HTTP."""
-
-    async def _generate() -> None:
-        async with OpenAICompatibleLLMAdapter(
-            config=OpenAICompatibleLLMConfig(
-                base_url=context.base_url,
-                api_key="test-key",
-                max_attempts=2,
-                retry_delay_seconds=0,
+    _run_generate(
+        _function_scoped_runner,
+        context,
+        _GenerateOptions(
+            max_attempts=2,
+            token_budget=LLMTokenBudget(
+                max_input_tokens=230,
+                max_output_tokens=200,
+                max_total_tokens=430,
             ),
-        ) as adapter:
-            response = await adapter.generate(
-                LLMRequest(
-                    model="gpt-4o-mini",
-                    prompt=typ.cast("RenderedPrompt", context.rendered_prompt).text,
-                    system_prompt=typ.cast(
-                        "RenderedPrompt", context.guardrail_prompt
-                    ).text,
-                    token_budget=LLMTokenBudget(
-                        max_input_tokens=500,
-                        max_output_tokens=200,
-                        max_total_tokens=700,
-                    ),
-                ),
-            )
-        context.generated_text = response.text
-
-    _run_async_step(_function_scoped_runner, _generate)
+        ),
+    )
 
 
 @then("the adapter retries once and returns the generated text")
@@ -270,4 +311,45 @@ def assert_guardrail_prompt(context: LLMAdapterContext) -> None:
     )
     assert latest_request["max_tokens"] == 200, (
         "request should cap output tokens at the configured budget"
+    )
+
+
+@given("an OpenAI-compatible mock LLM server is running without transient failures")
+def mock_llm_server_always_succeeds(context: LLMAdapterContext) -> None:
+    """Start a localhost HTTP server that always responds successfully."""
+    _start_mock_server(context, fail_first=False)
+
+
+@when(
+    "the OpenAI-compatible adapter generates content "
+    "with a custom chars-per-token ratio"
+)
+def adapter_generates_custom_ratio(
+    _function_scoped_runner: asyncio.Runner,
+    context: LLMAdapterContext,
+) -> None:
+    """Generate text with chars_per_token=2.0 over real HTTP."""
+    _run_generate(
+        _function_scoped_runner,
+        context,
+        _GenerateOptions(
+            max_attempts=1,
+            chars_per_token=2.0,
+            token_budget=LLMTokenBudget(
+                max_input_tokens=460,
+                max_output_tokens=200,
+                max_total_tokens=660,
+            ),
+        ),
+    )
+
+
+@then("the adapter returns the generated text on the first attempt")
+def assert_generated_first_attempt(context: LLMAdapterContext) -> None:
+    """Assert no retry occurred and the generated text is correct."""
+    assert context.server_state.call_count == 1, (
+        "adapter should succeed on the first attempt with no transient failure"
+    )
+    assert context.generated_text == "BDD generated episode draft.", (
+        "adapter should return generated text when chars_per_token=2.0 is configured"
     )

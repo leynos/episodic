@@ -1,9 +1,17 @@
-"""Unit tests for OpenAI adapter budget enforcement."""
+"""Unit tests for OpenAI adapter token budget enforcement.
+
+These tests exercise the adapter boundary where provider-neutral `LLMRequest`
+budgets become OpenAI-compatible calls. They cover preflight estimates,
+post-response provider usage checks, and the shared fixtures that simulate
+provider transports without leaving the unit-test layer.
+"""
 
 import typing as typ
 
 import httpx
+import hypothesis.strategies as st
 import pytest
+from hypothesis import given, settings
 
 from episodic.llm import (
     LLMProviderResponseError,
@@ -11,9 +19,74 @@ from episodic.llm import (
     LLMTokenBudget,
     LLMTokenBudgetExceededError,
 )
+from episodic.llm.openai_adapter import _estimate_token_count
 
 if typ.TYPE_CHECKING:
-    from openai_test_types import _OpenAIAdapterFactory, _OpenAIJsonResponseBuilder
+    from syrupy.assertion import SnapshotAssertion
+
+    from openai_test_types import (
+        _OpenAIAdapterFactory,
+        _OpenAIJsonResponseBuilder,
+        _OpenAILogSpy,
+    )
+
+_OVER_BUDGET_USAGE_PAYLOAD: dict[str, object] = {
+    "id": "chatcmpl-789",
+    "model": "gpt-4o-mini",
+    "choices": [{"message": {"content": "Too expensive."}}],
+    "usage": {
+        "prompt_tokens": 200,
+        "completion_tokens": 100,
+        "total_tokens": 300,
+    },
+}
+
+_OVER_BUDGET_USAGE_REQUEST = LLMRequest(
+    model="gpt-4o-mini",
+    prompt="Draft the episode opener.",
+    system_prompt="Keep the output factual and concise.",
+    token_budget=LLMTokenBudget(
+        max_input_tokens=400,
+        max_output_tokens=200,
+        max_total_tokens=250,
+    ),
+)
+
+_PREFLIGHT_OVERFLOW_REQUEST = LLMRequest(
+    model="gpt-4o-mini",
+    prompt="x" * 10_000,
+    system_prompt="system",
+    token_budget=LLMTokenBudget(
+        max_input_tokens=20,
+        max_output_tokens=10,
+        max_total_tokens=40,
+    ),
+)
+
+
+@given(
+    text=st.text(max_size=500),
+    chars_per_token=st.floats(
+        min_value=0.001,
+        max_value=1_000.0,
+        allow_nan=False,
+        allow_infinity=False,
+    ),
+)
+@settings(max_examples=100)
+def test_estimate_token_count_matches_ceiling_ratio(
+    text: str,
+    chars_per_token: float,
+) -> None:
+    """Token estimates should preserve the configured finite positive ratio."""
+    estimated_tokens = _estimate_token_count(chars_per_token, text)
+
+    assert estimated_tokens >= 0
+    if not text:
+        assert estimated_tokens == 0
+    else:
+        assert (estimated_tokens - 1) * chars_per_token < len(text)
+        assert estimated_tokens * chars_per_token >= len(text)
 
 
 def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
@@ -31,20 +104,45 @@ def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
     )
 
 
+@pytest.fixture
+def usage_budget_transport(
+    request: pytest.FixtureRequest,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+) -> httpx.MockTransport:
+    """Build a mock transport for parametrized usage-budget payloads."""
+    response_payload = typ.cast("dict[str, object]", request.param)
+    return httpx.MockTransport(lambda _r: openai_json_response(response_payload))
+
+
 @pytest.mark.asyncio
 async def test_generate_rejects_prompt_that_exceeds_input_budget(
     openai_adapter_factory: _OpenAIAdapterFactory,
     openai_json_response: _OpenAIJsonResponseBuilder,
 ) -> None:
     """Reject clearly impossible requests before calling the provider."""
-    transport = httpx.MockTransport(lambda request: openai_json_response({}))
+    transport = httpx.MockTransport(lambda _r: openai_json_response({}))
     async with openai_adapter_factory(transport=transport) as adapter:
+        with pytest.raises(LLMTokenBudgetExceededError, match="input token budget"):
+            await adapter.generate(_PREFLIGHT_OVERFLOW_REQUEST)
+
+
+@pytest.mark.asyncio
+async def test_generate_uses_configured_chars_per_token_for_preflight_budget(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+) -> None:
+    """Allow operators to tighten prompt preflight estimation per adapter."""
+    transport = httpx.MockTransport(lambda _r: openai_json_response({}))
+    async with openai_adapter_factory(
+        transport=transport,
+        chars_per_token=2.0,
+    ) as adapter:
         with pytest.raises(LLMTokenBudgetExceededError, match="input token budget"):
             await adapter.generate(
                 LLMRequest(
                     model="gpt-4o-mini",
-                    prompt="x" * 10_000,
-                    system_prompt="system",
+                    prompt="x" * 41,
+                    system_prompt=None,
                     token_budget=LLMTokenBudget(
                         max_input_tokens=20,
                         max_output_tokens=10,
@@ -55,40 +153,54 @@ async def test_generate_rejects_prompt_that_exceeds_input_budget(
 
 
 @pytest.mark.asyncio
-async def test_generate_rejects_response_usage_that_exceeds_total_budget(
+async def test_generate_preflight_budget_rejection_log_snapshot(
     openai_adapter_factory: _OpenAIAdapterFactory,
     openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_log_spy: _OpenAILogSpy,
+    snapshot: SnapshotAssertion,
 ) -> None:
-    """Reject provider responses that break the configured budget."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        del request
-        return openai_json_response({
-            "id": "chatcmpl-789",
-            "model": "gpt-4o-mini",
-            "choices": [{"message": {"content": "Too expensive."}}],
-            "usage": {
-                "prompt_tokens": 200,
-                "completion_tokens": 100,
-                "total_tokens": 300,
-            },
-        })
-
-    transport = httpx.MockTransport(handler)
+    """Preflight budget failures should emit stable structured diagnostics."""
+    transport = httpx.MockTransport(lambda _r: openai_json_response({}))
     async with openai_adapter_factory(transport=transport) as adapter:
+        with pytest.raises(LLMTokenBudgetExceededError, match="input token budget"):
+            await adapter.generate(_PREFLIGHT_OVERFLOW_REQUEST)
+
+    assert openai_log_spy.messages == snapshot
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "usage_budget_transport",
+    [
+        pytest.param(_OVER_BUDGET_USAGE_PAYLOAD, id="canonical-usage"),
+        pytest.param(
+            {
+                "id": "chatcmpl-790",
+                "model": "gpt-4o-mini",
+                "choices": [{"message": {"content": "Still too expensive."}}],
+                "usage": {
+                    "prompt_tokens": 180,
+                    "completion_tokens": 120,
+                    "total_tokens": 300,
+                },
+            },
+            id="alternate-usage",
+        ),
+    ],
+    indirect=True,
+)
+async def test_generate_rejects_response_usage_that_exceeds_total_budget(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_log_spy: _OpenAILogSpy,
+    snapshot: SnapshotAssertion,
+    usage_budget_transport: httpx.MockTransport,
+) -> None:
+    """Reject provider budget failures and emit stable structured diagnostics."""
+    async with openai_adapter_factory(transport=usage_budget_transport) as adapter:
         with pytest.raises(LLMTokenBudgetExceededError, match="total token budget"):
-            await adapter.generate(
-                LLMRequest(
-                    model="gpt-4o-mini",
-                    prompt="Draft the episode opener.",
-                    system_prompt="Keep the output factual and concise.",
-                    token_budget=LLMTokenBudget(
-                        max_input_tokens=400,
-                        max_output_tokens=200,
-                        max_total_tokens=250,
-                    ),
-                )
-            )
+            await adapter.generate(_OVER_BUDGET_USAGE_REQUEST)
+
+    assert openai_log_spy.messages == snapshot
 
 
 @pytest.mark.asyncio
