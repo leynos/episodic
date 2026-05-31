@@ -70,119 +70,127 @@ def _get_repos_for_kind(
     """Resolve repositories and bound callables for a specific entity kind."""
     match kind:
         case EntityKind.SERIES_PROFILE | "series_profile":
-            profile_repo = typ.cast("_SeriesProfileRepository", uow.series_profiles)
-            profile_history_repo = typ.cast(
-                "_SeriesProfileHistoryRepository",
-                uow.series_profile_history,
-            )
-
-            async def _list_profiles(
-                _: uuid.UUID | None,
-                limit: int | None,
-                offset: int,
-            ) -> cabc.Sequence[object]:
-                return typ.cast(
-                    "cabc.Sequence[object]",
-                    await profile_repo.list(limit=limit, offset=offset),
-                )
-
-            async def _count_profiles(_: uuid.UUID | None) -> int:
-                return await profile_repo.count()
-
-            async def _list_profile_history_paged(
-                profile_id: uuid.UUID,
-                limit: int,
-                offset: int,
-            ) -> list[object]:
-                return typ.cast(
-                    "list[object]",
-                    await profile_history_repo.list_for_profile_paged(
-                        profile_id,
-                        limit=limit,
-                        offset=offset,
-                    ),
-                )
-
-            return _KindDispatch(
-                human_label="Series profile",
-                entity_get=typ.cast(
-                    "cabc.Callable[[uuid.UUID], cabc.Awaitable[object | None]]",
-                    profile_repo.get,
-                ),
-                fetch_latest=typ.cast(
-                    "_RevisionFetcher",
-                    profile_history_repo.get_latest_for_profile,
-                ),
-                list_history_for_parent=typ.cast(
-                    "cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]",
-                    profile_history_repo.list_for_profile,
-                ),
-                list_history_for_parent_paged=_list_profile_history_paged,
-                count_history_for_parent=profile_history_repo.count_for_profile,
-                list_entities=_list_profiles,
-                count_entities=_count_profiles,
-                get_latest_revisions=profile_history_repo.get_latest_revisions_for_profiles,
-            )
+            return _build_series_profile_dispatch(uow)
         case EntityKind.EPISODE_TEMPLATE | "episode_template":
-            template_repo = typ.cast(
-                "_EpisodeTemplateRepository", uow.episode_templates
-            )
-            template_history_repo = typ.cast(
-                "_EpisodeTemplateHistoryRepository",
-                uow.episode_template_history,
-            )
-
-            async def _list_templates(
-                series_profile_id: uuid.UUID | None,
-                limit: int | None,
-                offset: int,
-            ) -> cabc.Sequence[object]:
-                return typ.cast(
-                    "cabc.Sequence[object]",
-                    await template_repo.list(
-                        series_profile_id,
-                        limit=limit,
-                        offset=offset,
-                    ),
-                )
-
-            async def _list_template_history_paged(
-                template_id: uuid.UUID,
-                limit: int,
-                offset: int,
-            ) -> list[object]:
-                return typ.cast(
-                    "list[object]",
-                    await template_history_repo.list_for_template_paged(
-                        template_id,
-                        limit=limit,
-                        offset=offset,
-                    ),
-                )
-
-            return _KindDispatch(
-                human_label="Episode template",
-                entity_get=typ.cast(
-                    "cabc.Callable[[uuid.UUID], cabc.Awaitable[object | None]]",
-                    template_repo.get,
-                ),
-                fetch_latest=typ.cast(
-                    "_RevisionFetcher",
-                    template_history_repo.get_latest_for_template,
-                ),
-                list_history_for_parent=typ.cast(
-                    "cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]",
-                    template_history_repo.list_for_template,
-                ),
-                list_history_for_parent_paged=_list_template_history_paged,
-                count_history_for_parent=template_history_repo.count_for_template,
-                list_entities=_list_templates,
-                count_entities=template_repo.count,
-                get_latest_revisions=template_history_repo.get_latest_revisions_for_templates,
-            )
+            return _build_episode_template_dispatch(uow)
         case _:
             msg = f"Unsupported kind: {kind}"
             raise ValueError(msg)
+
+
+def _build_series_profile_dispatch(uow: CanonicalUnitOfWork) -> _KindDispatch:
+    """Return the dispatch table for series-profile repositories."""
+    profile_repo = typ.cast("_SeriesProfileRepository", uow.series_profiles)
+    profile_history_repo = typ.cast(
+        "_SeriesProfileHistoryRepository",
+        uow.series_profile_history,
+    )
+
+    async def _list_profiles(
+        _: uuid.UUID | None,
+        limit: int | None,
+        offset: int,
+    ) -> cabc.Sequence[object]:
+        return typ.cast(
+            "cabc.Sequence[object]",
+            await profile_repo.list(limit=limit, offset=offset),
+        )
+
+    async def _count_profiles(_: uuid.UUID | None) -> int:
+        return await profile_repo.count()
+
+    async def _list_profile_history_paged(
+        profile_id: uuid.UUID,
+        limit: int,
+        offset: int,
+    ) -> list[object]:
+        return typ.cast(
+            "list[object]",
+            await profile_history_repo.list_for_profile_paged(
+                profile_id,
+                limit=limit,
+                offset=offset,
+            ),
+        )
+
+    return _KindDispatch(
+        human_label="Series profile",
+        entity_get=typ.cast(
+            "cabc.Callable[[uuid.UUID], cabc.Awaitable[object | None]]",
+            profile_repo.get,
+        ),
+        fetch_latest=typ.cast(
+            "_RevisionFetcher",
+            profile_history_repo.get_latest_for_profile,
+        ),
+        list_history_for_parent=typ.cast(
+            "cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]",
+            profile_history_repo.list_for_profile,
+        ),
+        list_history_for_parent_paged=_list_profile_history_paged,
+        count_history_for_parent=profile_history_repo.count_for_profile,
+        list_entities=_list_profiles,
+        count_entities=_count_profiles,
+        get_latest_revisions=profile_history_repo.get_latest_revisions_for_profiles,
+    )
+
+
+def _build_episode_template_dispatch(uow: CanonicalUnitOfWork) -> _KindDispatch:
+    """Return the dispatch table for episode-template repositories."""
+    template_repo = typ.cast("_EpisodeTemplateRepository", uow.episode_templates)
+    template_history_repo = typ.cast(
+        "_EpisodeTemplateHistoryRepository",
+        uow.episode_template_history,
+    )
+
+    async def _list_templates(
+        series_profile_id: uuid.UUID | None,
+        limit: int | None,
+        offset: int,
+    ) -> cabc.Sequence[object]:
+        return typ.cast(
+            "cabc.Sequence[object]",
+            await template_repo.list(
+                series_profile_id,
+                limit=limit,
+                offset=offset,
+            ),
+        )
+
+    async def _list_template_history_paged(
+        template_id: uuid.UUID,
+        limit: int,
+        offset: int,
+    ) -> list[object]:
+        return typ.cast(
+            "list[object]",
+            await template_history_repo.list_for_template_paged(
+                template_id,
+                limit=limit,
+                offset=offset,
+            ),
+        )
+
+    return _KindDispatch(
+        human_label="Episode template",
+        entity_get=typ.cast(
+            "cabc.Callable[[uuid.UUID], cabc.Awaitable[object | None]]",
+            template_repo.get,
+        ),
+        fetch_latest=typ.cast(
+            "_RevisionFetcher",
+            template_history_repo.get_latest_for_template,
+        ),
+        list_history_for_parent=typ.cast(
+            "cabc.Callable[[uuid.UUID], cabc.Awaitable[list[object]]]",
+            template_history_repo.list_for_template,
+        ),
+        list_history_for_parent_paged=_list_template_history_paged,
+        count_history_for_parent=template_history_repo.count_for_template,
+        list_entities=_list_templates,
+        count_entities=template_repo.count,
+        get_latest_revisions=template_history_repo.get_latest_revisions_for_templates,
+    )
 
 
 async def get_entity_with_revision(

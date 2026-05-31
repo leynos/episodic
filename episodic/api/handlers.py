@@ -164,14 +164,21 @@ def _raise_mapped_update_error(
     exc: EntityNotFoundError | RevisionConflictError,
     *,
     entity_id: uuid.UUID,
-    payload: JsonPayload,
+    expected_revision: int | None,
 ) -> typ.NoReturn:
-    """Re-raise a domain update error as a typed envelope-aware Falcon error."""
-    expected_revision: int | None = None
-    if isinstance(exc, RevisionConflictError):
-        expected_revision = typ.cast("int | None", payload.get("expected_revision"))
+    """Re-raise a domain update error as a typed envelope-aware Falcon error.
+
+    ``expected_revision`` is only attached to ``revision_conflict`` envelopes;
+    callers should pass the parsed integer from the typed update request so
+    the envelope ``details`` stays type-stable (no raw payload values leak
+    into the response).
+    """
     raise map_profile_template_error(
-        exc, entity_id=entity_id, expected_revision=expected_revision
+        exc,
+        entity_id=entity_id,
+        expected_revision=(
+            expected_revision if isinstance(exc, RevisionConflictError) else None
+        ),
     ) from exc
 
 
@@ -233,7 +240,11 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
         async with uow_factory() as uow:
             entity, revision = await service_fn(uow, request=update_request)
     except (EntityNotFoundError, RevisionConflictError) as exc:
-        _raise_mapped_update_error(exc, entity_id=parsed_entity_id, payload=payload)
+        _raise_mapped_update_error(
+            exc,
+            entity_id=parsed_entity_id,
+            expected_revision=update_request.expected_revision,
+        )
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 

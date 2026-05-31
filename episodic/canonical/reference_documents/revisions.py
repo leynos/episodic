@@ -73,11 +73,12 @@ async def list_reference_document_revisions(
     request: ReferenceDocumentRevisionListRequest,
 ) -> list[ReferenceDocumentRevision]:
     """List immutable revisions for one reference document."""
-    revisions, _total = await list_reference_document_revisions_paged(
-        uow,
-        request=request,
+    parsed_document_id = await _prepare_revision_list_query(uow, request)
+    return await uow.reference_document_revisions.list_for_document(
+        parsed_document_id,
+        limit=request.limit,
+        offset=request.offset,
     )
-    return revisions
 
 
 async def list_reference_document_revisions_paged(
@@ -86,6 +87,23 @@ async def list_reference_document_revisions_paged(
     request: ReferenceDocumentRevisionListRequest,
 ) -> tuple[list[ReferenceDocumentRevision], int]:
     """List immutable revisions and their unpaginated total."""
+    parsed_document_id = await _prepare_revision_list_query(uow, request)
+    revisions = await uow.reference_document_revisions.list_for_document(
+        parsed_document_id,
+        limit=request.limit,
+        offset=request.offset,
+    )
+    total = await uow.reference_document_revisions.count_for_document(
+        parsed_document_id,
+    )
+    return revisions, total
+
+
+async def _prepare_revision_list_query(
+    uow: CanonicalUnitOfWork,
+    request: ReferenceDocumentRevisionListRequest,
+) -> uuid.UUID:
+    """Validate pagination, parse identifiers, and confirm the document exists."""
     _validate_pagination(request.limit, request.offset)
     parsed_document_id = _parse_uuid(request.document_id, "document_id")
     parsed_owner_id = _parse_uuid(
@@ -97,15 +115,7 @@ async def list_reference_document_revisions_paged(
         document_id=parsed_document_id,
         owner_series_profile_id=parsed_owner_id,
     )
-    revisions = await uow.reference_document_revisions.list_for_document(
-        parsed_document_id,
-        limit=request.limit,
-        offset=request.offset,
-    )
-    total = await uow.reference_document_revisions.count_for_document(
-        parsed_document_id,
-    )
-    return revisions, total
+    return parsed_document_id
 
 
 async def get_reference_document_revision(

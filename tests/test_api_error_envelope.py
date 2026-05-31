@@ -36,7 +36,12 @@ def _assert_error_envelope(
     assert isinstance(payload["message"], str), (
         f"expected string message, got {type(payload['message']).__name__}"
     )
-    details = typ.cast("dict[str, object]", payload["details"])
+    raw_details = payload["details"]
+    assert isinstance(raw_details, dict), (
+        f"expected envelope `details` to be a dict, "
+        f"got {type(raw_details).__name__}; payload={payload}"
+    )
+    details = typ.cast("dict[str, object]", raw_details)
     if expected.field is not None:
         assert details["field"] == expected.field, (
             f"expected details field {expected.field!r}, got {details.get('field')!r}"
@@ -74,7 +79,7 @@ def test_invalid_pagination_returns_validation_envelope(
         "/v1/reference-bindings",
         params={
             "target_kind": "episode_template",
-            "target_id": "irrelevant",
+            "target_id": "00000000-0000-0000-0000-000000000000",
             "limit": "0",
         },
     )

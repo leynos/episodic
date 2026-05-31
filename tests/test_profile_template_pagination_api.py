@@ -4,10 +4,10 @@ import typing as typ
 
 import pytest
 
-from tests.test_profile_template_api import _create_profile, _create_template
-
 if typ.TYPE_CHECKING:
     from falcon import testing
+
+    from tests.fixtures.api import CanonicalApiCreators
 
 
 @pytest.mark.parametrize(
@@ -19,19 +19,20 @@ if typ.TYPE_CHECKING:
 )
 def test_list_endpoints_return_pagination_envelopes(
     canonical_api_client: testing.TestClient,
+    canonical_api_creators: CanonicalApiCreators,
     endpoint: str,
     setup_count: int,
 ) -> None:
     """List endpoints should return pagination envelopes with totals."""
     profile_ids = [
-        _create_profile(canonical_api_client, slug=f"api-profile-page-{index}")[0]
+        canonical_api_creators.series_profile(f"api-profile-page-{index}")
         for index in range(setup_count)
     ]
     expected_ids = profile_ids
 
     if endpoint == "/v1/episode-templates":
         expected_ids = [
-            _create_template(canonical_api_client, profile_id)[0]
+            canonical_api_creators.episode_template(profile_id)
             for profile_id in profile_ids
         ]
 

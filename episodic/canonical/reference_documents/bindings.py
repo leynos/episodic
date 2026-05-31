@@ -415,8 +415,15 @@ async def list_reference_bindings(
     ReferenceValidationError
         If pagination values, target kind, or target identifier are invalid.
     """
-    bindings, _total = await list_reference_bindings_paged(uow, request=request)
-    return bindings
+    _validate_pagination(request.limit, request.offset)
+    parsed_target_kind = _parse_target_kind(request.target_kind)
+    parsed_target_id = _parse_uuid(request.target_id, "target_id")
+    return await uow.reference_bindings.list_for_target(
+        target_kind=parsed_target_kind,
+        target_id=parsed_target_id,
+        limit=request.limit,
+        offset=request.offset,
+    )
 
 
 async def list_reference_bindings_paged(

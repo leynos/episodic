@@ -5,7 +5,7 @@ import datetime as dt
 import typing as typ
 import uuid
 
-from episodic.canonical.domain import ReferenceDocument
+from episodic.canonical.domain import ReferenceDocument, ReferenceDocumentKind
 
 from .helpers import (
     _parse_lifecycle_state,
@@ -80,8 +80,13 @@ async def list_reference_documents(
     request: ReferenceDocumentListRequest,
 ) -> list[ReferenceDocument]:
     """List reusable reference documents for one owning series profile."""
-    documents, _total = await list_reference_documents_paged(uow, request=request)
-    return documents
+    parsed_owner_id, parsed_kind = await _prepare_document_list_query(uow, request)
+    return await uow.reference_documents.list_for_series(
+        parsed_owner_id,
+        kind=parsed_kind,
+        limit=request.limit,
+        offset=request.offset,
+    )
 
 
 async def list_reference_documents_paged(
@@ -90,13 +95,7 @@ async def list_reference_documents_paged(
     request: ReferenceDocumentListRequest,
 ) -> tuple[list[ReferenceDocument], int]:
     """List reusable reference documents and their unpaginated total."""
-    _validate_pagination(request.limit, request.offset)
-    parsed_owner_id = _parse_uuid(
-        request.owner_series_profile_id,
-        "owner_series_profile_id",
-    )
-    await _require_series_exists(uow, parsed_owner_id)
-    parsed_kind = None if request.kind is None else _parse_reference_kind(request.kind)
+    parsed_owner_id, parsed_kind = await _prepare_document_list_query(uow, request)
     documents = await uow.reference_documents.list_for_series(
         parsed_owner_id,
         kind=parsed_kind,
@@ -108,6 +107,21 @@ async def list_reference_documents_paged(
         kind=parsed_kind,
     )
     return documents, total
+
+
+async def _prepare_document_list_query(
+    uow: CanonicalUnitOfWork,
+    request: ReferenceDocumentListRequest,
+) -> tuple[uuid.UUID, ReferenceDocumentKind | None]:
+    """Validate pagination, parse identifiers, and confirm the owning series."""
+    _validate_pagination(request.limit, request.offset)
+    parsed_owner_id = _parse_uuid(
+        request.owner_series_profile_id,
+        "owner_series_profile_id",
+    )
+    await _require_series_exists(uow, parsed_owner_id)
+    parsed_kind = None if request.kind is None else _parse_reference_kind(request.kind)
+    return parsed_owner_id, parsed_kind
 
 
 async def update_reference_document(
