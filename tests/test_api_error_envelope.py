@@ -3,6 +3,8 @@
 import dataclasses as dc
 import typing as typ
 
+import pytest
+
 if typ.TYPE_CHECKING:
     from falcon import testing
 
@@ -54,135 +56,96 @@ def _assert_error_envelope(
     return payload
 
 
-def test_invalid_uuid_returns_validation_envelope(
-    canonical_api_client: testing.TestClient,
-) -> None:
-    """Invalid path identifiers return a field-specific validation error."""
-    response = canonical_api_client.simulate_get("/v1/series-profiles/not-a-valid-uuid")
-
-    _assert_error_envelope(
-        response,
-        _Expected(
-            status_code=400,
-            code="validation_error",
-            field="profile_id",
-            constraint="uuid",
+@pytest.mark.parametrize(
+    ("path", "params", "expected"),
+    [
+        pytest.param(
+            "/v1/series-profiles/not-a-valid-uuid",
+            None,
+            _Expected(
+                status_code=400,
+                code="validation_error",
+                field="profile_id",
+                constraint="uuid",
+            ),
+            id="invalid_uuid_path_segment",
         ),
-    )
-
-
-def test_invalid_pagination_returns_validation_envelope(
-    canonical_api_client: testing.TestClient,
-) -> None:
-    """Invalid pagination bounds return range details."""
-    response = canonical_api_client.simulate_get(
-        "/v1/reference-bindings",
-        params={
-            "target_kind": "episode_template",
-            "target_id": "00000000-0000-0000-0000-000000000000",
-            "limit": "0",
-        },
-    )
-
-    _assert_error_envelope(
-        response,
-        _Expected(
-            status_code=400,
-            code="validation_error",
-            field="limit",
-            constraint="range",
+        pytest.param(
+            "/v1/reference-bindings",
+            {
+                "target_kind": "episode_template",
+                "target_id": "00000000-0000-0000-0000-000000000000",
+                "limit": "0",
+            },
+            _Expected(
+                status_code=400,
+                code="validation_error",
+                field="limit",
+                constraint="range",
+            ),
+            id="invalid_pagination_bounds",
         ),
-    )
-
-
-def test_invalid_optional_uuid_filter_returns_validation_envelope(
-    canonical_api_client: testing.TestClient,
-) -> None:
-    """Invalid optional UUID query filters return field-specific details."""
-    response = canonical_api_client.simulate_get(
-        "/v1/episode-templates",
-        params={"series_profile_id": "not-a-uuid"},
-    )
-
-    _assert_error_envelope(
-        response,
-        _Expected(
-            status_code=400,
-            code="validation_error",
-            field="series_profile_id",
-            constraint="uuid",
+        pytest.param(
+            "/v1/episode-templates",
+            {"series_profile_id": "not-a-uuid"},
+            _Expected(
+                status_code=400,
+                code="validation_error",
+                field="series_profile_id",
+                constraint="uuid",
+            ),
+            id="invalid_optional_uuid_filter",
         ),
-    )
-
-
-def test_invalid_reference_document_kind_filter_returns_validation_envelope(
-    canonical_api_client: testing.TestClient,
-) -> None:
-    """Invalid document-kind filters return field-specific enum details."""
-    response = canonical_api_client.simulate_get(
-        "/v1/series-profiles/018f0c2a-1234-7000-a000-000000000001/reference-documents",
-        params={"kind": "not-a-kind"},
-    )
-
-    _assert_error_envelope(
-        response,
-        _Expected(
-            status_code=400,
-            code="validation_error",
-            field="kind",
-            constraint="enum",
+        pytest.param(
+            "/v1/series-profiles/018f0c2a-1234-7000-a000-000000000001/reference-documents",
+            {"kind": "not-a-kind"},
+            _Expected(
+                status_code=400,
+                code="validation_error",
+                field="kind",
+                constraint="enum",
+            ),
+            id="invalid_reference_document_kind_filter",
         ),
-    )
-
-
-def test_invalid_reference_binding_target_kind_returns_validation_envelope(
-    canonical_api_client: testing.TestClient,
-) -> None:
-    """Invalid binding target-kind filters return field-specific enum details."""
-    response = canonical_api_client.simulate_get(
-        "/v1/reference-bindings",
-        params={
-            "target_kind": "not-a-target",
-            "target_id": "018f0c2a-1234-7000-a000-000000000001",
-        },
-    )
-
-    _assert_error_envelope(
-        response,
-        _Expected(
-            status_code=400,
-            code="validation_error",
-            field="target_kind",
-            constraint="enum",
+        pytest.param(
+            "/v1/reference-bindings",
+            {
+                "target_kind": "not-a-target",
+                "target_id": "018f0c2a-1234-7000-a000-000000000001",
+            },
+            _Expected(
+                status_code=400,
+                code="validation_error",
+                field="target_kind",
+                constraint="enum",
+            ),
+            id="invalid_reference_binding_target_kind",
         ),
-    )
-
-
-def test_missing_query_parameter_returns_validation_envelope(
-    canonical_api_client: testing.TestClient,
-) -> None:
-    """Missing required query parameters return required-field details."""
-    response = canonical_api_client.simulate_get(
-        "/v1/series-profiles/018f0c2a-1234-7000-a000-000000000001/resolved-bindings"
-    )
-
-    _assert_error_envelope(
-        response,
-        _Expected(
-            status_code=400,
-            code="validation_error",
-            field="episode_id",
-            constraint="required",
+        pytest.param(
+            "/v1/series-profiles/018f0c2a-1234-7000-a000-000000000001/resolved-bindings",
+            None,
+            _Expected(
+                status_code=400,
+                code="validation_error",
+                field="episode_id",
+                constraint="required",
+            ),
+            id="missing_required_query_parameter",
         ),
-    )
-
-
-def test_unknown_identifier_returns_not_found_envelope(
+        pytest.param(
+            "/v1/series-profiles/018f0c2a-1234-7000-a000-000000000001",
+            None,
+            _Expected(status_code=404, code="not_found"),
+            id="unknown_identifier",
+        ),
+    ],
+)
+def test_error_envelope(
     canonical_api_client: testing.TestClient,
+    path: str,
+    params: dict[str, str] | None,
+    expected: _Expected,
 ) -> None:
-    """Unknown entities return the common not-found envelope."""
-    response = canonical_api_client.simulate_get(
-        "/v1/series-profiles/018f0c2a-1234-7000-a000-000000000001"
-    )
-
-    _assert_error_envelope(response, _Expected(status_code=404, code="not_found"))
+    """Canonical API errors share a single ``{code, message, details}`` envelope."""
+    response = canonical_api_client.simulate_get(path, params=params)
+    _assert_error_envelope(response, expected)
