@@ -16,26 +16,18 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
-def test_resolved_bindings_endpoint_returns_resolved_payloads(
-    canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Resolved-bindings endpoint should return document, revision, and binding data."""
-    fixture = reference_support.build_api_fixture(canonical_api_client)
+def _create_series_profile_binding(
+    client: testing.TestClient,
+    profile_id: str,
+    episode_id: str,
+) -> str:
+    """Create a style-guide document, one revision, and a series-profile binding.
 
-    episode_id = _function_scoped_runner.run(
-        binding_support.create_episode(
-            session_factory,
-            profile_id=fixture.primary_profile_id,
-            title="Resolution target episode",
-            created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
-        )
-    )
-
-    _, series_revision_id = binding_support.create_document_with_revision(
-        canonical_api_client,
-        fixture.primary_profile_id,
+    Returns the revision ID.
+    """
+    _, revision_id = binding_support.create_document_with_revision(
+        client,
+        profile_id,
         binding_support.DocumentSpec(
             kind="style_guide",
             name="Resolved series guide",
@@ -44,15 +36,26 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
         ),
     )
     binding_support.create_series_binding(
-        canonical_api_client,
-        revision_id=series_revision_id,
-        profile_id=fixture.primary_profile_id,
+        client,
+        revision_id=revision_id,
+        profile_id=profile_id,
         effective_from_episode_id=episode_id,
     )
+    return revision_id
 
-    _, template_revision_id = binding_support.create_document_with_revision(
-        canonical_api_client,
-        fixture.primary_profile_id,
+
+def _create_episode_template_binding(
+    client: testing.TestClient,
+    profile_id: str,
+    template_id: str,
+) -> str:
+    """Create a guest-profile document, one revision, and an episode-template binding.
+
+    Returns the revision ID.
+    """
+    _, revision_id = binding_support.create_document_with_revision(
+        client,
+        profile_id,
         binding_support.DocumentSpec(
             kind="guest_profile",
             name="Resolved template guest",
@@ -61,20 +64,19 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
         ),
     )
     reference_support.create_reference_binding(
-        canonical_api_client,
-        revision_id=template_revision_id,
-        template_id=fixture.template_id,
+        client,
+        revision_id=revision_id,
+        template_id=template_id,
     )
+    return revision_id
 
-    response = canonical_api_client.simulate_get(
-        f"/v1/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
-        params={"episode_id": episode_id, "template_id": fixture.template_id},
-    )
 
-    assert response.status_code == 200, (
-        "Expected resolved-bindings endpoint to return 200."
-    )
-    payload = typ.cast("dict[str, object]", response.json)
+def _assert_resolved_bindings_payload(
+    payload: dict[str, object],
+    series_revision_id: str,
+    template_revision_id: str,
+) -> None:
+    """Assert the pagination envelope and items of a resolved-bindings response."""
     assert payload["limit"] == 20, (
         f"expected limit == 20, got {payload['limit']!r}; payload={payload}"
     )
@@ -99,6 +101,45 @@ def test_resolved_bindings_endpoint_returns_resolved_payloads(
     assert documents[1]["kind"] == "guest_profile", (
         f"expected second resolved document kind == 'guest_profile', "
         f"got {documents[1]['kind']!r}"
+    )
+
+
+def test_resolved_bindings_endpoint_returns_resolved_payloads(
+    canonical_api_client: testing.TestClient,
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Resolved-bindings endpoint should return document, revision, and binding data."""
+    fixture = reference_support.build_api_fixture(canonical_api_client)
+
+    episode_id = _function_scoped_runner.run(
+        binding_support.create_episode(
+            session_factory,
+            profile_id=fixture.primary_profile_id,
+            title="Resolution target episode",
+            created_at=dt.datetime(2026, 1, 5, tzinfo=dt.UTC),
+        )
+    )
+
+    series_revision_id = _create_series_profile_binding(
+        canonical_api_client, fixture.primary_profile_id, episode_id
+    )
+    template_revision_id = _create_episode_template_binding(
+        canonical_api_client, fixture.primary_profile_id, fixture.template_id
+    )
+
+    response = canonical_api_client.simulate_get(
+        f"/v1/series-profiles/{fixture.primary_profile_id}/resolved-bindings",
+        params={"episode_id": episode_id, "template_id": fixture.template_id},
+    )
+
+    assert response.status_code == 200, (
+        "Expected resolved-bindings endpoint to return 200."
+    )
+    _assert_resolved_bindings_payload(
+        typ.cast("dict[str, object]", response.json),
+        series_revision_id,
+        template_revision_id,
     )
 
 
