@@ -983,7 +983,10 @@ stored planner-result payloads.
 `episodic.llm.openai_adapter` is the compatibility facade exported to callers.
 The implementation lives in the outbound-adapter package
 `episodic.llm.openai_api`, whose modules split transport concerns by
-responsibility:
+responsibility. Keep the split focused on adapter reuse points: request
+construction, response normalization, and validation helpers are imported both
+by the facade compatibility tests and by the async adapter, while the adapter
+module remains responsible for HTTP lifecycle and retry orchestration.
 
 - `adapter.py` owns `OpenAICompatibleLLMConfig`,
   `OpenAICompatibleLLMAdapter`, HTTP client lifecycle, and the retry loop.

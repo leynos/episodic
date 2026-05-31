@@ -224,7 +224,11 @@ def _check_input_preflight_budget(
     request: LLMRequest,
     chars_per_token: float,
 ) -> None:
-    """Reject requests whose estimated input tokens exceed the input budget."""
+    """Reject requests whose estimated input tokens exceed the input budget.
+
+    Emits a structured ``openai_adapter.preflight_budget_exceeded`` error
+    event before raising when the estimate is over the configured input limit.
+    """
     if estimated_input_tokens <= token_budget.max_input_tokens:
         return
 
@@ -250,7 +254,12 @@ def _check_total_preflight_budget(
     request: LLMRequest,
     chars_per_token: float,
 ) -> None:
-    """Reject requests whose projected total tokens exceed the total budget."""
+    """Reject requests whose projected total tokens exceed the total budget.
+
+    Emits a structured ``openai_adapter.preflight_budget_exceeded`` error
+    event before raising when the projected input-plus-output total is over
+    the configured total limit.
+    """
     if token_budget.max_total_tokens is None:
         return
 
@@ -280,7 +289,12 @@ def _validate_preflight_budget(
     token_budget: LLMTokenBudget,
     chars_per_token: float,
 ) -> None:
-    """Reject requests that obviously cannot fit within the configured budget."""
+    """Reject requests that obviously cannot fit within the configured budget.
+
+    Emits structured error events through the delegated preflight checks before
+    raising when either the estimated input or projected total budget is
+    exceeded.
+    """
     estimated_input_tokens = _estimate_token_count(
         chars_per_token, request.system_prompt, request.prompt
     )
@@ -310,7 +324,12 @@ def _check_usage_budget(
     token_budget: LLMTokenBudget,
     operation: LLMProviderOperation,
 ) -> None:
-    """Log and reject provider usage values that exceed one budget dimension."""
+    """Log and reject provider usage values that exceed one budget dimension.
+
+    Emits ``openai_adapter.usage_budget_exceeded`` with normalized usage and
+    limit fields before raising when the selected usage dimension exceeds its
+    configured budget.
+    """
     actual, limit = _usage_values_for_label(response, token_budget)[label]
     if limit is None:
         return
@@ -337,7 +356,12 @@ def _validate_usage_budget(
     token_budget: LLMTokenBudget,
     operation: LLMProviderOperation,
 ) -> None:
-    """Reject responses whose actual usage exceeds the configured budget."""
+    """Reject responses whose actual usage exceeds the configured budget.
+
+    Emits structured usage-budget error events through the delegated dimension
+    checks before raising when provider-reported usage is over any configured
+    input, output, or total limit.
+    """
     _check_usage_budget(
         "input",
         response,
@@ -407,7 +431,11 @@ def _is_valid_chars_per_token(value: object) -> bool:
 
 
 def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
-    """Validate OpenAICompatibleLLMConfig field values."""
+    """Validate OpenAICompatibleLLMConfig field values.
+
+    Emits ``openai_adapter.config_rejected`` with bounded configuration
+    diagnostics before raising ``ValueError`` for the first rejected field.
+    """
     base_url: object = config.base_url
     api_key: object = config.api_key
     chars_per_token: object = config.chars_per_token
