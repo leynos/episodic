@@ -1,5 +1,6 @@
 """Positive functional tests for get/list reference-binding query operations."""
 
+import datetime as dt
 import typing as typ
 import uuid
 
@@ -7,7 +8,13 @@ import pytest
 import test_reference_document_service_support as support
 
 from episodic.canonical.domain import (
+    ApprovalState,
+    CanonicalEpisode,
+    EpisodeStatus,
+    IngestionJob,
+    IngestionStatus,
     ReferenceBindingTargetKind,
+    TeiHeader,
 )
 from episodic.canonical.reference_documents import (
     ReferenceBindingData,
@@ -209,3 +216,158 @@ async def test_list_reference_bindings_pagination_offset(
 
     assert len(results) == 1
     assert results[0].id == second.id
+
+
+@pytest.mark.asyncio
+async def test_create_reference_binding_with_series_profile_target(
+    session_factory: cabc.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Return a binding with SERIES_PROFILE target and no effective_from episode."""
+    _, rev_id = await _create_document_and_revision(session_factory, service_fixture)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        binding = await create_reference_binding(
+            uow,
+            data=ReferenceBindingData(
+                reference_document_revision_id=str(rev_id),
+                target_kind="series_profile",
+                series_profile_id=service_fixture["primary_profile_id"],
+                episode_template_id=None,
+                ingestion_job_id=None,
+                effective_from_episode_id=None,
+            ),
+        )
+
+    assert binding.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE
+    assert binding.series_profile_id == uuid.UUID(service_fixture["primary_profile_id"])
+    assert binding.episode_template_id is None
+    assert binding.ingestion_job_id is None
+    assert binding.effective_from_episode_id is None
+
+
+@pytest.mark.asyncio
+async def test_create_reference_binding_with_episode_template_target(
+    session_factory: cabc.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Return a binding with EPISODE_TEMPLATE target."""
+    _, rev_id = await _create_document_and_revision(session_factory, service_fixture)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        binding = await create_reference_binding(
+            uow,
+            data=ReferenceBindingData(
+                reference_document_revision_id=str(rev_id),
+                target_kind="episode_template",
+                series_profile_id=None,
+                episode_template_id=service_fixture["template_id"],
+                ingestion_job_id=None,
+                effective_from_episode_id=None,
+            ),
+        )
+
+    assert binding.target_kind == ReferenceBindingTargetKind.EPISODE_TEMPLATE
+    assert binding.episode_template_id == uuid.UUID(service_fixture["template_id"])
+
+
+@pytest.mark.asyncio
+async def test_create_reference_binding_with_ingestion_job_target(
+    session_factory: cabc.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Return a binding with INGESTION_JOB target."""
+    now = dt.datetime.now(tz=dt.UTC)
+    series_id = uuid.UUID(service_fixture["primary_profile_id"])
+    job_id = uuid.uuid4()
+
+    job = IngestionJob(
+        id=job_id,
+        series_profile_id=series_id,
+        target_episode_id=None,
+        status=IngestionStatus.COMPLETED,
+        requested_at=now,
+        started_at=now,
+        completed_at=now,
+        error_message=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.ingestion_jobs.add(job)
+        await uow.commit()
+
+    _, rev_id = await _create_document_and_revision(session_factory, service_fixture)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        binding = await create_reference_binding(
+            uow,
+            data=ReferenceBindingData(
+                reference_document_revision_id=str(rev_id),
+                target_kind="ingestion_job",
+                series_profile_id=None,
+                episode_template_id=None,
+                ingestion_job_id=str(job_id),
+                effective_from_episode_id=None,
+            ),
+        )
+
+    assert binding.target_kind == ReferenceBindingTargetKind.INGESTION_JOB
+    assert binding.ingestion_job_id == job_id
+
+
+@pytest.mark.asyncio
+async def test_create_reference_binding_with_effective_from_episode_id(
+    session_factory: cabc.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Return a series binding with effective_from_episode_id set."""
+    now = dt.datetime.now(tz=dt.UTC)
+    series_id = uuid.UUID(service_fixture["primary_profile_id"])
+    episode_id = uuid.uuid4()
+    header_id = uuid.uuid4()
+
+    header = TeiHeader(
+        id=header_id,
+        title="Effective From Episode",
+        payload={},
+        raw_xml="<teiHeader/>",
+        created_at=now,
+        updated_at=now,
+    )
+    episode = CanonicalEpisode(
+        id=episode_id,
+        series_profile_id=series_id,
+        tei_header_id=header_id,
+        title="Effective From Episode",
+        tei_xml="<TEI/>",
+        status=EpisodeStatus.DRAFT,
+        approval_state=ApprovalState.DRAFT,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.tei_headers.add(header)
+        await uow.flush()
+        await uow.episodes.add(episode)
+        await uow.commit()
+
+    _, rev_id = await _create_document_and_revision(session_factory, service_fixture)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        binding = await create_reference_binding(
+            uow,
+            data=ReferenceBindingData(
+                reference_document_revision_id=str(rev_id),
+                target_kind="series_profile",
+                series_profile_id=service_fixture["primary_profile_id"],
+                episode_template_id=None,
+                ingestion_job_id=None,
+                effective_from_episode_id=str(episode_id),
+            ),
+        )
+
+    assert binding.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE
+    assert binding.effective_from_episode_id == episode_id

@@ -24,8 +24,8 @@ Success is observable when:
    `GET /v1/episode-templates`, the reusable-reference endpoints, and the
    binding-resolution endpoints route through the existing Falcon resource
    handlers.
-2. The old unversioned canonical API paths return Falcon's normal `404 Not
-   Found` response, proving there is no compatibility alias.
+2. The old unversioned canonical API paths return Falcon's normal
+   `404 Not Found` response, proving there is no compatibility alias.
 3. Operator health checks remain at `GET /health/live` and
    `GET /health/ready`, unless the implementation discovers a documented reason
    to version them.

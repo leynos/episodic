@@ -163,8 +163,7 @@ Structural body content is exposed through tagged unions:
 
 - `BodyBlock = Paragraph | Utterance | DivBlock`
 - `DivContent = Paragraph | Utterance | ListBlock | DivBlock`
-- `Event = DocumentStart | HeaderEvent | ParagraphEvent | UtteranceEvent |
-  DivEvent | DocumentEnd`
+- `Event = DocumentStart | HeaderEvent | ParagraphEvent | UtteranceEvent | DivEvent | DocumentEnd`
 
 `DivBlock` and streamed `DivEvent` values now expose `div_type`, optional
 `subtype`, optional `head`, optional `xml_id`, and recursive `content`, so
