@@ -94,8 +94,8 @@ Versioned API routing:
   including series-profile, episode-template, reusable-reference, and
   binding-resolution routes.
 - Existing unversioned canonical routes are pre-v0.1.0 implementation details.
-  They are not compatibility aliases and should return Falcon's normal
-  `404 Not Found` response.
+  They are not compatibility aliases and should return the shared
+  `404 not_found` error envelope.
 - Health checks remain root-level operator endpoints at `/health/live` and
   `/health/ready`.
 - New terminal user interface (TUI)-facing and vertical-slice REST endpoints
@@ -103,6 +103,53 @@ Versioned API routing:
 - The routing decision follows
   [`adr-009-source-to-script-rest-vertical-slice.md`](adr/adr-009-source-to-script-rest-vertical-slice.md)
   and [`episodic-tui-api-design.md`](episodic-tui-api-design.md).
+
+REST error contract:
+
+- Every Falcon `HTTPError` raised by the canonical API is serialized as
+  `{"code": "<machine-readable>", "message": "<human>", "details": {...}}` by
+  `episodic/api/errors.py`.
+- Validation helpers attach field-level details where the request parser knows
+  the field and constraint, for example
+  `{"field": "limit", "constraint": "range"}`.
+- Profile/template domain errors are mapped by `map_profile_template_error`.
+  Stale optimistic-lock updates use `revision_conflict` and include `entity_id`
+  plus `expected_revision` when the adapter has that context.
+- Reusable-reference domain errors are mapped by `map_reference_error`.
+  Validation failures use `validation_error`, missing entities use `not_found`,
+  stale revisions use `revision_conflict`, and remaining persistence conflicts
+  use `conflict`.
+
+REST pagination and filter contract:
+
+- List resources parse pagination through `parse_pagination`. The shared
+  contract is `limit=20`, `offset=0`, `1 <= limit <= 100`, and `offset >= 0`.
+- List responses return `{"items": […], "limit": <int>, "offset": <int>,
+  "total": <int>}`.
+- Optional UUID query filters use `parse_optional_uuid_param`; invalid values
+  raise `validation_error` with `{"field": "<name>", "constraint": "uuid"}`.
+- Optional enum filters use `parse_enum_param`; invalid values raise
+  `validation_error` with `{"field": "<name>", "constraint": "enum"}`.
+- Resource adapters should validate filters before opening a unit of work, so
+  malformed filters are not hidden behind later `404` or domain errors.
+
+Authorization scaffold:
+
+- Every `/v1` request passes through `AuthorizationMiddleware` before resource
+  dispatch. Health checks remain operator endpoints and are not authorized by
+  this scaffold.
+- `ApiDependencies.authorization` accepts an `AuthorizationPort`; production
+  wiring currently defaults to `PermitAll`, so existing clients do not need an
+  `Authorization` header yet.
+- Authorization adapters receive an `AuthorizationContext` containing the HTTP
+  method, request path, and raw `Authorization` header. The port is async, so
+  future policy adapters can call external identity or permission services.
+- Non-permit decisions short-circuit with the canonical error envelope:
+  `unauthorized` returns `401`, and `forbidden` returns `403`.
+- Authorization adapter failures short-circuit with `service_unavailable` and
+  `503`, so policy-backend outages are not reported as resource failures.
+- Roadmap item `5.1` is expected to replace the default permit-all adapter with
+  policy-backed role or scope checks.
 
 Testing guidance:
 
@@ -578,7 +625,8 @@ Implementation notes:
   guest documents. Cross-series access is treated as `404 Not Found` for
   profile-scoped routes.
 - Inbound adapters map typed reusable-reference service errors to Falcon HTTP
-  errors through local `_map_reference_error(...)` helpers.
+  errors through `episodic/api/errors.py`, so callers receive the shared REST
+  error envelope instead of Falcon's default `{title, description}` body.
 
 ### Reusable reference-document repositories
 

@@ -197,6 +197,48 @@ Reusable reference-document workflows currently support:
   provenance-backed `source_documents`, so audit trails record the exact
   reference revisions consumed for that episode build.
 
+### REST API reference
+
+Client-facing canonical API resources use the `/v1` prefix. List endpoints use
+the same pagination envelope:
+
+```json
+{
+  "items": [],
+  "limit": 20,
+  "offset": 0,
+  "total": 0
+}
+```
+
+Use `limit` and `offset` query parameters to page through collections. The
+default is `limit=20&offset=0`; `limit` must be between `1` and `100`, and
+`offset` must be non-negative.
+
+Every API error uses the same envelope:
+
+```json
+{
+  "code": "validation_error",
+  "message": "limit must be between 1 and 100.",
+  "details": {
+    "field": "limit",
+    "constraint": "range"
+  }
+}
+```
+
+List endpoints that expose filters validate them before dispatching to the
+service layer. For example:
+
+```text
+GET /v1/series-profiles/{profile_id}/reference-documents?kind=guest_profile&limit=20&offset=0
+```
+
+The authorization scaffold is active for every `/v1` request, but the default
+adapter currently permits all requests. Roadmap item `5.1` will replace that
+default with policy-backed authorization.
+
 ### HTTP service health and runtime
 
 The canonical-content HTTP service now runs as a Falcon ASGI application under

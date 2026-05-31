@@ -108,14 +108,31 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
             _series_profile_from_record,
         )
 
-    async def list(self) -> cabc.Sequence[SeriesProfile]:
+    async def list(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> cabc.Sequence[SeriesProfile]:
         """List all series profiles."""
-        return await self._list_where(
-            SeriesProfileRecord,
-            sa.true(),
-            SeriesProfileRecord.created_at,
-            _series_profile_from_record,
+        statement = (
+            sa
+            .select(SeriesProfileRecord)
+            .where(sa.true())
+            .order_by(SeriesProfileRecord.created_at, SeriesProfileRecord.id)
+            .offset(offset)
         )
+        if limit is not None:
+            statement = statement.limit(limit)
+        result = await self._session.execute(statement)
+        return [_series_profile_from_record(row) for row in result.scalars()]
+
+    async def count(self) -> int:
+        """Count all series profiles."""
+        result = await self._session.execute(
+            sa.select(sa.func.count()).select_from(SeriesProfileRecord)
+        )
+        return result.scalar_one()
 
     async def update(self, profile: SeriesProfile) -> None:
         """Persist changes to an existing series profile."""
@@ -306,17 +323,38 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
     async def list(
         self,
         series_profile_id: uuid.UUID | None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> cabc.Sequence[EpisodeTemplate]:
         """List episode templates, optionally by series profile."""
         where_clause: typ.Any = sa.true()
         if series_profile_id is not None:
             where_clause = EpisodeTemplateRecord.series_profile_id == series_profile_id
-        return await self._list_where(
-            EpisodeTemplateRecord,
-            where_clause,
-            EpisodeTemplateRecord.created_at,
-            _episode_template_from_record,
+        statement = (
+            sa
+            .select(EpisodeTemplateRecord)
+            .where(where_clause)
+            .order_by(EpisodeTemplateRecord.created_at, EpisodeTemplateRecord.id)
+            .offset(offset)
         )
+        if limit is not None:
+            statement = statement.limit(limit)
+        result = await self._session.execute(statement)
+        return [_episode_template_from_record(row) for row in result.scalars()]
+
+    async def count(self, series_profile_id: uuid.UUID | None) -> int:
+        """Count episode templates, optionally by series profile."""
+        where_clause: typ.Any = sa.true()
+        if series_profile_id is not None:
+            where_clause = EpisodeTemplateRecord.series_profile_id == series_profile_id
+        result = await self._session.execute(
+            sa
+            .select(sa.func.count())
+            .select_from(EpisodeTemplateRecord)
+            .where(where_clause)
+        )
+        return result.scalar_one()
 
     async def get_by_slug(
         self,

@@ -23,6 +23,20 @@ class SeriesProfileHistoryRepository(typ.Protocol):
         """List history entries for a series profile."""
         raise NotImplementedError
 
+    async def list_for_profile_paged(
+        self,
+        profile_id: uuid.UUID,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[SeriesProfileHistoryEntry]:
+        """List paged history entries for a series profile."""
+        raise NotImplementedError
+
+    async def count_for_profile(self, profile_id: uuid.UUID) -> int:
+        """Count history entries for a series profile."""
+        raise NotImplementedError
+
     async def get_latest_for_profile(
         self,
         profile_id: uuid.UUID,
@@ -50,6 +64,20 @@ class EpisodeTemplateHistoryRepository(typ.Protocol):
         template_id: uuid.UUID,
     ) -> list[EpisodeTemplateHistoryEntry]:
         """List history entries for an episode template."""
+        raise NotImplementedError
+
+    async def list_for_template_paged(
+        self,
+        template_id: uuid.UUID,
+        *,
+        limit: int,
+        offset: int,
+    ) -> list[EpisodeTemplateHistoryEntry]:
+        """List paged history entries for an episode template."""
+        raise NotImplementedError
+
+    async def count_for_template(self, template_id: uuid.UUID) -> int:
+        """Count history entries for an episode template."""
         raise NotImplementedError
 
     async def get_latest_for_template(

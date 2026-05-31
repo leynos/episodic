@@ -63,11 +63,7 @@ class SqlAlchemyReferenceDocumentRepository(
         offset: int = 0,
     ) -> list[ReferenceDocument]:
         """List reusable reference documents for one series profile."""
-        where_clause = (
-            ReferenceDocumentRecord.owner_series_profile_id == series_profile_id
-        )
-        if kind is not None:
-            where_clause = sa.and_(where_clause, ReferenceDocumentRecord.kind == kind)
+        where_clause = _document_series_filter(series_profile_id, kind)
         statement = (
             sa
             .select(ReferenceDocumentRecord)
@@ -79,6 +75,22 @@ class SqlAlchemyReferenceDocumentRepository(
             statement = statement.limit(limit)
         result = await self._session.execute(statement)
         return [_reference_document_from_record(row) for row in result.scalars()]
+
+    async def count_for_series(
+        self,
+        series_profile_id: uuid.UUID,
+        *,
+        kind: ReferenceDocumentKind | None = None,
+    ) -> int:
+        """Count reusable reference documents for one series profile."""
+        statement = sa.select(sa.func.count()).select_from(
+            sa
+            .select(ReferenceDocumentRecord.id)
+            .where(_document_series_filter(series_profile_id, kind))
+            .subquery()
+        )
+        result = await self._session.execute(statement)
+        return result.scalar_one()
 
     async def list_by_ids(
         self,
@@ -177,6 +189,17 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
             _reference_document_revision_from_record(row) for row in result.scalars()
         ]
 
+    async def count_for_document(self, document_id: uuid.UUID) -> int:
+        """Count revisions for one reusable reference document."""
+        statement = (
+            sa
+            .select(sa.func.count())
+            .select_from(ReferenceDocumentRevisionRecord)
+            .where(ReferenceDocumentRevisionRecord.reference_document_id == document_id)
+        )
+        result = await self._session.execute(statement)
+        return result.scalar_one()
+
     async def list_by_ids(
         self,
         revision_ids: cabc.Collection[uuid.UUID],
@@ -259,6 +282,39 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
             statement = statement.limit(limit)
         result = await self._session.execute(statement)
         return [_reference_binding_from_record(row) for row in result.scalars()]
+
+    async def count_for_target(
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_id: uuid.UUID,
+    ) -> int:
+        """Count reusable reference bindings for one target context."""
+        target_field = self._target_field(target_kind)
+        statement = (
+            sa
+            .select(sa.func.count())
+            .select_from(ReferenceBindingRecord)
+            .where(
+                sa.and_(
+                    ReferenceBindingRecord.target_kind == target_kind,
+                    target_field == target_id,
+                )
+            )
+        )
+        result = await self._session.execute(statement)
+        return result.scalar_one()
+
+
+def _document_series_filter(
+    series_profile_id: uuid.UUID,
+    kind: ReferenceDocumentKind | None,
+) -> typ.Any:  # noqa: ANN401
+    """Return the reusable-reference document series filter."""
+    where_clause = ReferenceDocumentRecord.owner_series_profile_id == series_profile_id
+    if kind is not None:
+        return sa.and_(where_clause, ReferenceDocumentRecord.kind == kind)
+    return where_clause
 
 
 __all__ = (

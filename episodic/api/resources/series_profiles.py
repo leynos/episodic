@@ -19,6 +19,7 @@ import falcon
 from episodic.api.helpers import (
     build_profile_create_kwargs,
     build_profile_update_request,
+    parse_pagination,
     parse_uuid,
 )
 from episodic.api.resources.base import (
@@ -37,8 +38,8 @@ from episodic.canonical.profile_templates import (
     EntityNotFoundError,
     create_series_profile,
     get_entity_with_revision,
-    list_entities_with_revisions,
-    list_history,
+    list_entities_with_revisions_paged,
+    list_history_paged,
     update_series_profile,
 )
 
@@ -77,12 +78,21 @@ class SeriesProfilesResource(_CreateResourceBase[object]):
         None
             Response media is set to an ``items`` list and status ``200``.
         """
-        del req
-        service_fn = partial(list_entities_with_revisions, kind="series_profile")
+        page = parse_pagination(req)
+        service_fn = partial(
+            list_entities_with_revisions_paged,
+            kind="series_profile",
+            page=page,
+        )
         async with self._uow_factory() as uow:
-            items = await service_fn(uow)
+            items, total = await service_fn(uow)
 
-        resp.media = {"items": list(starmap(serialize_series_profile, items))}
+        resp.media = {
+            "items": list(starmap(serialize_series_profile, items)),
+            "limit": page.limit,
+            "offset": page.offset,
+            "total": total,
+        }
         resp.status = falcon.HTTP_200
 
     @staticmethod
@@ -214,11 +224,14 @@ class SeriesProfileHistoryResource(_GetHistoryResourceBase[object]):
 
     @staticmethod
     @typ.override
-    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
+    def _get_service_fn() -> cabc.Callable[
+        ...,
+        cabc.Awaitable[tuple[list[object], int]],
+    ]:
         """Return the profile-history list service."""
         return typ.cast(
-            "cabc.Callable[..., cabc.Awaitable[list[object]]]",
-            partial(list_history, kind="series_profile"),
+            "cabc.Callable[..., cabc.Awaitable[tuple[list[object], int]]]",
+            partial(list_history_paged, kind="series_profile"),
         )
 
     @staticmethod

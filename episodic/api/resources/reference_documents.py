@@ -4,8 +4,10 @@ import typing as typ
 
 import falcon
 
+from episodic.api.errors import map_reference_error
 from episodic.api.helpers import (
-    map_reference_error,
+    parse_enum_param,
+    parse_optional_uuid_param,
     parse_pagination,
     parse_uuid,
     require_payload_dict,
@@ -14,6 +16,7 @@ from episodic.api.serializers import (
     serialize_reference_document,
     serialize_reference_document_revision,
 )
+from episodic.canonical.domain import ReferenceDocumentKind
 from episodic.canonical.reference_documents import (
     ReferenceDocumentCreateData,
     ReferenceDocumentError,
@@ -25,8 +28,8 @@ from episodic.canonical.reference_documents import (
     create_reference_document_revision,
     get_reference_document,
     get_reference_document_revision,
-    list_reference_document_revisions,
-    list_reference_documents,
+    list_reference_document_revisions_paged,
+    list_reference_documents_paged,
     update_reference_document,
 )
 
@@ -109,20 +112,20 @@ class ReferenceDocumentsResource:
         profile_id: str,
     ) -> None:
         """List reusable reference documents for one series profile."""
-        limit, offset = parse_pagination(req)
-        kind = req.get_param("kind")
+        page = parse_pagination(req)
+        kind = parse_enum_param(req, "kind", ReferenceDocumentKind)
 
         try:
             async with self._uow_factory() as uow:
-                documents = await list_reference_documents(
+                documents, total = await list_reference_documents_paged(
                     uow,
                     request=ReferenceDocumentListRequest(
                         owner_series_profile_id=str(
                             parse_uuid(profile_id, "profile_id")
                         ),
-                        kind=kind,
-                        limit=limit,
-                        offset=offset,
+                        kind=None if kind is None else kind.value,
+                        limit=page.limit,
+                        offset=page.offset,
                     ),
                 )
         except ReferenceDocumentError as exc:
@@ -130,8 +133,9 @@ class ReferenceDocumentsResource:
 
         resp.media = {
             "items": [serialize_reference_document(item) for item in documents],
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
+            "total": total,
         }
         resp.status = falcon.HTTP_200
 
@@ -246,19 +250,19 @@ class ReferenceDocumentRevisionsResource:
         document_id: str,
     ) -> None:
         """List immutable revisions for one reusable reference document."""
-        limit, offset = parse_pagination(req)
+        page = parse_pagination(req)
 
         try:
             async with self._uow_factory() as uow:
-                revisions = await list_reference_document_revisions(
+                revisions, total = await list_reference_document_revisions_paged(
                     uow,
                     request=ReferenceDocumentRevisionListRequest(
                         document_id=str(parse_uuid(document_id, "document_id")),
                         owner_series_profile_id=str(
                             parse_uuid(profile_id, "profile_id")
                         ),
-                        limit=limit,
-                        offset=offset,
+                        limit=page.limit,
+                        offset=page.offset,
                     ),
                 )
         except ReferenceDocumentError as exc:
@@ -268,8 +272,9 @@ class ReferenceDocumentRevisionsResource:
             "items": [
                 serialize_reference_document_revision(item) for item in revisions
             ],
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
+            "total": total,
         }
         resp.status = falcon.HTTP_200
 
@@ -287,7 +292,10 @@ class ReferenceDocumentRevisionResource:
         revision_id: str,
     ) -> None:
         """Fetch one immutable revision by identifier."""
-        owner_series_profile_id = req.get_param("owner_series_profile_id")
+        owner_series_profile_id = parse_optional_uuid_param(
+            req,
+            "owner_series_profile_id",
+        )
 
         try:
             async with self._uow_factory() as uow:
@@ -297,12 +305,7 @@ class ReferenceDocumentRevisionResource:
                     owner_series_profile_id=(
                         None
                         if owner_series_profile_id is None
-                        else str(
-                            parse_uuid(
-                                owner_series_profile_id,
-                                "owner_series_profile_id",
-                            )
-                        )
+                        else str(owner_series_profile_id)
                     ),
                 )
         except ReferenceDocumentError as exc:

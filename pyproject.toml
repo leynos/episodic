@@ -113,6 +113,7 @@ extend-ignore = [
 [tool.ruff.lint.per-file-ignores]
 "**/test_*.py" = ["S101", "PLR0913", "PLR0917", "PLR2004", "PLR6301"]
 "tests/steps/*.py" = ["S101", "PLR0913", "PLR0917", "PLR2004", "PLR6301"]
+"tests/fixtures/*.py" = ["S101", "PLR0913", "PLR0917", "PLR2004", "PLR6301"]
 "tests/test_generation_orchestration_snapshots.py" = ["D103", "TC002"]
 
 [tool.ruff.lint.flake8-import-conventions]
@@ -458,6 +459,7 @@ prefixes = [
     "episodic.canonical.ingestion_ports",
     "episodic.canonical.entity_protocols",
     "episodic.canonical.history_protocols",
+    "episodic.canonical.pagination",
     "episodic.canonical.ports",
     "episodic.canonical.reference_protocols",
     "episodic.canonical.unit_of_work_protocols",

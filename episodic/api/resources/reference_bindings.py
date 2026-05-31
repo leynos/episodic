@@ -4,21 +4,23 @@ import typing as typ
 
 import falcon
 
+from episodic.api.errors import map_reference_error
 from episodic.api.helpers import (
-    map_reference_error,
+    parse_enum_param,
     parse_pagination,
     parse_uuid,
     require_payload_dict,
     require_query_params,
 )
 from episodic.api.serializers import serialize_reference_binding
+from episodic.canonical.domain import ReferenceBindingTargetKind
 from episodic.canonical.reference_documents import (
     ReferenceBindingData,
     ReferenceBindingListRequest,
     ReferenceDocumentError,
     create_reference_binding,
     get_reference_binding,
-    list_reference_bindings,
+    list_reference_bindings_paged,
 )
 
 if typ.TYPE_CHECKING:
@@ -70,17 +72,21 @@ class ReferenceBindingsResource:
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """List reusable reference bindings for one target context."""
         params = require_query_params(req, "target_kind", "target_id")
-        limit, offset = parse_pagination(req)
+        page = parse_pagination(req)
+        target_kind = typ.cast(
+            "ReferenceBindingTargetKind",
+            parse_enum_param(req, "target_kind", ReferenceBindingTargetKind),
+        )
 
         try:
             async with self._uow_factory() as uow:
-                bindings = await list_reference_bindings(
+                bindings, total = await list_reference_bindings_paged(
                     uow,
                     request=ReferenceBindingListRequest(
-                        target_kind=params["target_kind"],
+                        target_kind=target_kind.value,
                         target_id=str(parse_uuid(params["target_id"], "target_id")),
-                        limit=limit,
-                        offset=offset,
+                        limit=page.limit,
+                        offset=page.offset,
                     ),
                 )
         except ReferenceDocumentError as exc:
@@ -88,8 +94,9 @@ class ReferenceBindingsResource:
 
         resp.media = {
             "items": [serialize_reference_binding(item) for item in bindings],
-            "limit": limit,
-            "offset": offset,
+            "limit": page.limit,
+            "offset": page.offset,
+            "total": total,
         }
         resp.status = falcon.HTTP_200
 

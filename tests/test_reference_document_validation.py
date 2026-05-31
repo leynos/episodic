@@ -18,12 +18,12 @@ if typ.TYPE_CHECKING:
         (
             "/v1/series-profiles/{profile_id}/reference-documents",
             lambda fixture: {"limit": "not-an-int"},
-            "Pagination parameters limit/offset must be integers.",
+            "limit must be an integer.",
         ),
         (
             "/v1/series-profiles/{profile_id}/reference-documents",
             lambda fixture: {"offset": "not-an-int"},
-            "Pagination parameters limit/offset must be integers.",
+            "offset must be an integer.",
         ),
         (
             "/v1/series-profiles/{profile_id}/reference-documents",
@@ -46,7 +46,7 @@ if typ.TYPE_CHECKING:
                 fixture,
                 limit="not-an-int",
             ),
-            "Pagination parameters limit/offset must be integers.",
+            "limit must be an integer.",
         ),
         (
             "/v1/reference-bindings",
@@ -54,7 +54,7 @@ if typ.TYPE_CHECKING:
                 fixture,
                 offset="not-an-int",
             ),
-            "Pagination parameters limit/offset must be integers.",
+            "offset must be an integer.",
         ),
         (
             "/v1/reference-bindings",

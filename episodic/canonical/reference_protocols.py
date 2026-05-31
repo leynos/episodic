@@ -38,6 +38,15 @@ class ReferenceDocumentRepository(typ.Protocol):
         """List reusable reference documents owned by one series profile."""
         raise NotImplementedError
 
+    async def count_for_series(
+        self,
+        series_profile_id: uuid.UUID,
+        *,
+        kind: ReferenceDocumentKind | None = None,
+    ) -> int:
+        """Count reusable reference documents owned by one series profile."""
+        raise NotImplementedError
+
     async def list_by_ids(
         self,
         document_ids: cabc.Collection[uuid.UUID],
@@ -83,6 +92,10 @@ class ReferenceDocumentRevisionRepository(typ.Protocol):
         """List immutable revisions for one reusable reference document."""
         raise NotImplementedError
 
+    async def count_for_document(self, document_id: uuid.UUID) -> int:
+        """Count immutable revisions for one reusable reference document."""
+        raise NotImplementedError
+
     async def list_by_ids(
         self,
         revision_ids: cabc.Collection[uuid.UUID],
@@ -119,4 +132,13 @@ class ReferenceBindingRepository(typ.Protocol):
         offset: int = 0,
     ) -> list[ReferenceBinding]:
         """List bindings for one target context."""
+        raise NotImplementedError
+
+    async def count_for_target(
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_id: uuid.UUID,
+    ) -> int:
+        """Count bindings for one target context."""
         raise NotImplementedError

@@ -18,7 +18,11 @@ import pytest
 if typ.TYPE_CHECKING:
     from falcon import testing
 
-_NOT_FOUND_PAYLOAD = {"title": "404 Not Found"}
+_NOT_FOUND_PAYLOAD = {
+    "code": "not_found",
+    "message": "404 Not Found",
+    "details": {},
+}
 
 _CANONICAL_ROUTE_CONTRACT_PATHS = (
     ("/series-profiles", "series-profiles"),

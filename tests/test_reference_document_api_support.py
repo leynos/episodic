@@ -152,6 +152,9 @@ def _assert_binding_list_workflow(
     assert bindings_payload["offset"] == 0, (
         f"expected offset 0 in bindings payload: {bindings_payload}"
     )
+    assert bindings_payload["total"] == 1, (
+        f"expected total 1 in bindings payload: {bindings_payload}"
+    )
     assert len(bindings_items) == 1, (
         f"Expected one binding in list response, got {len(bindings_items)}"
     )
@@ -162,17 +165,20 @@ def _assert_bad_request_error(
     *,
     description: str | None = None,
 ) -> None:
-    """Assert Falcon returned the stable HTTP 400 JSON error envelope."""
+    """Assert the API returned the stable HTTP 400 JSON error envelope."""
     assert response.status_code == 400, (
         f"expected 400 but got {response.status_code} for response={response}"
     )
     payload = typ.cast("dict[str, object]", response.json)
-    assert payload["title"] == "400 Bad Request", (
-        f"unexpected title in payload: {payload}"
+    assert payload["code"] == "validation_error", (
+        f"unexpected code in payload: {payload}"
+    )
+    assert isinstance(payload["details"], dict), (
+        f"unexpected details in payload: {payload}"
     )
     if description is not None:
-        assert payload["description"] == description, (
-            f"unexpected description {payload.get('description')!r} "
+        assert payload["message"] == description, (
+            f"unexpected message {payload.get('message')!r} "
             f"for expected {description!r} in payload: {payload}"
         )
 

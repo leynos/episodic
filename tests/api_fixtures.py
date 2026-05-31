@@ -54,6 +54,17 @@ def _assert_instance(value: object, expected_type: type[object], message: str) -
         _fail(message)
 
 
+def _assert_total_at_least(total: object, returned: int, message: str) -> None:
+    """Require the pagination ``total`` to be at least the returned page size.
+
+    The list payload's ``total`` reflects the full filtered count, while
+    ``returned`` is the page slice length. The two are equal only for the last
+    page or when ``total <= limit``; in all other cases ``total > returned``.
+    """
+    if not isinstance(total, int) or total < returned:
+        _fail(message)
+
+
 def post_and_return_id(
     client: testing.TestClient,
     path: str,
@@ -188,6 +199,11 @@ def assert_reference_document_list(
         f"expected limit 10 in payload: {payload}",
     )
     _assert_equal(payload["offset"], 0, f"expected offset 0 in payload: {payload}")
+    _assert_total_at_least(
+        payload["total"],
+        len(items),
+        f"expected total >= {len(items)} returned items in payload: {payload}",
+    )
     return items
 
 
@@ -243,6 +259,11 @@ def assert_reference_revision_history(
         f"expected limit 10, got {payload['limit']}",
     )
     _assert_equal(payload["offset"], 0, f"expected offset 0, got {payload['offset']}")
+    _assert_total_at_least(
+        payload["total"],
+        len(items),
+        f"expected total >= {len(items)} returned revisions in payload: {payload}",
+    )
     return items
 
 

@@ -20,7 +20,8 @@ import falcon
 from episodic.api.helpers import (
     build_template_create_kwargs,
     build_template_update_request,
-    parse_uuid,
+    parse_optional_uuid_param,
+    parse_pagination,
 )
 from episodic.api.resources.base import (
     UpdateRequestBuilder,
@@ -36,8 +37,8 @@ from episodic.api.serializers import (
 from episodic.canonical.profile_templates import (
     create_episode_template,
     get_entity_with_revision,
-    list_entities_with_revisions,
-    list_history,
+    list_entities_with_revisions_paged,
+    list_history_paged,
     update_episode_template,
 )
 
@@ -76,21 +77,26 @@ class EpisodeTemplatesResource(_CreateResourceBase[object]):
         falcon.HTTPBadRequest
             Raised when ``series_profile_id`` is provided but invalid.
         """
-        raw_series_profile_id = req.get_param("series_profile_id")
-        series_profile_id = (
-            None
-            if raw_series_profile_id is None
-            else parse_uuid(raw_series_profile_id, "series_profile_id")
-        )
+        page = parse_pagination(req)
+        series_profile_id = parse_optional_uuid_param(req, "series_profile_id")
 
         async with self._uow_factory() as uow:
-            service_fn = partial(list_entities_with_revisions, kind="episode_template")
-            items = await service_fn(
+            service_fn = partial(
+                list_entities_with_revisions_paged,
+                kind="episode_template",
+                page=page,
+            )
+            items, total = await service_fn(
                 uow,
                 series_profile_id=series_profile_id,
             )
 
-        resp.media = {"items": list(starmap(serialize_episode_template, items))}
+        resp.media = {
+            "items": list(starmap(serialize_episode_template, items)),
+            "limit": page.limit,
+            "offset": page.offset,
+            "total": total,
+        }
         resp.status = falcon.HTTP_200
 
     @staticmethod
@@ -222,11 +228,14 @@ class EpisodeTemplateHistoryResource(_GetHistoryResourceBase[object]):
 
     @staticmethod
     @typ.override
-    def _get_service_fn() -> cabc.Callable[..., cabc.Awaitable[list[object]]]:
+    def _get_service_fn() -> cabc.Callable[
+        ...,
+        cabc.Awaitable[tuple[list[object], int]],
+    ]:
         """Return the template-history list service."""
         return typ.cast(
-            "cabc.Callable[..., cabc.Awaitable[list[object]]]",
-            partial(list_history, kind="episode_template"),
+            "cabc.Callable[..., cabc.Awaitable[tuple[list[object], int]]]",
+            partial(list_history_paged, kind="episode_template"),
         )
 
     @staticmethod

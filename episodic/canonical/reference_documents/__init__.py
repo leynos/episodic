@@ -4,11 +4,13 @@ from .bindings import (
     create_reference_binding,
     get_reference_binding,
     list_reference_bindings,
+    list_reference_bindings_paged,
 )
 from .documents import (
     create_reference_document,
     get_reference_document,
     list_reference_documents,
+    list_reference_documents_paged,
     update_reference_document,
 )
 from .resolution import (
@@ -19,6 +21,7 @@ from .revisions import (
     create_reference_document_revision,
     get_reference_document_revision,
     list_reference_document_revisions,
+    list_reference_document_revisions_paged,
 )
 from .snapshots import (
     SnapshotContext,
@@ -61,8 +64,11 @@ __all__: tuple[str, ...] = (
     "get_reference_document",
     "get_reference_document_revision",
     "list_reference_bindings",
+    "list_reference_bindings_paged",
     "list_reference_document_revisions",
+    "list_reference_document_revisions_paged",
     "list_reference_documents",
+    "list_reference_documents_paged",
     "resolve_bindings",
     "snapshot_resolved_bindings",
     "update_reference_document",

@@ -10,6 +10,8 @@ import dataclasses as dc
 import inspect
 import typing as typ
 
+from .authorization import AuthorizationPort, PermitAll
+
 if typ.TYPE_CHECKING:
     from episodic.llm import LLMPort
 
@@ -52,6 +54,14 @@ def _validate_readiness_probe(
     _validate_async_callable(probe.check, label)  # type: ignore[union-attr]
 
 
+def _validate_authorization_port(port: object) -> None:
+    """Require an authorization port with an async decision method."""
+    if not isinstance(port, AuthorizationPort):
+        msg = "ApiDependencies.authorization must implement AuthorizationPort."
+        raise TypeError(msg)
+    _validate_async_callable(port.decide, "ApiDependencies.authorization.decide")
+
+
 @dc.dataclass(frozen=True, slots=True)
 class ReadinessProbe:
     """Describe one infrastructural readiness check."""
@@ -75,12 +85,14 @@ class ApiDependencies:
     readiness_probes: tuple[ReadinessProbe, ...] = ()
     shutdown_hooks: tuple[ShutdownHook, ...] = ()
     llm_port: LLMPort | None = None
+    authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
 
     def __post_init__(self) -> None:
         """Validate the dependency contract."""
         if not callable(self.uow_factory):
             msg = "ApiDependencies.uow_factory must be callable."
             raise TypeError(msg)
+        _validate_authorization_port(self.authorization)
         object.__setattr__(self, "readiness_probes", tuple(self.readiness_probes))
         object.__setattr__(self, "shutdown_hooks", tuple(self.shutdown_hooks))
         for probe in self.readiness_probes:

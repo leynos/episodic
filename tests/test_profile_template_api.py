@@ -107,8 +107,16 @@ def _verify_stale_update_rejected_generic(
     assert stale_update_response.status_code == 409, (
         f"Expected stale {spec.entity_label} update to return 409."
     )
-    assert isinstance(stale_update_response.json, dict), (
-        f"Expected stale {spec.entity_label} error as a JSON object."
+    payload = typ.cast("dict[str, object]", stale_update_response.json)
+    assert payload["code"] == "revision_conflict", (
+        f"Expected stale {spec.entity_label} to use revision_conflict."
+    )
+    details = typ.cast("dict[str, object]", payload["details"])
+    assert isinstance(details["entity_id"], str), (
+        f"Expected stale {spec.entity_label} details to include entity_id."
+    )
+    assert details["expected_revision"] == 1, (
+        f"Expected stale {spec.entity_label} details to include expected revision."
     )
 
 
@@ -118,21 +126,32 @@ def _verify_entity_history(
     entity_label: str,
 ) -> None:
     """Verify entity history includes both create and update revisions."""
-    history_response = client.simulate_get(history_path)
+    history_response = client.simulate_get(
+        history_path,
+        params={"limit": "1", "offset": "1"},
+    )
     assert history_response.status_code == 200, (
         f"Expected {entity_label} history endpoint to return 200."
     )
 
     history_payload = history_response.json
-    items = (
-        history_payload["items"]
-        if isinstance(history_payload, dict)
-        else history_payload
+    assert isinstance(history_payload, dict), (
+        f"Expected {entity_label} history response to be a JSON object."
     )
+    assert history_payload["limit"] == 1, (
+        f"Expected {entity_label} history response to echo limit."
+    )
+    assert history_payload["offset"] == 1, (
+        f"Expected {entity_label} history response to echo offset."
+    )
+    assert history_payload["total"] == 2, (
+        f"Expected {entity_label} history response to include total revisions."
+    )
+    items = history_payload["items"]
     assert isinstance(items, list), (
         f"Expected {entity_label} history response to be a JSON list."
     )
-    assert len(items) == 2, f"Expected two {entity_label} history revisions."
+    assert len(items) == 1, f"Expected one paged {entity_label} history revision."
 
 
 def _update_profile(client: testing.TestClient, profile_id: str) -> None:

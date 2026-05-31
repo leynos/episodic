@@ -20,6 +20,17 @@ def test_api_dependencies_require_callable_uow_factory() -> None:
         ApiDependencies(uow_factory=typ.cast("UowFactory", None))
 
 
+def test_api_dependencies_require_authorization_port() -> None:
+    """Reject authorization dependencies that do not implement the port."""
+    from episodic.api import ApiDependencies
+
+    with pytest.raises(TypeError, match="authorization"):
+        ApiDependencies(
+            uow_factory=scaffold_support.unexpected_uow_factory,
+            authorization=typ.cast("typ.Any", object()),
+        )
+
+
 def test_readiness_probe_requires_async_check() -> None:
     """Reject sync readiness callbacks that would fail when awaited."""
     from episodic.api import ReadinessProbe
