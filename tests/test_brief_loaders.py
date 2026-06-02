@@ -141,8 +141,16 @@ class TestSerializeBindingsForOwner:
         )
 
         assert len(results) == 1, "Expected exactly one serialised binding."
-        assert results[0]["binding_id"] == str(binding.id), "binding_id must match binding.id."  # noqa: E501
-        assert results[0]["document_id"] == str(document.id), "document_id must match document.id."  # noqa: E501
-        assert results[0]["revision_id"] == str(revision.id), "revision_id must match revision.id."  # noqa: E501
+        assert results[0]["binding_id"] == str(binding.id), (
+            "binding_id must match binding.id."
+        )
+        assert results[0]["document_id"] == str(document.id), (
+            "document_id must match document.id."
+        )
+        assert results[0]["revision_id"] == str(revision.id), (
+            "revision_id must match revision.id."
+        )
         content = typ.cast("dict[str, object]", results[0]["content"])
-        assert content["data"] == "test", "Serialised content must preserve the revision payload."  # noqa: E501
+        assert content["data"] == "test", (
+            "Serialised content must preserve the revision payload."
+        )
