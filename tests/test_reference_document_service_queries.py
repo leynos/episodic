@@ -35,6 +35,8 @@ if typ.TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from episodic.canonical.domain import ReferenceBinding
+
 
 service_fixture = support.service_fixture
 ServiceFixture = support.ServiceFixture
@@ -68,6 +70,43 @@ async def _create_document_and_revision(
             ),
         )
     return doc.id, rev.id
+
+
+async def _create_two_series_profile_bindings(
+    session_factory: cabc.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> tuple[ReferenceBinding, ReferenceBinding]:
+    """Create two series-profile bindings; return (first, second)."""
+    _doc1_id, rev1_id = await _create_document_and_revision(
+        session_factory, service_fixture
+    )
+    _doc2_id, rev2_id = await _create_document_and_revision(
+        session_factory, service_fixture
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        first = await create_reference_binding(
+            uow,
+            data=ReferenceBindingData(
+                reference_document_revision_id=str(rev1_id),
+                target_kind="series_profile",
+                series_profile_id=service_fixture["primary_profile_id"],
+                episode_template_id=None,
+                ingestion_job_id=None,
+                effective_from_episode_id=None,
+            ),
+        )
+        second = await create_reference_binding(
+            uow,
+            data=ReferenceBindingData(
+                reference_document_revision_id=str(rev2_id),
+                target_kind="series_profile",
+                series_profile_id=service_fixture["primary_profile_id"],
+                episode_template_id=None,
+                ingestion_job_id=None,
+                effective_from_episode_id=None,
+            ),
+        )
+    return first, second
 
 
 @pytest.mark.asyncio
@@ -121,36 +160,7 @@ async def test_list_reference_bindings_returns_all_for_target(
     service_fixture: ServiceFixture,
 ) -> None:
     """Return all bindings for a given target kind and target id."""
-    _doc1_id, rev1_id = await _create_document_and_revision(
-        session_factory, service_fixture
-    )
-    _doc2_id, rev2_id = await _create_document_and_revision(
-        session_factory, service_fixture
-    )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await create_reference_binding(
-            uow,
-            data=ReferenceBindingData(
-                reference_document_revision_id=str(rev1_id),
-                target_kind="series_profile",
-                series_profile_id=service_fixture["primary_profile_id"],
-                episode_template_id=None,
-                ingestion_job_id=None,
-                effective_from_episode_id=None,
-            ),
-        )
-        await create_reference_binding(
-            uow,
-            data=ReferenceBindingData(
-                reference_document_revision_id=str(rev2_id),
-                target_kind="series_profile",
-                series_profile_id=service_fixture["primary_profile_id"],
-                episode_template_id=None,
-                ingestion_job_id=None,
-                effective_from_episode_id=None,
-            ),
-        )
+    await _create_two_series_profile_bindings(session_factory, service_fixture)
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         results = await list_reference_bindings(
@@ -172,36 +182,9 @@ async def test_list_reference_bindings_pagination_offset(
     service_fixture: ServiceFixture,
 ) -> None:
     """Return the second binding when limit=1 and offset=1."""
-    _doc1_id, rev1_id = await _create_document_and_revision(
+    _first, second = await _create_two_series_profile_bindings(
         session_factory, service_fixture
     )
-    _doc2_id, rev2_id = await _create_document_and_revision(
-        session_factory, service_fixture
-    )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await create_reference_binding(
-            uow,
-            data=ReferenceBindingData(
-                reference_document_revision_id=str(rev1_id),
-                target_kind="series_profile",
-                series_profile_id=service_fixture["primary_profile_id"],
-                episode_template_id=None,
-                ingestion_job_id=None,
-                effective_from_episode_id=None,
-            ),
-        )
-        second = await create_reference_binding(
-            uow,
-            data=ReferenceBindingData(
-                reference_document_revision_id=str(rev2_id),
-                target_kind="series_profile",
-                series_profile_id=service_fixture["primary_profile_id"],
-                episode_template_id=None,
-                ingestion_job_id=None,
-                effective_from_episode_id=None,
-            ),
-        )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         results = await list_reference_bindings(
