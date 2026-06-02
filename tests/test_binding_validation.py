@@ -38,12 +38,22 @@ class TestParseBindingIds:
 
         result = _parse_binding_ids(data)
 
-        assert result.revision_id == revision_id
-        assert result.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE
-        assert result.series_profile_id == series_id
-        assert result.episode_template_id == template_id
-        assert result.ingestion_job_id == job_id
-        assert result.effective_from_episode_id == episode_id
+        assert result.revision_id == revision_id, "Parsed revision_id must match input."
+        assert (
+            result.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE
+        ), "Parsed target_kind must be SERIES_PROFILE."
+        assert (
+            result.series_profile_id == series_id
+        ), "Parsed series_profile_id must match input."
+        assert (
+            result.episode_template_id == template_id
+        ), "Parsed episode_template_id must match input."
+        assert (
+            result.ingestion_job_id == job_id
+        ), "Parsed ingestion_job_id must match input."
+        assert (
+            result.effective_from_episode_id == episode_id
+        ), "Parsed effective_from_episode_id must match input."
 
     def test_it_handles_none_fields(self) -> None:
         """Return None for optional target and effective-from fields."""
@@ -60,11 +70,15 @@ class TestParseBindingIds:
 
         result = _parse_binding_ids(data)
 
-        assert result.revision_id == revision_id
-        assert result.series_profile_id is None
-        assert result.episode_template_id is None
-        assert result.ingestion_job_id is None
-        assert result.effective_from_episode_id is None
+        assert result.revision_id == revision_id, "Parsed revision_id must match input."
+        assert result.series_profile_id is None, "series_profile_id must remain None."
+        assert (
+            result.episode_template_id is None
+        ), "episode_template_id must remain None."
+        assert result.ingestion_job_id is None, "ingestion_job_id must remain None."
+        assert (
+            result.effective_from_episode_id is None
+        ), "effective_from_episode_id must remain None."
 
     @pytest.mark.parametrize(
         ("revision_id", "target_kind_str", "expected_match"),
