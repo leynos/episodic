@@ -9,6 +9,9 @@ The implementation is split across three private sub-modules:
 - ``_binding_queries`` — ``get_reference_binding`` and
   ``list_reference_bindings``.
 
+This façade does not implement validation, persistence, or query logic
+itself; it re-exports the focused sub-modules.
+
 All callers should import exclusively from this façade or from
 ``reference_documents.services`` / ``reference_documents.__init__``.
 """

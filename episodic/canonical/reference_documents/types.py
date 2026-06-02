@@ -10,6 +10,10 @@ types used across the ``reference_documents`` sub-modules:
   ``ReferenceRevisionConflictError``.
 - Internal: ``_ParsedBindingIds`` (parsed/validated binding payload fields,
   used by ``_binding_validation`` and ``_binding_creation``).
+
+This module does not perform validation, persistence, or query logic itself;
+it is consumed by sibling ``reference_documents`` service sub-modules and the
+parent facades.
 """
 
 import dataclasses as dc
