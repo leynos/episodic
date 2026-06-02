@@ -13,6 +13,35 @@ All callers should import exclusively from this façade or from
 ``reference_documents.services`` / ``reference_documents.__init__``.
 """
 
+from __future__ import annotations
+
+import typing as typ
+
+from ._binding_creation import create_reference_binding
+from ._binding_queries import (
+    get_reference_binding,
+    list_reference_bindings,
+)
+from .helpers import (
+    _parse_target_kind,
+    _parse_uuid,
+    _validate_pagination,
+)
+
+if typ.TYPE_CHECKING:
+    from episodic.canonical.domain import ReferenceBinding
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+
+    from .types import ReferenceBindingListRequest
+
+
+__all__: tuple[str, ...] = (
+    "create_reference_binding",
+    "get_reference_binding",
+    "list_reference_bindings",
+    "list_reference_bindings_paged",
+)
+
 
 async def list_reference_bindings_paged(
     uow: CanonicalUnitOfWork,
