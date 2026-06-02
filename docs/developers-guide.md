@@ -630,7 +630,6 @@ Implementation notes:
   errors through `episodic/api/errors.py`, so callers receive the shared REST
   error envelope instead of Falcon's default `{title, description}` body.
 
-
 ### Internal service-module decomposition
 
 Canonical service modules that exceeded the 400-line limit have been split into
