@@ -73,9 +73,10 @@ material, the user's guide explains how to use the project, the developer's
 guide explains how to work on the project, the design document explains why the
 system is shaped the way it is, and the repository layout document explains
 where important things live. For discoverability, use canonical filenames
-unless a stronger repository-specific constraint applies: `docs/contents.md`,
-`docs/users-guide.md`, `docs/developers-guide.md`, `docs/repository-layout.md`,
-and a primary design document with an explicit product or topic name such as
+unless a stronger repository-specific constraint applies. A minimal canonical
+set looks like
+`docs/{contents,users-guide,developers-guide,repository-layout}.md` plus a
+primary design document under `docs/*-design.md`, for example
 `docs/theoremc-design.md` or `docs/query-planner-design.md`.
 
 ### Contents file
@@ -135,8 +136,9 @@ the existing system, not as the place for the project's primary design document.
 
 - Open with one short paragraph that states the audience and the operational
   scope of the guide.
-- Link early to the design document, accepted decision records, and other
-  normative references that explain architecture or rationale in depth.
+- Link early to the design document, repository layout document, accepted
+  decision records, and other normative references that explain architecture or
+  rationale in depth.
 - Put maintainer-facing implementation guidance here, for example build, test,
   lint, release, debugging, extension, and contribution workflows.
 - Use numbered sections for long-form technical documents to improve
@@ -148,6 +150,9 @@ the existing system, not as the place for the project's primary design document.
 - Keep subsystem descriptions focused on current responsibilities,
   integration points, and operational expectations. Put design rationale, major
   trade-offs, and proposed architecture in design documents instead.
+- Do not embed repository-layout guidance here. The canonical location for
+  file-tree and path-responsibility documentation is
+  `docs/repository-layout.md`.
 - Keep the document synchronized with decision records, roadmap items, and the
   codebase. A stale developer's guide is worse than a shorter one.
 
@@ -408,7 +413,7 @@ Include these sections as appropriate to the decision's complexity:
 
 ### ADR template
 
-```markdown
+```plaintext
 # Architectural decision record (ADR) NNN: <title>
 
 ## Status
@@ -488,9 +493,9 @@ implementation is required.>
 ### Repository layout document
 
 Use a repository layout document, canonically `docs/repository-layout.md`, to
-explain the shape of the tree and the responsibilities of its major paths. This
-may be a standalone document or a clearly labelled section within the
-developer's guide, provided readers can find it easily from the contents file.
+explain the shape of the tree and the responsibilities of its major paths. Use
+this standalone document as the canonical location for repository-layout
+guidance rather than embedding that material in the developer's guide.
 
 - Document the top-level directories and any critical subdirectories that a new
   contributor must understand quickly.
@@ -504,6 +509,8 @@ developer's guide, provided readers can find it easily from the contents file.
   long-lived reference documents belong.
 - Call out any directories with unusual constraints, such as generated output,
   fixtures, snapshots, or capability-restricted paths.
+- Ensure the contents file links directly to `docs/repository-layout.md` so
+  readers can find it without scanning the developer's guide.
 - Update the layout document when the repository structure changes enough that
   a contributor could otherwise follow outdated guidance.
 
@@ -622,7 +629,7 @@ This hierarchy should align with the GIST framework:
   - Phases: 1, 2, 3, …
   - Steps: 1.1, 1.2, 1.3, …
   - Headline tasks: 1.1.1, 1.1.2, 1.1.3, …
-- **Checkboxes:** Precede task and sub-task items with a GitHub Flavored
+- **Checkboxes:** Precede task and sub-task items with a GitHub-flavoured
   Markdown (GFM) checkbox (`[ ]`) to track completion status.
 - **Dependencies:** Note non-linear dependencies explicitly. Where a task
   depends on another task outside its immediate sequence, cite the dependency
@@ -634,7 +641,7 @@ This hierarchy should align with the GIST framework:
 
 ### Roadmap example
 
-```markdown
+```plaintext
 ## 1. Core infrastructure
 
 ### 1.1. Logging subsystem
