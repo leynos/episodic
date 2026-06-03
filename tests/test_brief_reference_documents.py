@@ -1,6 +1,8 @@
 """Integration tests for brief reference-document resolution strategies."""
 
+import collections.abc as cabc
 import datetime as dt
+import types as pytypes
 import typing as typ
 import uuid
 
@@ -10,6 +12,7 @@ from episodic.canonical.domain import (
     ApprovalState,
     CanonicalEpisode,
     EpisodeStatus,
+    EpisodeTemplate,
     ReferenceBinding,
     ReferenceBindingTargetKind,
     SeriesProfile,
@@ -27,6 +30,7 @@ if typ.TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from tests.fixtures.binding import BindingFixtures
 
 
@@ -135,3 +139,82 @@ async def test_load_legacy_reference_documents_returns_empty_when_no_bindings(
     )
 
     assert results == []
+
+
+@pytest.mark.asyncio
+async def test_load_legacy_reference_documents_batches_template_binding_lookup(
+    uow_with_binding_fixtures: BindingFixtures,
+) -> None:
+    """Use one batched binding lookup for all episode-template targets."""
+    fixtures = uow_with_binding_fixtures
+    now = fixtures["now"]
+    templates = [
+        EpisodeTemplate(
+            id=uuid.uuid4(),
+            series_profile_id=fixtures["series"].id,
+            slug=f"template-{index}",
+            title=f"Template {index}",
+            description=None,
+            structure={},
+            guardrails={},
+            created_at=now,
+            updated_at=now,
+        )
+        for index in range(3)
+    ]
+    repository = _CountingReferenceBindingRepository()
+    uow = typ.cast(
+        "CanonicalUnitOfWork",
+        pytypes.SimpleNamespace(reference_bindings=repository),
+    )
+
+    results = await _load_legacy_reference_documents(
+        uow,
+        profile_id=fixtures["series"].id,
+        template_items=[(template, 1) for template in templates],
+    )
+
+    assert results == [], "Expected no serialised documents without bindings."
+    assert repository.single_target_calls == 1, (
+        "Legacy loading should query the series-profile target once."
+    )
+    assert repository.multi_target_calls == 1, (
+        "Legacy loading should batch episode-template target lookups."
+    )
+    assert repository.last_target_ids == {template.id for template in templates}, (
+        "Batched lookup must include every template target id."
+    )
+
+
+class _CountingReferenceBindingRepository:
+    """Count binding lookup calls made by brief reference-document loaders."""
+
+    def __init__(self) -> None:
+        self.single_target_calls = 0
+        self.multi_target_calls = 0
+        self.last_target_ids: set[uuid.UUID] = set()
+
+    async def list_for_target(  # pylint: disable=too-many-arguments
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_id: uuid.UUID,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[ReferenceBinding]:
+        """Return no bindings while counting single-target calls."""
+        del target_kind, target_id, limit, offset
+        self.single_target_calls += 1
+        return []
+
+    async def list_for_targets(
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_ids: cabc.Collection[uuid.UUID],
+    ) -> list[ReferenceBinding]:
+        """Return no bindings while counting batched target calls."""
+        del target_kind
+        self.multi_target_calls += 1
+        self.last_target_ids = set(target_ids)
+        return []

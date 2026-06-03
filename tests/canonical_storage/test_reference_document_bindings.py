@@ -105,3 +105,41 @@ async def test_reference_binding_repository_filters_by_target_kind(
         assert [binding.id for binding in job_bindings] == [
             guest_bundle.bindings[1].id
         ], "expected only the ingestion-job-target binding for job lookup"
+
+
+@pytest.mark.asyncio
+async def test_reference_binding_repository_lists_multiple_targets(
+    session_factory: object,
+    episode_fixture: tuple[
+        SeriesProfile,
+        TeiHeader,
+        CanonicalEpisode,
+        IngestionJob,
+        SourceDocument,
+    ],
+) -> None:
+    """Binding repository should batch lookups for several target identifiers."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    guest_bundle = build_guest_bundle(
+        series_id=episode_fixture[0].id,
+        job_id=episode_fixture[3].id,
+    )
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await persist_entities_from_fixture(uow, episode_fixture)
+        await uow.reference_documents.add(guest_bundle.document)
+        await uow.reference_document_revisions.add(guest_bundle.revision)
+        await uow.flush()
+        for binding in guest_bundle.bindings:
+            await uow.reference_bindings.add(binding)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        series_bindings = await uow.reference_bindings.list_for_targets(
+            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+            target_ids={episode_fixture[0].id, uuid.uuid4()},
+        )
+
+    assert [binding.id for binding in series_bindings] == [
+        guest_bundle.bindings[0].id
+    ], "expected only matching series-target bindings from batched lookup"

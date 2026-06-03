@@ -134,6 +134,15 @@ class ReferenceBindingRepository(typ.Protocol):
         """List bindings for one target context."""
         raise NotImplementedError
 
+    async def list_for_targets(
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_ids: cabc.Collection[uuid.UUID],
+    ) -> list[ReferenceBinding]:
+        """List bindings for several target contexts of one kind."""
+        raise NotImplementedError
+
     async def count_for_target(
         self,
         *,

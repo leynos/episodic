@@ -92,13 +92,10 @@ async def _load_episode_aware_reference_documents(
         )
 
     template_documents: list[JsonMapping] = []
-    all_template_bindings: list[ReferenceBinding] = []
-    for template, _ in template_items:
-        bindings = await uow.reference_bindings.list_for_target(
-            target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
-            target_id=template.id,
-        )
-        all_template_bindings.extend(bindings)
+    all_template_bindings = await _load_template_bindings_for_brief(
+        uow,
+        template_items=template_items,
+    )
 
     if all_template_bindings:
         revisions_by_id = await _load_revisions_by_id(
@@ -116,6 +113,31 @@ async def _load_episode_aware_reference_documents(
             owner_series_profile_id=profile_id,
         )
     return resolved_documents + template_documents
+
+
+async def _load_template_bindings_for_brief(
+    uow: CanonicalUnitOfWork,
+    *,
+    template_items: list[tuple[EpisodeTemplate, int]],
+) -> list[ReferenceBinding]:
+    """Load all template-scoped reference bindings in one repository call."""
+    template_positions = {
+        template.id: position for position, (template, _) in enumerate(template_items)
+    }
+    if not template_positions:
+        return []
+
+    bindings = await uow.reference_bindings.list_for_targets(
+        target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+        target_ids=template_positions.keys(),
+    )
+    return sorted(
+        bindings,
+        key=lambda binding: (
+            template_positions[typ.cast("uuid.UUID", binding.episode_template_id)],
+            binding.created_at,
+        ),
+    )
 
 
 async def _load_legacy_reference_documents(
@@ -140,13 +162,12 @@ async def _load_legacy_reference_documents(
         target_id=profile_id,
     )
 
-    for template, _ in template_items:
-        all_bindings.extend(
-            await uow.reference_bindings.list_for_target(
-                target_kind=ReferenceBindingTargetKind.EPISODE_TEMPLATE,
-                target_id=template.id,
-            )
+    all_bindings.extend(
+        await _load_template_bindings_for_brief(
+            uow,
+            template_items=template_items,
         )
+    )
 
     if not all_bindings:
         return []
