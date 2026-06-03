@@ -633,8 +633,8 @@ Implementation notes:
 ### Internal service-module decomposition
 
 Canonical service modules that exceeded the 400-line limit have been split into
-focused sub-modules, each exposing a thin public façade. Callers must import
-only from the façade; the `_` prefix on sub-module names signals they are
+focused submodules, each exposing a thin public façade. Callers must import
+only from the façade; the `_` prefix on submodule names signals they are
 package-internal.
 
 **`reference_documents/bindings`**
@@ -649,7 +649,7 @@ package-internal.
   `list_reference_bindings` query operations.
 
 The shared `_ParsedBindingIds` dataclass lives in `types.py` so all binding
-sub-modules reference a single definition.
+submodules reference a single definition.
 
 **`profile_templates/brief`**
 

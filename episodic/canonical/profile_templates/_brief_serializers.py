@@ -52,17 +52,14 @@ def _serialize_reference_document_for_brief(
     revision: ReferenceDocumentRevision,
 ) -> JsonMapping:
     """Serialize a reference binding/document/revision triple."""
+    effective_from_episode_id = None if binding.effective_from_episode_id is None else str(binding.effective_from_episode_id)  # noqa: E501  # fmt: skip
     return {
         "binding_id": str(binding.id),
         "document_id": str(document.id),
         "revision_id": str(revision.id),
         "kind": document.kind.value,
         "target_kind": binding.target_kind.value,
-        "effective_from_episode_id": (
-            None
-            if binding.effective_from_episode_id is None
-            else str(binding.effective_from_episode_id)
-        ),
+        "effective_from_episode_id": effective_from_episode_id,
         "lifecycle_state": document.lifecycle_state.value,
         "metadata": document.metadata,
         "content": revision.content,

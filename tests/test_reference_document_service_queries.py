@@ -1,5 +1,6 @@
 """Positive functional tests for get/list reference-binding query operations."""
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -27,6 +28,7 @@ from episodic.canonical.reference_documents import (
     create_reference_document_revision,
     get_reference_binding,
     list_reference_bindings,
+    list_reference_bindings_paged,
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
@@ -40,6 +42,17 @@ if typ.TYPE_CHECKING:
 
 service_fixture = support.service_fixture
 ServiceFixture = support.ServiceFixture
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ListBindingCase:
+    """Input and expectations for reference-binding list query cases."""
+
+    limit: int
+    offset: int
+    expected_count: int
+    expected_first_id: str | None
+    list_mode: str
 
 
 async def _create_document_and_revision(
@@ -157,51 +170,46 @@ async def test_get_reference_binding_raises_not_found_for_unknown_id(
             )
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(_ListBindingCase(10, 0, 2, None, "plain"), id="all-results"),
+        pytest.param(_ListBindingCase(1, 1, 1, "second", "plain"), id="offset-second"),
+        pytest.param(
+            _ListBindingCase(1, 1, 1, "second", "paged"),
+            id="paged-offset-second",
+        ),
+    ],
+)
 @pytest.mark.asyncio
-async def test_list_reference_bindings_returns_all_for_target(
+async def test_list_reference_bindings_for_target(
     session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
+    case: _ListBindingCase,
 ) -> None:
-    """Return all bindings for a given target kind and target id."""
-    await _create_two_series_profile_bindings(session_factory, service_fixture)
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        results = await list_reference_bindings(
-            uow,
-            request=ReferenceBindingListRequest(
-                target_kind="series_profile",
-                target_id=service_fixture["primary_profile_id"],
-                limit=10,
-                offset=0,
-            ),
-        )
-
-    assert len(results) == 2
-
-
-@pytest.mark.asyncio
-async def test_list_reference_bindings_pagination_offset(
-    session_factory: cabc.Callable[[], AsyncSession],
-    service_fixture: ServiceFixture,
-) -> None:
-    """Return the second binding when limit=1 and offset=1."""
+    """Return requested bindings and total when paged listing is requested."""
     _first, second = await _create_two_series_profile_bindings(
         session_factory, service_fixture
     )
+    request = ReferenceBindingListRequest(
+        target_kind="series_profile",
+        target_id=service_fixture["primary_profile_id"],
+        limit=case.limit,
+        offset=case.offset,
+    )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        results = await list_reference_bindings(
-            uow,
-            request=ReferenceBindingListRequest(
-                target_kind="series_profile",
-                target_id=service_fixture["primary_profile_id"],
-                limit=1,
-                offset=1,
-            ),
-        )
+        if case.list_mode == "paged":
+            results, total = await list_reference_bindings_paged(uow, request=request)
+        else:
+            results = await list_reference_bindings(uow, request=request)
+            total = None
 
-    assert len(results) == 1
-    assert results[0].id == second.id
+    assert len(results) == case.expected_count
+    if case.expected_first_id == "second":
+        assert results[0].id == second.id
+    if case.list_mode == "paged":
+        assert total == 2
 
 
 @pytest.mark.asyncio

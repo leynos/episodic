@@ -39,14 +39,22 @@ class TestSerializeProfileForBrief:
 
         result = _serialize_profile_for_brief(profile, 3)
 
-        assert result["id"] == str(profile.id)
-        assert result["slug"] == "test-series"
-        assert result["title"] == "Test Series"
-        assert result["description"] == "A test series"
-        assert result["configuration"] == {"tone": "casual"}
-        assert result["guardrails"] == {"max_length": 100}
-        assert result["revision"] == 3
-        assert result["updated_at"] == now.isoformat()
+        assert result["id"] == str(profile.id), "expected id to match profile.id"
+        assert result["slug"] == "test-series", "expected slug to match profile.slug"
+        assert result["title"] == "Test Series", "expected title to match profile.title"
+        assert result["description"] == "A test series", (
+            "expected description to match profile.description"
+        )
+        assert result["configuration"] == {"tone": "casual"}, (
+            "expected configuration to match profile.configuration"
+        )
+        assert result["guardrails"] == {"max_length": 100}, (
+            "expected guardrails to match profile.guardrails"
+        )
+        assert result["revision"] == 3, "expected revision to match input revision"
+        assert result["updated_at"] == now.isoformat(), (
+            "expected updated_at to match now.isoformat()"
+        )
 
 
 class TestSerializeTemplateForBrief:
@@ -70,15 +78,27 @@ class TestSerializeTemplateForBrief:
 
         result = _serialize_template_for_brief(template, 1)
 
-        assert result["id"] == str(template.id)
-        assert result["series_profile_id"] == str(series_id)
-        assert result["slug"] == "test-template"
-        assert result["title"] == "Test Template"
-        assert result["description"] == "A test template"
-        assert result["structure"] == {"segments": ["intro", "body"]}
-        assert result["guardrails"] == {"style": "formal"}
-        assert result["revision"] == 1
-        assert result["updated_at"] == now.isoformat()
+        assert result["id"] == str(template.id), "expected id to match template.id"
+        assert result["series_profile_id"] == str(series_id), (
+            "expected series_profile_id to match series_id"
+        )
+        assert result["slug"] == "test-template", "expected slug to match template.slug"
+        assert result["title"] == "Test Template", (
+            "expected title to match template.title"
+        )
+        assert result["description"] == "A test template", (
+            "expected description to match template.description"
+        )
+        assert result["structure"] == {"segments": ["intro", "body"]}, (
+            "expected structure to match template.structure"
+        )
+        assert result["guardrails"] == {"style": "formal"}, (
+            "expected guardrails to match template.guardrails"
+        )
+        assert result["revision"] == 1, "expected revision to match input revision"
+        assert result["updated_at"] == now.isoformat(), (
+            "expected updated_at to match now.isoformat()"
+        )
 
 
 class TestSerializeReferenceDocumentForBrief:
@@ -128,16 +148,37 @@ class TestSerializeReferenceDocumentForBrief:
             revision=revision,
         )
 
-        assert result["binding_id"] == str(binding_id)
-        assert result["document_id"] == str(doc_id)
-        assert result["revision_id"] == str(revision_id)
-        assert result["kind"] == "style_guide"
-        assert result["target_kind"] == "series_profile"
-        assert result["effective_from_episode_id"] == str(episode_id)
-        assert result["lifecycle_state"] == "active"
-        assert result["metadata"] == {"version": "2.0"}
-        assert result["content"] == {"rules": ["rule1"]}
-        assert result["content_hash"] == "abc123"
+        assert result["binding_id"] == str(binding_id), (
+            f"expected result binding_id to match binding_id {binding_id}"
+        )
+        assert result["document_id"] == str(doc_id), (
+            f"expected result document_id to match doc_id {doc_id}"
+        )
+        assert result["revision_id"] == str(revision_id), (
+            f"expected result revision_id to match revision_id {revision_id}"
+        )
+        assert result["kind"] == "style_guide", (
+            f"expected result kind style_guide, got {result['kind']}"
+        )
+        assert result["target_kind"] == "series_profile", (
+            f"expected result target_kind series_profile, got {result['target_kind']}"
+        )
+        assert result["effective_from_episode_id"] == str(episode_id), (
+            "expected result effective_from_episode_id to match "
+            f"episode_id {episode_id}"
+        )
+        assert result["lifecycle_state"] == "active", (
+            f"expected result lifecycle_state active, got {result['lifecycle_state']}"
+        )
+        assert result["metadata"] == {"version": "2.0"}, (
+            f"expected metadata to match document metadata, got {result['metadata']}"
+        )
+        assert result["content"] == {"rules": ["rule1"]}, (
+            f"expected content to match revision content, got {result['content']}"
+        )
+        assert result["content_hash"] == "abc123", (
+            f"expected result content_hash abc123, got {result['content_hash']}"
+        )
 
     def test_it_handles_none_effective_from_episode(self) -> None:
         """Test case."""
@@ -182,4 +223,7 @@ class TestSerializeReferenceDocumentForBrief:
             revision=revision,
         )
 
-        assert result["effective_from_episode_id"] is None
+        assert result["effective_from_episode_id"] is None, (
+            "expected effective_from_episode_id to be None, got "
+            f"{result['effective_from_episode_id']}"
+        )

@@ -16,8 +16,6 @@ All callers should import exclusively from this façade or from
 ``reference_documents.services`` / ``reference_documents.__init__``.
 """
 
-from __future__ import annotations
-
 import typing as typ
 
 from ._binding_creation import create_reference_binding
