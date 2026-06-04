@@ -1,5 +1,7 @@
 """Behavioural tests for structured generation orchestration."""
 
+from __future__ import annotations
+
 import asyncio  # noqa: TC003  # pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
@@ -11,6 +13,7 @@ from pathlib import (
 import pytest
 from pytest_bdd import given, scenario, then, when
 
+from episodic.cost.ports import BillingPeriodKey, CostLedgerEntryId
 from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
@@ -38,6 +41,7 @@ from tests.steps.generation_orchestration_vidaimock import (
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
     from episodic.orchestration import (
         ActionExecutionResult,
@@ -57,6 +61,7 @@ class OrchestrationBDDContext:
     requests: list[LLMRequest] = dc.field(default_factory=list)
     suspended_result: SuspendedWorkflowResult | None = None
     repeated_suspended_result: SuspendedWorkflowResult | None = None
+    cost_recorder: _RecordingCostRecorder | None = None
 
 
 @dc.dataclass(slots=True)
@@ -82,6 +87,45 @@ class _BDDResumePort:
     ) -> ActionExecutionResult:
         """Return the externally supplied action result."""
         return command.result
+
+
+@dc.dataclass(slots=True)
+class _RecordingCostRecorder:
+    """Capture orchestration cost-recorder calls for the BDD scenario."""
+
+    pinned_providers: tuple[CostProviderOperation, ...] = ()
+    pinned_billing_period_key: BillingPeriodKey | None = None
+    provider_calls: list[ProviderCallRecord] = dc.field(default_factory=list)
+    finalized_workflow_run_id: str | None = None
+
+    async def pin_run_pricing(
+        self,
+        workflow_run_id: str,
+        providers: tuple[CostProviderOperation, ...],
+        billing_period_key: BillingPeriodKey,
+    ) -> None:
+        """Capture pricing pins selected for this workflow."""
+        _ = workflow_run_id
+        self.pinned_providers = providers
+        self.pinned_billing_period_key = billing_period_key
+
+    async def record_provider_call(
+        self,
+        record: ProviderCallRecord,
+    ) -> CostLedgerEntryId:
+        """Capture provider-call ledger input."""
+        self.provider_calls.append(record)
+        return CostLedgerEntryId(f"bdd:{record.idempotency_key}")
+
+    async def finalize_run(
+        self,
+        workflow_run_id: str,
+        workflow_node: str | None,
+    ) -> CostLedgerEntryId:
+        """Capture the final run-level roll-up request."""
+        _ = workflow_node
+        self.finalized_workflow_run_id = workflow_run_id
+        return CostLedgerEntryId(f"bdd:run:{workflow_run_id}:rollup")
 
 
 def _run_async_step(
@@ -175,6 +219,7 @@ def run_orchestration(
                 planning_model="gpt-4.1",
                 execution_model="gpt-4o-mini",
             )
+            cost_recorder = _RecordingCostRecorder()
             orchestrator = StructuredPlanningOrchestrator(
                 planner=StructuredGenerationPlanner(
                     llm=recording_port,
@@ -184,10 +229,12 @@ def run_orchestration(
                     llm=recording_port,
                     config=config,
                 ),
+                cost_recorder=cost_recorder,
             )
 
             orchestration_context.result = await orchestrator.orchestrate(request)
             orchestration_context.requests = recording_port.requests
+            orchestration_context.cost_recorder = cost_recorder
 
     _run_async_step(_function_scoped_runner, _orchestrate)
 
@@ -278,6 +325,41 @@ def assert_requests(orchestration_context: OrchestrationBDDContext) -> None:
     assert [request.model for request in requests] == expected_models
     assert "enabled_action_kinds" in requests[0].prompt
     assert "script_tei_xml" in requests[-1].prompt
+
+
+@then(
+    "the cost ledger includes planner and show-notes entries totalled into "
+    "a task roll-up"
+)
+def assert_cost_ledger(orchestration_context: OrchestrationBDDContext) -> None:
+    """Verify the BDD flow records the billable planner and executor calls."""
+    result = orchestration_context.result
+    request = orchestration_context.request
+    recorder = orchestration_context.cost_recorder
+    assert result is not None, "Expected orchestration result, got None."
+    assert request is not None, "Expected orchestration request, got None."
+    assert recorder is not None, "Expected injected cost recorder, got None."
+    assert recorder.pinned_billing_period_key is not None
+    assert [provider.model for provider in recorder.pinned_providers] == [
+        "gpt-4.1",
+        "gpt-4o-mini",
+    ]
+    assert [record.workflow_node for record in recorder.provider_calls] == [
+        "planner",
+        "generate_show_notes",
+    ]
+    assert [record.model for record in recorder.provider_calls] == [
+        "gpt-4.1",
+        "gpt-4o-mini",
+    ]
+    assert [record.usage for record in recorder.provider_calls] == [
+        {"input_tokens": 41, "output_tokens": 13},
+        {"input_tokens": 19, "output_tokens": 8},
+    ]
+    assert sum(sum(record.usage.values()) for record in recorder.provider_calls) == (
+        result.total_usage.total_tokens
+    )
+    assert recorder.finalized_workflow_run_id == request.correlation_id
 
 
 @then("the orchestration checkpoint is reused for the repeated workflow step")

@@ -100,6 +100,8 @@
         'guest_bios_result': None,
         'model': 'gpt-4o-mini',
         'model_tier': <ModelTier.EXECUTION: 'execution'>,
+        'provider_call_usage': None,
+        'provider_operation': <LLMProviderOperation.CHAT_COMPLETIONS: 'chat_completions'>,
         'show_notes_result': None,
         'summary': 'test',
         'usage': dict({
@@ -136,17 +138,6 @@
     }),
   })
 # ---
-# name: test_planner_format_error_messages_snapshot
-  dict({
-    'missing_action_id': 'action_id must be a non-empty string.',
-    'missing_plan_version': 'plan_version must be a non-empty string.',
-    'non_list_required_inputs': 'required_inputs must be a list of strings.',
-    'non_list_steps': 'steps must be a list.',
-    'non_object_step': 'step must be an object.',
-    'unknown_action_kind': 'action_kind must be one of: generate_show_notes, generate_guest_bios.',
-    'unknown_model_tier': 'model_tier must be one of: planning, execution.',
-  })
-# ---
 # name: test_generation_orchestration_result_with_show_notes_snapshot
   dict({
     'action_results': tuple(
@@ -156,6 +147,8 @@
         'guest_bios_result': None,
         'model': 'gpt-4o-mini',
         'model_tier': <ModelTier.EXECUTION: 'execution'>,
+        'provider_call_usage': None,
+        'provider_operation': <LLMProviderOperation.CHAT_COMPLETIONS: 'chat_completions'>,
         'show_notes_result': dict({
           'entries': tuple(
             dict({
@@ -167,6 +160,7 @@
           ),
           'finish_reason': 'stop',
           'model': 'gpt-4o-mini',
+          'provider_call_usage': None,
           'provider_response_id': 'show-notes-001',
           'usage': dict({
             'input_tokens': 40,
@@ -210,6 +204,17 @@
     }),
   })
 # ---
+# name: test_planner_format_error_messages_snapshot
+  dict({
+    'missing_action_id': 'action_id must be a non-empty string.',
+    'missing_plan_version': 'plan_version must be a non-empty string.',
+    'non_list_required_inputs': 'required_inputs must be a list of strings.',
+    'non_list_steps': 'steps must be a list.',
+    'non_object_step': 'step must be an object.',
+    'unknown_action_kind': 'action_kind must be one of: generate_show_notes, generate_guest_bios.',
+    'unknown_model_tier': 'model_tier must be one of: planning, execution.',
+  })
+# ---
 # name: test_show_notes_entry_serialisation_snapshot
   dict({
     'summary': 'The episode explains typed orchestration DTOs.',
@@ -236,6 +241,7 @@
     ),
     'finish_reason': 'stop',
     'model': 'gpt-4o-mini',
+    'provider_call_usage': None,
     'provider_response_id': 'show-notes-001',
     'usage': dict({
       'input_tokens': 40,

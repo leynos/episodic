@@ -206,6 +206,36 @@ class TaskRollupLedgerEntry:
 class CostLedgerPort(typ.Protocol):
     """Port for append-only cost ledger persistence."""
 
+    async def pin_run_pricing(  # noqa: PLR0913 - port key fields stay explicit.  # pylint: disable=too-many-arguments
+        self,
+        *,
+        workflow_run_id: str,
+        provider_name: str,
+        model: str,
+        operation: str,
+        billing_period_key: BillingPeriodKey,
+        pricing_snapshot_id: PricingSnapshotId,
+        pinned_at: str,
+    ) -> None:
+        """Persist the pricing snapshot selected for a workflow run."""
+        raise NotImplementedError
+
+    async def get_run_pricing_pin(  # noqa: PLR0913 - port key fields stay explicit.  # pylint: disable=too-many-arguments
+        self,
+        *,
+        workflow_run_id: str,
+        provider_name: str,
+        model: str,
+        operation: str,
+        billing_period_key: BillingPeriodKey,
+    ) -> PricingSnapshotId | None:
+        """Return a pinned pricing snapshot identifier, if one exists."""
+        raise NotImplementedError
+
+    async def sum_provider_call_costs(self, workflow_run_id: str) -> int:
+        """Return the total provider-call cost for one workflow run."""
+        raise NotImplementedError
+
     async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
         """Record or return an idempotent provider-call ledger entry.
 
@@ -253,6 +283,29 @@ class CostLedgerPort(typ.Protocol):
 @typ.runtime_checkable
 class PricingCataloguePort(typ.Protocol):
     """Port for resolving immutable pricing snapshots."""
+
+    async def get_snapshot(
+        self,
+        pricing_snapshot_id: PricingSnapshotId,
+    ) -> PricingSnapshot:
+        """Return one immutable pricing snapshot by identifier.
+
+        Parameters
+        ----------
+        pricing_snapshot_id : PricingSnapshotId
+            Snapshot identifier pinned to a workflow run.
+
+        Returns
+        -------
+        PricingSnapshot
+            Immutable snapshot matching the requested identifier.
+
+        Raises
+        ------
+        LookupError
+            Raised when the snapshot identifier is unknown.
+        """
+        raise NotImplementedError
 
     async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,

@@ -25,6 +25,7 @@ from episodic.cost.ports import (
     LedgerScope,
     MeteringCounterKey,
     PricingModel,
+    PricingSnapshotId,
     ProviderCallLedgerEntry,
     TaskRollupLedgerEntry,
     UsageSource,
@@ -34,6 +35,7 @@ from .models import (
     CostLedgerEntryRecord,
     MeteringCounterEventRecord,
     MeteringCounterRecord,
+    RunPricingPinRecord,
 )
 
 if typ.TYPE_CHECKING:
@@ -55,6 +57,83 @@ class SqlAlchemyCostLedgerStore:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def pin_run_pricing(  # noqa: PLR0913 - mirrors the ledger port key fields.  # pylint: disable=too-many-arguments
+        self,
+        *,
+        workflow_run_id: str,
+        provider_name: str,
+        model: str,
+        operation: str,
+        billing_period_key: BillingPeriodKey,
+        pricing_snapshot_id: PricingSnapshotId,
+        pinned_at: str,
+    ) -> None:
+        """Persist or reuse a run-level pricing pin."""
+        statement = (
+            insert(RunPricingPinRecord)
+            .values(
+                workflow_run_id=workflow_run_id,
+                provider_name=provider_name,
+                model=model,
+                operation=operation,
+                billing_period_key=str(billing_period_key),
+                pricing_snapshot_id=uuid.UUID(str(pricing_snapshot_id)),
+                pinned_at=parse_instant(
+                    pinned_at,
+                    error_message="timestamp must include timezone information.",
+                ),
+            )
+            .on_conflict_do_nothing(
+                index_elements=[
+                    "workflow_run_id",
+                    "provider_name",
+                    "model",
+                    "operation",
+                    "billing_period_key",
+                ]
+            )
+        )
+        await self._session.execute(statement)
+
+    async def get_run_pricing_pin(  # noqa: PLR0913 - mirrors the ledger port key fields.  # pylint: disable=too-many-arguments
+        self,
+        *,
+        workflow_run_id: str,
+        provider_name: str,
+        model: str,
+        operation: str,
+        billing_period_key: BillingPeriodKey,
+    ) -> PricingSnapshotId | None:
+        """Return the pinned pricing snapshot for a run and provider."""
+        snapshot_id = (
+            await self._session.execute(
+                sa.select(RunPricingPinRecord.pricing_snapshot_id).where(
+                    RunPricingPinRecord.workflow_run_id == workflow_run_id,
+                    RunPricingPinRecord.provider_name == provider_name,
+                    RunPricingPinRecord.model == model,
+                    RunPricingPinRecord.operation == operation,
+                    RunPricingPinRecord.billing_period_key == str(billing_period_key),
+                )
+            )
+        ).scalar_one_or_none()
+        return None if snapshot_id is None else PricingSnapshotId(str(snapshot_id))
+
+    async def sum_provider_call_costs(self, workflow_run_id: str) -> int:
+        """Return the total provider-call cost for one workflow run."""
+        total = (
+            await self._session.execute(
+                sa.select(
+                    sa.func.coalesce(
+                        sa.func.sum(CostLedgerEntryRecord.computed_cost_minor), 0
+                    )
+                ).where(
+                    CostLedgerEntryRecord.workflow_run_id == workflow_run_id,
+                    CostLedgerEntryRecord.scope == LedgerScope.PROVIDER_CALL.value,
+                )
+            )
+        ).scalar_one()
+        return int(total)
 
     async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
         """Persist or reuse a provider-call ledger row."""

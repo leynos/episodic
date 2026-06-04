@@ -24,6 +24,46 @@ from episodic.llm.ports import LLMResponse, LLMUsage, ProviderCallUsage
 
 
 class _InMemoryCostLedger:
+    async def pin_run_pricing(  # pylint: disable=too-many-arguments
+        self,
+        *,
+        workflow_run_id: str,
+        provider_name: str,
+        model: str,
+        operation: str,
+        billing_period_key: BillingPeriodKey,
+        pricing_snapshot_id: PricingSnapshotId,
+        pinned_at: str,
+    ) -> None:
+        """Accept a fake run-pricing pin."""
+        _ = (
+            workflow_run_id,
+            provider_name,
+            model,
+            operation,
+            billing_period_key,
+            pricing_snapshot_id,
+            pinned_at,
+        )
+
+    async def get_run_pricing_pin(  # pylint: disable=too-many-arguments
+        self,
+        *,
+        workflow_run_id: str,
+        provider_name: str,
+        model: str,
+        operation: str,
+        billing_period_key: BillingPeriodKey,
+    ) -> PricingSnapshotId | None:
+        """Return no fake pricing pin by default."""
+        _ = (workflow_run_id, provider_name, model, operation, billing_period_key)
+        return None
+
+    async def sum_provider_call_costs(self, workflow_run_id: str) -> int:
+        """Return a deterministic fake run total."""
+        _ = workflow_run_id
+        return 0
+
     async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
         """Record a provider call and return a stable fake identifier."""
         return CostLedgerEntryId(f"call:{entry.idempotency_key}")
@@ -37,6 +77,25 @@ class _InMemoryCostLedger:
 
 
 class _StaticPricingCatalogue:
+    async def get_snapshot(
+        self,
+        pricing_snapshot_id: PricingSnapshotId,
+    ) -> PricingSnapshot:
+        """Return a deterministic snapshot for protocol conformance tests."""
+        return PricingSnapshot(
+            pricing_snapshot_id=pricing_snapshot_id,
+            provider_name="vidai",
+            model="mock-gpt",
+            operation="chat_completions",
+            source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
+            currency=CurrencyCode("USD"),
+            billing_period_key=BillingPeriodKey("2026-06"),
+            rates_minor_per_metric={"input_tokens": 1_000_000},
+            source_metadata={"source": "test"},
+            content_hash="sha256:test",
+            retrieved_at="2026-06-04T00:00:00Z",
+        )
+
     async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         provider_name: str,
@@ -80,9 +139,13 @@ def test_cost_protocol_fakes_satisfy_public_ports() -> None:
     metering = _InMemoryMetering()
 
     assert isinstance(ledger, CostLedgerPort)
+    assert inspect.iscoroutinefunction(ledger.pin_run_pricing)
+    assert inspect.iscoroutinefunction(ledger.get_run_pricing_pin)
+    assert inspect.iscoroutinefunction(ledger.sum_provider_call_costs)
     assert inspect.iscoroutinefunction(ledger.record_call)
     assert inspect.iscoroutinefunction(ledger.record_task_rollup)
     assert isinstance(catalogue, PricingCataloguePort)
+    assert inspect.iscoroutinefunction(catalogue.get_snapshot)
     assert inspect.iscoroutinefunction(catalogue.resolve)
     assert isinstance(metering, MeteringPort)
     assert inspect.iscoroutinefunction(metering.consume)

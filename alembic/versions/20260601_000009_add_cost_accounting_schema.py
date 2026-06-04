@@ -122,6 +122,8 @@ def upgrade() -> None:
         "run_pricing_pins",
         sa.Column("workflow_run_id", sa.Text(), primary_key=True),
         sa.Column("provider_name", sa.Text(), primary_key=True),
+        sa.Column("model", sa.Text(), primary_key=True),
+        sa.Column("operation", sa.Text(), primary_key=True),
         sa.Column("billing_period_key", sa.Text(), primary_key=True),
         sa.Column("pricing_snapshot_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(

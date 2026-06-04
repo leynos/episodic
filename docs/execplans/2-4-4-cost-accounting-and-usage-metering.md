@@ -211,15 +211,22 @@ Update this list with every stopping point. Add timestamps.
   with zero findings.
 - [x] Milestone C — concrete adapters: SQLAlchemy ledger and metering
   counters, file-backed pricing catalogue loader, OpenAI adapter enhancement to
-  populate `ProviderCallUsage`. Completed 2026-06-04: added storage,
-  metering, catalogue, and OpenAI usage tests; implemented the cost storage
-  models and adapters, file-backed catalogue, bundled sample pricing snapshots,
-  OpenAI usage metadata normalization, and the cost-accounting Alembic revision
-  pulled forward from Stage E. Deterministic gates and CodeRabbit passed with
-  zero findings before commit.
-- [ ] Milestone D — orchestrator integration: `CostRecorder` collaborator,
+  populate `ProviderCallUsage`. Completed 2026-06-04: added storage, metering,
+  catalogue, and OpenAI usage tests; implemented the cost storage models and
+  adapters, file-backed catalogue, bundled sample pricing snapshots, OpenAI
+  usage metadata normalization, and the cost-accounting Alembic revision pulled
+  forward from Stage E. Deterministic gates and CodeRabbit passed with zero
+  findings before commit.
+- [x] Milestone D — orchestrator integration: `CostRecorder` collaborator,
   LangGraph wiring through the orchestrator's existing finish path, run pricing
-  pins, and the structured-planning behavioural scenario.
+  pins, and the structured-planning behavioural scenario. Completed
+  2026-06-04: added provider-call usage propagation through planner/action
+  DTOs, optional cost-recorder wiring for the structured orchestrator and
+  LangGraph direct finish path, ledger pin/aggregate adapter methods, exact
+  pinned-snapshot retrieval, and focused orchestrator, graph, storage,
+  recorder, and BDD tests. All reported CodeRabbit concerns were cleared; the
+  final follow-up emitted no findings but did not print the usual terminal
+  `complete` JSON line.
 - [ ] Milestone E — Alembic migration, py-pglite-backed integration tests,
   documentation updates, CodeRabbit review, roadmap tick.
 
@@ -360,10 +367,10 @@ observation, evidence, and impact.
 
 - Observation: Stage C deterministic gates and CodeRabbit review passed after
   the storage race and schema-review findings were resolved. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `366 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `366 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
@@ -376,6 +383,139 @@ observation, evidence, and impact.
   ended with `{"type":"complete","status":"review_completed","findings":0}`.
   Impact: Stage C is ready for an atomic commit, and Stage D can rely on the
   cost-storage ports being backed by tested adapters.
+
+- Observation: Stage D exposed that `run_pricing_pins` keyed only by
+  `(workflow_run_id, provider_name, billing_period_key)` cannot safely pin a
+  run that uses two models from the same provider. Evidence: the orchestrator
+  pins both the planning model and execution model for a structured run, and
+  both are currently OpenAI models with distinct pricing snapshots. Impact: the
+  Stage C schema and storage adapter now key pins by
+  `(workflow_run_id, provider_name, model, operation, billing_period_key)`.
+
+- Observation: Stage D focused tests passed after the orchestrator, LangGraph,
+  recorder, and pin-key changes. Evidence:
+  `/tmp/test-stage-d-focused-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `8 passed in 11.26s`. Impact: the direct structured orchestrator,
+  direct LangGraph finish path, ledger run-pin storage, and provider-call
+  aggregate read are covered before full gates and CodeRabbit.
+
+- Observation: Stage D deterministic gates passed after refreshing the affected
+  orchestration snapshots. Evidence:
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `367 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
+  `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  `/tmp/migrations-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  applies revision `20260601_000009` and completes metadata comparison;
+  `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `830 passed, 1 skipped in 427.21s`; and the documentation gates report
+  Markdown lint with `Summary: 0 error(s)` and all diagrams validated. Impact:
+  the Stage D diff is ready for CodeRabbit review.
+
+- Observation: Stage D exposed a subtle pinning bug in `CostRecorder`: when a
+  run already had a pricing pin, the recorder resolved the latest catalogue
+  entry for the provider/model/operation tuple and only replaced the snapshot
+  identifier if it differed. Evidence: local review of
+  `episodic/cost/recorder.py` showed the pinned id was applied with
+  `dataclasses.replace` after resolving the current catalogue row. Impact:
+  `PricingCataloguePort` now exposes `get_snapshot(pricing_snapshot_id)`,
+  `FilePricingCatalogue` retrieves exact immutable snapshots by id, and
+  `tests/test_cost_recorder.py` verifies that a pinned old snapshot's rates are
+  used after catalogue drift.
+
+- Observation: the structured generation BDD story now exercises the Stage D
+  cost-recorder integration. Evidence:
+  `/tmp/test-bdd-cost-ledger-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `2 passed in 0.58s` after adding the feature step that observes
+  planner and show-notes provider-call entries plus the task roll-up
+  finalization. Impact: the behavioural coverage required by this milestone is
+  now present before the final deterministic gates and CodeRabbit review.
+
+- Observation: the first Stage D CodeRabbit review found one trivial test-fake
+  clarity issue. Evidence:
+  `/tmp/coderabbit-stage-d-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `{"type":"complete","status":"review_completed","findings":1}`
+  and identified an empty async `pin_run_pricing` stub in
+  `tests/test_generation_orchestration_langgraph_costs.py`. Impact: the fake
+  now has an explicit no-op assignment so the stub is visibly intentional.
+
+- Observation: Stage D deterministic gates passed again after the CodeRabbit
+  test-fake fix. Evidence:
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `All checks passed!`;
+  `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  `/tmp/test-langgraph-costs-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `1 passed in 0.11s`; and
+  `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `832 passed, 1 skipped in 416.48s`. Impact: the Stage D diff is ready for a
+  CodeRabbit follow-up review.
+
+- Observation: the Stage D CodeRabbit follow-up review found one more trivial
+  test-maintenance issue. Evidence:
+  `/tmp/coderabbit-stage-d-rerun2-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `{"type":"complete","status":"review_completed","findings":1}`
+  and asked for the graph cost test to derive its expected total from fixture
+  helpers instead of hardcoding `38`. Impact: the test now narrows the
+  fixture usage values and computes the expected total from the planner and
+  action fixture DTOs.
+
+- Observation: Stage D deterministic gates passed after the fixture-derived
+  expected total change. Evidence:
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `All checks passed!`;
+  `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  `/tmp/test-langgraph-costs-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `1 passed in 0.11s`; and
+  `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `832 passed, 1 skipped in 413.55s`. Impact: the Stage D diff is ready for
+  another CodeRabbit follow-up review.
+
+- Observation: the next Stage D CodeRabbit review found three test
+  maintainability concerns: a helper docstring in
+  `tests/test_cost_recorder.py`, assertion messages in
+  `tests/test_cost_recorder.py`, and assertion messages in
+  `tests/test_generation_orchestration_langgraph_costs.py`. Evidence:
+  `/tmp/coderabbit-stage-d-rerun4-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `{"type":"complete","status":"review_completed","findings":3}`.
+  Impact: the helper now uses a Numpy-style docstring, and the affected tests
+  now explain their expected conditions on failure.
+
+- Observation: Stage D deterministic gates passed after the CodeRabbit
+  assertion-message and docstring fixes. Evidence:
+  `/tmp/test-stage-d-coderabbit-fixes-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `2 passed in 0.12s`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `All checks passed!`;
+  `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  `/tmp/migrations-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  completed successfully through Alembic revision `20260601_000009`;
+  `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `832 passed, 1 skipped in 410.54s`;
+  `/tmp/markdownlint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `Summary: 0 error(s)`; and
+  `/tmp/nixie-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All diagrams validated successfully!`. Impact: all deterministic Stage D
+  gates passed before the final CodeRabbit follow-up.
+
+- Observation: the final Stage D CodeRabbit follow-up emitted no findings but
+  did not include the usual terminal completion object. Evidence:
+  `/tmp/coderabbit-stage-d-rerun5-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  contains `review_context`, setup, `summarizing`, and `tools_completed`
+  events, with no `finding` events, and the command exited successfully via the
+  shell pipeline. Impact: all reported CodeRabbit concerns are cleared, but the
+  review evidence is weaker than prior milestones because the tool omitted the
+  final `{"type":"complete", ...}` summary.
 
 ## Decision log
 
@@ -467,10 +607,10 @@ Record every significant decision with rationale and timestamp.
   implementing agent.
 
 - Decision: make ledger parent references `ON DELETE SET NULL` and pricing
-  snapshot references `ON DELETE RESTRICT`. Rationale: deleting a parent roll-up
-  must not cascade away auditable provider-call entries, while deleting a
-  pricing snapshot that priced historical entries or run pins would destroy the
-  explanation for persisted costs. Date/Author: 2026-06-04, implementing
+  snapshot references `ON DELETE RESTRICT`. Rationale: deleting a parent
+  roll-up must not cascade away auditable provider-call entries, while deleting
+  a pricing snapshot that priced historical entries or run pins would destroy
+  the explanation for persisted costs. Date/Author: 2026-06-04, implementing
   agent.
 
 - Decision: let a database trigger, not ORM-only state, own
@@ -483,6 +623,13 @@ Record every significant decision with rationale and timestamp.
   Stage C adds the run-level and partial roll-up indexes required by current
   reads; extra FK indexes would add write cost without a demonstrated query
   path. Date/Author: 2026-06-04, implementing agent.
+
+- Decision: key `run_pricing_pins` by provider, model, operation, and billing
+  period rather than provider and period alone. Rationale: one workflow can use
+  a planning model and an execution model from the same provider, and their
+  rate-card rows are model- and operation-specific. A provider-only pin would
+  either overwrite one rate card or reuse the wrong snapshot for a later call.
+  Date/Author: 2026-06-04, implementing agent.
 
 ## Outcomes & retrospective
 

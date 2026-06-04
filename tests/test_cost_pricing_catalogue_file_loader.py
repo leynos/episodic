@@ -83,6 +83,58 @@ async def test_file_pricing_catalogue_resolves_latest_effective_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_file_pricing_catalogue_gets_pinned_snapshot_by_identifier(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Pinned run pricing can retrieve the exact historical snapshot."""
+    old_snapshot_id = PricingSnapshotId("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f")
+    _write_snapshot(
+        tmp_path,
+        "openai-old.yaml",
+        """
+        pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f
+        provider_name: openai
+        model: gpt-4o-mini
+        operation: chat_completions
+        source_kind: provider_rate_card
+        currency: USD
+        billing_period_key: "2026-06"
+        rates_minor_per_metric:
+          input_tokens: 100
+        source_metadata:
+          source_url: https://example.test/old
+        retrieved_at: "2026-05-01T00:00:00Z"
+        effective_from: "2026-05-01T00:00:00Z"
+        """,
+    )
+    _write_snapshot(
+        tmp_path,
+        "openai-new.yaml",
+        """
+        pricing_snapshot_id: 018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f90
+        provider_name: openai
+        model: gpt-4o-mini
+        operation: chat_completions
+        source_kind: provider_rate_card
+        currency: USD
+        billing_period_key: "2026-06"
+        rates_minor_per_metric:
+          input_tokens: 900
+        source_metadata:
+          source_url: https://example.test/new
+        retrieved_at: "2026-05-15T00:00:00Z"
+        effective_from: "2026-05-15T00:00:00Z"
+        """,
+    )
+    catalogue = FilePricingCatalogue(tmp_path, now=lambda: "2026-06-04T00:00:00Z")
+
+    snapshot = await catalogue.get_snapshot(old_snapshot_id)
+
+    assert snapshot.pricing_snapshot_id == old_snapshot_id
+    assert snapshot.rates_minor_per_metric["input_tokens"] == 100
+
+
+@pytest.mark.asyncio
 async def test_file_pricing_catalogue_rejects_missing_snapshot(
     tmp_path: pathlib.Path,
 ) -> None:

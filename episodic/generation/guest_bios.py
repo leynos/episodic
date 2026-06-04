@@ -16,6 +16,7 @@ from episodic.llm import (
     LLMResponse,
     LLMTokenBudget,
     LLMUsage,
+    ProviderCallUsage,
 )
 
 if typ.TYPE_CHECKING:
@@ -146,6 +147,7 @@ class GuestBiosResult:
     model: str = ""
     provider_response_id: str = ""
     finish_reason: str | None = None
+    provider_call_usage: ProviderCallUsage | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -364,6 +366,7 @@ class GuestBiosGenerator:
             model=response.model,
             provider_response_id=response.provider_response_id,
             finish_reason=response.finish_reason,
+            provider_call_usage=response.provider_call_usage,
         )
 
     async def generate(

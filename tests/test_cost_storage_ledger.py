@@ -21,6 +21,7 @@ from episodic.cost import (
 from episodic.cost.storage import (
     CostLedgerEntryRecord,
     PricingSnapshotRecord,
+    RunPricingPinRecord,
     SqlAlchemyCostLedgerStore,
 )
 
@@ -142,16 +143,96 @@ async def test_rollup_query_sums_provider_call_costs(
         await session.commit()
 
     async with session_factory() as session:
-        total = (
+        store = SqlAlchemyCostLedgerStore(session)
+        total = await store.sum_provider_call_costs("workflow-run-1")
+
+    assert total == 84, f"expected sum of provider call costs to be 84 but got {total}"
+
+
+@pytest.mark.asyncio
+async def test_run_pricing_pin_is_idempotent(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Repeated run-pricing pins preserve the first selected snapshot."""
+    async with session_factory() as session:
+        session.add(_pricing_snapshot_record())
+        await session.flush()
+        store = SqlAlchemyCostLedgerStore(session)
+        await store.pin_run_pricing(
+            workflow_run_id="workflow-run-1",
+            provider_name="openai",
+            model="gpt-4o-mini",
+            operation="chat_completions",
+            billing_period_key=BillingPeriodKey("2026-06"),
+            pricing_snapshot_id=PricingSnapshotId(
+                "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
+            ),
+            pinned_at="2026-06-04T10:00:00Z",
+        )
+        await store.pin_run_pricing(
+            workflow_run_id="workflow-run-1",
+            provider_name="openai",
+            model="gpt-4o-mini",
+            operation="chat_completions",
+            billing_period_key=BillingPeriodKey("2026-06"),
+            pricing_snapshot_id=PricingSnapshotId(
+                "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
+            ),
+            pinned_at="2026-06-04T10:01:00Z",
+        )
+        pinned_id = await store.get_run_pricing_pin(
+            workflow_run_id="workflow-run-1",
+            provider_name="openai",
+            model="gpt-4o-mini",
+            operation="chat_completions",
+            billing_period_key=BillingPeriodKey("2026-06"),
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        row_count = (
             await session.execute(
-                sa.select(sa.func.sum(CostLedgerEntryRecord.computed_cost_minor)).where(
-                    CostLedgerEntryRecord.workflow_run_id == "workflow-run-1",
-                    CostLedgerEntryRecord.scope == LedgerScope.PROVIDER_CALL,
-                )
+                sa.select(sa.func.count(RunPricingPinRecord.pinned_at))
             )
         ).scalar_one()
 
-    assert total == 84, f"expected sum of provider call costs to be 84 but got {total}"
+    assert pinned_id == PricingSnapshotId("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"), (
+        "expected the original pricing snapshot to be pinned"
+    )
+    assert row_count == 1, "expected idempotent pinning to preserve one row"
+
+
+@pytest.mark.asyncio
+async def test_run_pricing_pins_distinguish_models(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """One run can pin different OpenAI models without overwriting rates."""
+    async with session_factory() as session:
+        session.add(_pricing_snapshot_record())
+        await session.flush()
+        store = SqlAlchemyCostLedgerStore(session)
+        for model in ("gpt-4.1", "gpt-4o-mini"):
+            await store.pin_run_pricing(
+                workflow_run_id="workflow-run-1",
+                provider_name="openai",
+                model=model,
+                operation="chat_completions",
+                billing_period_key=BillingPeriodKey("2026-06"),
+                pricing_snapshot_id=PricingSnapshotId(
+                    "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
+                ),
+                pinned_at="2026-06-04T10:00:00Z",
+            )
+        await session.commit()
+
+    async with session_factory() as session:
+        row_count = (
+            await session.execute(
+                sa.select(sa.func.count(RunPricingPinRecord.pinned_at))
+            )
+        ).scalar_one()
+
+    assert row_count == 2, "expected separate pricing pins for each model"
 
 
 def test_recorded_at_fixture_is_timezone_aware() -> None:
