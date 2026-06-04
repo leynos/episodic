@@ -203,7 +203,12 @@ Update this list with every stopping point. Add timestamps.
   design now documents provider-rate-card pricing snapshots plus
   `run_pricing_pins`.
 - [ ] Milestone B — domain DTOs, ports, and pricing engine, plus Hecate
-  group extensions and the first ADR draft.
+  group extensions and the first ADR draft. Completed 2026-06-04: added
+  `episodic.cost` ports, `PricingEngine`, `CostRecorder`, Hecate group
+  extensions, `ProviderCallUsage`, and focused Stage B tests. The focused
+  tests first failed with `ModuleNotFoundError: No module named
+  'episodic.cost'`, then passed after implementation. CodeRabbit's Stage B
+  follow-up completed with zero findings.
 - [ ] Milestone C — concrete adapters: SQLAlchemy ledger and metering
   counters, file-backed pricing catalogue loader, OpenAI adapter enhancement to
   populate `ProviderCallUsage`.
@@ -249,6 +254,60 @@ observation, evidence, and impact.
   `/tmp/coderabbit-stage-a-third-episodic-2-4-4-cost-accounting-and-usage-metering.out`
   ended with `{"type":"complete","status":"review_completed","findings":0}`.
   Impact: Stage A is ready to commit.
+
+- Observation: Stage B focused tests reached the intended red state before
+  implementation. Evidence:
+  `/tmp/test-stage-b-red-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  showed `ModuleNotFoundError: No module named 'episodic.cost'` for the new
+  pricing-engine and port-contract tests. Impact: the tests proved the new
+  package and API surface were absent before implementation.
+
+- Observation: Stage B focused tests passed after implementation. Evidence:
+  `/tmp/test-stage-b-focused-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `9 passed in 0.55s`. Impact: the new pricing engine properties,
+  cost-port protocol conformance, and optional
+  `LLMResponse.provider_call_usage` compatibility are covered before the full
+  gates run.
+
+- Observation: Stage B local gates passed before CodeRabbit review. Evidence:
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `355 files already formatted`; `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `All checks passed!`; `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `815 passed, 1 skipped`; `/tmp/markdownlint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `Summary: 0 error(s)`; and `/tmp/nixie-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports all diagrams validated. Impact: deterministic gates are clear before
+  requesting CodeRabbit.
+
+- Observation: the first Stage B CodeRabbit review found 14 concerns: three
+  major findings for broad file-level Pylint disables and 11 trivial findings
+  for terse module or public-method docstrings. Evidence:
+  `/tmp/coderabbit-stage-b-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `{"type":"complete","status":"review_completed","findings":14}`.
+  Impact: the implementation now uses narrow inline suppressions only where
+  protocol-shaped signatures require them, and the cost package, pricing
+  engine, ports, and recorder expose fuller NumPy-style documentation.
+
+- Observation: Stage B deterministic gates passed again after the CodeRabbit
+  fixes. Evidence:
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `355 files already formatted`; `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `All checks passed!`; `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  and `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `815 passed, 1 skipped in 395.98s`. Impact: the Python gates remain
+  clear before the Stage B CodeRabbit follow-up review.
+
+- Observation: Stage B documentation gates and CodeRabbit follow-up passed
+  after the plan update and documentation fixes. Evidence:
+  `/tmp/markdownlint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `Summary: 0 error(s)`;
+  `/tmp/nixie-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  all diagrams validated; and
+  `/tmp/coderabbit-stage-b-rerun-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `{"type":"complete","status":"review_completed","findings":0}`.
+  Impact: Stage B is ready for an atomic commit.
 
 ## Decision log
 
@@ -323,6 +382,15 @@ Record every significant decision with rationale and timestamp.
   explicitly asked to proceed with the planned functionality and to keep this
   plan updated. Date/Author: 2026-06-04, implementing agent.
 
+- Decision: constrain the Stage B additivity property test to rates that are
+  exact minor units per token, represented as multiples of one million in
+  `rates_minor_per_metric`. Rationale: the pricing engine stores integer minor
+  units and provider rates are expressed per one million units. Independent
+  integer division on arbitrary fractional minor-unit rates cannot be perfectly
+  additive, so the property test uses exact rates to verify the algebraic
+  invariant without smuggling in a rounding policy that belongs to catalogue
+  design. Date/Author: 2026-06-04, implementing agent.
+
 ## Outcomes & retrospective
 
 Fill in at each milestone close and at completion.
@@ -330,6 +398,12 @@ Fill in at each milestone close and at completion.
 - Stage A completed on 2026-06-04. The repository now has a proposed ADR for
   cost accounting ports and deterministic pricing, and the system design names
   the run-pricing pin table needed for reproducible suspended workflow bills.
+
+- Stage B completed on 2026-06-04. The repository now has cost-accounting
+  domain ports, immutable pricing value objects, a deterministic pricing
+  engine, an application-level cost recorder, Hecate group coverage, focused
+  tests, and an optional `LLMResponse.provider_call_usage` envelope that leaves
+  `LLMUsage` unchanged.
 
 ## Context and orientation
 
