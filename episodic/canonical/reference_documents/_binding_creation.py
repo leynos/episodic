@@ -44,6 +44,8 @@ from .types import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
@@ -60,7 +62,9 @@ def _new_binding(
     ids: _ParsedBindingIds,
     revision_id: uuid.UUID,
     effective_from_episode_id: uuid.UUID | None,
+    clock: cabc.Callable[[], dt.datetime] | None = None,
 ) -> ReferenceBinding:
+    now = clock() if clock is not None else dt.datetime.now(dt.UTC)
     try:
         return ReferenceBinding(
             id=uuid.uuid4(),
@@ -70,7 +74,7 @@ def _new_binding(
             episode_template_id=ids.episode_template_id,
             ingestion_job_id=ids.ingestion_job_id,
             effective_from_episode_id=effective_from_episode_id,
-            created_at=dt.datetime.now(dt.UTC),
+            created_at=now,
         )
     except ValueError as exc:
         msg = (

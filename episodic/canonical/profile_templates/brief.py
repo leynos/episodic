@@ -2,6 +2,15 @@
 
 Orchestrates loading, validation, and serialisation of series profiles,
 episode templates, and reference documents into a single brief payload.
+Delegates to three private submodules:
+
+- ``_brief_serializers`` — pure data-shaping transforms; no I/O.
+- ``_brief_loaders`` — bulk entity loading, binding serialisation, and
+  template-item resolution.
+- ``_brief_reference_documents`` — episode-aware and legacy
+  reference-document resolution strategies.
+
+The sole public export is ``build_series_brief``.
 """
 
 import typing as typ

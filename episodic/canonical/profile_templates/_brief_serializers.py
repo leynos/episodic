@@ -1,7 +1,10 @@
-"""Serializers that shape entity data into structured-brief payloads.
+"""Serialisers that shape entity data into structured-brief payloads.
 
 These functions are pure data-shaping transforms to ``JsonMapping`` payloads
-with no database dependencies.
+with no database dependencies. Consumed by ``_brief_loaders`` (via
+``_serialize_bindings_for_owner``) and by ``_brief_reference_documents``
+(via ``_serialize_reference_document_for_brief``). Not part of the public
+package API; import only through the ``brief`` entry point.
 """
 
 import typing as typ

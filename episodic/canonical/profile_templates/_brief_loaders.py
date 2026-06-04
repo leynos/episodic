@@ -46,6 +46,19 @@ def _raise_if_missing_ids(
     raise ValueError(msg)
 
 
+def _assert_document_owner(
+    document: ReferenceDocument,
+    owner_series_profile_id: uuid.UUID,
+) -> None:
+    """Raise ValueError when a document is owned by the wrong series profile."""
+    if document.owner_series_profile_id != owner_series_profile_id:
+        msg = (
+            f"Reference document {document.id} does not belong to requested "
+            f"series profile {owner_series_profile_id}."
+        )
+        raise ValueError(msg)
+
+
 async def _load_revisions_by_id(
     *,
     uow: CanonicalUnitOfWork,
@@ -94,12 +107,7 @@ def _serialize_bindings_for_owner(
     for binding in bindings:
         revision = revisions_by_id[binding.reference_document_revision_id]
         document = documents_by_id[revision.reference_document_id]
-        if document.owner_series_profile_id != owner_series_profile_id:
-            msg = (
-                f"Reference document {document.id} does not belong to requested "
-                f"series profile {owner_series_profile_id}."
-            )
-            raise ValueError(msg)
+        _assert_document_owner(document, owner_series_profile_id)
         serialized.append(
             _serialize_reference_document_for_brief(
                 binding=binding,

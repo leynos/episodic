@@ -149,6 +149,29 @@ async def test_create_reference_binding_duplicate_target_raises_conflict(
             await create_reference_binding(uow, data=binding_data)
 
 
+@pytest.mark.asyncio
+async def test_create_reference_binding_raises_not_found_for_missing_revision(
+    session_factory: cabc.Callable[[], AsyncSession],
+    service_fixture: ServiceFixture,
+) -> None:
+    """Raise ReferenceEntityNotFoundError for an unknown binding revision."""
+    from episodic.canonical.reference_documents import ReferenceEntityNotFoundError
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(ReferenceEntityNotFoundError, match="not found"):
+            await create_reference_binding(
+                uow,
+                data=ReferenceBindingData(
+                    reference_document_revision_id=str(uuid.uuid4()),
+                    target_kind="series_profile",
+                    series_profile_id=service_fixture["primary_profile_id"],
+                    episode_template_id=None,
+                    ingestion_job_id=None,
+                    effective_from_episode_id=None,
+                ),
+            )
+
+
 @pytest.mark.parametrize(
     ("payload_kwargs", "expected_match"),
     [
