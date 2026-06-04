@@ -202,16 +202,21 @@ Update this list with every stopping point. Add timestamps.
   plan into execution, ADR-015 was drafted in Proposed status, and the system
   design now documents provider-rate-card pricing snapshots plus
   `run_pricing_pins`.
-- [ ] Milestone B — domain DTOs, ports, and pricing engine, plus Hecate
+- [x] Milestone B — domain DTOs, ports, and pricing engine, plus Hecate
   group extensions and the first ADR draft. Completed 2026-06-04: added
   `episodic.cost` ports, `PricingEngine`, `CostRecorder`, Hecate group
-  extensions, `ProviderCallUsage`, and focused Stage B tests. The focused
-  tests first failed with `ModuleNotFoundError: No module named
-  'episodic.cost'`, then passed after implementation. CodeRabbit's Stage B
-  follow-up completed with zero findings.
-- [ ] Milestone C — concrete adapters: SQLAlchemy ledger and metering
+  extensions, `ProviderCallUsage`, and focused Stage B tests. The focused tests
+  first failed with `ModuleNotFoundError: No module named 'episodic.cost'`,
+  then passed after implementation. CodeRabbit's Stage B follow-up completed
+  with zero findings.
+- [x] Milestone C — concrete adapters: SQLAlchemy ledger and metering
   counters, file-backed pricing catalogue loader, OpenAI adapter enhancement to
-  populate `ProviderCallUsage`.
+  populate `ProviderCallUsage`. Completed 2026-06-04: added storage,
+  metering, catalogue, and OpenAI usage tests; implemented the cost storage
+  models and adapters, file-backed catalogue, bundled sample pricing snapshots,
+  OpenAI usage metadata normalization, and the cost-accounting Alembic revision
+  pulled forward from Stage E. Deterministic gates and CodeRabbit passed with
+  zero findings before commit.
 - [ ] Milestone D — orchestrator integration: `CostRecorder` collaborator,
   LangGraph wiring through the orchestrator's existing finish path, run pricing
   pins, and the structured-planning behavioural scenario.
@@ -270,14 +275,18 @@ observation, evidence, and impact.
   gates run.
 
 - Observation: Stage B local gates passed before CodeRabbit review. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `355 files already formatted`; `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`; `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `355 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
+  `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
-  `815 passed, 1 skipped`; `/tmp/markdownlint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `Summary: 0 error(s)`; and `/tmp/nixie-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports all diagrams validated. Impact: deterministic gates are clear before
+  `815 passed, 1 skipped`;
+  `/tmp/markdownlint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `Summary: 0 error(s)`; and
+  `/tmp/nixie-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  all diagrams validated. Impact: deterministic gates are clear before
   requesting CodeRabbit.
 
 - Observation: the first Stage B CodeRabbit review found 14 concerns: three
@@ -291,13 +300,15 @@ observation, evidence, and impact.
 
 - Observation: Stage B deterministic gates passed again after the CodeRabbit
   fixes. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `355 files already formatted`; `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`; `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
-  and `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `815 passed, 1 skipped in 395.98s`. Impact: the Python gates remain
-  clear before the Stage B CodeRabbit follow-up review.
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `355 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
+  `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`; and
+  `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `815 passed, 1 skipped in 395.98s`. Impact: the Python gates remain clear
+  before the Stage B CodeRabbit follow-up review.
 
 - Observation: Stage B documentation gates and CodeRabbit follow-up passed
   after the plan update and documentation fixes. Evidence:
@@ -308,6 +319,63 @@ observation, evidence, and impact.
   `/tmp/coderabbit-stage-b-rerun-episodic-2-4-4-cost-accounting-and-usage-metering.out`
   ended with `{"type":"complete","status":"review_completed","findings":0}`.
   Impact: Stage B is ready for an atomic commit.
+
+- Observation: the repository's migration drift checker compares the full
+  Alembic-applied database schema against `Base.metadata`. Evidence:
+  `episodic/canonical/storage/migration_check.py` calls
+  `compare_metadata(ctx, Base.metadata)`, and Alembic's environment imports the
+  same metadata from `episodic.canonical.storage`. Impact: Stage C must add the
+  cost-accounting Alembic revision alongside the ORM models rather than waiting
+  until Stage E, otherwise `make check-migrations` cannot pass before the Stage
+  C CodeRabbit review.
+
+- Observation: Stage C focused tests reached the intended red state before
+  implementation. Evidence:
+  `/tmp/test-stage-c-red-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  showed `ModuleNotFoundError` for `episodic.cost.storage` and
+  `episodic.cost.pricing_catalogue`. Impact: the storage and catalogue adapters
+  were absent before implementation.
+
+- Observation: Stage C focused tests passed after implementation. Evidence:
+  `/tmp/test-stage-c-focused-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `11 passed in 12.76s`. Impact: the new SQLAlchemy ledger,
+  metering counters, file pricing catalogue, and OpenAI provider-call usage
+  normalization are covered before the full gate sequence.
+
+- Observation: Stage C added the cost-accounting Alembic revision, SQLAlchemy
+  models, and PostgreSQL adapters in the same milestone so migration drift
+  stays visible to `make check-migrations`. Evidence:
+  `/tmp/migrations-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  applied revision `20260601_000009` and completed the metadata comparison
+  without drift. Impact: future cost schema changes must update both the
+  storage models and Alembic migration chain before CodeRabbit review.
+
+- Observation: Stage C's metering idempotency path must insert the audit event
+  before incrementing the counter. Evidence: CodeRabbit identified the previous
+  counter-first shape as a race where a crash between the counter update and
+  event insert could double-count replayed idempotency keys. Impact:
+  `SqlAlchemyMeteringCounterStore.consume` now wins or loses the idempotency
+  event insert first; only the winner increments the counter, and duplicate
+  callers return the existing event total.
+
+- Observation: Stage C deterministic gates and CodeRabbit review passed after
+  the storage race and schema-review findings were resolved. Evidence:
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `366 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `All checks passed!`;
+  `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `826 passed, 1 skipped in 441.76s`;
+  `/tmp/markdownlint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `Summary: 0 error(s)`;
+  `/tmp/nixie-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  all diagrams validated; and
+  `/tmp/coderabbit-stage-c-retry6-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `{"type":"complete","status":"review_completed","findings":0}`.
+  Impact: Stage C is ready for an atomic commit, and Stage D can rely on the
+  cost-storage ports being backed by tested adapters.
 
 ## Decision log
 
@@ -390,6 +458,31 @@ Record every significant decision with rationale and timestamp.
   additive, so the property test uses exact rates to verify the algebraic
   invariant without smuggling in a rounding policy that belongs to catalogue
   design. Date/Author: 2026-06-04, implementing agent.
+
+- Decision: pull the cost-accounting Alembic revision forward into Stage C.
+  Rationale: the local gate requires `make check-migrations` after each
+  milestone, and the migration drift checker treats newly imported ORM models
+  without matching migrations as a hard failure. Stage E still owns final
+  documentation, acceptance, and roadmap closure. Date/Author: 2026-06-04,
+  implementing agent.
+
+- Decision: make ledger parent references `ON DELETE SET NULL` and pricing
+  snapshot references `ON DELETE RESTRICT`. Rationale: deleting a parent roll-up
+  must not cascade away auditable provider-call entries, while deleting a
+  pricing snapshot that priced historical entries or run pins would destroy the
+  explanation for persisted costs. Date/Author: 2026-06-04, implementing
+  agent.
+
+- Decision: let a database trigger, not ORM-only state, own
+  `metering_counters.updated_at` changes. Rationale: the counter is mutated by
+  PostgreSQL upserts, so relying on ORM `onupdate` would leave timestamps stale
+  on the hot path. Date/Author: 2026-06-04, implementing agent.
+
+- Decision: defer foreign-key indexes for `parent_cost_entry_id` and
+  `pricing_snapshot_id` until concrete lookup queries need them. Rationale:
+  Stage C adds the run-level and partial roll-up indexes required by current
+  reads; extra FK indexes would add write cost without a demonstrated query
+  path. Date/Author: 2026-06-04, implementing agent.
 
 ## Outcomes & retrospective
 

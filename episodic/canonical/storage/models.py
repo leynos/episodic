@@ -5,6 +5,14 @@ model surface.  The implementations live in focused modules to keep each file
 below the project line-count limit.
 """
 
+from episodic.cost.storage.models import (
+    CostLedgerEntryRecord,
+    MeteringCounterEventRecord,
+    MeteringCounterRecord,
+    PricingSnapshotRecord,
+    RunPricingPinRecord,
+)
+
 from .entity_models import (
     ApprovalEventRecord,
     EpisodeRecord,
@@ -54,15 +62,20 @@ __all__ = (
     "WORKFLOW_CHECKPOINT_STATUS",
     "ApprovalEventRecord",
     "Base",
+    "CostLedgerEntryRecord",
     "EpisodeRecord",
     "EpisodeTemplateHistoryRecord",
     "EpisodeTemplateRecord",
     "IdempotencyRecordModel",
     "IngestionJobRecord",
     "IngestionJobSourceRecord",
+    "MeteringCounterEventRecord",
+    "MeteringCounterRecord",
+    "PricingSnapshotRecord",
     "ReferenceBindingRecord",
     "ReferenceDocumentRecord",
     "ReferenceDocumentRevisionRecord",
+    "RunPricingPinRecord",
     "SeriesProfileHistoryRecord",
     "SeriesProfileRecord",
     "SourceDocumentRecord",

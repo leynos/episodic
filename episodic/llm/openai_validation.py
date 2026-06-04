@@ -3,7 +3,8 @@
 import collections.abc as cabc
 import typing as typ
 
-from episodic.llm.ports import LLMUsage
+from episodic.cost.ports import UsageSource
+from episodic.llm.ports import LLMUsage, ProviderCallUsage
 
 
 class OpenAIResponseValidationError(ValueError):
@@ -28,6 +29,7 @@ _RESPONSES_USAGE_TOKEN_FIELDS: tuple[str, ...] = (
     "output_tokens",
     "total_tokens",
 )
+_ZERO_LATENCY_PLACEHOLDER_MS = 0
 
 
 def _is_string_keyed_mapping(value: object) -> bool:
@@ -169,4 +171,139 @@ def _normalize_responses_usage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total,
+    )
+
+
+def _extract_nested_token_count(
+    usage_payload: cabc.Mapping[str, object],
+    parent_key: str,
+    token_key: str,
+) -> int | None:
+    """Extract an optional nested non-negative token count."""
+    parent = usage_payload.get(parent_key)
+    if parent is None:
+        return None
+    if not _is_string_keyed_mapping(parent):
+        raise OpenAIResponseValidationError(_INVALID_CHAT_COMPLETION_MESSAGE)
+    parent_mapping = typ.cast("cabc.Mapping[str, object]", parent)
+    if token_key not in parent_mapping:
+        return None
+    return _validate_and_extract_token_count(parent_mapping[token_key], token_key)
+
+
+def _add_metric_if_present(
+    metrics: dict[str, int],
+    key: str,
+    value: int | None,
+) -> None:
+    """Add a canonical usage metric when the provider reported it."""
+    if value is not None:
+        metrics[key] = value
+
+
+def _normalize_chat_provider_call_usage(
+    payload_mapping: cabc.Mapping[str, object],
+    usage_payload: cabc.Mapping[str, object] | None,
+    finish_reason: str | None,
+) -> ProviderCallUsage | None:
+    """Convert OpenAI chat usage details into canonical cost metrics."""
+    if usage_payload is None:
+        return None
+    metrics = {
+        "input_tokens": _extract_token_count(usage_payload, "prompt_tokens"),
+        "output_tokens": _extract_token_count(usage_payload, "completion_tokens"),
+    }
+    _add_metric_if_present(
+        metrics,
+        "cached_input_tokens",
+        _extract_nested_token_count(
+            usage_payload,
+            "prompt_tokens_details",
+            "cached_tokens",
+        ),
+    )
+    _add_metric_if_present(
+        metrics,
+        "audio_input_tokens",
+        _extract_nested_token_count(
+            usage_payload,
+            "prompt_tokens_details",
+            "audio_tokens",
+        ),
+    )
+    _add_metric_if_present(
+        metrics,
+        "reasoning_tokens",
+        _extract_nested_token_count(
+            usage_payload,
+            "completion_tokens_details",
+            "reasoning_tokens",
+        ),
+    )
+    _add_metric_if_present(
+        metrics,
+        "audio_output_tokens",
+        _extract_nested_token_count(
+            usage_payload,
+            "completion_tokens_details",
+            "audio_tokens",
+        ),
+    )
+    return ProviderCallUsage(
+        usage_metrics=metrics,
+        usage_source=UsageSource.PROVIDER,
+        usage_complete=True,
+        provider_response_id=typ.cast("str", payload_mapping["id"]),
+        finish_reason=finish_reason,
+        started_at="",
+        latency_ms=_ZERO_LATENCY_PLACEHOLDER_MS,
+    )
+
+
+def _normalize_responses_provider_call_usage(
+    payload_mapping: cabc.Mapping[str, object],
+    usage_payload: cabc.Mapping[str, object] | None,
+    finish_reason: str | None,
+) -> ProviderCallUsage | None:
+    """Convert OpenAI Responses usage details into canonical cost metrics."""
+    if usage_payload is None:
+        return None
+    metrics = {
+        "input_tokens": _extract_token_count(
+            usage_payload,
+            "input_tokens",
+            error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
+        ),
+        "output_tokens": _extract_token_count(
+            usage_payload,
+            "output_tokens",
+            error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
+        ),
+    }
+    _add_metric_if_present(
+        metrics,
+        "cached_input_tokens",
+        _extract_nested_token_count(
+            usage_payload,
+            "input_tokens_details",
+            "cached_tokens",
+        ),
+    )
+    _add_metric_if_present(
+        metrics,
+        "reasoning_tokens",
+        _extract_nested_token_count(
+            usage_payload,
+            "output_tokens_details",
+            "reasoning_tokens",
+        ),
+    )
+    return ProviderCallUsage(
+        usage_metrics=metrics,
+        usage_source=UsageSource.PROVIDER,
+        usage_complete=True,
+        provider_response_id=typ.cast("str", payload_mapping["id"]),
+        finish_reason=finish_reason,
+        started_at="",
+        latency_ms=_ZERO_LATENCY_PLACEHOLDER_MS,
     )

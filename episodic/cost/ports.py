@@ -45,6 +45,7 @@ class PricingModel(enum.StrEnum):
     """Supported pricing model families."""
 
     PAYG = "payg"
+    ROLLUP = "rollup"
     QUOTA_OVERAGE = "quota_overage"
     SUBSCRIPTION_ALLOCATED = "subscription_allocated"
 
@@ -61,6 +62,7 @@ class UsageSource(enum.StrEnum):
 
     PROVIDER = "provider"
     ESTIMATED = "estimated"
+    ROLLUP = "rollup"
 
 
 PricingSnapshotId = typ.NewType("PricingSnapshotId", str)
