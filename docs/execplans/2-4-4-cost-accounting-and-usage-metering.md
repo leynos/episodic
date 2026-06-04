@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -227,8 +227,13 @@ Update this list with every stopping point. Add timestamps.
   recorder, and BDD tests. All reported CodeRabbit concerns were cleared; the
   final follow-up emitted no findings but did not print the usual terminal
   `complete` JSON line.
-- [ ] Milestone E — Alembic migration, py-pglite-backed integration tests,
-  documentation updates, CodeRabbit review, roadmap tick.
+- [x] Milestone E — Alembic migration, py-pglite-backed integration tests,
+  documentation updates, CodeRabbit review, roadmap tick. Completed
+  2026-06-04: the migration and py-pglite tests were completed in earlier
+  milestones to satisfy migration gates; Stage E accepted ADR-015, updated
+  operator and maintainer documentation, recorded the system-design
+  cross-reference, ticked roadmap item `2.4.4`, passed the final gates, and
+  completed the final CodeRabbit review with zero findings.
 
 ## Surprises & discoveries
 
@@ -517,6 +522,37 @@ observation, evidence, and impact.
   review evidence is weaker than prior milestones because the tool omitted the
   final `{"type":"complete", ...}` summary.
 
+- Observation: Stage E did not need another Alembic revision. Evidence: the
+  cost-accounting migration was pulled forward into Stage C, updated in Stage D
+  for the wider `run_pricing_pins` key, and `make check-migrations` passed
+  after that schema correction. Impact: Stage E only needs documentation,
+  roadmap closure, gates, and CodeRabbit validation.
+
+- Observation: Stage E deterministic gates passed after the documentation and
+  roadmap updates. Evidence:
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `All checks passed!`;
+  `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
+  `/tmp/migrations-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  completed successfully through Alembic revision `20260601_000009`;
+  `/tmp/test-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `832 passed, 1 skipped in 408.86s`;
+  `/tmp/markdownlint-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  reports `Summary: 0 error(s)`; and
+  `/tmp/nixie-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All diagrams validated successfully!`. Impact: the final branch state is
+  ready for the Stage E CodeRabbit review.
+
+- Observation: the final Stage E CodeRabbit retry completed with zero findings
+  after one prior Stage E run timed out after `tools_completed`. Evidence:
+  `/tmp/coderabbit-stage-e-rerun-episodic-2-4-4-cost-accounting-and-usage-metering.out`
+  ended with `{"type":"complete","status":"review_completed","findings":0}`.
+  Impact: all CodeRabbit concerns reported during the work are cleared, and
+  the final branch state has external-review coverage.
+
 ## Decision log
 
 Record every significant decision with rationale and timestamp.
@@ -644,6 +680,21 @@ Fill in at each milestone close and at completion.
   engine, an application-level cost recorder, Hecate group coverage, focused
   tests, and an optional `LLMResponse.provider_call_usage` envelope that leaves
   `LLMUsage` unchanged.
+
+- Stage C completed on 2026-06-04. The repository now has SQLAlchemy-backed
+  cost ledger and metering adapters, file-backed pricing catalogue loading,
+  sample provider rate-card snapshots, OpenAI usage normalization, and an
+  Alembic revision validated against py-pglite.
+
+- Stage D completed on 2026-06-04. Structured orchestration now carries
+  provider-call usage through planner and action DTOs, optionally records costs
+  through `CostRecorder`, pins run pricing by provider/model/operation, and
+  writes task roll-ups after direct generation runs complete.
+
+- Stage E completed on 2026-06-04. ADR-015 is accepted, the users' and
+  developers' guides describe the implemented cost-accounting behaviour, the
+  roadmap marks item `2.4.4` complete, all final gates passed, and the final
+  CodeRabbit review completed with zero findings.
 
 ## Context and orientation
 

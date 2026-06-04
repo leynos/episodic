@@ -1329,6 +1329,9 @@ Chrono is a local estimator. The intent is determinism and auditability:
 historical bills must remain explainable even if provider pricing changes or an
 evaluator is later replaced with a cheaper implementation.
 
+ADR-015 records the accepted port shape, canonical usage metrics, pricing
+snapshot pinning strategy, and deterministic pricing rules for this design.
+
 #### Internal evaluator metering and deterministic pricing
 
 - `PricingCataloguePort` abstracts where pricing inputs come from. Today it can
