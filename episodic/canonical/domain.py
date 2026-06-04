@@ -4,6 +4,8 @@ import dataclasses as dc
 import enum
 import typing as typ
 
+from .generation_run_errors import CheckpointAlreadyTerminal
+
 if typ.TYPE_CHECKING:
     import datetime as dt
     import uuid
@@ -87,7 +89,171 @@ class WorkflowCheckpointStatus(enum.StrEnum):
     SUSPENDED = "suspended"
     RESUMED = "resumed"
 
+class GenerationRunStatus(enum.StrEnum):
+    """Lifecycle states for user-facing generation runs."""
 
+    PENDING = "pending"
+    RUNNING = "running"
+    PAUSED = "paused"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+    def is_terminal(self) -> bool:
+        """Return whether this status is a terminal run state."""
+        return self in {
+            GenerationRunStatus.SUCCEEDED,
+            GenerationRunStatus.FAILED,
+            GenerationRunStatus.CANCELLED,
+        }
+
+class CheckpointStatus(enum.StrEnum):
+    """Lifecycle states for user-facing generation checkpoints."""
+
+    CREATED = "created"
+    RESPONDED = "responded"
+    TIMED_OUT = "timed_out"
+    CANCELLED = "cancelled"
+
+    def is_terminal(self) -> bool:
+        """Return whether this status is a terminal checkpoint state."""
+        return self is not CheckpointStatus.CREATED
+
+class CheckpointAction(enum.StrEnum):
+    """Reviewer actions accepted for a generation checkpoint."""
+
+    APPROVE = "approve"
+    REQUEST_CHANGES = "request_changes"
+    EDIT = "edit"
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationRun:
+    """User-facing generation run aggregate root."""
+
+    id: uuid.UUID
+    episode_id: uuid.UUID
+    source_bundle_id: uuid.UUID
+    actor: str
+    status: GenerationRunStatus
+    current_node: str | None
+    budget_snapshot: JsonMapping
+    configuration: JsonMapping
+    created_at: dt.datetime
+    updated_at: dt.datetime
+    started_at: dt.datetime | None
+    ended_at: dt.datetime | None
+    error_message: str | None
+
+    def __post_init__(self) -> None:
+        """Validate generation-run invariants."""
+        _validate_non_empty_text(self.actor, "actor")
+        _validate_optional_text(self.current_node, "current_node")
+        _validate_optional_text(self.error_message, "error_message")
+        _copy_json_mapping(self, "budget_snapshot")
+        _copy_json_mapping(self, "configuration")
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationEvent:
+    """Append-only event emitted by a generation run."""
+
+    id: uuid.UUID
+    generation_run_id: uuid.UUID
+    seq: int
+    kind: str
+    payload: JsonMapping
+    created_at: dt.datetime
+    occurred_at: dt.datetime
+
+    def __post_init__(self) -> None:
+        """Validate event identity and payload invariants."""
+        if not isinstance(self.seq, int) or self.seq < 1:
+            msg = "seq must be a positive integer."
+            raise ValueError(msg)
+        _validate_non_empty_text(self.kind, "kind")
+        _copy_json_mapping(self, "payload")
+
+@dc.dataclass(frozen=True, slots=True)
+class Checkpoint:
+    """Human review checkpoint attached to a generation run."""
+
+    id: uuid.UUID
+    generation_run_id: uuid.UUID
+    node: str
+    prompt: str
+    options: tuple[str, ...]
+    status: CheckpointStatus
+    created_at: dt.datetime
+    responded_at: dt.datetime | None
+    responded_by: str | None
+    response_action: CheckpointAction | None
+    response_payload: JsonMapping
+
+    def __post_init__(self) -> None:
+        """Validate checkpoint lifecycle invariants."""
+        _validate_non_empty_text(self.node, "node")
+        _validate_non_empty_text(self.prompt, "prompt")
+        if len(self.options) == 0:
+            msg = "options must contain at least one action."
+            raise ValueError(msg)
+        if any(
+            not isinstance(option, str) or _is_blank(option) for option in self.options
+        ):
+            msg = "options must contain non-empty strings."
+            raise ValueError(msg)
+        _validate_optional_text(self.responded_by, "responded_by")
+        _copy_json_mapping(self, "response_payload")
+        if self.status is CheckpointStatus.RESPONDED:
+            if self.responded_at is None:
+                msg = "responded checkpoints require responded_at."
+                raise ValueError(msg)
+            if self.responded_by is None:
+                msg = "responded checkpoints require responded_by."
+                raise ValueError(msg)
+            if self.response_action is None:
+                msg = "responded checkpoints require response_action."
+                raise ValueError(msg)
+
+    def respond(
+        self,
+        *,
+        action: CheckpointAction,
+        payload: JsonMapping,
+        responded_at: dt.datetime,
+        responded_by: str,
+    ) -> Checkpoint:
+        """Return a responded checkpoint."""
+        self._raise_if_terminal()
+        return dc.replace(
+            self,
+            status=CheckpointStatus.RESPONDED,
+            responded_at=responded_at,
+            responded_by=responded_by,
+            response_action=action,
+            response_payload=payload,
+        )
+
+    def time_out(self, at: dt.datetime) -> Checkpoint:
+        """Return a timed-out checkpoint."""
+        self._raise_if_terminal()
+        return dc.replace(
+            self,
+            status=CheckpointStatus.TIMED_OUT,
+            responded_at=at,
+        )
+
+    def cancel(self, at: dt.datetime) -> Checkpoint:
+        """Return a cancelled checkpoint."""
+        self._raise_if_terminal()
+        return dc.replace(
+            self,
+            status=CheckpointStatus.CANCELLED,
+            responded_at=at,
+        )
+
+    def _raise_if_terminal(self) -> None:
+        """Raise when the checkpoint can no longer transition."""
+        if self.status.is_terminal():
+            raise CheckpointAlreadyTerminal(self.id)
 @dc.dataclass(frozen=True)
 class SeriesProfile:
     """Series metadata required for canonical ingestion."""
@@ -404,3 +570,29 @@ class EpisodeTemplateHistoryEntry:
     note: str | None
     snapshot: JsonMapping
     created_at: dt.datetime
+
+def _is_blank(value: str) -> bool:
+    """Return whether a string is empty after whitespace trimming."""
+    return value.strip() == ""
+
+def _validate_non_empty_text(value: str, field_name: str) -> None:
+    """Validate a required non-empty string field."""
+    if not isinstance(value, str):
+        msg = f"{field_name} must be a string."
+        raise TypeError(msg)
+    if _is_blank(value):
+        msg = f"{field_name} must be a non-empty string."
+        raise ValueError(msg)
+
+def _validate_optional_text(value: str | None, field_name: str) -> None:
+    """Validate an optional string field when present."""
+    if value is not None:
+        _validate_non_empty_text(value, field_name)
+
+def _copy_json_mapping(owner: object, field_name: str) -> None:
+    """Validate and defensively copy a JSON mapping field."""
+    value = getattr(owner, field_name)
+    if not isinstance(value, dict):
+        msg = f"{field_name} must be a JSON mapping."
+        raise TypeError(msg)
+    object.__setattr__(owner, field_name, dict(value))

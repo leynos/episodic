@@ -20,6 +20,7 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-012-pronunciation-repository.md`](adr/adr-012-pronunciation-repository.md)
 - [`adr-013-speech-synthesis-adapters.md`](adr/adr-013-speech-synthesis-adapters.md)
 - [`adr-014-hexagonal-architecture-enforcement.md`](adr/adr-014-hexagonal-architecture-enforcement.md)
+- [`adr-015-generation-run-port-split.md`](adr/adr-015-generation-run-port-split.md)
 - [`adr-015-upload-and-idempotency-ports.md`](adr/adr-015-upload-and-idempotency-ports.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
@@ -1213,6 +1214,36 @@ reported an idempotency conflict. Trend
 `workflow_checkpoint.save_or_reuse.idempotency_conflicts` and save latency for
 load and retry pressure, but do not label checkpoint metrics with workflow ids,
 checkpoint ids, or idempotency keys.
+
+
+### Generation-run domain ports
+
+User-facing generation runs live in the canonical domain, separate from the
+LangGraph workflow checkpoint mechanism. The core entities are `GenerationRun`,
+`GenerationEvent`, and `Checkpoint` in `episodic.canonical.domain`; the ports
+live in `episodic.canonical.generation_run_ports`.
+
+The port surface is intentionally split:
+
+- `GenerationRunRepository` creates, fetches, lists, and updates run state.
+- `GenerationEventLog` appends events and allocates per-run `EventSeq` values
+  inside the adapter.
+- `GenerationCheckpointPort` creates checkpoints and records reviewer
+  responses through the `Checkpoint.respond(...)` domain transition.
+- `GenerationRunPort` composes the three sub-ports for callers that need the
+  complete surface.
+
+Use `InMemoryGenerationRunStore` from
+`episodic.canonical.adapters.generation_runs` as the reference adapter in fast
+tests. It implements first-write-wins idempotency for run creation and uses a
+per-run `asyncio.Lock` so concurrent event appends produce gap-free sequence
+numbers.
+
+Naming matters: `episodic.canonical.domain.Checkpoint` is the user-facing human
+review checkpoint attached to a generation run. It is not the same as
+`episodic.orchestration.WorkflowCheckpoint`, which stores internal LangGraph
+suspend/resume state through `CheckpointPort`. Do not convert between the two
+implicitly; bridge logic belongs in the later orchestration and REST work.
 
 ### Maintainer rules
 
