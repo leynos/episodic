@@ -48,6 +48,12 @@ from episodic.orchestration._checkpoint_resume import (
     resume_generation_orchestration as resume_generation_orchestration,
 )
 from episodic.orchestration._graph_state import GenerationGraphState
+from episodic.orchestration._planning_orchestrator import (
+    _cost_provider_operations,
+    _current_billing_period_key,
+    _provider_call_record,
+    _ProviderCallContext,
+)
 from episodic.orchestration._types import _log_event
 from episodic.orchestration._usage import build_generation_result
 
@@ -243,6 +249,58 @@ def _invoke_finish_callback(
         )
 
 
+async def _record_costs_from_finished_state(
+    state: GenerationGraphState,
+    *,
+    cost_recorder: protocols.CostRecorderPort | None,
+) -> None:
+    """Record graph provider-call costs from the finished direct path."""
+    if cost_recorder is None:
+        return
+    if state.request is None or state.planner_result is None:
+        return
+    billing_period_key = _current_billing_period_key()
+    planner_result = state.planner_result
+    providers = _cost_provider_operations(planner_result)
+    if providers:
+        await cost_recorder.pin_run_pricing(
+            state.request.correlation_id,
+            providers,
+            billing_period_key,
+        )
+    if planner_result.provider_call_usage is not None:
+        await cost_recorder.record_provider_call(
+            _provider_call_record(
+                context=_ProviderCallContext(
+                    workflow_run_id=state.request.correlation_id,
+                    workflow_node="planner",
+                    logical_call_id=planner_result.provider_response_id,
+                    model=planner_result.model,
+                    operation=str(planner_result.provider_operation),
+                ),
+                provider_call_usage=planner_result.provider_call_usage,
+                billing_period_key=billing_period_key,
+            )
+        )
+    for action_result in state.action_results:
+        if action_result.provider_call_usage is None:
+            continue
+        await cost_recorder.record_provider_call(
+            _provider_call_record(
+                context=_ProviderCallContext(
+                    workflow_run_id=state.request.correlation_id,
+                    workflow_node=action_result.action_kind.value,
+                    logical_call_id=action_result.action_id,
+                    model=action_result.model,
+                    operation=str(action_result.provider_operation),
+                ),
+                provider_call_usage=action_result.provider_call_usage,
+                billing_period_key=billing_period_key,
+            )
+        )
+    await cost_recorder.finalize_run(state.request.correlation_id, None)
+
+
 def _build_execute_node(
     tool_executor: protocols.ToolExecutorPort,
     checkpoint_port: protocols.CheckpointPort | None,
@@ -275,13 +333,14 @@ def _build_execute_node(
     return _run_suspend_execute_node, END
 
 
-def build_generation_orchestration_graph(
+def build_generation_orchestration_graph(  # noqa: PLR0913 - graph construction exposes orthogonal ports.
     *,
     planner: protocols.PlannerPort,
     tool_executor: protocols.ToolExecutorPort,
     checkpoint_port: protocols.CheckpointPort | None = None,
     finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None]
     | None = None,
+    cost_recorder: protocols.CostRecorderPort | None = None,
 ) -> CompiledStateGraph[
     GenerationGraphState,
     None,
@@ -312,6 +371,10 @@ def build_generation_orchestration_graph(
             serialize concurrent invocations of the same callback; callbacks
             that mutate shared state must be thread-safe or otherwise
             synchronize their own state.
+        cost_recorder: Optional cost-recorder collaborator. When provided, the
+            direct finish path records planner and action provider-call costs
+            as a side effect before invoking `finish_callback`. The suspend
+            path does not record costs because execution has not run yet.
     """
     graph = StateGraph(GenerationGraphState)
 
@@ -321,11 +384,12 @@ def build_generation_orchestration_graph(
         """Async entry point for the plan graph node."""
         return await _plan_node(state, planner=planner)
 
-    def _run_finish_node(
+    async def _run_finish_node(
         state: GenerationGraphState,
     ) -> dict[str, dto.GenerationOrchestrationResult]:
         """Entry point for the finish graph node."""
         result = _finish_node(state)
+        await _record_costs_from_finished_state(state, cost_recorder=cost_recorder)
         if finish_callback is not None:
             correlation_id = (
                 state.request.correlation_id if state.request is not None else None

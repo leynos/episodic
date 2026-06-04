@@ -271,4 +271,6 @@ class StructuredGenerationPlanner:
             model=response.model,
             provider_response_id=response.provider_response_id,
             finish_reason=response.finish_reason,
+            provider_call_usage=response.provider_call_usage,
+            provider_operation=self.config.planning_provider_operation,
         )

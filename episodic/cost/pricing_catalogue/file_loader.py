@@ -132,6 +132,17 @@ class FilePricingCatalogue:
         self._now = now
         self._cache: list[_LoadedSnapshot] | None = None
 
+    async def get_snapshot(
+        self,
+        pricing_snapshot_id: PricingSnapshotId,
+    ) -> PricingSnapshot:
+        """Return a loaded pricing snapshot by immutable identifier."""
+        for loaded in self._load_snapshots():
+            if loaded.snapshot.pricing_snapshot_id == pricing_snapshot_id:
+                return loaded.snapshot
+        msg = f"No pricing snapshot found for id {pricing_snapshot_id}."
+        raise LookupError(msg)
+
     # The catalogue key is intentionally explicit across provider, model,
     # operation, and billing period so adapters cannot collapse dimensions.
     async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments

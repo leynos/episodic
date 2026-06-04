@@ -14,12 +14,14 @@ entry_id = await recorder.record_provider_call(record)
 from __future__ import annotations
 
 import dataclasses as dc
+import datetime as dt
 import typing as typ
 
 from episodic.cost.ports import (
     BillingPeriodKey,
     CostLedgerEntryId,
     CostLedgerPort,
+    CurrencyCode,
     IdempotencyKey,
     LedgerScope,
     PricingCataloguePort,
@@ -58,6 +60,15 @@ class ProviderCallRecord:
 
 
 @dc.dataclass(frozen=True, slots=True)
+class CostProviderOperation:
+    """Provider operation whose pricing should be pinned for a run."""
+
+    provider_name: str
+    model: str
+    operation: str
+
+
+@dc.dataclass(frozen=True, slots=True)
 class CostRecorder:
     """Coordinate pricing and ledger writes for orchestration code."""
 
@@ -65,7 +76,7 @@ class CostRecorder:
     pricing_catalogue: PricingCataloguePort
     pricing_engine: PricingEngine
 
-    async def pin_run_pricing(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def _resolve_pricing_snapshot(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         provider_name: str,
         model: str,
@@ -102,6 +113,40 @@ class CostRecorder:
             billing_period_key,
         )
 
+    async def pin_run_pricing(
+        self,
+        workflow_run_id: str,
+        providers: tuple[CostProviderOperation, ...],
+        billing_period_key: BillingPeriodKey,
+    ) -> None:
+        """Resolve and persist pricing pins for one workflow run."""
+        pinned_at = dt.datetime.now(dt.UTC).isoformat()
+        for provider in providers:
+            existing_pin = await self.ledger.get_run_pricing_pin(
+                workflow_run_id=workflow_run_id,
+                provider_name=provider.provider_name,
+                model=provider.model,
+                operation=provider.operation,
+                billing_period_key=billing_period_key,
+            )
+            if existing_pin is not None:
+                continue
+            snapshot = await self._resolve_pricing_snapshot(
+                provider.provider_name,
+                provider.model,
+                provider.operation,
+                billing_period_key,
+            )
+            await self.ledger.pin_run_pricing(
+                workflow_run_id=workflow_run_id,
+                provider_name=provider.provider_name,
+                model=provider.model,
+                operation=provider.operation,
+                billing_period_key=billing_period_key,
+                pricing_snapshot_id=snapshot.pricing_snapshot_id,
+                pinned_at=pinned_at,
+            )
+
     async def record_provider_call(
         self,
         record: ProviderCallRecord,
@@ -131,12 +176,22 @@ class CostRecorder:
         computation to `pricing_engine.price`, constructs a
         `ProviderCallLedgerEntry`, and persists it with `ledger.record_call`.
         """
-        snapshot = await self.pin_run_pricing(
-            record.provider_name,
-            record.model,
-            record.operation,
-            record.billing_period_key,
+        pinned_snapshot_id = await self.ledger.get_run_pricing_pin(
+            workflow_run_id=record.workflow_run_id,
+            provider_name=record.provider_name,
+            model=record.model,
+            operation=record.operation,
+            billing_period_key=record.billing_period_key,
         )
+        if pinned_snapshot_id is None:
+            snapshot = await self._resolve_pricing_snapshot(
+                record.provider_name,
+                record.model,
+                record.operation,
+                record.billing_period_key,
+            )
+        else:
+            snapshot = await self.pricing_catalogue.get_snapshot(pinned_snapshot_id)
         priced_call = self.pricing_engine.price(
             snapshot,
             record.usage,
@@ -165,6 +220,26 @@ class CostRecorder:
             recorded_at=record.recorded_at,
         )
         return await self.ledger.record_call(entry)
+
+    async def finalize_run(
+        self,
+        workflow_run_id: str,
+        workflow_node: str | None,
+    ) -> CostLedgerEntryId:
+        """Record the final run roll-up from persisted provider-call costs."""
+        total_cost_minor = await self.ledger.sum_provider_call_costs(workflow_run_id)
+        rollup = TaskRollupLedgerEntry(
+            idempotency_key=IdempotencyKey(f"run:{workflow_run_id}:rollup"),
+            workflow_run_id=workflow_run_id,
+            workflow_node=workflow_node,
+            computed_cost_minor=total_cost_minor,
+            currency=CurrencyCode("USD"),
+            billing_period_key=BillingPeriodKey(
+                dt.datetime.now(dt.UTC).strftime("%Y-%m")
+            ),
+            recorded_at=dt.datetime.now(dt.UTC).isoformat(),
+        )
+        return await self.record_task_rollup(rollup)
 
     async def record_task_rollup(
         self,

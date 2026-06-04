@@ -152,12 +152,14 @@ class MeteringCounterEventRecord(Base):
 
 
 class RunPricingPinRecord(Base):
-    """Pricing snapshot pinned for one workflow run and provider period."""
+    """Pricing snapshot pinned for one workflow run and provider operation."""
 
     __tablename__ = "run_pricing_pins"
 
     workflow_run_id: orm.Mapped[str] = orm.mapped_column(sa.Text, primary_key=True)
     provider_name: orm.Mapped[str] = orm.mapped_column(sa.Text, primary_key=True)
+    model: orm.Mapped[str] = orm.mapped_column(sa.Text, primary_key=True)
+    operation: orm.Mapped[str] = orm.mapped_column(sa.Text, primary_key=True)
     billing_period_key: orm.Mapped[str] = orm.mapped_column(sa.Text, primary_key=True)
     pricing_snapshot_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
