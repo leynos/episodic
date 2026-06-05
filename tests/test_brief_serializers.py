@@ -101,6 +101,56 @@ class TestSerializeTemplateForBrief:
         )
 
 
+def _make_ref_doc_triple(  # pylint: disable=too-many-arguments
+    *,
+    now: dt.datetime,
+    doc_id: uuid.UUID,
+    series_id: uuid.UUID,
+    revision_id: uuid.UUID,
+    binding_id: uuid.UUID,
+    kind: ReferenceDocumentKind = ReferenceDocumentKind.STYLE_GUIDE,
+    lifecycle_state: ReferenceDocumentLifecycleState = (
+        ReferenceDocumentLifecycleState.ACTIVE
+    ),
+    metadata: dict | None = None,
+    content: dict | None = None,
+    content_hash: str = "hash",
+    author: str | None = None,
+    change_note: str | None = None,
+    effective_from_episode_id: uuid.UUID | None = None,
+) -> tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding]:
+    """Build a (document, revision, binding) triple for serialiser tests."""
+    document = ReferenceDocument(
+        id=doc_id,
+        owner_series_profile_id=series_id,
+        kind=kind,
+        lifecycle_state=lifecycle_state,
+        metadata=metadata if metadata is not None else {},
+        created_at=now,
+        updated_at=now,
+    )
+    revision = ReferenceDocumentRevision(
+        id=revision_id,
+        reference_document_id=doc_id,
+        content=content if content is not None else {},
+        content_hash=content_hash,
+        author=author,
+        change_note=change_note,
+        created_at=now,
+    )
+    binding = ReferenceBinding(
+        id=binding_id,
+        reference_document_revision_id=revision_id,
+        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+        series_profile_id=series_id,
+        episode_template_id=None,
+        ingestion_job_id=None,
+        effective_from_episode_id=effective_from_episode_id,
+        created_at=now,
+    )
+    return document, revision, binding
+
+
 class TestSerializeReferenceDocumentForBrief:
     """Tests for this group."""
 
@@ -113,33 +163,20 @@ class TestSerializeReferenceDocumentForBrief:
         binding_id = uuid.uuid4()
         episode_id = uuid.uuid4()
 
-        document = ReferenceDocument(
-            id=doc_id,
-            owner_series_profile_id=series_id,
+        document, revision, binding = _make_ref_doc_triple(
+            now=now,
+            doc_id=doc_id,
+            series_id=series_id,
+            revision_id=revision_id,
+            binding_id=binding_id,
             kind=ReferenceDocumentKind.STYLE_GUIDE,
             lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
             metadata={"version": "2.0"},
-            created_at=now,
-            updated_at=now,
-        )
-        revision = ReferenceDocumentRevision(
-            id=revision_id,
-            reference_document_id=doc_id,
             content={"rules": ["rule1"]},
             content_hash="abc123",
             author="editor",
             change_note="Initial",
-            created_at=now,
-        )
-        binding = ReferenceBinding(
-            id=binding_id,
-            reference_document_revision_id=revision_id,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=series_id,
-            episode_template_id=None,
-            ingestion_job_id=None,
             effective_from_episode_id=episode_id,
-            created_at=now,
         )
 
         result = _serialize_reference_document_for_brief(
@@ -188,33 +225,15 @@ class TestSerializeReferenceDocumentForBrief:
         revision_id = uuid.uuid4()
         binding_id = uuid.uuid4()
 
-        document = ReferenceDocument(
-            id=doc_id,
-            owner_series_profile_id=series_id,
+        document, revision, binding = _make_ref_doc_triple(
+            now=now,
+            doc_id=doc_id,
+            series_id=series_id,
+            revision_id=revision_id,
+            binding_id=binding_id,
             kind=ReferenceDocumentKind.HOST_PROFILE,
             lifecycle_state=ReferenceDocumentLifecycleState.DRAFT,
-            metadata={},
-            created_at=now,
-            updated_at=now,
-        )
-        revision = ReferenceDocumentRevision(
-            id=revision_id,
-            reference_document_id=doc_id,
             content={"data": {}},
-            content_hash="hash",
-            author=None,
-            change_note=None,
-            created_at=now,
-        )
-        binding = ReferenceBinding(
-            id=binding_id,
-            reference_document_revision_id=revision_id,
-            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-            series_profile_id=series_id,
-            episode_template_id=None,
-            ingestion_job_id=None,
-            effective_from_episode_id=None,
-            created_at=now,
         )
 
         result = _serialize_reference_document_for_brief(
