@@ -67,20 +67,37 @@ def _episode_template(
     )
 
 
+def _make_history_entry(
+    entry_cls: type,
+    parent_field: str,
+    parent_id: uuid.UUID,
+    *,
+    revision: int,
+) -> typ.Any:  # noqa: ANN401  # helper builds heterogeneous history entry types
+    """Build a history entry of *entry_cls* at *revision*.
+
+    *parent_field* is the keyword argument name that holds the parent
+    entity identifier (e.g. ``"series_profile_id"``).
+    """
+    return entry_cls(
+        id=uuid.uuid4(),
+        **{parent_field: parent_id},
+        revision=revision,
+        actor="actor@example.com",
+        note=f"Revision {revision}",
+        snapshot={"revision": revision},
+        created_at=_now(),
+    )
+
+
 def _series_history_entry(
     profile_id: uuid.UUID,
     *,
     revision: int,
 ) -> SeriesProfileHistoryEntry:
     """Build a series-profile history entry at ``revision``."""
-    return SeriesProfileHistoryEntry(
-        id=uuid.uuid4(),
-        series_profile_id=profile_id,
-        revision=revision,
-        actor="actor@example.com",
-        note=f"Revision {revision}",
-        snapshot={"revision": revision},
-        created_at=_now(),
+    return _make_history_entry(
+        SeriesProfileHistoryEntry, "series_profile_id", profile_id, revision=revision
     )
 
 
@@ -90,14 +107,11 @@ def _template_history_entry(
     revision: int,
 ) -> EpisodeTemplateHistoryEntry:
     """Build an episode-template history entry at ``revision``."""
-    return EpisodeTemplateHistoryEntry(
-        id=uuid.uuid4(),
-        episode_template_id=template_id,
+    return _make_history_entry(
+        EpisodeTemplateHistoryEntry,
+        "episode_template_id",
+        template_id,
         revision=revision,
-        actor="actor@example.com",
-        note=f"Revision {revision}",
-        snapshot={"revision": revision},
-        created_at=_now(),
     )
 
 
