@@ -15,10 +15,6 @@ import datetime as dt
 import typing as typ
 import uuid
 
-from sqlalchemy.exc import IntegrityError
-
-from episodic.canonical.constraints import REVISION_CONSTRAINT_NAMES
-
 from .types import (
     AuditMetadata,
     EntityNotFoundError,
@@ -61,27 +57,6 @@ def _check_revision_conflict(
             f"{expected_revision}, found {latest_revision}."
         )
         raise RevisionConflictError(msg)
-
-
-def _is_revision_conflict_integrity_error(
-    exc: IntegrityError,
-    entity_id_field: str,
-) -> bool:
-    """Return True when an integrity error indicates a revision collision."""
-    orig_exc = getattr(exc, "orig", exc)
-    diag = getattr(orig_exc, "diag", None)
-    constraint_name = getattr(diag, "constraint_name", None)
-    if constraint_name in REVISION_CONSTRAINT_NAMES:
-        return True
-    detail = str(orig_exc)
-    return any(
-        marker in detail
-        for marker in (
-            *REVISION_CONSTRAINT_NAMES,
-            f"({entity_id_field}, revision)",
-            f"{entity_id_field}, revision",
-        )
-    )
 
 
 def _build_snapshot_base(
@@ -177,16 +152,12 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
         created_at=now,
         **{entity_id_field: updated_entity.id},
     )
-    try:
-        await entity_repo.update(updated_entity)
-        await history_repo.add(history_entry)
-        await uow.commit()
-    except IntegrityError as exc:
-        await uow.rollback()
-        if not _is_revision_conflict_integrity_error(exc, entity_id_field):
-            raise
-        msg = f"{entity_label} revision conflict: concurrent update detected."
-        raise RevisionConflictError(msg, entity_id=str(entity_id)) from exc
+    # The storage adapter translates revision-uniqueness violations into
+    # `RevisionConflictError`, so this domain helper does not need to inspect
+    # ORM-level integrity errors. Other failures propagate unchanged.
+    await entity_repo.update(updated_entity)
+    await history_repo.add(history_entry)
+    await uow.commit()
     return updated_entity, next_revision
 
 

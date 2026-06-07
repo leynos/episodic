@@ -20,8 +20,6 @@ from .types import (
 )
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
@@ -157,29 +155,3 @@ class _BindingTargetAlignment:
     episode_template_id: uuid.UUID | None
     ingestion_job_id: uuid.UUID | None
     document_owner_series_id: uuid.UUID
-
-
-def _exception_chain(exc: object) -> cabc.Iterator[object]:
-    """Yield exc and its chained causes/contexts, then `orig`, de-duplicated."""
-    seen: set[int] = set()
-    roots = (exc, getattr(exc, "orig", exc))
-    for root in roots:
-        current: object | None = root
-        while current is not None and id(current) not in seen:
-            seen.add(id(current))
-            yield current
-            current = getattr(current, "__cause__", None) or getattr(
-                current, "__context__", None
-            )
-
-
-def _constraint_name(exc: object) -> str | None:
-    """Return the Postgres constraint name when available."""
-    for node in _exception_chain(exc):
-        direct = getattr(node, "constraint_name", None)
-        if direct is not None:
-            return typ.cast("str", direct)
-
-    orig_exc = getattr(exc, "orig", exc)
-    diag = getattr(orig_exc, "diag", None)
-    return typ.cast("str | None", getattr(diag, "constraint_name", None))

@@ -11,19 +11,10 @@ import datetime as dt
 import typing as typ
 import uuid
 
-from sqlalchemy.exc import IntegrityError
-
-from episodic.canonical.constraints import (
-    UQ_REF_DOC_BINDINGS_JOB_REV,
-    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
-)
 from episodic.canonical.domain import ReferenceBinding, ReferenceBindingTargetKind
 
 from .helpers import (
     _BindingTargetAlignment,
-    _constraint_name,
     _parse_target_kind,
     _parse_uuid,
     _require_episode_exists,
@@ -35,7 +26,6 @@ from .helpers import (
 from .types import (
     ReferenceBindingData,
     ReferenceBindingListRequest,
-    ReferenceConflictError,
     ReferenceEntityNotFoundError,
     ReferenceValidationError,
 )
@@ -44,14 +34,6 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
-
-
-_BINDING_CONSTRAINT_NAMES = {
-    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
-    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
-    UQ_REF_DOC_BINDINGS_JOB_REV,
-}
 
 
 class _SeriesOwnedEntity(typ.Protocol):
@@ -280,15 +262,14 @@ def _new_binding(
 
 
 async def _persist_binding(uow: CanonicalUnitOfWork, binding: ReferenceBinding) -> None:
-    try:
-        await uow.reference_bindings.add(binding)
-        await uow.commit()
-    except IntegrityError as exc:
-        await uow.rollback()
-        if _constraint_name(exc) not in _BINDING_CONSTRAINT_NAMES:
-            raise
-        msg = "Reference binding conflict: duplicate target/revision binding."
-        raise ReferenceConflictError(msg) from exc
+    """Persist a binding through the repository.
+
+    Duplicate-target binding violations are translated into
+    ``ReferenceConflictError`` by the storage adapter, so the service does not
+    need to inspect ORM exceptions.
+    """
+    await uow.reference_bindings.add(binding)
+    await uow.commit()
 
 
 async def create_reference_binding(
