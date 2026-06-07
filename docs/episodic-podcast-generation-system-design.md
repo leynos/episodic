@@ -1931,6 +1931,19 @@ forwarded to custom loop task factories when present. This keeps business logic
 independent of event-loop internals while enabling centralized diagnostics for
 concurrent ingestion flows.
 
+The public HTTP boundary still needs a dedicated request-correlation workstream
+before the source-to-script API can satisfy its end-to-end observability
+contract. The Falcon ASGI composition root should install `falcon-correlate`'s
+`CorrelationIDMiddlewareASGI` before authorization so each request either
+accepts a trusted incoming correlation header or generates a new UUIDv7
+correlation ID. The same active ID should be echoed on responses, available
+through `req.context.correlation_id`, copied into Celery publish and worker
+contexts, and injected into owned `httpx.AsyncClient` traffic such as the
+OpenAI-compatible LLM adapter. Runtime configuration must cover the header
+name, trusted ingress source ranges, incoming-ID validation, and
+response-header echoing so deployments can align the application contract with
+their gateway topology.
+
 During persistence, `ingest_sources` enriches the TEI header payload with
 provenance automatically. Source priorities are derived from final source
 weights (descending, preserving source input order on equal weights), ingestion

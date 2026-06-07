@@ -603,6 +603,27 @@ Completion enables stable API consumption by clients.
   - Implement pagination, filtering, and role enforcement.
   - Ensure consistent error contracts across all endpoints.
   - See [Error contract](episodic-tui-api-design.md#error-contract).
+- [ ] 4.1.3. Integrate request correlation across HTTP, tasks, and outbound
+  provider calls. Requires 1.5.1 and 1.5.2.
+  - Add `falcon-correlate` as an application dependency once a pinned release
+    or Git revision is selected.
+  - Wire `CorrelationIDMiddlewareASGI` into the Falcon composition root before
+    authorization middleware so denial, error, and resource logs share the same
+    request identifier.
+  - Expose runtime configuration for the correlation header name, trusted proxy
+    or ingress source ranges, incoming-ID validation, and response-header
+    echoing.
+  - Configure Celery correlation propagation in the worker composition root so
+    published tasks and worker-side logs inherit the active request
+    correlation ID.
+  - Wrap owned `httpx.AsyncClient` instances, including the OpenAI-compatible
+    LLM adapter client, with `falcon-correlate` transport support so provider
+    calls receive the active correlation header.
+  - Add Falcon ASGI, Celery eager-mode, and outbound `httpx.MockTransport`
+    tests proving generated IDs are visible on `req.context`, response
+    headers, task context, and provider request headers.
+  - Document the operator-facing header contract and local debugging workflow
+    in the users' guide and developers' guide.
 
 ### 4.2. Episode and approval workflow endpoints
 
