@@ -1,5 +1,6 @@
 """Unit tests for brief-payload serialisation helpers."""
 
+import dataclasses
 import datetime as dt
 import uuid
 
@@ -101,52 +102,72 @@ class TestSerializeTemplateForBrief:
         )
 
 
-def _make_ref_doc_triple(  # pylint: disable=too-many-arguments
-    *,
-    now: dt.datetime,
-    doc_id: uuid.UUID,
-    series_id: uuid.UUID,
-    revision_id: uuid.UUID,
-    binding_id: uuid.UUID,
-    kind: ReferenceDocumentKind = ReferenceDocumentKind.STYLE_GUIDE,
+@dataclasses.dataclass(frozen=True)
+class _TripleIds:
+    """Shared identity and timestamp fields for a document/revision/binding triple."""
+
+    now: dt.datetime
+    doc_id: uuid.UUID
+    series_id: uuid.UUID
+    revision_id: uuid.UUID
+    binding_id: uuid.UUID
+
+
+@dataclasses.dataclass(frozen=True)
+class _DocumentSpec:
+    """Document-specific field overrides for ``_make_ref_doc_triple``."""
+
+    kind: ReferenceDocumentKind = ReferenceDocumentKind.STYLE_GUIDE
     lifecycle_state: ReferenceDocumentLifecycleState = (
         ReferenceDocumentLifecycleState.ACTIVE
-    ),
-    metadata: dict | None = None,
-    content: dict | None = None,
-    content_hash: str = "hash",
-    author: str | None = None,
-    change_note: str | None = None,
-    effective_from_episode_id: uuid.UUID | None = None,
+    )
+    metadata: dict | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class _RevisionSpec:
+    """Revision- and binding-specific field overrides for ``_make_ref_doc_triple``."""
+
+    content: dict | None = None
+    content_hash: str = "hash"
+    author: str | None = None
+    change_note: str | None = None
+    effective_from_episode_id: uuid.UUID | None = None
+
+
+def _make_ref_doc_triple(
+    ids: _TripleIds,
+    doc_spec: _DocumentSpec,
+    rev_spec: _RevisionSpec,
 ) -> tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding]:
     """Build a (document, revision, binding) triple for serialiser tests."""
     document = ReferenceDocument(
-        id=doc_id,
-        owner_series_profile_id=series_id,
-        kind=kind,
-        lifecycle_state=lifecycle_state,
-        metadata=metadata if metadata is not None else {},
-        created_at=now,
-        updated_at=now,
+        id=ids.doc_id,
+        owner_series_profile_id=ids.series_id,
+        kind=doc_spec.kind,
+        lifecycle_state=doc_spec.lifecycle_state,
+        metadata=doc_spec.metadata if doc_spec.metadata is not None else {},
+        created_at=ids.now,
+        updated_at=ids.now,
     )
     revision = ReferenceDocumentRevision(
-        id=revision_id,
-        reference_document_id=doc_id,
-        content=content if content is not None else {},
-        content_hash=content_hash,
-        author=author,
-        change_note=change_note,
-        created_at=now,
+        id=ids.revision_id,
+        reference_document_id=ids.doc_id,
+        content=rev_spec.content if rev_spec.content is not None else {},
+        content_hash=rev_spec.content_hash,
+        author=rev_spec.author,
+        change_note=rev_spec.change_note,
+        created_at=ids.now,
     )
     binding = ReferenceBinding(
-        id=binding_id,
-        reference_document_revision_id=revision_id,
+        id=ids.binding_id,
+        reference_document_revision_id=ids.revision_id,
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series_id,
+        series_profile_id=ids.series_id,
         episode_template_id=None,
         ingestion_job_id=None,
-        effective_from_episode_id=effective_from_episode_id,
-        created_at=now,
+        effective_from_episode_id=rev_spec.effective_from_episode_id,
+        created_at=ids.now,
     )
     return document, revision, binding
 
@@ -164,19 +185,25 @@ class TestSerializeReferenceDocumentForBrief:
         episode_id = uuid.uuid4()
 
         document, revision, binding = _make_ref_doc_triple(
-            now=now,
-            doc_id=doc_id,
-            series_id=series_id,
-            revision_id=revision_id,
-            binding_id=binding_id,
-            kind=ReferenceDocumentKind.STYLE_GUIDE,
-            lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
-            metadata={"version": "2.0"},
-            content={"rules": ["rule1"]},
-            content_hash="abc123",
-            author="editor",
-            change_note="Initial",
-            effective_from_episode_id=episode_id,
+            _TripleIds(
+                now=now,
+                doc_id=doc_id,
+                series_id=series_id,
+                revision_id=revision_id,
+                binding_id=binding_id,
+            ),
+            _DocumentSpec(
+                kind=ReferenceDocumentKind.STYLE_GUIDE,
+                lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+                metadata={"version": "2.0"},
+            ),
+            _RevisionSpec(
+                content={"rules": ["rule1"]},
+                content_hash="abc123",
+                author="editor",
+                change_note="Initial",
+                effective_from_episode_id=episode_id,
+            ),
         )
 
         result = _serialize_reference_document_for_brief(
@@ -226,14 +253,18 @@ class TestSerializeReferenceDocumentForBrief:
         binding_id = uuid.uuid4()
 
         document, revision, binding = _make_ref_doc_triple(
-            now=now,
-            doc_id=doc_id,
-            series_id=series_id,
-            revision_id=revision_id,
-            binding_id=binding_id,
-            kind=ReferenceDocumentKind.HOST_PROFILE,
-            lifecycle_state=ReferenceDocumentLifecycleState.DRAFT,
-            content={"data": {}},
+            _TripleIds(
+                now=now,
+                doc_id=doc_id,
+                series_id=series_id,
+                revision_id=revision_id,
+                binding_id=binding_id,
+            ),
+            _DocumentSpec(
+                kind=ReferenceDocumentKind.HOST_PROFILE,
+                lifecycle_state=ReferenceDocumentLifecycleState.DRAFT,
+            ),
+            _RevisionSpec(content={"data": {}}),
         )
 
         result = _serialize_reference_document_for_brief(

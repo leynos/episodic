@@ -17,7 +17,15 @@ public package API.
 import typing as typ
 
 from episodic.canonical.domain import ReferenceBindingTargetKind
+from episodic.canonical.reference_documents.resolution import resolve_bindings
 
+from ._brief_loaders import (
+    _assert_document_owner,
+    _load_documents_by_id,
+    _load_revisions_by_id,
+    _serialize_bindings_for_owner,
+)
+from ._brief_serializers import _serialize_reference_document_for_brief
 from .types import EntityNotFoundError
 
 if typ.TYPE_CHECKING:
@@ -60,15 +68,6 @@ async def _load_episode_aware_reference_documents(
     ``effective_from_episode_id`` precedence, then appends any template-scoped
     bindings without episode filtering.
     """
-    from episodic.canonical.reference_documents import resolve_bindings
-
-    from ._brief_loaders import (
-        _load_documents_by_id,
-        _load_revisions_by_id,
-        _serialize_bindings_for_owner,
-    )
-    from ._brief_serializers import _serialize_reference_document_for_brief
-
     await _validate_episode_for_brief(uow, episode_id=episode_id, profile_id=profile_id)
     resolved_bindings = await resolve_bindings(
         uow,
@@ -77,12 +76,7 @@ async def _load_episode_aware_reference_documents(
     )
     resolved_documents: list[JsonMapping] = []
     for resolved in resolved_bindings:
-        if resolved.document.owner_series_profile_id != profile_id:
-            msg = (
-                f"Reference document {resolved.document.id} does not belong to "
-                f"requested series profile {profile_id}."
-            )
-            raise ValueError(msg)
+        _assert_document_owner(resolved.document, profile_id)
         resolved_documents.append(
             _serialize_reference_document_for_brief(
                 binding=resolved.binding,
@@ -151,12 +145,6 @@ async def _load_legacy_reference_documents(
     Aggregates all SERIES_PROFILE bindings plus EPISODE_TEMPLATE bindings for
     every template in ``template_items``, then serialises the full set.
     """
-    from ._brief_loaders import (
-        _load_documents_by_id,
-        _load_revisions_by_id,
-        _serialize_bindings_for_owner,
-    )
-
     all_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         target_id=profile_id,

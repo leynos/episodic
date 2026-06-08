@@ -14,6 +14,8 @@ API.
 
 import typing as typ
 
+from ._brief_serializers import _serialize_reference_document_for_brief
+from .services import get_entity_with_revision, list_entities_with_revisions
 from .types import EntityNotFoundError
 
 if typ.TYPE_CHECKING:
@@ -101,8 +103,6 @@ def _serialize_bindings_for_owner(
     owner_series_profile_id: uuid.UUID,
 ) -> list[JsonMapping]:
     """Serialize bindings after validating owner alignment for each document."""
-    from ._brief_serializers import _serialize_reference_document_for_brief
-
     serialized: list[JsonMapping] = []
     for binding in bindings:
         revision = revisions_by_id[binding.reference_document_revision_id]
@@ -156,8 +156,6 @@ async def _load_template_items_for_brief(
     template_id: uuid.UUID | None,
 ) -> list[tuple[EpisodeTemplate, int]]:
     """Load template and revision pairs for structured brief rendering."""
-    from .services import get_entity_with_revision, list_entities_with_revisions
-
     if template_id is None:
         items = await list_entities_with_revisions(
             uow,

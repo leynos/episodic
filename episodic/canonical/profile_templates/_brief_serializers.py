@@ -9,6 +9,8 @@ package API; import only through the ``brief`` entry point.
 
 import typing as typ
 
+from .helpers import _profile_payload_fields, _template_payload_fields
+
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         EpisodeTemplate,
@@ -25,8 +27,6 @@ def _serialize_profile_for_brief(
     revision: int,
 ) -> JsonMapping:
     """Serialize profile with revision for structured brief payloads."""
-    from .helpers import _profile_payload_fields
-
     return {
         **_profile_payload_fields(profile),
         "revision": revision,
@@ -39,8 +39,6 @@ def _serialize_template_for_brief(
     revision: int,
 ) -> JsonMapping:
     """Serialize episode template with revision for structured brief payloads."""
-    from .helpers import _template_payload_fields
-
     return {
         **_template_payload_fields(template),
         "revision": revision,
@@ -55,7 +53,8 @@ def _serialize_reference_document_for_brief(
     revision: ReferenceDocumentRevision,
 ) -> JsonMapping:
     """Serialize a reference binding/document/revision triple."""
-    effective_from_episode_id = None if binding.effective_from_episode_id is None else str(binding.effective_from_episode_id)  # noqa: E501  # fmt: skip
+    effective_from = binding.effective_from_episode_id
+    effective_from_episode_id = None if effective_from is None else str(effective_from)
     return {
         "binding_id": str(binding.id),
         "document_id": str(document.id),
