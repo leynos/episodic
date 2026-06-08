@@ -33,14 +33,20 @@ follow-up roadmap item that should own it.
 Success is observable when:
 
 1. A client can `POST /v1/uploads` with `multipart/form-data` containing a
-   research-paper Portable Document Format (PDF) byte stream, an
-   `Idempotency-Key` Hypertext Transfer Protocol (HTTP) header, and metadata,
-   and receive `201 Created` with body
+   source-document byte stream of any allowlisted content type — Portable
+   Document Format (PDF, `application/pdf`), Office Open XML document
+   (DOCX, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`),
+   plain text (`text/plain`), Markdown (`text/markdown`), or Hypertext
+   Markup Language (`text/html`) — an `Idempotency-Key` Hypertext Transfer
+   Protocol (HTTP) header, and metadata, and receive `201 Created` with
+   body
    `{"id": "<uuid>", "content_hash": "sha256:<hex>", "size_bytes": <int>,`
-   `"content_type": "application/pdf", "storage_key": "<opaque>", ...}`. A
-   second identical request with the same key returns the same `201` response
-   verbatim; a request with the same key and a different body returns `409`
-   with body `{"code": "idempotency_conflict", ...}`.
+   `"content_type": "<allowlisted-mime>", "storage_key": "<opaque>", ...}`.
+   A second identical request with the same key returns the same `201`
+   response verbatim; a request with the same key and a different body
+   returns `409` with body `{"code": "idempotency_conflict", ...}`. A
+   request whose declared `content_type` is outside the allowlist returns
+   `415` with body `{"code": "unsupported_content_type", ...}`.
 2. A client can `POST /v1/ingestion-jobs` with
    `{"series_profile_id": "<uuid>", "target_episode_id": null}` and an
    `Idempotency-Key`, and receive `201 Created` with body
