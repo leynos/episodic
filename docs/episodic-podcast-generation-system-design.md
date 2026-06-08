@@ -20,6 +20,7 @@ Accepted decision records:
 - [ADR 012: Pronunciation repository](adr/adr-012-pronunciation-repository.md)
 - [ADR 013: Speech synthesis adapters](adr/adr-013-speech-synthesis-adapters.md)
 - [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
+- [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
 
 ## Overview
 
@@ -981,6 +982,13 @@ operations that can outlive a request return pollable resources with
 `POST` requests accept `Idempotency-Key` so clients can retry network failures
 without duplicating uploads, source attachments, or generation runs.
 
+ADR 015 records the implementation ports for the first task. Upload bytes go
+through an `ObjectStorePort`, retryable `POST` requests go through an
+`IdempotencyStore`, and pre-generation attachments are stored separately from
+post-merge `source_documents`. The first implementation serves only
+`POST /v1/uploads`; resumable upload initialisation and direct byte `PUT`
+routes are deferred until a concrete S3-compatible adapter lands.
+
 TEI retrieval remains attached to the episode resource rather than to export
 jobs. `GET /v1/episodes/{episode_id}/tei` returns a JSON envelope by default,
 including TEI XML, content hash, revision, last generation run id, quality
@@ -1471,7 +1479,13 @@ Agentic workflow behaviour is configurable per series profile:
   limits, storage location, and idempotency keys before uploaded material is
   attached to ingestion jobs.
 - `ingestion_jobs` tracks each ingestion run, including status, timestamps, and
-  targeted episodes.
+  targeted episodes. Source-intake readiness is tracked separately from merge
+  status through `intake_state`.
+- `ingestion_job_sources` records pre-generation attachments for an ingestion
+  job. Each row references either an `upload` or a remote `source_uri`, but not
+  both.
+- `idempotency_records` stores accepted retryable request keys, body hashes,
+  replayable response payloads, and expiry timestamps.
 - `source_documents` records ingestion-run inputs, document types, weighting
   factors, and original files in object storage.
 - `episodes` holds canonical TEI, generation status, QA verdicts, and approval
@@ -1563,6 +1577,61 @@ the same provenance contract when implemented.
 
 The diagram below summarizes the canonical content tables and their
 relationships.
+
+For screen readers: the following entity-relationship diagram shows uploads,
+ingestion jobs, source attachments, source provenance, and idempotency records.
+
+```mermaid
+erDiagram
+  UPLOADS {
+    uuid id
+    string owner_principal_id
+    string content_type
+    string content_hash
+    string storage_key
+    string state
+  }
+
+  INGESTION_JOBS {
+    uuid id
+    uuid series_profile_id
+    uuid target_episode_id
+    string status
+    string intake_state
+  }
+
+  INGESTION_JOB_SOURCES {
+    uuid id
+    uuid ingestion_job_id
+    uuid upload_id
+    string source_uri
+    string attachment_kind
+    string source_type
+  }
+
+  SOURCE_DOCUMENTS {
+    uuid id
+    uuid ingestion_job_id
+    uuid episode_id
+    string document_type
+  }
+
+  IDEMPOTENCY_RECORDS {
+    uuid id
+    string principal_id
+    string route
+    string key
+    string body_hash
+    string state
+  }
+
+  INGESTION_JOBS ||--o{ INGESTION_JOB_SOURCES : queues
+  UPLOADS ||--o{ INGESTION_JOB_SOURCES : attaches
+  INGESTION_JOBS ||--o{ SOURCE_DOCUMENTS : produces
+```
+
+_Figure 18: Source-intake tables and their relationship to post-merge
+provenance._
 
 ```mermaid
 erDiagram

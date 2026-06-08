@@ -687,6 +687,40 @@ When an episode context is present, the same resolution algorithm is exposed
 through `ResolvedBindingsResource` and reused by ingestion to snapshot the
 resolved reference revisions into provenance `source_documents`.
 
+
+### Source-intake idempotency and errors
+
+Roadmap item `4.3.1` reserves the source-intake `POST` contract for idempotent
+uploads, ingestion jobs, and source attachments. Each side-effecting request in
+the slice accepts `Idempotency-Key`; the server scopes the key by authenticated
+principal, route, and request-body hash. A repeated request with the same key
+and same canonical body replays the stored response. A repeated request with
+the same key and a different canonical body returns `409 Conflict`.
+
+The following error codes are reserved for the source-intake implementation:
+
+| Error code                 | HTTP status | Meaning                                                       |
+| -------------------------- | ----------- | ------------------------------------------------------------- |
+| `idempotency_conflict`     | 409         | Same key, different request-body hash.                        |
+| `idempotency_in_progress`  | 409         | Same key and body while the first request is still in flight. |
+| `upload_not_found`         | 404         | Referenced `upload_id` does not exist.                        |
+| `upload_not_ready`         | 409         | Referenced `upload_id` is not yet in `ready` state.           |
+| `upload_hash_mismatch`     | 400         | Server-computed SHA-256 differs from the client declaration.  |
+| `upload_size_mismatch`     | 400         | Server-observed byte count differs from the declared size.    |
+| `unsupported_content_type` | 415         | Declared content type is outside the allowlist.               |
+| `payload_too_large`        | 413         | Streamed body exceeds the configured cap.                     |
+| `source_payload_invalid`   | 422         | Source-attachment payload fails discriminator validation.     |
+| `ingestion_job_not_found`  | 404         | Referenced ingestion job does not exist.                      |
+| `series_profile_not_found` | 404         | Referenced series profile does not exist.                     |
+
+_Table 4: Reserved source-intake API error codes._
+
+Until the automated purge worker lands, operators can recover stale upload and
+idempotency state manually. Stale `uploads` rows in `pending` or `failed` state
+identify blobs that can be deleted through the configured object-store adapter.
+Expired idempotency rows can be purged with a bounded SQL delete against
+`idempotency_records.expires_at`.
+
 ### Prompt scaffolding for generators
 
 Use the canonical prompt helpers to build deterministic generation scaffolds
