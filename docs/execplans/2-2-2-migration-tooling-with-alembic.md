@@ -270,8 +270,8 @@ Create `episodic/canonical/storage/migration_check.py` with:
    `tests/conftest.py`), calls `detect_schema_drift()`, prints results, and
    returns exit code 0 or 1.
 
-3. A `if __name__ == "__main__"` guard that calls `sys.exit(asyncio.run(
-   check_migrations_cli()))`.
+3. A `if __name__ == "__main__"` guard that calls
+   `sys.exit(asyncio.run( check_migrations_cli()))`.
 
 The module uses `femtologging` via `episodic.logging` for status messages.
 

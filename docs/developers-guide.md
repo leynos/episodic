@@ -537,7 +537,7 @@ payloads automatically.
 
 Series profile and episode template workflows are implemented as a driving
 adapter (`episodic/api/app.py`) over domain services in
-`episodic/canonical/profile_templates.py`.
+`episodic/canonical/profile_templates/`.
 
 ### Endpoints
 
@@ -629,6 +629,37 @@ Implementation notes:
 - Inbound adapters map typed reusable-reference service errors to Falcon HTTP
   errors through `episodic/api/errors.py`, so callers receive the shared REST
   error envelope instead of Falcon's default `{title, description}` body.
+
+### Internal service-module decomposition
+
+Canonical service modules that exceeded the 400-line limit have been split into
+focused submodules, each exposing a thin public façade. Callers must import
+only from the façade; the `_` prefix on submodule names signals they are
+package-internal.
+
+**`reference_documents/bindings`**
+
+- `bindings.py` — thin façade re-exporting `create_reference_binding`,
+  `get_reference_binding`, and `list_reference_bindings`.
+- `_binding_validation.py` — target validation, alignment checks, and
+  identifier parsing (`_validate_*`, `_assert_*`, `_parse_binding_ids`).
+- `_binding_creation.py` — `create_reference_binding` orchestrator and
+  persistence helpers (`_new_binding`, `_persist_binding`).
+- `_binding_queries.py` — `get_reference_binding` and
+  `list_reference_bindings` query operations.
+
+The shared `_ParsedBindingIds` dataclass lives in `types.py` so all binding
+submodules reference a single definition.
+
+**`profile_templates/brief`**
+
+- `brief.py` — orchestration entry point; exports only `build_series_brief`.
+- `_brief_serializers.py` — pure data-shaping transforms to brief payloads
+  (no database dependencies).
+- `_brief_loaders.py` — entity loading, binding serialization with owner
+  alignment, and template-item resolution.
+- `_brief_reference_documents.py` — episode-aware and legacy reference
+  document resolution strategies.
 
 ### Reusable reference-document repositories
 

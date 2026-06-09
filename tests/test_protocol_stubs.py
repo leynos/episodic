@@ -110,6 +110,12 @@ async def _assert_async_stub_raises(
             (),
             {"target_kind": None, "target_id": None},
         ),
+        (
+            ReferenceBindingRepository,
+            "list_for_targets",
+            (),
+            {"target_kind": None, "target_ids": ()},
+        ),
         (EpisodeTemplateRepository, "add", (None,), {}),
         (EpisodeTemplateRepository, "get", (None,), {}),
         (EpisodeTemplateRepository, "list", (None,), {}),

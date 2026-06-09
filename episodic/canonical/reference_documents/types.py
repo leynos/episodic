@@ -1,6 +1,28 @@
-"""Types and errors for reusable reference-document services."""
+"""Types and errors for reusable reference-document services.
+
+Defines the data-transfer objects, typed error hierarchy, and shared internal
+types used across the ``reference_documents`` sub-modules:
+
+- Input DTOs: ``ReferenceDocumentCreateData``, ``ReferenceDocumentRevisionData``,
+  ``ReferenceBindingData``, ``ReferenceBindingListRequest``.
+- Error types: ``ReferenceDocumentError``, ``ReferenceValidationError``,
+  ``ReferenceConflictError``, ``ReferenceEntityNotFoundError``,
+  ``ReferenceRevisionConflictError``.
+- Internal: ``_ParsedBindingIds`` (parsed/validated binding payload fields,
+  used by ``_binding_validation`` and ``_binding_creation``).
+
+This module does not perform validation, persistence, or query logic itself;
+it is consumed by sibling ``reference_documents`` service sub-modules and the
+parent facades.
+"""
 
 import dataclasses as dc
+import typing as typ
+
+if typ.TYPE_CHECKING:
+    import uuid
+
+    from episodic.canonical.domain import ReferenceBindingTargetKind
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -94,3 +116,15 @@ class ReferenceRevisionConflictError(ReferenceDocumentError):
 
 class ReferenceConflictError(ReferenceDocumentError):
     """Raised when persistence constraints reject a write."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ParsedBindingIds:
+    """Parsed and validated UUID/enum fields from a ReferenceBindingData payload."""
+
+    revision_id: uuid.UUID
+    target_kind: ReferenceBindingTargetKind
+    series_profile_id: uuid.UUID | None
+    episode_template_id: uuid.UUID | None
+    ingestion_job_id: uuid.UUID | None
+    effective_from_episode_id: uuid.UUID | None

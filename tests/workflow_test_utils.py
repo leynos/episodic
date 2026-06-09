@@ -5,12 +5,15 @@ import os
 import socket
 import subprocess  # noqa: S404
 import typing as typ
+import uuid
 from shutil import which
 from zipfile import ZipFile
 
 import pytest
 
 from tests.utils import podman_socket_path
+
+ACT_RUNNER_IMAGE = "catthehacker/ubuntu:act-latest"
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -47,6 +50,68 @@ def _timeout_output_part_to_text(part: bytes | str) -> str:
     return part
 
 
+def _ensure_act_runner_backend(socket_uri: str) -> None:
+    """Skip workflow tests when the local act runner backend cannot start."""
+    podman_path = which("podman")
+    if podman_path is None:
+        pytest.skip("podman is required to preflight the act runner backend.")
+
+    container_name = f"episodic-act-preflight-{uuid.uuid4()}"
+    cmd = [
+        podman_path,
+        "--remote",
+        "--url",
+        socket_uri,
+        "run",
+        "--rm",
+        "--name",
+        container_name,
+        "--entrypoint",
+        "/bin/true",
+        ACT_RUNNER_IMAGE,
+    ]
+    try:
+        completed = subprocess.run(  # noqa: S603
+            cmd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        partial_output = "\n".join(
+            _timeout_output_part_to_text(part)
+            for part in (exc.output, exc.stderr)
+            if part is not None
+        )
+        pytest.skip(
+            "act runner backend timed out starting "
+            f"{ACT_RUNNER_IMAGE}: {partial_output}"
+        )
+    if completed.returncode == 0:
+        return
+
+    subprocess.run(  # noqa: S603
+        [
+            podman_path,
+            "--remote",
+            "--url",
+            socket_uri,
+            "rm",
+            "-f",
+            container_name,
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    pytest.skip(
+        "act runner backend cannot start "
+        f"{ACT_RUNNER_IMAGE}: {completed.stderr or completed.stdout}"
+    )
+
+
 def run_act(
     *,
     job_name: str,
@@ -59,6 +124,7 @@ def run_act(
 
     socket_path = podman_socket_path()
     socket_uri = f"unix://{socket_path}"
+    _ensure_act_runner_backend(socket_uri)
     port = artifact_server_port()
     cmd = [
         "act",
@@ -68,7 +134,7 @@ def run_act(
         "-e",
         str(event_path),
         "-P",
-        "ubuntu-latest=catthehacker/ubuntu:act-latest",
+        f"ubuntu-latest={ACT_RUNNER_IMAGE}",
         "--container-daemon-socket",
         socket_uri,
         "--artifact-server-addr",

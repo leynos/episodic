@@ -283,6 +283,30 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
         result = await self._session.execute(statement)
         return [_reference_binding_from_record(row) for row in result.scalars()]
 
+    async def list_for_targets(
+        self,
+        *,
+        target_kind: ReferenceBindingTargetKind,
+        target_ids: cabc.Collection[uuid.UUID],
+    ) -> list[ReferenceBinding]:
+        """List reusable reference bindings for several target contexts."""
+        if not target_ids:
+            return []
+        target_field = self._target_field(target_kind)
+        statement = (
+            sa
+            .select(ReferenceBindingRecord)
+            .where(
+                sa.and_(
+                    ReferenceBindingRecord.target_kind == target_kind,
+                    target_field.in_(list(target_ids)),
+                )
+            )
+            .order_by(ReferenceBindingRecord.created_at)
+        )
+        result = await self._session.execute(statement)
+        return [_reference_binding_from_record(row) for row in result.scalars()]
+
     async def count_for_target(
         self,
         *,
