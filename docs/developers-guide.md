@@ -124,8 +124,8 @@ REST pagination and filter contract:
 
 - List resources parse pagination through `parse_pagination`. The shared
   contract is `limit=20`, `offset=0`, `1 <= limit <= 100`, and `offset >= 0`.
-- List responses return `{"items": […], "limit": <int>, "offset": <int>,
-  "total": <int>}`.
+- List responses return
+  `{"items": […], "limit": <int>, "offset": <int>, "total": <int>}`.
 - Optional UUID query filters use `parse_optional_uuid_param`; invalid values
   raise `validation_error` with `{"field": "<name>", "constraint": "uuid"}`.
 - Optional enum filters use `parse_enum_param`; invalid values raise
@@ -306,30 +306,30 @@ When adding new worker tasks:
 
 ## Observability port abstractions
 
-Two canonical observability ports live in `episodic/observability.py` and
-must be the default when adding new operational instrumentation:
+Two canonical observability ports live in `episodic/observability.py` and must
+be the default when adding new operational instrumentation:
 
 - `MetricsPort` is the canonical bounded-cardinality metrics interface. Its
   `labels` parameters are typed as `collections.abc.Mapping[str, str]` so
-  callers can pass `dict` or any read-only mapping value, which keeps
-  adapter wiring flexible at the boundary.
+  callers can pass `dict` or any read-only mapping value, which keeps adapter
+  wiring flexible at the boundary.
 - `MonotonicClockPort` is the canonical clock port for measuring elapsed
-  operation time. Feature modules (for example `episodic.qa.chrono`) must
-  reuse this port rather than declaring parallel hierarchies. The matching
-  default adapter `PerfCounterClock` is exported from the same module.
+  operation time. Feature modules (for example `episodic.qa.chrono`) must reuse
+  this port rather than declaring parallel hierarchies. The matching default
+  adapter `PerfCounterClock` is exported from the same module.
 
-`episodic/metrics_ports.py` retains the narrower
-`BoundedMetricsPort` and `BoundedValueMetricsPort` protocols, whose
-`labels` parameters are typed as `dict[str, str]`. They exist for the
-feature-specific ports (`ChronoMetricsPort`, `CpuTaskExecutorMetricsPort`)
-that historically extended them. New code should depend on the canonical
-`MetricsPort` unless extending one of those existing feature ports.
+`episodic/metrics_ports.py` retains the narrower `BoundedMetricsPort` and
+`BoundedValueMetricsPort` protocols, whose `labels` parameters are typed as
+`dict[str, str]`. They exist for the feature-specific ports
+(`ChronoMetricsPort`, `CpuTaskExecutorMetricsPort`) that historically extended
+them. New code should depend on the canonical `MetricsPort` unless extending
+one of those existing feature ports.
 
 Adapters that satisfy `MetricsPort` also satisfy `BoundedMetricsPort` for
-callers that construct their label dictionaries as concrete `dict`
-instances. Tests should reuse `episodic.observability.NoopMetrics` and
-`PerfCounterClock` (or the feature-specific noops, such as the private
-`_NoopChronoMetrics`) as default test doubles for the boundary.
+callers that construct their label dictionaries as concrete `dict` instances.
+Tests should reuse `episodic.observability.NoopMetrics` and `PerfCounterClock`
+(or the feature-specific noops, such as the private `_NoopChronoMetrics`) as
+default test doubles for the boundary.
 
 ## Database migrations
 
@@ -499,8 +499,7 @@ The enforced groups are:
 - `inbound_adapter`: Falcon API modules and worker task/topology seams.
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
   OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
-  `episodic.llm.openai_api` helper package, and
-  `episodic.llm.openai_client`.
+  `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
 
@@ -762,8 +761,8 @@ Pedante and Chrono are implemented in the `episodic/qa/` package.
   implementations.
 - Wire Chrono operational metrics through `ChronoMetricsPort` and measure
   latency through the shared `MonotonicClockPort` from
-  `episodic.observability`. Keep labels bounded to outcome and error class,
-  and record estimator latency without including script text or other
+  `episodic.observability`. Keep labels bounded to outcome and error class, and
+  record estimator latency without including script text or other
   high-cardinality payload data. Keep the deterministic spoken-runtime
   calculation free of logging, metrics, and wall-clock reads; those side
   effects belong at the estimator orchestration boundary.
@@ -1164,12 +1163,11 @@ checkpoint ids, or idempotency keys.
   impossible requests, and normalized provider usage is checked again after the
   response returns.
 - `OpenAICompatibleLLMConfig(chars_per_token=...)` controls the preflight
-  estimate. The value defaults to `4.0`, must be finite and greater than
-  zero, and is applied as
-  `ceil(len(prompt_text) / chars_per_token)` across the request prompt and
-  optional system prompt. Tune it by comparing sampled prompt character counts
-  with provider-reported input-token usage for the target model and prompt
-  shape.
+  estimate. The value defaults to `4.0`, must be finite and greater than zero,
+  and is applied as `ceil(len(prompt_text) / chars_per_token)` across the
+  request prompt and optional system prompt. Tune it by comparing sampled
+  prompt character counts with provider-reported input-token usage for the
+  target model and prompt shape.
 - Persisted `guardrails` belong to canonical profile/template state and are
   composed before the adapter call, not inside the vendor transport layer.
 
