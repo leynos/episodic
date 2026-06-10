@@ -177,6 +177,9 @@ through `tests/conftest.py`.
   mode. Keep that default unless deliberately investigating worker-count
   behaviour; setting a value above one adds `pytest -n <n>`, and higher worker
   counts can trigger py-pglite cross-worker process termination.
+- Concurrent xdist workers share one py-pglite process. Schema resets must go
+  through `_schema_reset_lock` in `tests/fixtures/database.py` so one worker
+  cannot drop `public` while another worker is applying migrations.
 - The project-level pytest timeout is 180 seconds so function-scoped
   py-pglite startup and Alembic migration application have room to complete on
   shared hosts. Treat repeated near-timeout database tests as fixture or

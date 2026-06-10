@@ -32,6 +32,11 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     _PGLITE_AVAILABLE = False
 
 
+# Serialise concurrent schema resets under pytest-xdist. Workers sharing one
+# py-pglite process must go through this lock before dropping `public`.
+_schema_reset_lock = asyncio.Lock()
+
+
 @pytest.fixture(scope="session")
 def pglite_node_environment(
     tmp_path_factory: pytest.TempPathFactory,
@@ -92,7 +97,7 @@ async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
 
 async def _reset_public_schema(engine: AsyncEngine) -> None:
     """Reset the shared py-pglite database before applying migrations."""
-    async with engine.begin() as connection:
+    async with _schema_reset_lock, engine.begin() as connection:
         await connection.execute(sa.text("DROP SCHEMA IF EXISTS public CASCADE"))
         await connection.execute(sa.text("CREATE SCHEMA public"))
 
