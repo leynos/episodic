@@ -26,18 +26,46 @@ Introduce two driven ports under `episodic.canonical.*`:
   storage paths, and the port rejects absolute paths, leading slashes, and `..`
   components before an adapter touches the filesystem.
 - `IdempotencyStore` records retryable side-effecting `POST` requests by
-  `(principal_id, route, idempotency_key)`. The backing SQL table enforces that
-  tuple with a unique constraint. `acquire` returns one of `Acquired`, `Replay`,
-  `Conflict`, or `InFlight`; `complete` stores the final status, response
-  body, response headers, and expiry timestamp.
+  `(principal_id, operation, idempotency_key)`, where `operation` is a stable
+  adapter-defined domain operation string such as `upload.create` or
+  `ingestion_job.create`. The backing SQL table enforces that tuple with a
+  unique constraint. `acquire` returns one of the domain-only outcomes
+  `Acquired(record_id: UUID)`, `Replay(serialised_outcome: bytes)`,
+  `Conflict(record_id: UUID)`, or `InFlight(record_id: UUID)`. `complete`
+  accepts `(record_id: UUID, serialised_outcome: bytes)` and stores only the
+  opaque bytes and expiry timestamp. The HTTP adapter is responsible for
+  serialising status, body, and headers before completion and deserialising
+  them when replaying.
 
 The intake slice also introduces:
 
 - `Upload`, a metadata record for uploaded bytes.
 - `IngestionJobSource`, a pre-generation source attachment that references
   either an upload or a remote source Uniform Resource Identifier (URI).
-- `IdempotencyRecord`, the stored request and replay payload.
+- `IdempotencyRecord`, the stored request hash and opaque replay payload. Its
+  domain fields are `id`, `principal_id`, `operation`, `idempotency_key`,
+  `body_hash`, `state`, `serialised_outcome: bytes | None`, `expires_at`,
+  `created_at`, and `updated_at`. The adapter layer selects the codec used for
+  `serialised_outcome`.
 - `IngestionJob.intake_state`, an orthogonal state for REST intake progress.
+
+The `idempotency_records` table stores the same domain vocabulary:
+
+```sql
+CREATE TABLE idempotency_records (
+  id UUID PRIMARY KEY,
+  principal_id TEXT,
+  operation TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  body_hash TEXT NOT NULL,
+  state TEXT NOT NULL,
+  serialised_outcome BYTEA,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  UNIQUE (principal_id, operation, idempotency_key)
+);
+```
 
 The existing `SourceDocument` entity remains post-merge provenance. Reusing it
 for pre-generation attachment would mix the queue of proposed inputs with the
@@ -101,14 +129,14 @@ filenames, source URIs, document hashes, or principal ids.
 
 Required metrics:
 
-- `source_intake_upload_requests_total{route,outcome,content_type_family}`:
+- `source_intake_upload_requests_total{operation,outcome,content_type_family}`:
   counter for upload requests. `content_type_family` is one of `pdf`, `docx`,
   `text`, `markdown`, `html`, or `other`.
-- `source_intake_upload_duration_seconds{route,outcome}`: histogram covering
+- `source_intake_upload_duration_seconds{operation,outcome}`: histogram covering
   request receipt through upload row persistence.
 - `source_intake_upload_bytes{content_type_family,outcome}`: histogram of
   accepted and rejected upload byte counts.
-- `source_intake_upload_errors_total{route,error_code}`: counter for
+- `source_intake_upload_errors_total{operation,error_code}`: counter for
   documented intake error-code outcomes.
 - `source_intake_object_store_operations_total{operation,outcome,error_class}`:
   counter for object-store `put`, `open`, and `delete` operations. The
@@ -116,12 +144,12 @@ Required metrics:
   `permission`, `not_found`, `io`, or `none`.
 - `source_intake_object_store_operation_duration_seconds{operation,outcome}`:
   histogram around each storage-port call.
-- `source_intake_idempotency_outcomes_total{route,outcome}`: counter for
+- `source_intake_idempotency_outcomes_total{operation,outcome}`: counter for
   `acquired`, `replay`, `conflict`, `in_flight`, and `complete_failed`.
 - `source_intake_orphan_uploads_total{state}` and
   `source_intake_stuck_idempotency_records_total{state}`: counters incremented
   by manual or automated recovery sweeps.
-- `source_intake_stream_errors_total{route,error_class}`: counter for failed
+- `source_intake_stream_errors_total{operation,error_class}`: counter for failed
   multipart reads, client disconnects, payload-limit aborts, and hash
   mismatches.
 
@@ -137,7 +165,7 @@ Required trace spans:
   `source_intake.ingestion_job.attach_source` wrap job and source-attachment
   service operations.
 
-Span attributes are limited to `route`, `operation`, `outcome`, `error_code`,
+Span attributes are limited to `operation`, `outcome`, `error_code`,
 `content_type_family`, `upload_state`, `intake_state`, and `target_kind`.
 Correlation to a specific request belongs in logs and trace context, not in
 metric labels.
@@ -154,7 +182,7 @@ Required alerts:
 - Page when a recovery sweep reports in-flight idempotency records older than
   15 minutes.
 - Warn when `payload_too_large` or `unsupported_content_type` exceeds 20
-  occurrences in five minutes for one route.
+  occurrences in five minutes for one operation.
 
 Structured log levels are fixed as follows:
 

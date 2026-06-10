@@ -118,12 +118,14 @@ violation requires escalation, not workarounds.
   `/v1/ingestion-jobs`, `/v1/ingestion-jobs/{job_id}/sources`) must accept
   `Idempotency-Key`. The store enforces the contract from ADR 009 §"Idempotency
   implementation contract": one accepted request per key, identical body
-  returns the stored response, different body returns `409`. A SQL unique
-  constraint on `(principal_id, route, idempotency_key)` is required. The
-  middleware order in `episodic.api.app.create_app` is authorization first,
-  idempotency second: the idempotency cache key includes the authenticated
-  principal id, so authorization must run before the idempotency middleware can
-  compute the composite key.
+  returns the stored outcome, different body returns `409`. A SQL unique
+  constraint on `(principal_id, operation, idempotency_key)` is required.
+  `operation` is a stable adapter-defined domain operation string such as
+  `upload.create` or `ingestion_job.create`. The middleware order in
+  `episodic.api.app.create_app` is authorization first, idempotency second: the
+  idempotency cache key includes the authenticated principal id, so
+  authorization must run before the idempotency middleware can compute the
+  composite key.
 - The request-body hash is SHA-256 over the canonical request bytes per ADR 009
   §"Request-body hash". For JSON bodies, canonical UTF-8 JSON with stable
   object-key ordering and no insignificant whitespace (the helper
@@ -131,7 +133,7 @@ violation requires escalation, not workarounds.
   only authoritative implementation). For multipart bodies, the hash is
   `SHA-256(body_bytes) || ":" || canonical_json_bytes(allowlisted_metadata)`,
   where `body_bytes` is the streamed binary part and the allowlisted metadata
-  fields per route are fixed in the same module
+  fields per operation are fixed in the same module
   (`MULTIPART_BODY_HASH_METADATA: dict[str, tuple[str, ...]]`). ADR 015 must
   contain a worked example vector that integration tests assert against.
 - Error responses must use the established envelope from
@@ -253,21 +255,21 @@ Known uncertainties identified upfront:
   access control and tenancy hardening").
 - Risk: Idempotency-record retention cost. At sustained throughput, the
   `idempotency_records` table grows at one row per side-effecting `POST` per
-  `Idempotency-Key`. With a 24-hour retention and even modest stored response
-  bodies, the table grows fastest of any in the slice. Severity: medium.
-  Likelihood: medium. Mitigation: cap the stored response body at 64 kilobytes
-  (KB) (responses larger than that are uncommon for the slice's endpoints; the
-  cap is enforced by `IdempotencyStore.complete`). Add an Alembic-shipped index
-  on `expires_at` so a future purge job can scan efficiently. The purge job
-  itself is deferred to roadmap item `5.1`; the operator-recovery recipe in
+  `Idempotency-Key`. With a 24-hour retention and even modest opaque
+  `serialised_outcome` payloads, the table grows fastest of any in the slice.
+  Severity: medium. Likelihood: medium. Mitigation: cap the serialised outcome
+  at 64 kilobytes (KB) in the HTTP adapter before calling
+  `IdempotencyStore.complete`. Add an Alembic-shipped index on `expires_at` so
+  a future purge job can scan efficiently. The purge job itself is deferred to
+  roadmap item `5.1`; the operator-recovery recipe in
   `docs/developers-guide.md` includes a manual
   `DELETE … WHERE expires_at < NOW()` recipe so production can drain the table
   without code changes.
 - Risk: Idempotency-Key storage with a strict unique constraint can collide
   with parallel test execution under `pytest-xdist` if tests reuse keys.
   Severity: low. Likelihood: medium. Mitigation: composite cache key
-  `(principal_id, route, idempotency_key)`; test helpers generate fresh `uuid4`
-  keys per request; py-pglite isolates databases per worker.
+  `(principal_id, operation, idempotency_key)`; test helpers generate fresh
+  `uuid4` keys per request; py-pglite isolates databases per worker.
 - Risk: Object-storage filesystem adapter must not expose path traversal or
   permit symlink escape. Severity: high. Likelihood: low. Mitigation:
   server-generated `uuid4` storage keys, never trust client filenames for
@@ -401,6 +403,12 @@ Each entry should follow the form:
   `list_reference_bindings`, and `list_reference_bindings_paged` through the
   public `bindings` module using the existing async SQLAlchemy fixture stack,
   and assert returned `ReferenceBinding` values and pagination totals.
+- Observation: ADR 015 still described idempotency storage using HTTP-layer
+  routing and response-envelope concepts. Evidence: the prior
+  `IdempotencyStore` text mixed adapter concerns into the domain port. Impact:
+  ADR 015, the system-design schema, and this ExecPlan now use
+  `(principal_id, operation, idempotency_key)` and a single opaque
+  `serialised_outcome` payload owned by the adapter codec.
 
 ## Decision log
 
@@ -455,16 +463,16 @@ Seed entries (DRAFT):
   encourage. Date/Author: drafted with the ExecPlan.
 - Decision: Idempotency middleware sits after the authorization middleware,
   not before it. Rationale: the idempotency cache key is composite
-  `(principal_id, route, key)`. Computing it before authorization runs would
-  either drop `principal_id` (allowing cross-tenant cache reads) or require the
-  middleware to look up the principal itself, duplicating authorization logic.
-  The authorization re-check on a replayed request is cheap and is the correct
-  trust boundary. Date/Author: drafted with the ExecPlan in response to the
-  Logisphere design-review finding R2.
+  `(principal_id, operation, idempotency_key)`. Computing it before
+  authorization runs would either drop `principal_id` (allowing cross-tenant
+  cache reads) or require the middleware to look up the principal itself,
+  duplicating authorization logic. The authorization re-check on a replayed
+  request is cheap and is the correct trust boundary. Date/Author: drafted with
+  the ExecPlan in response to the Logisphere design-review finding R2.
 - Decision: Multipart bodies for `POST /v1/uploads` are hashed by the
   application service as
   `SHA-256(body_bytes) || ":" || canonical_json_bytes(allowlisted_metadata)`,
-  with the allowlisted metadata fields per route fixed in
+  with the allowlisted metadata fields per operation fixed in
   `episodic.canonical.idempotency_service.MULTIPART_BODY_HASH_METADATA`.
   Rationale: two implementations of "the canonical multipart body hash"
   inevitably diverge; pinning the algorithm in one constant and a worked
@@ -499,6 +507,11 @@ Seed entries (DRAFT):
   public façade function now has a database-backed async test that calls
   through `episodic.canonical.reference_documents.bindings` and asserts a
   meaningful result field. Date/Author: 2026-06-10T12:30Z / Codex.
+- Decision: Keep idempotency outcome storage domain-only. Rationale:
+  `IdempotencyStore` is a driven domain port, so it should not know HTTP
+  routing or response-envelope details. It stores operation-keyed records and
+  opaque serialised outcomes; the HTTP adapter serialises and deserialises
+  replay payloads at the edge. Date/Author: 2026-06-10T13:57Z / Codex.
 - Decision: Source-intake observability must include bounded metrics, tracing,
   and actionable alerts in addition to structured logs. Rationale: orphan
   blobs, stuck idempotency records, and stream failures are operational
@@ -629,9 +642,10 @@ contract that the rest of the milestones implement against.
      §"Interfaces and dependencies".
    - `IdempotencyStorePort`: an `acquire` method returning a discriminated
      union of `Acquired`, `Replay`, `Conflict`, and `InFlight`, backed by a
-     unique SQL constraint. The store persists the stored response payload,
-     status, headers, and expiry. The default retention is 24 hours,
-     configurable per route.
+     unique SQL constraint. The store persists only an opaque
+     `serialised_outcome` byte payload and expiry; HTTP status, body, and
+     headers are encoded and decoded by the inbound adapter. The default
+     retention is 24 hours, configurable per operation.
    The ADR also records the decision to introduce a new `IngestionJobSource`
    entity and to defer S3, magic-byte sniffing, and Vidai Mock to later items.
 2. Update `docs/episodic-podcast-generation-system-design.md` §"Reference
@@ -675,12 +689,13 @@ Each addition lives in the `domain_ports` Hecate group and may not import from
    `attachment_kind`.
 3. Create `episodic/canonical/idempotency.py` with a frozen
    `IdempotencyRecord` dataclass: `id: uuid.UUID`, `principal_id: str | None`,
-   `route: str`, `key: str`, `body_hash: str`, `state: IdempotencyState`
-   (`in_flight`, `completed`), `response_status: int | None`,
-   `response_body: JsonMapping | None`, `response_headers: JsonMapping | None`,
-   `expires_at: dt.datetime`, `created_at: dt.datetime`,
-   `updated_at: dt.datetime`. Also define a tagged-union outcome type
-   `IdempotencyOutcome` = `Acquired | Replay | Conflict | InFlight` for the
+   `operation: str`, `idempotency_key: str`, `body_hash: str`,
+   `state: IdempotencyState` (`in_flight`, `completed`),
+   `serialised_outcome: bytes | None`, `expires_at: dt.datetime`,
+   `created_at: dt.datetime`, `updated_at: dt.datetime`. Also define a
+   tagged-union outcome type `IdempotencyOutcome` =
+   `Acquired(record_id: uuid.UUID) | Replay(serialised_outcome: bytes) |
+   Conflict(record_id: uuid.UUID) | InFlight(record_id: uuid.UUID)` for the
    `acquire` call.
 4. Create `episodic/canonical/upload_protocols.py` with three Protocol
    classes: `UploadRepository` (`add`, `get`, `mark_ready`, `mark_failed`),
@@ -753,9 +768,9 @@ These additions sit in the `outbound_adapter` Hecate group.
      to `ingestion_jobs.id` and `uploads.id`. Database-level check
      constraint that exactly one of `upload_id`, `source_uri` is non-null.
    - `idempotency.py` — `IdempotencyRecord` with composite unique index on
-     `(principal_id, route, key)` and a `body_hash` column. JSON columns for
-     stored response body and headers. A monotonically advancing
-     `expires_at` column for retention.
+     `(principal_id, operation, idempotency_key)` and a `body_hash` column.
+     The only stored replay payload is the opaque `serialised_outcome` byte
+     column. A monotonically advancing `expires_at` column controls retention.
 2. Add mappers (`*_mappers.py`) following the convention in
    `episodic/canonical/storage/entity_mappers.py`. Each mapper exposes the
    familiar `_X_from_record` / `_X_to_record` private helpers.
@@ -789,8 +804,8 @@ These additions sit in the `outbound_adapter` Hecate group.
    - `ingestion_jobs(series_profile_id, intake_state, created_at DESC)` for
      the listing query.
    - `idempotency_records(expires_at)` for the eventual purge job.
-   - `idempotency_records(principal_id, route, key) UNIQUE` for the
-     first-writer-wins enforcement.
+   - `idempotency_records(principal_id, operation, idempotency_key) UNIQUE`
+     for the first-writer-wins enforcement.
    - `uploads(state, created_at)` for the eventual orphan-blob sweeper.
    - `ingestion_job_sources(ingestion_job_id, created_at)` for the per-job
      listing query.
@@ -862,20 +877,24 @@ Application services live in the `application` Hecate group (existing
    - `canonical_json_bytes(payload: JsonMapping) -> bytes` enforces sorted
      keys, UTF-8, no insignificant whitespace.
    - `MULTIPART_BODY_HASH_METADATA: dict[str, tuple[str, ...]]` fixes the
-     per-route allowlist of metadata fields that participate in the
-     multipart body hash (initially `{"POST /v1/uploads": ("content_type",
-     "declared_size", "declared_sha256")}`).
-   - `multipart_request_hash(route, *, body_sha256: str, metadata:
+     per-operation allowlist of metadata fields that participate in the
+     multipart body hash (initially
+     `{"upload.create": ("content_type", "declared_size",
+     "declared_sha256")}`).
+   - `multipart_request_hash(operation, *, body_sha256: str, metadata:
      JsonMapping) -> str` returns
      `sha256(body_sha256 + ":" + canonical_json_bytes(filtered_metadata))`
-     where `filtered_metadata` retains only the route's allowlisted fields.
+     where `filtered_metadata` retains only the operation's allowlisted
+     fields.
      The function accepts the streamed body's SHA-256 rather than the bytes
      themselves so the streaming hash computed during upload is the same
      value used for the body fingerprint.
-   - `acquire_or_replay(store, *, principal, route, key, body_hash, work:
-     cabc.Callable[…, Awaitable[StoredResponse]]) -> IdempotencyOutcome`
-     is the orchestration wrapper that resources call from the inbound
-     adapter.
+   - `acquire_or_replay(store, *, principal, operation, idempotency_key,
+     body_hash,
+     serialise_outcome, deserialise_outcome, work) -> IdempotencyOutcome` is
+     the orchestration wrapper that resources call from the inbound adapter.
+     The adapter supplies the HTTP codec functions; the domain store sees only
+     opaque `serialised_outcome` bytes.
 4. Where the new domain transitions require cross-repository commits
    (source attachment + intake-state transition + idempotency record), wrap
    them in the existing `CanonicalUnitOfWork` and commit once. The two-phase
@@ -904,8 +923,9 @@ and `domain_ports`.
    replayed payload when the outcome is `Replay` or `InFlight`. On `Conflict`
    it returns `409` with `{"code": "idempotency_conflict", ...}`. On `Acquired`
    it stashes a completion callback on the request context that the resource
-   invokes after the resource has been created so the stored response can be
-   captured.
+   invokes after the resource has been created so the adapter can serialise the
+   HTTP status, body, and headers into the opaque outcome bytes passed to
+   `IdempotencyStore.complete`.
 2. Add `episodic/api/upload_helpers.py` with the multipart parser, the
    content-type allowlist (`UPLOAD_CONTENT_TYPE_ALLOWLIST` constant), the
    maximum-size constant (read from configuration through `ApiDependencies`),
@@ -1105,7 +1125,7 @@ Quality criteria (what "done" means):
 - Observability: ADR 015 and `docs/developers-guide.md` define the
   source-intake metrics, trace spans, log levels, and alert thresholds. Metrics
   use bounded labels only. Logs carry request correlation fields such as
-  `idempotency_outcome`, `idempotency_key`, `route`, `principal_id`,
+  `idempotency_outcome`, `idempotency_key`, `operation`, `principal_id`,
   `series_profile_id`, `ingestion_job_id`, and `upload_id`, and reuse the
   existing helpers in `episodic.logging`.
 
@@ -1214,8 +1234,8 @@ class IdempotencyStore(typ.Protocol):
         self,
         *,
         principal_id: str | None,
-        route: str,
-        key: str,
+        operation: str,
+        idempotency_key: str,
         body_hash: str,
         retention_seconds: int,
     ) -> IdempotencyOutcome: ...
@@ -1224,17 +1244,15 @@ class IdempotencyStore(typ.Protocol):
         self,
         record_id: uuid.UUID,
         *,
-        response_status: int,
-        response_body: JsonMapping,
-        response_headers: JsonMapping,
+        serialised_outcome: bytes,
     ) -> None: ...
 
     async def lookup(
         self,
         *,
         principal_id: str | None,
-        route: str,
-        key: str,
+        operation: str,
+        idempotency_key: str,
     ) -> IdempotencyRecord | None: ...
 ```
 
@@ -1365,7 +1383,7 @@ future reader can understand the negative space around the design:
   - documented the two-phase blob write for the multipart path and the
     orphan-blob recovery recipe;
   - specified the multipart canonical body-hash algorithm and pinned a
-    per-route metadata allowlist;
+    per-operation metadata allowlist;
   - added explicit `type` discriminator to the source-attachment
     payload;
   - named the database indexes required for the polling and listing

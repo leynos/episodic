@@ -1484,8 +1484,8 @@ Agentic workflow behaviour is configurable per series profile:
 - `ingestion_job_sources` records pre-generation attachments for an ingestion
   job. Each row references either an `upload` or a remote `source_uri`, but not
   both.
-- `idempotency_records` stores accepted retryable request keys, body hashes,
-  replayable response payloads, and expiry timestamps.
+- `idempotency_records` stores accepted retryable operation keys, body hashes,
+  opaque serialised outcomes, and expiry timestamps.
 - `source_documents` records ingestion-run inputs, document types, weighting
   factors, and original files in object storage.
 - `episodes` holds canonical TEI, generation status, QA verdicts, and approval
@@ -1619,10 +1619,11 @@ erDiagram
   IDEMPOTENCY_RECORDS {
     uuid id
     string principal_id
-    string route
-    string key
+    string operation
+    string idempotency_key
     string body_hash
     string state
+    bytes serialised_outcome
   }
 
   INGESTION_JOBS ||--o{ INGESTION_JOB_SOURCES : queues
