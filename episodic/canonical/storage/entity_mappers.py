@@ -152,6 +152,7 @@ def _ingestion_job_from_record(record: IngestionJobRecord) -> IngestionJob:
         error_message=record.error_message,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        intake_state=record.intake_state,
     )
 
 
@@ -166,6 +167,7 @@ def _ingestion_job_to_record(job: IngestionJob) -> IngestionJobRecord:
         started_at=job.started_at,
         completed_at=job.completed_at,
         error_message=job.error_message,
+        intake_state=job.intake_state,
         created_at=job.created_at,
         updated_at=job.updated_at,
     )

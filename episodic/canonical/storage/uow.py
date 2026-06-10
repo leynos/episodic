@@ -17,12 +17,12 @@ import typing as typ
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.logging import get_logger
 
+from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
     SqlAlchemyEpisodeRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemyEpisodeTemplateRepository,
-    SqlAlchemyIngestionJobRepository,
     SqlAlchemyReferenceBindingRepository,
     SqlAlchemyReferenceDocumentRepository,
     SqlAlchemyReferenceDocumentRevisionRepository,
@@ -30,6 +30,11 @@ from .repositories import (
     SqlAlchemySeriesProfileRepository,
     SqlAlchemySourceDocumentRepository,
     SqlAlchemyTeiHeaderRepository,
+)
+from .source_intake_repositories import (
+    SqlAlchemyIdempotencyStore,
+    SqlAlchemyIngestionJobSourceRepository,
+    SqlAlchemyUploadRepository,
 )
 from .workflow_checkpoints import SqlAlchemyWorkflowCheckpointStore
 
@@ -125,6 +130,11 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             SqlAlchemyReferenceDocumentRevisionRepository(self._session)
         )
         self.reference_bindings = SqlAlchemyReferenceBindingRepository(self._session)
+        self.uploads = SqlAlchemyUploadRepository(self._session)
+        self.ingestion_job_sources = SqlAlchemyIngestionJobSourceRepository(
+            self._session
+        )
+        self.idempotency = SqlAlchemyIdempotencyStore(self._session)
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
             self._session,
             metrics=self._metrics,

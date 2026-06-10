@@ -480,6 +480,7 @@ prefixes = [
     "episodic.canonical.services",
     "episodic.canonical.ingestion_service",
     "episodic.canonical.idempotency_service",
+    "episodic.canonical.source_intake_service",
     "episodic.canonical.profile_templates",
     "episodic.canonical.reference_documents",
     "episodic.generation",

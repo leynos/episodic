@@ -25,6 +25,9 @@ from .resources import (
     EpisodeTemplatesResource,
     HealthLiveResource,
     HealthReadyResource,
+    IngestionJobResource,
+    IngestionJobSourcesResource,
+    IngestionJobsResource,
     ReferenceBindingResource,
     ReferenceBindingsResource,
     ReferenceDocumentResource,
@@ -36,7 +39,9 @@ from .resources import (
     SeriesProfileHistoryResource,
     SeriesProfileResource,
     SeriesProfilesResource,
+    UploadsResource,
 )
+from .source_intake_support import UploadResourceConfig
 
 if typ.TYPE_CHECKING:
     from .dependencies import ApiDependencies, ShutdownHook
@@ -127,6 +132,26 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     app.add_route(
         "/v1/reference-bindings/{binding_id}",
         ReferenceBindingResource(uow_factory),
+    )
+    app.add_route(
+        "/v1/uploads",
+        UploadsResource(
+            uow_factory,
+            config=UploadResourceConfig(
+                object_store=dependencies.object_store,
+                max_bytes=dependencies.upload_max_bytes,
+                content_types=frozenset(dependencies.upload_content_types),
+            ),
+        ),
+    )
+    app.add_route("/v1/ingestion-jobs", IngestionJobsResource(uow_factory))
+    app.add_route(
+        "/v1/ingestion-jobs/{job_id}",
+        IngestionJobResource(uow_factory),
+    )
+    app.add_route(
+        "/v1/ingestion-jobs/{job_id}/sources",
+        IngestionJobSourcesResource(uow_factory),
     )
 
     return app

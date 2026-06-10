@@ -20,6 +20,7 @@ HTTPBadRequest(...)
 ...     raise map_profile_template_error(exc, entity_id="profile-1") from exc
 """
 
+import collections.abc as cabc
 import dataclasses as dc
 import http
 import typing as typ
@@ -37,11 +38,22 @@ from episodic.canonical.reference_documents import (
     ReferenceRevisionConflictError,
     ReferenceValidationError,
 )
+from episodic.canonical.source_intake_service import (
+    IngestionJobNotFoundError,
+    SeriesProfileNotFoundError,
+    SourceIntakeError,
+    UploadHashMismatchError,
+    UploadNotFoundError,
+    UploadNotReadyError,
+    UploadSizeMismatchError,
+)
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.profile_templates.types import ProfileTemplateError
 
     from .types import JsonPayload
+
+type _HttpErrorFactory = cabc.Callable[..., falcon.HTTPError]
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -288,6 +300,33 @@ def map_reference_error(
     return http_error(
         falcon.HTTPInternalServerError(description=msg),
         code="internal_error",
+    )
+
+
+def map_source_intake_error(exc: SourceIntakeError) -> falcon.HTTPError:
+    """Map source-intake application errors to enriched Falcon HTTP errors."""
+    mapping = _source_intake_error_mapping()
+    for error_type, factory, code in mapping:
+        if isinstance(exc, error_type):
+            return http_error(factory(description=str(exc)), code=code)
+    return http_error(
+        falcon.HTTPInternalServerError(description="Unexpected source-intake error."),
+        code="internal_error",
+    )
+
+
+def _source_intake_error_mapping() -> tuple[
+    tuple[type[SourceIntakeError], _HttpErrorFactory, str],
+    ...,
+]:
+    """Return source-intake exception to HTTP error mappings."""
+    return (
+        (SeriesProfileNotFoundError, falcon.HTTPNotFound, "series_profile_not_found"),
+        (IngestionJobNotFoundError, falcon.HTTPNotFound, "ingestion_job_not_found"),
+        (UploadNotFoundError, falcon.HTTPNotFound, "upload_not_found"),
+        (UploadNotReadyError, falcon.HTTPConflict, "upload_not_ready"),
+        (UploadHashMismatchError, falcon.HTTPBadRequest, "upload_hash_mismatch"),
+        (UploadSizeMismatchError, falcon.HTTPBadRequest, "upload_size_mismatch"),
     )
 
 

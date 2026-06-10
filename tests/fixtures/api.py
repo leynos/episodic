@@ -16,6 +16,7 @@ if typ.TYPE_CHECKING:
 
     from episodic.api import ApiDependencies
     from episodic.api.authorization import AuthorizationPort
+    from episodic.canonical.object_store import ObjectStorePort
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -51,6 +52,7 @@ def build_api_dependencies(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     authorization: AuthorizationPort | None = None,
+    object_store: ObjectStorePort | None = None,
 ) -> ApiDependencies:
     """Build typed API dependencies with optional authorization override."""
     from episodic.api import ApiDependencies
@@ -58,11 +60,13 @@ def build_api_dependencies(
 
     if authorization is None:
         return ApiDependencies(
-            uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory)
+            uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
+            object_store=object_store,
         )
     return ApiDependencies(
         uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
         authorization=authorization,
+        object_store=object_store,
     )
 
 

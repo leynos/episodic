@@ -15,11 +15,15 @@ from .entity_models import (
 from .history_models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
 from .models_base import (
     APPROVAL_STATE,
+    ATTACHMENT_KIND,
     EPISODE_STATUS,
+    IDEMPOTENCY_STATE,
     INGESTION_STATUS,
+    INTAKE_STATE,
     REFERENCE_BINDING_TARGET_KIND,
     REFERENCE_DOCUMENT_KIND,
     REFERENCE_DOCUMENT_LIFECYCLE_STATE,
+    UPLOAD_STATE,
     WORKFLOW_CHECKPOINT_STATUS,
     Base,
 )
@@ -29,22 +33,33 @@ from .reference_models import (
     ReferenceDocumentRecord,
     ReferenceDocumentRevisionRecord,
 )
+from .source_intake_models import (
+    IdempotencyRecordModel,
+    IngestionJobSourceRecord,
+    UploadRecord,
+)
 from .workflow_checkpoint_models import WorkflowCheckpointRecord
 
 __all__ = (
     "APPROVAL_STATE",
+    "ATTACHMENT_KIND",
     "EPISODE_STATUS",
+    "IDEMPOTENCY_STATE",
     "INGESTION_STATUS",
+    "INTAKE_STATE",
     "REFERENCE_BINDING_TARGET_KIND",
     "REFERENCE_DOCUMENT_KIND",
     "REFERENCE_DOCUMENT_LIFECYCLE_STATE",
+    "UPLOAD_STATE",
     "WORKFLOW_CHECKPOINT_STATUS",
     "ApprovalEventRecord",
     "Base",
     "EpisodeRecord",
     "EpisodeTemplateHistoryRecord",
     "EpisodeTemplateRecord",
+    "IdempotencyRecordModel",
     "IngestionJobRecord",
+    "IngestionJobSourceRecord",
     "ReferenceBindingRecord",
     "ReferenceDocumentRecord",
     "ReferenceDocumentRevisionRecord",
@@ -52,5 +67,6 @@ __all__ = (
     "SeriesProfileRecord",
     "SourceDocumentRecord",
     "TeiHeaderRecord",
+    "UploadRecord",
     "WorkflowCheckpointRecord",
 )

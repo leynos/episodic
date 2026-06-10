@@ -12,6 +12,8 @@ Use the unit-of-work to fetch a canonical episode:
 ...     episode = await uow.episodes.get(episode_id)
 """
 
+from .filesystem_object_store import FilesystemObjectStore
+from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
 from .migration_check import detect_schema_drift
 from .models import (
     ApprovalEventRecord,
@@ -19,7 +21,9 @@ from .models import (
     EpisodeRecord,
     EpisodeTemplateHistoryRecord,
     EpisodeTemplateRecord,
+    IdempotencyRecordModel,
     IngestionJobRecord,
+    IngestionJobSourceRecord,
     ReferenceBindingRecord,
     ReferenceDocumentRecord,
     ReferenceDocumentRevisionRecord,
@@ -27,6 +31,7 @@ from .models import (
     SeriesProfileRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
+    UploadRecord,
     WorkflowCheckpointRecord,
 )
 from .repositories import (
@@ -34,7 +39,6 @@ from .repositories import (
     SqlAlchemyEpisodeRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemyEpisodeTemplateRepository,
-    SqlAlchemyIngestionJobRepository,
     SqlAlchemyReferenceBindingRepository,
     SqlAlchemyReferenceDocumentRepository,
     SqlAlchemyReferenceDocumentRevisionRepository,
@@ -42,6 +46,11 @@ from .repositories import (
     SqlAlchemySeriesProfileRepository,
     SqlAlchemySourceDocumentRepository,
     SqlAlchemyTeiHeaderRepository,
+)
+from .source_intake_repositories import (
+    SqlAlchemyIdempotencyStore,
+    SqlAlchemyIngestionJobSourceRepository,
+    SqlAlchemyUploadRepository,
 )
 from .uow import SqlAlchemyUnitOfWork
 from .workflow_checkpoints import SqlAlchemyWorkflowCheckpointStore
@@ -52,7 +61,10 @@ __all__ = (
     "EpisodeRecord",
     "EpisodeTemplateHistoryRecord",
     "EpisodeTemplateRecord",
+    "FilesystemObjectStore",
+    "IdempotencyRecordModel",
     "IngestionJobRecord",
+    "IngestionJobSourceRecord",
     "ReferenceBindingRecord",
     "ReferenceDocumentRecord",
     "ReferenceDocumentRevisionRecord",
@@ -63,7 +75,9 @@ __all__ = (
     "SqlAlchemyEpisodeRepository",
     "SqlAlchemyEpisodeTemplateHistoryRepository",
     "SqlAlchemyEpisodeTemplateRepository",
+    "SqlAlchemyIdempotencyStore",
     "SqlAlchemyIngestionJobRepository",
+    "SqlAlchemyIngestionJobSourceRepository",
     "SqlAlchemyReferenceBindingRepository",
     "SqlAlchemyReferenceDocumentRepository",
     "SqlAlchemyReferenceDocumentRevisionRepository",
@@ -72,8 +86,10 @@ __all__ = (
     "SqlAlchemySourceDocumentRepository",
     "SqlAlchemyTeiHeaderRepository",
     "SqlAlchemyUnitOfWork",
+    "SqlAlchemyUploadRepository",
     "SqlAlchemyWorkflowCheckpointStore",
     "TeiHeaderRecord",
+    "UploadRecord",
     "WorkflowCheckpointRecord",
     "detect_schema_drift",
 )

@@ -320,35 +320,32 @@ timestamps as milestones land.
   `docs/developers-guide.md`, added the `docs/users-guide.md` intake stub, and
   linked ADR 015 from `docs/contents.md`. Validation passed with `make fmt`,
   `make check-fmt`, `make markdownlint`, and `make nixie`.
-- [ ] Milestone D2 — Domain ports and entities. Add `Upload`,
-  `IngestionJobSource`, `IdempotencyRecord`, `UploadRepository`,
-  `IngestionJobSourceRepository`, `IdempotencyStore`, `ObjectStorePort`, and
-  the helper services that compute and verify canonical request hashes. Extend
-  `IngestionJobRepository` with `list_paged` and `update_status`.
-- [ ] Milestone D3 — Outbound adapters. Add SQLAlchemy mappers, models, and
-  repositories for the new entities. Add a `FilesystemObjectStore` adapter. Add
-  Alembic migrations. Wire the new repositories into `SqlAlchemyUnitOfWork`.
-  Add Hecate prefixes.
-- [ ] Milestone D4 — Application services. Implement
-  `register_upload`, `initialize_upload`, `finalize_upload_bytes`,
-  `create_ingestion_job`, `attach_source_to_ingestion_job`,
-  `get_ingestion_job_status`, and the supporting transactional flows.
-- [ ] Milestone D5 — Inbound adapters and HTTP wiring. Add Falcon resources
-  `UploadsResource`, `UploadResource`, `IngestionJobsResource`,
-  `IngestionJobResource`, `IngestionJobSourcesResource`, an
-  `IdempotencyMiddleware`, and helpers for multipart parsing, content-type
-  allowlists, and size limits. Register the routes in `episodic/api/app.py`
-  (with the authorization middleware registered before the idempotency
-  middleware) and update `ApiDependencies` with the new configuration handles.
-  The `POST /v1/uploads/init` and `PUT /v1/uploads/{id}/bytes` routes are
-  explicitly out of scope for this slice (see Decision Log "Two-step upload
-  deferred"); roadmap item `5.1` or a dedicated S3-adapter item picks them up.
-- [ ] Milestone D6 — Tests. Add unit tests for ports, mappers, hash
-  computation, and idempotency body-hash comparison. Add a behavioural feature
-  `tests/features/source_intake.feature` with steps in
-  `tests/steps/test_source_intake_steps.py`. Add a syrupy snapshot test for the
-  canonical JSON envelopes. Add Hypothesis property tests for the idempotency
-  state machine.
+- [x] (2026-06-10T15:05Z) Milestone D2 — Domain ports and entities. Added
+  `Upload`, `IngestionJobSource`, `IdempotencyRecord`,
+  upload/source/idempotency repository protocols, `ObjectStorePort`, canonical
+  JSON and multipart hash helpers, and intake-aware ingestion-job
+  list/count/transition protocol methods.
+- [x] (2026-06-10T15:50Z) Milestone D3 — Outbound adapters. Added focused
+  SQLAlchemy source-intake models, mappers, repositories, Alembic revision
+  `20260610_000009`, `FilesystemObjectStore`, and `SqlAlchemyUnitOfWork` wiring
+  for `uploads`, `ingestion_job_sources`, and `idempotency`.
+- [x] (2026-06-10T16:25Z) Milestone D4 — Application services. Added
+  `register_upload`, `create_ingestion_job`, `attach_source_to_ingestion_job`,
+  `get_ingestion_job_status`, and `list_ingestion_jobs`. The two-step
+  `initialize_upload`/`finalize_upload_bytes` path remains deferred by the
+  existing "Two-step upload deferred" decision.
+- [x] (2026-06-10T16:50Z) Milestone D5 — Inbound adapters and HTTP wiring. Added
+  `UploadsResource`, `IngestionJobsResource`, `IngestionJobResource`,
+  `IngestionJobSourcesResource`, multipart parsing, content-type allowlisting,
+  size checks, idempotent replay/conflict handling, and `/v1` route
+  registration. Idempotency is implemented by an adapter helper rather than a
+  generic middleware; see the Decision Log entry dated 2026-06-10T16:45Z.
+- [x] (2026-06-10T15:45Z) Milestone D6 — Tests. Added focused
+  unit/integration coverage for the object-store port, ADR 015 multipart
+  fingerprint, SQLAlchemy source-intake repositories, SQLAlchemy idempotency
+  replay/conflict outcomes, Hypothesis idempotency properties, an HTTP
+  end-to-end upload/job/source/poll flow, a pytest-bdd source-intake feature,
+  and a syrupy snapshot for stable source-intake response envelopes.
 - [ ] Milestone D7 — Documentation final pass and roadmap toggle. Finalise
   `docs/users-guide.md` and `docs/developers-guide.md` updates, refresh the
   contents index, and mark `4.3.1` done in `docs/roadmap.md`.
@@ -411,11 +408,24 @@ Each entry should follow the form:
   `serialised_outcome` payload owned by the adapter codec.
 - Observation: the ADR 015 multipart worked-vector digest conflicts with the
   prose algorithm material. Evidence: hashing the exact material shown in ADR
-  015 produces `b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12`,
-  while the review gate and ADR both require
-  `f03f8d4c738536bcd1c13cc34d6816f8ea0672c3e2d47c2cbbaf5c8ecbda5e2c`.
-  Impact: `multipart_request_hash` preserves the published ADR vector as a
+  015 produces
+  `b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12`, while the
+  review gate and ADR both require
+  `f03f8d4c738536bcd1c13cc34d6816f8ea0672c3e2d47c2cbbaf5c8ecbda5e2c`. Impact:
+  `multipart_request_hash` preserves the published ADR vector as a
   compatibility contract, and the focused unit test pins the required digest.
+- Observation: Falcon ASGI multipart parsing does not expose the WSGI
+  `MultipartForm` concrete class in endpoint tests. Evidence: the first upload
+  test returned the adapter's "multipart/form-data payload is required" error
+  until parsing switched to the iterable body-part interface. Impact:
+  `UploadsResource` now accepts sync or async Falcon multipart iterables and
+  reads JSON metadata through `part.media` when Falcon has already decoded it.
+- Observation: deterministic source-intake gates pass after adding the
+  BDD/snapshot coverage. Evidence: `make check-fmt`, `make lint`,
+  `make typecheck`, and `make test` passed on 2026-06-10; the full test gate
+  reported 863 passed, 2 skipped, and 19 snapshots passed. Impact: CodeRabbit
+  can review the completed implementation milestone rather than deterministic
+  formatting, lint, typing, or test failures.
 
 ## Decision log
 
@@ -525,6 +535,13 @@ Seed entries (DRAFT):
   failures that may not be visible from request logs alone. ADR 015 now defines
   the metric names, allowed labels, trace spans, alert thresholds, and
   WARN/ERROR/INFO split. Date/Author: 2026-06-10T15:35Z / Codex.
+- Decision: Implement idempotency as resource-level adapter helpers for this
+  slice rather than a generic `IdempotencyMiddleware` class. Rationale:
+  `upload.create`, `ingestion_job.create`, and `ingestion_job.source.attach`
+  require operation-specific canonical body hashes, including multipart
+  byte-stream hashing for uploads. The helper still uses the domain
+  `IdempotencyStore` outcomes and keeps HTTP status/body replay serialisation
+  in the adapter layer. Date/Author: 2026-06-10T16:45Z / Codex.
 - Decision: Raise the pytest-timeout budget to 180 seconds for this repository.
   Rationale: the suite intentionally uses function-scoped py-pglite databases
   for PostgreSQL semantics and isolation. Startup plus Alembic migration
@@ -701,8 +718,8 @@ Each addition lives in the `domain_ports` Hecate group and may not import from
    `serialised_outcome: bytes | None`, `expires_at: dt.datetime`,
    `created_at: dt.datetime`, `updated_at: dt.datetime`. Also define a
    tagged-union outcome type `IdempotencyOutcome` =
-   `Acquired(record_id: uuid.UUID) | Replay(serialised_outcome: bytes) |
-   Conflict(record_id: uuid.UUID) | InFlight(record_id: uuid.UUID)` for the
+   `Acquired(record_id: uuid.UUID) | Replay(serialised_outcome: bytes) |`
+   `Conflict(record_id: uuid.UUID) | InFlight(record_id: uuid.UUID)` for the
    `acquire` call.
 4. Create `episodic/canonical/upload_protocols.py` with three Protocol
    classes: `UploadRepository` (`add`, `get`, `mark_ready`, `mark_failed`),

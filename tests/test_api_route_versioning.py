@@ -51,6 +51,13 @@ _CANONICAL_ROUTE_CONTRACT_PATHS = (
     ),
     ("/reference-bindings", "reference-bindings"),
     ("/reference-bindings/not-a-valid-uuid", "reference-binding"),
+    ("/uploads", "uploads"),
+    ("/ingestion-jobs", "ingestion-jobs"),
+    ("/ingestion-jobs/not-a-valid-uuid", "ingestion-job"),
+    (
+        "/ingestion-jobs/not-a-valid-uuid/sources",
+        "ingestion-job-sources",
+    ),
 )
 
 _UNVERSIONED_CANONICAL_PATHS = tuple(
@@ -108,7 +115,10 @@ def test_versioned_health_routes_are_not_registered(
     )
 
 
-@pytest.mark.parametrize("path", ["/series-profiles", "/episode-templates"])
+@pytest.mark.parametrize(
+    "path",
+    ["/series-profiles", "/episode-templates", "/uploads", "/ingestion-jobs"],
+)
 def test_unversioned_canonical_write_routes_are_not_registered(
     canonical_api_client: testing.TestClient,
     path: str,

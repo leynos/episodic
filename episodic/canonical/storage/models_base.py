@@ -7,11 +7,15 @@ from episodic.canonical.domain import (
     ApprovalState,
     EpisodeStatus,
     IngestionStatus,
+    IntakeState,
     ReferenceBindingTargetKind,
     ReferenceDocumentKind,
     ReferenceDocumentLifecycleState,
     WorkflowCheckpointStatus,
 )
+from episodic.canonical.idempotency import IdempotencyState
+from episodic.canonical.ingestion_sources import AttachmentKind
+from episodic.canonical.uploads import UploadState
 
 
 class Base(orm.DeclarativeBase):
@@ -37,6 +41,26 @@ APPROVAL_STATE = sa.Enum(
 INGESTION_STATUS = sa.Enum(
     IngestionStatus,
     name="ingestion_status",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+INTAKE_STATE = sa.Enum(
+    IntakeState,
+    name="intake_state",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+UPLOAD_STATE = sa.Enum(
+    UploadState,
+    name="upload_state",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+ATTACHMENT_KIND = sa.Enum(
+    AttachmentKind,
+    name="attachment_kind",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+IDEMPOTENCY_STATE = sa.Enum(
+    IdempotencyState,
+    name="idempotency_state",
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )
 REFERENCE_DOCUMENT_KIND = sa.Enum(

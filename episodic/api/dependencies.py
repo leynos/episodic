@@ -13,6 +13,7 @@ import typing as typ
 from .authorization import AuthorizationPort, PermitAll
 
 if typ.TYPE_CHECKING:
+    from episodic.canonical.object_store import ObjectStorePort
     from episodic.llm import LLMPort
 
     from .types import UowFactory
@@ -82,6 +83,15 @@ class ApiDependencies:
     """Group the ports and probes required by the Falcon API adapter."""
 
     uow_factory: UowFactory
+    object_store: ObjectStorePort | None = None
+    upload_max_bytes: int = 25 * 1024 * 1024
+    upload_content_types: tuple[str, ...] = (
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain",
+        "text/markdown",
+        "text/html",
+    )
     readiness_probes: tuple[ReadinessProbe, ...] = ()
     shutdown_hooks: tuple[ShutdownHook, ...] = ()
     llm_port: LLMPort | None = None
