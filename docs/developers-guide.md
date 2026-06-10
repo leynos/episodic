@@ -687,7 +687,6 @@ When an episode context is present, the same resolution algorithm is exposed
 through `ResolvedBindingsResource` and reused by ingestion to snapshot the
 resolved reference revisions into provenance `source_documents`.
 
-
 ### Source-intake idempotency and errors
 
 Roadmap item `4.3.1` reserves the source-intake `POST` contract for idempotent
