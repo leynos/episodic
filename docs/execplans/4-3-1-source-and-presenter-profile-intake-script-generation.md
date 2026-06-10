@@ -368,10 +368,11 @@ Each entry should follow the form:
   gate is treated as satisfied by the implementation request.
 - Observation: CodeRabbit could not complete the Milestone D1 review because
   the CLI repeatedly returned `rate_limit` after three full requested retry
-  sleeps. Evidence: scoped review attempts used `coderabbit review --agent
-  --type uncommitted --dir docs`; the CLI returned `rate_limit` after waits of
-  88, 64, and 84 minutes. Impact: Milestone D1 deterministic gates are green,
-  but the work is paused at the CodeRabbit review gate before starting D2.
+  sleeps. Evidence: scoped review attempts used
+  `coderabbit review --agent --type uncommitted --dir docs`; the CLI returned
+  `rate_limit` after waits of 88, 64, and 84 minutes. Impact: Milestone D1
+  deterministic gates are green, but the work is paused at the CodeRabbit
+  review gate before starting D2.
 - Observation: post-review warnings identified two gaps to close before
   readiness: the refactored `brief.py` and `bindings.py` façades needed
   explicit replacement coverage, and source-intake observability needed more
@@ -386,12 +387,20 @@ Each entry should follow the form:
   the remaining failures timed out while `migrated_engine` or
   `pglite_sqlalchemy_manager` started a function-scoped py-pglite database and
   applied migrations. Impact: the project pytest timeout is raised from 60 to
-  180 seconds; `make test` now avoids xdist in the default one-worker mode;
-  the py-pglite process is shared for the pytest session; `migrated_engine`
-  resets the `public` schema before applying migrations per test; startup is
-  retried up to three times with a fresh run directory; and the py-pglite docs
-  now describe the expected headroom and the need to investigate repeated
+  180 seconds; `make test` now avoids xdist in the default one-worker mode; the
+  py-pglite process is shared for the pytest session; `migrated_engine` resets
+  the `public` schema before applying migrations per test; startup is retried
+  up to three times with a fresh run directory; and the py-pglite docs now
+  describe the expected headroom and the need to investigate repeated
   near-timeouts.
+- Observation: follow-up review found the initial bindings façade tests still
+  relied on object identity checks. Evidence: the tests asserted public
+  attributes with `is`, which could pass if a façade attribute were replaced by
+  another non-callable object. Impact: the façade tests now call
+  `create_reference_binding`, `get_reference_binding`,
+  `list_reference_bindings`, and `list_reference_bindings_paged` through the
+  public `bindings` module using the existing async SQLAlchemy fixture stack,
+  and assert returned `ReferenceBinding` values and pagination totals.
 
 ## Decision log
 
@@ -484,6 +493,12 @@ Seed entries (DRAFT):
   `_brief_*` and `_binding_*` modules; the replacement coverage should exercise
   helper edge paths and service behaviour while adding small regression tests
   that pin the public import contract. Date/Author: 2026-06-10T15:30Z / Codex.
+- Decision: Exercise bindings façade exports functionally rather than by
+  comparing object identity. Rationale: identity checks prove the import graph
+  but not the callable contract, and they can pass for constants or mocks. Each
+  public façade function now has a database-backed async test that calls
+  through `episodic.canonical.reference_documents.bindings` and asserts a
+  meaningful result field. Date/Author: 2026-06-10T12:30Z / Codex.
 - Decision: Source-intake observability must include bounded metrics, tracing,
   and actionable alerts in addition to structured logs. Rationale: orphan
   blobs, stuck idempotency records, and stream failures are operational
@@ -504,10 +519,10 @@ Seed entries (DRAFT):
   explicit worker counts above one. Date/Author: 2026-06-10T16:20Z / Codex.
 - Decision: Share one py-pglite process for the pytest session and reset schema
   state per test. Rationale: each database-backed test needs isolated schema
-  state, not a fresh Node process. Reusing the process avoids repeated py-pglite
-  startup while `migrated_engine` preserves test isolation by dropping and
-  recreating the `public` schema before applying Alembic migrations.
-  Date/Author: 2026-06-10T16:35Z / Codex.
+  state, not a fresh Node process. Reusing the process avoids repeated
+  py-pglite startup while `migrated_engine` preserves test isolation by
+  dropping and recreating the `public` schema before applying Alembic
+  migrations. Date/Author: 2026-06-10T16:35Z / Codex.
 - Decision: Retry py-pglite startup at the fixture boundary.
   Rationale: the external Node process can occasionally miss the startup window
   under host load even after dependency caching. Retrying with a fresh run
