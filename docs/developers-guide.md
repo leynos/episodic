@@ -749,9 +749,9 @@ Required metrics are:
 - `source_intake_stream_errors_total`
 
 Trace these service and adapter boundaries with the span names from ADR 015:
-upload registration, object-store `put`/`open`/`delete`, idempotency
-`acquire`/`complete`, ingestion-job creation, and source attachment. Span
-attributes must use the same bounded vocabulary as metrics.
+upload registration, object-store `put`/`open`/`delete`, idempotency `acquire`/
+`complete`, ingestion-job creation, and source attachment. Span attributes must
+use the same bounded vocabulary as metrics.
 
 Use log levels consistently:
 
@@ -768,8 +768,8 @@ Production alerting must page when upload errors exceed 5 percent of requests
 over 15 minutes after excluding expected client rejections, when object-store
 operation failures exceed 1 percent over 10 minutes, when any object-store
 permission error occurs, when recovery finds pending or failed uploads older
-than one hour, or when in-flight idempotency records are older than
-15 minutes. Emit warning alerts for high-volume `payload_too_large` or
+than one hour, or when in-flight idempotency records are older than 15 minutes.
+Emit warning alerts for high-volume `payload_too_large` or
 `unsupported_content_type` responses so integrators can correct clients before
 they become incidents.
 

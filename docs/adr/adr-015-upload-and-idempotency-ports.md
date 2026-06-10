@@ -123,9 +123,9 @@ sha256:f03f8d4c738536bcd1c13cc34d6816f8ea0672c3e2d47c2cbbaf5c8ecbda5e2c
 ## Observability contract
 
 The intake adapters must emit metrics, traces, and structured logs at the
-storage and idempotency boundaries. Metrics use bounded-cardinality labels only;
-do not label metrics with upload ids, idempotency keys, object-store keys,
-filenames, source URIs, document hashes, or principal ids.
+storage and idempotency boundaries. Metrics use bounded-cardinality labels
+only; do not label metrics with upload ids, idempotency keys, object-store
+keys, filenames, source URIs, document hashes, or principal ids.
 
 Required metrics:
 
@@ -140,8 +140,8 @@ Required metrics:
   documented intake error-code outcomes.
 - `source_intake_object_store_operations_total{operation,outcome,error_class}`:
   counter for object-store `put`, `open`, and `delete` operations. The
-  `error_class` label is a stable adapter-defined category such as
-  `permission`, `not_found`, `io`, or `none`.
+  `error_class` label is a stable adapter-defined category such as `permission`,
+  `not_found`, `io`, or `none`.
 - `source_intake_object_store_operation_duration_seconds{operation,outcome}`:
   histogram around each storage-port call.
 - `source_intake_idempotency_outcomes_total{operation,outcome}`: counter for

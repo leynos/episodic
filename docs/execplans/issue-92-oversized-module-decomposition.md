@@ -35,8 +35,8 @@ environment issue that must be reported rather than patched.
 Run validation through Makefile targets. At minimum, the final candidate fix
 must pass `make check-fmt`, `make test`, `make typecheck`, and `make lint`.
 
-The branch currently also has an unrelated, uncommitted serializer-test refactor
-in `tests/test_brief_serializers.py`. Preserve it and do not revert it.
+The branch currently also has an unrelated, uncommitted serializer-test
+refactor in `tests/test_brief_serializers.py`. Preserve it and do not revert it.
 
 ## Current Evidence
 
@@ -61,8 +61,8 @@ act workflow_dispatch -j <job> -e <event> \
 It also sets `DOCKER_HOST` to the same Podman socket URI.
 
 The Podman socket exists, otherwise `tests/utils.py::podman_socket_path` would
-skip the tests. After a failed run, `podman ps -a` shows created containers such
-as:
+skip the tests. After a failed run, `podman ps -a` shows created containers
+such as:
 
 ```plaintext
 act-bootstrap-gitops-repo-bootstrap-... docker.io/catthehacker/ubuntu:act-latest Created
@@ -101,14 +101,14 @@ configuration with a successful manually started container. Where possible,
 reproduce with a minimal Docker-compatible client against
 `DOCKER_HOST=unix:///run/user/1000/podman/podman.sock`.
 
-Expected negative result: a minimal Docker API create/start with the same image,
-entrypoint, command, and host network succeeds. That would make act-specific
-unsupported options less likely.
+Expected negative result: a minimal Docker API create/start with the same
+image, entrypoint, command, and host network succeeds. That would make
+act-specific unsupported options less likely.
 
 ### H3: Stale act containers cause the start failure
 
-Prediction: removing only failed `Created` containers from previous act runs and
-rerunning the focused workflow tests makes the start failure disappear.
+Prediction: removing only failed `Created` containers from previous act runs
+and rerunning the focused workflow tests makes the start failure disappear.
 
 Falsification test: remove containers named `act-bootstrap-gitops-repo-*` and
 `act-provision-doks-*` that are in `Created` state, then rerun:
@@ -155,17 +155,17 @@ report repo-side assumptions that could explain failure before workflow steps
 run.
 
 Wyvern agent `Russell` owns environment-side falsification. It should inspect
-Podman, `act`, container state, and minimal runtime checks without editing files
-or touching unrelated processes.
+Podman, `act`, container state, and minimal runtime checks without editing
+files or touching unrelated processes.
 
 The main agent owns this plan, integrates the evidence, applies any minimal
 repo-local fix, and runs the required Makefile gates.
 
 ## Progress
 
-2026-06-05: Rebased branch onto `origin/main` without conflicts. `make
-check-fmt`, `make typecheck`, and `make lint` passed. `make test` failed only
-in the two act workflow tests with the `conmon failed` startup error.
+2026-06-05: Rebased branch onto `origin/main` without conflicts.
+`make check-fmt`, `make typecheck`, and `make lint` passed. `make test` failed
+only in the two act workflow tests with the `conmon failed` startup error.
 
 2026-06-05: Confirmed the failing tests call only `run_act`, and the shared
 helper targets the rootless Podman socket unconditionally. Confirmed the socket
@@ -177,20 +177,20 @@ mode means external workflow tools such as `gh` and OpenTofu are not involved.
 The failure persists when disabling act's container socket mount and when
 removing bind-mount mode, so it is not caused solely by those test flags.
 
-2026-06-05: Wyvern agent `Russell` falsified the image-start hypothesis.
-Direct `podman run` of `catthehacker/ubuntu:act-latest` succeeds, including
-with host networking and a long-running `tail -f /dev/null` process. Remote
-Podman API starts through `unix:///run/user/1000/podman/podman.sock` fail with
-the same `conmon failed: exit status 1` error even for minimal commands. Docker
-is not installed, so the helper has no alternative working daemon to prefer.
+2026-06-05: Wyvern agent `Russell` falsified the image-start hypothesis. Direct
+`podman run` of `catthehacker/ubuntu:act-latest` succeeds, including with host
+networking and a long-running `tail -f /dev/null` process. Remote Podman API
+starts through `unix:///run/user/1000/podman/podman.sock` fail with the same
+`conmon failed: exit status 1` error even for minimal commands. Docker is not
+installed, so the helper has no alternative working daemon to prefer.
 
-2026-06-05: Applied a minimal harness fix in
-`tests/workflow_test_utils.py`. Before invoking `act`, `run_act` now preflights
-the local runner backend by starting the pinned runner image through the same
-Podman remote socket. If the backend cannot start containers, the workflow
-integration tests skip as an unavailable local prerequisite, matching the
-existing behaviour when `act` or the Podman socket is unavailable. This does
-not change the workflow assertions when the backend is healthy.
+2026-06-05: Applied a minimal harness fix in `tests/workflow_test_utils.py`.
+Before invoking `act`, `run_act` now preflights the local runner backend by
+starting the pinned runner image through the same Podman remote socket. If the
+backend cannot start containers, the workflow integration tests skip as an
+unavailable local prerequisite, matching the existing behaviour when `act` or
+the Podman socket is unavailable. This does not change the workflow assertions
+when the backend is healthy.
 
 2026-06-05: Focused validation with
 `uv run pytest -q tests/test_workflow_bootstrap_gitops_repo.py tests/test_workflow_provision_doks.py`
