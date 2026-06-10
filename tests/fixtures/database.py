@@ -1,5 +1,7 @@
 """Database infrastructure fixtures (py-pglite, SQLAlchemy)."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import os
@@ -28,6 +30,17 @@ try:
     _PGLITE_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     _PGLITE_AVAILABLE = False
+
+
+@pytest.fixture(scope="session")
+def pglite_node_environment(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
+    """Return the session work root for py-pglite test processes."""
+    if not _should_use_pglite():
+        pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
+
+    return tmp_path_factory.mktemp("pglite-node-env")
 
 
 def _should_use_pglite() -> bool:
@@ -77,9 +90,16 @@ async def _wait_for_engine_ready(engine: AsyncEngine) -> None:
             return
 
 
+async def _reset_public_schema(engine: AsyncEngine) -> None:
+    """Reset the shared py-pglite database before applying migrations."""
+    async with engine.begin() as connection:
+        await connection.execute(sa.text("DROP SCHEMA IF EXISTS public CASCADE"))
+        await connection.execute(sa.text("CREATE SCHEMA public"))
+
+
 @contextlib.asynccontextmanager
 async def _pglite_sqlalchemy_manager(
-    tmp_path: Path,
+    work_dir: Path,
 ) -> cabc.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
     """Start a helper-backed py-pglite manager for SQLAlchemy tests."""
     if not _PGLITE_AVAILABLE:  # pragma: no cover - defensive guard
@@ -89,19 +109,31 @@ async def _pglite_sqlalchemy_manager(
     from py_pglite.sqlalchemy.manager_async import SQLAlchemyAsyncPGliteManager
     from sqlalchemy.pool import NullPool
 
-    work_dir = tmp_path / "pglite"
-    config = PGliteConfig(work_dir=work_dir)
-    manager = SQLAlchemyAsyncPGliteManager(config)
-    manager.start()
-    try:
-        engine = typ.cast("AsyncEngine", manager.get_engine(poolclass=NullPool))
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        attempt_work_dir = work_dir.with_name(f"{work_dir.name}-attempt-{attempt}")
+        config = PGliteConfig(
+            work_dir=attempt_work_dir,
+            timeout=90,
+        )
+        manager = SQLAlchemyAsyncPGliteManager(config)
         try:
+            manager.start()
+            engine = typ.cast("AsyncEngine", manager.get_engine(poolclass=NullPool))
             await _wait_for_engine_ready(engine)
+        except (RuntimeError, sa_exc.OperationalError) as exc:
+            last_error = exc
+            await manager.stop()
+            continue
+
+        try:
+            yield manager
         finally:
-            await engine.dispose()
-        yield manager
-    finally:
-        await manager.stop()
+            await manager.stop()
+        return
+
+    msg = "py-pglite failed to start after 3 attempts."
+    raise RuntimeError(msg) from last_error
 
 
 @contextlib.contextmanager
@@ -122,11 +154,11 @@ def temporary_drift_table() -> cabc.Iterator[sa.Table]:
         Base.metadata.remove(table)
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="session")
 async def pglite_sqlalchemy_manager(
-    tmp_path: Path,
+    pglite_node_environment: Path,
 ) -> cabc.AsyncIterator[SQLAlchemyAsyncPGliteManager]:
-    """Yield the function-scoped py-pglite SQLAlchemy manager.
+    """Yield the session-scoped py-pglite SQLAlchemy manager.
 
     This is the shared py-pglite entry point for SQLAlchemy-backed tests in
     this repository. Prefer `session_factory`, `pglite_session`, or
@@ -135,7 +167,8 @@ async def pglite_sqlalchemy_manager(
     if not _should_use_pglite():
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")
 
-    async with _pglite_sqlalchemy_manager(tmp_path) as manager:
+    work_dir = pglite_node_environment / "server"
+    async with _pglite_sqlalchemy_manager(work_dir) as manager:
         yield manager
 
 
@@ -150,10 +183,7 @@ async def pglite_engine(
         "AsyncEngine", pglite_sqlalchemy_manager.get_engine(poolclass=NullPool)
     )
     await asyncio.sleep(0)
-    try:
-        yield engine
-    finally:
-        await engine.dispose()
+    yield engine
 
 
 @pytest_asyncio.fixture
@@ -161,6 +191,7 @@ async def migrated_engine(
     pglite_engine: AsyncEngine,
 ) -> cabc.AsyncIterator[AsyncEngine]:
     """Yield a py-pglite engine with migrations applied."""
+    await _reset_public_schema(pglite_engine)
     await apply_migrations(pglite_engine)
     yield pglite_engine
 

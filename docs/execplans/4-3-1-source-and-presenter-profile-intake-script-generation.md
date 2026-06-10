@@ -372,6 +372,26 @@ Each entry should follow the form:
   --type uncommitted --dir docs`; the CLI returned `rate_limit` after waits of
   88, 64, and 84 minutes. Impact: Milestone D1 deterministic gates are green,
   but the work is paused at the CodeRabbit review gate before starting D2.
+- Observation: post-review warnings identified two gaps to close before
+  readiness: the refactored `brief.py` and `bindings.py` façades needed
+  explicit replacement coverage, and source-intake observability needed more
+  than structured logging. Evidence: the 2026-06-10 review warning called out
+  deleted tests and missing metrics, tracing, and alerting. Impact: the branch
+  now adds loader edge-path and façade regression tests, and ADR 015 plus the
+  developers' guide define bounded metrics, trace spans, alert rules, and log
+  levels before the next validation run.
+- Observation: full-suite test retries exposed py-pglite fixture setup
+  timeouts rather than assertion failures in the new tests. Evidence: focused
+  reruns passed the brief/bindings tests and most previously failed BDD tests;
+  the remaining failures timed out while `migrated_engine` or
+  `pglite_sqlalchemy_manager` started a function-scoped py-pglite database and
+  applied migrations. Impact: the project pytest timeout is raised from 60 to
+  180 seconds; `make test` now avoids xdist in the default one-worker mode;
+  the py-pglite process is shared for the pytest session; `migrated_engine`
+  resets the `public` schema before applying migrations per test; startup is
+  retried up to three times with a fresh run directory; and the py-pglite docs
+  now describe the expected headroom and the need to investigate repeated
+  near-timeouts.
 
 ## Decision log
 
@@ -458,6 +478,41 @@ Seed entries (DRAFT):
   implementation, frequent commits, gate execution, and CodeRabbit review,
   which is stronger than passive approval. Date/Author: 2026-06-08T15:50Z /
   Codex.
+- Decision: Treat `brief.py` and `bindings.py` as public façades with focused
+  private-module tests rather than duplicating all service behaviour in the
+  façade files. Rationale: the refactor deliberately moved implementation into
+  `_brief_*` and `_binding_*` modules; the replacement coverage should exercise
+  helper edge paths and service behaviour while adding small regression tests
+  that pin the public import contract. Date/Author: 2026-06-10T15:30Z / Codex.
+- Decision: Source-intake observability must include bounded metrics, tracing,
+  and actionable alerts in addition to structured logs. Rationale: orphan
+  blobs, stuck idempotency records, and stream failures are operational
+  failures that may not be visible from request logs alone. ADR 015 now defines
+  the metric names, allowed labels, trace spans, alert thresholds, and
+  WARN/ERROR/INFO split. Date/Author: 2026-06-10T15:35Z / Codex.
+- Decision: Raise the pytest-timeout budget to 180 seconds for this repository.
+  Rationale: the suite intentionally uses function-scoped py-pglite databases
+  for PostgreSQL semantics and isolation. Startup plus Alembic migration
+  application can exceed 60 seconds on shared CI or multi-agent hosts, which
+  kills otherwise healthy database-backed tests during fixture setup. Date/
+  Author: 2026-06-10T16:05Z / Codex.
+- Decision: Do not invoke xdist when `PYTEST_XDIST_WORKERS=1`.
+  Rationale: default `make test` was still running through xdist with
+  `pytest -n 1`, which added a worker process around py-pglite even though no
+  parallelism was requested. Focused non-xdist runs were stable, so the
+  Makefile now runs plain pytest for the default and reserves xdist for
+  explicit worker counts above one. Date/Author: 2026-06-10T16:20Z / Codex.
+- Decision: Share one py-pglite process for the pytest session and reset schema
+  state per test. Rationale: each database-backed test needs isolated schema
+  state, not a fresh Node process. Reusing the process avoids repeated py-pglite
+  startup while `migrated_engine` preserves test isolation by dropping and
+  recreating the `public` schema before applying Alembic migrations.
+  Date/Author: 2026-06-10T16:35Z / Codex.
+- Decision: Retry py-pglite startup at the fixture boundary.
+  Rationale: the external Node process can occasionally miss the startup window
+  under host load even after dependency caching. Retrying with a fresh run
+  directory preserves per-test database isolation and avoids retrying the test
+  body or hiding assertion failures. Date/Author: 2026-06-10T16:50Z / Codex.
 
 ## Outcomes & retrospective
 
@@ -1032,10 +1087,12 @@ Quality criteria (what "done" means):
   path enters the filesystem; the content-type allowlist is enforced
   server-side; payload size is capped during the streaming hash; the
   idempotency store enforces first-writer-wins via SQL unique constraint.
-- Observability: logs at INFO carry `idempotency_outcome`,
-  `idempotency_key`, `route`, `principal_id`, `series_profile_id`,
-  `ingestion_job_id`, and `upload_id`. The existing log helpers in
-  `episodic.logging` are reused.
+- Observability: ADR 015 and `docs/developers-guide.md` define the
+  source-intake metrics, trace spans, log levels, and alert thresholds. Metrics
+  use bounded labels only. Logs carry request correlation fields such as
+  `idempotency_outcome`, `idempotency_key`, `route`, `principal_id`,
+  `series_profile_id`, `ingestion_job_id`, and `upload_id`, and reuse the
+  existing helpers in `episodic.logging`.
 
 Quality method (how we check):
 

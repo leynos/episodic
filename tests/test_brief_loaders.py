@@ -14,6 +14,8 @@ from episodic.canonical.domain import (
     ReferenceDocumentRevision,
 )
 from episodic.canonical.profile_templates._brief_loaders import (
+    _load_documents_by_id,
+    _load_revisions_by_id,
     _raise_if_missing_ids,
     _serialize_bindings_for_owner,
 )
@@ -154,3 +156,106 @@ class TestSerializeBindingsForOwner:
         assert content["data"] == "test", (
             "Serialised content must preserve the revision payload."
         )
+
+
+class TestBriefLoaderMissingReferences:
+    """Tests for missing revision and document edge paths."""
+
+    @pytest.mark.asyncio
+    async def test_load_revisions_by_id_rejects_missing_binding_revision(
+        self,
+    ) -> None:
+        """Raise when a binding points at a missing revision."""
+        import datetime as dt
+
+        now = dt.datetime.now(tz=dt.UTC)
+        missing_revision_id = uuid.uuid4()
+        binding = ReferenceBinding(
+            id=uuid.uuid4(),
+            reference_document_revision_id=missing_revision_id,
+            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+            series_profile_id=uuid.uuid4(),
+            episode_template_id=None,
+            ingestion_job_id=None,
+            effective_from_episode_id=None,
+            created_at=now,
+        )
+        uow = typ.cast(
+            "typ.Any",
+            _ReferenceLoaderUnitOfWork(
+                revisions=[],
+                documents=[],
+            ),
+        )
+
+        with pytest.raises(ValueError, match="missing revision"):
+            await _load_revisions_by_id(uow=uow, bindings=[binding])
+
+    @pytest.mark.asyncio
+    async def test_load_documents_by_id_rejects_missing_revision_document(
+        self,
+    ) -> None:
+        """Raise when a revision points at a missing document."""
+        import datetime as dt
+
+        now = dt.datetime.now(tz=dt.UTC)
+        revision = ReferenceDocumentRevision(
+            id=uuid.uuid4(),
+            reference_document_id=uuid.uuid4(),
+            content={},
+            content_hash="hash",
+            author=None,
+            change_note=None,
+            created_at=now,
+        )
+        uow = typ.cast(
+            "typ.Any",
+            _ReferenceLoaderUnitOfWork(
+                revisions=[revision],
+                documents=[],
+            ),
+        )
+
+        with pytest.raises(ValueError, match="missing document"):
+            await _load_documents_by_id(uow=uow, revisions=[revision])
+
+
+class _ReferenceLoaderUnitOfWork:
+    """Minimal unit-of-work stub for brief loader edge-path tests."""
+
+    def __init__(
+        self,
+        *,
+        revisions: list[ReferenceDocumentRevision],
+        documents: list[ReferenceDocument],
+    ) -> None:
+        self.reference_document_revisions = _RevisionRepositoryStub(revisions)
+        self.reference_documents = _DocumentRepositoryStub(documents)
+
+
+class _RevisionRepositoryStub:
+    """Return matching revisions from an in-memory collection."""
+
+    def __init__(self, revisions: list[ReferenceDocumentRevision]) -> None:
+        self._revisions = revisions
+
+    async def list_by_ids(
+        self,
+        ids: set[uuid.UUID],
+    ) -> list[ReferenceDocumentRevision]:
+        """Return revisions with identifiers present in ``ids``."""
+        return [revision for revision in self._revisions if revision.id in ids]
+
+
+class _DocumentRepositoryStub:
+    """Return matching documents from an in-memory collection."""
+
+    def __init__(self, documents: list[ReferenceDocument]) -> None:
+        self._documents = documents
+
+    async def list_by_ids(
+        self,
+        ids: set[uuid.UUID],
+    ) -> list[ReferenceDocument]:
+        """Return documents with identifiers present in ``ids``."""
+        return [document for document in self._documents if document.id in ids]

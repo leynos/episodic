@@ -394,17 +394,25 @@ Key expectations:
   runtime.
 - Tests run against Postgres semantics, not SQLite.
 - The shared fixture stack is fully asynchronous:
-  - `_pglite_sqlalchemy_manager(tmp_path)` starts
+  - `_pglite_sqlalchemy_manager(work_dir)` starts
     `SQLAlchemyAsyncPGliteManager`, waits for the helper-managed engine to
-    accept connections, and shuts the manager down after the test.
-  - `pglite_sqlalchemy_manager` is the public function-scoped manager fixture.
+    accept connections, and shuts the manager down after the test session.
+  - `pglite_sqlalchemy_manager` is the public session-scoped manager fixture.
   - `pglite_engine` yields the helper-managed `AsyncEngine`.
-  - `migrated_engine` applies Alembic migrations to that engine.
+  - `migrated_engine` resets the shared py-pglite database's `public` schema
+    and applies Alembic migrations to that engine for each database-backed
+    test.
   - `session_factory` returns `async_sessionmaker[AsyncSession]` with
     `expire_on_commit=False`.
   - `pglite_session` yields a ready-to-use `AsyncSession`.
-- Because the stack depends on pytest's function-scoped `tmp_path`, each
-  database-backed test gets an isolated ephemeral database by default.
+- Because `migrated_engine` drops and recreates the `public` schema before
+  applying migrations, each database-backed test gets an isolated schema while
+  the expensive py-pglite Node process is shared for the pytest session.
+- A session-scoped `pglite_node_environment` fixture owns the py-pglite work
+  root. The helper installs py-pglite's Node dependencies once for the session
+  and retries startup up to three times with a fresh run directory before
+  failing, because the external Node process can occasionally time out during
+  startup on shared hosts.
 - Most database-backed tests should use `session_factory` or `pglite_session`.
   Use `pglite_engine` only for lower-level engine assertions, and use
   `pglite_sqlalchemy_manager` only when a test genuinely needs direct manager
@@ -419,9 +427,14 @@ Key expectations:
   database tests. Synchronous Falcon API tests should use
   `canonical_api_client`, which is already wired to `SqlAlchemyUnitOfWork`
   backed by the shared `session_factory`.
-- `make test` uses `PYTEST_XDIST_WORKERS=1` by default to avoid py-pglite
-  cross-worker process termination. Override with
-  `PYTEST_XDIST_WORKERS=<n> make test` when debugging worker-count behaviour.
+- `make test` uses `PYTEST_XDIST_WORKERS=1` by default and does not load xdist
+  in that mode. Override with `PYTEST_XDIST_WORKERS=<n> make test` when
+  deliberately debugging worker-count behaviour; values above one add
+  `pytest -n <n>`.
+- The global pytest timeout is 180 seconds. Keep it high enough for
+  function-scoped py-pglite startup and Alembic migration application under
+  shared Continuous Integration (CI) or multi-agent host load, but investigate
+  any individual database test that approaches the limit repeatedly.
 - `EPISODIC_TEST_DB=sqlite` disables the py-pglite fixtures (tests that depend
   on them will be skipped).
 - If a non-SQLite backend is requested while py-pglite is unavailable, the
@@ -713,6 +726,52 @@ The following error codes are reserved for the source-intake implementation:
 | `series_profile_not_found` | 404         | Referenced series profile does not exist.                     |
 
 _Table 4: Reserved source-intake API error codes._
+
+Source-intake observability follows
+[ADR 015](adr/adr-015-upload-and-idempotency-ports.md). Implement the metrics
+through the shared `MetricsPort` boundary and keep labels bounded: route,
+outcome, content-type family, operation, error code, error class, upload state,
+intake state, and target kind are allowed. Never use upload ids, idempotency
+keys, object-store keys, filenames, Uniform Resource Identifiers (URIs),
+document hashes, or principal ids as metric labels.
+
+Required metrics are:
+
+- `source_intake_upload_requests_total`
+- `source_intake_upload_duration_seconds`
+- `source_intake_upload_bytes`
+- `source_intake_upload_errors_total`
+- `source_intake_object_store_operations_total`
+- `source_intake_object_store_operation_duration_seconds`
+- `source_intake_idempotency_outcomes_total`
+- `source_intake_orphan_uploads_total`
+- `source_intake_stuck_idempotency_records_total`
+- `source_intake_stream_errors_total`
+
+Trace these service and adapter boundaries with the span names from ADR 015:
+upload registration, object-store `put`/`open`/`delete`, idempotency
+`acquire`/`complete`, ingestion-job creation, and source attachment. Span
+attributes must use the same bounded vocabulary as metrics.
+
+Use log levels consistently:
+
+- `INFO` for successful upload registration, idempotency replay, ingestion-job
+  creation, source attachment, and ready-for-generation transitions.
+- `WARN` for client-correctable validation failures, idempotency conflicts,
+  in-flight duplicate requests, hash or size mismatches, and recovery sweeps
+  that find orphan uploads or stale idempotency records.
+- `ERROR` for object-store failures, database transaction failures, accepted
+  request stream failures, and idempotency completion failures that may make a
+  committed side effect non-replayable.
+
+Production alerting must page when upload errors exceed 5 percent of requests
+over 15 minutes after excluding expected client rejections, when object-store
+operation failures exceed 1 percent over 10 minutes, when any object-store
+permission error occurs, when recovery finds pending or failed uploads older
+than one hour, or when in-flight idempotency records are older than
+15 minutes. Emit warning alerts for high-volume `payload_too_large` or
+`unsupported_content_type` responses so integrators can correct clients before
+they become incidents.
 
 Until the automated purge worker lands, operators can recover stale upload and
 idempotency state manually. Stale `uploads` rows in `pending` or `failed` state

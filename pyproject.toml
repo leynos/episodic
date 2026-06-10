@@ -420,8 +420,9 @@ enable = [
 
 [tool.pytest.ini_options]
 # Tests automatically killed after seconds elapsed. Full-suite database fixture
-# startup can exceed 30 seconds under shared CI or agent-host load.
-timeout = 60
+# startup can exceed 60 seconds under shared CI or agent-host load when
+# py-pglite starts a fresh PostgreSQL runtime and applies Alembic migrations.
+timeout = 180
 markers = [
     "act: integration tests that drive GitHub Actions via act",
     "crosshair: symbolic contract verification using CrossHair",
