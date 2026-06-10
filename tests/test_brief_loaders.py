@@ -1,4 +1,14 @@
-"""Tests for brief loader helpers."""
+"""Tests for brief loaders in ``_brief_loaders``.
+
+Brief loaders load reference-document revisions and documents by ID,
+serialise reference bindings, and raise on missing IDs. They exercise
+``ReferenceBinding``, ``ReferenceDocument``, ``ReferenceDocumentRevision``,
+``_load_revisions_by_id``, ``_load_documents_by_id``,
+``_serialize_bindings_for_owner``, and ``_raise_if_missing_ids``. The brief
+generation pipeline calls them to resolve document bindings before building
+generation briefs. Stub repositories keep these tests in-memory and free of
+database fixtures.
+"""
 
 import typing as typ
 import uuid
