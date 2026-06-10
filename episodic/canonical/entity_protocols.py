@@ -11,6 +11,8 @@ if typ.TYPE_CHECKING:
         CanonicalEpisode,
         EpisodeTemplate,
         IngestionJob,
+        IngestionJobListFilters,
+        IntakeState,
         SeriesProfile,
         SourceDocument,
         TeiHeader,
@@ -80,6 +82,33 @@ class IngestionJobRepository(typ.Protocol):
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
         """Fetch an ingestion job by identifier."""
+        raise NotImplementedError
+
+    async def list_paged(
+        self,
+        filters: IngestionJobListFilters,
+        *,
+        limit: int,
+        offset: int,
+    ) -> cabc.Sequence[IngestionJob]:
+        """List ingestion jobs using source-intake filters."""
+        raise NotImplementedError
+
+    async def count(
+        self,
+        filters: IngestionJobListFilters,
+    ) -> int:
+        """Count ingestion jobs using source-intake filters."""
+        raise NotImplementedError
+
+    async def transition_intake_state(
+        self,
+        job_id: uuid.UUID,
+        *,
+        from_state: IntakeState,
+        to_state: IntakeState,
+    ) -> bool:
+        """Return True only when the conditional intake-state update matched."""
         raise NotImplementedError
 
 

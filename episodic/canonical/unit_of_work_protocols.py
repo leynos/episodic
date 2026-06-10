@@ -23,6 +23,11 @@ if typ.TYPE_CHECKING:
         ReferenceDocumentRepository,
         ReferenceDocumentRevisionRepository,
     )
+    from .upload_protocols import (
+        IdempotencyStore,
+        IngestionJobSourceRepository,
+        UploadRepository,
+    )
 
 
 @typ.runtime_checkable
@@ -41,6 +46,9 @@ class CanonicalUnitOfWork(typ.Protocol):
     reference_documents: ReferenceDocumentRepository
     reference_document_revisions: ReferenceDocumentRevisionRepository
     reference_bindings: ReferenceBindingRepository
+    uploads: UploadRepository
+    ingestion_job_sources: IngestionJobSourceRepository
+    idempotency: IdempotencyStore
 
     async def __aenter__(self) -> CanonicalUnitOfWork:
         """Enter the unit-of-work context."""

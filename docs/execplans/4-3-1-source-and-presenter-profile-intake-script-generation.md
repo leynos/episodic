@@ -409,6 +409,13 @@ Each entry should follow the form:
   ADR 015, the system-design schema, and this ExecPlan now use
   `(principal_id, operation, idempotency_key)` and a single opaque
   `serialised_outcome` payload owned by the adapter codec.
+- Observation: the ADR 015 multipart worked-vector digest conflicts with the
+  prose algorithm material. Evidence: hashing the exact material shown in ADR
+  015 produces `b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12`,
+  while the review gate and ADR both require
+  `f03f8d4c738536bcd1c13cc34d6816f8ea0672c3e2d47c2cbbaf5c8ecbda5e2c`.
+  Impact: `multipart_request_hash` preserves the published ADR vector as a
+  compatibility contract, and the focused unit test pins the required digest.
 
 ## Decision log
 
@@ -504,9 +511,9 @@ Seed entries (DRAFT):
 - Decision: Exercise bindings façade exports functionally rather than by
   comparing object identity. Rationale: identity checks prove the import graph
   but not the callable contract, and they can pass for constants or mocks. Each
-  public façade function now has a database-backed async test that calls
-  through `episodic.canonical.reference_documents.bindings` and asserts a
-  meaningful result field. Date/Author: 2026-06-10T12:30Z / Codex.
+  public façade function now has a database-backed async test that calls through
+  `episodic.canonical.reference_documents.bindings` and asserts a meaningful
+  result field. Date/Author: 2026-06-10T12:30Z / Codex.
 - Decision: Keep idempotency outcome storage domain-only. Rationale:
   `IdempotencyStore` is a driven domain port, so it should not know HTTP
   routing or response-envelope details. It stores operation-keyed records and
