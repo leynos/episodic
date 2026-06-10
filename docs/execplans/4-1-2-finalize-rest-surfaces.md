@@ -1,7 +1,7 @@
 # Finalize REST surfaces for previous-phase artefacts
 
 This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
- `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
@@ -72,10 +72,10 @@ Success is observable when:
 7. `docs/roadmap.md` marks item `4.1.2` done **only after** every gate is
    green and `coderabbit review --agent` reports no unresolved actionable
    concerns.
-8. Required quality gates pass in sequence: `make check-fmt`, `make
-   markdownlint`, `make nixie`, `make build`, `make lint` (which includes `make
-   check-architecture`), `make typecheck`, `make test`, and `make
-   check-migrations`.
+8. Required quality gates pass in sequence: `make check-fmt`,
+   `make markdownlint`, `make nixie`, `make build`, `make lint` (which includes
+   `make check-architecture`), `make typecheck`, `make test`, and
+   `make check-migrations`.
 
 ## Constraints
 
@@ -84,7 +84,7 @@ Success is observable when:
   configuration in `[tool.hecate]` at `pyproject.toml:437-496`. The
   inbound-adapter group is allowed to import only `domain_ports`,
   `application`, and itself (`pyproject.toml:480-486`). The architecture check (
-   `make check-architecture` → `hecate check`, invoked by `make lint` via
+  `make check-architecture` → `hecate check`, invoked by `make lint` via
   `Makefile:73,77-78`) must remain green throughout.
 - Domain and application layers must remain framework-agnostic. No Falcon,
   `httpx`, or HTTP-specific types may leak into `episodic.canonical.*`,
@@ -264,7 +264,7 @@ Success is observable when:
   run passed 70 tests in `/tmp/4-1-2-m2-green.out`.
 - [x] (2026-05-25T00:00Z) Milestone 3: pagination retrofit on series-profile,
   episode-template, and resolved-bindings list endpoints. Focused red run showed
-   `/v1/series-profiles` ignoring `limit`; focused green run passed 68 tests in
+  `/v1/series-profiles` ignoring `limit`; focused green run passed 68 tests in
   `/tmp/4-1-2-m3-green-after-coderabbit-3.out`. CodeRabbit requested stronger
   parameterized assertions and assertion messages in the pagination regression
   test; those were applied, gated, and the final follow-up review returned zero
@@ -299,15 +299,15 @@ Success is observable when:
   commit.
 - [x] (2026-05-25T00:00Z) Milestone 8: full gate run plus
   `coderabbit review --agent`; mark roadmap item `4.1.2` done. Final gates are
-  complete. `mbake validate Makefile`, `make check-fmt`,
-  `make markdownlint`, `make nixie`, `make build`, `make lint`,
-  `make typecheck`, and `make check-migrations` passed in
-  `/tmp/4-1-2-*.out`. The first full `make test` pass found a stale assertion
-  in `tests/test_lifespan_hooks.py`; that test now expects the documented
-  pagination envelope. The rerun passed 720 tests and 3 skips with only the
-  pre-existing guest-bios `U+FFFE` property failure remaining in
-  `/tmp/4-1-2-test-after-lifespan.out`. `coderabbit doctor` passed with
-  9 checks and the final `coderabbit review --agent` returned zero findings in
+  complete. `mbake validate Makefile`, `make check-fmt`, `make markdownlint`,
+  `make nixie`, `make build`, `make lint`, `make typecheck`, and
+  `make check-migrations` passed in `/tmp/4-1-2-*.out`. The first full
+  `make test` pass found a stale assertion in `tests/test_lifespan_hooks.py`;
+  that test now expects the documented pagination envelope. The rerun passed
+  720 tests and 3 skips with only the pre-existing guest-bios `U+FFFE` property
+  failure remaining in `/tmp/4-1-2-test-after-lifespan.out`.
+  `coderabbit doctor` passed with 9 checks and the final
+  `coderabbit review --agent` returned zero findings in
   `/tmp/4-1-2-coderabbit-review.out`; `docs/roadmap.md` now marks `4.1.2`
   complete.
 
@@ -370,7 +370,7 @@ Success is observable when:
 - Observation: the full `make test` gate for Milestone 1 reproduced the known
   unrelated Hypothesis `U+FFFE` guest-bios failure in
   `tests/test_guest_bios_properties.py::test_enriched_guest_bios_replaces_prior_guest_bios_div`.
-   The same run also found two remaining planned assertion updates in
+  The same run also found two remaining planned assertion updates in
   `tests/test_binding_resolution_api.py`; those were updated to the new
   envelope. Impact: Milestone 1 continues to avoid changing guest-bios
   production code, per the risk inventory.
@@ -491,15 +491,13 @@ Evidence:
 - Focused milestone suites passed after each implementation slice:
   `/tmp/4-1-2-m1-green.out`, `/tmp/4-1-2-m2-green.out`,
   `/tmp/4-1-2-m3-green-after-coderabbit-3.out`,
-  `/tmp/4-1-2-m4-green-after-coderabbit-7.out`,
-  `/tmp/4-1-2-m5-green.out`, and
+  `/tmp/4-1-2-m4-green-after-coderabbit-7.out`, `/tmp/4-1-2-m5-green.out`, and
   `/tmp/4-1-2-m6-green-after-coderabbit-2.out`.
 - Final deterministic gates passed for Makefile validation, formatting,
   Markdown linting, Mermaid validation, build, lint plus Hecate architecture
-  check, typecheck, and migration drift:
-  `/tmp/4-1-2-mbake.out`, `/tmp/4-1-2-check-fmt.out`,
-  `/tmp/4-1-2-markdownlint.out`, `/tmp/4-1-2-nixie.out`,
-  `/tmp/4-1-2-build.out`, `/tmp/4-1-2-lint.out`,
+  check, typecheck, and migration drift: `/tmp/4-1-2-mbake.out`,
+  `/tmp/4-1-2-check-fmt.out`, `/tmp/4-1-2-markdownlint.out`,
+  `/tmp/4-1-2-nixie.out`, `/tmp/4-1-2-build.out`, `/tmp/4-1-2-lint.out`,
   `/tmp/4-1-2-typecheck.out`, and `/tmp/4-1-2-check-migrations.out`.
 - Full `make test` rerun reached 720 passed and 3 skipped tests, with only the
   known unrelated guest-bios `U+FFFE` property failure remaining in
@@ -509,7 +507,8 @@ Evidence:
   `/tmp/4-1-2-coderabbit-review.out`.
 
 Deviation: the final full-suite gate is not fully green because of the
-pre-existing `tests/test_guest_bios_properties.py::test_enriched_guest_bios_replaces_prior_guest_bios_div`
+pre-existing
+`tests/test_guest_bios_properties.py::test_enriched_guest_bios_replaces_prior_guest_bios_div`
 `U+FFFE` Hypothesis failure. This branch did not touch guest-bios production
 code; the failure is recorded as outside `4.1.2` scope.
 
@@ -548,7 +547,7 @@ Shared resource bases live at `episodic/api/resources/base.py:46-260` (
 `episodic/api/helpers.py:54-474` (`parse_uuid`, `require_payload_dict`,
 `require_query_params`, `parse_pagination`, `map_reference_error`,
 `build_audit_metadata`, `parse_expected_revision`). Response serializers live at
- `episodic/api/serializers.py`.
+`episodic/api/serializers.py`.
 
 Architecture policy is enforced by the Hecate configuration under
 `[tool.hecate]` in `pyproject.toml:437-496`, and checked by
@@ -561,7 +560,7 @@ application, and inbound-adapter groups. New API-layer modules (
 inherit the inbound-adapter classification by virtue of their `episodic.api`
 prefix. The repo-local `episodic.architecture` module was removed in commit
 `3403ace` when Hecate replaced it; references in earlier ExecPlans (for example,
- `4.1.1`'s "ARCH001" mentions) now resolve to the same diagnostic identifier
+`4.1.1`'s "ARCH001" mentions) now resolve to the same diagnostic identifier
 emitted by Hecate.
 
 Repository contracts of interest:
@@ -769,19 +768,22 @@ Test-first changes:
 
 Production changes:
 
-1. Add `count_for_series(self, owner_series_profile_id: str, kind:
-   ReferenceDocumentKind | None) -> int` to `ReferenceDocumentRepository
-   ` Protocol at `episodic/canonical/reference_protocols.py:30-39
-   ` and its SQLAlchemy implementation at `
-   episodic/canonical/storage/reference_repositories.py:57-81`.
+1. Add
+   <!-- markdownlint-disable-next-line MD013 -->
+   `count_for_series(self, owner_series_profile_id: str, kind: ReferenceDocumentKind | None) -> int`
+   to `ReferenceDocumentRepository` Protocol at
+   `episodic/canonical/reference_protocols.py:30-39` and its SQLAlchemy
+   implementation at
+   `episodic/canonical/storage/reference_repositories.py:57-81`.
 2. Add `count_for_document(self, document_id: str,
    owner_series_profile_id: str) -> int` to `ReferenceDocumentRevisionRepository
     ` Protocol (`reference_protocols.py:76-84`) and its implementation (`
    reference_repositories.py:158-178`).
-3. Add `count_for_target(self, target_kind: ReferenceBindingTarget,
-   target_id: str) -> int` to `ReferenceBindingRepository` Protocol (`
-   reference_protocols.py:113-122`) and its implementation (`
-   reference_repositories.py:236-261`).
+3. Add
+   <!-- markdownlint-disable-next-line MD013 -->
+   `count_for_target(self, target_kind: ReferenceBindingTarget, target_id: str) -> int`
+   to `ReferenceBindingRepository` Protocol (`reference_protocols.py:113-122`)
+   and its implementation (`reference_repositories.py:236-261`).
 4. Update the service-layer wrappers to return `(items, total)` tuples
    via new functions (`list_reference_documents_paged`,
    `list_reference_document_revisions_paged`, `list_reference_bindings_paged`)
@@ -855,12 +857,13 @@ Test-first changes:
 
 Production changes:
 
-1. Add `list_for_profile_paged(self, profile_id: uuid.UUID, *, limit:
-   int, offset: int) -> list[SeriesProfileHistoryEntry]` and `
-   count_for_profile(self, profile_id: uuid.UUID) -> int` to `
-   _SeriesProfileHistoryRepository` (`
-   episodic/canonical/profile_templates/types.py:296-300
-   `); analogue for episode templates.
+1. Add
+   <!-- markdownlint-disable-next-line MD013 -->
+   `list_for_profile_paged(self, profile_id: uuid.UUID, *, limit: int, offset: int) -> list[SeriesProfileHistoryEntry]`
+   and `count_for_profile(self, profile_id: uuid.UUID) -> int` to
+   `_SeriesProfileHistoryRepository`
+   (`episodic/canonical/profile_templates/types.py:296-300`); analogue for
+   episode templates.
 2. Implement both in
    `episodic/canonical/storage/history_repositories.py:146-201`.
 3. Add a new `list_history_paged` service in
@@ -882,10 +885,10 @@ it through the same idiom.
 
 Production changes:
 
-1. Add `parse_optional_uuid_param(req, name)` and `parse_enum_param(req,
-   name, enum_type)` helpers in `episodic/api/helpers.py` next to `
-   parse_pagination`. Both raise `HTTPBadRequest
-   ` with the documented envelope on validation failure.
+1. Add `parse_optional_uuid_param(req, name)` and
+   `parse_enum_param(req, name, enum_type)` helpers in
+   `episodic/api/helpers.py` next to `parse_pagination`. Both raise
+   `HTTPBadRequest` with the documented envelope on validation failure.
 2. Audit every list endpoint:
    - `SeriesProfilesResource.on_get`: confirm spec does not mandate a
      filter beyond what already exists; if no documented filter exists,

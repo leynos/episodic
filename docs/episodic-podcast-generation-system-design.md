@@ -1842,8 +1842,7 @@ through Falcon ASGI (Asynchronous Server Gateway Interface) adapters in
 `episodic/api/app.py` and `episodic/api/resources/`.
 
 - `POST /v1/series-profiles/{profile_id}/reference-documents` creates one
-  reusable
-  `ReferenceDocument` for the owning series profile.
+  reusable `ReferenceDocument` for the owning series profile.
 - `GET /v1/series-profiles/{profile_id}/reference-documents` lists reusable
   documents for that series profile. Optional `kind` filter supports
   `style_guide`, `host_profile`, `guest_profile`, and `research_brief`.
@@ -1873,13 +1872,13 @@ Pagination contract for list endpoints:
 - Query parameters: `limit` and `offset`.
 - Defaults: `limit=20`, `offset=0`.
 - Bounds: `1 <= limit <= 100` and `offset >= 0`.
-- Response envelope: `{ "items": […], "limit": <int>, "offset": <int>,
-  "total": <int> }`.
+- Response envelope:
+  `{ "items": […], "limit": <int>, "offset": <int>, "total": <int> }`.
 
 Error contract:
 
-- Error envelope: `{ "code": "<machine-readable>", "message": "<human>",
-  "details": {…} }`.
+- Error envelope:
+  `{ "code": "<machine-readable>", "message": "<human>", "details": {…} }`.
 - `400 Bad Request` for malformed payloads, invalid UUID/query formats, or
   invalid pagination bounds.
 - `404 Not Found` for unknown entities and cross-series access paths that fail

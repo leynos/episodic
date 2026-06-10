@@ -271,7 +271,7 @@ Create `episodic/canonical/storage/migration_check.py` with:
    returns exit code 0 or 1.
 
 3. A `if __name__ == "__main__"` guard that calls
-   `sys.exit(asyncio.run( check_migrations_cli()))`.
+   `sys.exit(asyncio.run(check_migrations_cli()))`.
 
 The module uses `femtologging` via `episodic.logging` for status messages.
 

@@ -401,9 +401,9 @@ require a live RabbitMQ broker.
   prompts routinely use text that tokenizes differently from the default
   estimate. Lower values, such as `2.0`, make preflight checks stricter for
   code-heavy or non-Latin-script prompts; higher values make them more
-  permissive for compact natural-language prompts. The value must be finite
-  and greater than zero. Operators should calibrate it by comparing sampled
-  prompt character counts with provider-reported input-token usage, then use a
+  permissive for compact natural-language prompts. The value must be finite and
+  greater than zero. Operators should calibrate it by comparing sampled prompt
+  character counts with provider-reported input-token usage, then use a
   conservative ratio that rejects oversized prompts before a provider call.
 - Migration note: OpenAI adapter classes are no longer exported from
   `episodic.llm`. Import `OpenAICompatibleLLMAdapter` and
