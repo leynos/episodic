@@ -426,6 +426,14 @@ Each entry should follow the form:
   reported 863 passed, 2 skipped, and 19 snapshots passed. Impact: CodeRabbit
   can review the completed implementation milestone rather than deterministic
   formatting, lint, typing, or test failures.
+- Observation: rebasing onto `origin/main` on 2026-06-11 produced one
+  documentation-format conflict in
+  `docs/execplans/4-1-2-finalize-rest-surfaces.md`. Evidence: `git rebase
+  origin/main` stopped while replaying `Document source-intake port decisions`
+  after `origin/main` landed `e283147 Reformat docs with mdformat-all (#132)`.
+  Impact: the conflict was resolved by preserving `main`'s code-block
+  formatting for long signatures while keeping this branch's source-intake
+  documentation changes.
 
 ## Decision log
 

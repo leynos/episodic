@@ -68,7 +68,6 @@ This guide will cover:
 - Persisting `guardrails` on series profiles and episode templates so
   generation requests carry stable editorial instructions as system prompts
 
-
 #### Source-to-script intake
 
 Source-to-script intake is being implemented for roadmap item `4.3.1`. The
