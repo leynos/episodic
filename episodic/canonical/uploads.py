@@ -20,6 +20,27 @@ class UploadState(enum.StrEnum):
     EXPIRED = "expired"
 
 
+def _require_non_negative_size(value: int, field_name: str) -> None:
+    """Raise ValueError when an integer size field is negative."""
+    if value < 0:
+        msg = f"{field_name} must be non-negative."
+        raise ValueError(msg)
+
+
+def _require_non_empty_string(value: str, field_name: str) -> None:
+    """Raise ValueError when *value* is blank after stripping whitespace."""
+    if not value.strip():
+        msg = f"{field_name} must be a non-empty string."
+        raise ValueError(msg)
+
+
+def _require_non_negative_actual_size(actual_size: int | None) -> None:
+    """Raise ValueError when actual_size is provided but negative."""
+    if actual_size is not None and actual_size < 0:
+        msg = "actual_size must be non-negative when provided."
+        raise ValueError(msg)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class Upload:
     """Metadata record for uploaded bytes."""
@@ -39,18 +60,10 @@ class Upload:
 
     def __post_init__(self) -> None:
         """Validate upload invariants at the domain boundary."""
-        if self.declared_size < 0:
-            msg = "declared_size must be non-negative."
-            raise ValueError(msg)
-        if self.actual_size is not None and self.actual_size < 0:
-            msg = "actual_size must be non-negative when provided."
-            raise ValueError(msg)
-        if not self.content_type.strip():
-            msg = "content_type must be a non-empty string."
-            raise ValueError(msg)
-        if not self.storage_key.strip():
-            msg = "storage_key must be a non-empty string."
-            raise ValueError(msg)
+        _require_non_negative_size(self.declared_size, "declared_size")
+        _require_non_negative_actual_size(self.actual_size)
+        _require_non_empty_string(self.content_type, "content_type")
+        _require_non_empty_string(self.storage_key, "storage_key")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -65,9 +78,5 @@ class UploadInitRequest:
 
     def __post_init__(self) -> None:
         """Validate the client-declared upload metadata."""
-        if self.declared_size < 0:
-            msg = "declared_size must be non-negative."
-            raise ValueError(msg)
-        if not self.content_type.strip():
-            msg = "content_type must be a non-empty string."
-            raise ValueError(msg)
+        _require_non_negative_size(self.declared_size, "declared_size")
+        _require_non_empty_string(self.content_type, "content_type")
