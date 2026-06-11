@@ -690,7 +690,6 @@ vertical slice].
     presenter context, poll completion over REST, and download a TEI-P5 XML
     file without using the QA, audio, or export-job pipelines.
 
-
 ### 4.4. Iterative generation and duration-based refinement
 
 This step answers whether a single generation run can complete a generation,
@@ -750,7 +749,6 @@ generation workflows beyond the initial draft-only slice.
     and
     [State persistence and checkpointing](episodic-podcast-generation-system-design.md#state-persistence-and-checkpointing).
 
-
 ### 4.5. WebSocket event streaming
 
 Implement real-time event streaming for generation runs. Completion enables
@@ -779,7 +777,6 @@ live workflow observation and checkpoint intervention.
   - Provide REST fallback via `resume_unavailable` error.
   - See [Backpressure](episodic-tui-api-design.md#backpressure).
 
-
 ### 4.6. CLI and web console
 
 Extend command-line tooling and ship the initial web console. Completion
@@ -793,7 +790,6 @@ enables operator and editorial self-service.
   - Implement series profile and template management views.
   - Implement approval queue dashboard.
   - Implement real-time generation progress view.
-
 
 ### 4.7. API documentation and specifications
 
