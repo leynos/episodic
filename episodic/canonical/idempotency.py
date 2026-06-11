@@ -16,6 +16,20 @@ class IdempotencyState(enum.StrEnum):
     COMPLETED = "completed"
 
 
+def _require_non_empty(value: str, field: str) -> None:
+    if not value.strip():
+        msg = f"{field} must be a non-empty string."
+        raise ValueError(msg)
+
+
+def _validate_completed_state(
+    state: IdempotencyState, serialised_outcome: bytes | None
+) -> None:
+    if state is IdempotencyState.COMPLETED and serialised_outcome is None:
+        msg = "completed idempotency records require serialised_outcome."
+        raise ValueError(msg)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class IdempotencyRecord:
     """Stored request fingerprint and opaque replay payload."""
@@ -33,18 +47,10 @@ class IdempotencyRecord:
 
     def __post_init__(self) -> None:
         """Validate domain-only idempotency state."""
-        if not self.operation.strip():
-            msg = "operation must be a non-empty string."
-            raise ValueError(msg)
-        if not self.idempotency_key.strip():
-            msg = "idempotency_key must be a non-empty string."
-            raise ValueError(msg)
-        if not self.body_hash.strip():
-            msg = "body_hash must be a non-empty string."
-            raise ValueError(msg)
-        if self.state is IdempotencyState.COMPLETED and self.serialised_outcome is None:
-            msg = "completed idempotency records require serialised_outcome."
-            raise ValueError(msg)
+        _require_non_empty(self.operation, "operation")
+        _require_non_empty(self.idempotency_key, "idempotency_key")
+        _require_non_empty(self.body_hash, "body_hash")
+        _validate_completed_state(self.state, self.serialised_outcome)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -59,15 +65,9 @@ class IdempotencyAcquireRequest:
 
     def __post_init__(self) -> None:
         """Validate logical idempotency-key input."""
-        if not self.operation.strip():
-            msg = "operation must be a non-empty string."
-            raise ValueError(msg)
-        if not self.idempotency_key.strip():
-            msg = "idempotency_key must be a non-empty string."
-            raise ValueError(msg)
-        if not self.body_hash.strip():
-            msg = "body_hash must be a non-empty string."
-            raise ValueError(msg)
+        _require_non_empty(self.operation, "operation")
+        _require_non_empty(self.idempotency_key, "idempotency_key")
+        _require_non_empty(self.body_hash, "body_hash")
 
 
 @dc.dataclass(frozen=True, slots=True)
