@@ -420,8 +420,9 @@ enable = [
 
 [tool.pytest.ini_options]
 # Tests automatically killed after seconds elapsed. Full-suite database fixture
-# startup can exceed 30 seconds under shared CI or agent-host load.
-timeout = 60
+# startup can exceed 60 seconds under shared CI or agent-host load when
+# py-pglite starts a fresh PostgreSQL runtime and applies Alembic migrations.
+timeout = 180
 markers = [
     "act: integration tests that drive GitHub Actions via act",
     "crosshair: symbolic contract verification using CrossHair",
@@ -459,10 +460,15 @@ prefixes = [
     "episodic.canonical.ingestion_ports",
     "episodic.canonical.entity_protocols",
     "episodic.canonical.history_protocols",
+    "episodic.canonical.idempotency",
+    "episodic.canonical.ingestion_sources",
+    "episodic.canonical.object_store",
     "episodic.canonical.pagination",
     "episodic.canonical.ports",
     "episodic.canonical.reference_protocols",
     "episodic.canonical.unit_of_work_protocols",
+    "episodic.canonical.upload_protocols",
+    "episodic.canonical.uploads",
     "episodic.llm.ports",
     "episodic.metrics_ports",
 ]
@@ -473,6 +479,8 @@ name = "application"
 prefixes = [
     "episodic.canonical.services",
     "episodic.canonical.ingestion_service",
+    "episodic.canonical.idempotency_service",
+    "episodic.canonical.source_intake_service",
     "episodic.canonical.profile_templates",
     "episodic.canonical.reference_documents",
     "episodic.generation",

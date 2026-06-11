@@ -7,13 +7,16 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         EpisodeTemplate,
         EpisodeTemplateHistoryEntry,
+        IngestionJob,
         ReferenceBinding,
         ReferenceDocument,
         ReferenceDocumentRevision,
         SeriesProfile,
         SeriesProfileHistoryEntry,
     )
+    from episodic.canonical.ingestion_sources import IngestionJobSource
     from episodic.canonical.reference_documents import ResolvedBinding
+    from episodic.canonical.uploads import Upload
 
 
 def serialize_series_profile(
@@ -141,4 +144,62 @@ def serialize_resolved_binding(
         "binding": serialize_reference_binding(resolved_binding.binding),
         "revision": serialize_reference_document_revision(resolved_binding.revision),
         "document": serialize_reference_document(resolved_binding.document),
+    }
+
+
+def serialize_upload(upload: Upload) -> dict[str, typ.Any]:
+    """Serialize a source-intake upload response payload."""
+    return {
+        "id": str(upload.id),
+        "content_hash": upload.content_hash,
+        "size_bytes": upload.actual_size,
+        "content_type": upload.content_type,
+        "storage_key": upload.storage_key,
+        "state": upload.state.value,
+        "metadata": upload.metadata,
+        "created_at": upload.created_at.isoformat(),
+        "updated_at": upload.updated_at.isoformat(),
+    }
+
+
+def serialize_ingestion_job(
+    job: IngestionJob,
+    *,
+    next_poll_after_seconds: int | None = None,
+) -> dict[str, typ.Any]:
+    """Serialize an intake-stage ingestion job response payload."""
+    payload: dict[str, typ.Any] = {
+        "id": str(job.id),
+        "series_profile_id": str(job.series_profile_id),
+        "target_episode_id": _optional_uuid_str(job.target_episode_id),
+        "status": job.status.value,
+        "intake_state": job.intake_state.value,
+        "requested_at": job.requested_at.isoformat(),
+        "started_at": None if job.started_at is None else job.started_at.isoformat(),
+        "completed_at": (
+            None if job.completed_at is None else job.completed_at.isoformat()
+        ),
+        "error_message": job.error_message,
+        "created_at": job.created_at.isoformat(),
+        "updated_at": job.updated_at.isoformat(),
+    }
+    if next_poll_after_seconds is not None:
+        payload["next_poll_after_seconds"] = next_poll_after_seconds
+    return payload
+
+
+def serialize_ingestion_job_source(
+    source: IngestionJobSource,
+) -> dict[str, typ.Any]:
+    """Serialize an intake source-attachment response payload."""
+    return {
+        "id": str(source.id),
+        "ingestion_job_id": str(source.ingestion_job_id),
+        "type": source.attachment_kind.value,
+        "upload_id": _optional_uuid_str(source.upload_id),
+        "source_uri": source.source_uri,
+        "source_type": source.source_type,
+        "weight": source.weight,
+        "metadata": source.metadata,
+        "created_at": source.created_at.isoformat(),
     }

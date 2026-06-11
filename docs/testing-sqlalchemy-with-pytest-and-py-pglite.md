@@ -25,21 +25,27 @@ session creation.
 
 Database-backed tests should build on these fixtures, in this order:
 
-- `_pglite_sqlalchemy_manager(tmp_path)` is an internal async context manager
+- `_pglite_sqlalchemy_manager(work_dir)` is an internal async context manager
   that starts `SQLAlchemyAsyncPGliteManager`, waits for the engine to accept
-  connections, and stops the manager during teardown.
-- `pglite_sqlalchemy_manager` is the public function-scoped manager fixture.
+  connections, and stops the manager during session teardown.
+- `pglite_sqlalchemy_manager` is the public session-scoped manager fixture.
 - `pglite_engine` yields the helper-managed SQLAlchemy `AsyncEngine`.
-- `migrated_engine` runs Alembic migrations by calling
+- `migrated_engine` resets the shared database's `public` schema and then runs
+  Alembic migrations by calling
   `episodic.canonical.storage.alembic_helpers.apply_migrations(...)`.
 - `session_factory` returns `async_sessionmaker[AsyncSession]` with
   `expire_on_commit=False`.
 - `pglite_session` yields an `AsyncSession` created from that migrated engine.
 - `canonical_api_client` builds a Falcon test client whose unit-of-work factory
   uses the shared `session_factory`.
+- `pglite_node_environment` owns the session work root for py-pglite. The
+  fixture installs py-pglite's Node dependencies once for the session and
+  retries startup up to three times with a fresh run directory before failing,
+  which absorbs occasional external Node startup stalls.
 
-Because the stack depends on pytest's function-scoped `tmp_path`, each
-database-backed test gets an isolated ephemeral database by default.
+Because `migrated_engine` drops and recreates the `public` schema before
+applying migrations, each database-backed test gets isolated schema state while
+the expensive py-pglite process is shared for the pytest session.
 
 ### Preferred fixture choices
 
@@ -167,9 +173,17 @@ through `tests/conftest.py`.
 
 - Node.js 18 or newer is required because py-pglite runs a WebAssembly-based
   PostgreSQL runtime.
-- `make test` defaults `PYTEST_XDIST_WORKERS=1`. Keep that default unless
-  deliberately investigating worker-count behaviour; higher worker counts can
-  trigger py-pglite cross-worker process termination.
+- `make test` defaults `PYTEST_XDIST_WORKERS=1` and runs plain pytest in that
+  mode. Keep that default unless deliberately investigating worker-count
+  behaviour; setting a value above one adds `pytest -n <n>`, and higher worker
+  counts can trigger py-pglite cross-worker process termination.
+- Concurrent xdist workers share one py-pglite process. Schema resets must go
+  through `_schema_reset_lock` in `tests/fixtures/database.py` so one worker
+  cannot drop `public` while another worker is applying migrations.
+- The project-level pytest timeout is 180 seconds so function-scoped
+  py-pglite startup and Alembic migration application have room to complete on
+  shared hosts. Treat repeated near-timeout database tests as fixture or
+  migration performance bugs, not as an invitation to raise the timeout again.
 - `EPISODIC_TEST_DB=sqlite` disables the py-pglite-backed fixtures. Tests that
   depend on those fixtures will be skipped.
 - If `EPISODIC_TEST_DB` requests a non-SQLite backend and py-pglite is not

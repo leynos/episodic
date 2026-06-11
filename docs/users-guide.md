@@ -68,6 +68,19 @@ This guide will cover:
 - Persisting `guardrails` on series profiles and episode templates so
   generation requests carry stable editorial instructions as system prompts
 
+#### Source-to-script intake
+
+Source-to-script intake is being implemented for roadmap item `4.3.1`. The
+workflow will let an integration client upload one source document, create an
+ingestion job, attach the upload or a remote source Uniform Resource Identifier
+(URI), bind host and guest profile reference-document revisions, and poll the
+job until the source context is ready for draft generation.
+
+The first implementation will expose `POST /v1/uploads`,
+`POST /v1/ingestion-jobs`, `POST /v1/ingestion-jobs/{job_id}/sources`, and
+`GET /v1/ingestion-jobs/{job_id}`. The resumable `uploads/init` flow remains a
+future extension.
+
 #### Show notes and chapter markers
 
 Show notes are the episode summaries and topic lists that appear alongside a

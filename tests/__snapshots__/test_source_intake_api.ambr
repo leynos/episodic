@@ -1,0 +1,32 @@
+# serializer version: 1
+# name: test_source_intake_response_envelope_snapshot
+  dict({
+    'job': dict({
+      'intake_state': 'awaiting_sources',
+      'next_poll_after_seconds': None,
+      'status': 'pending',
+    }),
+    'source': dict({
+      'metadata': dict({
+        'language': 'en',
+      }),
+      'source_type': 'research_paper',
+      'source_uri': None,
+      'type': 'upload',
+      'weight': 0.75,
+    }),
+    'status': dict({
+      'intake_state': 'ready_for_generation',
+      'next_poll_after_seconds': None,
+      'status': 'pending',
+    }),
+    'upload': dict({
+      'content_hash_algorithm': 'sha256',
+      'content_type': 'text/plain',
+      'metadata': dict({
+      }),
+      'size_bytes': 9,
+      'state': 'ready',
+    }),
+  })
+# ---

@@ -1,0 +1,229 @@
+"""Integration tests for the source-intake REST workflow."""
+
+import hashlib
+import typing as typ
+
+import httpx
+import pytest
+
+from episodic.api import create_app
+from episodic.canonical.storage import FilesystemObjectStore
+from tests.fixtures.api import build_api_dependencies
+
+if typ.TYPE_CHECKING:
+    from pathlib import Path
+
+    from httpx._transports.asgi import _ASGIApp
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from syrupy.assertion import SnapshotAssertion
+
+
+@pytest.mark.asyncio
+async def test_source_intake_upload_job_and_attach_flow(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    """Client can upload bytes, create a job, attach the upload, and poll ready."""
+    object_store = FilesystemObjectStore(tmp_path / "objects")
+    dependencies = build_api_dependencies(session_factory, object_store=object_store)
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        profile_id = await _create_series_profile(client)
+        payload = b"hello\n"
+        upload_response = await client.post(
+            "/v1/uploads",
+            headers={"Idempotency-Key": "upload-key"},
+            files={
+                "file": ("source.txt", payload, "text/plain"),
+                "content_type": (None, "text/plain"),
+                "declared_size": (None, str(len(payload))),
+                "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
+                "metadata": (None, '{"language":"en"}', "application/json"),
+            },
+        )
+        assert upload_response.status_code == 201, upload_response.text
+        replay_response = await client.post(
+            "/v1/uploads",
+            headers={"Idempotency-Key": "upload-key"},
+            files={
+                "file": ("source.txt", payload, "text/plain"),
+                "content_type": (None, "text/plain"),
+                "declared_size": (None, str(len(payload))),
+                "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
+                "metadata": (None, '{"language":"en"}', "application/json"),
+            },
+        )
+        job_response = await client.post(
+            "/v1/ingestion-jobs",
+            headers={"Idempotency-Key": "job-key"},
+            json={"series_profile_id": profile_id, "target_episode_id": None},
+        )
+        source_response = await client.post(
+            f"/v1/ingestion-jobs/{job_response.json()['id']}/sources",
+            headers={"Idempotency-Key": "source-key"},
+            json={
+                "type": "upload",
+                "upload_id": upload_response.json()["id"],
+                "source_type": "research_paper",
+                "weight": 1.0,
+                "metadata": {"language": "en"},
+            },
+        )
+        status_response = await client.get(
+            f"/v1/ingestion-jobs/{job_response.json()['id']}"
+        )
+
+    assert replay_response.status_code == 201
+    assert replay_response.json() == upload_response.json()
+    assert upload_response.json()["content_hash"].startswith("sha256:")
+    assert job_response.status_code == 201
+    assert job_response.json()["intake_state"] == "awaiting_sources"
+    assert source_response.status_code == 201
+    assert source_response.json()["upload_id"] == upload_response.json()["id"]
+    assert status_response.status_code == 200
+    assert status_response.json()["intake_state"] == "ready_for_generation"
+
+
+@pytest.mark.asyncio
+async def test_source_intake_idempotency_conflict(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    """Same idempotency key with different upload body returns 409."""
+    object_store = FilesystemObjectStore(tmp_path / "objects")
+    dependencies = build_api_dependencies(session_factory, object_store=object_store)
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        first = await _post_text_upload(client, key="conflict-key", payload=b"hello\n")
+        second = await _post_text_upload(client, key="conflict-key", payload=b"bye\n")
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 409
+    assert second.json()["code"] == "idempotency_conflict"
+
+
+@pytest.mark.asyncio
+async def test_source_intake_response_envelope_snapshot(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Snapshot stable fields from source-intake response envelopes."""
+    object_store = FilesystemObjectStore(tmp_path / "objects")
+    dependencies = build_api_dependencies(session_factory, object_store=object_store)
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        profile_id = await _create_series_profile(client)
+        upload_response = await _post_text_upload(
+            client,
+            key="snapshot-upload-key",
+            payload=b"snapshot\n",
+        )
+        job_response = await client.post(
+            "/v1/ingestion-jobs",
+            headers={"Idempotency-Key": "snapshot-job-key"},
+            json={"series_profile_id": profile_id, "target_episode_id": None},
+        )
+        source_response = await client.post(
+            f"/v1/ingestion-jobs/{job_response.json()['id']}/sources",
+            headers={"Idempotency-Key": "snapshot-source-key"},
+            json={
+                "type": "upload",
+                "upload_id": upload_response.json()["id"],
+                "source_type": "research_paper",
+                "weight": 0.75,
+                "metadata": {"language": "en"},
+            },
+        )
+        status_response = await client.get(
+            f"/v1/ingestion-jobs/{job_response.json()['id']}"
+        )
+
+    assert upload_response.status_code == 201, upload_response.text
+    assert job_response.status_code == 201, job_response.text
+    assert source_response.status_code == 201, source_response.text
+    assert status_response.status_code == 200, status_response.text
+    assert {
+        "upload": _stable_upload_fields(upload_response.json()),
+        "job": _stable_job_fields(job_response.json()),
+        "source": _stable_source_fields(source_response.json()),
+        "status": _stable_job_fields(status_response.json()),
+    } == snapshot
+
+
+async def _create_series_profile(client: httpx.AsyncClient) -> str:
+    """Create a series profile through the public API and return its id."""
+    response = await client.post(
+        "/v1/series-profiles",
+        json={
+            "slug": "source-intake",
+            "title": "Source Intake",
+            "description": "Created for intake tests.",
+            "configuration": {"tone": "clear"},
+            "guardrails": {"instruction": "Keep claims sourced."},
+            "actor": "api-user@example.com",
+            "note": "Initial profile",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return typ.cast("str", response.json()["id"])
+
+
+def _stable_upload_fields(payload: dict[str, object]) -> dict[str, object]:
+    """Return the stable upload fields that define the public response shape."""
+    content_hash = typ.cast("str", payload["content_hash"])
+    return {
+        "state": payload["state"],
+        "content_hash_algorithm": content_hash.split(":", maxsplit=1)[0],
+        "content_type": payload["content_type"],
+        "size_bytes": payload["size_bytes"],
+        "metadata": payload["metadata"],
+    }
+
+
+def _stable_job_fields(payload: dict[str, object]) -> dict[str, object]:
+    """Return stable ingestion-job response fields."""
+    return {
+        "status": payload["status"],
+        "intake_state": payload["intake_state"],
+        "next_poll_after_seconds": payload.get("next_poll_after_seconds"),
+    }
+
+
+def _stable_source_fields(payload: dict[str, object]) -> dict[str, object]:
+    """Return stable source-attachment response fields."""
+    return {
+        "type": payload["type"],
+        "source_type": payload["source_type"],
+        "weight": payload["weight"],
+        "source_uri": payload["source_uri"],
+        "metadata": payload["metadata"],
+    }
+
+
+async def _post_text_upload(
+    client: httpx.AsyncClient,
+    *,
+    key: str,
+    payload: bytes,
+) -> httpx.Response:
+    """Post a text upload with a deterministic multipart shape."""
+    return await client.post(
+        "/v1/uploads",
+        headers={"Idempotency-Key": key},
+        files={
+            "file": ("source.txt", payload, "text/plain"),
+            "content_type": (None, "text/plain"),
+            "declared_size": (None, str(len(payload))),
+            "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
+        },
+    )

@@ -7,13 +7,20 @@ import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
-from episodic.canonical.domain import (  # noqa: TC001  # SQLAlchemy evaluates annotations at runtime.
+from episodic.canonical.domain import (  # SQLAlchemy evaluates annotations at runtime.
     ApprovalState,
     EpisodeStatus,
     IngestionStatus,
+    IntakeState,
 )
 
-from .models_base import APPROVAL_STATE, EPISODE_STATUS, INGESTION_STATUS, Base
+from .models_base import (
+    APPROVAL_STATE,
+    EPISODE_STATUS,
+    INGESTION_STATUS,
+    INTAKE_STATE,
+    Base,
+)
 
 
 class TeiHeaderRecord(Base):
@@ -198,6 +205,11 @@ class IngestionJobRecord(Base):
         nullable=True,
     )
     error_message: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
+    intake_state: orm.Mapped[IntakeState] = orm.mapped_column(
+        INTAKE_STATE,
+        nullable=False,
+        server_default=IntakeState.AWAITING_SOURCES.value,
+    )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,

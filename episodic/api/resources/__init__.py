@@ -17,6 +17,9 @@ Utilities provided
   ``ReferenceDocumentRevisionsResource``,
   ``ReferenceDocumentRevisionResource``, ``ReferenceBindingsResource``,
   ``ReferenceBindingResource``, ``ResolvedBindingsResource``
+- Source-intake resources:
+  ``UploadsResource``, ``IngestionJobsResource``,
+  ``IngestionJobResource``, ``IngestionJobSourcesResource``
 - Health resources:
   ``HealthLiveResource``, ``HealthReadyResource``
 
@@ -48,6 +51,12 @@ from .series_profiles import (
     SeriesProfileResource,
     SeriesProfilesResource,
 )
+from .source_intake import (
+    IngestionJobResource,
+    IngestionJobSourcesResource,
+    IngestionJobsResource,
+    UploadsResource,
+)
 
 __all__ = [
     "EpisodeTemplateHistoryResource",
@@ -55,6 +64,9 @@ __all__ = [
     "EpisodeTemplatesResource",
     "HealthLiveResource",
     "HealthReadyResource",
+    "IngestionJobResource",
+    "IngestionJobSourcesResource",
+    "IngestionJobsResource",
     "ReferenceBindingResource",
     "ReferenceBindingsResource",
     "ReferenceDocumentResource",
@@ -66,6 +78,7 @@ __all__ = [
     "SeriesProfileHistoryResource",
     "SeriesProfileResource",
     "SeriesProfilesResource",
+    "UploadsResource",
     "_GetHistoryResourceBase",
     "_GetResourceBase",
 ]

@@ -48,6 +48,14 @@ class IngestionStatus(enum.StrEnum):
     FAILED = "failed"
 
 
+class IntakeState(enum.StrEnum):
+    """Source-intake states for pre-generation ingestion jobs."""
+
+    AWAITING_SOURCES = "awaiting_sources"
+    READY_FOR_GENERATION = "ready_for_generation"
+    CANCELLED = "cancelled"
+
+
 class ReferenceDocumentKind(enum.StrEnum):
     """Supported reusable reference-document kinds."""
 
@@ -135,6 +143,15 @@ class IngestionJob:
     error_message: str | None
     created_at: dt.datetime
     updated_at: dt.datetime
+    intake_state: IntakeState = IntakeState.AWAITING_SOURCES
+
+
+@dc.dataclass(frozen=True, slots=True)
+class IngestionJobListFilters:
+    """Filters for listing source-intake ingestion jobs."""
+
+    series_profile_id: uuid.UUID | None
+    intake_state: IntakeState | None
 
 
 @dc.dataclass(frozen=True)

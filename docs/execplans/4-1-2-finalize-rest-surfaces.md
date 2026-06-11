@@ -768,20 +768,25 @@ Test-first changes:
 
 Production changes:
 
-1. Add
-   <!-- markdownlint-disable-next-line MD013 -->
-   `count_for_series(self, owner_series_profile_id: str, kind: ReferenceDocumentKind | None) -> int`
-   to `ReferenceDocumentRepository` Protocol at
+1. Add this method to `ReferenceDocumentRepository` Protocol at
    `episodic/canonical/reference_protocols.py:30-39` and its SQLAlchemy
    implementation at
    `episodic/canonical/storage/reference_repositories.py:57-81`.
+
+   ```python
+   def count_for_series(
+       self,
+       owner_series_profile_id: str,
+       kind: ReferenceDocumentKind | None,
+   ) -> int: ...
+   ```
+
 2. Add `count_for_document(self, document_id: str,
    owner_series_profile_id: str) -> int` to `ReferenceDocumentRevisionRepository
     ` Protocol (`reference_protocols.py:76-84`) and its implementation (`
    reference_repositories.py:158-178`).
-3. Add
-   <!-- markdownlint-disable-next-line MD013 -->
-   `count_for_target(self, target_kind: ReferenceBindingTarget, target_id: str) -> int`
+3. Add `count_for_target(self, target_kind: ReferenceBindingTarget,
+   target_id: str) -> int`
    to `ReferenceBindingRepository` Protocol (`reference_protocols.py:113-122`)
    and its implementation (`reference_repositories.py:236-261`).
 4. Update the service-layer wrappers to return `(items, total)` tuples
@@ -857,12 +862,20 @@ Test-first changes:
 
 Production changes:
 
-1. Add
-   <!-- markdownlint-disable-next-line MD013 -->
-   `list_for_profile_paged(self, profile_id: uuid.UUID, *, limit: int, offset: int) -> list[SeriesProfileHistoryEntry]`
-   and `count_for_profile(self, profile_id: uuid.UUID) -> int` to
-   `_SeriesProfileHistoryRepository`
+1. Add these methods to `_SeriesProfileHistoryRepository`
    (`episodic/canonical/profile_templates/types.py:296-300`); analogue for
+
+   ```python
+   def list_for_profile_paged(
+       self,
+       profile_id: uuid.UUID,
+       *,
+       limit: int,
+       offset: int,
+   ) -> list[SeriesProfileHistoryEntry]: ...
+   def count_for_profile(self, profile_id: uuid.UUID) -> int: ...
+   ```
+
    episode templates.
 2. Implement both in
    `episodic/canonical/storage/history_repositories.py:146-201`.

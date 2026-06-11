@@ -67,12 +67,21 @@ async def test_create_app_from_env_wires_database_readiness_probe(
     from episodic.api.runtime import create_app_from_env
 
     app = create_app_from_env()
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
-        response = await client.get("/health/ready")
+    try:
+        transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/health/ready")
+    finally:
+        await scaffold_support.run_asgi_lifespan(
+            typ.cast("_ASGIApp", app),
+            (
+                scaffold_support.LifespanEvent(type="lifespan.startup"),
+                scaffold_support.LifespanEvent(type="lifespan.shutdown"),
+            ),
+        )
 
     assert response.status_code == 200, (
         f"unexpected readiness status code: {response.status_code}"

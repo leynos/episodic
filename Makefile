@@ -7,6 +7,11 @@ TOOLS = $(MDFORMAT_ALL)
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 PYTEST_XDIST_WORKERS ?= 1
+ifeq ($(PYTEST_XDIST_WORKERS),1)
+PYTEST_XDIST_ARGS :=
+else
+PYTEST_XDIST_ARGS := -n $(PYTEST_XDIST_WORKERS)
+endif
 PYLINT_PYTHON ?= pypy
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
 PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
@@ -92,7 +97,7 @@ nixie: ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox
 
 test: build crosshair $(VENV_TOOLS) ## Run tests
-	$(UV_ENV) $(UV) run pytest -v -n $(PYTEST_XDIST_WORKERS)
+	$(UV_ENV) $(UV) run pytest -v $(PYTEST_XDIST_ARGS)
 
 check-migrations: build $(VENV_TOOLS) ## Check for schema drift between models and migrations
 	$(UV_ENV) $(UV) run python -m episodic.canonical.storage.migration_check

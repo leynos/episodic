@@ -95,6 +95,8 @@ or delivery planning.
   - speech synthesis adapter boundaries.
 - [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
   - import-boundary enforcement model.
+- [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
+  - source-intake upload storage and idempotency port decisions.
 
 ## Execution plans
 
