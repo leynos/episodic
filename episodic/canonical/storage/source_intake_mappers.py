@@ -25,6 +25,16 @@ def _principal_from_record(value: str) -> str | None:
     return None if value == _ANONYMOUS_PRINCIPAL else value
 
 
+def _metadata_payload_to_domain[T](record_metadata_payload: T) -> T:
+    """Deep-copy a record metadata_payload field into the domain metadata field."""
+    return copy.deepcopy(record_metadata_payload)
+
+
+def _metadata_domain_to_payload[T](domain_metadata: T) -> T:
+    """Deep-copy a domain metadata field into the record metadata_payload field."""
+    return copy.deepcopy(domain_metadata)
+
+
 def _upload_from_record(record: UploadRecord) -> Upload:
     """Map an upload record to a domain entity."""
     return Upload(
@@ -37,7 +47,7 @@ def _upload_from_record(record: UploadRecord) -> Upload:
         content_hash=record.content_hash,
         storage_key=record.storage_key,
         state=record.state,
-        metadata=copy.deepcopy(record.metadata_payload),
+        metadata=_metadata_payload_to_domain(record.metadata_payload),
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -55,7 +65,7 @@ def _upload_to_record(upload: Upload) -> UploadRecord:
         content_hash=upload.content_hash,
         storage_key=upload.storage_key,
         state=upload.state,
-        metadata_payload=copy.deepcopy(upload.metadata),
+        metadata_payload=_metadata_domain_to_payload(upload.metadata),
         created_at=upload.created_at,
         updated_at=upload.updated_at,
     )
@@ -73,7 +83,7 @@ def _ingestion_job_source_from_record(
         source_uri=record.source_uri,
         source_type=record.source_type,
         weight=record.weight,
-        metadata=copy.deepcopy(record.metadata_payload),
+        metadata=_metadata_payload_to_domain(record.metadata_payload),
         created_at=record.created_at,
     )
 
@@ -90,7 +100,7 @@ def _ingestion_job_source_to_record(
         source_uri=source.source_uri,
         source_type=source.source_type,
         weight=source.weight,
-        metadata_payload=copy.deepcopy(source.metadata),
+        metadata_payload=_metadata_domain_to_payload(source.metadata),
         created_at=source.created_at,
     )
 

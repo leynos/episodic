@@ -113,27 +113,38 @@ async def _idempotent_response(
     typ.assert_never(outcome)
 
 
-def _idempotency_conflict(record_id: uuid.UUID) -> falcon.HTTPConflict:
-    """Build an idempotency conflict error."""
+def _build_idempotency_http_conflict(
+    record_id: uuid.UUID,
+    *,
+    description: str,
+    code: str,
+) -> falcon.HTTPConflict:
+    """Build an idempotency-related HTTP 409 error with a record-id detail."""
     return typ.cast(
         "falcon.HTTPConflict",
         http_error(
-            falcon.HTTPConflict(description=_IDEMPOTENCY_CONFLICT),
-            code="idempotency_conflict",
+            falcon.HTTPConflict(description=description),
+            code=code,
             details={"record_id": str(record_id)},
         ),
     )
 
 
+def _idempotency_conflict(record_id: uuid.UUID) -> falcon.HTTPConflict:
+    """Build an idempotency conflict error."""
+    return _build_idempotency_http_conflict(
+        record_id,
+        description=_IDEMPOTENCY_CONFLICT,
+        code="idempotency_conflict",
+    )
+
+
 def _idempotency_in_flight(record_id: uuid.UUID) -> falcon.HTTPConflict:
     """Build an in-flight idempotency error."""
-    return typ.cast(
-        "falcon.HTTPConflict",
-        http_error(
-            falcon.HTTPConflict(description=_IDEMPOTENCY_IN_FLIGHT),
-            code="idempotency_in_progress",
-            details={"record_id": str(record_id)},
-        ),
+    return _build_idempotency_http_conflict(
+        record_id,
+        description=_IDEMPOTENCY_IN_FLIGHT,
+        code="idempotency_in_progress",
     )
 
 
