@@ -48,6 +48,84 @@ def source_intake_fixtures() -> SourceIntakeContext:
     return SourceIntakeContext()
 
 
+async def _post_text_upload(
+    client: httpx.AsyncClient,
+    *,
+    key: str,
+    payload: bytes,
+) -> httpx.Response:
+    """Post a text upload with a deterministic multipart shape."""
+    return await client.post(
+        "/v1/uploads",
+        headers={"Idempotency-Key": key},
+        files={
+            "file": ("source.txt", payload, "text/plain"),
+            "content_type": (None, "text/plain"),
+            "declared_size": (None, str(len(payload))),
+            "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
+            "metadata": (None, '{"language":"en"}', "application/json"),
+        },
+    )
+
+
+async def _run_intake_api_calls(
+    client: httpx.AsyncClient,
+    context: SourceIntakeContext,
+) -> None:
+    profile_id = await _create_series_profile(client)
+    upload = await _post_text_upload(
+        client,
+        key="bdd-upload-key",
+        payload=b"source\n",
+    )
+    upload_replay = await _post_text_upload(
+        client,
+        key="bdd-upload-key",
+        payload=b"source\n",
+    )
+    conflict_first = await _post_text_upload(
+        client,
+        key="bdd-conflict-key",
+        payload=b"alpha\n",
+    )
+    conflict = await _post_text_upload(
+        client,
+        key="bdd-conflict-key",
+        payload=b"beta\n",
+    )
+    job = await client.post(
+        "/v1/ingestion-jobs",
+        headers={"Idempotency-Key": "bdd-job-key"},
+        json={"series_profile_id": profile_id, "target_episode_id": None},
+    )
+    source = await client.post(
+        f"/v1/ingestion-jobs/{job.json()['id']}/sources",
+        headers={"Idempotency-Key": "bdd-source-key"},
+        json={
+            "type": "upload",
+            "upload_id": upload.json()["id"],
+            "source_type": "research_paper",
+            "weight": 1.0,
+            "metadata": {"language": "en"},
+        },
+    )
+    status = await client.get(f"/v1/ingestion-jobs/{job.json()['id']}")
+
+    assert upload.status_code == 201, upload.text
+    assert upload_replay.status_code == 201, upload_replay.text
+    assert conflict_first.status_code == 201, conflict_first.text
+    assert job.status_code == 201, job.text
+    assert source.status_code == 201, source.text
+    assert status.status_code == 200, status.text
+    context.upload = typ.cast("dict[str, object]", upload.json())
+    context.upload_replay = typ.cast("dict[str, object]", upload_replay.json())
+    context.conflict = typ.cast("dict[str, object]", conflict.json())
+    context.conflict_status = conflict.status_code
+    context.job = typ.cast("dict[str, object]", job.json())
+    context.source = typ.cast("dict[str, object]", source.json())
+    context.status = typ.cast("dict[str, object]", status.json())
+
+
 @when("an editor uploads source material and attaches it to a new ingestion job")
 def upload_and_attach_source(
     context: SourceIntakeContext,
@@ -68,58 +146,7 @@ def upload_and_attach_source(
             transport=transport,
             base_url="http://testserver",
         ) as client:
-            profile_id = await _create_series_profile(client)
-            upload = await _post_text_upload(
-                client,
-                key="bdd-upload-key",
-                payload=b"source\n",
-            )
-            upload_replay = await _post_text_upload(
-                client,
-                key="bdd-upload-key",
-                payload=b"source\n",
-            )
-            conflict_first = await _post_text_upload(
-                client,
-                key="bdd-conflict-key",
-                payload=b"alpha\n",
-            )
-            conflict = await _post_text_upload(
-                client,
-                key="bdd-conflict-key",
-                payload=b"beta\n",
-            )
-            job = await client.post(
-                "/v1/ingestion-jobs",
-                headers={"Idempotency-Key": "bdd-job-key"},
-                json={"series_profile_id": profile_id, "target_episode_id": None},
-            )
-            source = await client.post(
-                f"/v1/ingestion-jobs/{job.json()['id']}/sources",
-                headers={"Idempotency-Key": "bdd-source-key"},
-                json={
-                    "type": "upload",
-                    "upload_id": upload.json()["id"],
-                    "source_type": "research_paper",
-                    "weight": 1.0,
-                    "metadata": {"language": "en"},
-                },
-            )
-            status = await client.get(f"/v1/ingestion-jobs/{job.json()['id']}")
-
-        assert upload.status_code == 201, upload.text
-        assert upload_replay.status_code == 201, upload_replay.text
-        assert conflict_first.status_code == 201, conflict_first.text
-        assert job.status_code == 201, job.text
-        assert source.status_code == 201, source.text
-        assert status.status_code == 200, status.text
-        context.upload = typ.cast("dict[str, object]", upload.json())
-        context.upload_replay = typ.cast("dict[str, object]", upload_replay.json())
-        context.conflict = typ.cast("dict[str, object]", conflict.json())
-        context.conflict_status = conflict.status_code
-        context.job = typ.cast("dict[str, object]", job.json())
-        context.source = typ.cast("dict[str, object]", source.json())
-        context.status = typ.cast("dict[str, object]", status.json())
+            await _run_intake_api_calls(client, context)
 
     asyncio.run(_run_workflow())
 
@@ -167,23 +194,3 @@ async def _create_series_profile(client: httpx.AsyncClient) -> str:
     )
     assert response.status_code == 201, response.text
     return typ.cast("str", response.json()["id"])
-
-
-async def _post_text_upload(
-    client: httpx.AsyncClient,
-    *,
-    key: str,
-    payload: bytes,
-) -> httpx.Response:
-    """Post a text upload with a deterministic multipart shape."""
-    return await client.post(
-        "/v1/uploads",
-        headers={"Idempotency-Key": key},
-        files={
-            "file": ("source.txt", payload, "text/plain"),
-            "content_type": (None, "text/plain"),
-            "declared_size": (None, str(len(payload))),
-            "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-            "metadata": (None, '{"language":"en"}', "application/json"),
-        },
-    )
