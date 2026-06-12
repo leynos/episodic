@@ -1,13 +1,18 @@
 """Tests for local k3d preview helper contracts."""
 
+import socket
 import subprocess
 
 import pytest
 
 from scripts.local_k8s import commands
 from scripts.local_k8s.config import PreviewConfig
-from scripts.local_k8s.orchestration import cluster_exists, down
-from scripts.local_k8s.validation import LocalK8sValidationError, require_tools
+from scripts.local_k8s.orchestration import cluster_exists, down, logs, status, up
+from scripts.local_k8s.validation import (
+    LocalK8sValidationError,
+    ensure_loopback_port_available,
+    require_tools,
+)
 
 
 class RecordingRunner:
@@ -18,6 +23,7 @@ class RecordingRunner:
         results: list[subprocess.CompletedProcess[str]] | None = None,
     ) -> None:
         self.commands: list[list[str]] = []
+        self.input_texts: list[str | None] = []
         self._results = results or []
 
     def run(
@@ -29,6 +35,7 @@ class RecordingRunner:
     ) -> subprocess.CompletedProcess[str]:
         """Record a command and return the next queued process result."""
         self.commands.append(args)
+        self.input_texts.append(input_text)
         if self._results:
             return self._results.pop(0)
         return subprocess.CompletedProcess(
@@ -65,6 +72,27 @@ def test_helm_upgrade_command_uses_local_chart_values() -> None:
     assert command[:5] == ["helm", "--kube-context", "k3d-demo", "upgrade", "--install"]
     assert "--values" in command, "local values file must be passed to Helm."
     assert str(config.values_path) in command, "local values path must be rendered."
+
+
+def test_kubectl_secret_command_renders_database_url_literal() -> None:
+    """Create the app Secret from the configured local database URL."""
+    config = PreviewConfig(database_url="postgresql+asyncpg://user:pass@postgres/db")
+
+    command = commands.kubectl_secret_command(config)
+
+    assert "--from-literal=database-url=postgresql+asyncpg://user:pass@postgres/db" in (
+        command
+    )
+
+
+def test_loopback_port_validation_reports_occupied_port() -> None:
+    """Reject a local ingress port that is already bound."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        occupied_port = listener.getsockname()[1]
+
+        with pytest.raises(LocalK8sValidationError, match=str(occupied_port)):
+            ensure_loopback_port_available(occupied_port)
 
 
 def test_require_tools_reports_all_missing_tools(
@@ -109,3 +137,120 @@ def test_down_is_idempotent_when_cluster_is_absent() -> None:
     assert runner.commands == [["k3d", "cluster", "get", "missing"]], (
         "down must only check existence, not attempt deletion when cluster is absent."
     )
+
+
+def test_up_bootstraps_postgres_before_installing_chart(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Apply local Postgres manifests before Helm waits on app readiness."""
+    monkeypatch.setattr(
+        "scripts.local_k8s.orchestration.require_tools",
+        lambda _: None,
+    )
+    monkeypatch.setattr(
+        "scripts.local_k8s.orchestration.ensure_loopback_port_available",
+        lambda _: None,
+    )
+    runner = RecordingRunner([
+        subprocess.CompletedProcess(args=["k3d"], returncode=1, stdout="", stderr=""),
+        subprocess.CompletedProcess(args=["k3d"], returncode=0, stdout="", stderr=""),
+        subprocess.CompletedProcess(
+            args=["kubectl"],
+            returncode=0,
+            stdout="apiVersion: v1\nkind: Namespace\n",
+            stderr="",
+        ),
+        subprocess.CompletedProcess(
+            args=["kubectl"],
+            returncode=0,
+            stdout="apiVersion: v1\nkind: Secret\n",
+            stderr="",
+        ),
+    ])
+
+    up(PreviewConfig(cluster_name="demo", ingress_port=9090), runner, skip_image=True)
+
+    command_names = [" ".join(command) for command in runner.commands]
+    assert any("k3d cluster create demo" in command for command in command_names), (
+        "up must create the missing cluster."
+    )
+    assert any(
+        input_text and "kind: StatefulSet" in input_text
+        for input_text in runner.input_texts
+    ), "up must apply a local Postgres StatefulSet before Helm installation."
+    assert any(
+        input_text and "name: postgres" in input_text
+        for input_text in runner.input_texts
+    ), "up must apply a local Postgres Service matching the preview database URL."
+    assert runner.commands[-1][0] == "helm", "Helm must run after dependencies exist."
+    banner = capsys.readouterr().out
+    assert "Preview URL: http://episodic.localhost:9090" in banner
+    assert "Health URL: http://episodic.localhost:9090/health/live" in banner
+    assert "Status: make local-k8s-status" in banner
+    assert "Logs: make local-k8s-logs" in banner
+    assert "Teardown: make local-k8s-down" in banner
+
+
+def test_up_rejects_existing_cluster_with_conflicting_ingress_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Do not reuse an existing k3d cluster mapped to a different host port."""
+    monkeypatch.setattr(
+        "scripts.local_k8s.orchestration.require_tools",
+        lambda _: None,
+    )
+    runner = RecordingRunner([
+        subprocess.CompletedProcess(args=["k3d"], returncode=0, stdout="", stderr=""),
+        subprocess.CompletedProcess(
+            args=["k3d"],
+            returncode=0,
+            stdout='{"nodes":[{"portMappings":{"80/tcp":[{"HostPort":"8088"}]}}]}',
+            stderr="",
+        ),
+    ])
+
+    with pytest.raises(LocalK8sValidationError, match="ingress port"):
+        up(
+            PreviewConfig(cluster_name="demo", ingress_port=9090),
+            runner,
+            skip_image=True,
+        )
+
+
+def test_status_reports_missing_cluster_without_kubectl(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Avoid raw kubectl tracebacks when status is requested before up."""
+    monkeypatch.setattr(
+        "scripts.local_k8s.orchestration.require_tools",
+        lambda _: None,
+    )
+    runner = RecordingRunner([
+        subprocess.CompletedProcess(args=["k3d"], returncode=1, stdout="", stderr=""),
+    ])
+
+    status(PreviewConfig(cluster_name="missing"), runner)
+
+    assert runner.commands == [["k3d", "cluster", "get", "missing"]]
+    assert "does not exist" in capsys.readouterr().out
+
+
+def test_logs_reports_missing_cluster_without_kubectl(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Avoid raw kubectl tracebacks when logs are requested before up."""
+    monkeypatch.setattr(
+        "scripts.local_k8s.orchestration.require_tools",
+        lambda _: None,
+    )
+    runner = RecordingRunner([
+        subprocess.CompletedProcess(args=["k3d"], returncode=1, stdout="", stderr=""),
+    ])
+
+    logs(PreviewConfig(cluster_name="missing"), runner)
+
+    assert runner.commands == [["k3d", "cluster", "get", "missing"]]
+    assert "does not exist" in capsys.readouterr().out

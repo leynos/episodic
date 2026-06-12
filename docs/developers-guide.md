@@ -202,6 +202,8 @@ Helm conventions:
 - Keep chart values aligned with the Nile Valley example chart contract:
   `config`, `existingSecretName`, `allowMissingSecret`, `secretEnvFromKeys`,
   `externalSecret`, ingress, and HTTP probes.
+- Keep the Deployment pod-template `checksum/config` annotation aligned with
+  `templates/configmap.yaml` so ConfigMap-backed environment changes roll pods.
 - Validate chart edits with `uv run pytest tests/test_helm_chart_contract.py`.
 - Update the syrupy snapshot when intentional local manifest output changes.
 - Preserve explicit `secretEnvFromKeys.*.optional: false`; do not use Helm's
@@ -214,6 +216,10 @@ Local preview conventions:
 - `scripts/local_k8s/validation.py` should contain host prerequisite checks.
 - `scripts/local_k8s/orchestration.py` should sequence helpers without hiding
   command failures.
+- `local-k8s-up` must apply the local-only Postgres dependency before invoking
+  Helm with `--wait`, because `/health/ready` depends on database connectivity.
+- Existing clusters must be reused only when the requested ingress port matches
+  the k3d load-balancer mapping.
 - Add focused tests in `tests/test_local_k8s_tooling.py` for new command
   construction or idempotency behaviour.
 

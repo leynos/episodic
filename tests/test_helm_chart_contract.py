@@ -79,6 +79,9 @@ def test_helm_local_manifest_includes_nile_valley_contract() -> None:
     assert "path: /health/ready" in manifest, "readiness probe path must render."
     assert "name: episodic-local" in manifest, "existing Secret reference must render."
     assert "optional: false" in manifest, "local secrets must be required."
+    assert "checksum/config:" in manifest, (
+        "ConfigMap-backed env vars must trigger pod rollout on config changes."
+    )
 
 
 def test_helm_external_secret_manifest_renders() -> None:

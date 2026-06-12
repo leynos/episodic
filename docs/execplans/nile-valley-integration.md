@@ -4,9 +4,12 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: COMPLETE. The user explicitly approved implementation on 2026-05-21.
-The health server, container image, Helm chart, local `k3d` workflow,
-documentation, tests, final validation, and CodeRabbit review are complete.
+Status: COMPLETE for repository-side implementation and review follow-up. The
+user explicitly approved implementation on 2026-05-21. A 2026-06-12 review
+found Docker and local `k3d` live-path gaps; this follow-up pass addressed
+those findings with tests, implementation, documentation, validation, and
+CodeRabbit review. Live `make local-k8s-up` execution remains blocked on this
+host because Docker, `k3d`, and `kubectl` are not installed or reachable.
 
 ## Purpose and big picture
 
@@ -212,6 +215,24 @@ repository quality gates pass.
 - [x] (2026-05-21T18:50:00Z) Completed final validation and CodeRabbit review
   for the full branch. The final `make test` rerun reported `685 passed,
   4 skipped`, and CodeRabbit reported `findings: 0`.
+- [x] (2026-06-12T17:41:00Z) Started review follow-up for the Docker,
+  Postgres bootstrap, local `k3d` idempotence, CLI behavioural coverage, and
+  Helm ConfigMap rollout findings.
+- [x] (2026-06-12T17:41:00Z) Added red-stage focused tests that reproduced the
+  missing Docker COPY source, missing local Postgres bootstrap, incomplete
+  success banner, ingress-port mismatch reuse, missing-cluster status/logs
+  behaviour, local preview CLI surface, and missing ConfigMap checksum rollout.
+- [x] (2026-06-12T17:41:00Z) Implemented the review fixes and reran the focused
+  review suite, which reported `22 passed, 1 skipped`.
+- [x] (2026-06-12T19:55:00Z) Fixed the host-specific workflow-test failure by
+  making `act` tests skip when the configured Podman socket exists but is not
+  accepting connections.
+- [x] (2026-06-12T20:05:00Z) Completed full review-fix validation:
+  `make check-fmt`, `make typecheck`, `make lint`, and `make test` passed; the
+  final full test run reported `694 passed, 3 skipped`.
+- [x] (2026-06-12T20:35:00Z) Ran CodeRabbit review for the follow-up, addressed
+  the subprocess timeout and lint-suppression comment findings in the new
+  local preview BDD test, and reran CodeRabbit to `findings: 0`.
 
 ## Surprises & discoveries
 
@@ -579,6 +600,44 @@ repository quality gates pass.
   Impact: keep the final validation loop open and rerun the full gates after
   committing the test-stability fix.
 
+- Observation: the 2026-06-12 review correctly found that the Dockerfile still
+  copied the non-existent `stilyagi` directory, and that the local preview
+  could not become ready because no Postgres dependency was deployed in the
+  `k3d` cluster. Evidence:
+  `/tmp/review-fixes-red-episodic-nile-valley-integration.out` reproduced the
+  missing COPY source, local Postgres bootstrap, ingress-port mismatch,
+  status/logs, and ConfigMap checksum failures. Impact: removed the stale COPY
+  line, added a Docker COPY-source contract test, made `local-k8s-up` apply a
+  local-only Postgres Service and StatefulSet before Helm, and added focused
+  tests plus a pytest-bdd CLI scenario.
+
+- Observation: the first full review-fix `make test` run reached the end of
+  the suite but failed two pre-existing `act` workflow tests because this host
+  has a stale or unreachable Podman socket at `/run/user/1000/podman/podman.sock`.
+  Evidence: `/tmp/test-review-fixes-episodic-nile-valley-integration.out`.
+  Impact: made the shared workflow test helper verify that the Podman UNIX
+  socket accepts connections before invoking `act`, matching the existing skip
+  behaviour for missing `act` or missing sockets. The final full test run
+  reported `694 passed, 3 skipped` in
+  `/tmp/test-review-fixes3-episodic-nile-valley-integration.out`.
+
+- Observation: CodeRabbit's follow-up review found only test hygiene issues in
+  the new local preview BDD step: add subprocess timeouts and justify the
+  static-argument `subprocess.run` suppressions. Evidence:
+  `/tmp/coderabbit-review-fixes-episodic-nile-valley-integration.out`,
+  `/tmp/coderabbit-review-fixes2-episodic-nile-valley-integration.out`, and
+  `/tmp/coderabbit-review-fixes3-episodic-nile-valley-integration.out`. Impact:
+  added 30-second subprocess timeouts, clarified the `# noqa: S603` comments,
+  reran focused BDD coverage, and got CodeRabbit to `findings: 0`.
+
+- Observation: this host has Helm at `/usr/bin/helm`, but Docker, `k3d`, and
+  `kubectl` are missing from `PATH`. Evidence: the 2026-06-12 tool check
+  printed `docker=missing`, `k3d=missing`, `kubectl=missing`, and
+  `helm=/usr/bin/helm`. Impact: the live `make local-k8s-up` acceptance path
+  cannot run in this worktree environment; the branch relies on structural,
+  Helm, CLI, and orchestration tests until a Docker-capable host can run the
+  preview end to end.
+
 ## Decision log
 
 - Decision: keep `/health/live` and `/health/ready` as the external health
@@ -624,6 +683,18 @@ repository quality gates pass.
   an executable end-to-end image check for environments that can build and run
   containers. Date/Author: 2026-05-21 / Codex.
 
+- Decision: bootstrap local Postgres from the Python preview orchestration
+  instead of adding a chart dependency. Rationale: the dependency is local-only,
+  should not become part of the production Helm release, and must use the same
+  idempotent `kubectl apply` flow as namespace and Secret setup. Date/Author:
+  2026-06-12 / Codex.
+
+- Decision: keep GitHub Actions `act` workflow tests optional on hosts without
+  a usable Podman socket, including stale socket-file cases. Rationale: these
+  tests require a working container daemon, and treating an unreachable socket
+  as a hard failure makes normal `make test` results depend on local daemon
+  state rather than workflow correctness. Date/Author: 2026-06-12 / Codex.
+
 ## Outcomes and retrospective
 
 Episodic now has a production-oriented Nile Valley integration surface. The
@@ -640,7 +711,14 @@ stability discovery found during final validation. Documentation now covers the
 local preview design, user-facing deployment workflow, developer conventions,
 and system-design placement of the health port and deployment adapters.
 
-Final validation evidence:
+The 2026-06-12 review follow-up removed the stale `COPY stilyagi` Dockerfile
+line, added a Docker COPY-source regression test, bootstraps local-only
+Postgres before Helm waits for readiness, rejects reused clusters with
+mismatched ingress ports, improves `status` and `logs` missing-cluster output,
+prints the required preview banner fields, rolls pods on ConfigMap changes, and
+adds behavioural coverage for the local preview CLI surface.
+
+Original final validation evidence:
 `/tmp/check-fmt-guest-bios-property3-episodic-nile-valley-integration.out`,
 `/tmp/typecheck-guest-bios-property-episodic-nile-valley-integration.out`,
 `/tmp/lint-guest-bios-property-episodic-nile-valley-integration.out`,
@@ -650,11 +728,23 @@ Final validation evidence:
 run reported `685 passed, 4 skipped`; the final CodeRabbit review reported
 `findings: 0`.
 
-The only runtime validation gap is environmental: this host did not expose a
-Docker daemon, so the live container smoke test remains opt-in through
-`EPISODIC_RUN_DOCKER_TESTS=1`. The repository still validates the image
-contract structurally and documents the live smoke-test path for hosts with
-Docker access.
+Review follow-up validation evidence:
+`/tmp/check-fmt-review-fixes6-episodic-nile-valley-integration.out`,
+`/tmp/typecheck-review-fixes6-episodic-nile-valley-integration.out`,
+`/tmp/lint-review-fixes6-episodic-nile-valley-integration.out`,
+`/tmp/test-review-fixes3-episodic-nile-valley-integration.out`,
+`/tmp/markdownlint-review-fixes-final2-episodic-nile-valley-integration.out`,
+`/tmp/nixie-review-fixes-final2-episodic-nile-valley-integration.out`,
+`/tmp/local-k8s-bdd-comments-episodic-nile-valley-integration.out`, and
+`/tmp/coderabbit-review-fixes3-episodic-nile-valley-integration.out`. The final
+full test run reported `694 passed, 3 skipped`; the final CodeRabbit review
+reported `findings: 0`.
+
+The remaining runtime validation gap is environmental: this host does not
+expose Docker, `k3d`, or `kubectl`, so the live container smoke test and
+`make local-k8s-up` cannot be executed here. The repository now validates the
+image, chart, and local preview contracts structurally and documents the live
+smoke-test path for hosts with the required container and Kubernetes tooling.
 
 ## Context and orientation
 

@@ -3,6 +3,7 @@
 import dataclasses as dc
 import subprocess
 import typing as typ
+import urllib.parse as urlparse
 
 if typ.TYPE_CHECKING:
     from scripts.local_k8s.config import PreviewConfig
@@ -72,6 +73,11 @@ def k3d_cluster_delete_command(config: PreviewConfig) -> list[str]:
     return ["k3d", "cluster", "delete", config.cluster_name]
 
 
+def k3d_cluster_get_json_command(config: PreviewConfig) -> list[str]:
+    """Build the k3d cluster inspection command with JSON output."""
+    return ["k3d", "cluster", "get", config.cluster_name, "-o", "json"]
+
+
 def k3d_image_import_command(config: PreviewConfig) -> list[str]:
     """Build the k3d image import command."""
     return [
@@ -126,6 +132,93 @@ def kubectl_secret_command(config: PreviewConfig) -> list[str]:
         "-o",
         "yaml",
     ]
+
+
+def _yaml_string(value: str) -> str:
+    """Quote a simple scalar for the local manifest."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def local_postgres_manifest(config: PreviewConfig) -> str:
+    """Build the local-only Postgres dependency manifest."""
+    database_url = urlparse.urlsplit(config.database_url)
+    database_name = database_url.path.lstrip("/") or "episodic"
+    username = urlparse.unquote(database_url.username or "episodic")
+    credential = urlparse.unquote(database_url.password or "episodic")
+    service_name = database_url.hostname or "postgres"
+    port = database_url.port or 5432
+    # The local preview uses literal credentials so the dependency can be
+    # created with one stdin apply. Shared previews must use ExternalSecret.
+    return f"""\
+apiVersion: v1
+kind: Service
+metadata:
+  name: {service_name}
+  namespace: {config.namespace}
+  labels:
+    app.kubernetes.io/name: {service_name}
+    app.kubernetes.io/part-of: episodic-preview
+spec:
+  ports:
+    - name: postgres
+      port: {port}
+      targetPort: postgres
+  selector:
+    app.kubernetes.io/name: {service_name}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {service_name}
+  namespace: {config.namespace}
+  labels:
+    app.kubernetes.io/name: {service_name}
+    app.kubernetes.io/part-of: episodic-preview
+spec:
+  serviceName: {service_name}
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {service_name}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {service_name}
+        app.kubernetes.io/part-of: episodic-preview
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {_yaml_string(database_name)}
+            - name: POSTGRES_USER
+              value: {_yaml_string(username)}
+            - name: POSTGRES_PASSWORD
+              value: {_yaml_string(credential)}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {_yaml_string(username)}
+                - -d
+                - {_yaml_string(database_name)}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          emptyDir: {{}}
+"""
 
 
 def helm_upgrade_command(config: PreviewConfig) -> list[str]:
