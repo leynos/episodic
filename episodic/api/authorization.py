@@ -19,6 +19,14 @@ class AuthorizationDecision(enum.StrEnum):
 
 
 @dc.dataclass(frozen=True, slots=True)
+class AuthorizationResult:
+    """Decision returned by authorization with the authenticated principal."""
+
+    decision: AuthorizationDecision
+    principal_id: str | None = None
+
+
+@dc.dataclass(frozen=True, slots=True)
 class AuthorizationContext:
     """Request data supplied to authorization adapters."""
 
@@ -31,7 +39,10 @@ class AuthorizationContext:
 class AuthorizationPort(typ.Protocol):
     """Port used by the API adapter to authorize incoming requests."""
 
-    async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
+    async def decide(
+        self,
+        context: AuthorizationContext,
+    ) -> AuthorizationDecision | AuthorizationResult:
         """Return the authorization decision for one request."""
         ...  # pylint: disable=unnecessary-ellipsis  # Protocol stub.
 
@@ -42,10 +53,10 @@ class PermitAll:
     async def decide(  # noqa: PLR6301 - must match AuthorizationPort instance method.
         self,
         context: AuthorizationContext,
-    ) -> AuthorizationDecision:
+    ) -> AuthorizationResult:
         """Permit the request."""
         del context
-        return AuthorizationDecision.PERMIT
+        return AuthorizationResult(AuthorizationDecision.PERMIT)
 
 
 class AuthorizationMiddleware:
@@ -69,7 +80,7 @@ class AuthorizationMiddleware:
             authorization_header=req.get_header("Authorization"),
         )
         try:
-            decision = await self._authorization.decide(context)
+            result = _authorization_result(await self._authorization.decide(context))
         except Exception:
             logger.exception(
                 "Authorization adapter failed for %s %s.",
@@ -85,11 +96,12 @@ class AuthorizationMiddleware:
             resp.complete = True
             return
 
-        match decision:
+        match result.decision:
             case AuthorizationDecision.PERMIT:
+                req.context.principal_id = result.principal_id
                 return
             case AuthorizationDecision.UNAUTHORIZED:
-                _log_authorization_denial(decision, context)
+                _log_authorization_denial(result.decision, context)
                 resp.media = {
                     "code": "unauthorized",
                     "message": "Authorization is required.",
@@ -97,7 +109,7 @@ class AuthorizationMiddleware:
                 }
                 resp.status = falcon.HTTP_401
             case AuthorizationDecision.FORBIDDEN:
-                _log_authorization_denial(decision, context)
+                _log_authorization_denial(result.decision, context)
                 resp.media = {
                     "code": "forbidden",
                     "message": "Access to this resource is forbidden.",
@@ -105,7 +117,7 @@ class AuthorizationMiddleware:
                 }
                 resp.status = falcon.HTTP_403
             case _:
-                _log_authorization_denial(decision, context)
+                _log_authorization_denial(result.decision, context)
                 resp.media = {
                     "code": "internal_error",
                     "message": "Unexpected authorization decision.",
@@ -113,6 +125,15 @@ class AuthorizationMiddleware:
                 }
                 resp.status = falcon.HTTP_503
         resp.complete = True
+
+
+def _authorization_result(
+    outcome: AuthorizationDecision | AuthorizationResult,
+) -> AuthorizationResult:
+    """Normalise legacy decision-only adapters to a principal-aware result."""
+    if isinstance(outcome, AuthorizationResult):
+        return outcome
+    return AuthorizationResult(decision=outcome)
 
 
 def _log_authorization_denial(

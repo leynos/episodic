@@ -21,6 +21,8 @@ if typ.TYPE_CHECKING:
     from .pagination import Pagination
     from .unit_of_work_protocols import CanonicalUnitOfWork
 
+    UowFactory = cabc.Callable[[], CanonicalUnitOfWork]
+
 
 _UPLOAD_STORAGE_PREFIX = "uploads"
 
@@ -97,11 +99,11 @@ class UploadSizeMismatchError(SourceIntakeError):
 
 
 async def register_upload(
-    uow: CanonicalUnitOfWork,
+    uow_factory: UowFactory,
     object_store: ObjectStorePort,
     request: UploadBytesRequest,
 ) -> Upload:
-    """Persist upload bytes and metadata in one unit-of-work."""
+    """Persist upload bytes after committing a recoverable pending row."""
     _validate_declared_upload(request)
     upload_id = uuid.uuid4()
     storage_key = f"{_UPLOAD_STORAGE_PREFIX}/{upload_id}"
@@ -120,18 +122,21 @@ async def register_upload(
         created_at=now,
         updated_at=now,
     )
-    await uow.uploads.add(upload)
+    async with uow_factory() as uow:
+        await uow.uploads.add(upload)
+        await uow.commit()
     stored = await object_store.put(
         storage_key,
         _single_chunk_stream(request.payload),
         max_bytes=request.max_bytes,
     )
-    ready_upload = await uow.uploads.mark_ready(
-        upload_id,
-        content_hash=f"sha256:{stored.sha256}",
-        actual_size=stored.size,
-    )
-    await uow.commit()
+    async with uow_factory() as uow:
+        ready_upload = await uow.uploads.mark_ready(
+            upload_id,
+            content_hash=f"sha256:{stored.sha256}",
+            actual_size=stored.size,
+        )
+        await uow.commit()
     return ready_upload
 
 

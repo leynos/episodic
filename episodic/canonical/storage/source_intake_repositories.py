@@ -5,6 +5,7 @@ import typing as typ
 import uuid
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.idempotency import (
     Acquired,
@@ -168,30 +169,34 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
         if record is None:
             record_id = uuid.uuid4()
             now = dt.datetime.now(dt.UTC)
-            self._session.add(
-                IdempotencyRecordModel(
-                    id=record_id,
-                    principal_id=_principal_to_record(request.principal_id),
+            try:
+                async with self._session.begin_nested():
+                    self._session.add(
+                        IdempotencyRecordModel(
+                            id=record_id,
+                            principal_id=_principal_to_record(request.principal_id),
+                            operation=request.operation,
+                            idempotency_key=request.idempotency_key,
+                            body_hash=request.body_hash,
+                            state=IdempotencyState.IN_FLIGHT,
+                            serialised_outcome=None,
+                            expires_at=request.expires_at,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+                    await self._session.flush()
+            except IntegrityError:
+                record = await self._get_record(
+                    principal_id=request.principal_id,
                     operation=request.operation,
                     idempotency_key=request.idempotency_key,
-                    body_hash=request.body_hash,
-                    state=IdempotencyState.IN_FLIGHT,
-                    serialised_outcome=None,
-                    expires_at=request.expires_at,
-                    created_at=now,
-                    updated_at=now,
                 )
-            )
-            await self._session.flush()
-            return Acquired(record_id)
-        if record.body_hash != request.body_hash:
-            return Conflict(record.id)
-        if record.state is IdempotencyState.COMPLETED:
-            if record.serialised_outcome is None:
-                msg = f"Completed idempotency record lacks outcome: {record.id}"
-                raise RuntimeError(msg)
-            return Replay(record.serialised_outcome)
-        return InFlight(record.id)
+                if record is None:
+                    raise
+            else:
+                return Acquired(record_id)
+        return _idempotency_outcome_for_record(record, request.body_hash)
 
     async def complete(
         self,
@@ -245,3 +250,18 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
             )
         )
         return result.scalar_one_or_none()
+
+
+def _idempotency_outcome_for_record(
+    record: IdempotencyRecordModel,
+    body_hash: str,
+) -> IdempotencyOutcome:
+    """Map an existing idempotency record to the acquire outcome."""
+    if record.body_hash != body_hash:
+        return Conflict(record.id)
+    if record.state is IdempotencyState.COMPLETED:
+        if record.serialised_outcome is None:
+            msg = f"Completed idempotency record lacks outcome: {record.id}"
+            raise RuntimeError(msg)
+        return Replay(record.serialised_outcome)
+    return InFlight(record.id)

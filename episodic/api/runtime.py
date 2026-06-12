@@ -2,13 +2,14 @@
 
 import dataclasses as dc
 import os
+import pathlib
 import typing as typ
 
 import psycopg
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
 
 from . import create_app
 from .dependencies import ApiDependencies, ReadinessProbe, ShutdownHook
@@ -28,6 +29,7 @@ class RuntimeConfig:
     """Runtime configuration required to boot the Falcon HTTP service."""
 
     database_url: str
+    source_intake_object_store_root: pathlib.Path
 
 
 _SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
@@ -44,7 +46,17 @@ def _load_runtime_config(
     if not database_url:
         msg = "DATABASE_URL must be set before starting the HTTP service."
         raise RuntimeError(msg)
-    return RuntimeConfig(database_url=database_url)
+    object_store_root = environment.get("SOURCE_INTAKE_OBJECT_STORE_ROOT", "").strip()
+    if not object_store_root:
+        msg = (
+            "SOURCE_INTAKE_OBJECT_STORE_ROOT must be set before starting "
+            "the HTTP service."
+        )
+        raise RuntimeError(msg)
+    return RuntimeConfig(
+        database_url=database_url,
+        source_intake_object_store_root=pathlib.Path(object_store_root),
+    )
 
 
 def _build_database_probe(
@@ -122,6 +134,7 @@ def create_app_from_env() -> asgi.App:
     return create_app(
         ApiDependencies(
             uow_factory=uow_factory,
+            object_store=FilesystemObjectStore(config.source_intake_object_store_root),
             readiness_probes=(database_probe,),
             shutdown_hooks=(shutdown_hook,),
         )

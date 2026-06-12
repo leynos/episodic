@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
 
 import pytest
+import sqlalchemy as sa
 
 from episodic.canonical.domain import IngestionJobListFilters, IntakeState
 from episodic.canonical.idempotency import (
+    Acquired,
     Conflict,
     IdempotencyAcquireRequest,
     InFlight,
@@ -18,6 +21,7 @@ from episodic.canonical.idempotency import (
 )
 from episodic.canonical.ingestion_sources import AttachmentKind, IngestionJobSource
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage.source_intake_models import IdempotencyRecordModel
 from episodic.canonical.uploads import Upload, UploadState
 
 if typ.TYPE_CHECKING:
@@ -231,3 +235,38 @@ async def test_sqlalchemy_idempotency_store_replays_and_conflicts(
     assert isinstance(replay, Replay)
     assert replay.serialised_outcome == b'{"ok":true}'
     assert isinstance(conflict, Conflict)
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_idempotency_store_concurrent_acquire_is_first_writer_wins(
+    session_factory: object,
+) -> None:
+    """Concurrent acquires for one logical key converge on one stored row."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    request = IdempotencyAcquireRequest(
+        principal_id="principal",
+        operation="upload.create",
+        idempotency_key=f"concurrent-{uuid.uuid4()}",
+        body_hash="body-a",
+        expires_at=dt.datetime.now(dt.UTC) + dt.timedelta(hours=1),
+    )
+
+    async def acquire() -> Acquired | Replay | Conflict | InFlight:
+        async with SqlAlchemyUnitOfWork(factory) as uow:
+            outcome = await uow.idempotency.acquire(request=request)
+            await uow.commit()
+            return outcome
+
+    first, second = await asyncio.gather(acquire(), acquire())
+
+    async with factory() as session:
+        persisted_count = await session.scalar(
+            sa
+            .select(sa.func.count())
+            .select_from(IdempotencyRecordModel)
+            .where(IdempotencyRecordModel.idempotency_key == request.idempotency_key)
+        )
+
+    assert sum(isinstance(outcome, Acquired) for outcome in (first, second)) == 1
+    assert sum(isinstance(outcome, InFlight) for outcome in (first, second)) == 1
+    assert persisted_count == 1

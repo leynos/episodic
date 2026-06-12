@@ -7,6 +7,11 @@ import httpx
 import pytest
 
 from episodic.api import create_app
+from episodic.api.authorization import (
+    AuthorizationContext,
+    AuthorizationDecision,
+    AuthorizationResult,
+)
 from episodic.canonical.storage import FilesystemObjectStore
 from tests.fixtures.api import build_api_dependencies
 
@@ -16,6 +21,18 @@ if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
     from syrupy.assertion import SnapshotAssertion
+
+
+class HeaderPrincipalAuthorization:
+    """Permit requests and derive the principal from the Authorization header."""
+
+    async def decide(self, context: AuthorizationContext) -> AuthorizationResult:
+        """Return the header value as the authenticated principal."""
+        principal = context.authorization_header
+        return AuthorizationResult(
+            decision=AuthorizationDecision.PERMIT,
+            principal_id=principal,
+        )
 
 
 @pytest.mark.asyncio
@@ -106,6 +123,49 @@ async def test_source_intake_idempotency_conflict(
     assert first.status_code == 201, first.text
     assert second.status_code == 409
     assert second.json()["code"] == "idempotency_conflict"
+
+
+@pytest.mark.asyncio
+async def test_source_intake_idempotency_is_scoped_by_authorized_principal(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    """The authorization principal scopes idempotency records for upload replay."""
+    object_store = FilesystemObjectStore(tmp_path / "objects")
+    dependencies = build_api_dependencies(
+        session_factory,
+        authorization=HeaderPrincipalAuthorization(),
+        object_store=object_store,
+    )
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        first = await _post_text_upload(
+            client,
+            key="principal-key",
+            payload=b"same\n",
+            authorization="principal-a",
+        )
+        second = await _post_text_upload(
+            client,
+            key="principal-key",
+            payload=b"same\n",
+            authorization="principal-b",
+        )
+        replay = await _post_text_upload(
+            client,
+            key="principal-key",
+            payload=b"same\n",
+            authorization="principal-a",
+        )
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert replay.status_code == 201, replay.text
+    assert first.json()["id"] != second.json()["id"]
+    assert replay.json()["id"] == first.json()["id"]
 
 
 @pytest.mark.asyncio
@@ -215,11 +275,15 @@ async def _post_text_upload(
     *,
     key: str,
     payload: bytes,
+    authorization: str | None = None,
 ) -> httpx.Response:
     """Post a text upload with a deterministic multipart shape."""
+    headers = {"Idempotency-Key": key}
+    if authorization is not None:
+        headers["Authorization"] = authorization
     return await client.post(
         "/v1/uploads",
-        headers={"Idempotency-Key": key},
+        headers=headers,
         files={
             "file": ("source.txt", payload, "text/plain"),
             "content_type": (None, "text/plain"),

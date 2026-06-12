@@ -103,23 +103,22 @@ class UploadsResource:
         )
 
         async def work() -> IdempotentResponse:
-            async with self._uow_factory() as uow:
-                try:
-                    upload = await register_upload(
-                        uow,
-                        object_store,
-                        UploadBytesRequest(
-                            owner_principal_id=principal_id(req),
-                            content_type=parsed.content_type,
-                            declared_size=parsed.declared_size,
-                            declared_sha256=parsed.declared_sha256,
-                            payload=parsed.payload,
-                            max_bytes=self._config.max_bytes,
-                            metadata=parsed.metadata,
-                        ),
-                    )
-                except SourceIntakeError as exc:
-                    raise map_source_intake_error(exc) from exc
+            try:
+                upload = await register_upload(
+                    self._uow_factory,
+                    object_store,
+                    UploadBytesRequest(
+                        owner_principal_id=principal_id(req),
+                        content_type=parsed.content_type,
+                        declared_size=parsed.declared_size,
+                        declared_sha256=parsed.declared_sha256,
+                        payload=parsed.payload,
+                        max_bytes=self._config.max_bytes,
+                        metadata=parsed.metadata,
+                    ),
+                )
+            except SourceIntakeError as exc:
+                raise map_source_intake_error(exc) from exc
             return IdempotentResponse(falcon.HTTP_201, serialize_upload(upload))
 
         result = await run_idempotent(

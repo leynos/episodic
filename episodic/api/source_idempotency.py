@@ -85,7 +85,7 @@ def apply_response(resp: falcon.Response, response: IdempotentResponse) -> None:
 
 def principal_id(req: falcon.Request) -> str | None:
     """Return the principal identifier supplied by the inbound adapter."""
-    return req.get_header("X-Principal-Id")
+    return typ.cast("str | None", getattr(req.context, "principal_id", None))
 
 
 async def _idempotent_response(
