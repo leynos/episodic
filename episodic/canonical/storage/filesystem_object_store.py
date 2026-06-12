@@ -20,6 +20,54 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 
+class _HashDigest(typ.Protocol):
+    """Small structural type for hash objects used while writing streams."""
+
+    def update(self, data: bytes, /) -> None:
+        """Update the hash with one byte chunk."""
+        raise NotImplementedError
+
+    def hexdigest(self) -> str:
+        """Return the hex digest."""
+        raise NotImplementedError
+
+
+async def _write_stream_to_file(
+    file_handle: typ.IO[bytes],
+    stream: cabc.AsyncIterator[bytes],
+    *,
+    max_bytes: int,
+    digest: _HashDigest | None,
+) -> int:
+    """Write stream chunks to an open file handle; return the total byte count.
+
+    Raises PayloadTooLargeError if accumulated size exceeds max_bytes.
+    Updates digest in place when supplied.
+    """
+    size = 0
+    async for chunk in stream:
+        next_size = size + len(chunk)
+        if next_size > max_bytes:
+            _raise_payload_too_large()
+        file_handle.write(chunk)
+        if digest is not None:
+            digest.update(chunk)
+        size = next_size
+    return size
+
+
+def _resolve_sha256(
+    digest: _HashDigest | None,
+    precomputed_sha256: str | None,
+) -> str:
+    """Return the hex SHA-256 string from either digest source."""
+    if digest is None:
+        if precomputed_sha256 is None:
+            raise AssertionError
+        return precomputed_sha256
+    return digest.hexdigest()
+
+
 class FilesystemObjectStore(ObjectStorePort):
     """Store object bytes under a configured filesystem root."""
 
@@ -47,28 +95,17 @@ class FilesystemObjectStore(ObjectStorePort):
         tmp_path = self._tmp_root / f"{uuid.uuid4()}.tmp"
 
         digest = None if precomputed_sha256 is not None else hashlib.sha256()
-        size = 0
         try:
             with tmp_path.open("wb") as file_handle:
-                async for chunk in stream:
-                    next_size = size + len(chunk)
-                    if next_size > max_bytes:
-                        _raise_payload_too_large()
-                    file_handle.write(chunk)
-                    if digest is not None:
-                        digest.update(chunk)
-                    size = next_size
+                size = await _write_stream_to_file(
+                    file_handle, stream, max_bytes=max_bytes, digest=digest
+                )
             tmp_path.replace(target)
         except Exception:
             tmp_path.unlink(missing_ok=True)
             raise
 
-        if digest is None:
-            if precomputed_sha256 is None:
-                raise AssertionError
-            sha256_result = precomputed_sha256
-        else:
-            sha256_result = digest.hexdigest()
+        sha256_result = _resolve_sha256(digest, precomputed_sha256)
         return StoredObject(key=safe_key, size=size, sha256=sha256_result)
 
     @contextlib.asynccontextmanager
