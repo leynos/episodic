@@ -1,4 +1,5 @@
 """Application services for source-intake REST workflows."""
+# pylint: disable=too-many-lines
 
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ if typ.TYPE_CHECKING:
     from episodic.observability import MetricsPort, MonotonicClockPort
 
     from .domain import JsonMapping
-    from .object_store import ObjectStorePort
+    from .object_store import ObjectStorePort, StoredObject
     from .pagination import Pagination
     from .unit_of_work_protocols import CanonicalUnitOfWork
 
@@ -143,6 +144,47 @@ async def register_upload(
         created_at=now,
         updated_at=now,
     )
+    await _commit_pending_upload(uow_factory, upload, providers)
+    stored = await _store_upload_bytes(
+        object_store,
+        upload_id,
+        storage_key,
+        request,
+        providers,
+    )
+    ready_upload = await _commit_ready_upload(
+        uow_factory,
+        upload_id,
+        storage_key,
+        stored,
+        started_at,
+        providers,
+    )
+    log_info(
+        logger,
+        "source_intake_upload_ready upload_id=%s storage_key=%s actual_size=%s",
+        upload_id,
+        storage_key,
+        stored.size,
+    )
+    providers.metrics.increment_counter(
+        "source_intake_upload_events_total",
+        labels={"event": "ready"},
+    )
+    providers.metrics.observe_latency_ms(
+        "source_intake_upload_register_latency_ms",
+        (providers.monotonic_clock.monotonic_seconds() - started_at) * 1000,
+        labels={"outcome": "ready"},
+    )
+    return ready_upload
+
+
+async def _commit_pending_upload(
+    uow_factory: UowFactory,
+    upload: Upload,
+    providers: SourceIntakeRuntime,
+) -> None:
+    """Commit a recoverable pending upload row."""
     async with uow_factory() as uow:
         await uow.uploads.add(upload)
         await uow.commit()
@@ -152,15 +194,25 @@ async def register_upload(
             "source_intake_upload_pending upload_id=%s owner_principal_id=%s "
             "content_type=%s declared_size=%s"
         ),
-        upload_id,
-        request.owner_principal_id,
-        request.content_type,
-        request.declared_size,
+        upload.id,
+        upload.owner_principal_id,
+        upload.content_type,
+        upload.declared_size,
     )
     providers.metrics.increment_counter(
         "source_intake_upload_events_total",
         labels={"event": "pending_committed"},
     )
+
+
+async def _store_upload_bytes(  # noqa: PLR0913, PLR0917  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    object_store: ObjectStorePort,
+    upload_id: uuid.UUID,
+    storage_key: str,
+    request: UploadBytesRequest,
+    providers: SourceIntakeRuntime,
+) -> StoredObject:
+    """Store upload bytes through the object-store port."""
     stored = await object_store.put(
         storage_key,
         _single_chunk_stream(request.payload),
@@ -181,6 +233,18 @@ async def register_upload(
         "source_intake_upload_events_total",
         labels={"event": "object_stored"},
     )
+    return stored
+
+
+async def _commit_ready_upload(  # noqa: PLR0913, PLR0917  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    uow_factory: UowFactory,
+    upload_id: uuid.UUID,
+    storage_key: str,
+    stored: StoredObject,
+    started_at: float,
+    providers: SourceIntakeRuntime,
+) -> Upload:
+    """Mark a stored upload ready or preserve recovery signals on failure."""
     async with uow_factory() as uow:
         ready_upload = await uow.uploads.mark_ready(
             upload_id,
@@ -211,22 +275,6 @@ async def register_upload(
                 labels={"outcome": "ready_commit_failed"},
             )
             raise
-    log_info(
-        logger,
-        "source_intake_upload_ready upload_id=%s storage_key=%s actual_size=%s",
-        upload_id,
-        storage_key,
-        stored.size,
-    )
-    providers.metrics.increment_counter(
-        "source_intake_upload_events_total",
-        labels={"event": "ready"},
-    )
-    providers.metrics.observe_latency_ms(
-        "source_intake_upload_register_latency_ms",
-        (providers.monotonic_clock.monotonic_seconds() - started_at) * 1000,
-        labels={"outcome": "ready"},
-    )
     return ready_upload
 
 
