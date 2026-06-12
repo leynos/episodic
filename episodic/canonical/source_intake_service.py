@@ -145,27 +145,19 @@ async def register_upload(
         updated_at=now,
     )
     await _commit_pending_upload(uow_factory, upload, providers)
-    stored = await _store_upload_bytes(
-        object_store,
-        upload_id,
-        storage_key,
-        request,
-        providers,
+    upload_ref = _UploadRef(id=upload_id, storage_key=storage_key)
+    stored_upload = await _store_upload_bytes(
+        object_store, upload_ref, request, providers
     )
     ready_upload = await _commit_ready_upload(
-        uow_factory,
-        upload_id,
-        storage_key,
-        stored,
-        started_at,
-        providers,
+        uow_factory, stored_upload, started_at, providers
     )
     log_info(
         logger,
         "source_intake_upload_ready upload_id=%s storage_key=%s actual_size=%s",
-        upload_id,
-        storage_key,
-        stored.size,
+        stored_upload.ref.id,
+        stored_upload.ref.storage_key,
+        stored_upload.stored.size,
     )
     providers.metrics.increment_counter(
         "source_intake_upload_events_total",
@@ -205,16 +197,27 @@ async def _commit_pending_upload(
     )
 
 
-async def _store_upload_bytes(  # noqa: PLR0913, PLR0917  # pylint: disable=too-many-arguments,too-many-positional-arguments
+@dc.dataclass(frozen=True, slots=True)
+class _UploadRef:
+    id: uuid.UUID
+    storage_key: str
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _StoredUpload:
+    ref: _UploadRef
+    stored: StoredObject
+
+
+async def _store_upload_bytes(
     object_store: ObjectStorePort,
-    upload_id: uuid.UUID,
-    storage_key: str,
+    upload_ref: _UploadRef,
     request: UploadBytesRequest,
     providers: SourceIntakeRuntime,
-) -> StoredObject:
+) -> _StoredUpload:
     """Store upload bytes through the object-store port."""
     stored = await object_store.put(
-        storage_key,
+        upload_ref.storage_key,
         _single_chunk_stream(request.payload),
         max_bytes=request.max_bytes,
     )
@@ -224,8 +227,8 @@ async def _store_upload_bytes(  # noqa: PLR0913, PLR0917  # pylint: disable=too-
             "source_intake_upload_stored upload_id=%s storage_key=%s "
             "actual_size=%s content_hash=%s"
         ),
-        upload_id,
-        storage_key,
+        upload_ref.id,
+        upload_ref.storage_key,
         stored.size,
         f"sha256:{stored.sha256}",
     )
@@ -233,18 +236,19 @@ async def _store_upload_bytes(  # noqa: PLR0913, PLR0917  # pylint: disable=too-
         "source_intake_upload_events_total",
         labels={"event": "object_stored"},
     )
-    return stored
+    return _StoredUpload(ref=upload_ref, stored=stored)
 
 
-async def _commit_ready_upload(  # noqa: PLR0913, PLR0917  # pylint: disable=too-many-arguments,too-many-positional-arguments
+async def _commit_ready_upload(
     uow_factory: UowFactory,
-    upload_id: uuid.UUID,
-    storage_key: str,
-    stored: StoredObject,
+    stored_upload: _StoredUpload,
     started_at: float,
     providers: SourceIntakeRuntime,
 ) -> Upload:
     """Mark a stored upload ready or preserve recovery signals on failure."""
+    upload_id = stored_upload.ref.id
+    storage_key = stored_upload.ref.storage_key
+    stored = stored_upload.stored
     async with uow_factory() as uow:
         ready_upload = await uow.uploads.mark_ready(
             upload_id,
