@@ -22,7 +22,12 @@ from episodic.canonical.idempotency import (
 from episodic.canonical.ingestion_sources import AttachmentKind, IngestionJobSource
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.storage.source_intake_models import IdempotencyRecordModel
+from episodic.canonical.storage.source_intake_repositories import (
+    SourceIntakeStorageRuntime,
+    SqlAlchemyIdempotencyStore,
+)
 from episodic.canonical.uploads import Upload, UploadState
+from episodic.observability import NoopMetrics, PerfCounterClock
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -235,6 +240,45 @@ async def test_sqlalchemy_idempotency_store_replays_and_conflicts(
     assert isinstance(replay, Replay)
     assert replay.serialised_outcome == b'{"ok":true}'
     assert isinstance(conflict, Conflict)
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_idempotency_store_uses_injected_time_and_ids(
+    session_factory: object,
+) -> None:
+    """SQLAlchemy idempotency records use injected providers at the boundary."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    fixed_record_id = uuid.UUID("00000000-0000-4000-8000-000000000001")
+    fixed_now = dt.datetime(2026, 6, 12, 1, 45, tzinfo=dt.UTC)
+    request = IdempotencyAcquireRequest(
+        principal_id="principal",
+        operation="upload.create",
+        idempotency_key="deterministic-key",
+        body_hash="body-a",
+        expires_at=fixed_now + dt.timedelta(hours=1),
+    )
+
+    async with factory() as session:
+        store = SqlAlchemyIdempotencyStore(
+            session,
+            runtime=SourceIntakeStorageRuntime(
+                clock=lambda: fixed_now,
+                uuid_factory=lambda: fixed_record_id,
+                metrics=NoopMetrics(),
+                monotonic_clock=PerfCounterClock(),
+            ),
+        )
+        acquired = await store.acquire(request=request)
+        await session.commit()
+
+    async with factory() as session:
+        record = await session.get(IdempotencyRecordModel, fixed_record_id)
+
+    assert isinstance(acquired, Acquired)
+    assert acquired.record_id == fixed_record_id
+    assert record is not None, "expected deterministic record to persist"
+    assert record.created_at == fixed_now
+    assert record.updated_at == fixed_now
 
 
 @pytest.mark.asyncio

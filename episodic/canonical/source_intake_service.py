@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
 import hashlib
 import typing as typ
 import uuid
 
+from episodic.logging import get_logger, log_info, log_warning
+from episodic.observability import NoopMetrics, PerfCounterClock
+
 from .domain import IngestionJob, IngestionJobListFilters, IngestionStatus, IntakeState
 from .ingestion_sources import AttachmentKind, IngestionJobSource
 from .uploads import Upload, UploadState
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+    from episodic.observability import MetricsPort, MonotonicClockPort
 
     from .domain import JsonMapping
     from .object_store import ObjectStorePort
@@ -25,6 +29,9 @@ if typ.TYPE_CHECKING:
 
 
 _UPLOAD_STORAGE_PREFIX = "uploads"
+Clock = cabc.Callable[[], dt.datetime]
+UuidFactory = cabc.Callable[[], uuid.UUID]
+logger = get_logger(__name__)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -70,6 +77,16 @@ class IngestionJobPage:
     pagination: Pagination
 
 
+@dc.dataclass(frozen=True, slots=True)
+class SourceIntakeRuntime:
+    """Runtime providers used by source-intake command services."""
+
+    clock: Clock
+    uuid_factory: UuidFactory
+    metrics: MetricsPort
+    monotonic_clock: MonotonicClockPort
+
+
 class SourceIntakeError(Exception):
     """Base class for source-intake domain errors."""
 
@@ -102,12 +119,16 @@ async def register_upload(
     uow_factory: UowFactory,
     object_store: ObjectStorePort,
     request: UploadBytesRequest,
+    *,
+    runtime: SourceIntakeRuntime | None = None,
 ) -> Upload:
     """Persist upload bytes after committing a recoverable pending row."""
     _validate_declared_upload(request)
-    upload_id = uuid.uuid4()
+    providers = _source_intake_runtime(runtime)
+    started_at = providers.monotonic_clock.monotonic_seconds()
+    upload_id = providers.uuid_factory()
     storage_key = f"{_UPLOAD_STORAGE_PREFIX}/{upload_id}"
-    now = dt.datetime.now(dt.UTC)
+    now = providers.clock()
     upload = Upload(
         id=upload_id,
         owner_principal_id=request.owner_principal_id,
@@ -125,10 +146,40 @@ async def register_upload(
     async with uow_factory() as uow:
         await uow.uploads.add(upload)
         await uow.commit()
+    log_info(
+        logger,
+        (
+            "source_intake_upload_pending upload_id=%s owner_principal_id=%s "
+            "content_type=%s declared_size=%s"
+        ),
+        upload_id,
+        request.owner_principal_id,
+        request.content_type,
+        request.declared_size,
+    )
+    providers.metrics.increment_counter(
+        "source_intake_upload_events_total",
+        labels={"event": "pending_committed"},
+    )
     stored = await object_store.put(
         storage_key,
         _single_chunk_stream(request.payload),
         max_bytes=request.max_bytes,
+    )
+    log_info(
+        logger,
+        (
+            "source_intake_upload_stored upload_id=%s storage_key=%s "
+            "actual_size=%s content_hash=%s"
+        ),
+        upload_id,
+        storage_key,
+        stored.size,
+        f"sha256:{stored.sha256}",
+    )
+    providers.metrics.increment_counter(
+        "source_intake_upload_events_total",
+        labels={"event": "object_stored"},
     )
     async with uow_factory() as uow:
         ready_upload = await uow.uploads.mark_ready(
@@ -136,21 +187,63 @@ async def register_upload(
             content_hash=f"sha256:{stored.sha256}",
             actual_size=stored.size,
         )
-        await uow.commit()
+        try:
+            await uow.commit()
+        except Exception:
+            log_warning(
+                logger,
+                (
+                    "source_intake_upload_ready_commit_failed upload_id=%s "
+                    "storage_key=%s actual_size=%s"
+                ),
+                upload_id,
+                storage_key,
+                stored.size,
+                exc_info=True,
+            )
+            providers.metrics.increment_counter(
+                "source_intake_upload_events_total",
+                labels={"event": "ready_commit_failed"},
+            )
+            providers.metrics.observe_latency_ms(
+                "source_intake_upload_register_latency_ms",
+                (providers.monotonic_clock.monotonic_seconds() - started_at) * 1000,
+                labels={"outcome": "ready_commit_failed"},
+            )
+            raise
+    log_info(
+        logger,
+        "source_intake_upload_ready upload_id=%s storage_key=%s actual_size=%s",
+        upload_id,
+        storage_key,
+        stored.size,
+    )
+    providers.metrics.increment_counter(
+        "source_intake_upload_events_total",
+        labels={"event": "ready"},
+    )
+    providers.metrics.observe_latency_ms(
+        "source_intake_upload_register_latency_ms",
+        (providers.monotonic_clock.monotonic_seconds() - started_at) * 1000,
+        labels={"outcome": "ready"},
+    )
     return ready_upload
 
 
 async def create_ingestion_job(
     uow: CanonicalUnitOfWork,
     request: CreateIngestionJobRequest,
+    *,
+    runtime: SourceIntakeRuntime | None = None,
 ) -> IngestionJob:
     """Create an intake-stage ingestion job for a known series profile."""
     profile = await uow.series_profiles.get(request.series_profile_id)
     if profile is None:
         raise SeriesProfileNotFoundError(str(request.series_profile_id))
-    now = dt.datetime.now(dt.UTC)
+    providers = _source_intake_runtime(runtime)
+    now = providers.clock()
     job = IngestionJob(
-        id=uuid.uuid4(),
+        id=providers.uuid_factory(),
         series_profile_id=request.series_profile_id,
         target_episode_id=request.target_episode_id,
         status=IngestionStatus.PENDING,
@@ -170,6 +263,8 @@ async def create_ingestion_job(
 async def attach_source_to_ingestion_job(
     uow: CanonicalUnitOfWork,
     request: AttachSourceRequest,
+    *,
+    runtime: SourceIntakeRuntime | None = None,
 ) -> IngestionJobSource:
     """Attach one upload or remote URI source to an ingestion job."""
     job = await uow.ingestion_jobs.get(request.ingestion_job_id)
@@ -181,8 +276,9 @@ async def attach_source_to_ingestion_job(
     else:
         source_uri = request.source_uri
 
+    providers = _source_intake_runtime(runtime)
     source = IngestionJobSource(
-        id=uuid.uuid4(),
+        id=providers.uuid_factory(),
         ingestion_job_id=request.ingestion_job_id,
         attachment_kind=request.attachment_kind,
         upload_id=request.upload_id,
@@ -190,7 +286,7 @@ async def attach_source_to_ingestion_job(
         source_type=request.source_type,
         weight=request.weight,
         metadata=request.metadata,
-        created_at=dt.datetime.now(dt.UTC),
+        created_at=providers.clock(),
     )
     await uow.ingestion_job_sources.add(source)
     await uow.ingestion_jobs.transition_intake_state(
@@ -251,6 +347,30 @@ def _validate_declared_upload(request: UploadBytesRequest) -> None:
     actual_hash = hashlib.sha256(request.payload).hexdigest()
     if request.declared_sha256 is not None and request.declared_sha256 != actual_hash:
         raise UploadHashMismatchError(request.declared_sha256)
+
+
+def _utc_now() -> dt.datetime:
+    """Return the current UTC timestamp for source-intake entities."""
+    return dt.datetime.now(dt.UTC)
+
+
+def _new_uuid() -> uuid.UUID:
+    """Return a new source-intake identifier."""
+    return uuid.uuid4()
+
+
+def _source_intake_runtime(
+    runtime: SourceIntakeRuntime | None,
+) -> SourceIntakeRuntime:
+    """Return source-intake runtime providers with production defaults."""
+    if runtime is not None:
+        return runtime
+    return SourceIntakeRuntime(
+        clock=_utc_now,
+        uuid_factory=_new_uuid,
+        metrics=NoopMetrics(),
+        monotonic_clock=PerfCounterClock(),
+    )
 
 
 async def _single_chunk_stream(payload: bytes) -> cabc.AsyncIterator[bytes]:

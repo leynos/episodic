@@ -171,8 +171,9 @@ async def test_create_app_from_env_wires_object_store_for_uploads(
     tmp_path: Path,
 ) -> None:
     """Runtime-created apps accept uploads when object storage is configured."""
+    object_store_root = tmp_path / "objects"
     monkeypatch.setenv("DATABASE_URL", migrated_database_url)
-    monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path / "objects"))
+    monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(object_store_root))
 
     from episodic.api.runtime import create_app_from_env
 
@@ -204,4 +205,9 @@ async def test_create_app_from_env_wires_object_store_for_uploads(
         )
 
     assert response.status_code == 201, response.text
-    assert response.json()["content_hash"].startswith("sha256:")
+    response_body = response.json()
+    expected_hash = hashlib.sha256(payload).hexdigest()
+    stored_path = object_store_root / "uploads" / response_body["id"]
+    assert response_body["content_hash"] == f"sha256:{expected_hash}"
+    assert stored_path.is_file(), f"expected upload payload at {stored_path}"
+    assert stored_path.read_bytes() == payload

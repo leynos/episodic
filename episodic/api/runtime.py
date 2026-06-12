@@ -10,6 +10,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
+from episodic.logging import get_logger, log_info, log_warning
 
 from . import create_app
 from .dependencies import ApiDependencies, ReadinessProbe, ShutdownHook
@@ -35,6 +36,7 @@ class RuntimeConfig:
 _SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
 _SUPPORTED_ASYNC_POSTGRES_DRIVERS = frozenset({"asyncpg", "psycopg"})
 _DEFAULT_ASYNC_POSTGRES_DRIVER = "psycopg"
+logger = get_logger(__name__)
 
 
 def _load_runtime_config(
@@ -48,11 +50,21 @@ def _load_runtime_config(
         raise RuntimeError(msg)
     object_store_root = environment.get("SOURCE_INTAKE_OBJECT_STORE_ROOT", "").strip()
     if not object_store_root:
+        log_warning(
+            logger,
+            "runtime_config_missing setting=%s",
+            "SOURCE_INTAKE_OBJECT_STORE_ROOT",
+        )
         msg = (
             "SOURCE_INTAKE_OBJECT_STORE_ROOT must be set before starting "
             "the HTTP service."
         )
         raise RuntimeError(msg)
+    log_info(
+        logger,
+        "runtime_config_loaded source_intake_object_store_root=%s",
+        object_store_root,
+    )
     return RuntimeConfig(
         database_url=database_url,
         source_intake_object_store_root=pathlib.Path(object_store_root),

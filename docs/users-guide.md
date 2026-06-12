@@ -79,9 +79,12 @@ job until the source context is ready for draft generation.
 The implemented endpoints are `POST /v1/uploads`, `POST /v1/ingestion-jobs`,
 `POST /v1/ingestion-jobs/{job_id}/sources`, and
 `GET /v1/ingestion-jobs/{job_id}`. Side-effecting `POST` requests require an
-`Idempotency-Key`; repeated requests with the same key and body replay the
-stored response. The resumable `POST /v1/uploads/init` flow remains a future
-extension for an object-store adapter that can use pre-signed upload URLs.
+`Idempotency-Key`; the server scopes that key by the authenticated principal
+from authorization. Repeated requests from the same principal with the same key
+and canonical body replay the stored response. Reusing the same key with a
+different canonical body returns `409 Conflict`. The resumable
+`POST /v1/uploads/init` flow remains a future extension for an object-store
+adapter that can use pre-signed upload URLs.
 
 #### Show notes and chapter markers
 

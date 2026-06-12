@@ -713,6 +713,25 @@ Final validation evidence from this branch:
   the documentation milestone; log:
   `/tmp/coderabbit-docs-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
 
+PR feedback follow-up on 2026-06-12:
+
+- Strengthened the runtime object-store test to assert the uploaded bytes are
+  written below `SOURCE_INTAKE_OBJECT_STORE_ROOT` and match the reported
+  content hash.
+- Added source-intake clock, UUID, metrics, and monotonic-clock provider
+  bundles for command services and the SQLAlchemy idempotency adapter.
+- Added a database-backed deterministic-provider test and a Hypothesis property
+  for authenticated-principal idempotency scoping.
+- Added bounded logs and metrics for runtime object-store configuration,
+  upload persistence transitions, ready-commit failure, and idempotency acquire
+  outcomes.
+- Updated `docs/users-guide.md` to state that idempotency is scoped by the
+  authenticated principal and that mismatched canonical bodies return
+  `409 Conflict`.
+- Follow-up validation passed with `make check-fmt`, `make markdownlint`,
+  `make nixie`, `make lint`, `make typecheck`, `make test` (870 passed, 2
+  skipped), and `coderabbit review --agent --type uncommitted` (zero findings).
+
 ## Context and orientation
 
 This section assumes the reader has only the current working tree.
