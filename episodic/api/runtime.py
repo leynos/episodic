@@ -147,6 +147,11 @@ def _normalize_database_urls(database_url: str) -> tuple[URL, PsycopgConnectKwar
     return async_database_url, _psycopg_connection_kwargs(probe_database_url)
 
 
+def _query_param_scalar(value: str | tuple[str, ...]) -> str:
+    """Return a query-parameter value as a plain comma-joined string."""
+    return ",".join(value) if isinstance(value, tuple) else value
+
+
 def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
     """Return Psycopg connection kwargs without rendering secrets into a URL."""
     connection_kwargs = url.translate_connect_args(
@@ -154,17 +159,20 @@ def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
         database="dbname",
     )
     probe_kwargs = PsycopgConnectKwargs()
-    for key in ("host", "dbname", "user", "password"):
-        if value := connection_kwargs.get(key):
-            probe_kwargs[key] = value
+    if value := connection_kwargs.get("host"):
+        probe_kwargs["host"] = value
+    if value := connection_kwargs.get("dbname"):
+        probe_kwargs["dbname"] = value
+    if value := connection_kwargs.get("user"):
+        probe_kwargs["user"] = value
+    if value := connection_kwargs.get("password"):
+        probe_kwargs["password"] = value
     if port := connection_kwargs.get("port"):
         probe_kwargs["port"] = int(port)
     if host := url.query.get("host"):
-        probe_kwargs["host"] = ",".join(host) if isinstance(host, tuple) else host
+        probe_kwargs["host"] = _query_param_scalar(host)
     if sslmode := url.query.get("sslmode"):
-        probe_kwargs["sslmode"] = (
-            ",".join(sslmode) if isinstance(sslmode, tuple) else sslmode
-        )
+        probe_kwargs["sslmode"] = _query_param_scalar(sslmode)
     return probe_kwargs
 
 
