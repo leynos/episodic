@@ -27,12 +27,14 @@ class FilesystemObjectStore(ObjectStorePort):
         self._root = root
         self._tmp_root = root / "_tmp"
 
+    # pylint: disable-next=too-many-arguments
     async def put(
         self,
         key: str,
         stream: cabc.AsyncIterator[bytes],
         *,
         max_bytes: int,
+        precomputed_sha256: str | None = None,
     ) -> StoredObject:
         """Store stream bytes atomically and return observed size/hash."""
         if max_bytes < 0:
@@ -44,7 +46,7 @@ class FilesystemObjectStore(ObjectStorePort):
         self._tmp_root.mkdir(parents=True, exist_ok=True)
         tmp_path = self._tmp_root / f"{uuid.uuid4()}.tmp"
 
-        digest = hashlib.sha256()
+        digest = None if precomputed_sha256 is not None else hashlib.sha256()
         size = 0
         try:
             with tmp_path.open("wb") as file_handle:
@@ -53,14 +55,21 @@ class FilesystemObjectStore(ObjectStorePort):
                     if next_size > max_bytes:
                         _raise_payload_too_large()
                     file_handle.write(chunk)
-                    digest.update(chunk)
+                    if digest is not None:
+                        digest.update(chunk)
                     size = next_size
             tmp_path.replace(target)
         except Exception:
             tmp_path.unlink(missing_ok=True)
             raise
 
-        return StoredObject(key=safe_key, size=size, sha256=digest.hexdigest())
+        if digest is None:
+            if precomputed_sha256 is None:
+                raise AssertionError
+            sha256_result = precomputed_sha256
+        else:
+            sha256_result = digest.hexdigest()
+        return StoredObject(key=safe_key, size=size, sha256=sha256_result)
 
     @contextlib.asynccontextmanager
     async def open(self, key: str) -> cabc.AsyncIterator[cabc.AsyncIterator[bytes]]:

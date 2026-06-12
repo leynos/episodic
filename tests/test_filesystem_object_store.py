@@ -1,6 +1,7 @@
 """Tests for the filesystem source-intake object-store adapter."""
 
 import asyncio
+import hashlib
 import typing as typ
 
 import pytest
@@ -46,6 +47,34 @@ async def test_filesystem_object_store_round_trips_chunks(
     assert stored.sha256 == (
         "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
     )
+    async with store.open(stored.key) as chunks:
+        assert b"".join([chunk async for chunk in chunks]) == b"hello\n"
+
+
+@pytest.mark.asyncio
+async def test_filesystem_object_store_uses_precomputed_sha256(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A supplied digest should be trusted while size and bytes are still stored."""
+    store = FilesystemObjectStore(tmp_path)
+    supplied_digest = "f" * 64
+
+    def fail_hashing() -> typ.NoReturn:
+        raise AssertionError
+
+    monkeypatch.setattr(hashlib, "sha256", fail_hashing)
+
+    stored = await store.put(
+        "uploads/precomputed.bin",
+        _byte_stream(b"hello", b"\n"),
+        max_bytes=6,
+        precomputed_sha256=supplied_digest,
+    )
+
+    assert stored.key == "uploads/precomputed.bin"
+    assert stored.size == 6
+    assert stored.sha256 == supplied_digest
     async with store.open(stored.key) as chunks:
         assert b"".join([chunk async for chunk in chunks]) == b"hello\n"
 

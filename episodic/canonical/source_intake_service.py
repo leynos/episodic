@@ -124,7 +124,8 @@ async def register_upload(
     runtime: SourceIntakeRuntime | None = None,
 ) -> Upload:
     """Persist upload bytes after committing a recoverable pending row."""
-    _validate_declared_upload(request)
+    payload_sha256: str = hashlib.sha256(request.payload).hexdigest()
+    _validate_declared_upload(request, payload_sha256)
     providers = _source_intake_runtime(runtime)
     started_at = providers.monotonic_clock.monotonic_seconds()
     upload_id = providers.uuid_factory()
@@ -147,7 +148,13 @@ async def register_upload(
     await _commit_pending_upload(uow_factory, upload, providers)
     upload_ref = _UploadRef(id=upload_id, storage_key=storage_key)
     stored_upload = await _store_upload_bytes(
-        object_store, upload_ref, request, providers
+        object_store,
+        _UploadStorageInput(
+            ref=upload_ref,
+            request=request,
+            precomputed_sha256=payload_sha256,
+        ),
+        providers,
     )
     ready_upload = await _commit_ready_upload(
         uow_factory, stored_upload, started_at, providers
@@ -205,17 +212,24 @@ class _StoredUpload:
     stored: StoredObject
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _UploadStorageInput:
+    ref: _UploadRef
+    request: UploadBytesRequest
+    precomputed_sha256: str
+
+
 async def _store_upload_bytes(
     object_store: ObjectStorePort,
-    upload_ref: _UploadRef,
-    request: UploadBytesRequest,
+    storage_input: _UploadStorageInput,
     providers: SourceIntakeRuntime,
 ) -> _StoredUpload:
     """Store upload bytes through the object-store port."""
     stored = await object_store.put(
-        upload_ref.storage_key,
-        _single_chunk_stream(request.payload),
-        max_bytes=request.max_bytes,
+        storage_input.ref.storage_key,
+        _single_chunk_stream(storage_input.request.payload),
+        max_bytes=storage_input.request.max_bytes,
+        precomputed_sha256=storage_input.precomputed_sha256,
     )
     log_info(
         logger,
@@ -223,8 +237,8 @@ async def _store_upload_bytes(
             "source_intake_upload_stored upload_id=%s storage_key=%s "
             "actual_size=%s content_hash=%s"
         ),
-        upload_ref.id,
-        upload_ref.storage_key,
+        storage_input.ref.id,
+        storage_input.ref.storage_key,
         stored.size,
         f"sha256:{stored.sha256}",
     )
@@ -232,7 +246,7 @@ async def _store_upload_bytes(
         "source_intake_upload_events_total",
         labels={"event": "object_stored"},
     )
-    return _StoredUpload(ref=upload_ref, stored=stored)
+    return _StoredUpload(ref=storage_input.ref, stored=stored)
 
 
 async def _commit_ready_upload(
@@ -387,15 +401,14 @@ async def _require_ready_upload(
     return upload
 
 
-def _validate_declared_upload(request: UploadBytesRequest) -> None:
+def _validate_declared_upload(request: UploadBytesRequest, payload_sha256: str) -> None:
     """Check client-declared size and hash against the supplied payload."""
     actual_size = len(request.payload)
     if actual_size != request.declared_size:
         raise UploadSizeMismatchError(str(request.declared_size))
     if request.declared_sha256 is None:
         return
-    actual_hash = hashlib.sha256(request.payload).hexdigest()
-    if request.declared_sha256 != actual_hash:
+    if request.declared_sha256 != payload_sha256:
         raise UploadHashMismatchError(request.declared_sha256)
 
 

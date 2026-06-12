@@ -7,7 +7,12 @@ import typing as typ
 import pytest
 import sqlalchemy as sa
 
-from episodic.canonical.source_intake_service import UploadBytesRequest, register_upload
+from episodic.canonical.source_intake_service import (
+    UploadBytesRequest,
+    UploadHashMismatchError,
+    _validate_declared_upload,
+    register_upload,
+)
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
 from episodic.canonical.storage.source_intake_models import UploadRecord
 from episodic.canonical.uploads import UploadState
@@ -80,3 +85,19 @@ async def test_register_upload_keeps_pending_row_when_ready_commit_fails(
     async with object_store.open(record.storage_key) as chunks:
         stored_payload = b"".join([chunk async for chunk in chunks])
     assert stored_payload == payload, "expected object-store payload to match input"
+
+
+def test_validate_declared_upload_uses_precomputed_hash() -> None:
+    """Declared hash validation compares against the supplied payload digest."""
+    request = UploadBytesRequest(
+        owner_principal_id="principal",
+        content_type="text/plain",
+        declared_size=6,
+        declared_sha256="declared-digest",
+        payload=b"upload",
+        max_bytes=1024,
+        metadata={},
+    )
+
+    with pytest.raises(UploadHashMismatchError):
+        _validate_declared_upload(request, "precomputed-digest")
