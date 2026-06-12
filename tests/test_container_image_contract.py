@@ -3,6 +3,7 @@
 import json
 import os
 import pathlib as pl
+import shlex
 import shutil
 import subprocess  # noqa: S404 - the opt-in smoke test drives Docker.
 
@@ -41,6 +42,28 @@ def test_dockerfile_uses_multi_stage_python_build() -> None:
     )
     assert "COPY --from=builder /dist/*.whl /tmp/" in dockerfile, (
         "runtime stage must install the wheel built by the builder stage."
+    )
+
+
+def test_dockerfile_copy_sources_exist_in_repository() -> None:
+    """Keep Docker builds from failing on stale local COPY sources."""
+    missing_sources: list[str] = []
+    for line in _dockerfile_text().splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("COPY "):
+            continue
+
+        parts = shlex.split(stripped)
+        if any(part.startswith("--from=") for part in parts):
+            continue
+
+        copy_sources = [part for part in parts[1:-1] if not part.startswith("--")]
+        missing_sources.extend(
+            source for source in copy_sources if not (REPOSITORY_ROOT / source).exists()
+        )
+
+    assert not missing_sources, (
+        f"Dockerfile COPY sources must exist in the repository: {missing_sources!r}"
     )
 
 

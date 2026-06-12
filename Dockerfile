@@ -10,7 +10,6 @@ WORKDIR /src
 COPY pyproject.toml uv.lock README.md ./
 COPY alembic ./alembic
 COPY episodic ./episodic
-COPY stilyagi ./stilyagi
 
 RUN uv build --wheel --out-dir /dist
 

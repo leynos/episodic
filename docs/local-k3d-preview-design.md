@@ -82,8 +82,16 @@ command construction, and orchestration.
 
 `local-k8s-up` validates the required tools, creates or reuses the configured
 `k3d` cluster, builds and imports the local image unless skipped, creates the
-application namespace and Secret, installs the chart with
-`charts/episodic/values.local.yaml`, and waits for Helm readiness.
+application namespace and Secret, applies a local-only Postgres Service and
+StatefulSet, installs the chart with `charts/episodic/values.local.yaml`, and
+waits for Helm readiness.
+
+When the configured cluster already exists, `local-k8s-up` inspects the
+cluster's host port mappings and fails clearly if the existing ingress port
+does not match the requested port. `local-k8s-status` and `local-k8s-logs`
+first check that the cluster exists, so calling them before `local-k8s-up`
+prints a clear missing-cluster message instead of surfacing a raw `kubectl`
+traceback.
 
 The default preview values are intentionally local-only:
 
@@ -95,9 +103,9 @@ The default preview values are intentionally local-only:
 - Secret name: `episodic-local`.
 
 The default database URL contains local development credentials that match the
-expected local Postgres container. Production and shared preview environments
-must inject real credentials through Kubernetes Secrets or ExternalSecret
-resources.
+local Postgres StatefulSet created by `local-k8s-up`. Production and shared
+preview environments must inject real credentials through Kubernetes Secrets or
+ExternalSecret resources.
 
 ## Validation
 
@@ -105,8 +113,10 @@ Chart output is validated by `tests/test_helm_chart_contract.py` using Helm
 linting, Helm template rendering, and a syrupy snapshot for the local manifest.
 Local preview helper behaviour is validated by
 `tests/test_local_k8s_tooling.py`, which covers command construction,
-prerequisite validation, and idempotent missing-cluster handling without
-requiring a live Kubernetes cluster.
+prerequisite validation, Postgres bootstrap ordering, ingress-port conflict
+handling, and idempotent missing-cluster handling without requiring a live
+Kubernetes cluster. The Cyclopts command surface is covered by the
+pytest-bdd scenario in `tests/features/local_k8s_preview.feature`.
 
 Full milestone validation uses:
 

@@ -74,6 +74,8 @@
           app.kubernetes.io/name: episodic
           app.kubernetes.io/instance: episodic
           app.kubernetes.io/version: "local"
+        annotations:
+          checksum/config: 759d78b6ca2e295a73df119f48f694b19ba75a893da575922256e1308939116c
       spec:
         serviceAccountName: episodic
         securityContext:

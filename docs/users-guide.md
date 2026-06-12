@@ -243,9 +243,15 @@ make local-k8s-down
 ```
 
 The preview workflow uses `k3d`, Docker, `kubectl`, Helm, and the local chart
-values in `charts/episodic/values.local.yaml`. By default it deploys the
-`episodic:local` image into the `episodic-preview` cluster and exposes ingress
+values in `charts/episodic/values.local.yaml`. By default it builds and
+deploys the `episodic:local` image into the `episodic-preview` cluster,
+bootstraps a local-only Postgres Service and StatefulSet, and exposes ingress
 through `http://episodic.localhost:8088`.
+
+If a cluster with the configured name already exists, `local-k8s-up` reuses it
+only when its ingress port matches the requested port. `local-k8s-status` and
+`local-k8s-logs` report a missing cluster clearly when the preview has not been
+created yet.
 
 ### Logging
 
