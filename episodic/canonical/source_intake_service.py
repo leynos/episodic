@@ -46,6 +46,7 @@ class UploadBytesRequest:
     payload: bytes
     max_bytes: int
     metadata: JsonMapping
+    payload_sha256: str | None = None  # precomputed by caller; avoids rehashing
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -124,8 +125,11 @@ async def register_upload(
     runtime: SourceIntakeRuntime | None = None,
 ) -> Upload:
     """Persist upload bytes after committing a recoverable pending row."""
-    payload_sha256: str = hashlib.sha256(request.payload).hexdigest()
-    _validate_declared_upload(request, payload_sha256)
+    payload_sha256 = (
+        request.payload_sha256 or hashlib.sha256(request.payload).hexdigest()
+    )
+    request = dc.replace(request, payload_sha256=payload_sha256)
+    _validate_declared_upload(request)
     providers = _source_intake_runtime(runtime)
     started_at = providers.monotonic_clock.monotonic_seconds()
     upload_id = providers.uuid_factory()
@@ -146,11 +150,10 @@ async def register_upload(
         updated_at=now,
     )
     await _commit_pending_upload(uow_factory, upload, providers)
-    upload_ref = _UploadRef(id=upload_id, storage_key=storage_key)
     stored_upload = await _store_upload_bytes(
         object_store,
         _UploadStorageInput(
-            ref=upload_ref,
+            ref=_UploadRef(id=upload_id, storage_key=storage_key),
             request=request,
             precomputed_sha256=payload_sha256,
         ),
@@ -401,14 +404,19 @@ async def _require_ready_upload(
     return upload
 
 
-def _validate_declared_upload(request: UploadBytesRequest, payload_sha256: str) -> None:
+def _validate_declared_upload(request: UploadBytesRequest) -> None:
     """Check client-declared size and hash against the supplied payload."""
     actual_size = len(request.payload)
     if actual_size != request.declared_size:
         raise UploadSizeMismatchError(str(request.declared_size))
     if request.declared_sha256 is None:
         return
-    if request.declared_sha256 != payload_sha256:
+    actual_hash = (
+        request.payload_sha256
+        if request.payload_sha256 is not None
+        else hashlib.sha256(request.payload).hexdigest()
+    )
+    if request.declared_sha256 != actual_hash:
         raise UploadHashMismatchError(request.declared_sha256)
 
 

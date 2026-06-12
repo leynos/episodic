@@ -97,7 +97,8 @@ def test_validate_declared_upload_uses_precomputed_hash() -> None:
         payload=b"upload",
         max_bytes=1024,
         metadata={},
+        payload_sha256="precomputed-digest",
     )
 
     with pytest.raises(UploadHashMismatchError):
-        _validate_declared_upload(request, "precomputed-digest")
+        _validate_declared_upload(request)

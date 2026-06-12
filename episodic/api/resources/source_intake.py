@@ -96,9 +96,10 @@ class UploadsResource:
             "declared_size": parsed.declared_size,
             "declared_sha256": parsed.declared_sha256,
         }
+        payload_sha256_hex = hashlib.sha256(parsed.payload).hexdigest()
         body_hash = multipart_request_hash(
             _UPLOAD_OPERATION,
-            body_sha256=hashlib.sha256(parsed.payload).hexdigest(),
+            body_sha256=payload_sha256_hex,
             metadata=metadata,
         )
 
@@ -115,6 +116,7 @@ class UploadsResource:
                         payload=parsed.payload,
                         max_bytes=self._config.max_bytes,
                         metadata=parsed.metadata,
+                        payload_sha256=payload_sha256_hex,
                     ),
                 )
             except SourceIntakeError as exc:
