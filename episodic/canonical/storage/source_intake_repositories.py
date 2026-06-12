@@ -1,4 +1,5 @@
 """SQLAlchemy repositories for source-intake entities."""
+# pylint: disable=too-many-lines
 
 from __future__ import annotations
 
@@ -190,6 +191,53 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
         self._session = session
         self._runtime = source_intake_storage_runtime(runtime)
 
+    async def _insert_in_flight(
+        self,
+        *,
+        request: IdempotencyAcquireRequest,
+        record_id: uuid.UUID,
+        now: dt.datetime,
+    ) -> IdempotencyRecordModel | None:
+        """Insert an in-flight idempotency record or return the conflicting row."""
+        try:
+            async with self._session.begin_nested():
+                self._session.add(
+                    IdempotencyRecordModel(
+                        id=record_id,
+                        principal_id=_principal_to_record(request.principal_id),
+                        operation=request.operation,
+                        idempotency_key=request.idempotency_key,
+                        body_hash=request.body_hash,
+                        state=IdempotencyState.IN_FLIGHT,
+                        serialised_outcome=None,
+                        expires_at=request.expires_at,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                await self._session.flush()
+        except IntegrityError:
+            log_warning(
+                logger,
+                (
+                    "source_intake_idempotency_acquire_conflict "
+                    "principal_id=%s operation=%s idempotency_key=%s"
+                ),
+                request.principal_id,
+                request.operation,
+                request.idempotency_key,
+                exc_info=True,
+            )
+            record = await self._get_record(
+                principal_id=request.principal_id,
+                operation=request.operation,
+                idempotency_key=request.idempotency_key,
+            )
+            if record is None:
+                raise
+            return record
+        return None
+
     async def acquire(
         self,
         *,
@@ -205,43 +253,12 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
         if record is None:
             record_id = self._runtime.uuid_factory()
             now = self._runtime.clock()
-            try:
-                async with self._session.begin_nested():
-                    self._session.add(
-                        IdempotencyRecordModel(
-                            id=record_id,
-                            principal_id=_principal_to_record(request.principal_id),
-                            operation=request.operation,
-                            idempotency_key=request.idempotency_key,
-                            body_hash=request.body_hash,
-                            state=IdempotencyState.IN_FLIGHT,
-                            serialised_outcome=None,
-                            expires_at=request.expires_at,
-                            created_at=now,
-                            updated_at=now,
-                        )
-                    )
-                    await self._session.flush()
-            except IntegrityError:
-                log_warning(
-                    logger,
-                    (
-                        "source_intake_idempotency_acquire_conflict "
-                        "principal_id=%s operation=%s idempotency_key=%s"
-                    ),
-                    request.principal_id,
-                    request.operation,
-                    request.idempotency_key,
-                    exc_info=True,
-                )
-                record = await self._get_record(
-                    principal_id=request.principal_id,
-                    operation=request.operation,
-                    idempotency_key=request.idempotency_key,
-                )
-                if record is None:
-                    raise
-            else:
+            record = await self._insert_in_flight(
+                request=request,
+                record_id=record_id,
+                now=now,
+            )
+            if record is None:
                 log_info(
                     logger,
                     (
