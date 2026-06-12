@@ -4,7 +4,7 @@ This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -346,20 +346,30 @@ timestamps as milestones land.
   replay/conflict outcomes, Hypothesis idempotency properties, an HTTP
   end-to-end upload/job/source/poll flow, a pytest-bdd source-intake feature,
   and a syrupy snapshot for stable source-intake response envelopes.
-- [ ] Milestone D7 — Documentation final pass, roadmap toggle, and assessment
-  follow-up. Finalise `docs/users-guide.md` and `docs/developers-guide.md`
-  updates, refresh the contents index, reconcile the roadmap with the deferred
-  `/v1/uploads/init` decision, run every final gate including
-  `make check-migrations`, and mark `4.3.1` done in `docs/roadmap.md` only
-  after the implementation gaps recorded below are closed.
-- [ ] (2026-06-12T00:30Z) Post-merge completeness assessment. A `leta`-guided
+- [x] (2026-06-12T01:29Z) Milestone D7 — Documentation final pass, roadmap
+  toggle, and assessment follow-up. Finalised `docs/users-guide.md` and
+  `docs/developers-guide.md`, reconciled `docs/roadmap.md` with the accepted
+  `/v1/uploads/init` deferral, ran the final gate sequence including
+  `make check-migrations`, and marked `4.3.1` complete after the blockers
+  recorded below were closed.
+- [x] (2026-06-12T01:29Z) Post-merge completeness assessment. A `leta`-guided
   code inspection, `sem diff --from ee16ed2^ --to ee16ed2`, and a wyvern
   agent-team review found the REST surface, persistence tables, domain ports,
   filesystem adapter, behaviour tests, and most documentation are substantially
   implemented. The assessment also found four blockers to close before the plan
   can move to `COMPLETE`: runtime object-store wiring, upload transaction
   boundary correctness, first-writer-wins idempotency under concurrent
-  acquisition, and D7 documentation/roadmap/gate close-out.
+  acquisition, and D7 documentation/roadmap/gate close-out. Commit `beb8ea0`
+  and the D7 documentation milestone close those blockers.
+- [x] (2026-06-12T01:21Z) Completion implementation. Commit `beb8ea0` wired
+  `SOURCE_INTAKE_OBJECT_STORE_ROOT` into `create_app_from_env`, made upload
+  registration commit a recoverable pending row before object-store writes,
+  made SQLAlchemy idempotency acquisition first-writer-wins under concurrent
+  inserts, and bound source-intake idempotency principal scoping to the
+  authorization result on the Falcon request context. Focused regression
+  coverage was added for runtime object-store wiring, principal-scoped replay,
+  recoverable upload rows after the second commit fails, concurrent idempotency
+  acquisition, and the live Granian runtime fixture.
 
 Update each milestone with completion timestamps and any partial-progress
 notes. Use the form `[x] (YYYY-MM-DDTHH:MMZ) <note>`.
@@ -420,6 +430,17 @@ supersedes any implication above that D7 is only a documentation toggle.
    `make check-migrations` tied to this worktree. The final D7 close-out must
    run the full sequence in `Concrete steps and expected output` and record the
    exact log paths and summaries in `Outcomes & retrospective`.
+
+Completion update on 2026-06-12:
+
+- Items 1-4 were closed by commit `beb8ea0`.
+- Item 5 is closed in this documentation milestone by replacing in-progress
+  user-guide wording, documenting `SOURCE_INTAKE_OBJECT_STORE_ROOT` and
+  authorization-result principal scoping in the developers' guide, and marking
+  roadmap item `4.3.1` complete while keeping the accepted
+  `POST /v1/uploads/init` deferral explicit.
+- Item 6 is closed. The final deterministic gates and CodeRabbit review are
+  recorded in `Outcomes & retrospective`.
 
 ## Surprises & discoveries
 
@@ -647,6 +668,50 @@ Seed entries (DRAFT):
 Summarise outcomes, gaps, and lessons after the final milestone. Compare the
 result against the success criteria above. Note what would be done differently
 next time. Update this section at the close-out commit.
+
+Roadmap item 4.3.1 is complete as an implemented one-step intake workflow:
+clients can upload source material with `POST /v1/uploads`, create an ingestion
+job, attach uploads or presenter-profile reference documents to that job, and
+poll the intake status. The implementation persists uploads, ingestion-job
+source links, and idempotency records through SQLAlchemy-backed repositories,
+stores upload bytes through the runtime-configured filesystem object store, and
+scopes idempotent operations by the principal supplied by the authorization
+result.
+
+The 2026-06-12 completeness assessment found four late blockers after the
+initial implementation landed. Commit `beb8ea0` closed the runtime object-store
+wiring, upload transaction-boundary recovery, concurrent idempotency
+acquisition, and authorization-result principal-scoping gaps. The D7
+documentation milestone then reconciled the user guide, developers' guide,
+roadmap, and this ExecPlan with the shipped behaviour.
+
+The accepted deferral remains `POST /v1/uploads/init`: the shipped workflow
+uses direct multipart upload via `POST /v1/uploads`, and a future pre-signed
+upload flow can extend the same upload and idempotency ports without changing
+the current public contract.
+
+Final validation evidence from this branch:
+
+- `make fmt` completed before the final gate sequence.
+- `make check-fmt` passed; log:
+  `/tmp/check-fmt-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make markdownlint` passed with zero errors; log:
+  `/tmp/markdownlint-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make nixie` validated all diagrams; log:
+  `/tmp/nixie-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make build` passed; log:
+  `/tmp/build-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make check-migrations` passed; log:
+  `/tmp/check-migrations-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make lint` passed with Hecate, Ruff, and Pylint clean; log:
+  `/tmp/lint-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make typecheck` passed with ty 0.0.32; log:
+  `/tmp/typecheck-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make test` passed with 868 passed and 2 skipped; log:
+  `/tmp/test-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `coderabbit review --agent --type uncommitted` reported zero findings for
+  the documentation milestone; log:
+  `/tmp/coderabbit-docs-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
 
 ## Context and orientation
 
