@@ -225,17 +225,19 @@ async def test_source_intake_response_envelope_snapshot(
     } == snapshot
 
 
-@pytest.mark.asyncio
-async def test_idempotent_response_deletes_in_flight_on_work_failure(
+async def _acquire_and_run_failing_work(
     session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """A failed acquired operation clears its in-flight idempotency row."""
-    request = _idempotency_request("failure-cleanup-key")
+    idempotency_key: str,
+) -> Acquired:
+    """Acquire an idempotency record, run failing work, and return the outcome.
 
+    Asserts that the acquire returns ``Acquired`` and ``_idempotent_response``
+    propagates the ``RuntimeError("boom")`` raised by work.
+    """
+    request = _idempotency_request(idempotency_key)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         outcome = await uow.idempotency.acquire(request=request)
         await uow.commit()
-
     assert isinstance(outcome, Acquired)
 
     async def failing_work() -> IdempotentResponse:
@@ -248,6 +250,17 @@ async def test_idempotent_response_deletes_in_flight_on_work_failure(
             outcome,
             failing_work,
         )
+    return outcome
+
+
+@pytest.mark.asyncio
+async def test_idempotent_response_deletes_in_flight_on_work_failure(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A failed acquired operation clears its in-flight idempotency row."""
+    outcome = await _acquire_and_run_failing_work(
+        session_factory, "failure-cleanup-key"
+    )
 
     async with session_factory() as session:
         record = await session.get(IdempotencyRecordModel, outcome.record_id)
@@ -260,27 +273,12 @@ async def test_idempotent_response_allows_retry_after_work_failure(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A failed acquired operation can be acquired again immediately."""
-    request = _idempotency_request("failure-retry-key")
+    await _acquire_and_run_failing_work(session_factory, "failure-retry-key")
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        first_outcome = await uow.idempotency.acquire(request=request)
-        await uow.commit()
-
-    assert isinstance(first_outcome, Acquired)
-
-    async def failing_work() -> IdempotentResponse:
-        await asyncio.sleep(0)
-        raise RuntimeError("boom")
-
-    with pytest.raises(RuntimeError, match="boom"):
-        await _idempotent_response(
-            lambda: SqlAlchemyUnitOfWork(session_factory),
-            first_outcome,
-            failing_work,
+        retry_outcome = await uow.idempotency.acquire(
+            request=_idempotency_request("failure-retry-key")
         )
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        retry_outcome = await uow.idempotency.acquire(request=request)
         await uow.commit()
 
     assert isinstance(retry_outcome, Acquired)
