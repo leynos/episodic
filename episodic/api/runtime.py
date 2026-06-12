@@ -6,7 +6,7 @@ import pathlib
 import typing as typ
 
 import psycopg
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
@@ -36,6 +36,19 @@ class RuntimeConfig:
 _SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
 _SUPPORTED_ASYNC_POSTGRES_DRIVERS = frozenset({"asyncpg", "psycopg"})
 _DEFAULT_ASYNC_POSTGRES_DRIVER = "psycopg"
+
+
+class PsycopgConnectKwargs(typ.TypedDict, total=False):
+    """Connection kwargs accepted by the database readiness probe."""
+
+    host: str
+    port: int
+    dbname: str
+    user: str
+    password: str
+    sslmode: str
+
+
 logger = get_logger(__name__)
 
 
@@ -62,8 +75,7 @@ def _load_runtime_config(
         raise RuntimeError(msg)
     log_info(
         logger,
-        "runtime_config_loaded source_intake_object_store_root=%s",
-        object_store_root,
+        "runtime_config_loaded source_intake_object_store_configured",
     )
     return RuntimeConfig(
         database_url=database_url,
@@ -75,7 +87,7 @@ def _build_database_probe(
     database_url: str,
 ) -> tuple[ReadinessProbe, UowFactory, ShutdownHook]:
     """Build the database readiness probe and unit-of-work factory."""
-    async_database_url, probe_database_url = _normalize_database_urls(database_url)
+    async_database_url, probe_connection_kwargs = _normalize_database_urls(database_url)
     engine = create_async_engine(async_database_url, pool_pre_ping=True)
     session_factory = async_sessionmaker(
         engine,
@@ -85,7 +97,9 @@ def _build_database_probe(
     async def check_database() -> bool:
         try:
             async with (
-                await psycopg.AsyncConnection.connect(probe_database_url) as connection,
+                await psycopg.AsyncConnection.connect(
+                    **probe_connection_kwargs
+                ) as connection,
                 connection.cursor() as cursor,
             ):
                 await cursor.execute("SELECT 1")
@@ -104,7 +118,7 @@ def _build_database_probe(
     )
 
 
-def _normalize_database_urls(database_url: str) -> tuple[str, str]:
+def _normalize_database_urls(database_url: str) -> tuple[URL, PsycopgConnectKwargs]:
     """Build async-engine and sync-probe URLs from one operator-facing setting."""
     url = make_url(database_url)
     base_driver, separator, driver = url.drivername.partition("+")
@@ -128,13 +142,30 @@ def _normalize_database_urls(database_url: str) -> tuple[str, str]:
         raise RuntimeError(msg)
 
     normalized_driver = "postgresql"
-    async_database_url = url.set(
-        drivername=f"{normalized_driver}+{async_driver}"
-    ).render_as_string(hide_password=False)
-    probe_database_url = url.set(drivername=normalized_driver).render_as_string(
-        hide_password=False
+    async_database_url = url.set(drivername=f"{normalized_driver}+{async_driver}")
+    probe_database_url = url.set(drivername=normalized_driver)
+    return async_database_url, _psycopg_connection_kwargs(probe_database_url)
+
+
+def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
+    """Return Psycopg connection kwargs without rendering secrets into a URL."""
+    connection_kwargs = url.translate_connect_args(
+        username="user",
+        database="dbname",
     )
-    return async_database_url, probe_database_url
+    probe_kwargs = PsycopgConnectKwargs()
+    for key in ("host", "dbname", "user", "password"):
+        if value := connection_kwargs.get(key):
+            probe_kwargs[key] = value
+    if port := connection_kwargs.get("port"):
+        probe_kwargs["port"] = int(port)
+    if host := url.query.get("host"):
+        probe_kwargs["host"] = ",".join(host) if isinstance(host, tuple) else host
+    if sslmode := url.query.get("sslmode"):
+        probe_kwargs["sslmode"] = (
+            ",".join(sslmode) if isinstance(sslmode, tuple) else sslmode
+        )
+    return probe_kwargs
 
 
 def create_app_from_env() -> asgi.App:

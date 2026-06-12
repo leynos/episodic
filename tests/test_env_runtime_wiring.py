@@ -54,6 +54,21 @@ def test_create_app_from_env_rejects_unsupported_database_driver(
         create_app_from_env()
 
 
+def test_normalize_database_urls_avoids_rendering_passwords() -> None:
+    """Keep database secrets out of rendered runtime URL strings."""
+    from episodic.api.runtime import _normalize_database_urls
+
+    credential = "".join(("s3", "cr3t-value"))
+    async_url, probe_kwargs = _normalize_database_urls(
+        f"postgresql://api-user:{credential}@example.test:5432/episodic?sslmode=require"
+    )
+
+    assert async_url.password == credential
+    assert credential not in async_url.render_as_string(hide_password=True)
+    assert probe_kwargs["password"] == credential
+    assert probe_kwargs["sslmode"] == "require"
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "strip_driver",

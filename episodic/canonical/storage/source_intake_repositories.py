@@ -219,13 +219,8 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
         except IntegrityError:
             log_warning(
                 logger,
-                (
-                    "source_intake_idempotency_acquire_conflict "
-                    "principal_id=%s operation=%s idempotency_key=%s"
-                ),
-                request.principal_id,
+                ("source_intake_idempotency_acquire_conflict operation=%s"),
                 request.operation,
-                request.idempotency_key,
                 exc_info=True,
             )
             record = await self._get_record(
@@ -250,9 +245,13 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
             operation=request.operation,
             idempotency_key=request.idempotency_key,
         )
+        now = self._runtime.clock()
+        if record is not None and record.expires_at <= now:
+            await self._session.delete(record)
+            await self._session.flush()
+            record = None
         if record is None:
             record_id = self._runtime.uuid_factory()
-            now = self._runtime.clock()
             record = await self._insert_in_flight(
                 request=request,
                 record_id=record_id,
@@ -261,14 +260,9 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
             if record is None:
                 log_info(
                     logger,
-                    (
-                        "source_intake_idempotency_acquired record_id=%s "
-                        "principal_id=%s operation=%s idempotency_key=%s"
-                    ),
+                    ("source_intake_idempotency_acquired record_id=%s operation=%s"),
                     record_id,
-                    request.principal_id,
                     request.operation,
-                    request.idempotency_key,
                 )
                 self._record_acquire_metrics(started_at, "acquired")
                 return Acquired(record_id)
@@ -276,14 +270,9 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
         outcome_label = _outcome_metric_label(outcome)
         log_info(
             logger,
-            (
-                "source_intake_idempotency_outcome outcome=%s principal_id=%s "
-                "operation=%s idempotency_key=%s"
-            ),
+            ("source_intake_idempotency_outcome outcome=%s operation=%s"),
             outcome_label,
-            request.principal_id,
             request.operation,
-            request.idempotency_key,
         )
         self._record_acquire_metrics(started_at, outcome_label)
         return outcome

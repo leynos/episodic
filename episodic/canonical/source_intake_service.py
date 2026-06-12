@@ -182,12 +182,8 @@ async def _commit_pending_upload(
         await uow.commit()
     log_info(
         logger,
-        (
-            "source_intake_upload_pending upload_id=%s owner_principal_id=%s "
-            "content_type=%s declared_size=%s"
-        ),
+        ("source_intake_upload_pending upload_id=%s content_type=%s declared_size=%s"),
         upload.id,
-        upload.owner_principal_id,
         upload.content_type,
         upload.declared_size,
     )
@@ -396,8 +392,10 @@ def _validate_declared_upload(request: UploadBytesRequest) -> None:
     actual_size = len(request.payload)
     if actual_size != request.declared_size:
         raise UploadSizeMismatchError(str(request.declared_size))
+    if request.declared_sha256 is None:
+        return
     actual_hash = hashlib.sha256(request.payload).hexdigest()
-    if request.declared_sha256 is not None and request.declared_sha256 != actual_hash:
+    if request.declared_sha256 != actual_hash:
         raise UploadHashMismatchError(request.declared_sha256)
 
 
