@@ -74,8 +74,8 @@ Success is observable when:
    concerns.
 8. Required quality gates pass in sequence: `make check-fmt`,
    `make markdownlint`, `make nixie`, `make build`, `make lint` (which includes
-   `make check-architecture`), `make typecheck`, `make test`, and `make
-   check-migrations`.
+   `make check-architecture`), `make typecheck`, `make test`, and
+   `make check-migrations`.
 
 ## Constraints
 
