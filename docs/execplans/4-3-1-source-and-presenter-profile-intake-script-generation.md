@@ -346,12 +346,80 @@ timestamps as milestones land.
   replay/conflict outcomes, Hypothesis idempotency properties, an HTTP
   end-to-end upload/job/source/poll flow, a pytest-bdd source-intake feature,
   and a syrupy snapshot for stable source-intake response envelopes.
-- [ ] Milestone D7 — Documentation final pass and roadmap toggle. Finalise
-  `docs/users-guide.md` and `docs/developers-guide.md` updates, refresh the
-  contents index, and mark `4.3.1` done in `docs/roadmap.md`.
+- [ ] Milestone D7 — Documentation final pass, roadmap toggle, and assessment
+  follow-up. Finalise `docs/users-guide.md` and `docs/developers-guide.md`
+  updates, refresh the contents index, reconcile the roadmap with the deferred
+  `/v1/uploads/init` decision, run every final gate including
+  `make check-migrations`, and mark `4.3.1` done in `docs/roadmap.md` only
+  after the implementation gaps recorded below are closed.
+- [ ] (2026-06-12T00:30Z) Post-merge completeness assessment. A `leta`-guided
+  code inspection, `sem diff --from ee16ed2^ --to ee16ed2`, and a wyvern
+  agent-team review found the REST surface, persistence tables, domain ports,
+  filesystem adapter, behaviour tests, and most documentation are substantially
+  implemented. The assessment also found four blockers to close before the plan
+  can move to `COMPLETE`: runtime object-store wiring, upload transaction
+  boundary correctness, first-writer-wins idempotency under concurrent
+  acquisition, and D7 documentation/roadmap/gate close-out.
 
 Update each milestone with completion timestamps and any partial-progress
 notes. Use the form `[x] (YYYY-MM-DDTHH:MMZ) <note>`.
+
+## Remaining work after 2026-06-12 assessment
+
+This section records the work that remains after inspecting the implementation
+merged as `ee16ed2` (`Source and presenter-profile intake (4.3.1) (#131)`). It
+supersedes any implication above that D7 is only a documentation toggle.
+
+1. Wire a default object-store adapter in the HTTP runtime composition root.
+   `ApiDependencies.object_store` exists and tests inject a
+   `FilesystemObjectStore`, but `episodic/api/runtime.py::create_app_from_env`
+   still constructs `ApiDependencies` without an object store. In a real
+   runtime boot, `POST /v1/uploads` therefore returns `503` before the intake
+   workflow can start. Add an operator-facing environment variable such as
+   `SOURCE_INTAKE_OBJECT_STORE_ROOT`, construct
+   `episodic.canonical.storage.FilesystemObjectStore` from it, document the
+   setting in `docs/developers-guide.md`, and add runtime tests proving that
+   the default app can accept uploads when the variable is set and fails fast
+   with a clear configuration error when it is missing.
+2. Correct the upload transaction boundary promised by the orphan-blob risk
+   mitigation. `episodic/canonical/source_intake_service.py::register_upload`
+   currently inserts the pending `Upload`, writes the blob, marks it ready, and
+   commits once. If that final commit fails, the blob may exist without a
+   committed row. Refactor the service/API boundary so the pending row commits
+   before `ObjectStorePort.put`, then a second transaction marks the row
+   `ready`. Add a regression test that injects a commit failure after the blob
+   write and proves the pending row remains available for the documented
+   operator sweep.
+3. Make idempotency acquisition genuinely first-writer-wins under concurrency.
+   `SqlAlchemyIdempotencyStore.acquire` currently performs a read, then inserts
+   and flushes. The plan requires `INSERT ... ON CONFLICT DO NOTHING` or an
+   equivalent `IntegrityError`-safe pattern so concurrent requests for the same
+   `(principal_id, operation, idempotency_key)` converge to one `Acquired`
+   result and one `InFlight`/`Replay`/`Conflict` result rather than surfacing a
+   database exception. Add a database-backed concurrent regression test for
+   this case.
+4. Bind idempotency principal identity to the authorization result rather than
+   trusting an unrelated client header. `source_idempotency.principal_id`
+   currently reads `X-Principal-Id`, while
+   `AuthorizationMiddleware.process_request` only evaluates the `Authorization`
+   header and does not populate a principal on the request context. Either
+   extend the authorization port to return the authenticated principal and
+   store it on `req.context`, or document and enforce a trusted upstream
+   contract for `X-Principal-Id`. The preferred fix is the first option because
+   ADR 009 and this plan require the idempotency key to include the principal
+   supplied by authorization middleware.
+5. Finish D7 documentation and roadmap reconciliation. Replace the
+   `docs/users-guide.md` wording that says intake "is being implemented", update
+   `docs/roadmap.md` so item `4.3.1` reflects the accepted deferral of
+   `/v1/uploads/init`, and keep the roadmap checkbox open until the preceding
+   implementation fixes and all final gates are green.
+6. Re-run and record final gate evidence after the fixes. The assessment found
+   existing logs for `make check-fmt`, `make markdownlint`, `make nixie`,
+   `make lint`, `make typecheck`, `make test`, and `coderabbit review --agent`
+   with no unresolved findings, but no current `/tmp` evidence for
+   `make check-migrations` tied to this worktree. The final D7 close-out must
+   run the full sequence in `Concrete steps and expected output` and record the
+   exact log paths and summaries in `Outcomes & retrospective`.
 
 ## Surprises & discoveries
 
@@ -428,12 +496,12 @@ Each entry should follow the form:
   formatting, lint, typing, or test failures.
 - Observation: rebasing onto `origin/main` on 2026-06-11 produced one
   documentation-format conflict in
-  `docs/execplans/4-1-2-finalize-rest-surfaces.md`. Evidence: `git rebase
-  origin/main` stopped while replaying `Document source-intake port decisions`
-  after `origin/main` landed `e283147 Reformat docs with mdformat-all (#132)`.
-  Impact: the conflict was resolved by preserving `main`'s code-block
-  formatting for long signatures while keeping this branch's source-intake
-  documentation changes.
+  `docs/execplans/4-1-2-finalize-rest-surfaces.md`. Evidence:
+  `git rebase origin/main` stopped while replaying
+  `Document source-intake port decisions` after `origin/main` landed
+  `e283147 Reformat docs with mdformat-all (#132)`. Impact: the conflict was
+  resolved by preserving `main`'s code-block formatting for long signatures
+  while keeping this branch's source-intake documentation changes.
 
 ## Decision log
 
