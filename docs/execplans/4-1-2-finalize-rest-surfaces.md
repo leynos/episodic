@@ -74,8 +74,8 @@ Success is observable when:
    concerns.
 8. Required quality gates pass in sequence: `make check-fmt`,
    `make markdownlint`, `make nixie`, `make build`, `make lint` (which includes
-   `make check-architecture`), `make typecheck`, `make test`, and
-   `make check-migrations`.
+   `make check-architecture`), `make typecheck`, `make test`, and `make
+   check-migrations`.
 
 ## Constraints
 
@@ -768,27 +768,44 @@ Test-first changes:
 
 Production changes:
 
-1. Add this method to `ReferenceDocumentRepository` Protocol at
-   `episodic/canonical/reference_protocols.py:30-39` and its SQLAlchemy
+1. Add `count_for_series(...)` to the `ReferenceDocumentRepository` protocol
+   at `episodic/canonical/reference_protocols.py:30-39` and its SQLAlchemy
    implementation at
    `episodic/canonical/storage/reference_repositories.py:57-81`.
 
    ```python
-   def count_for_series(
+   count_for_series(
        self,
        owner_series_profile_id: str,
        kind: ReferenceDocumentKind | None,
-   ) -> int: ...
+   ) -> int
    ```
 
-2. Add `count_for_document(self, document_id: str,
-   owner_series_profile_id: str) -> int` to `ReferenceDocumentRevisionRepository
-    ` Protocol (`reference_protocols.py:76-84`) and its implementation (`
-   reference_repositories.py:158-178`).
-3. Add `count_for_target(self, target_kind: ReferenceBindingTarget,
-   target_id: str) -> int`
-   to `ReferenceBindingRepository` Protocol (`reference_protocols.py:113-122`)
-   and its implementation (`reference_repositories.py:236-261`).
+2. Add `count_for_document(...)` to the
+   `ReferenceDocumentRevisionRepository` protocol
+   (`reference_protocols.py:76-84`) and its implementation
+   (`reference_repositories.py:158-178`).
+
+   ```python
+   count_for_document(
+       self,
+       document_id: str,
+       owner_series_profile_id: str,
+   ) -> int
+   ```
+
+3. Add `count_for_target(...)` to the `ReferenceBindingRepository` protocol
+   (`reference_protocols.py:113-122`) and its implementation
+   (`reference_repositories.py:236-261`).
+
+   ```python
+   count_for_target(
+       self,
+       target_kind: ReferenceBindingTarget,
+       target_id: str,
+   ) -> int
+   ```
+
 4. Update the service-layer wrappers to return `(items, total)` tuples
    via new functions (`list_reference_documents_paged`,
    `list_reference_document_revisions_paged`, `list_reference_bindings_paged`)
@@ -862,21 +879,23 @@ Test-first changes:
 
 Production changes:
 
-1. Add these methods to `_SeriesProfileHistoryRepository`
+1. Add `list_for_profile_paged(...)` and `count_for_profile(...)` to
+   `_SeriesProfileHistoryRepository`
    (`episodic/canonical/profile_templates/types.py:296-300`); analogue for
+   episode templates.
 
    ```python
-   def list_for_profile_paged(
+   list_for_profile_paged(
        self,
        profile_id: uuid.UUID,
        *,
        limit: int,
        offset: int,
-   ) -> list[SeriesProfileHistoryEntry]: ...
-   def count_for_profile(self, profile_id: uuid.UUID) -> int: ...
+   ) -> list[SeriesProfileHistoryEntry]
+
+   count_for_profile(self, profile_id: uuid.UUID) -> int
    ```
 
-   episode templates.
 2. Implement both in
    `episodic/canonical/storage/history_repositories.py:146-201`.
 3. Add a new `list_history_paged` service in
