@@ -1,5 +1,7 @@
 """Integration tests for the source-intake REST workflow."""
 
+import asyncio
+import datetime as dt
 import hashlib
 import typing as typ
 
@@ -12,7 +14,10 @@ from episodic.api.authorization import (
     AuthorizationDecision,
     AuthorizationResult,
 )
-from episodic.canonical.storage import FilesystemObjectStore
+from episodic.api.source_idempotency import IdempotentResponse, _idempotent_response
+from episodic.canonical.idempotency import Acquired, IdempotencyAcquireRequest
+from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
+from episodic.canonical.storage.source_intake_models import IdempotencyRecordModel
 from tests.fixtures.api import build_api_dependencies
 
 if typ.TYPE_CHECKING:
@@ -220,6 +225,67 @@ async def test_source_intake_response_envelope_snapshot(
     } == snapshot
 
 
+@pytest.mark.asyncio
+async def test_idempotent_response_deletes_in_flight_on_work_failure(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A failed acquired operation clears its in-flight idempotency row."""
+    request = _idempotency_request("failure-cleanup-key")
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        outcome = await uow.idempotency.acquire(request=request)
+        await uow.commit()
+
+    assert isinstance(outcome, Acquired)
+
+    async def failing_work() -> IdempotentResponse:
+        await asyncio.sleep(0)
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await _idempotent_response(
+            lambda: SqlAlchemyUnitOfWork(session_factory),
+            outcome,
+            failing_work,
+        )
+
+    async with session_factory() as session:
+        record = await session.get(IdempotencyRecordModel, outcome.record_id)
+
+    assert record is None
+
+
+@pytest.mark.asyncio
+async def test_idempotent_response_allows_retry_after_work_failure(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A failed acquired operation can be acquired again immediately."""
+    request = _idempotency_request("failure-retry-key")
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        first_outcome = await uow.idempotency.acquire(request=request)
+        await uow.commit()
+
+    assert isinstance(first_outcome, Acquired)
+
+    async def failing_work() -> IdempotentResponse:
+        await asyncio.sleep(0)
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await _idempotent_response(
+            lambda: SqlAlchemyUnitOfWork(session_factory),
+            first_outcome,
+            failing_work,
+        )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        retry_outcome = await uow.idempotency.acquire(request=request)
+        await uow.commit()
+
+    assert isinstance(retry_outcome, Acquired)
+
+
 async def _create_series_profile(client: httpx.AsyncClient) -> str:
     """Create a series profile through the public API and return its id."""
     response = await client.post(
@@ -268,6 +334,17 @@ def _stable_source_fields(payload: dict[str, object]) -> dict[str, object]:
         "source_uri": payload["source_uri"],
         "metadata": payload["metadata"],
     }
+
+
+def _idempotency_request(idempotency_key: str) -> IdempotencyAcquireRequest:
+    """Build a source-intake idempotency request fixture."""
+    return IdempotencyAcquireRequest(
+        principal_id="principal",
+        operation="upload.create",
+        idempotency_key=idempotency_key,
+        body_hash="body-a",
+        expires_at=dt.datetime.now(dt.UTC) + dt.timedelta(hours=1),
+    )
 
 
 async def _post_text_upload(

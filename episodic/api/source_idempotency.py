@@ -96,7 +96,13 @@ async def _idempotent_response(
     """Return the adapter response for an idempotency acquire outcome."""
     match outcome:
         case Acquired(record_id=record_id):
-            response = await work()
+            try:
+                response = await work()
+            except BaseException:
+                async with uow_factory() as uow:
+                    await uow.idempotency.fail(record_id=record_id)
+                    await uow.commit()
+                raise
             async with uow_factory() as uow:
                 await uow.idempotency.complete(
                     record_id=record_id,

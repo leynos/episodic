@@ -307,6 +307,14 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
             )
         )
 
+    async def fail(self, *, record_id: uuid.UUID) -> None:
+        """Delete the IN_FLIGHT record so the client can retry immediately."""
+        await self._session.execute(
+            sa.delete(IdempotencyRecordModel).where(
+                IdempotencyRecordModel.id == record_id
+            )
+        )
+
     async def lookup(
         self,
         *,
