@@ -33,6 +33,7 @@ from .openai_validation import (
     _INVALID_CHAT_COMPLETION_MESSAGE,
     OpenAIResponseValidationError,
     _is_string_keyed_mapping,
+    _normalize_chat_provider_call_usage,
     _normalize_usage,
 )
 
@@ -271,4 +272,9 @@ class OpenAIChatCompletionAdapter:
             provider_response_id=typ.cast("str", payload_mapping["id"]),
             finish_reason=finish_reason,
             usage=_normalize_usage(usage_payload),
+            provider_call_usage=_normalize_chat_provider_call_usage(
+                payload_mapping,
+                usage_payload,
+                finish_reason,
+            ),
         )

@@ -259,7 +259,7 @@ metering. Completion enables reliable, auditable generation workflows.
 - [x] 2.4.3. Configure Celery queue routing for workload isolation.
   - Route I/O-bound tasks to high-concurrency pools.
   - Route CPU-bound tasks to prefork pools.
-- [ ] 2.4.4. Instrument cost accounting with per-call usage metering.
+- [x] 2.4.4. Instrument cost accounting with per-call usage metering.
   - Record token counts and model identifiers per LLM call.
   - Attribute evaluator-node usage to underlying provider calls inside
     LangGraph.

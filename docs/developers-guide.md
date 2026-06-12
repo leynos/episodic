@@ -1194,8 +1194,10 @@ checkpoint ids, or idempotency keys.
 
 - Keep the planner strict: parse model output into typed DTOs immediately and
   raise deterministic validation errors for malformed JSON.
-- Keep model-tier selection in `GenerationOrchestrationConfig`; do not couple
-  this slice to pricing-ledger or budget-reservation persistence.
+- Keep model-tier selection in `GenerationOrchestrationConfig`. Cost-accounting
+  side effects belong behind the optional `CostRecorder` collaborator, and
+  orchestration code may depend on `episodic.cost.recorder` but not on
+  `episodic.cost.ports` or concrete cost adapters.
 - Keep LangGraph nodes dependent on ports and orchestration DTOs only. Tool
   implementations may call generation services, but the graph should see only
   `ToolExecutorPort`.

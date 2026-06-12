@@ -9,9 +9,12 @@ rolled up into the final `GenerationOrchestrationResult`.
 """
 
 import json
+import typing as typ
 
 import pytest
 
+from episodic.cost.ports import CostLedgerEntryId, UsageSource
+from episodic.llm.ports import ProviderCallUsage
 from episodic.orchestration import (
     ActionExecutionResult,
     ActionKind,
@@ -24,6 +27,7 @@ from episodic.orchestration import (
     StructuredPlanningOrchestrator,
     ToolExecutionError,
 )
+from episodic.orchestration._action_result_dto import PlannerResult
 from tests._orchestration_fakes import (
     _config,
     _FakeLLMPort,
@@ -33,6 +37,75 @@ from tests._orchestration_fakes import (
     _response,
     _usage,
 )
+
+if typ.TYPE_CHECKING:
+    from episodic.cost.recorder import ProviderCallRecord
+
+
+class _RecordingCostRecorder:
+    """Capture cost-recorder calls made by the orchestrator."""
+
+    def __init__(self) -> None:
+        self.pinned_runs: list[tuple[str, object, object]] = []
+        self.provider_calls: list[ProviderCallRecord] = []
+        self.finalized_runs: list[tuple[str, str | None]] = []
+
+    async def pin_run_pricing(
+        self,
+        workflow_run_id: str,
+        providers: object,
+        billing_period_key: object,
+    ) -> None:
+        """Record a run-pricing pin request."""
+        self.pinned_runs.append((workflow_run_id, providers, billing_period_key))
+
+    async def record_provider_call(
+        self,
+        record: ProviderCallRecord,
+    ) -> CostLedgerEntryId:
+        """Record one provider-call request."""
+        self.provider_calls.append(record)
+        return CostLedgerEntryId(f"entry-{len(self.provider_calls)}")
+
+    async def finalize_run(
+        self,
+        workflow_run_id: str,
+        workflow_node: str | None,
+    ) -> CostLedgerEntryId:
+        """Record one run-finalization request."""
+        self.finalized_runs.append((workflow_run_id, workflow_node))
+        return CostLedgerEntryId("rollup-entry")
+
+
+class _FakePlanner:
+    """Return a planner result with provider-call usage metadata."""
+
+    def __init__(self, result: PlannerResult) -> None:
+        self.result = result
+
+    async def plan(self, request: object) -> PlannerResult:
+        """Return the canned planner result."""
+        return self.result
+
+
+def _provider_call_usage(
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    provider_response_id: str,
+) -> ProviderCallUsage:
+    return ProviderCallUsage(
+        usage_metrics={
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+        },
+        usage_source=UsageSource.PROVIDER,
+        usage_complete=True,
+        provider_response_id=provider_response_id,
+        finish_reason="stop",
+        started_at="2026-06-04T12:00:00+00:00",
+        latency_ms=25,
+    )
 
 
 @pytest.mark.asyncio
@@ -68,6 +141,71 @@ async def test_orchestrator_dispatches_through_tool_port() -> None:
     assert context.correlation_id == "corr-123"
     assert result.action_results == (tool_result,)
     assert result.total_usage == _usage(input_tokens=32, output_tokens=18)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_records_cost_entries_when_recorder_is_present() -> None:
+    """Cost recording should be a side channel around the existing result."""
+    planner_usage = _provider_call_usage(
+        input_tokens=20,
+        output_tokens=10,
+        provider_response_id="planner-response",
+    )
+    plan = StructuredGenerationPlanner(
+        llm=_FakeLLMPort([
+            _response(
+                _plan_payload(),
+                model="gpt-4.1",
+                usage=_usage(input_tokens=20, output_tokens=10),
+            )
+        ]),
+        config=_config(),
+    )
+    planner_result = await plan.plan(_request())
+    planner = _FakePlanner(
+        PlannerResult(
+            plan=planner_result.plan,
+            usage=planner_result.usage,
+            model="gpt-4.1",
+            provider_response_id="planner-response",
+            finish_reason="stop",
+            provider_call_usage=planner_usage,
+        )
+    )
+    tool_usage = _provider_call_usage(
+        input_tokens=12,
+        output_tokens=8,
+        provider_response_id="tool-response",
+    )
+    tool_result = ActionExecutionResult(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        model_tier=ModelTier.EXECUTION,
+        model="gpt-4o-mini",
+        summary="Generated one show-notes payload.",
+        usage=_usage(input_tokens=12, output_tokens=8),
+        provider_call_usage=tool_usage,
+    )
+    cost_recorder = _RecordingCostRecorder()
+    orchestrator = StructuredPlanningOrchestrator(
+        planner=planner,
+        tool_executor=_FakeToolExecutor(result=tool_result),
+        cost_recorder=cost_recorder,
+    )
+
+    result = await orchestrator.orchestrate(_request())
+
+    assert result.total_usage == _usage(input_tokens=32, output_tokens=18)
+    assert len(cost_recorder.pinned_runs) == 1
+    assert cost_recorder.pinned_runs[0][0] == "corr-123"
+    assert len(cost_recorder.provider_calls) == 2
+    assert cost_recorder.finalized_runs == [("corr-123", None)]
+    assert cost_recorder.provider_calls[0].workflow_node == "planner"
+    assert cost_recorder.provider_calls[0].model == "gpt-4.1"
+    assert cost_recorder.provider_calls[0].usage == planner_usage.usage_metrics
+    assert cost_recorder.provider_calls[1].workflow_node == "generate_show_notes"
+    assert cost_recorder.provider_calls[1].model == "gpt-4o-mini"
+    assert cost_recorder.provider_calls[1].usage == tool_usage.usage_metrics
 
 
 @pytest.mark.asyncio

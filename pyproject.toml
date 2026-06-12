@@ -469,6 +469,8 @@ prefixes = [
     "episodic.canonical.unit_of_work_protocols",
     "episodic.canonical.upload_protocols",
     "episodic.canonical.uploads",
+    "episodic.cost.ports",
+    "episodic.cost.engine",
     "episodic.llm.ports",
     "episodic.metrics_ports",
 ]
@@ -483,7 +485,9 @@ prefixes = [
     "episodic.canonical.source_intake_service",
     "episodic.canonical.profile_templates",
     "episodic.canonical.reference_documents",
+    "episodic.cost.recorder",
     "episodic.generation",
+    "episodic.orchestration",
 ]
 allowed = ["application", "domain_ports"]
 
@@ -501,6 +505,8 @@ name = "outbound_adapter"
 prefixes = [
     "episodic.canonical.adapters",
     "episodic.canonical.storage",
+    "episodic.cost.storage",
+    "episodic.cost.pricing_catalogue",
     "episodic.llm.openai_api",
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
