@@ -52,13 +52,26 @@ class SourceIntakeContext:
     source_list: dict[str, object] | None = None
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _SourceIntakeAppConfig:
+    """Infrastructure wiring for a single BDD test app instance."""
+
+    session_factory: async_sessionmaker[AsyncSession]
+    tmp_path: Path
+    upload_max_bytes: int | None = None
+
+
 def run_intake_workflow(
     context: SourceIntakeContext,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
 ) -> None:
     """Run the happy-path source-intake workflow."""
-    _run_source_intake_call(context, session_factory, tmp_path, _run_intake_api_calls)
+    _run_source_intake_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _run_intake_api_calls,
+    )
 
 
 def upload_unsupported_content_type(
@@ -80,7 +93,11 @@ def upload_unsupported_content_type(
         )
         record_error_response(response, scenario_context)
 
-    _run_source_intake_call(context, session_factory, tmp_path, _action)
+    _run_source_intake_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _action,
+    )
 
 
 def upload_oversized_source(
@@ -103,10 +120,12 @@ def upload_oversized_source(
 
     _run_source_intake_call(
         context,
-        session_factory,
-        tmp_path,
+        _SourceIntakeAppConfig(
+            session_factory=session_factory,
+            tmp_path=tmp_path,
+            upload_max_bytes=4,
+        ),
         _action,
-        upload_max_bytes=4,
     )
 
 
@@ -133,7 +152,11 @@ def attach_unknown_source_discriminator(
         )
         record_error_response(response, scenario_context)
 
-    _run_source_intake_call(context, session_factory, tmp_path, _action)
+    _run_source_intake_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _action,
+    )
 
 
 def attach_to_missing_job(
@@ -154,7 +177,11 @@ def attach_to_missing_job(
         )
         record_error_response(response, scenario_context)
 
-    _run_source_intake_call(context, session_factory, tmp_path, _action)
+    _run_source_intake_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _action,
+    )
 
 
 def attach_missing_upload(
@@ -177,7 +204,11 @@ def attach_missing_upload(
         )
         record_error_response(response, scenario_context)
 
-    _run_source_intake_call(context, session_factory, tmp_path, _action)
+    _run_source_intake_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _action,
+    )
 
 
 def attach_pending_upload(
@@ -201,7 +232,11 @@ def attach_pending_upload(
         )
         record_error_response(response, scenario_context)
 
-    _run_source_intake_call(context, session_factory, tmp_path, _action)
+    _run_source_intake_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _action,
+    )
 
 
 def list_attached_sources(
@@ -232,24 +267,25 @@ def list_attached_sources(
         scenario_context.upload = typ.cast("dict[str, object]", upload.json())
         scenario_context.source_list = typ.cast("dict[str, object]", response.json())
 
-    _run_source_intake_call(context, session_factory, tmp_path, _action)
+    _run_source_intake_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _action,
+    )
 
 
 def _run_source_intake_call(
     context: SourceIntakeContext,
-    session_factory: async_sessionmaker[AsyncSession],
-    tmp_path: Path,
+    config: _SourceIntakeAppConfig,
     action: SourceIntakeAction,
-    *,
-    upload_max_bytes: int | None = None,
 ) -> None:
     """Run one BDD action against the source-intake ASGI app."""
 
     async def _run_workflow() -> None:
         dependencies = build_api_dependencies(
-            session_factory,
-            object_store=FilesystemObjectStore(tmp_path / "bdd-objects"),
-            upload_max_bytes=upload_max_bytes,
+            config.session_factory,
+            object_store=FilesystemObjectStore(config.tmp_path / "bdd-objects"),
+            upload_max_bytes=config.upload_max_bytes,
         )
         transport = httpx.ASGITransport(
             app=typ.cast("_ASGIApp", create_app(dependencies))
