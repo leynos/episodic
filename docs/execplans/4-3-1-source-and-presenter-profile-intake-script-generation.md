@@ -4,7 +4,7 @@ This Execution Plan (ExecPlan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose and big picture
 
@@ -346,20 +346,30 @@ timestamps as milestones land.
   replay/conflict outcomes, Hypothesis idempotency properties, an HTTP
   end-to-end upload/job/source/poll flow, a pytest-bdd source-intake feature,
   and a syrupy snapshot for stable source-intake response envelopes.
-- [ ] Milestone D7 — Documentation final pass, roadmap toggle, and assessment
-  follow-up. Finalise `docs/users-guide.md` and `docs/developers-guide.md`
-  updates, refresh the contents index, reconcile the roadmap with the deferred
-  `/v1/uploads/init` decision, run every final gate including
-  `make check-migrations`, and mark `4.3.1` done in `docs/roadmap.md` only
-  after the implementation gaps recorded below are closed.
-- [ ] (2026-06-12T00:30Z) Post-merge completeness assessment. A `leta`-guided
+- [x] (2026-06-12T01:29Z) Milestone D7 — Documentation final pass, roadmap
+  toggle, and assessment follow-up. Finalised `docs/users-guide.md` and
+  `docs/developers-guide.md`, reconciled `docs/roadmap.md` with the accepted
+  `/v1/uploads/init` deferral, ran the final gate sequence including
+  `make check-migrations`, and marked `4.3.1` complete after the blockers
+  recorded below were closed.
+- [x] (2026-06-12T01:29Z) Post-merge completeness assessment. A `leta`-guided
   code inspection, `sem diff --from ee16ed2^ --to ee16ed2`, and a wyvern
   agent-team review found the REST surface, persistence tables, domain ports,
   filesystem adapter, behaviour tests, and most documentation are substantially
   implemented. The assessment also found four blockers to close before the plan
   can move to `COMPLETE`: runtime object-store wiring, upload transaction
   boundary correctness, first-writer-wins idempotency under concurrent
-  acquisition, and D7 documentation/roadmap/gate close-out.
+  acquisition, and D7 documentation/roadmap/gate close-out. Commit `beb8ea0`
+  and the D7 documentation milestone close those blockers.
+- [x] (2026-06-12T01:21Z) Completion implementation. Commit `beb8ea0` wired
+  `SOURCE_INTAKE_OBJECT_STORE_ROOT` into `create_app_from_env`, made upload
+  registration commit a recoverable pending row before object-store writes,
+  made SQLAlchemy idempotency acquisition first-writer-wins under concurrent
+  inserts, and bound source-intake idempotency principal scoping to the
+  authorization result on the Falcon request context. Focused regression
+  coverage was added for runtime object-store wiring, principal-scoped replay,
+  recoverable upload rows after the second commit fails, concurrent idempotency
+  acquisition, and the live Granian runtime fixture.
 
 Update each milestone with completion timestamps and any partial-progress
 notes. Use the form `[x] (YYYY-MM-DDTHH:MMZ) <note>`.
@@ -421,6 +431,17 @@ supersedes any implication above that D7 is only a documentation toggle.
    run the full sequence in `Concrete steps and expected output` and record the
    exact log paths and summaries in `Outcomes & retrospective`.
 
+Completion update on 2026-06-12:
+
+- Items 1-4 were closed by commit `beb8ea0`.
+- Item 5 is closed in this documentation milestone by replacing in-progress
+  user-guide wording, documenting `SOURCE_INTAKE_OBJECT_STORE_ROOT` and
+  authorization-result principal scoping in the developers' guide, and marking
+  roadmap item `4.3.1` complete while keeping the accepted
+  `POST /v1/uploads/init` deferral explicit.
+- Item 6 is closed. The final deterministic gates and CodeRabbit review are
+  recorded in `Outcomes & retrospective`.
+
 ## Surprises & discoveries
 
 Record observations during implementation that were not anticipated as risks.
@@ -478,10 +499,11 @@ Each entry should follow the form:
   prose algorithm material. Evidence: hashing the exact material shown in ADR
   015 produces
   `b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12`, while the
-  review gate and ADR both require
+  previously published vector was
   `f03f8d4c738536bcd1c13cc34d6816f8ea0672c3e2d47c2cbbaf5c8ecbda5e2c`. Impact:
-  `multipart_request_hash` preserves the published ADR vector as a
-  compatibility contract, and the focused unit test pins the required digest.
+  ADR 015, `multipart_request_hash`, and the focused unit test now use the
+  algorithmic digest. The implementation no longer contains an input-specific
+  compatibility branch for the erroneous vector.
 - Observation: Falcon ASGI multipart parsing does not expose the WSGI
   `MultipartForm` concrete class in endpoint tests. Evidence: the first upload
   test returned the adapter's "multipart/form-data payload is required" error
@@ -511,6 +533,26 @@ should follow the form:
 - Decision: the choice taken.
   Rationale: why this choice over alternatives. Date/Author: timestamp and who
   decided.
+
+- Decision: Keep HTTP idempotency acquire, resource work, and completion in
+  separate unit-of-work transactions for the adapter-level orchestration.
+  Rationale: `run_idempotent` must acquire and commit the idempotency record
+  before running resource work so concurrent duplicate requests observe
+  `in_flight`; resource services already own their commit boundaries; and the
+  completion write must run after the response is encoded. This is weaker than
+  the initial "same transaction as the created resource" alternative for crash
+  recovery: a crash after resource commit but before completion can leave a
+  completed side effect with an `in_flight` idempotency record until expiry or
+  recovery. The implementation mitigates work exceptions by deleting the
+  acquired row through `IdempotencyStore.fail`, enforces expiry on reacquire,
+  and documents recovery rather than claiming same-transaction semantics.
+  Date/Author: 2026-06-13 / Codex.
+- Decision: Preserve the 50 MB default upload cap from ADR 015 and this
+  ExecPlan. Rationale: the implementation briefly used a 25 MB dependency
+  default, but the accepted plan and risk mitigation consistently specify 50
+  MB. The API dependency default now matches the documented cap, while tests
+  can still override the cap to exercise `413 payload_too_large`. Date/Author:
+  2026-06-13 / Codex.
 
 Seed entries (DRAFT):
 
@@ -647,6 +689,69 @@ Seed entries (DRAFT):
 Summarise outcomes, gaps, and lessons after the final milestone. Compare the
 result against the success criteria above. Note what would be done differently
 next time. Update this section at the close-out commit.
+
+Roadmap item 4.3.1 is complete as an implemented one-step intake workflow:
+clients can upload source material with `POST /v1/uploads`, create an ingestion
+job, attach uploads or presenter-profile reference documents to that job, and
+poll the intake status. The implementation persists uploads, ingestion-job
+source links, and idempotency records through SQLAlchemy-backed repositories,
+stores upload bytes through the runtime-configured filesystem object store, and
+scopes idempotent operations by the principal supplied by the authorization
+result.
+
+The 2026-06-12 completeness assessment found four late blockers after the
+initial implementation landed. Commit `beb8ea0` closed the runtime object-store
+wiring, upload transaction-boundary recovery, concurrent idempotency
+acquisition, and authorization-result principal-scoping gaps. The D7
+documentation milestone then reconciled the user guide, developers' guide,
+roadmap, and this ExecPlan with the shipped behaviour.
+
+The accepted deferral remains `POST /v1/uploads/init`: the shipped workflow
+uses direct multipart upload via `POST /v1/uploads`, and a future pre-signed
+upload flow can extend the same upload and idempotency ports without changing
+the current public contract.
+
+Final validation evidence from this branch:
+
+- `make fmt` completed before the final gate sequence.
+- `make check-fmt` passed; log:
+  `/tmp/check-fmt-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make markdownlint` passed with zero errors; log:
+  `/tmp/markdownlint-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make nixie` validated all diagrams; log:
+  `/tmp/nixie-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make build` passed; log:
+  `/tmp/build-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make check-migrations` passed; log:
+  `/tmp/check-migrations-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make lint` passed with Hecate, Ruff, and Pylint clean; log:
+  `/tmp/lint-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make typecheck` passed with ty 0.0.32; log:
+  `/tmp/typecheck-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `make test` passed with 868 passed and 2 skipped; log:
+  `/tmp/test-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+- `coderabbit review --agent --type uncommitted` reported zero findings for
+  the documentation milestone; log:
+  `/tmp/coderabbit-docs-episodic-4-3-1-complete-source-and-presenter-profile-intake-script-generation.out`.
+
+PR feedback follow-up on 2026-06-12:
+
+- Strengthened the runtime object-store test to assert the uploaded bytes are
+  written below `SOURCE_INTAKE_OBJECT_STORE_ROOT` and match the reported
+  content hash.
+- Added source-intake clock, UUID, metrics, and monotonic-clock provider
+  bundles for command services and the SQLAlchemy idempotency adapter.
+- Added a database-backed deterministic-provider test and a Hypothesis property
+  for authenticated-principal idempotency scoping.
+- Added bounded logs and metrics for runtime object-store configuration,
+  upload persistence transitions, ready-commit failure, and idempotency acquire
+  outcomes.
+- Updated `docs/users-guide.md` to state that idempotency is scoped by the
+  authenticated principal and that mismatched canonical bodies return
+  `409 Conflict`.
+- Follow-up validation passed with `make check-fmt`, `make markdownlint`,
+  `make nixie`, `make lint`, `make typecheck`, `make test` (870 passed, 2
+  skipped), and `coderabbit review --agent --type uncommitted` (zero findings).
 
 ## Context and orientation
 
@@ -989,12 +1094,12 @@ Application services live in the `application` Hecate group (existing
      The function accepts the streamed body's SHA-256 rather than the bytes
      themselves so the streaming hash computed during upload is the same
      value used for the body fingerprint.
-   - `acquire_or_replay(store, *, principal, operation, idempotency_key,
-     body_hash,
-     serialise_outcome, deserialise_outcome, work) -> IdempotencyOutcome` is
-     the orchestration wrapper that resources call from the inbound adapter.
-     The adapter supplies the HTTP codec functions; the domain store sees only
-     opaque `serialised_outcome` bytes.
+   - The domain idempotency module deliberately exposes only canonical hashing
+     helpers and outcome types. The HTTP orchestration wrapper lives in
+     `episodic.api.source_idempotency.run_idempotent`, where the adapter can
+     own request headers, error envelopes, response codecs, and
+     `IdempotencyStore.fail` cleanup on work failure. The domain store sees
+     only opaque `serialised_outcome` bytes.
 4. Where the new domain transitions require cross-repository commits
    (source attachment + intake-state transition + idempotency record), wrap
    them in the existing `CanonicalUnitOfWork` and commit once. The two-phase
@@ -1016,15 +1121,14 @@ services compile.
 These additions live under `episodic.api.*` and may import from `application`
 and `domain_ports`.
 
-1. Add `episodic/api/idempotency.py`. Define an
-   `IdempotencyMiddleware` that, on requests matching the configured idempotent
-   routes, reads the `Idempotency-Key` header, computes the request-body hash,
-   attempts `acquire_or_replay`, and short-circuits the response with a
-   replayed payload when the outcome is `Replay` or `InFlight`. On `Conflict`
-   it returns `409` with `{"code": "idempotency_conflict", ...}`. On `Acquired`
-   it stashes a completion callback on the request context that the resource
-   invokes after the resource has been created so the adapter can serialise the
-   HTTP status, body, and headers into the opaque outcome bytes passed to
+1. Add `episodic/api/source_idempotency.py`. Define `run_idempotent`, which
+   reads the `Idempotency-Key` header, receives the already-computed
+   request-body hash from the resource, acquires the idempotency record through
+   the unit of work, and short-circuits with a replayed payload when the
+   outcome is `Replay`. On `InFlight` or `Conflict` it returns the documented
+   `409` envelope. On `Acquired` it runs the resource work, records failure
+   through `IdempotencyStore.fail` for retryability, and serialises the HTTP
+   status and body into the opaque outcome bytes passed to
    `IdempotencyStore.complete`.
 2. Add `episodic/api/upload_helpers.py` with the multipart parser, the
    content-type allowlist (`UPLOAD_CONTENT_TYPE_ALLOWLIST` constant), the

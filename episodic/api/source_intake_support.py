@@ -37,13 +37,26 @@ _WEIGHT_RANGE_REQUIRED = "weight must be between 0 and 1."
 _REQUIRED_FIELD_TEMPLATE = "Missing required field: {field_name}"
 _UUID_FIELD_TEMPLATE = "{field_name} must be a UUID string."
 _UPLOAD_TOO_LARGE = "Upload payload is too large."
+_UPLOAD_READ_CHUNK_BYTES = 64 * 1024
+
+
+class _HashDigest(typ.Protocol):
+    """Hash object shape used while reading upload streams."""
+
+    def update(self, data: bytes, /) -> None:
+        """Update the digest with one byte chunk."""
+        raise NotImplementedError
+
+    def hexdigest(self) -> str:
+        """Return the hex digest string."""
+        raise NotImplementedError
 
 
 class _ReadablePartStream(typ.Protocol):
     """Readable multipart part stream."""
 
-    def read(self) -> bytes | cabc.Awaitable[bytes]:
-        """Read the remaining bytes from the part stream."""
+    def read(self, size: int = -1) -> bytes | cabc.Awaitable[bytes]:
+        """Read bytes from the part stream."""
         raise NotImplementedError
 
 
@@ -71,31 +84,80 @@ class ParsedUpload:
     """Parsed multipart upload fields."""
 
     payload: bytes
+    payload_sha256: str
     content_type: str
     declared_size: int
     declared_sha256: str | None
     metadata: JsonPayload
 
 
-async def parse_upload_form(req: falcon.Request) -> ParsedUpload:
+@dataclasses.dataclass(slots=True)
+class _FileReadState:
+    """Mutable upload-part read state."""
+
+    chunks: list[bytes]
+    digest: _HashDigest
+    size: int = 0
+
+
+async def parse_upload_form(req: falcon.Request, *, max_bytes: int) -> ParsedUpload:
     """Parse the supported multipart upload form shape."""
     media = await req.get_media()
     _require_multipart_media(media)
-    fields, file_bytes, file_content_type = await _collect_upload_form_parts(media)
-    if file_bytes is None:
+    fields, file_part, file_content_type = await _collect_upload_form_parts(
+        media, max_bytes=max_bytes
+    )
+    if file_part is None:
         raise validation_error(_FILE_REQUIRED, field="file")
-    return _parsed_upload_from_fields(fields, file_bytes, file_content_type)
+    file_bytes, payload_sha256 = file_part
+    return _parsed_upload_from_fields(
+        fields, file_bytes, payload_sha256, file_content_type
+    )
 
 
-def reject_oversized(payload: bytes, max_bytes: int) -> None:
-    """Reject upload bodies larger than the configured cap."""
-    if len(payload) <= max_bytes:
-        return
+def _raise_payload_too_large(max_bytes: int) -> typ.NoReturn:
     raise http_error(
-        falcon.HTTPPayloadTooLarge(description=_UPLOAD_TOO_LARGE),
+        falcon.HTTPContentTooLarge(description=_UPLOAD_TOO_LARGE),
         code="payload_too_large",
         details={"max_bytes": max_bytes},
     )
+
+
+def _append_file_chunk(
+    state: _FileReadState,
+    chunk: bytes,
+    *,
+    max_bytes: int,
+) -> None:
+    """Append one bounded file chunk and return the new byte count."""
+    next_size = state.size + len(chunk)
+    if next_size > max_bytes:
+        _raise_payload_too_large(max_bytes)
+    state.chunks.append(chunk)
+    state.digest.update(chunk)
+    state.size = next_size
+
+
+async def _read_stream_chunk(stream: _ReadablePartStream, size: int) -> bytes:
+    """Read at most size bytes from a sync or async multipart stream."""
+    data = stream.read(size)
+    if inspect.isawaitable(data):
+        data = await data
+    return typ.cast("bytes", data)
+
+
+async def _read_part_bytes(
+    part: _MultipartPart,
+    *,
+    max_bytes: int,
+) -> tuple[bytes, str]:
+    """Read a file part with bounded chunks and return bytes plus SHA-256."""
+    state = _FileReadState(chunks=[], digest=hashlib.sha256())
+    while True:
+        chunk = await _read_stream_chunk(part.stream, _UPLOAD_READ_CHUNK_BYTES)
+        if not chunk:
+            return b"".join(state.chunks), state.digest.hexdigest()
+        _append_file_chunk(state, chunk, max_bytes=max_bytes)
 
 
 def build_attach_source_request(
@@ -161,6 +223,7 @@ def json_body_hash(payload: JsonPayload) -> str:
 def _parsed_upload_from_fields(
     fields: dict[str, object],
     file_bytes: bytes,
+    payload_sha256: str,
     file_content_type: str | None,
 ) -> ParsedUpload:
     """Build a parsed upload from collected multipart fields."""
@@ -174,6 +237,7 @@ def _parsed_upload_from_fields(
         raise validation_error(_METADATA_OBJECT_REQUIRED, field="metadata")
     return ParsedUpload(
         payload=file_bytes,
+        payload_sha256=payload_sha256,
         content_type=content_type,
         declared_size=_parse_declared_size(fields.get("declared_size")),
         declared_sha256=typ.cast("str | None", fields.get("declared_sha256")),
@@ -189,20 +253,22 @@ def _require_multipart_media(media: object) -> None:
 
 async def _collect_upload_form_parts(
     media: object,
-) -> tuple[dict[str, object], bytes | None, str | None]:
+    *,
+    max_bytes: int,
+) -> tuple[dict[str, object], tuple[bytes, str] | None, str | None]:
     """Collect supported upload form fields from multipart parts."""
     fields: dict[str, object] = {}
-    file_bytes: bytes | None = None
+    file_part: tuple[bytes, str] | None = None
     file_content_type: str | None = None
     async for part in _iter_multipart_parts(media):
         if part.name == "file":
-            file_bytes = await _read_part_bytes(part)
+            file_part = await _read_part_bytes(part, max_bytes=max_bytes)
             file_content_type = part.content_type
         elif part.name == "metadata":
             fields["metadata"] = await _read_metadata_part(part)
         elif part.name is not None:
             fields[part.name] = await _read_part_text(part)
-    return fields, file_bytes, file_content_type
+    return fields, file_part, file_content_type
 
 
 async def _iter_multipart_parts(media: object) -> cabc.AsyncIterator[_MultipartPart]:
@@ -213,14 +279,6 @@ async def _iter_multipart_parts(media: object) -> cabc.AsyncIterator[_MultipartP
         return
     for part in typ.cast("cabc.Iterable[_MultipartPart]", media):
         yield part
-
-
-async def _read_part_bytes(part: _MultipartPart) -> bytes:
-    """Read a multipart part body across Falcon sync and async streams."""
-    data = part.stream.read()
-    if inspect.isawaitable(data):
-        data = await data
-    return typ.cast("bytes", data)
 
 
 async def _read_part_text(part: _MultipartPart) -> str:

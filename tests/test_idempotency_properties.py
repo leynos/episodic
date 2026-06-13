@@ -172,3 +172,46 @@ async def test_different_body_for_key_conflicts(
     assert isinstance(second, Conflict)
     assert second.record_id == first.record_id
     assert len(store.records) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.hypothesis
+@given(
+    principal_a=st.text(min_size=1).filter(str.strip),
+    principal_b=st.text(min_size=1).filter(str.strip),
+    body_hash=st.text(min_size=1).filter(str.strip),
+)
+async def test_same_key_is_scoped_by_authenticated_principal(
+    principal_a: str,
+    principal_b: str,
+    body_hash: str,
+) -> None:
+    """Property: equal keys and bodies remain isolated across principals."""
+    if principal_a == principal_b:
+        principal_b = f"{principal_b}:other"
+    store = _InMemoryIdempotencyStore()
+    expires_at = dt.datetime.now(dt.UTC) + dt.timedelta(hours=1)
+
+    first = await store.acquire(
+        request=IdempotencyAcquireRequest(
+            principal_id=principal_a,
+            operation="upload.create",
+            idempotency_key="same-key",
+            body_hash=body_hash,
+            expires_at=expires_at,
+        ),
+    )
+    second = await store.acquire(
+        request=IdempotencyAcquireRequest(
+            principal_id=principal_b,
+            operation="upload.create",
+            idempotency_key="same-key",
+            body_hash=body_hash,
+            expires_at=expires_at,
+        ),
+    )
+
+    assert isinstance(first, Acquired)
+    assert isinstance(second, Acquired)
+    assert first.record_id != second.record_id
+    assert len(store.records) == 2

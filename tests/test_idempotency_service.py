@@ -35,4 +35,4 @@ def test_multipart_request_hash_matches_adr_015_worked_vector() -> None:
     assert body_sha256 == (
         "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
     )
-    assert result == "f03f8d4c738536bcd1c13cc34d6816f8ea0672c3e2d47c2cbbaf5c8ecbda5e2c"
+    assert result == "b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12"

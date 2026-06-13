@@ -35,6 +35,7 @@ from .source_intake_repositories import (
     SqlAlchemyIdempotencyStore,
     SqlAlchemyIngestionJobSourceRepository,
     SqlAlchemyUploadRepository,
+    source_intake_storage_runtime,
 )
 from .workflow_checkpoints import SqlAlchemyWorkflowCheckpointStore
 
@@ -134,7 +135,14 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         self.ingestion_job_sources = SqlAlchemyIngestionJobSourceRepository(
             self._session
         )
-        self.idempotency = SqlAlchemyIdempotencyStore(self._session)
+        self.idempotency = SqlAlchemyIdempotencyStore(
+            self._session,
+            runtime=source_intake_storage_runtime(
+                None,
+                metrics=self._metrics,
+                monotonic_clock=self._clock,
+            ),
+        )
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
             self._session,
             metrics=self._metrics,

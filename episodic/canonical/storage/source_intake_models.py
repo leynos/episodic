@@ -82,6 +82,7 @@ class UploadRecord(Base):
         sa.CheckConstraint(
             "actual_size IS NULL OR actual_size >= 0", name="ck_uploads_actual_size"
         ),
+        sa.Index("ix_uploads_state_created_at", "state", "created_at"),
     )
 
 

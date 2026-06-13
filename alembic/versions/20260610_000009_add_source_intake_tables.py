@@ -48,6 +48,11 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
+    op.create_index(
+        "ix_ingestion_jobs_series_profile_intake_state_created_at",
+        "ingestion_jobs",
+        ["series_profile_id", "intake_state", sa.text("created_at DESC")],
+    )
     op.create_table(
         "uploads",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -81,6 +86,11 @@ def upgrade() -> None:
             "actual_size IS NULL OR actual_size >= 0",
             name="ck_uploads_actual_size",
         ),
+    )
+    op.create_index(
+        "ix_uploads_state_created_at",
+        "uploads",
+        ["state", "created_at"],
     )
     op.create_table(
         "ingestion_job_sources",
@@ -192,7 +202,12 @@ def downgrade() -> None:
         table_name="ingestion_job_sources",
     )
     op.drop_table("ingestion_job_sources")
+    op.drop_index("ix_uploads_state_created_at", table_name="uploads")
     op.drop_table("uploads")
+    op.drop_index(
+        "ix_ingestion_jobs_series_profile_intake_state_created_at",
+        table_name="ingestion_jobs",
+    )
     op.drop_column("ingestion_jobs", "intake_state")
     _enum("idempotency_state", "in_flight", "completed").drop(
         op.get_bind(),

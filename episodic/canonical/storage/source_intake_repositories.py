@@ -1,10 +1,16 @@
 """SQLAlchemy repositories for source-intake entities."""
+# pylint: disable=too-many-lines
 
+from __future__ import annotations
+
+import collections.abc as cabc
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.idempotency import (
     Acquired,
@@ -21,6 +27,13 @@ from episodic.canonical.upload_protocols import (
     UploadRepository,
 )
 from episodic.canonical.uploads import UploadState
+from episodic.logging import get_logger, log_info, log_warning
+from episodic.observability import (
+    MetricsPort,
+    MonotonicClockPort,
+    NoopMetrics,
+    PerfCounterClock,
+)
 
 from .repository_base import _RepositoryBase
 from .source_intake_mappers import (
@@ -38,11 +51,26 @@ from .source_intake_models import (
 )
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.idempotency import IdempotencyRecord
     from episodic.canonical.ingestion_sources import IngestionJobSource
     from episodic.canonical.uploads import Upload
+
+
+Clock = cabc.Callable[[], dt.datetime]
+UuidFactory = cabc.Callable[[], uuid.UUID]
+logger = get_logger(__name__)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class SourceIntakeStorageRuntime:
+    """Runtime providers used by source-intake SQLAlchemy adapters."""
+
+    clock: Clock
+    uuid_factory: UuidFactory
+    metrics: MetricsPort
+    monotonic_clock: MonotonicClockPort
 
 
 class SqlAlchemyUploadRepository(_RepositoryBase, UploadRepository):
@@ -154,44 +182,111 @@ class SqlAlchemyIngestionJobSourceRepository(
 class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
     """Persist idempotency records with domain-only outcomes."""
 
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        runtime: SourceIntakeStorageRuntime | None = None,
+    ) -> None:
+        self._session = session
+        self._runtime = source_intake_storage_runtime(runtime)
+
+    async def _insert_in_flight(
+        self,
+        *,
+        request: IdempotencyAcquireRequest,
+        record_id: uuid.UUID,
+        now: dt.datetime,
+    ) -> IdempotencyRecordModel | None:
+        """Insert an in-flight idempotency record or return the conflicting row."""
+        try:
+            async with self._session.begin_nested():
+                self._session.add(
+                    IdempotencyRecordModel(
+                        id=record_id,
+                        principal_id=_principal_to_record(request.principal_id),
+                        operation=request.operation,
+                        idempotency_key=request.idempotency_key,
+                        body_hash=request.body_hash,
+                        state=IdempotencyState.IN_FLIGHT,
+                        serialised_outcome=None,
+                        expires_at=request.expires_at,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                await self._session.flush()
+        except IntegrityError:
+            log_warning(
+                logger,
+                ("source_intake_idempotency_acquire_conflict operation=%s"),
+                request.operation,
+            )
+            record = await self._get_record(
+                principal_id=request.principal_id,
+                operation=request.operation,
+                idempotency_key=request.idempotency_key,
+            )
+            if record is None:
+                raise
+            return record
+        return None
+
     async def acquire(
         self,
         *,
         request: IdempotencyAcquireRequest,
     ) -> IdempotencyOutcome:
         """Acquire or inspect an idempotency record."""
+        started_at = self._runtime.monotonic_clock.monotonic_seconds()
         record = await self._get_record(
             principal_id=request.principal_id,
             operation=request.operation,
             idempotency_key=request.idempotency_key,
         )
-        if record is None:
-            record_id = uuid.uuid4()
-            now = dt.datetime.now(dt.UTC)
-            self._session.add(
-                IdempotencyRecordModel(
-                    id=record_id,
-                    principal_id=_principal_to_record(request.principal_id),
-                    operation=request.operation,
-                    idempotency_key=request.idempotency_key,
-                    body_hash=request.body_hash,
-                    state=IdempotencyState.IN_FLIGHT,
-                    serialised_outcome=None,
-                    expires_at=request.expires_at,
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
+        now = self._runtime.clock()
+        if record is not None and record.expires_at <= now:
+            await self._session.delete(record)
             await self._session.flush()
-            return Acquired(record_id)
-        if record.body_hash != request.body_hash:
-            return Conflict(record.id)
-        if record.state is IdempotencyState.COMPLETED:
-            if record.serialised_outcome is None:
-                msg = f"Completed idempotency record lacks outcome: {record.id}"
-                raise RuntimeError(msg)
-            return Replay(record.serialised_outcome)
-        return InFlight(record.id)
+            record = None
+        if record is None:
+            record_id = self._runtime.uuid_factory()
+            record = await self._insert_in_flight(
+                request=request,
+                record_id=record_id,
+                now=now,
+            )
+            if record is None:
+                log_info(
+                    logger,
+                    ("source_intake_idempotency_acquired record_id=%s operation=%s"),
+                    record_id,
+                    request.operation,
+                )
+                self._record_acquire_metrics(started_at, "acquired")
+                return Acquired(record_id)
+        outcome = _idempotency_outcome_for_record(record, request.body_hash)
+        outcome_label = _outcome_metric_label(outcome)
+        log_info(
+            logger,
+            ("source_intake_idempotency_outcome outcome=%s operation=%s"),
+            outcome_label,
+            request.operation,
+        )
+        self._record_acquire_metrics(started_at, outcome_label)
+        return outcome
+
+    def _record_acquire_metrics(self, started_at: float, outcome: str) -> None:
+        """Record bounded idempotency acquire metrics."""
+        self._runtime.metrics.increment_counter(
+            "source_intake_idempotency_acquire_total",
+            labels={"outcome": outcome},
+        )
+        self._runtime.metrics.observe_latency_ms(
+            "source_intake_idempotency_acquire_latency_ms",
+            (self._runtime.monotonic_clock.monotonic_seconds() - started_at) * 1000,
+            labels={"outcome": outcome},
+        )
 
     async def complete(
         self,
@@ -208,6 +303,14 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
                 state=IdempotencyState.COMPLETED,
                 serialised_outcome=serialised_outcome,
                 updated_at=sa.func.now(),
+            )
+        )
+
+    async def fail(self, *, record_id: uuid.UUID) -> None:
+        """Delete the IN_FLIGHT record so the client can retry immediately."""
+        await self._session.execute(
+            sa.delete(IdempotencyRecordModel).where(
+                IdempotencyRecordModel.id == record_id
             )
         )
 
@@ -245,3 +348,58 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
             )
         )
         return result.scalar_one_or_none()
+
+
+def _idempotency_outcome_for_record(
+    record: IdempotencyRecordModel,
+    body_hash: str,
+) -> IdempotencyOutcome:
+    """Map an existing idempotency record to the acquire outcome."""
+    if record.body_hash != body_hash:
+        return Conflict(record.id)
+    if record.state is IdempotencyState.COMPLETED:
+        if record.serialised_outcome is None:
+            msg = f"Completed idempotency record lacks outcome: {record.id}"
+            raise RuntimeError(msg)
+        return Replay(record.serialised_outcome)
+    return InFlight(record.id)
+
+
+def _outcome_metric_label(outcome: IdempotencyOutcome) -> str:
+    """Return a bounded label for idempotency acquire outcomes."""
+    if isinstance(outcome, Replay):
+        return "replay"
+    if isinstance(outcome, Conflict):
+        return "conflict"
+    if isinstance(outcome, InFlight):
+        return "in_flight"
+    return "acquired"
+
+
+def _utc_now() -> dt.datetime:
+    """Return the current UTC timestamp for idempotency records."""
+    return dt.datetime.now(dt.UTC)
+
+
+def _new_uuid() -> uuid.UUID:
+    """Return a new idempotency record identifier."""
+    return uuid.uuid4()
+
+
+def source_intake_storage_runtime(
+    runtime: SourceIntakeStorageRuntime | None,
+    *,
+    metrics: MetricsPort | None = None,
+    monotonic_clock: MonotonicClockPort | None = None,
+) -> SourceIntakeStorageRuntime:
+    """Return SQLAlchemy source-intake providers with production defaults."""
+    if runtime is not None:
+        return runtime
+    return SourceIntakeStorageRuntime(
+        clock=_utc_now,
+        uuid_factory=_new_uuid,
+        metrics=NoopMetrics() if metrics is None else metrics,
+        monotonic_clock=PerfCounterClock()
+        if monotonic_clock is None
+        else monotonic_clock,
+    )

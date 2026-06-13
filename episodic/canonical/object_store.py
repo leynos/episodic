@@ -52,12 +52,14 @@ def _has_unsafe_object_key_parts(key: str, path: pathlib.PurePosixPath) -> bool:
 class ObjectStorePort(typ.Protocol):
     """Driven port for storing and retrieving opaque byte streams."""
 
+    # pylint: disable-next=too-many-arguments
     async def put(
         self,
         key: str,
         stream: cabc.AsyncIterator[bytes],
         *,
         max_bytes: int,
+        precomputed_sha256: str | None = None,
     ) -> StoredObject:
         """Store stream bytes under key and return size/hash metadata."""
         raise NotImplementedError

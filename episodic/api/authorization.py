@@ -2,12 +2,13 @@
 
 import dataclasses as dc
 import enum
-import logging
 import typing as typ
 
 import falcon
 
-logger = logging.getLogger(__name__)
+from episodic.logging import LogLevel, get_logger, log_warning
+
+logger = get_logger(__name__)
 
 
 class AuthorizationDecision(enum.StrEnum):
@@ -16,6 +17,14 @@ class AuthorizationDecision(enum.StrEnum):
     PERMIT = "permit"
     UNAUTHORIZED = "unauthorized"
     FORBIDDEN = "forbidden"
+
+
+@dc.dataclass(frozen=True, slots=True)
+class AuthorizationResult:
+    """Decision returned by authorization with the authenticated principal."""
+
+    decision: AuthorizationDecision
+    principal_id: str | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -31,7 +40,10 @@ class AuthorizationContext:
 class AuthorizationPort(typ.Protocol):
     """Port used by the API adapter to authorize incoming requests."""
 
-    async def decide(self, context: AuthorizationContext) -> AuthorizationDecision:
+    async def decide(
+        self,
+        context: AuthorizationContext,
+    ) -> AuthorizationDecision | AuthorizationResult:
         """Return the authorization decision for one request."""
         ...  # pylint: disable=unnecessary-ellipsis  # Protocol stub.
 
@@ -42,10 +54,10 @@ class PermitAll:
     async def decide(  # noqa: PLR6301 - must match AuthorizationPort instance method.
         self,
         context: AuthorizationContext,
-    ) -> AuthorizationDecision:
+    ) -> AuthorizationResult:
         """Permit the request."""
         del context
-        return AuthorizationDecision.PERMIT
+        return AuthorizationResult(AuthorizationDecision.PERMIT)
 
 
 class AuthorizationMiddleware:
@@ -69,12 +81,14 @@ class AuthorizationMiddleware:
             authorization_header=req.get_header("Authorization"),
         )
         try:
-            decision = await self._authorization.decide(context)
-        except Exception:
-            logger.exception(
+            result = _authorization_result(await self._authorization.decide(context))
+        except OSError, RuntimeError, TypeError, ValueError:
+            log_warning(
+                logger,
                 "Authorization adapter failed for %s %s.",
                 context.method,
                 context.path,
+                exc_info=True,
             )
             resp.media = {
                 "code": "service_unavailable",
@@ -85,11 +99,12 @@ class AuthorizationMiddleware:
             resp.complete = True
             return
 
-        match decision:
+        match result.decision:
             case AuthorizationDecision.PERMIT:
+                req.context.principal_id = result.principal_id
                 return
             case AuthorizationDecision.UNAUTHORIZED:
-                _log_authorization_denial(decision, context)
+                _log_authorization_denial(result.decision, context)
                 resp.media = {
                     "code": "unauthorized",
                     "message": "Authorization is required.",
@@ -97,7 +112,7 @@ class AuthorizationMiddleware:
                 }
                 resp.status = falcon.HTTP_401
             case AuthorizationDecision.FORBIDDEN:
-                _log_authorization_denial(decision, context)
+                _log_authorization_denial(result.decision, context)
                 resp.media = {
                     "code": "forbidden",
                     "message": "Access to this resource is forbidden.",
@@ -105,7 +120,7 @@ class AuthorizationMiddleware:
                 }
                 resp.status = falcon.HTTP_403
             case _:
-                _log_authorization_denial(decision, context)
+                _log_authorization_denial(result.decision, context)
                 resp.media = {
                     "code": "internal_error",
                     "message": "Unexpected authorization decision.",
@@ -115,14 +130,21 @@ class AuthorizationMiddleware:
         resp.complete = True
 
 
+def _authorization_result(
+    outcome: AuthorizationDecision | AuthorizationResult,
+) -> AuthorizationResult:
+    """Normalise legacy decision-only adapters to a principal-aware result."""
+    if isinstance(outcome, AuthorizationResult):
+        return outcome
+    return AuthorizationResult(decision=outcome)
+
+
 def _log_authorization_denial(
     decision: AuthorizationDecision,
     context: AuthorizationContext,
 ) -> None:
     """Log non-permit decisions without recording credential material."""
-    logger.debug(
-        "Authorization denied with %s for %s %s.",
-        decision,
-        context.method,
-        context.path,
+    logger.log(
+        LogLevel.DEBUG,
+        (f"Authorization denied with {decision} for {context.method} {context.path}."),
     )

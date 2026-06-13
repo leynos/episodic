@@ -70,16 +70,21 @@ This guide will cover:
 
 #### Source-to-script intake
 
-Source-to-script intake is being implemented for roadmap item `4.3.1`. The
-workflow will let an integration client upload one source document, create an
+Source-to-script intake is available for the first half of the roadmap `4.3`
+vertical slice. An integration client can upload one source document, create an
 ingestion job, attach the upload or a remote source Uniform Resource Identifier
 (URI), bind host and guest profile reference-document revisions, and poll the
 job until the source context is ready for draft generation.
 
-The first implementation will expose `POST /v1/uploads`,
-`POST /v1/ingestion-jobs`, `POST /v1/ingestion-jobs/{job_id}/sources`, and
-`GET /v1/ingestion-jobs/{job_id}`. The resumable `uploads/init` flow remains a
-future extension.
+The implemented endpoints are `POST /v1/uploads`, `POST /v1/ingestion-jobs`,
+`POST /v1/ingestion-jobs/{job_id}/sources`, and
+`GET /v1/ingestion-jobs/{job_id}`. Side-effecting `POST` requests require an
+`Idempotency-Key`; the server scopes that key by the authenticated principal
+from authorization. Repeated requests from the same principal with the same key
+and canonical body replay the stored response. Reusing the same key with a
+different canonical body returns `409 Conflict`. The resumable
+`POST /v1/uploads/init` flow remains a future extension for an object-store
+adapter that can use pre-signed upload URLs.
 
 #### Show notes and chapter markers
 
