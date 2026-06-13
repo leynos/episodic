@@ -74,29 +74,50 @@ def run_intake_workflow(
     )
 
 
+def _run_single_error_call(
+    context: SourceIntakeContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    request_fn: cabc.Callable[[httpx.AsyncClient], cabc.Awaitable[httpx.Response]],
+    *,
+    upload_max_bytes: int | None = None,
+) -> None:
+    """Run a single HTTP action, recording the error response into context."""
+
+    async def _action(
+        client: httpx.AsyncClient,
+        scenario_context: SourceIntakeContext,
+    ) -> None:
+        response = await request_fn(client)
+        record_error_response(response, scenario_context)
+
+    _run_source_intake_call(
+        context,
+        _SourceIntakeAppConfig(
+            session_factory=session_factory,
+            tmp_path=tmp_path,
+            upload_max_bytes=upload_max_bytes,
+        ),
+        _action,
+    )
+
+
 def upload_unsupported_content_type(
     context: SourceIntakeContext,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
 ) -> None:
     """Upload source material whose declared content type is not allowlisted."""
-
-    async def _action(
-        client: httpx.AsyncClient,
-        scenario_context: SourceIntakeContext,
-    ) -> None:
-        response = await post_text_upload(
+    _run_single_error_call(
+        context,
+        session_factory,
+        tmp_path,
+        lambda client: post_text_upload(
             client,
             key="bdd-unsupported-content-type",
             payload=b"source\n",
             content_type="application/octet-stream",
-        )
-        record_error_response(response, scenario_context)
-
-    _run_source_intake_call(
-        context,
-        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
-        _action,
+        ),
     )
 
 
@@ -106,26 +127,16 @@ def upload_oversized_source(
     tmp_path: Path,
 ) -> None:
     """Upload source material that exceeds the configured byte cap."""
-
-    async def _action(
-        client: httpx.AsyncClient,
-        scenario_context: SourceIntakeContext,
-    ) -> None:
-        response = await post_text_upload(
+    _run_single_error_call(
+        context,
+        session_factory,
+        tmp_path,
+        lambda client: post_text_upload(
             client,
             key="bdd-oversized-source",
             payload=b"source\n",
-        )
-        record_error_response(response, scenario_context)
-
-    _run_source_intake_call(
-        context,
-        _SourceIntakeAppConfig(
-            session_factory=session_factory,
-            tmp_path=tmp_path,
-            upload_max_bytes=4,
         ),
-        _action,
+        upload_max_bytes=4,
     )
 
 
@@ -191,24 +202,16 @@ def attach_missing_upload(
 ) -> None:
     """Attach an unknown upload to a known ingestion job."""
 
-    async def _action(
-        client: httpx.AsyncClient,
-        scenario_context: SourceIntakeContext,
-    ) -> None:
+    async def _request(client: httpx.AsyncClient) -> httpx.Response:
         profile_id = await create_series_profile(client)
         job_id = await create_ingestion_job(client, profile_id)
-        response = await client.post(
+        return await client.post(
             f"/v1/ingestion-jobs/{job_id}/sources",
             headers={"Idempotency-Key": "bdd-missing-upload"},
             json=upload_payload(str(uuid.uuid4())),
         )
-        record_error_response(response, scenario_context)
 
-    _run_source_intake_call(
-        context,
-        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
-        _action,
-    )
+    _run_single_error_call(context, session_factory, tmp_path, _request)
 
 
 def attach_pending_upload(
@@ -218,25 +221,17 @@ def attach_pending_upload(
 ) -> None:
     """Attach a pending upload to a known ingestion job."""
 
-    async def _action(
-        client: httpx.AsyncClient,
-        scenario_context: SourceIntakeContext,
-    ) -> None:
+    async def _request(client: httpx.AsyncClient) -> httpx.Response:
         profile_id = await create_series_profile(client)
         job_id = await create_ingestion_job(client, profile_id)
         upload_id = await create_pending_upload(session_factory)
-        response = await client.post(
+        return await client.post(
             f"/v1/ingestion-jobs/{job_id}/sources",
             headers={"Idempotency-Key": "bdd-pending-upload"},
             json=upload_payload(str(upload_id)),
         )
-        record_error_response(response, scenario_context)
 
-    _run_source_intake_call(
-        context,
-        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
-        _action,
-    )
+    _run_single_error_call(context, session_factory, tmp_path, _request)
 
 
 def list_attached_sources(
