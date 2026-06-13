@@ -76,11 +76,8 @@ def run_intake_workflow(
 
 def _run_single_error_call(
     context: SourceIntakeContext,
-    session_factory: async_sessionmaker[AsyncSession],
-    tmp_path: Path,
+    config: _SourceIntakeAppConfig,
     request_fn: cabc.Callable[[httpx.AsyncClient], cabc.Awaitable[httpx.Response]],
-    *,
-    upload_max_bytes: int | None = None,
 ) -> None:
     """Run a single HTTP action, recording the error response into context."""
 
@@ -93,11 +90,7 @@ def _run_single_error_call(
 
     _run_source_intake_call(
         context,
-        _SourceIntakeAppConfig(
-            session_factory=session_factory,
-            tmp_path=tmp_path,
-            upload_max_bytes=upload_max_bytes,
-        ),
+        config,
         _action,
     )
 
@@ -110,8 +103,7 @@ def upload_unsupported_content_type(
     """Upload source material whose declared content type is not allowlisted."""
     _run_single_error_call(
         context,
-        session_factory,
-        tmp_path,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
         lambda client: post_text_upload(
             client,
             key="bdd-unsupported-content-type",
@@ -129,14 +121,16 @@ def upload_oversized_source(
     """Upload source material that exceeds the configured byte cap."""
     _run_single_error_call(
         context,
-        session_factory,
-        tmp_path,
+        _SourceIntakeAppConfig(
+            session_factory=session_factory,
+            tmp_path=tmp_path,
+            upload_max_bytes=4,
+        ),
         lambda client: post_text_upload(
             client,
             key="bdd-oversized-source",
             payload=b"source\n",
         ),
-        upload_max_bytes=4,
     )
 
 
@@ -146,12 +140,10 @@ def attach_unknown_source_discriminator(
     tmp_path: Path,
 ) -> None:
     """Attach source material with an invalid ``type`` discriminator."""
-
-    async def _action(
-        client: httpx.AsyncClient,
-        scenario_context: SourceIntakeContext,
-    ) -> None:
-        response = await client.post(
+    _run_single_error_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        lambda client: client.post(
             f"/v1/ingestion-jobs/{uuid.uuid4()}/sources",
             headers={"Idempotency-Key": "bdd-unknown-source-kind"},
             json={
@@ -160,13 +152,7 @@ def attach_unknown_source_discriminator(
                 "weight": 1.0,
                 "metadata": {},
             },
-        )
-        record_error_response(response, scenario_context)
-
-    _run_source_intake_call(
-        context,
-        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
-        _action,
+        ),
     )
 
 
@@ -176,22 +162,14 @@ def attach_to_missing_job(
     tmp_path: Path,
 ) -> None:
     """Attach source material to an ingestion job that does not exist."""
-
-    async def _action(
-        client: httpx.AsyncClient,
-        scenario_context: SourceIntakeContext,
-    ) -> None:
-        response = await client.post(
+    _run_single_error_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        lambda client: client.post(
             f"/v1/ingestion-jobs/{uuid.uuid4()}/sources",
             headers={"Idempotency-Key": "bdd-missing-job"},
             json=source_uri_payload(),
-        )
-        record_error_response(response, scenario_context)
-
-    _run_source_intake_call(
-        context,
-        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
-        _action,
+        ),
     )
 
 
@@ -211,7 +189,11 @@ def attach_missing_upload(
             json=upload_payload(str(uuid.uuid4())),
         )
 
-    _run_single_error_call(context, session_factory, tmp_path, _request)
+    _run_single_error_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _request,
+    )
 
 
 def attach_pending_upload(
@@ -231,7 +213,11 @@ def attach_pending_upload(
             json=upload_payload(str(upload_id)),
         )
 
-    _run_single_error_call(context, session_factory, tmp_path, _request)
+    _run_single_error_call(
+        context,
+        _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
+        _request,
+    )
 
 
 def list_attached_sources(
