@@ -638,6 +638,50 @@ repository quality gates pass.
   Helm, CLI, and orchestration tests until a Docker-capable host can run the
   preview end to end.
 
+- Observation (2026-06-13): the "missing tools" framing was incomplete. This
+  host has rootless Podman and Helm; `k3d` and `kubectl` were then installed.
+  Re-testing showed the live path is blocked by implementation and host facts,
+  not merely by absent binaries. See the three entries below and the new
+  "Local preview on rootless Podman" section for the validated path.
+
+- Observation (2026-06-13): the image cannot build, independent of the earlier
+  `stilyagi` fix. `pyproject.toml` declares two `git+https` dependencies
+  (`femtologging` and `tei-rapporteur`); the Dockerfile resolves all
+  dependencies with `pip install <wheel>` in the git-less `python:3.14-slim`
+  runtime stage, so the build fails with `Cannot find command 'git'`. Evidence:
+  `podman build .` on this host. Neither base image ships git
+  (`python:3.14-slim` and the `uv` builder both lack it). This was masked
+  because earlier validation only ran the builder-stage `uv build --wheel`
+  (which packages the local project without resolving deps), the contract test
+  only parses Dockerfile text, and the opt-in Docker smoke test never ran.
+  Impact: resolve dependencies in the builder stage (which can install git) and
+  copy the populated venv into the runtime stage, or add git to the runtime
+  stage; prefer the former to keep the runtime slim and honour `uv.lock`.
+
+- Observation (2026-06-13): k3d/k3s cannot run under rootless Podman on this
+  host. With `DOCKER_HOST`/`DOCKER_SOCK` pointed at the rootless Podman socket
+  and a DNS-enabled `k3d` network, nodes boot but the server dies with
+  `level=fatal msg="Error: failed to find cpuset cgroup (v2)"`. Rootless
+  delegation here is `cpu memory pids` only; delegating `cpuset`/`io` requires a
+  root-written `/etc/systemd/system/user@.service.d/delegate.conf` plus
+  `systemctl daemon-reload` — a privileged host change that hits the plan's
+  tooling tolerance. `--kubelet-arg=feature-gates=KubeletInUserNamespace=true`
+  does not help, because k3s checks for the cpuset controller before the kubelet
+  starts. Evidence: `podman logs k3d-<cluster>-server-0`.
+
+- Observation (2026-06-13): kind (kubeadm + containerd) does run under rootless
+  Podman with no privileged host change. It does not require the `cpuset`
+  controller; the default `cpu` delegation plus a `systemd-run --scope --user -p
+  Delegate=yes` wrapper suffices. A cluster reached Ready in ~18s, the local
+  Postgres bootstrap from `scripts.local_k8s.commands.local_postgres_manifest`
+  became `1/1 Running` with `pg_isready` accepting connections, and `helm
+  upgrade --install` against the chart was accepted by the Kubernetes 1.36 API
+  server (Deployment, Service, ConfigMap, Ingress all created; the pod
+  `DATABASE_URL` resolved from the `episodic-local` Secret with `optional:
+  false`). The only failure was the episodic pod itself, blocked on the broken
+  image build above, not on any manifest or wiring defect. The precise,
+  reproducible steps are in the "Local preview on rootless Podman" section.
+
 ## Decision log
 
 - Decision: keep `/health/live` and `/health/ready` as the external health
@@ -740,11 +784,144 @@ Review follow-up validation evidence:
 full test run reported `694 passed, 3 skipped`; the final CodeRabbit review
 reported `findings: 0`.
 
-The remaining runtime validation gap is environmental: this host does not
-expose Docker, `k3d`, or `kubectl`, so the live container smoke test and
-`make local-k8s-up` cannot be executed here. The repository now validates the
-image, chart, and local preview contracts structurally and documents the live
-smoke-test path for hosts with the required container and Kubernetes tooling.
+The remaining runtime validation gaps are now characterised precisely. On
+2026-06-13, with rootless Podman plus freshly installed `k3d` and `kubectl`,
+the chart, Secret, and Postgres bootstrap were deployed to a live kind cluster
+and accepted by the Kubernetes 1.36 API server. Two real blockers remain: the
+container image does not build (git VCS dependencies in a git-less runtime
+stage), and the shipped `scripts/local_k8s` tooling hardcodes Docker and `k3d`
+so it cannot drive the validated Podman + kind path. The k3d path additionally
+requires a privileged cgroup-delegation change on this host. See the next
+section for the validated, reproducible steps and the outstanding fixes.
+
+## Local preview on rootless Podman
+
+This section records the validated path for running the local preview on a
+rootless Podman host (for example this Rocky 10 worktree), discovered during the
+2026-06-13 review. The shipped Makefile and `scripts/local_k8s` tooling do not
+yet implement this path; treat it both as operator guidance and as a checklist
+of implementation changes still required.
+
+### Why kind, not k3d, on rootless Podman
+
+k3d runs k3s nodes as containers, and k3s fatally requires the `cpuset` cgroup
+v2 controller (`level=fatal msg="Error: failed to find cpuset cgroup (v2)"`).
+Rootless delegation on this host is `cpu memory pids` only. Delegating `cpuset`
+and `io` needs a root-owned `/etc/systemd/system/user@.service.d/delegate.conf`
+with `Delegate=cpu cpuset io memory pids` followed by `systemctl daemon-reload`
+— a privileged host change that the plan's tooling tolerance says to escalate
+on. `KubeletInUserNamespace=true` does not avoid it, because k3s checks for
+cpuset before the kubelet starts. kind (kubeadm + containerd) does not require
+cpuset and runs unprivileged via a `systemd-run --scope --user` wrapper.
+
+### Host prerequisites (one-time, unprivileged)
+
+```bash
+# Rootless Podman API socket (k3d/kind talk to it over the Docker-compat API).
+systemctl --user enable --now podman.socket
+
+# kind tails `podman logs`; the rootless default log relay can race kind's
+# readiness watcher, so pin a file-based log driver.
+mkdir -p ~/.config/containers
+printf '[containers]\nlog_driver = "k8s-file"\n' >> ~/.config/containers/containers.conf
+```
+
+cgroup v2 must be present (`/sys/fs/cgroup/cgroup.controllers` exists) and
+systemd should be 252 or newer so the `cpu` controller is delegated to the user
+manager by default. Both hold on this host (systemd 257).
+
+### Create the cluster
+
+```bash
+export KIND_EXPERIMENTAL_PROVIDER=podman
+
+cat > /tmp/kind-episodic.yaml <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8088
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+EOF
+
+systemd-run --scope --user -p "Delegate=yes" \
+  kind create cluster --name episodic-preview \
+  --config /tmp/kind-episodic.yaml --wait 180s
+# kube context: kind-episodic-preview
+```
+
+### Build and load the image
+
+The production image must build first. As of 2026-06-13 it does not: the
+Dockerfile installs dependencies with `pip install <wheel>` in the git-less
+`python:3.14-slim` runtime stage, and the `femtologging` and `tei-rapporteur`
+`git+https` dependencies make pip fail with `Cannot find command 'git'`. Fix
+this by resolving and installing dependencies in the builder stage (which can
+add git and use `uv.lock`) and copying the populated venv into the runtime
+stage. Once the build is fixed:
+
+```bash
+podman build --tag episodic:local .
+kind load docker-image episodic:local --name episodic-preview
+```
+
+### Deploy the chart and dependency
+
+```bash
+export KIND_EXPERIMENTAL_PROVIDER=podman
+CTX=kind-episodic-preview
+NS=episodic
+
+kubectl --context "$CTX" create namespace "$NS" \
+  --dry-run=client -o yaml | kubectl --context "$CTX" apply -f -
+
+kubectl --context "$CTX" -n "$NS" create secret generic episodic-local \
+  --from-literal=database-url='postgresql+asyncpg://episodic:episodic@postgres:5432/episodic' \
+  --dry-run=client -o yaml | kubectl --context "$CTX" apply -f -
+
+# Local-only Postgres dependency (Service + StatefulSet).
+uv run --group dev python -c \
+  'from scripts.local_k8s.commands import local_postgres_manifest; \
+   from scripts.local_k8s.config import PreviewConfig; \
+   print(local_postgres_manifest(PreviewConfig(namespace="episodic")))' \
+  | kubectl --context "$CTX" apply -f -
+
+helm --kube-context "$CTX" upgrade --install episodic charts/episodic \
+  -n "$NS" --values charts/episodic/values.local.yaml --wait --timeout 5m
+```
+
+### Reach the service
+
+The chart Service is `ClusterIP`, and its Ingress uses the `traefik` class,
+which kind does not install by default. The reliable local check is a
+port-forward:
+
+```bash
+kubectl --context kind-episodic-preview -n episodic \
+  port-forward svc/episodic 8088:80 &
+curl -fsS http://127.0.0.1:8088/health/live
+curl -fsS http://127.0.0.1:8088/health/ready
+```
+
+### Tear down
+
+```bash
+KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name episodic-preview
+```
+
+### Implementation gap
+
+`scripts/local_k8s` hardcodes `docker` and `k3d` (in `REQUIRED_TOOLS` and the
+command builders) and offers no `DOCKER_HOST`/`DOCKER_SOCK` handling, podman
+engine selection, or kind provider, so `make local-k8s-up` cannot execute the
+path above. The repository's own workflow test helper (`tests/utils.py`)
+already standardises on Podman. Before the branch can claim a runnable local
+preview, the tooling needs an engine abstraction (Docker or Podman) and a
+provider abstraction (k3d or kind), or the plan must document Docker-with-cgroup
+-delegation as a hard prerequisite and scope rootless Podman out explicitly.
 
 ## Context and orientation
 
