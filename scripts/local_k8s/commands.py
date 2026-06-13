@@ -1,4 +1,4 @@
-"""Command construction for the local k3d preview workflow."""
+"""Command construction for the local Kubernetes preview workflow."""
 
 import dataclasses as dc
 import subprocess
@@ -68,14 +68,97 @@ def k3d_cluster_create_command(config: PreviewConfig) -> list[str]:
     ]
 
 
+def kind_cluster_config(config: PreviewConfig) -> str:
+    """Build the kind cluster config for the local preview."""
+    return """\
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+"""
+
+
+def _kind_command_prefix(config: PreviewConfig) -> list[str]:
+    """Return the kind command prefix for the selected container engine."""
+    if config.container_engine == "podman":
+        return ["env", "KIND_EXPERIMENTAL_PROVIDER=podman", "kind"]
+    return ["kind"]
+
+
+def cluster_create_command(config: PreviewConfig) -> list[str]:
+    """Build the cluster creation command for the configured provider."""
+    if config.cluster_provider != "kind":
+        return k3d_cluster_create_command(config)
+
+    command = [
+        *_kind_command_prefix(config),
+        "create",
+        "cluster",
+        "--name",
+        config.cluster_name,
+        "--config",
+        "-",
+        "--wait",
+        "180s",
+    ]
+    if config.container_engine != "podman":
+        return command
+    return [
+        "systemd-run",
+        "--scope",
+        "--user",
+        "-p",
+        "Delegate=yes",
+        *command,
+    ]
+
+
+def cluster_create_input(config: PreviewConfig) -> str | None:
+    """Return stdin for cluster creation when the provider needs a config."""
+    if config.cluster_provider == "kind":
+        return kind_cluster_config(config)
+    return None
+
+
 def k3d_cluster_delete_command(config: PreviewConfig) -> list[str]:
     """Build the k3d cluster deletion command."""
     return ["k3d", "cluster", "delete", config.cluster_name]
 
 
+def cluster_delete_command(config: PreviewConfig) -> list[str]:
+    """Build the cluster deletion command for the configured provider."""
+    if config.cluster_provider == "kind":
+        return [
+            *_kind_command_prefix(config),
+            "delete",
+            "cluster",
+            "--name",
+            config.cluster_name,
+        ]
+    return k3d_cluster_delete_command(config)
+
+
+def cluster_get_command(config: PreviewConfig) -> list[str]:
+    """Build the cluster existence command for the configured provider."""
+    if config.cluster_provider == "kind":
+        return [*_kind_command_prefix(config), "get", "clusters"]
+    return ["k3d", "cluster", "get", config.cluster_name]
+
+
 def k3d_cluster_get_json_command(config: PreviewConfig) -> list[str]:
     """Build the k3d cluster inspection command with JSON output."""
     return ["k3d", "cluster", "get", config.cluster_name, "-o", "json"]
+
+
+def cluster_get_json_command(config: PreviewConfig) -> list[str]:
+    """Build the provider-specific cluster inspection command."""
+    if config.cluster_provider == "kind":
+        return [
+            config.container_engine,
+            "inspect",
+            f"{config.cluster_name}-control-plane",
+        ]
+    return k3d_cluster_get_json_command(config)
 
 
 def k3d_image_import_command(config: PreviewConfig) -> list[str]:
@@ -90,9 +173,50 @@ def k3d_image_import_command(config: PreviewConfig) -> list[str]:
     ]
 
 
+def image_load_command(config: PreviewConfig) -> list[str]:
+    """Build the image load/import command for the configured provider."""
+    if config.cluster_provider == "kind":
+        if config.container_engine == "podman":
+            return [
+                *_kind_command_prefix(config),
+                "load",
+                "image-archive",
+                str(config.image_archive_path),
+                "--name",
+                config.cluster_name,
+            ]
+        return [
+            *_kind_command_prefix(config),
+            "load",
+            "docker-image",
+            config.image_name,
+            "--name",
+            config.cluster_name,
+        ]
+    return k3d_image_import_command(config)
+
+
+def image_build_command(config: PreviewConfig) -> list[str]:
+    """Build the local container image build command."""
+    return [config.container_engine, "build", "--tag", config.image_name, "."]
+
+
+def image_save_command(config: PreviewConfig) -> list[str] | None:
+    """Build the image archive command when the provider needs one."""
+    if config.cluster_provider == "kind" and config.container_engine == "podman":
+        return [
+            config.container_engine,
+            "save",
+            "--output",
+            str(config.image_archive_path),
+            config.image_name,
+        ]
+    return None
+
+
 def docker_build_command(config: PreviewConfig) -> list[str]:
-    """Build the local Docker image build command."""
-    return ["docker", "build", "--tag", config.image_name, "."]
+    """Build the legacy local Docker image build command."""
+    return image_build_command(config)
 
 
 def kubectl_namespace_command(config: PreviewConfig) -> list[str]:
@@ -266,4 +390,18 @@ def kubectl_logs_command(config: PreviewConfig) -> list[str]:
         f"deploy/{config.release_name}",
         "--tail",
         "100",
+    ]
+
+
+def kubectl_port_forward_command(config: PreviewConfig) -> list[str]:
+    """Build the port-forward command needed for kind's ClusterIP Service."""
+    return [
+        "kubectl",
+        "--context",
+        config.kube_context(),
+        "--namespace",
+        config.namespace,
+        "port-forward",
+        f"svc/{config.release_name}",
+        f"{config.ingress_port}:80",
     ]

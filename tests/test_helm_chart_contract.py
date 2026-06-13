@@ -74,7 +74,9 @@ def test_helm_local_manifest_includes_nile_valley_contract() -> None:
     assert "kind: Service" in manifest, "local render must include a Service."
     assert "kind: ConfigMap" in manifest, "local render must include a ConfigMap."
     assert "kind: Ingress" in manifest, "local render must include an Ingress."
-    assert 'image: "episodic:local"' in manifest, "local image tag must render."
+    assert 'image: "localhost/episodic:local"' in manifest, (
+        "local image tag must render."
+    )
     assert "path: /health/live" in manifest, "liveness probe path must render."
     assert "path: /health/ready" in manifest, "readiness probe path must render."
     assert "name: episodic-local" in manifest, "existing Secret reference must render."

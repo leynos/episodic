@@ -81,25 +81,30 @@ Cyclopts and delegates to small helper modules for configuration, validation,
 command construction, and orchestration.
 
 `local-k8s-up` validates the required tools, creates or reuses the configured
-`k3d` cluster, builds and imports the local image unless skipped, creates the
+local cluster, builds and imports the local image unless skipped, creates the
 application namespace and Secret, applies a local-only Postgres Service and
 StatefulSet, installs the chart with `charts/episodic/values.local.yaml`, and
-waits for Helm readiness.
+waits for Helm readiness. The default provider is Docker plus `k3d`; rootless
+Podman hosts can use
+`make local-k8s-up LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind`.
 
-When the configured cluster already exists, `local-k8s-up` inspects the
+When a configured `k3d` cluster already exists, `local-k8s-up` inspects the
 cluster's host port mappings and fails clearly if the existing ingress port
-does not match the requested port. `local-k8s-status` and `local-k8s-logs`
-first check that the cluster exists, so calling them before `local-k8s-up`
-prints a clear missing-cluster message instead of surfacing a raw `kubectl`
-traceback.
+does not match the requested port. Kind previews use `kubectl port-forward`
+instead of a cluster host-port mapping, so existing kind clusters created with
+the old host-port model are rejected and should be recreated.
+`local-k8s-status` and `local-k8s-logs` first check that the cluster exists, so
+calling them before `local-k8s-up` prints a clear missing-cluster message
+instead of surfacing a raw `kubectl` traceback.
 
 The default preview values are intentionally local-only:
 
 - cluster: `episodic-preview`;
 - namespace: `episodic`;
-- image: `episodic:local`;
+- image: `localhost/episodic:local`;
 - ingress host: `episodic.localhost`;
-- ingress port: `8088`; and
+- ingress port: `8088` for `k3d`, or the suggested local port-forward port for
+  kind; and
 - Secret name: `episodic-local`.
 
 The default database URL contains local development credentials that match the
@@ -115,8 +120,8 @@ Local preview helper behaviour is validated by
 `tests/test_local_k8s_tooling.py`, which covers command construction,
 prerequisite validation, Postgres bootstrap ordering, ingress-port conflict
 handling, and idempotent missing-cluster handling without requiring a live
-Kubernetes cluster. The Cyclopts command surface is covered by the
-pytest-bdd scenario in `tests/features/local_k8s_preview.feature`.
+Kubernetes cluster. The Cyclopts command surface is covered by the pytest-bdd
+scenario in `tests/features/local_k8s_preview.feature`.
 
 Full milestone validation uses:
 

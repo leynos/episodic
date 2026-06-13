@@ -3,15 +3,20 @@
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
 
-WORKDIR /src
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends build-essential git \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock README.md ./
 COPY alembic ./alembic
 COPY episodic ./episodic
 
-RUN uv build --wheel --out-dir /dist
+RUN uv sync --frozen --no-dev --no-editable
 
 FROM python:3.14-slim AS runtime
 
@@ -23,13 +28,9 @@ WORKDIR /app
 
 RUN groupadd --system --gid 10001 episodic \
     && useradd --system --uid 10001 --gid episodic --home-dir /app --shell /usr/sbin/nologin episodic \
-    && python -m venv /app/.venv \
     && chown -R episodic:episodic /app
 
-COPY --from=builder /dist/*.whl /tmp/
-
-RUN /app/.venv/bin/python -m pip install --no-cache-dir /tmp/*.whl \
-    && rm -rf /tmp/*.whl
+COPY --from=builder --chown=episodic:episodic /app/.venv /app/.venv
 
 USER 10001:10001
 

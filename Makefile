@@ -7,6 +7,8 @@ TOOLS = $(MDFORMAT_ALL)
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 PYTEST_XDIST_WORKERS ?= 1
+LOCAL_K8S_ENGINE ?= docker
+LOCAL_K8S_PROVIDER ?= k3d
 PYLINT_PYTHON ?= pypy
 PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
 PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
@@ -99,17 +101,21 @@ test: build crosshair $(VENV_TOOLS) ## Run tests
 check-migrations: build $(VENV_TOOLS) ## Check for schema drift between models and migrations
 	$(UV_ENV) $(UV) run python -m episodic.canonical.storage.migration_check
 
-local-k8s-up: build ## Create or update the local k3d preview
-	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py up
+local-k8s-up: build ## Create or update the local Kubernetes preview
+	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py up \
+	  --engine $(LOCAL_K8S_ENGINE) --provider $(LOCAL_K8S_PROVIDER)
 
-local-k8s-down: build ## Tear down the local k3d preview
-	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py down
+local-k8s-down: build ## Tear down the local Kubernetes preview
+	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py down \
+	  --engine $(LOCAL_K8S_ENGINE) --provider $(LOCAL_K8S_PROVIDER)
 
-local-k8s-status: build ## Inspect the local k3d preview
-	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py status
+local-k8s-status: build ## Inspect the local Kubernetes preview
+	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py status \
+	  --engine $(LOCAL_K8S_ENGINE) --provider $(LOCAL_K8S_PROVIDER)
 
-local-k8s-logs: build ## Show logs from the local k3d preview
-	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py logs
+local-k8s-logs: build ## Show logs from the local Kubernetes preview
+	$(UV_ENV) $(UV) run --group dev scripts/local_k8s.py logs \
+	  --engine $(LOCAL_K8S_ENGINE) --provider $(LOCAL_K8S_PROVIDER)
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \

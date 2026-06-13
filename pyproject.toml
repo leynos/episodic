@@ -116,6 +116,7 @@ extend-ignore = [
 "tests/test_generation_orchestration_snapshots.py" = ["D103", "TC002"]
 "scripts/local_k8s.py" = ["FBT001", "FBT002", "PLR0913", "PLR0917"]
 "scripts/local_k8s/*.py" = ["S404"]
+"tests/test_local_k8s_kind_tooling.py" = ["S404"]
 "tests/test_local_k8s_tooling.py" = ["S404"]
 
 [tool.ruff.lint.flake8-import-conventions]
