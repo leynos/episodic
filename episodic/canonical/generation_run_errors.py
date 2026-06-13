@@ -43,6 +43,3 @@ class CheckpointAlreadyTerminal(  # noqa: N818 - stable ExecPlan contract.
     def __init__(self, checkpoint_id: uuid.UUID) -> None:
         msg = f"generation checkpoint is already terminal: {checkpoint_id}"
         super().__init__(msg)
-
-
-CheckpointAlreadyResponded = CheckpointAlreadyTerminal

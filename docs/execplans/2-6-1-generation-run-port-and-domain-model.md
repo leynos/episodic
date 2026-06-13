@@ -39,7 +39,7 @@ Success is observable in these behaviours:
 4. A behavioural test using `pytest-bdd` walks a checkpoint from `created` to
    `responded` via the domain factory `Checkpoint.respond(...)`, and a separate
    scenario asserts that a second response on the same checkpoint raises
-   `CheckpointAlreadyResponded`.
+   `CheckpointAlreadyTerminal`.
 5. The architecture gate (`make lint`, which runs Hecate) passes with the new
    modules placed in the `domain_ports` group; no inbound or outbound adapter
    imports leak across the boundary.
@@ -616,8 +616,8 @@ Add:
 - Domain factory methods on `Checkpoint`: `respond(...)`,
   `time_out(self, at: dt.datetime) -> Checkpoint`, and
   `cancel(self, at: dt.datetime) -> Checkpoint`. Each returns a new frozen
-  instance and raises `CheckpointAlreadyResponded` (or a more general
-  `CheckpointAlreadyTerminal`) when applied to a terminal checkpoint.
+  instance and raises `CheckpointAlreadyTerminal` when applied to a terminal
+  checkpoint.
 - A new module `episodic/canonical/generation_run_errors.py` for the
   exception hierarchy: `GenerationRunError` (base), `RunNotFound`,
   `RunAlreadyTerminal`, `StaleEventSequence`, `CheckpointNotFound`,
