@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import typing as typ
 
 import pytest
@@ -85,6 +86,33 @@ async def test_register_upload_keeps_pending_row_when_ready_commit_fails(
     async with object_store.open(record.storage_key) as chunks:
         stored_payload = b"".join([chunk async for chunk in chunks])
     assert stored_payload == payload, "expected object-store payload to match input"
+
+
+@pytest.mark.asyncio
+async def test_register_upload_recomputes_untrusted_payload_hash(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    """A caller-supplied payload digest cannot override the uploaded bytes."""
+    payload = b"trusted bytes\n"
+    object_store = FilesystemObjectStore(tmp_path / "objects")
+
+    upload = await register_upload(
+        lambda: SqlAlchemyUnitOfWork(session_factory),
+        object_store,
+        UploadBytesRequest(
+            owner_principal_id="principal",
+            content_type="text/plain",
+            declared_size=len(payload),
+            declared_sha256=None,
+            payload=payload,
+            max_bytes=1024,
+            metadata={"language": "en"},
+            payload_sha256="bad",
+        ),
+    )
+
+    assert upload.content_hash == f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
 def test_validate_declared_upload_uses_precomputed_hash() -> None:

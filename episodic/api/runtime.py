@@ -152,6 +152,18 @@ def _query_param_scalar(value: str | tuple[str, ...]) -> str:
     return ",".join(value) if isinstance(value, tuple) else value
 
 
+def _apply_query_connect_overrides(
+    probe_kwargs: PsycopgConnectKwargs, url: URL
+) -> None:
+    """Apply psycopg connection kwargs that SQLAlchemy stores in the query."""
+    if host := url.query.get("host"):
+        probe_kwargs["host"] = _query_param_scalar(host)
+    if port := url.query.get("port"):
+        probe_kwargs["port"] = int(_query_param_scalar(port))
+    if sslmode := url.query.get("sslmode"):
+        probe_kwargs["sslmode"] = _query_param_scalar(sslmode)
+
+
 def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
     """Return Psycopg connection kwargs without rendering secrets into a URL."""
     connection_kwargs = url.translate_connect_args(
@@ -169,10 +181,7 @@ def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
         probe_kwargs["password"] = value
     if port := connection_kwargs.get("port"):
         probe_kwargs["port"] = int(port)
-    if host := url.query.get("host"):
-        probe_kwargs["host"] = _query_param_scalar(host)
-    if sslmode := url.query.get("sslmode"):
-        probe_kwargs["sslmode"] = _query_param_scalar(sslmode)
+    _apply_query_connect_overrides(probe_kwargs, url)
     return probe_kwargs
 
 

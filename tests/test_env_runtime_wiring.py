@@ -69,6 +69,18 @@ def test_normalize_database_urls_avoids_rendering_passwords() -> None:
     assert probe_kwargs["sslmode"] == "require"
 
 
+def test_normalize_database_urls_uses_query_port_for_probe() -> None:
+    """Pass Unix-socket query port settings to the psycopg readiness probe."""
+    from episodic.api.runtime import _normalize_database_urls
+
+    _, probe_kwargs = _normalize_database_urls(
+        "postgresql:///episodic?host=/var/run/postgresql&port=6544"
+    )
+
+    assert probe_kwargs["host"] == "/var/run/postgresql"
+    assert probe_kwargs["port"] == 6544
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "strip_driver",

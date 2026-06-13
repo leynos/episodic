@@ -390,6 +390,13 @@ The Continuous Integration (CI) pipeline (`.github/workflows/ci.yml`) runs
 pull request that modifies Object-Relational Mapping (ORM) models without an
 accompanying Alembic migration will be blocked.
 
+The CI job also sets two Cargo network overrides for builds that compile Rust
+extensions. `CARGO_HTTP_MULTIPLEXING` is set to `"false"` so CI prefers
+network reliability over HTTP/2 multiplexing on flaky runner networks.
+`CARGO_NET_RETRY` is set to `"10"` based on empirical CI stability testing of
+transient crates.io fetch failures. These settings are CI-specific and do not
+change local development defaults.
+
 ### Developer workflow
 
 1. Modify ORM models in `episodic/canonical/storage/models.py`.

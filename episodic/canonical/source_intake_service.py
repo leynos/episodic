@@ -125,9 +125,7 @@ async def register_upload(
     runtime: SourceIntakeRuntime | None = None,
 ) -> Upload:
     """Persist upload bytes after committing a recoverable pending row."""
-    payload_sha256 = (
-        request.payload_sha256 or hashlib.sha256(request.payload).hexdigest()
-    )
+    payload_sha256 = hashlib.sha256(request.payload).hexdigest()
     request = dc.replace(request, payload_sha256=payload_sha256)
     _validate_declared_upload(request)
     providers = _source_intake_runtime(runtime)
