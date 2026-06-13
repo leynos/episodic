@@ -106,9 +106,8 @@ async def test_attach_upload_reports_missing_upload(
     tmp_path: Path,
 ) -> None:
     """Attaching an unknown upload to a known job returns upload_not_found."""
+    job_id = await _create_profile_and_job(session_factory, tmp_path)
     async with _source_intake_client(session_factory, tmp_path) as client:
-        profile_id = await _create_series_profile(client)
-        job_id = await _create_ingestion_job(client, profile_id)
         response = await client.post(
             f"/v1/ingestion-jobs/{job_id}/sources",
             headers={"Idempotency-Key": "missing-upload"},
@@ -125,11 +124,8 @@ async def test_attach_upload_reports_not_ready_upload(
     tmp_path: Path,
 ) -> None:
     """Attaching a pending upload returns upload_not_ready."""
-    async with _source_intake_client(session_factory, tmp_path) as client:
-        profile_id = await _create_series_profile(client)
-        job_id = await _create_ingestion_job(client, profile_id)
+    job_id = await _create_profile_and_job(session_factory, tmp_path)
     upload_id = await _create_pending_upload(session_factory)
-
     async with _source_intake_client(session_factory, tmp_path) as client:
         response = await client.post(
             f"/v1/ingestion-jobs/{job_id}/sources",
@@ -277,6 +273,16 @@ async def _create_ingestion_job(client: httpx.AsyncClient, profile_id: str) -> s
     )
     assert response.status_code == 201, response.text
     return typ.cast("str", response.json()["id"])
+
+
+async def _create_profile_and_job(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> str:
+    """Create a series profile and an ingestion job; return the job id."""
+    async with _source_intake_client(session_factory, tmp_path) as client:
+        profile_id = await _create_series_profile(client)
+        return await _create_ingestion_job(client, profile_id)
 
 
 async def _create_pending_upload(
