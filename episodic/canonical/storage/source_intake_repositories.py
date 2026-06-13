@@ -221,7 +221,6 @@ class SqlAlchemyIdempotencyStore(_RepositoryBase, IdempotencyStore):
                 logger,
                 ("source_intake_idempotency_acquire_conflict operation=%s"),
                 request.operation,
-                exc_info=True,
             )
             record = await self._get_record(
                 principal_id=request.principal_id,

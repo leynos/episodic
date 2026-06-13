@@ -63,7 +63,8 @@ def _resolve_sha256(
     """Return the hex SHA-256 string from either digest source."""
     if digest is None:
         if precomputed_sha256 is None:
-            raise AssertionError
+            msg = "digest and precomputed_sha256 cannot both be None"
+            raise AssertionError(msg)
         return precomputed_sha256
     return digest.hexdigest()
 

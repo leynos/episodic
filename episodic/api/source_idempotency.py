@@ -98,7 +98,7 @@ async def _idempotent_response(
         case Acquired(record_id=record_id):
             try:
                 response = await work()
-            except BaseException:
+            except Exception:
                 async with uow_factory() as uow:
                     await uow.idempotency.fail(record_id=record_id)
                     await uow.commit()
