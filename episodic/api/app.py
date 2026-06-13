@@ -39,6 +39,7 @@ from .resources import (
     SeriesProfileHistoryResource,
     SeriesProfileResource,
     SeriesProfilesResource,
+    UploadResource,
     UploadsResource,
 )
 from .source_intake_support import UploadResourceConfig
@@ -148,6 +149,7 @@ def _register_intake_routes(
             ),
         ),
     )
+    app.add_route("/v1/uploads/{upload_id}", UploadResource(uow_factory))
     app.add_route("/v1/ingestion-jobs", IngestionJobsResource(uow_factory))
     app.add_route(
         "/v1/ingestion-jobs/{job_id}",

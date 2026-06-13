@@ -2,12 +2,13 @@
 
 import dataclasses as dc
 import enum
-import logging
 import typing as typ
 
 import falcon
 
-logger = logging.getLogger(__name__)
+from episodic.logging import LogLevel, get_logger, log_warning
+
+logger = get_logger(__name__)
 
 
 class AuthorizationDecision(enum.StrEnum):
@@ -81,11 +82,13 @@ class AuthorizationMiddleware:
         )
         try:
             result = _authorization_result(await self._authorization.decide(context))
-        except Exception:
-            logger.exception(
+        except OSError, RuntimeError, TypeError, ValueError:
+            log_warning(
+                logger,
                 "Authorization adapter failed for %s %s.",
                 context.method,
                 context.path,
+                exc_info=True,
             )
             resp.media = {
                 "code": "service_unavailable",
@@ -141,9 +144,7 @@ def _log_authorization_denial(
     context: AuthorizationContext,
 ) -> None:
     """Log non-permit decisions without recording credential material."""
-    logger.debug(
-        "Authorization denied with %s for %s %s.",
-        decision,
-        context.method,
-        context.path,
+    logger.log(
+        LogLevel.DEBUG,
+        (f"Authorization denied with {decision} for {context.method} {context.path}."),
     )

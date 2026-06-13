@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import typing as typ
 
 import falcon
@@ -33,7 +32,6 @@ from episodic.api.source_intake_support import (
     json_body_hash,
     parse_optional_payload_uuid,
     parse_upload_form,
-    reject_oversized,
     require_str,
 )
 from episodic.canonical.domain import IngestionJobListFilters, IntakeState
@@ -47,6 +45,8 @@ from episodic.canonical.source_intake_service import (
     attach_source_to_ingestion_job,
     create_ingestion_job,
     get_ingestion_job_status,
+    get_upload,
+    list_ingestion_job_sources,
     list_ingestion_jobs,
     register_upload,
 )
@@ -81,8 +81,7 @@ class UploadsResource:
                 ),
                 code="service_unavailable",
             )
-        parsed = await parse_upload_form(req)
-        reject_oversized(parsed.payload, self._config.max_bytes)
+        parsed = await parse_upload_form(req, max_bytes=self._config.max_bytes)
         if parsed.content_type not in self._config.content_types:
             raise http_error(
                 falcon.HTTPUnsupportedMediaType(
@@ -96,10 +95,9 @@ class UploadsResource:
             "declared_size": parsed.declared_size,
             "declared_sha256": parsed.declared_sha256,
         }
-        payload_sha256_hex = hashlib.sha256(parsed.payload).hexdigest()
         body_hash = multipart_request_hash(
             _UPLOAD_OPERATION,
-            body_sha256=payload_sha256_hex,
+            body_sha256=parsed.payload_sha256,
             metadata=metadata,
         )
 
@@ -116,7 +114,6 @@ class UploadsResource:
                         payload=parsed.payload,
                         max_bytes=self._config.max_bytes,
                         metadata=parsed.metadata,
-                        payload_sha256=payload_sha256_hex,
                     ),
                 )
             except SourceIntakeError as exc:
@@ -133,6 +130,30 @@ class UploadsResource:
             work=work,
         )
         apply_response(resp, result)
+
+
+class UploadResource:
+    """Handle one source upload metadata endpoint."""
+
+    def __init__(self, uow_factory: UowFactory) -> None:
+        self._uow_factory = uow_factory
+
+    async def on_get(
+        self,
+        req: falcon.Request,
+        resp: falcon.Response,
+        upload_id: str,
+    ) -> None:
+        """Return one upload metadata envelope."""
+        del req
+        parsed_upload_id = parse_uuid(upload_id, "upload_id")
+        async with self._uow_factory() as uow:
+            try:
+                upload = await get_upload(uow, parsed_upload_id)
+            except SourceIntakeError as exc:
+                raise map_source_intake_error(exc) from exc
+        resp.media = serialize_upload(upload)
+        resp.status = falcon.HTTP_200
 
 
 class IngestionJobsResource:
@@ -267,3 +288,29 @@ class IngestionJobSourcesResource:
             work=work,
         )
         apply_response(resp, result)
+
+    async def on_get(
+        self,
+        req: falcon.Request,
+        resp: falcon.Response,
+        job_id: str,
+    ) -> None:
+        """List source attachments for one ingestion job."""
+        parsed_job_id = parse_uuid(job_id, "job_id")
+        pagination = parse_pagination(req)
+        async with self._uow_factory() as uow:
+            try:
+                page = await list_ingestion_job_sources(
+                    uow,
+                    parsed_job_id,
+                    pagination,
+                )
+            except SourceIntakeError as exc:
+                raise map_source_intake_error(exc) from exc
+        resp.media = {
+            "items": [serialize_ingestion_job_source(source) for source in page.items],
+            "limit": page.pagination.limit,
+            "offset": page.pagination.offset,
+            "total": page.total,
+        }
+        resp.status = falcon.HTTP_200

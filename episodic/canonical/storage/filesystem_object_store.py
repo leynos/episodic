@@ -70,7 +70,12 @@ def _resolve_sha256(
 
 
 class FilesystemObjectStore(ObjectStorePort):
-    """Store object bytes under a configured filesystem root."""
+    """Store object bytes under a configured filesystem root.
+
+    This local adapter intentionally uses blocking filesystem calls inside its
+    async port methods because it is the development and CI object store. A
+    production network adapter should provide non-blocking I/O at this port.
+    """
 
     def __init__(self, root: pathlib.Path) -> None:
         self._root = root

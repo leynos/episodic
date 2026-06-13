@@ -499,10 +499,11 @@ Each entry should follow the form:
   prose algorithm material. Evidence: hashing the exact material shown in ADR
   015 produces
   `b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12`, while the
-  review gate and ADR both require
+  previously published vector was
   `f03f8d4c738536bcd1c13cc34d6816f8ea0672c3e2d47c2cbbaf5c8ecbda5e2c`. Impact:
-  `multipart_request_hash` preserves the published ADR vector as a
-  compatibility contract, and the focused unit test pins the required digest.
+  ADR 015, `multipart_request_hash`, and the focused unit test now use the
+  algorithmic digest. The implementation no longer contains an input-specific
+  compatibility branch for the erroneous vector.
 - Observation: Falcon ASGI multipart parsing does not expose the WSGI
   `MultipartForm` concrete class in endpoint tests. Evidence: the first upload
   test returned the adapter's "multipart/form-data payload is required" error
@@ -532,6 +533,26 @@ should follow the form:
 - Decision: the choice taken.
   Rationale: why this choice over alternatives. Date/Author: timestamp and who
   decided.
+
+- Decision: Keep HTTP idempotency acquire, resource work, and completion in
+  separate unit-of-work transactions for the adapter-level orchestration.
+  Rationale: `run_idempotent` must acquire and commit the idempotency record
+  before running resource work so concurrent duplicate requests observe
+  `in_flight`; resource services already own their commit boundaries; and the
+  completion write must run after the response is encoded. This is weaker than
+  the initial "same transaction as the created resource" alternative for crash
+  recovery: a crash after resource commit but before completion can leave a
+  completed side effect with an `in_flight` idempotency record until expiry or
+  recovery. The implementation mitigates work exceptions by deleting the
+  acquired row through `IdempotencyStore.fail`, enforces expiry on reacquire,
+  and documents recovery rather than claiming same-transaction semantics.
+  Date/Author: 2026-06-13 / Codex.
+- Decision: Preserve the 50 MB default upload cap from ADR 015 and this
+  ExecPlan. Rationale: the implementation briefly used a 25 MB dependency
+  default, but the accepted plan and risk mitigation consistently specify 50
+  MB. The API dependency default now matches the documented cap, while tests
+  can still override the cap to exercise `413 payload_too_large`. Date/Author:
+  2026-06-13 / Codex.
 
 Seed entries (DRAFT):
 
@@ -1073,12 +1094,12 @@ Application services live in the `application` Hecate group (existing
      The function accepts the streamed body's SHA-256 rather than the bytes
      themselves so the streaming hash computed during upload is the same
      value used for the body fingerprint.
-   - `acquire_or_replay(store, *, principal, operation, idempotency_key,
-     body_hash,
-     serialise_outcome, deserialise_outcome, work) -> IdempotencyOutcome` is
-     the orchestration wrapper that resources call from the inbound adapter.
-     The adapter supplies the HTTP codec functions; the domain store sees only
-     opaque `serialised_outcome` bytes.
+   - The domain idempotency module deliberately exposes only canonical hashing
+     helpers and outcome types. The HTTP orchestration wrapper lives in
+     `episodic.api.source_idempotency.run_idempotent`, where the adapter can
+     own request headers, error envelopes, response codecs, and
+     `IdempotencyStore.fail` cleanup on work failure. The domain store sees
+     only opaque `serialised_outcome` bytes.
 4. Where the new domain transitions require cross-repository commits
    (source attachment + intake-state transition + idempotency record), wrap
    them in the existing `CanonicalUnitOfWork` and commit once. The two-phase
@@ -1100,15 +1121,14 @@ services compile.
 These additions live under `episodic.api.*` and may import from `application`
 and `domain_ports`.
 
-1. Add `episodic/api/idempotency.py`. Define an
-   `IdempotencyMiddleware` that, on requests matching the configured idempotent
-   routes, reads the `Idempotency-Key` header, computes the request-body hash,
-   attempts `acquire_or_replay`, and short-circuits the response with a
-   replayed payload when the outcome is `Replay` or `InFlight`. On `Conflict`
-   it returns `409` with `{"code": "idempotency_conflict", ...}`. On `Acquired`
-   it stashes a completion callback on the request context that the resource
-   invokes after the resource has been created so the adapter can serialise the
-   HTTP status, body, and headers into the opaque outcome bytes passed to
+1. Add `episodic/api/source_idempotency.py`. Define `run_idempotent`, which
+   reads the `Idempotency-Key` header, receives the already-computed
+   request-body hash from the resource, acquires the idempotency record through
+   the unit of work, and short-circuits with a replayed payload when the
+   outcome is `Replay`. On `InFlight` or `Conflict` it returns the documented
+   `409` envelope. On `Acquired` it runs the resource work, records failure
+   through `IdempotencyStore.fail` for retryability, and serialises the HTTP
+   status and body into the opaque outcome bytes passed to
    `IdempotencyStore.complete`.
 2. Add `episodic/api/upload_helpers.py` with the multipart parser, the
    content-type allowlist (`UPLOAD_CONTENT_TYPE_ALLOWLIST` constant), the

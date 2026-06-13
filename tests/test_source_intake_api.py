@@ -14,7 +14,11 @@ from episodic.api.authorization import (
     AuthorizationDecision,
     AuthorizationResult,
 )
-from episodic.api.source_idempotency import IdempotentResponse, _idempotent_response
+from episodic.api.source_idempotency import (
+    IdempotentResponse,
+    _encode_outcome,
+    _idempotent_response,
+)
 from episodic.canonical.idempotency import Acquired, IdempotencyAcquireRequest
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
 from episodic.canonical.storage.source_intake_models import IdempotencyRecordModel
@@ -282,6 +286,17 @@ async def test_idempotent_response_allows_retry_after_work_failure(
         await uow.commit()
 
     assert isinstance(retry_outcome, Acquired)
+
+
+def test_idempotency_outcome_encoding_rejects_large_payloads() -> None:
+    """Idempotency replay envelopes are capped at 64 KiB."""
+    response = IdempotentResponse(
+        "201 Created",
+        {"content": "x" * (64 * 1024)},
+    )
+
+    with pytest.raises(ValueError, match="64 KiB"):
+        _encode_outcome(response)
 
 
 async def _create_series_profile(client: httpx.AsyncClient) -> str:

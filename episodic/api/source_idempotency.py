@@ -30,6 +30,8 @@ _IDEMPOTENCY_KEY_REQUIRED = "Idempotency-Key header is required."
 _REPLAY_PAYLOAD_INVALID = "Invalid idempotency replay payload."
 _IDEMPOTENCY_CONFLICT = "Idempotency key body mismatch."
 _IDEMPOTENCY_IN_FLIGHT = "Idempotent request is in flight."
+_SERIALISED_OUTCOME_MAX_BYTES = 64 * 1024
+_SERIALISED_OUTCOME_TOO_LARGE = "Idempotency outcome exceeds 64 KiB."
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -156,7 +158,10 @@ def _idempotency_in_flight(record_id: uuid.UUID) -> falcon.HTTPConflict:
 
 def _encode_outcome(response: IdempotentResponse) -> bytes:
     """Serialize an HTTP adapter response for idempotent replay."""
-    return canonical_json_bytes({"status": response.status, "media": response.media})
+    payload = canonical_json_bytes({"status": response.status, "media": response.media})
+    if len(payload) > _SERIALISED_OUTCOME_MAX_BYTES:
+        raise ValueError(_SERIALISED_OUTCOME_TOO_LARGE)
+    return payload
 
 
 def _decode_outcome(payload: bytes) -> IdempotentResponse:

@@ -1,27 +1,39 @@
 """Application services for source-intake REST workflows."""
-# pylint: disable=too-many-lines
 
 from __future__ import annotations
 
 import asyncio
-import collections.abc as cabc
 import dataclasses as dc
-import datetime as dt
 import hashlib
 import typing as typ
-import uuid
 
 from episodic.logging import get_logger, log_info, log_warning
-from episodic.observability import NoopMetrics, PerfCounterClock
 
 from .domain import IngestionJob, IngestionJobListFilters, IngestionStatus, IntakeState
 from .ingestion_sources import AttachmentKind, IngestionJobSource
+from .source_intake_errors import (
+    IngestionJobNotFoundError,
+    SeriesProfileNotFoundError,
+    SourceIntakeError,
+    UploadHashMismatchError,
+    UploadNotFoundError,
+    UploadNotReadyError,
+    UploadSizeMismatchError,
+)
+from .source_intake_runtime import SourceIntakeRuntime, source_intake_runtime
+from .source_intake_types import (
+    AttachSourceRequest,
+    CreateIngestionJobRequest,
+    IngestionJobPage,
+    IngestionJobSourcePage,
+    UploadBytesRequest,
+)
 from .uploads import Upload, UploadState
 
 if typ.TYPE_CHECKING:
-    from episodic.observability import MetricsPort, MonotonicClockPort
+    import collections.abc as cabc
+    import uuid
 
-    from .domain import JsonMapping
     from .object_store import ObjectStorePort, StoredObject
     from .pagination import Pagination
     from .unit_of_work_protocols import CanonicalUnitOfWork
@@ -30,91 +42,8 @@ if typ.TYPE_CHECKING:
 
 
 _UPLOAD_STORAGE_PREFIX = "uploads"
-Clock = cabc.Callable[[], dt.datetime]
-UuidFactory = cabc.Callable[[], uuid.UUID]
 logger = get_logger(__name__)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class UploadBytesRequest:
-    """Validated upload request data."""
-
-    owner_principal_id: str | None
-    content_type: str
-    declared_size: int
-    declared_sha256: str | None
-    payload: bytes
-    max_bytes: int
-    metadata: JsonMapping
-    payload_sha256: str | None = None  # precomputed by caller; avoids rehashing
-
-
-@dc.dataclass(frozen=True, slots=True)
-class CreateIngestionJobRequest:
-    """Request to create an intake-stage ingestion job."""
-
-    series_profile_id: uuid.UUID
-    target_episode_id: uuid.UUID | None
-
-
-@dc.dataclass(frozen=True, slots=True)
-class AttachSourceRequest:
-    """Request to attach one source to an ingestion job."""
-
-    ingestion_job_id: uuid.UUID
-    attachment_kind: AttachmentKind
-    upload_id: uuid.UUID | None
-    source_uri: str | None
-    source_type: str
-    weight: float
-    metadata: JsonMapping
-
-
-@dc.dataclass(frozen=True, slots=True)
-class IngestionJobPage:
-    """Page of ingestion jobs plus total count."""
-
-    items: cabc.Sequence[IngestionJob]
-    total: int
-    pagination: Pagination
-
-
-@dc.dataclass(frozen=True, slots=True)
-class SourceIntakeRuntime:
-    """Runtime providers used by source-intake command services."""
-
-    clock: Clock
-    uuid_factory: UuidFactory
-    metrics: MetricsPort
-    monotonic_clock: MonotonicClockPort
-
-
-class SourceIntakeError(Exception):
-    """Base class for source-intake domain errors."""
-
-
-class SeriesProfileNotFoundError(SourceIntakeError):
-    """Raised when creating a job for an unknown series profile."""
-
-
-class IngestionJobNotFoundError(SourceIntakeError):
-    """Raised when an ingestion job cannot be found."""
-
-
-class UploadNotFoundError(SourceIntakeError):
-    """Raised when a source attachment references an unknown upload."""
-
-
-class UploadNotReadyError(SourceIntakeError):
-    """Raised when a source attachment references a non-ready upload."""
-
-
-class UploadHashMismatchError(SourceIntakeError):
-    """Raised when the declared upload hash does not match stored bytes."""
-
-
-class UploadSizeMismatchError(SourceIntakeError):
-    """Raised when the declared upload size does not match stored bytes."""
+__all__ = ("SourceIntakeError",)
 
 
 async def register_upload(
@@ -126,8 +55,7 @@ async def register_upload(
 ) -> Upload:
     """Persist upload bytes after committing a recoverable pending row."""
     payload_sha256 = hashlib.sha256(request.payload).hexdigest()
-    request = dc.replace(request, payload_sha256=payload_sha256)
-    _validate_declared_upload(request)
+    _validate_declared_upload(request, payload_sha256)
     providers = _source_intake_runtime(runtime)
     started_at = providers.monotonic_clock.monotonic_seconds()
     upload_id = providers.uuid_factory()
@@ -372,6 +300,17 @@ async def get_ingestion_job_status(
     return job
 
 
+async def get_upload(
+    uow: CanonicalUnitOfWork,
+    upload_id: uuid.UUID,
+) -> Upload:
+    """Fetch one upload or raise a source-intake not-found error."""
+    upload = await uow.uploads.get(upload_id)
+    if upload is None:
+        raise UploadNotFoundError(str(upload_id))
+    return upload
+
+
 async def list_ingestion_jobs(
     uow: CanonicalUnitOfWork,
     filters: IngestionJobListFilters,
@@ -385,6 +324,24 @@ async def list_ingestion_jobs(
     )
     total = await uow.ingestion_jobs.count(filters)
     return IngestionJobPage(items=items, total=total, pagination=pagination)
+
+
+async def list_ingestion_job_sources(
+    uow: CanonicalUnitOfWork,
+    job_id: uuid.UUID,
+    pagination: Pagination,
+) -> IngestionJobSourcePage:
+    """List source attachments for one ingestion job with total count."""
+    job = await uow.ingestion_jobs.get(job_id)
+    if job is None:
+        raise IngestionJobNotFoundError(str(job_id))
+    items = await uow.ingestion_job_sources.list_for_job_paged(
+        job_id,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    total = await uow.ingestion_job_sources.count_for_job(job_id)
+    return IngestionJobSourcePage(items=items, total=total, pagination=pagination)
 
 
 async def _require_ready_upload(
@@ -402,44 +359,26 @@ async def _require_ready_upload(
     return upload
 
 
-def _validate_declared_upload(request: UploadBytesRequest) -> None:
+def _validate_declared_upload(
+    request: UploadBytesRequest,
+    payload_sha256: str | None = None,
+) -> None:
     """Check client-declared size and hash against the supplied payload."""
     actual_size = len(request.payload)
     if actual_size != request.declared_size:
         raise UploadSizeMismatchError(str(request.declared_size))
     if request.declared_sha256 is None:
         return
-    actual_hash = (
-        request.payload_sha256
-        if request.payload_sha256 is not None
-        else hashlib.sha256(request.payload).hexdigest()
-    )
+    actual_hash = payload_sha256 or hashlib.sha256(request.payload).hexdigest()
     if request.declared_sha256 != actual_hash:
         raise UploadHashMismatchError(request.declared_sha256)
-
-
-def _utc_now() -> dt.datetime:
-    """Return the current UTC timestamp for source-intake entities."""
-    return dt.datetime.now(dt.UTC)
-
-
-def _new_uuid() -> uuid.UUID:
-    """Return a new source-intake identifier."""
-    return uuid.uuid4()
 
 
 def _source_intake_runtime(
     runtime: SourceIntakeRuntime | None,
 ) -> SourceIntakeRuntime:
     """Return source-intake runtime providers with production defaults."""
-    if runtime is not None:
-        return runtime
-    return SourceIntakeRuntime(
-        clock=_utc_now,
-        uuid_factory=_new_uuid,
-        metrics=NoopMetrics(),
-        monotonic_clock=PerfCounterClock(),
-    )
+    return source_intake_runtime(runtime)
 
 
 async def _single_chunk_stream(payload: bytes) -> cabc.AsyncIterator[bytes]:

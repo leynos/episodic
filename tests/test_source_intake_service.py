@@ -89,11 +89,11 @@ async def test_register_upload_keeps_pending_row_when_ready_commit_fails(
 
 
 @pytest.mark.asyncio
-async def test_register_upload_recomputes_untrusted_payload_hash(
+async def test_register_upload_stores_computed_payload_hash(
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
 ) -> None:
-    """A caller-supplied payload digest cannot override the uploaded bytes."""
+    """The stored upload content hash comes from the uploaded bytes."""
     payload = b"trusted bytes\n"
     object_store = FilesystemObjectStore(tmp_path / "objects")
 
@@ -108,7 +108,6 @@ async def test_register_upload_recomputes_untrusted_payload_hash(
             payload=payload,
             max_bytes=1024,
             metadata={"language": "en"},
-            payload_sha256="bad",
         ),
     )
 
@@ -125,8 +124,7 @@ def test_validate_declared_upload_uses_precomputed_hash() -> None:
         payload=b"upload",
         max_bytes=1024,
         metadata={},
-        payload_sha256="precomputed-digest",
     )
 
     with pytest.raises(UploadHashMismatchError):
-        _validate_declared_upload(request)
+        _validate_declared_upload(request, "precomputed-digest")
