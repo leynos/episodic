@@ -1,4 +1,4 @@
-"""Behavioural coverage for the local k3d preview CLI surface."""
+"""Behavioural coverage for the local Kubernetes preview CLI surface."""
 
 import dataclasses as dc
 import subprocess  # noqa: S404 - behavioural test invokes the local CLI.
@@ -52,10 +52,14 @@ def then_cli_lists_lifecycle_commands(cli_context: LocalK8sCliContext) -> None:
         )
 
 
-@then("the up command documents dry-run and image-skip options")
+@then("the up command documents dry-run, image, engine, and provider options")
 def then_up_documents_operator_options(cli_context: LocalK8sCliContext) -> None:
     """Assert the important safe-preview options are visible."""
     assert "--dry-run" in cli_context.up_help, "up help must document dry-run mode."
     assert "--skip-image" in cli_context.up_help, (
         "up help must document the image-skip option."
+    )
+    assert "--engine" in cli_context.up_help, "up help must document engine selection."
+    assert "--provider" in cli_context.up_help, (
+        "up help must document provider selection."
     )

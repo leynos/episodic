@@ -92,7 +92,7 @@
               readOnlyRootFilesystem: true
               runAsGroup: 10001
               runAsUser: 10001
-            image: "episodic:local"
+            image: "localhost/episodic:local"
             imagePullPolicy: IfNotPresent
             ports:
               - name: http

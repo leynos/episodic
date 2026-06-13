@@ -4,21 +4,25 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: COMPLETE for repository-side implementation and review follow-up. The
+Status: COMPLETE for the rootless Podman and kind live-preview follow-up. The
 user explicitly approved implementation on 2026-05-21. A 2026-06-12 review
-found Docker and local `k3d` live-path gaps; this follow-up pass addressed
+found Docker and local `k3d` live-path gaps; the first follow-up pass addressed
 those findings with tests, implementation, documentation, validation, and
-CodeRabbit review. Live `make local-k8s-up` execution remains blocked on this
-host because Docker, `k3d`, and `kubectl` are not installed or reachable.
+CodeRabbit review. A 2026-06-13 live validation pass found that this host can
+run the preview with rootless Podman and kind, not `k3d`; the local Kubernetes
+tooling now drives that validated path while preserving the Docker plus `k3d`
+defaults.
 
 ## Purpose and big picture
 
 This work makes Episodic deployable through the Nile Valley preview and GitOps
 workflow. After implementation, an operator can build a production-style
 container image, install Episodic through a Helm chart, and bring up a local
-`k3d` preview environment with one Makefile command. Kubernetes liveness and
-readiness probes can observe the service through stable HTTP endpoints, and the
-local preview path exercises the same chart shape expected by Nile Valley.
+Kubernetes preview environment with one Makefile command. The default local
+path remains Docker plus `k3d`; rootless Podman hosts can use kind as a
+provider. Kubernetes liveness and readiness probes can observe the service
+through stable HTTP endpoints, and the local preview path exercises the same
+chart shape expected by Nile Valley.
 
 Success is observable when `make local-k8s-up` creates or reuses a local
 cluster, deploys the Episodic chart, and prints a preview URL whose
@@ -213,8 +217,8 @@ repository quality gates pass.
 - [x] (2026-05-21T18:27:00Z) Completed Stage 6 documentation validation after
   Markdown linting, Mermaid validation, and a clean CodeRabbit review.
 - [x] (2026-05-21T18:50:00Z) Completed final validation and CodeRabbit review
-  for the full branch. The final `make test` rerun reported `685 passed,
-  4 skipped`, and CodeRabbit reported `findings: 0`.
+  for the full branch. The final `make test` rerun reported
+  `685 passed, 4 skipped`, and CodeRabbit reported `findings: 0`.
 - [x] (2026-06-12T17:41:00Z) Started review follow-up for the Docker,
   Postgres bootstrap, local `k3d` idempotence, CLI behavioural coverage, and
   Helm ConfigMap rollout findings.
@@ -231,8 +235,62 @@ repository quality gates pass.
   `make check-fmt`, `make typecheck`, `make lint`, and `make test` passed; the
   final full test run reported `694 passed, 3 skipped`.
 - [x] (2026-06-12T20:35:00Z) Ran CodeRabbit review for the follow-up, addressed
-  the subprocess timeout and lint-suppression comment findings in the new
-  local preview BDD test, and reran CodeRabbit to `findings: 0`.
+  the subprocess timeout and lint-suppression comment findings in the new local
+  preview BDD test, and reran CodeRabbit to `findings: 0`.
+- [x] (2026-06-13T13:20:00Z) Started the rootless Podman and kind live-preview
+  follow-up. Focused red tests captured the Dockerfile dependency-layout gap
+  and the missing provider/engine abstraction in `scripts/local_k8s`.
+- [x] (2026-06-13T13:35:00Z) Reworked the Dockerfile to resolve dependencies in
+  the uv builder stage, copy the populated virtual environment into the
+  non-root runtime stage, install builder tools for source builds, and set
+  `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` for Python 3.14 PyO3 dependencies.
+  `podman build --tag localhost/episodic:local .` succeeded on this host.
+- [x] (2026-06-13T13:55:00Z) Added `docker`/`podman` engine and `k3d`/`kind`
+  provider selection to the local preview config, Cyclopts CLI, command
+  builders, orchestration, and focused tests.
+- [x] (2026-06-13T14:15:00Z) Live
+      `uv run scripts/local_k8s.py up --engine podman --provider kind` created
+      the kind cluster but failed at image loading:
+      kind's `load docker-image` path did not see the rootless Podman image
+      store. The implementation now saves the Podman image to a `/tmp` archive
+      and loads it with `kind load image-archive`.
+- [x] (2026-06-13T14:35:00Z) The next live run loaded the image and started the
+  pod, but it crash-looped because the copied virtual environment's console
+  scripts still pointed at `/src/.venv/bin/python`. The Dockerfile now builds
+  the venv at `/app/.venv` in the builder stage and copies it to the same path
+  in the runtime stage so the Granian entrypoint shebang remains valid.
+- [x] (2026-06-13T14:55:00Z) The corrected
+      `uv run scripts/local_k8s.py up --engine podman --provider kind` run
+      succeeded after recreating the kind
+      cluster without host-port mappings. `kubectl get pods` showed Episodic
+      and Postgres both `1/1 Running`;
+      `curl -i -fsS http://127.0.0.1:8088/health/live` and `/health/ready`
+      through `kubectl port-forward svc/episodic 8088:80` both returned HTTP
+      `200`.
+- [x] (2026-06-13T15:00:00Z) Live
+      `uv run scripts/local_k8s.py status --engine podman --provider kind`
+      reported the Deployment, Service, Ingress,
+      and pods, and
+      `uv run scripts/local_k8s.py logs --engine podman --provider kind`
+      returned Granian startup logs from the running application pod.
+- [x] (2026-06-13T15:20:00Z) Added Makefile variables
+      `LOCAL_K8S_ENGINE` and `LOCAL_K8S_PROVIDER` so the validated Podman/kind
+      path can be driven through `make local-k8s-up` while preserving
+      Docker/`k3d` defaults.
+- [x] (2026-06-13T15:55:00Z) Full validation passed after fixing the rootless
+      Podman `act` artifact server binding: `make check-fmt`, `make typecheck`,
+      `make lint`, `make test` (`704 passed, 1 skipped`), `make markdownlint`,
+      and `make nixie`.
+- [x] (2026-06-13T16:20:00Z) CodeRabbit review found only assertion-message
+      and docstring hygiene issues in the new rootless Podman/kind tests.
+      Addressed those findings and reran the focused coverage:
+      `/tmp/coderabbit-focused-kind-podman-episodic-nile-valley-integration.out`
+      reported `10 passed`.
+- [x] (2026-06-13T16:35:00Z) Post-CodeRabbit gates passed:
+      `make check-fmt`, `make typecheck`, `make lint`, and `make test`
+      (`704 passed, 1 skipped`). Two subsequent CodeRabbit reruns stalled in
+      remote sandbox setup after `preparing_sandbox`; both were stopped after
+      no findings were emitted.
 
 ## Surprises & discoveries
 
@@ -346,7 +404,7 @@ repository quality gates pass.
   `/tmp/typecheck-stage1-commit3-episodic-nile-valley-integration.out`,
   `/tmp/lint-stage1-commit3-episodic-nile-valley-integration.out`, and
   `/tmp/test-stage1-commit-episodic-nile-valley-integration.out`, which reported
-   `670 passed, 3 skipped`. Impact: Stage 1 is ready for final Markdown gates,
+  `670 passed, 3 skipped`. Impact: Stage 1 is ready for final Markdown gates,
   CodeRabbit review, and commit.
 
 - Observation: final Stage 1 Markdown gates and CodeRabbit review passed after
@@ -546,7 +604,7 @@ repository quality gates pass.
   `/tmp/markdownlint-stage4-final9-episodic-nile-valley-integration.out`,
   `/tmp/nixie-stage4-final9-episodic-nile-valley-integration.out`,
   `/tmp/test-stage4-final9-episodic-nile-valley-integration.out`, which reported
-   `680 passed, 4 skipped`, and
+  `680 passed, 4 skipped`, and
   `/tmp/coderabbit-stage4-final9-episodic-nile-valley-integration.out`, which
   reported `findings: 0`. Impact: Stage 4 is ready to commit.
 
@@ -595,7 +653,8 @@ repository quality gates pass.
   Hypothesis generated XML noncharacters such as `U+FFFE` and `U+1FFFE`, which
   `tei_rapporteur` correctly rejects during XML emission. Evidence:
   `/tmp/test-final-episodic-nile-valley-integration.out` failed one property
-  test, and `/tmp/guest-bios-properties-rerun2-episodic-nile-valley-integration.out`
+  test, and
+  `/tmp/guest-bios-properties-rerun2-episodic-nile-valley-integration.out`
   passed after constraining the property strategy to XML-compatible text.
   Impact: keep the final validation loop open and rerun the full gates after
   committing the test-stability fix.
@@ -613,12 +672,13 @@ repository quality gates pass.
 
 - Observation: the first full review-fix `make test` run reached the end of
   the suite but failed two pre-existing `act` workflow tests because this host
-  has a stale or unreachable Podman socket at `/run/user/1000/podman/podman.sock`.
-  Evidence: `/tmp/test-review-fixes-episodic-nile-valley-integration.out`.
-  Impact: made the shared workflow test helper verify that the Podman UNIX
-  socket accepts connections before invoking `act`, matching the existing skip
-  behaviour for missing `act` or missing sockets. The final full test run
-  reported `694 passed, 3 skipped` in
+  has a stale or unreachable Podman socket at
+  `/run/user/1000/podman/podman.sock`. Evidence:
+  `/tmp/test-review-fixes-episodic-nile-valley-integration.out`. Impact: made
+  the shared workflow test helper verify that the Podman UNIX socket accepts
+  connections before invoking `act`, matching the existing skip behaviour for
+  missing `act` or missing sockets. The final full test run reported
+  `694 passed, 3 skipped` in
   `/tmp/test-review-fixes3-episodic-nile-valley-integration.out`.
 
 - Observation: CodeRabbit's follow-up review found only test hygiene issues in
@@ -631,8 +691,8 @@ repository quality gates pass.
   reran focused BDD coverage, and got CodeRabbit to `findings: 0`.
 
 - Observation: this host has Helm at `/usr/bin/helm`, but Docker, `k3d`, and
-  `kubectl` are missing from `PATH`. Evidence: the 2026-06-12 tool check
-  printed `docker=missing`, `k3d=missing`, `kubectl=missing`, and
+  `kubectl` are missing from `PATH`. Evidence: the 2026-06-12 tool check printed
+  `docker=missing`, `k3d=missing`, `kubectl=missing`, and
   `helm=/usr/bin/helm`. Impact: the live `make local-k8s-up` acceptance path
   cannot run in this worktree environment; the branch relies on structural,
   Helm, CLI, and orchestration tests until a Docker-capable host can run the
@@ -641,8 +701,8 @@ repository quality gates pass.
 - Observation (2026-06-13): the "missing tools" framing was incomplete. This
   host has rootless Podman and Helm; `k3d` and `kubectl` were then installed.
   Re-testing showed the live path is blocked by implementation and host facts,
-  not merely by absent binaries. See the three entries below and the new
-  "Local preview on rootless Podman" section for the validated path.
+  not merely by absent binaries. See the three entries below and the new "Local
+  preview on rootless Podman" section for the validated path.
 
 - Observation (2026-06-13): the image cannot build, independent of the earlier
   `stilyagi` fix. `pyproject.toml` declares two `git+https` dependencies
@@ -662,25 +722,51 @@ repository quality gates pass.
   host. With `DOCKER_HOST`/`DOCKER_SOCK` pointed at the rootless Podman socket
   and a DNS-enabled `k3d` network, nodes boot but the server dies with
   `level=fatal msg="Error: failed to find cpuset cgroup (v2)"`. Rootless
-  delegation here is `cpu memory pids` only; delegating `cpuset`/`io` requires a
-  root-written `/etc/systemd/system/user@.service.d/delegate.conf` plus
+  delegation here is `cpu memory pids` only; delegating `cpuset`/`io` requires
+  a root-written `/etc/systemd/system/user@.service.d/delegate.conf` plus
   `systemctl daemon-reload` — a privileged host change that hits the plan's
   tooling tolerance. `--kubelet-arg=feature-gates=KubeletInUserNamespace=true`
-  does not help, because k3s checks for the cpuset controller before the kubelet
-  starts. Evidence: `podman logs k3d-<cluster>-server-0`.
+  does not help, because k3s checks for the cpuset controller before the
+  kubelet starts. Evidence: `podman logs k3d-<cluster>-server-0`.
 
 - Observation (2026-06-13): kind (kubeadm + containerd) does run under rootless
   Podman with no privileged host change. It does not require the `cpuset`
-  controller; the default `cpu` delegation plus a `systemd-run --scope --user -p
-  Delegate=yes` wrapper suffices. A cluster reached Ready in ~18s, the local
-  Postgres bootstrap from `scripts.local_k8s.commands.local_postgres_manifest`
-  became `1/1 Running` with `pg_isready` accepting connections, and `helm
-  upgrade --install` against the chart was accepted by the Kubernetes 1.36 API
-  server (Deployment, Service, ConfigMap, Ingress all created; the pod
-  `DATABASE_URL` resolved from the `episodic-local` Secret with `optional:
-  false`). The only failure was the episodic pod itself, blocked on the broken
-  image build above, not on any manifest or wiring defect. The precise,
-  reproducible steps are in the "Local preview on rootless Podman" section.
+  controller; the default `cpu` delegation plus a
+  `systemd-run --scope --user -p Delegate=yes` wrapper suffices. A cluster
+  reached Ready in ~18s, the local Postgres bootstrap from
+  `scripts.local_k8s.commands.local_postgres_manifest` became `1/1 Running` with
+  `pg_isready` accepting connections, and `helm upgrade --install` against the
+  chart was accepted by the Kubernetes 1.36 API server (Deployment, Service,
+  ConfigMap, Ingress all created; the pod `DATABASE_URL` resolved from the
+  `episodic-local` Secret with `optional: false`). The only failure was the
+  episodic pod itself, blocked on the broken image build above, not on any
+  manifest or wiring defect. The precise, reproducible steps are in the "Local
+  preview on rootless Podman" section.
+
+- Observation (2026-06-13): when the Podman socket is live, the repository's
+  `act` workflow tests also need an artifact server reachable from rootless
+  job containers. Evidence:
+  `/tmp/workflow-act-rootless-artifacts-episodic-nile-valley-integration-rerun.out`
+  passed after binding the artifact server to `0.0.0.0` with a concrete free
+  port instead of advertising port `0`. Impact: the helper still skips on
+  hosts without a usable Podman socket, but a live rootless Podman host now
+  exercises the workflow tests successfully.
+
+- Observation (2026-06-13): the post-fix CodeRabbit review first returned five
+  test-hygiene findings: add NumPy-style docstrings to the kind
+  `RecordingRunner` methods and add assertion messages in the new local
+  Kubernetes and workflow helper tests. Evidence:
+  `/tmp/coderabbit-kind-podman-episodic-nile-valley-integration.out`. Impact:
+  addressed all five findings, reran the focused coverage, and then reran the
+  code gates.
+
+- Observation (2026-06-13): two CodeRabbit reruns after the hygiene fixes
+  stalled in remote sandbox setup after emitting `preparing_sandbox` and no
+  findings. Evidence:
+  `/tmp/coderabbit-kind-podman-episodic-nile-valley-integration-rerun.out` and
+  `/tmp/coderabbit-kind-podman-episodic-nile-valley-integration-rerun2.out`.
+  Impact: recorded the tool-side stall and relied on the completed CodeRabbit
+  findings plus the focused and full local gates for the final commit decision.
 
 ## Decision log
 
@@ -728,16 +814,23 @@ repository quality gates pass.
   containers. Date/Author: 2026-05-21 / Codex.
 
 - Decision: bootstrap local Postgres from the Python preview orchestration
-  instead of adding a chart dependency. Rationale: the dependency is local-only,
-  should not become part of the production Helm release, and must use the same
-  idempotent `kubectl apply` flow as namespace and Secret setup. Date/Author:
-  2026-06-12 / Codex.
+  instead of adding a chart dependency. Rationale: the dependency is
+  local-only, should not become part of the production Helm release, and must
+  use the same idempotent `kubectl apply` flow as namespace and Secret setup.
+  Date/Author: 2026-06-12 / Codex.
 
 - Decision: keep GitHub Actions `act` workflow tests optional on hosts without
   a usable Podman socket, including stale socket-file cases. Rationale: these
   tests require a working container daemon, and treating an unreachable socket
   as a hard failure makes normal `make test` results depend on local daemon
   state rather than workflow correctness. Date/Author: 2026-06-12 / Codex.
+
+- Decision: add `--engine` and `--provider` selection to the local Kubernetes
+  preview toolchain, keeping Docker plus `k3d` as the default and supporting
+  rootless Podman plus kind as the validated path on this host. Rationale:
+  `k3d` requires privileged cgroup delegation under rootless Podman here, while
+  kind runs without host-level changes and satisfies the plan's local preview
+  acceptance criteria. Date/Author: 2026-06-13 / Codex.
 
 ## Outcomes and retrospective
 
@@ -784,23 +877,40 @@ Review follow-up validation evidence:
 full test run reported `694 passed, 3 skipped`; the final CodeRabbit review
 reported `findings: 0`.
 
-The remaining runtime validation gaps are now characterised precisely. On
-2026-06-13, with rootless Podman plus freshly installed `k3d` and `kubectl`,
-the chart, Secret, and Postgres bootstrap were deployed to a live kind cluster
-and accepted by the Kubernetes 1.36 API server. Two real blockers remain: the
-container image does not build (git VCS dependencies in a git-less runtime
-stage), and the shipped `scripts/local_k8s` tooling hardcodes Docker and `k3d`
-so it cannot drive the validated Podman + kind path. The k3d path additionally
-requires a privileged cgroup-delegation change on this host. See the next
-section for the validated, reproducible steps and the outstanding fixes.
+Rootless Podman/kind follow-up validation evidence:
+`/tmp/local-k8s-up-kind-podman-episodic-nile-valley-integration-rerun5.out`,
+`/tmp/local-k8s-status-kind-podman-episodic-nile-valley-integration.out`,
+`/tmp/local-k8s-logs-kind-podman-episodic-nile-valley-integration.out`,
+`/tmp/check-fmt-kind-podman-episodic-nile-valley-integration-post-coderabbit.out`,
+`/tmp/typecheck-kind-podman-episodic-nile-valley-integration-post-coderabbit.out`,
+`/tmp/lint-kind-podman-episodic-nile-valley-integration-post-coderabbit.out`,
+`/tmp/test-kind-podman-episodic-nile-valley-integration-post-coderabbit.out`,
+`/tmp/markdownlint-kind-podman-episodic-nile-valley-integration-final.out`,
+`/tmp/nixie-kind-podman-episodic-nile-valley-integration.out`,
+`/tmp/coderabbit-focused-kind-podman-episodic-nile-valley-integration.out`,
+and
+`/tmp/coderabbit-kind-podman-episodic-nile-valley-integration.out`.
+The final full test run reported `704 passed, 1 skipped`. CodeRabbit's
+completed post-follow-up review findings were addressed; two later reruns
+stalled in remote sandbox setup before emitting findings.
+
+On 2026-06-13, with rootless Podman plus freshly installed `k3d`, `kind`, and
+`kubectl`, `uv run scripts/local_k8s.py up --engine podman --provider kind`
+built the image, loaded it into kind through an image archive, deployed local
+Postgres, installed the Helm chart, and reached a ready preview. Through
+`kubectl port-forward svc/episodic 8088:80`, both `/health/live` and
+`/health/ready` returned HTTP `200`. The `k3d` path additionally requires a
+privileged cgroup-delegation change on this host, so the implemented live path
+uses kind for rootless Podman while retaining the original Docker plus `k3d`
+default. See the next section for the validated, reproducible steps and the
+implementation details.
 
 ## Local preview on rootless Podman
 
 This section records the validated path for running the local preview on a
-rootless Podman host (for example this Rocky 10 worktree), discovered during the
-2026-06-13 review. The shipped Makefile and `scripts/local_k8s` tooling do not
-yet implement this path; treat it both as operator guidance and as a checklist
-of implementation changes still required.
+rootless Podman host (for example this Rocky 10 worktree), discovered during
+the 2026-06-13 review and now represented in `scripts/local_k8s` through
+`--engine podman --provider kind`.
 
 ### Why kind, not k3d, on rootless Podman
 
@@ -808,11 +918,12 @@ k3d runs k3s nodes as containers, and k3s fatally requires the `cpuset` cgroup
 v2 controller (`level=fatal msg="Error: failed to find cpuset cgroup (v2)"`).
 Rootless delegation on this host is `cpu memory pids` only. Delegating `cpuset`
 and `io` needs a root-owned `/etc/systemd/system/user@.service.d/delegate.conf`
-with `Delegate=cpu cpuset io memory pids` followed by `systemctl daemon-reload`
-— a privileged host change that the plan's tooling tolerance says to escalate
-on. `KubeletInUserNamespace=true` does not avoid it, because k3s checks for
-cpuset before the kubelet starts. kind (kubeadm + containerd) does not require
-cpuset and runs unprivileged via a `systemd-run --scope --user` wrapper.
+with `Delegate=cpu cpuset io memory pids` followed by
+`systemctl daemon-reload` — a privileged host change that the plan's tooling
+tolerance says to escalate on. `KubeletInUserNamespace=true` does not avoid it,
+because k3s checks for cpuset before the kubelet starts. kind (kubeadm +
+containerd) does not require cpuset and runs unprivileged via a
+`systemd-run --scope --user` wrapper.
 
 ### Host prerequisites (one-time, unprivileged)
 
@@ -840,11 +951,6 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
-    extraPortMappings:
-      - containerPort: 30080
-        hostPort: 8088
-        listenAddress: "127.0.0.1"
-        protocol: TCP
 EOF
 
 systemd-run --scope --user -p "Delegate=yes" \
@@ -855,17 +961,23 @@ systemd-run --scope --user -p "Delegate=yes" \
 
 ### Build and load the image
 
-The production image must build first. As of 2026-06-13 it does not: the
-Dockerfile installs dependencies with `pip install <wheel>` in the git-less
-`python:3.14-slim` runtime stage, and the `femtologging` and `tei-rapporteur`
-`git+https` dependencies make pip fail with `Cannot find command 'git'`. Fix
-this by resolving and installing dependencies in the builder stage (which can
-add git and use `uv.lock`) and copying the populated venv into the runtime
-stage. Once the build is fixed:
+The production image builds on this host after resolving dependencies in the uv
+builder stage and copying the populated virtual environment into the runtime
+stage. Source builds currently require `build-essential`, and `tei-rapporteur`
+requires `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` while its PyO3 dependency
+catches up with Python 3.14.
+
+Rootless Podman and kind need an image archive handoff on this host.
+`kind load docker-image localhost/episodic:local --name episodic-preview`
+reports the local image as absent even after `podman image inspect` succeeds,
+while `podman save` followed by `kind load image-archive` works.
 
 ```bash
-podman build --tag episodic:local .
-kind load docker-image episodic:local --name episodic-preview
+podman build --tag localhost/episodic:local .
+podman save --output /tmp/episodic-local-image.tar localhost/episodic:local
+KIND_EXPERIMENTAL_PROVIDER=podman \
+  kind load image-archive /tmp/episodic-local-image.tar \
+  --name episodic-preview
 ```
 
 ### Deploy the chart and dependency
@@ -897,7 +1009,9 @@ helm --kube-context "$CTX" upgrade --install episodic charts/episodic \
 
 The chart Service is `ClusterIP`, and its Ingress uses the `traefik` class,
 which kind does not install by default. The reliable local check is a
-port-forward:
+port-forward. Newly created kind clusters intentionally do not map host port
+8088, because that would prevent `kubectl port-forward` from binding the same
+operator-facing port.
 
 ```bash
 kubectl --context kind-episodic-preview -n episodic \
@@ -912,16 +1026,12 @@ curl -fsS http://127.0.0.1:8088/health/ready
 KIND_EXPERIMENTAL_PROVIDER=podman kind delete cluster --name episodic-preview
 ```
 
-### Implementation gap
+### Implementation status
 
-`scripts/local_k8s` hardcodes `docker` and `k3d` (in `REQUIRED_TOOLS` and the
-command builders) and offers no `DOCKER_HOST`/`DOCKER_SOCK` handling, podman
-engine selection, or kind provider, so `make local-k8s-up` cannot execute the
-path above. The repository's own workflow test helper (`tests/utils.py`)
-already standardises on Podman. Before the branch can claim a runnable local
-preview, the tooling needs an engine abstraction (Docker or Podman) and a
-provider abstraction (k3d or kind), or the plan must document Docker-with-cgroup
--delegation as a hard prerequisite and scope rootless Podman out explicitly.
+`scripts/local_k8s` now has explicit engine and provider selection. Use
+`make local-k8s-up LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind` for this
+validated rootless path. The Makefile retains the Docker plus `k3d` default
+when no variables are supplied.
 
 ## Context and orientation
 
@@ -1084,13 +1194,26 @@ helm template episodic charts/episodic --values charts/episodic/values.local.yam
   | tee /tmp/helm-template-episodic-nile-valley-integration.out
 ```
 
-For local preview smoke testing:
+For local preview smoke testing with the default Docker plus `k3d` path:
 
 ```bash
 make local-k8s-up | tee /tmp/local-k8s-up-episodic-nile-valley-integration.out
 make local-k8s-status | tee /tmp/local-k8s-status-episodic-nile-valley-integration.out
 make local-k8s-logs | tee /tmp/local-k8s-logs-episodic-nile-valley-integration.out
 make local-k8s-down | tee /tmp/local-k8s-down-episodic-nile-valley-integration.out
+```
+
+For the validated rootless Podman plus kind path on this host:
+
+```bash
+make local-k8s-up LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind \
+  | tee /tmp/local-k8s-up-kind-podman-episodic-nile-valley-integration.out
+make local-k8s-status LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind \
+  | tee /tmp/local-k8s-status-kind-podman-episodic-nile-valley-integration.out
+make local-k8s-logs LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind \
+  | tee /tmp/local-k8s-logs-kind-podman-episodic-nile-valley-integration.out
+make local-k8s-down LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind \
+  | tee /tmp/local-k8s-down-kind-podman-episodic-nile-valley-integration.out
 ```
 
 For required final validation, run these sequentially:
@@ -1140,9 +1263,11 @@ The feature is accepted when all of the following are true:
 - `helm template episodic charts/episodic --values charts/episodic/values.local.yaml`
   renders Deployment, Service, ConfigMap, optional Ingress, optional
   ExternalSecret, and probe configuration matching the documented values.
-- `make local-k8s-up` can create or reuse a local `k3d` cluster and deploy the
-  chart, or skips with a clear documented reason when required CLIs are absent
-  in the test environment.
+- `make local-k8s-up` can create or reuse a local cluster and deploy the chart,
+  or skips with a clear documented reason when required CLIs are absent in the
+  test environment. Docker plus `k3d` remains the default; rootless Podman
+  hosts can use kind through `LOCAL_K8S_ENGINE=podman
+  LOCAL_K8S_PROVIDER=kind`.
 - The local preview success banner includes the preview URL, health URL, status
   command, logs command, and teardown command.
 - Unit tests cover the health port, health aggregation, Falcon adapter

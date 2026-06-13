@@ -20,10 +20,15 @@ if typ.TYPE_CHECKING:
 
 
 def artifact_server_port() -> str:
-    """Return a concrete free port for act's artifact server."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return str(sock.getsockname()[1])
+    """Return a currently free host port for act's artifact server."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return str(listener.getsockname()[1])
+
+
+def artifact_server_addr() -> str:
+    """Bind act's artifact server where rootless Podman containers can reach it."""
+    return "0.0.0.0"  # noqa: S104 - local test server must accept job containers.
 
 
 def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:
@@ -138,7 +143,7 @@ def run_act(
         "--container-daemon-socket",
         socket_uri,
         "--artifact-server-addr",
-        "127.0.0.1",
+        artifact_server_addr(),
         "--artifact-server-port",
         port,
         "--artifact-server-path",

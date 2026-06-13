@@ -1,5 +1,5 @@
 image:
-  repository: episodic
+  repository: localhost/episodic
   tag: local
   pullPolicy: IfNotPresent
 

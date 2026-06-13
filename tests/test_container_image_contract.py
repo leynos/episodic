@@ -40,8 +40,25 @@ def test_dockerfile_uses_multi_stage_python_build() -> None:
     assert "FROM python:3.14-slim AS runtime" in dockerfile, (
         "Dockerfile must run from a slim Python 3.14 runtime stage."
     )
-    assert "COPY --from=builder /dist/*.whl /tmp/" in dockerfile, (
-        "runtime stage must install the wheel built by the builder stage."
+    assert "uv sync --frozen --no-dev --no-editable" in dockerfile, (
+        "builder stage must resolve locked dependencies before the runtime stage."
+    )
+    assert "build-essential" in dockerfile, (
+        "builder stage must include a compiler for Python 3.14 dependencies "
+        "without wheels."
+    )
+    assert "PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1" in dockerfile, (
+        "builder stage must allow PyO3-backed dependencies to build on Python 3.14."
+    )
+    assert "COPY --from=builder --chown=episodic:episodic /app/.venv /app/.venv" in (
+        dockerfile
+    ), (
+        "runtime stage must copy the builder-created virtual environment without "
+        "changing its path so console script shebangs remain valid and git "
+        "dependencies are not resolved in the git-less runtime image."
+    )
+    assert "pip install" not in dockerfile, (
+        "runtime stage must not resolve dependencies with pip."
     )
 
 

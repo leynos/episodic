@@ -310,10 +310,21 @@ make local-k8s-down
 ```
 
 The preview workflow uses `k3d`, Docker, `kubectl`, Helm, and the local chart
-values in `charts/episodic/values.local.yaml`. By default it builds and
-deploys the `episodic:local` image into the `episodic-preview` cluster,
+values in `charts/episodic/values.local.yaml` by default. It builds and deploys
+the `localhost/episodic:local` image into the `episodic-preview` cluster,
 bootstraps a local-only Postgres Service and StatefulSet, and exposes ingress
 through `http://episodic.localhost:8088`.
+
+On rootless Podman hosts, use the kind provider directly:
+
+```shell
+make local-k8s-up LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind
+kubectl --context kind-episodic-preview --namespace episodic \
+  port-forward svc/episodic 8088:80
+```
+
+Kind does not install the `traefik` ingress controller used by the local chart
+values, so the preview URL is reached through the printed port-forward command.
 
 If a cluster with the configured name already exists, `local-k8s-up` reuses it
 only when its ingress port matches the requested port. `local-k8s-status` and
