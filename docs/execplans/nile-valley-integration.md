@@ -291,6 +291,13 @@ repository quality gates pass.
       (`704 passed, 1 skipped`). Two subsequent CodeRabbit reruns stalled in
       remote sandbox setup after `preparing_sandbox`; both were stopped after
       no findings were emitted.
+- [x] (2026-06-13T14:40:00Z) Fresh goal-audit live validation passed on the
+      current `42901d4` branch head: `uv run scripts/local_k8s.py up --engine
+      podman --provider kind` reported the preview ready, `kubectl
+      port-forward svc/episodic 8088:80` exposed the service, and both
+      `/health/live` and `/health/ready` returned HTTP `200`. Status showed
+      Episodic and Postgres `1/1 Running`; logs showed Granian listening on
+      `0.0.0.0:8080`. The preview cluster was then torn down successfully.
 
 ## Surprises & discoveries
 
@@ -881,6 +888,12 @@ Rootless Podman/kind follow-up validation evidence:
 `/tmp/local-k8s-up-kind-podman-episodic-nile-valley-integration-rerun5.out`,
 `/tmp/local-k8s-status-kind-podman-episodic-nile-valley-integration.out`,
 `/tmp/local-k8s-logs-kind-podman-episodic-nile-valley-integration.out`,
+`/tmp/local-k8s-up-kind-podman-goal-audit.out`,
+`/tmp/local-k8s-health-live-kind-podman-goal-audit.out`,
+`/tmp/local-k8s-health-ready-kind-podman-goal-audit.out`,
+`/tmp/local-k8s-status-kind-podman-goal-audit.out`,
+`/tmp/local-k8s-logs-kind-podman-goal-audit.out`,
+`/tmp/local-k8s-down-kind-podman-goal-audit.out`,
 `/tmp/check-fmt-kind-podman-episodic-nile-valley-integration-post-coderabbit.out`,
 `/tmp/typecheck-kind-podman-episodic-nile-valley-integration-post-coderabbit.out`,
 `/tmp/lint-kind-podman-episodic-nile-valley-integration-post-coderabbit.out`,
