@@ -130,6 +130,7 @@ class GenerationCheckpointPort(typ.Protocol):
     async def respond_to_checkpoint(
         self,
         checkpoint_id: uuid.UUID,
+        *,
         response: CheckpointResponse,
     ) -> Checkpoint:
         """Record a reviewer response for a checkpoint."""

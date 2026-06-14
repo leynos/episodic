@@ -189,6 +189,7 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
     async def respond_to_checkpoint(
         self,
         checkpoint_id: uuid.UUID,
+        *,
         response: CheckpointResponse,
     ) -> Checkpoint:
         """Raise for all responses."""
@@ -339,7 +340,7 @@ class TestGenerationCheckpointPort:
 
         responded = await store.respond_to_checkpoint(
             checkpoint.id,
-            CheckpointResponse(
+            response=CheckpointResponse(
                 action=CheckpointAction.APPROVE,
                 payload={"approved": True},
                 responded_at=NOW + dt.timedelta(minutes=1),
@@ -366,7 +367,7 @@ class TestGenerationCheckpointPort:
         with pytest.raises(CheckpointNotFound, match=r"unknown generation checkpoint:"):
             await store.respond_to_checkpoint(
                 uuid.uuid7(),
-                CheckpointResponse(
+                response=CheckpointResponse(
                     action=CheckpointAction.APPROVE,
                     payload={},
                     responded_at=NOW,

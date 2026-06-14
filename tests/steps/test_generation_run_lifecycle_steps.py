@@ -116,7 +116,7 @@ def responded_checkpoint(
 ) -> None:
     """Create a checkpoint that already reached a terminal response state."""
     generation_run_context.checkpoint = _checkpoint().respond(
-        CheckpointResponse(
+        response=CheckpointResponse(
             action=CheckpointAction.APPROVE,
             payload={"approved": True},
             responded_at=NOW + dt.timedelta(minutes=1),
@@ -136,7 +136,7 @@ def reviewer_responds(
         msg = "Checkpoint was not prepared."
         raise AssertionError(msg)
     generation_run_context.checkpoint = checkpoint.respond(
-        CheckpointResponse(
+        response=CheckpointResponse(
             action=CheckpointAction(action),
             payload=_ACTION_PAYLOADS[action],
             responded_at=NOW + dt.timedelta(minutes=1),
@@ -156,7 +156,7 @@ def reviewer_attempts_second_response(
         raise AssertionError(msg)
     try:
         checkpoint.respond(
-            CheckpointResponse(
+            response=CheckpointResponse(
                 action=CheckpointAction.EDIT,
                 payload={},
                 responded_at=NOW + dt.timedelta(minutes=2),

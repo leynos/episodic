@@ -174,7 +174,7 @@ def test_checkpoint_response_returns_new_responded_instance(
     responded_at = NOW + dt.timedelta(minutes=5)
 
     responded = checkpoint.respond(
-        CheckpointResponse(
+        response=CheckpointResponse(
             action=CheckpointAction.APPROVE,
             payload={"approved": True},
             responded_at=responded_at,
@@ -199,7 +199,7 @@ def test_checkpoint_response_returns_new_responded_instance(
 def test_terminal_checkpoint_rejects_second_response(checkpoint: Checkpoint) -> None:
     """Terminal checkpoints must not accept repeated responses."""
     responded = checkpoint.respond(
-        CheckpointResponse(
+        response=CheckpointResponse(
             action=CheckpointAction.APPROVE,
             payload={},
             responded_at=NOW,
@@ -209,7 +209,7 @@ def test_terminal_checkpoint_rejects_second_response(checkpoint: Checkpoint) -> 
 
     with pytest.raises(CheckpointAlreadyTerminal):
         responded.respond(
-            CheckpointResponse(
+            response=CheckpointResponse(
                 action=CheckpointAction.EDIT,
                 payload={},
                 responded_at=NOW,
