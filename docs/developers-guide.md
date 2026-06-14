@@ -182,7 +182,6 @@ Testing guidance:
   engine disposal step is required to keep the py-pglite-backed runtime probe
   responsive.
 
-
 ## Container and local Kubernetes previews
 
 The deployment design is documented in
