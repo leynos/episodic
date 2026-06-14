@@ -90,10 +90,11 @@ async def test_attach_source_reports_missing_ingestion_job(
 ) -> None:
     """Attaching a source URI to an unknown job returns ingestion_job_not_found."""
     async with _source_intake_client(session_factory, tmp_path) as client:
-        response = await client.post(
-            f"/v1/ingestion-jobs/{uuid.uuid4()}/sources",
-            headers={"Idempotency-Key": "missing-job"},
-            json=_source_uri_payload(),
+        response = await _post_attach_source(
+            client,
+            str(uuid.uuid4()),
+            idempotency_key="missing-job",
+            payload=_source_uri_payload(),
         )
 
     assert response.status_code == 404
@@ -108,10 +109,11 @@ async def test_attach_upload_reports_missing_upload(
     """Attaching an unknown upload to a known job returns upload_not_found."""
     job_id = await _create_profile_and_job(session_factory, tmp_path)
     async with _source_intake_client(session_factory, tmp_path) as client:
-        response = await client.post(
-            f"/v1/ingestion-jobs/{job_id}/sources",
-            headers={"Idempotency-Key": "missing-upload"},
-            json=_upload_payload(str(uuid.uuid4())),
+        response = await _post_attach_source(
+            client,
+            job_id,
+            idempotency_key="missing-upload",
+            payload=_upload_payload(str(uuid.uuid4())),
         )
 
     assert response.status_code == 404
@@ -127,10 +129,11 @@ async def test_attach_upload_reports_not_ready_upload(
     job_id = await _create_profile_and_job(session_factory, tmp_path)
     upload_id = await _create_pending_upload(session_factory)
     async with _source_intake_client(session_factory, tmp_path) as client:
-        response = await client.post(
-            f"/v1/ingestion-jobs/{job_id}/sources",
-            headers={"Idempotency-Key": "pending-upload"},
-            json=_upload_payload(str(upload_id)),
+        response = await _post_attach_source(
+            client,
+            job_id,
+            idempotency_key="pending-upload",
+            payload=_upload_payload(str(upload_id)),
         )
 
     assert response.status_code == 409
@@ -308,6 +311,21 @@ async def _create_pending_upload(
         await uow.uploads.add(upload)
         await uow.commit()
     return upload.id
+
+
+async def _post_attach_source(
+    client: httpx.AsyncClient,
+    job_id: str,
+    *,
+    idempotency_key: str,
+    payload: dict[str, object],
+) -> httpx.Response:
+    """POST a source attachment to an ingestion job and return the response."""
+    return await client.post(
+        f"/v1/ingestion-jobs/{job_id}/sources",
+        headers={"Idempotency-Key": idempotency_key},
+        json=payload,
+    )
 
 
 async def _post_text_upload(
