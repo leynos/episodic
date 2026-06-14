@@ -24,6 +24,7 @@ class HttpServiceScaffoldBDDContext:
 
     base_url: str = ""
     database_url: str = ""
+    object_store_root: Path | None = None
     process: subprocess.Popen[str] | None = None
     live_payload: dict[str, object] | None = None
     ready_payload: dict[str, object] | None = None
@@ -39,6 +40,7 @@ def http_service_scaffold_context(
     """Share state between HTTP service scaffold steps and stop Granian."""
     context = HttpServiceScaffoldBDDContext(
         database_url=migrated_database_url,
+        object_store_root=tmp_path / "objects",
         log_path=tmp_path / "granian-http-service-scaffold.log",
     )
     yield context
@@ -195,12 +197,18 @@ def given_granian_service_running(
     if http_service_scaffold_context.log_path is None:
         msg = "Granian log path was not initialized."
         raise RuntimeError(msg)
+    if http_service_scaffold_context.object_store_root is None:
+        msg = "Object-store root was not initialized."
+        raise RuntimeError(msg)
     http_service_scaffold_context.log_handle = (
         http_service_scaffold_context.log_path.open("w", encoding="utf-8")
     )
     env = {
         **os.environ,
         "DATABASE_URL": http_service_scaffold_context.database_url,
+        "SOURCE_INTAKE_OBJECT_STORE_ROOT": str(
+            http_service_scaffold_context.object_store_root
+        ),
     }
     http_service_scaffold_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
         [

@@ -2,23 +2,33 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
 
 import pytest
+import sqlalchemy as sa
 
 from episodic.canonical.domain import IngestionJobListFilters, IntakeState
 from episodic.canonical.idempotency import (
+    Acquired,
     Conflict,
     IdempotencyAcquireRequest,
+    IdempotencyState,
     InFlight,
     Replay,
 )
 from episodic.canonical.ingestion_sources import AttachmentKind, IngestionJobSource
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage.source_intake_models import IdempotencyRecordModel
+from episodic.canonical.storage.source_intake_repositories import (
+    SourceIntakeStorageRuntime,
+    SqlAlchemyIdempotencyStore,
+)
 from episodic.canonical.uploads import Upload, UploadState
+from episodic.observability import NoopMetrics, PerfCounterClock
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -231,3 +241,138 @@ async def test_sqlalchemy_idempotency_store_replays_and_conflicts(
     assert isinstance(replay, Replay)
     assert replay.serialised_outcome == b'{"ok":true}'
     assert isinstance(conflict, Conflict)
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_idempotency_store_uses_injected_time_and_ids(
+    session_factory: object,
+) -> None:
+    """SQLAlchemy idempotency records use injected providers at the boundary."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    fixed_record_id = uuid.UUID("00000000-0000-4000-8000-000000000001")
+    fixed_now = dt.datetime(2026, 6, 12, 1, 45, tzinfo=dt.UTC)
+    request = IdempotencyAcquireRequest(
+        principal_id="principal",
+        operation="upload.create",
+        idempotency_key="deterministic-key",
+        body_hash="body-a",
+        expires_at=fixed_now + dt.timedelta(hours=1),
+    )
+
+    async with factory() as session:
+        store = SqlAlchemyIdempotencyStore(
+            session,
+            runtime=SourceIntakeStorageRuntime(
+                clock=lambda: fixed_now,
+                uuid_factory=lambda: fixed_record_id,
+                metrics=NoopMetrics(),
+                monotonic_clock=PerfCounterClock(),
+            ),
+        )
+        acquired = await store.acquire(request=request)
+        await session.commit()
+
+    async with factory() as session:
+        record = await session.get(IdempotencyRecordModel, fixed_record_id)
+
+    assert isinstance(acquired, Acquired)
+    assert acquired.record_id == fixed_record_id
+    assert record is not None, "expected deterministic record to persist"
+    assert record.created_at == fixed_now
+    assert record.updated_at == fixed_now
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_idempotency_store_concurrent_acquire_is_first_writer_wins(
+    session_factory: object,
+) -> None:
+    """Concurrent acquires for one logical key converge on one stored row."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    request = IdempotencyAcquireRequest(
+        principal_id="principal",
+        operation="upload.create",
+        idempotency_key=f"concurrent-{uuid.uuid4()}",
+        body_hash="body-a",
+        expires_at=dt.datetime.now(dt.UTC) + dt.timedelta(hours=1),
+    )
+
+    async def acquire() -> Acquired | Replay | Conflict | InFlight:
+        async with SqlAlchemyUnitOfWork(factory) as uow:
+            outcome = await uow.idempotency.acquire(request=request)
+            await uow.commit()
+            return outcome
+
+    first, second = await asyncio.gather(acquire(), acquire())
+
+    async with factory() as session:
+        persisted_count = await session.scalar(
+            sa
+            .select(sa.func.count())
+            .select_from(IdempotencyRecordModel)
+            .where(IdempotencyRecordModel.idempotency_key == request.idempotency_key)
+        )
+
+    assert sum(isinstance(outcome, Acquired) for outcome in (first, second)) == 1
+    assert sum(isinstance(outcome, InFlight) for outcome in (first, second)) == 1
+    assert persisted_count == 1
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_idempotency_store_reacquires_expired_in_flight_record(
+    session_factory: object,
+) -> None:
+    """Expired in-flight records should not block a retry forever."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    expired_record_id = uuid.UUID("00000000-0000-4000-8000-000000000010")
+    replacement_record_id = uuid.UUID("00000000-0000-4000-8000-000000000011")
+    fixed_now = dt.datetime(2026, 6, 12, 2, 15, tzinfo=dt.UTC)
+    request = IdempotencyAcquireRequest(
+        principal_id="principal",
+        operation="upload.create",
+        idempotency_key="expired-key",
+        body_hash="body-a",
+        expires_at=fixed_now + dt.timedelta(hours=1),
+    )
+
+    async with factory() as session:
+        session.add(
+            IdempotencyRecordModel(
+                id=expired_record_id,
+                principal_id="principal",
+                operation=request.operation,
+                idempotency_key=request.idempotency_key,
+                body_hash=request.body_hash,
+                state=IdempotencyState.IN_FLIGHT,
+                serialised_outcome=None,
+                expires_at=fixed_now - dt.timedelta(seconds=1),
+                created_at=fixed_now - dt.timedelta(hours=1),
+                updated_at=fixed_now - dt.timedelta(hours=1),
+            )
+        )
+        await session.commit()
+
+    async with factory() as session:
+        store = SqlAlchemyIdempotencyStore(
+            session,
+            runtime=SourceIntakeStorageRuntime(
+                clock=lambda: fixed_now,
+                uuid_factory=lambda: replacement_record_id,
+                metrics=NoopMetrics(),
+                monotonic_clock=PerfCounterClock(),
+            ),
+        )
+        outcome = await store.acquire(request=request)
+        await session.commit()
+
+    async with factory() as session:
+        expired_record = await session.get(IdempotencyRecordModel, expired_record_id)
+        replacement_record = await session.get(
+            IdempotencyRecordModel,
+            replacement_record_id,
+        )
+
+    assert isinstance(outcome, Acquired)
+    assert outcome.record_id == replacement_record_id
+    assert expired_record is None
+    assert replacement_record is not None
+    assert replacement_record.expires_at == request.expires_at

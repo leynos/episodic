@@ -30,6 +30,8 @@ _IDEMPOTENCY_KEY_REQUIRED = "Idempotency-Key header is required."
 _REPLAY_PAYLOAD_INVALID = "Invalid idempotency replay payload."
 _IDEMPOTENCY_CONFLICT = "Idempotency key body mismatch."
 _IDEMPOTENCY_IN_FLIGHT = "Idempotent request is in flight."
+_SERIALISED_OUTCOME_MAX_BYTES = 64 * 1024
+_SERIALISED_OUTCOME_TOO_LARGE = "Idempotency outcome exceeds 64 KiB."
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -85,7 +87,7 @@ def apply_response(resp: falcon.Response, response: IdempotentResponse) -> None:
 
 def principal_id(req: falcon.Request) -> str | None:
     """Return the principal identifier supplied by the inbound adapter."""
-    return req.get_header("X-Principal-Id")
+    return typ.cast("str | None", getattr(req.context, "principal_id", None))
 
 
 async def _idempotent_response(
@@ -96,7 +98,13 @@ async def _idempotent_response(
     """Return the adapter response for an idempotency acquire outcome."""
     match outcome:
         case Acquired(record_id=record_id):
-            response = await work()
+            try:
+                response = await work()
+            except Exception:
+                async with uow_factory() as uow:
+                    await uow.idempotency.fail(record_id=record_id)
+                    await uow.commit()
+                raise
             async with uow_factory() as uow:
                 await uow.idempotency.complete(
                     record_id=record_id,
@@ -150,7 +158,10 @@ def _idempotency_in_flight(record_id: uuid.UUID) -> falcon.HTTPConflict:
 
 def _encode_outcome(response: IdempotentResponse) -> bytes:
     """Serialize an HTTP adapter response for idempotent replay."""
-    return canonical_json_bytes({"status": response.status, "media": response.media})
+    payload = canonical_json_bytes({"status": response.status, "media": response.media})
+    if len(payload) > _SERIALISED_OUTCOME_MAX_BYTES:
+        raise ValueError(_SERIALISED_OUTCOME_TOO_LARGE)
+    return payload
 
 
 def _decode_outcome(payload: bytes) -> IdempotentResponse:

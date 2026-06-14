@@ -18,7 +18,7 @@ Utilities provided
   ``ReferenceDocumentRevisionResource``, ``ReferenceBindingsResource``,
   ``ReferenceBindingResource``, ``ResolvedBindingsResource``
 - Source-intake resources:
-  ``UploadsResource``, ``IngestionJobsResource``,
+  ``UploadsResource``, ``UploadResource``, ``IngestionJobsResource``,
   ``IngestionJobResource``, ``IngestionJobSourcesResource``
 - Health resources:
   ``HealthLiveResource``, ``HealthReadyResource``
@@ -55,6 +55,7 @@ from .source_intake import (
     IngestionJobResource,
     IngestionJobSourcesResource,
     IngestionJobsResource,
+    UploadResource,
     UploadsResource,
 )
 
@@ -78,6 +79,7 @@ __all__ = [
     "SeriesProfileHistoryResource",
     "SeriesProfileResource",
     "SeriesProfilesResource",
+    "UploadResource",
     "UploadsResource",
     "_GetHistoryResourceBase",
     "_GetResourceBase",

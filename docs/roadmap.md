@@ -660,15 +660,17 @@ vertical slice].
 [system design source-to-script vertical slice]: episodic-podcast-generation-system-design.md#source-to-script-vertical-slice
 [TUI API source-to-script vertical slice]: episodic-tui-api-design.md#source-to-script-vertical-slice
 
-- [ ] 4.3.1. Implement source and presenter-profile intake for script
+- [x] 4.3.1. Implement source and presenter-profile intake for script
   generation.
   - Requires 1.3.4, 1.4.3, and 4.1.1.
-  - Implement `/v1/uploads` and `/v1/uploads/init` with idempotency keys,
-    content-type allowlists, size limits, content hashes, and upload metadata.
-  - Implement `/v1/ingestion-jobs` and
+  - Implemented `POST /v1/uploads` with idempotency keys, content-type
+    allowlists, size limits, content hashes, upload metadata, and filesystem
+    object-store runtime wiring. The resumable `POST /v1/uploads/init` flow is
+    deferred until an object-store adapter can use pre-signed upload URLs.
+  - Implemented `/v1/ingestion-jobs` and
     `/v1/ingestion-jobs/{job_id}/sources` with pollable job status and source
     attachment by `upload_id` or `source_uri`.
-  - Use reusable reference documents with `kind=host_profile` and
+  - Uses reusable reference documents with `kind=host_profile` and
     `kind=guest_profile` as the presenter-profile contract.
   - Success: a client can upload a research paper, attach it to an ingestion
     job, create or bind presenter profile revisions, and observe JSON status

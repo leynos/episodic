@@ -16,8 +16,8 @@ def _enum(name: str, *values: str) -> postgresql.ENUM:
     return postgresql.ENUM(*values, name=name, create_type=False)
 
 
-def upgrade() -> None:
-    """Create source-intake tables and intake-state columns."""
+def _create_enums() -> None:
+    """Create source-intake PostgreSQL enums."""
     _enum(
         "intake_state", "awaiting_sources", "ready_for_generation", "cancelled"
     ).create(
@@ -37,6 +37,29 @@ def upgrade() -> None:
         checkfirst=True,
     )
 
+
+def _drop_enums() -> None:
+    """Drop source-intake PostgreSQL enums."""
+    _enum("idempotency_state", "in_flight", "completed").drop(
+        op.get_bind(),
+        checkfirst=True,
+    )
+    _enum("attachment_kind", "upload", "source_uri").drop(
+        op.get_bind(),
+        checkfirst=True,
+    )
+    _enum("upload_state", "pending", "ready", "failed", "expired").drop(
+        op.get_bind(),
+        checkfirst=True,
+    )
+    _enum("intake_state", "awaiting_sources", "ready_for_generation", "cancelled").drop(
+        op.get_bind(),
+        checkfirst=True,
+    )
+
+
+def _upgrade_ingestion_jobs() -> None:
+    """Add source-intake state to ingestion jobs."""
     op.add_column(
         "ingestion_jobs",
         sa.Column(
@@ -48,6 +71,24 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
+    op.create_index(
+        "ix_ingestion_jobs_series_profile_intake_state_created_at",
+        "ingestion_jobs",
+        ["series_profile_id", "intake_state", sa.text("created_at DESC")],
+    )
+
+
+def _downgrade_ingestion_jobs() -> None:
+    """Remove source-intake state from ingestion jobs."""
+    op.drop_index(
+        "ix_ingestion_jobs_series_profile_intake_state_created_at",
+        table_name="ingestion_jobs",
+    )
+    op.drop_column("ingestion_jobs", "intake_state")
+
+
+def _create_uploads_table() -> None:
+    """Create source upload records."""
     op.create_table(
         "uploads",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -82,6 +123,21 @@ def upgrade() -> None:
             name="ck_uploads_actual_size",
         ),
     )
+    op.create_index(
+        "ix_uploads_state_created_at",
+        "uploads",
+        ["state", "created_at"],
+    )
+
+
+def _drop_uploads_table() -> None:
+    """Drop source upload records."""
+    op.drop_index("ix_uploads_state_created_at", table_name="uploads")
+    op.drop_table("uploads")
+
+
+def _create_ingestion_job_sources_table() -> None:
+    """Create source attachment records."""
     op.create_table(
         "ingestion_job_sources",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -132,6 +188,23 @@ def upgrade() -> None:
         "ingestion_job_sources",
         ["upload_id"],
     )
+
+
+def _drop_ingestion_job_sources_table() -> None:
+    """Drop source attachment records."""
+    op.drop_index(
+        "ix_ingestion_job_sources_upload_id",
+        table_name="ingestion_job_sources",
+    )
+    op.drop_index(
+        "ix_ingestion_job_sources_ingestion_job_id",
+        table_name="ingestion_job_sources",
+    )
+    op.drop_table("ingestion_job_sources")
+
+
+def _create_idempotency_records_table() -> None:
+    """Create idempotency records."""
     op.create_table(
         "idempotency_records",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -176,37 +249,28 @@ def upgrade() -> None:
     )
 
 
-def downgrade() -> None:
-    """Drop source-intake tables and intake-state columns."""
+def _drop_idempotency_records_table() -> None:
+    """Drop idempotency records."""
     op.drop_index(
         "ix_idempotency_records_expires_at",
         table_name="idempotency_records",
     )
     op.drop_table("idempotency_records")
-    op.drop_index(
-        "ix_ingestion_job_sources_upload_id",
-        table_name="ingestion_job_sources",
-    )
-    op.drop_index(
-        "ix_ingestion_job_sources_ingestion_job_id",
-        table_name="ingestion_job_sources",
-    )
-    op.drop_table("ingestion_job_sources")
-    op.drop_table("uploads")
-    op.drop_column("ingestion_jobs", "intake_state")
-    _enum("idempotency_state", "in_flight", "completed").drop(
-        op.get_bind(),
-        checkfirst=True,
-    )
-    _enum("attachment_kind", "upload", "source_uri").drop(
-        op.get_bind(),
-        checkfirst=True,
-    )
-    _enum("upload_state", "pending", "ready", "failed", "expired").drop(
-        op.get_bind(),
-        checkfirst=True,
-    )
-    _enum("intake_state", "awaiting_sources", "ready_for_generation", "cancelled").drop(
-        op.get_bind(),
-        checkfirst=True,
-    )
+
+
+def upgrade() -> None:
+    """Create source-intake tables and intake-state columns."""
+    _create_enums()
+    _upgrade_ingestion_jobs()
+    _create_uploads_table()
+    _create_ingestion_job_sources_table()
+    _create_idempotency_records_table()
+
+
+def downgrade() -> None:
+    """Drop source-intake tables and intake-state columns."""
+    _drop_idempotency_records_table()
+    _drop_ingestion_job_sources_table()
+    _drop_uploads_table()
+    _downgrade_ingestion_jobs()
+    _drop_enums()

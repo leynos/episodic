@@ -53,20 +53,26 @@ def build_api_dependencies(
     *,
     authorization: AuthorizationPort | None = None,
     object_store: ObjectStorePort | None = None,
+    upload_max_bytes: int | None = None,
 ) -> ApiDependencies:
     """Build typed API dependencies with optional authorization override."""
     from episodic.api import ApiDependencies
     from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
+    kwargs: dict[str, typ.Any] = {}
+    if upload_max_bytes is not None:
+        kwargs["upload_max_bytes"] = upload_max_bytes
     if authorization is None:
         return ApiDependencies(
             uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
             object_store=object_store,
+            **kwargs,
         )
     return ApiDependencies(
         uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
         authorization=authorization,
         object_store=object_store,
+        **kwargs,
     )
 
 

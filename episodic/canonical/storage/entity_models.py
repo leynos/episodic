@@ -222,6 +222,15 @@ class IngestionJobRecord(Base):
         onupdate=sa.func.now(),
     )
 
+    __table_args__ = (
+        sa.Index(
+            "ix_ingestion_jobs_series_profile_intake_state_created_at",
+            "series_profile_id",
+            "intake_state",
+            sa.desc("created_at"),
+        ),
+    )
+
 
 class SourceDocumentRecord(Base):
     """SQLAlchemy model for source documents.

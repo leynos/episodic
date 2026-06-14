@@ -117,7 +117,7 @@ The multipart request fingerprint is SHA-256 over:
 which yields:
 
 ```plaintext
-sha256:f03f8d4c738536bcd1c13cc34d6816f8ea0672c3e2d47c2cbbaf5c8ecbda5e2c
+sha256:b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12
 ```
 
 ## Observability contract

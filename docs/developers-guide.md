@@ -20,6 +20,7 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-012-pronunciation-repository.md`](adr/adr-012-pronunciation-repository.md)
 - [`adr-013-speech-synthesis-adapters.md`](adr/adr-013-speech-synthesis-adapters.md)
 - [`adr-014-hexagonal-architecture-enforcement.md`](adr/adr-014-hexagonal-architecture-enforcement.md)
+- [`adr-015-upload-and-idempotency-ports.md`](adr/adr-015-upload-and-idempotency-ports.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -70,7 +71,8 @@ The canonical HTTP adapter has two layers:
 
 - `episodic/api/app.py` is the pure Falcon route factory.
 - `episodic/api/runtime.py` is the Granian composition root that reads
-  `DATABASE_URL`, creates the SQLAlchemy session factory, and injects readiness
+  `DATABASE_URL` and `SOURCE_INTAKE_OBJECT_STORE_ROOT`, creates the SQLAlchemy
+  session factory and filesystem object-store adapter, and injects readiness
   probes through `ApiDependencies`. It also normalizes plain `postgresql://...`
   URLs to the supported async dialect and disposes the long-lived async engine
   via Falcon's ASGI shutdown lifecycle.
@@ -80,6 +82,15 @@ Run the service locally with:
 ```shell
 granian episodic.api.runtime:create_app_from_env --interface asgi --factory
 ```
+
+Runtime environment:
+
+- `DATABASE_URL` must point at PostgreSQL. Plain `postgresql://...` and
+  `postgres://...` URLs are normalized to the async `psycopg` driver.
+- `SOURCE_INTAKE_OBJECT_STORE_ROOT` must point at the local directory used by
+  `FilesystemObjectStore` for source-intake upload bytes. The runtime fails
+  fast when the value is missing, because `POST /v1/uploads` cannot accept
+  payloads without an object-store adapter.
 
 Health contract:
 
@@ -144,6 +155,11 @@ Authorization scaffold:
 - Authorization adapters receive an `AuthorizationContext` containing the HTTP
   method, request path, and raw `Authorization` header. The port is async, so
   future policy adapters can call external identity or permission services.
+- Authorization adapters may return `AuthorizationResult` to carry the
+  authenticated principal identifier. The middleware stores that principal on
+  the Falcon request context before resource dispatch; source-intake
+  idempotency scopes keys from that trusted context rather than from
+  client-controlled principal headers.
 - Non-permit decisions short-circuit with the canonical error envelope:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
@@ -373,6 +389,13 @@ The Continuous Integration (CI) pipeline (`.github/workflows/ci.yml`) runs
 `make check-migrations` on every push to `main` and on every pull request. A
 pull request that modifies Object-Relational Mapping (ORM) models without an
 accompanying Alembic migration will be blocked.
+
+The CI job also sets two Cargo network overrides for builds that compile Rust
+extensions. `CARGO_HTTP_MULTIPLEXING` is set to `"false"` so CI prefers network
+reliability over HTTP/2 multiplexing on flaky runner networks.
+`CARGO_NET_RETRY` is set to `"10"` based on empirical CI stability testing of
+transient crates.io fetch failures. These settings are CI-specific and do not
+change local development defaults.
 
 ### Developer workflow
 
@@ -702,12 +725,13 @@ resolved reference revisions into provenance `source_documents`.
 
 ### Source-intake idempotency and errors
 
-Roadmap item `4.3.1` reserves the source-intake `POST` contract for idempotent
-uploads, ingestion jobs, and source attachments. Each side-effecting request in
-the slice accepts `Idempotency-Key`; the server scopes the key by authenticated
-principal, route, and request-body hash. A repeated request with the same key
-and same canonical body replays the stored response. A repeated request with
-the same key and a different canonical body returns `409 Conflict`.
+Roadmap item `4.3.1` implements the source-intake `POST` contract for
+idempotent uploads, ingestion jobs, and source attachments. Each side-effecting
+request in the slice accepts `Idempotency-Key`; the server scopes the key by
+the authenticated principal from `AuthorizationResult`, route, and request-body
+hash. A repeated request with the same key and same canonical body replays the
+stored response. A repeated request with the same key and a different canonical
+body returns `409 Conflict`.
 
 The following error codes are reserved for the source-intake implementation:
 

@@ -88,6 +88,10 @@ class IdempotencyStore(typ.Protocol):
         """Store an opaque completed outcome for replay."""
         raise NotImplementedError
 
+    async def fail(self, *, record_id: uuid.UUID) -> None:
+        """Delete or mark the idempotency record so the operation is retryable."""
+        raise NotImplementedError
+
     async def lookup(
         self,
         *,
