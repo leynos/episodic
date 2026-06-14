@@ -190,6 +190,7 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
     ], f"unexpected lifespan events: {sent_events!r}"
     assert shutdown_hook_called, "engine.dispose shutdown hook was not called"
 
+
 def test_runtime_exposes_container_granian_contract() -> None:
     """Keep container and orchestration code anchored to the HTTP runtime."""
     from episodic.api import runtime
