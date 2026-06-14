@@ -1215,7 +1215,6 @@ reported an idempotency conflict. Trend
 load and retry pressure, but do not label checkpoint metrics with workflow ids,
 checkpoint ids, or idempotency keys.
 
-
 ### Generation-run domain ports
 
 User-facing generation runs live in the canonical domain, separate from the

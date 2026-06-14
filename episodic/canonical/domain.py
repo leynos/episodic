@@ -89,6 +89,7 @@ class WorkflowCheckpointStatus(enum.StrEnum):
     SUSPENDED = "suspended"
     RESUMED = "resumed"
 
+
 class GenerationRunStatus(enum.StrEnum):
     """Lifecycle states for user-facing generation runs."""
 
@@ -107,6 +108,7 @@ class GenerationRunStatus(enum.StrEnum):
             GenerationRunStatus.CANCELLED,
         }
 
+
 class CheckpointStatus(enum.StrEnum):
     """Lifecycle states for user-facing generation checkpoints."""
 
@@ -119,12 +121,14 @@ class CheckpointStatus(enum.StrEnum):
         """Return whether this status is a terminal checkpoint state."""
         return self is not CheckpointStatus.CREATED
 
+
 class CheckpointAction(enum.StrEnum):
     """Reviewer actions accepted for a generation checkpoint."""
 
     APPROVE = "approve"
     REQUEST_CHANGES = "request_changes"
     EDIT = "edit"
+
 
 @dc.dataclass(frozen=True, slots=True)
 class GenerationRun:
@@ -152,6 +156,7 @@ class GenerationRun:
         _copy_json_mapping(self, "budget_snapshot")
         _copy_json_mapping(self, "configuration")
 
+
 @dc.dataclass(frozen=True, slots=True)
 class GenerationEvent:
     """Append-only event emitted by a generation run."""
@@ -171,6 +176,7 @@ class GenerationEvent:
             raise ValueError(msg)
         _validate_non_empty_text(self.kind, "kind")
         _copy_json_mapping(self, "payload")
+
 
 @dc.dataclass(frozen=True, slots=True)
 class Checkpoint:
@@ -254,6 +260,8 @@ class Checkpoint:
         """Raise when the checkpoint can no longer transition."""
         if self.status.is_terminal():
             raise CheckpointAlreadyTerminal(self.id)
+
+
 @dc.dataclass(frozen=True)
 class SeriesProfile:
     """Series metadata required for canonical ingestion."""
@@ -571,9 +579,11 @@ class EpisodeTemplateHistoryEntry:
     snapshot: JsonMapping
     created_at: dt.datetime
 
+
 def _is_blank(value: str) -> bool:
     """Return whether a string is empty after whitespace trimming."""
     return value.strip() == ""
+
 
 def _validate_non_empty_text(value: str, field_name: str) -> None:
     """Validate a required non-empty string field."""
@@ -584,10 +594,12 @@ def _validate_non_empty_text(value: str, field_name: str) -> None:
         msg = f"{field_name} must be a non-empty string."
         raise ValueError(msg)
 
+
 def _validate_optional_text(value: str | None, field_name: str) -> None:
     """Validate an optional string field when present."""
     if value is not None:
         _validate_non_empty_text(value, field_name)
+
 
 def _copy_json_mapping(owner: object, field_name: str) -> None:
     """Validate and defensively copy a JSON mapping field."""

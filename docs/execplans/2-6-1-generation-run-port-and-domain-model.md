@@ -310,6 +310,16 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   `make nixie`.
 - 2026-06-04 18:05 Europe/Berlin: Final CodeRabbit review completed cleanly
   with zero findings after the PEP 695 alias and dataclass-state fixes.
+- 2026-06-14 15:20 Europe/Berlin: Rebasing onto `origin/main` stopped on a
+  `docs/developers-guide.md` ADR-list conflict. Resolution kept both branch
+  ADR-015 (`generation-run-port-split`) and main ADR-015
+  (`upload-and-idempotency-ports`) links because both files exist and document
+  distinct decisions. The first post-rebase `make test` then exposed a Hecate
+  configuration merge issue: the five architecture groups had collapsed into
+  duplicate `outbound_adapter` names. The fix restored main's
+  `composition_root`, `domain_ports`, `application`, `inbound_adapter`, and
+  `outbound_adapter` groups while preserving this branch's
+  `generation_run_errors` and `generation_run_ports` prefixes.
 
 ## Surprises & discoveries
 
@@ -357,6 +367,15 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   only where the test sequence needs accumulation.
 - 2026-06-04: The final CodeRabbit pass returned no findings after all local
   code, test, documentation, and diagram gates were green.
+- 2026-06-14: The rebase conflict in `docs/developers-guide.md` showed that
+  two independent ADRs were both numbered `015`. The rebase deliberately kept
+  both links rather than renumbering during conflict resolution, because
+  changing ADR identities during a rebase would broaden the merge beyond the
+  user's request.
+- 2026-06-14: `make check-fmt` after the rebase reformatted
+  `episodic/canonical/domain.py`. The change is formatting-only and reflects
+  current `origin/main` Ruff style interacting with this branch's dataclass
+  additions.
 
 ## Decision log
 

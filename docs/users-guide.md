@@ -134,7 +134,6 @@ the side-effecting execution step twice. Operators do not need to manage these
 checkpoints directly in this release; public generation-run checkpoint APIs are
 planned for a later roadmap item.
 
-
 #### Generation runs and review checkpoints
 
 Generation runs are now modelled as first-class domain resources for future
