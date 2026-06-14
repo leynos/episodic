@@ -336,6 +336,12 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   port-contract module below the Pylint file-length ceiling.
 - 2026-06-14 17:45 Europe/Berlin: CodeRabbit review was requested after the
   deterministic gates passed and completed with zero findings.
+- 2026-06-14 22:06 Europe/Berlin: Wyvern verification found three follow-up
+  warnings stale and one observability point partially live: terminal
+  checkpoint transitions rejected by the domain were not logged. The adapter
+  now logs `*_already_terminal` warning events in
+  `_apply_checkpoint_transition` before re-raising `CheckpointAlreadyTerminal`,
+  preserving domain purity and behaviour.
 
 ## Surprises & discoveries
 
@@ -466,6 +472,12 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   orchestration. Adapter decisions now emit structured logs; adding domain
   transition logs requires a domain-owned logging seam in a later change.
   Date/Author: 2026-06-14 / implementing agent.
+
+- Decision: log rejected terminal checkpoint transitions in
+  `InMemoryGenerationRunStore._apply_checkpoint_transition`. Rationale: this
+  makes failed response, timeout, and cancellation attempts observable without
+  importing orchestration helpers into the canonical domain or changing the
+  exceptions callers receive. Date/Author: 2026-06-14 / implementing agent.
 
 - Decision: extend the checkpoint lifecycle from the roadmap's
   `created → responded` to `created → {responded, timed_out, cancelled}` from

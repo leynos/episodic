@@ -31,6 +31,7 @@ from episodic.canonical.domain import (
     JsonMapping,
 )
 from episodic.canonical.generation_run_errors import (
+    CheckpointAlreadyTerminal,
     CheckpointNotFound,
     RunAlreadyTerminal,
     RunNotFound,
@@ -331,7 +332,18 @@ class InMemoryGenerationRunStore:
                     **extra,
                 )
                 raise CheckpointNotFound(checkpoint_id)
-            updated = transition(checkpoint)
+            try:
+                updated = transition(checkpoint)
+            except CheckpointAlreadyTerminal:
+                _log_event(
+                    "warning",
+                    f"{done_event}_already_terminal",
+                    checkpoint_id=str(checkpoint_id),
+                    run_id=str(checkpoint.generation_run_id),
+                    status=checkpoint.status.value,
+                    **extra,
+                )
+                raise
             self._checkpoints[checkpoint_id] = updated
             _log_event(
                 "info",
