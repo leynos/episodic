@@ -219,12 +219,26 @@ def docker_build_command(config: PreviewConfig) -> list[str]:
     return image_build_command(config)
 
 
-def kubectl_namespace_command(config: PreviewConfig) -> list[str]:
-    """Build the idempotent namespace creation command."""
+def _kubectl_cmd(config: PreviewConfig) -> list[str]:
+    """Return the base kubectl invocation for the preview cluster."""
+    return ["kubectl", "--context", config.kube_context()]
+
+
+def _kubectl_ns_cmd(config: PreviewConfig) -> list[str]:
+    """Return a kubectl invocation scoped to the preview namespace."""
     return [
         "kubectl",
         "--context",
         config.kube_context(),
+        "--namespace",
+        config.namespace,
+    ]
+
+
+def kubectl_namespace_command(config: PreviewConfig) -> list[str]:
+    """Build the idempotent namespace creation command."""
+    return [
+        *_kubectl_cmd(config),
         "create",
         "namespace",
         config.namespace,
@@ -236,17 +250,13 @@ def kubectl_namespace_command(config: PreviewConfig) -> list[str]:
 
 def kubectl_apply_command(config: PreviewConfig) -> list[str]:
     """Build a kubectl apply command for stdin manifests."""
-    return ["kubectl", "--context", config.kube_context(), "apply", "-f", "-"]
+    return [*_kubectl_cmd(config), "apply", "-f", "-"]
 
 
 def kubectl_secret_command(config: PreviewConfig) -> list[str]:
     """Build the idempotent application Secret creation command."""
     return [
-        "kubectl",
-        "--context",
-        config.kube_context(),
-        "--namespace",
-        config.namespace,
+        *_kubectl_ns_cmd(config),
         "create",
         "secret",
         "generic",
@@ -368,11 +378,7 @@ def helm_upgrade_command(config: PreviewConfig) -> list[str]:
 def kubectl_status_command(config: PreviewConfig) -> list[str]:
     """Build the status inspection command."""
     return [
-        "kubectl",
-        "--context",
-        config.kube_context(),
-        "--namespace",
-        config.namespace,
+        *_kubectl_ns_cmd(config),
         "get",
         "deploy,svc,ingress,pods",
     ]
@@ -381,11 +387,7 @@ def kubectl_status_command(config: PreviewConfig) -> list[str]:
 def kubectl_logs_command(config: PreviewConfig) -> list[str]:
     """Build the application logs command."""
     return [
-        "kubectl",
-        "--context",
-        config.kube_context(),
-        "--namespace",
-        config.namespace,
+        *_kubectl_ns_cmd(config),
         "logs",
         f"deploy/{config.release_name}",
         "--tail",
@@ -396,11 +398,7 @@ def kubectl_logs_command(config: PreviewConfig) -> list[str]:
 def kubectl_port_forward_command(config: PreviewConfig) -> list[str]:
     """Build the port-forward command needed for kind's ClusterIP Service."""
     return [
-        "kubectl",
-        "--context",
-        config.kube_context(),
-        "--namespace",
-        config.namespace,
+        *_kubectl_ns_cmd(config),
         "port-forward",
         f"svc/{config.release_name}",
         f"{config.ingress_port}:80",
