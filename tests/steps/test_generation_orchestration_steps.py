@@ -20,6 +20,7 @@ from episodic.llm.openai_adapter import (
 )
 from episodic.orchestration import (
     ActionKind,
+    GenerationGraphExtensions,
     GenerationGraphState,
     GenerationOrchestrationConfig,
     GenerationOrchestrationRequest,
@@ -272,7 +273,7 @@ def run_suspend_resume_orchestration(
             graph = build_generation_orchestration_graph(
                 planner=planner,
                 tool_executor=tool_executor,
-                checkpoint_port=checkpoint_store,
+                extensions=GenerationGraphExtensions(checkpoint_port=checkpoint_store),
             )
 
             first_state = await graph.ainvoke(GenerationGraphState(request=request))

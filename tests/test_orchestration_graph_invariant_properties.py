@@ -13,6 +13,7 @@ from episodic.orchestration import (
     ActionExecutionResult,
     ActionKind,
     ExecutionPlan,
+    GenerationGraphExtensions,
     GenerationGraphState,
     GenerationOrchestrationRequest,
     GenerationOrchestrationResult,
@@ -217,7 +218,9 @@ async def test_langgraph_respects_plan_execute_finish_order(
     graph = build_generation_orchestration_graph(
         planner=planner,
         tool_executor=tool_executor,
-        finish_callback=lambda _state: event_recorder.record("finish"),
+        extensions=GenerationGraphExtensions(
+            finish_callback=lambda _state: event_recorder.record("finish")
+        ),
     )
 
     state = await graph.ainvoke(GenerationGraphState(request=request))
@@ -241,8 +244,10 @@ async def _invoke_with_callback(
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=_planner_result()),
         tool_executor=PropGraphToolExecutor(result=_tool_result()),
-        checkpoint_port=checkpoint_port,
-        finish_callback=observed_results.append,
+        extensions=GenerationGraphExtensions(
+            checkpoint_port=checkpoint_port,
+            finish_callback=observed_results.append,
+        ),
     )
     state = await graph.ainvoke(GenerationGraphState(request=_request()))
     return state, observed_results
@@ -283,7 +288,7 @@ async def test_langgraph_finish_callback_errors_do_not_replace_result() -> None:
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=planner_result),
         tool_executor=PropGraphToolExecutor(result=tool_result),
-        finish_callback=_raise_callback,
+        extensions=GenerationGraphExtensions(finish_callback=_raise_callback),
     )
 
     state = await graph.ainvoke(
@@ -303,7 +308,7 @@ async def test_finish_callback_records_concurrent_direct_results() -> None:
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=_planner_result()),
         tool_executor=PropGraphToolExecutor(result=_tool_result()),
-        finish_callback=observed_results.append,
+        extensions=GenerationGraphExtensions(finish_callback=observed_results.append),
     )
 
     states = await asyncio.gather(

@@ -202,33 +202,32 @@ class TaskRollupLedgerEntry:
             raise ValueError(msg)
 
 
+@dc.dataclass(frozen=True, slots=True)
+class RunPricingKey:
+    """Composite key for one provider-operation pricing pin within a run."""
+
+    workflow_run_id: str
+    provider_name: str
+    model: str
+    operation: str
+    billing_period_key: BillingPeriodKey
+
+
 @typ.runtime_checkable
 class CostLedgerPort(typ.Protocol):
     """Port for append-only cost ledger persistence."""
 
-    async def pin_run_pricing(  # noqa: PLR0913 - port key fields stay explicit.  # pylint: disable=too-many-arguments
+    async def pin_run_pricing(
         self,
+        key: RunPricingKey,
         *,
-        workflow_run_id: str,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
         pricing_snapshot_id: PricingSnapshotId,
         pinned_at: str,
     ) -> None:
-        """Persist the pricing snapshot selected for a workflow run."""
+        """Record a run-level pricing pin; silently reuse an existing pin."""
         raise NotImplementedError
 
-    async def get_run_pricing_pin(  # noqa: PLR0913 - port key fields stay explicit.  # pylint: disable=too-many-arguments
-        self,
-        *,
-        workflow_run_id: str,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-    ) -> PricingSnapshotId | None:
+    async def get_run_pricing_pin(self, key: RunPricingKey) -> PricingSnapshotId | None:
         """Return a pinned pricing snapshot identifier, if one exists."""
         raise NotImplementedError
 

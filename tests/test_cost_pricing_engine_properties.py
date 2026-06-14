@@ -4,7 +4,7 @@ import hypothesis.strategies as st
 import pytest
 from hypothesis import given, settings
 
-from episodic.cost.engine import PricingEngine
+from episodic.cost.engine import PricingEngine, PricingRequest
 from episodic.cost.ports import (
     BillingPeriodKey,
     CurrencyCode,
@@ -86,7 +86,14 @@ def _price(
     usage: dict[str, int],
 ) -> PricedCall:
     """Price usage with the module's fixed operation and billing period."""
-    return engine.price(snapshot, usage, _OPERATION, _BILLING_PERIOD)
+    return engine.price(
+        snapshot,
+        PricingRequest(
+            usage=usage,
+            operation=_OPERATION,
+            billing_period_key=_BILLING_PERIOD,
+        ),
+    )
 
 
 @given(rates=_exact_rates(), usage_a=_usage_maps(), usage_b=_usage_maps())
@@ -151,9 +158,11 @@ def test_unknown_usage_metric_raises() -> None:
     with pytest.raises(UnknownPricedMetricError, match="unpriced metrics"):
         PricingEngine().price(
             snapshot,
-            {"input_tokens": 1, "output_tokens": 1},
-            _OPERATION,
-            _BILLING_PERIOD,
+            PricingRequest(
+                usage={"input_tokens": 1, "output_tokens": 1},
+                operation=_OPERATION,
+                billing_period_key=_BILLING_PERIOD,
+            ),
         )
 
 
@@ -164,9 +173,11 @@ def test_operation_mismatch_raises() -> None:
     with pytest.raises(OperationMismatchError, match="operation"):
         PricingEngine().price(
             snapshot,
-            {"input_tokens": 1},
-            "responses",
-            _BILLING_PERIOD,
+            PricingRequest(
+                usage={"input_tokens": 1},
+                operation="responses",
+                billing_period_key=_BILLING_PERIOD,
+            ),
         )
 
 

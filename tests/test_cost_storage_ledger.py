@@ -15,6 +15,7 @@ from episodic.cost import (
     PricingModel,
     PricingSnapshotId,
     ProviderCallLedgerEntry,
+    RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
@@ -158,35 +159,28 @@ async def test_run_pricing_pin_is_idempotent(
         session.add(_pricing_snapshot_record())
         await session.flush()
         store = SqlAlchemyCostLedgerStore(session)
-        await store.pin_run_pricing(
+        key = RunPricingKey(
             workflow_run_id="workflow-run-1",
             provider_name="openai",
             model="gpt-4o-mini",
             operation="chat_completions",
             billing_period_key=BillingPeriodKey("2026-06"),
+        )
+        await store.pin_run_pricing(
+            key,
             pricing_snapshot_id=PricingSnapshotId(
                 "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
             ),
             pinned_at="2026-06-04T10:00:00Z",
         )
         await store.pin_run_pricing(
-            workflow_run_id="workflow-run-1",
-            provider_name="openai",
-            model="gpt-4o-mini",
-            operation="chat_completions",
-            billing_period_key=BillingPeriodKey("2026-06"),
+            key,
             pricing_snapshot_id=PricingSnapshotId(
                 "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
             ),
             pinned_at="2026-06-04T10:01:00Z",
         )
-        pinned_id = await store.get_run_pricing_pin(
-            workflow_run_id="workflow-run-1",
-            provider_name="openai",
-            model="gpt-4o-mini",
-            operation="chat_completions",
-            billing_period_key=BillingPeriodKey("2026-06"),
-        )
+        pinned_id = await store.get_run_pricing_pin(key)
         await session.commit()
 
     async with session_factory() as session:
@@ -213,11 +207,13 @@ async def test_run_pricing_pins_distinguish_models(
         store = SqlAlchemyCostLedgerStore(session)
         for model in ("gpt-4.1", "gpt-4o-mini"):
             await store.pin_run_pricing(
-                workflow_run_id="workflow-run-1",
-                provider_name="openai",
-                model=model,
-                operation="chat_completions",
-                billing_period_key=BillingPeriodKey("2026-06"),
+                RunPricingKey(
+                    workflow_run_id="workflow-run-1",
+                    provider_name="openai",
+                    model=model,
+                    operation="chat_completions",
+                    billing_period_key=BillingPeriodKey("2026-06"),
+                ),
                 pricing_snapshot_id=PricingSnapshotId(
                     "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
                 ),

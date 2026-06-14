@@ -11,6 +11,7 @@ from episodic.orchestration import (
     ActionExecutionResult,
     ActionKind,
     ExecutionPlan,
+    GenerationGraphExtensions,
     GenerationGraphState,
     GenerationOrchestrationRequest,
     ModelTier,
@@ -165,7 +166,7 @@ async def test_generation_graph_records_costs_on_direct_finish_path() -> None:
     graph = build_generation_orchestration_graph(
         planner=_Planner(planner_result),
         tool_executor=_ToolExecutor(action_result),
-        cost_recorder=cost_recorder,
+        extensions=GenerationGraphExtensions(cost_recorder=cost_recorder),
     )
 
     state = await graph.ainvoke(GenerationGraphState(request=_request()))

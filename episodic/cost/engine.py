@@ -9,12 +9,12 @@ floating-point arithmetic.
 Example
 -------
 ```python
-priced_call = PricingEngine.price(
-    snapshot,
-    {"input_tokens": 100, "output_tokens": 50},
-    "chat_completions",
-    BillingPeriodKey("2026-06"),
+request = PricingRequest(
+    usage={"input_tokens": 100, "output_tokens": 50},
+    operation="chat_completions",
+    billing_period_key=BillingPeriodKey("2026-06"),
 )
+priced_call = PricingEngine.price(snapshot, request)
 ```
 """
 
@@ -39,17 +39,23 @@ _RATE_SCALE = 1_000_000
 
 
 @dc.dataclass(frozen=True, slots=True)
+class PricingRequest:
+    """Input data for one pricing computation passed to `PricingEngine.price`."""
+
+    usage: cabc.Mapping[str, int]
+    operation: str
+    billing_period_key: BillingPeriodKey
+    is_estimated: bool = False
+
+
+@dc.dataclass(frozen=True, slots=True)
 class PricingEngine:
     """Price provider usage from an immutable pricing snapshot."""
 
     @staticmethod
-    def price(  # noqa: PLR0913  # pylint: disable=too-many-arguments
+    def price(
         snapshot: PricingSnapshot,
-        usage: cabc.Mapping[str, int],
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-        *,
-        is_estimated: bool = False,
+        request: PricingRequest,
     ) -> PricedCall:
         """Compute integer minor-unit cost for a provider call.
 
@@ -87,20 +93,21 @@ class PricingEngine:
         the current truncation policy; catalogue design owns any future
         fractional-minor-unit rounding policy.
         """
-        if operation != snapshot.operation:
+        if request.operation != snapshot.operation:
             msg = (
                 "pricing snapshot operation does not match requested operation: "
-                f"{snapshot.operation!r} != {operation!r}"
+                f"{snapshot.operation!r} != {request.operation!r}"
             )
             raise OperationMismatchError(msg)
-        if billing_period_key != snapshot.billing_period_key:
+        if request.billing_period_key != snapshot.billing_period_key:
             msg = (
                 "pricing snapshot billing period does not match requested "
-                f"period: {snapshot.billing_period_key!r} != {billing_period_key!r}"
+                f"period: {snapshot.billing_period_key!r} != "
+                f"{request.billing_period_key!r}"
             )
             raise BillingPeriodMismatchError(msg)
 
-        unpriced_metrics = set(usage) - set(snapshot.rates_minor_per_metric)
+        unpriced_metrics = set(request.usage) - set(snapshot.rates_minor_per_metric)
         if unpriced_metrics:
             joined_metrics = ", ".join(sorted(unpriced_metrics))
             msg = f"usage contains unpriced metrics: {joined_metrics}"
@@ -108,10 +115,10 @@ class PricingEngine:
 
         computed_cost_minor = sum(
             usage_count * snapshot.rates_minor_per_metric[metric] // _RATE_SCALE
-            for metric, usage_count in usage.items()
+            for metric, usage_count in request.usage.items()
         )
         return PricedCall(
             computed_cost_minor=computed_cost_minor,
             currency=snapshot.currency,
-            is_estimated=is_estimated,
+            is_estimated=request.is_estimated,
         )

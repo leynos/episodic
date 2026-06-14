@@ -2,7 +2,7 @@
 
 import inspect
 
-from episodic.cost.engine import PricingEngine
+from episodic.cost.engine import PricingEngine, PricingRequest
 from episodic.cost.ports import (
     BillingPeriodKey,
     CostLedgerEntryId,
@@ -17,6 +17,7 @@ from episodic.cost.ports import (
     PricingSnapshotId,
     PricingSourceKind,
     ProviderCallLedgerEntry,
+    RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
@@ -24,39 +25,19 @@ from episodic.llm.ports import LLMResponse, LLMUsage, ProviderCallUsage
 
 
 class _InMemoryCostLedger:
-    async def pin_run_pricing(  # pylint: disable=too-many-arguments
+    async def pin_run_pricing(
         self,
+        key: RunPricingKey,
         *,
-        workflow_run_id: str,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
         pricing_snapshot_id: PricingSnapshotId,
         pinned_at: str,
     ) -> None:
         """Accept a fake run-pricing pin."""
-        _ = (
-            workflow_run_id,
-            provider_name,
-            model,
-            operation,
-            billing_period_key,
-            pricing_snapshot_id,
-            pinned_at,
-        )
+        _ = (key, pricing_snapshot_id, pinned_at)
 
-    async def get_run_pricing_pin(  # pylint: disable=too-many-arguments
-        self,
-        *,
-        workflow_run_id: str,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-    ) -> PricingSnapshotId | None:
+    async def get_run_pricing_pin(self, key: RunPricingKey) -> PricingSnapshotId | None:
         """Return no fake pricing pin by default."""
-        _ = (workflow_run_id, provider_name, model, operation, billing_period_key)
+        _ = key
         return None
 
     async def sum_provider_call_costs(self, workflow_run_id: str) -> int:
@@ -169,9 +150,11 @@ def test_pricing_engine_returns_priced_call() -> None:
 
     priced_call = PricingEngine().price(
         snapshot,
-        {"input_tokens": 3},
-        "chat_completions",
-        BillingPeriodKey("2026-06"),
+        PricingRequest(
+            usage={"input_tokens": 3},
+            operation="chat_completions",
+            billing_period_key=BillingPeriodKey("2026-06"),
+        ),
     )
 
     assert isinstance(priced_call, PricedCall)

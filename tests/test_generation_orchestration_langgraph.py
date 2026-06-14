@@ -20,6 +20,7 @@ from episodic.orchestration import (
     WorkflowCheckpoint,
 )
 from episodic.orchestration.langgraph import (
+    GenerationGraphExtensions,
     GenerationGraphState,
     build_generation_orchestration_graph,
     resume_generation_orchestration,
@@ -188,7 +189,7 @@ class TestGenerationOrchestrationGraph:
         graph = build_generation_orchestration_graph(
             planner=_FakePlanner(_planner_result()),
             tool_executor=tool_executor,
-            checkpoint_port=checkpoint_store,
+            extensions=GenerationGraphExtensions(checkpoint_port=checkpoint_store),
         )
 
         state = await graph.ainvoke(GenerationGraphState(request=_request()))
@@ -209,7 +210,7 @@ class TestGenerationOrchestrationGraph:
         graph = build_generation_orchestration_graph(
             planner=_FakePlanner(_planner_result()),
             tool_executor=_FakeToolExecutor(_action_result()),
-            checkpoint_port=checkpoint_store,
+            extensions=GenerationGraphExtensions(checkpoint_port=checkpoint_store),
         )
 
         first_state = await graph.ainvoke(GenerationGraphState(request=_request()))
@@ -229,7 +230,7 @@ class TestGenerationOrchestrationGraph:
         graph = build_generation_orchestration_graph(
             planner=_FakePlanner(_planner_result()),
             tool_executor=_FakeToolExecutor(_action_result()),
-            checkpoint_port=checkpoint_store,
+            extensions=GenerationGraphExtensions(checkpoint_port=checkpoint_store),
         )
         state = await graph.ainvoke(GenerationGraphState(request=_request()))
         command = ResumeWorkflowCommand(
@@ -260,7 +261,7 @@ class TestGenerationOrchestrationGraph:
         graph = build_generation_orchestration_graph(
             planner=_FakePlanner(_multi_step_planner_result()),
             tool_executor=_FakeToolExecutor(_action_result()),
-            checkpoint_port=checkpoint_store,
+            extensions=GenerationGraphExtensions(checkpoint_port=checkpoint_store),
         )
         with pytest.raises(ValueError, match="exactly one planned step"):
             await graph.ainvoke(GenerationGraphState(request=_request()))

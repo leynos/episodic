@@ -8,6 +8,7 @@ a `SuspendedWorkflowResult`; `resume_generation_orchestration` later rebuilds
 the saved planner state and folds in an externally supplied action result.
 """
 
+import dataclasses as dc
 import importlib
 import time
 import typing as typ
@@ -83,6 +84,17 @@ class ExecuteNodeFn(typ.Protocol):
     ) -> cabc.Awaitable[ExecuteNodeResult]:
         """Return the async execute-node update for *state*."""
         ...
+
+
+@dc.dataclass
+class GenerationGraphExtensions:
+    """Optional collaborators for the generation orchestration graph."""
+
+    checkpoint_port: protocols.CheckpointPort | None = None
+    finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None] | None = (
+        None
+    )
+    cost_recorder: protocols.CostRecorderPort | None = None
 
 
 async def _plan_node(
@@ -333,14 +345,11 @@ def _build_execute_node(
     return _run_suspend_execute_node, END
 
 
-def build_generation_orchestration_graph(  # noqa: PLR0913 - graph construction exposes orthogonal ports.
+def build_generation_orchestration_graph(
     *,
     planner: protocols.PlannerPort,
     tool_executor: protocols.ToolExecutorPort,
-    checkpoint_port: protocols.CheckpointPort | None = None,
-    finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None]
-    | None = None,
-    cost_recorder: protocols.CostRecorderPort | None = None,
+    extensions: GenerationGraphExtensions | None = None,
 ) -> CompiledStateGraph[
     GenerationGraphState,
     None,
@@ -358,24 +367,10 @@ def build_generation_orchestration_graph(  # noqa: PLR0913 - graph construction 
         planner: Port used by the `plan` node to produce an execution plan.
         tool_executor: Port used by the direct `execute` node to run planned
             actions.
-        checkpoint_port: Optional persistence port. When provided, the graph
-            writes a checkpoint after planning and returns a suspended result
-            instead of running the direct finish path.
-        finish_callback: Optional callable invoked as
-            `finish_callback(result)` after finish-node aggregation and before
-            returning from the direct-execute path. It receives the
-            `GenerationOrchestrationResult` produced by the finish node.
-            Invoked only on the direct plan -> execute -> finish path, not
-            the checkpoint suspend path. Callback exceptions are logged
-            without replacing the computed graph result. The graph does not
-            serialize concurrent invocations of the same callback; callbacks
-            that mutate shared state must be thread-safe or otherwise
-            synchronize their own state.
-        cost_recorder: Optional cost-recorder collaborator. When provided, the
-            direct finish path records planner and action provider-call costs
-            as a side effect before invoking `finish_callback`. The suspend
-            path does not record costs because execution has not run yet.
+        extensions: Optional persistence, callback, and cost-recording
+            collaborators for graph execution.
     """
+    graph_extensions = extensions or GenerationGraphExtensions()
     graph = StateGraph(GenerationGraphState)
 
     async def _run_plan_node(
@@ -389,15 +384,21 @@ def build_generation_orchestration_graph(  # noqa: PLR0913 - graph construction 
     ) -> dict[str, dto.GenerationOrchestrationResult]:
         """Entry point for the finish graph node."""
         result = _finish_node(state)
-        await _record_costs_from_finished_state(state, cost_recorder=cost_recorder)
-        if finish_callback is not None:
+        await _record_costs_from_finished_state(
+            state, cost_recorder=graph_extensions.cost_recorder
+        )
+        if graph_extensions.finish_callback is not None:
             correlation_id = (
                 state.request.correlation_id if state.request is not None else None
             )
-            _invoke_finish_callback(finish_callback, result, correlation_id)
+            _invoke_finish_callback(
+                graph_extensions.finish_callback, result, correlation_id
+            )
         return result
 
-    execute_node, execute_target = _build_execute_node(tool_executor, checkpoint_port)
+    execute_node, execute_target = _build_execute_node(
+        tool_executor, graph_extensions.checkpoint_port
+    )
 
     graph.add_node("plan", _run_plan_node)
     graph.add_node("execute", execute_node)

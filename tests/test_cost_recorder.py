@@ -15,6 +15,7 @@ from episodic.cost.ports import (
     PricingSnapshotId,
     PricingSourceKind,
     ProviderCallLedgerEntry,
+    RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
@@ -62,39 +63,19 @@ class _PinnedLedger:
     pinned_snapshot_id: PricingSnapshotId
     recorded_call: ProviderCallLedgerEntry | None = None
 
-    async def pin_run_pricing(  # pylint: disable=too-many-arguments
+    async def pin_run_pricing(
         self,
+        key: RunPricingKey,
         *,
-        workflow_run_id: str,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
         pricing_snapshot_id: PricingSnapshotId,
         pinned_at: str,
     ) -> None:
         """Accept a fake run-pricing pin."""
-        _ = (
-            workflow_run_id,
-            provider_name,
-            model,
-            operation,
-            billing_period_key,
-            pricing_snapshot_id,
-            pinned_at,
-        )
+        _ = (key, pricing_snapshot_id, pinned_at)
 
-    async def get_run_pricing_pin(  # pylint: disable=too-many-arguments
-        self,
-        *,
-        workflow_run_id: str,
-        provider_name: str,
-        model: str,
-        operation: str,
-        billing_period_key: BillingPeriodKey,
-    ) -> PricingSnapshotId | None:
+    async def get_run_pricing_pin(self, key: RunPricingKey) -> PricingSnapshotId | None:
         """Return the fake pinned snapshot identifier."""
-        _ = (workflow_run_id, provider_name, model, operation, billing_period_key)
+        _ = key
         return self.pinned_snapshot_id
 
     async def sum_provider_call_costs(self, workflow_run_id: str) -> int:

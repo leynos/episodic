@@ -17,6 +17,7 @@ import dataclasses as dc
 import datetime as dt
 import typing as typ
 
+from episodic.cost.engine import PricingRequest
 from episodic.cost.ports import (
     BillingPeriodKey,
     CostLedgerEntryId,
@@ -28,6 +29,7 @@ from episodic.cost.ports import (
     PricingModel,
     PricingSnapshot,
     ProviderCallLedgerEntry,
+    RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
@@ -122,13 +124,14 @@ class CostRecorder:
         """Resolve and persist pricing pins for one workflow run."""
         pinned_at = dt.datetime.now(dt.UTC).isoformat()
         for provider in providers:
-            existing_pin = await self.ledger.get_run_pricing_pin(
+            key = RunPricingKey(
                 workflow_run_id=workflow_run_id,
                 provider_name=provider.provider_name,
                 model=provider.model,
                 operation=provider.operation,
                 billing_period_key=billing_period_key,
             )
+            existing_pin = await self.ledger.get_run_pricing_pin(key)
             if existing_pin is not None:
                 continue
             snapshot = await self._resolve_pricing_snapshot(
@@ -138,11 +141,7 @@ class CostRecorder:
                 billing_period_key,
             )
             await self.ledger.pin_run_pricing(
-                workflow_run_id=workflow_run_id,
-                provider_name=provider.provider_name,
-                model=provider.model,
-                operation=provider.operation,
-                billing_period_key=billing_period_key,
+                key,
                 pricing_snapshot_id=snapshot.pricing_snapshot_id,
                 pinned_at=pinned_at,
             )
@@ -176,13 +175,14 @@ class CostRecorder:
         computation to `pricing_engine.price`, constructs a
         `ProviderCallLedgerEntry`, and persists it with `ledger.record_call`.
         """
-        pinned_snapshot_id = await self.ledger.get_run_pricing_pin(
+        key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,
             provider_name=record.provider_name,
             model=record.model,
             operation=record.operation,
             billing_period_key=record.billing_period_key,
         )
+        pinned_snapshot_id = await self.ledger.get_run_pricing_pin(key)
         if pinned_snapshot_id is None:
             snapshot = await self._resolve_pricing_snapshot(
                 record.provider_name,
@@ -194,10 +194,12 @@ class CostRecorder:
             snapshot = await self.pricing_catalogue.get_snapshot(pinned_snapshot_id)
         priced_call = self.pricing_engine.price(
             snapshot,
-            record.usage,
-            record.operation,
-            record.billing_period_key,
-            is_estimated=record.usage_source is UsageSource.ESTIMATED,
+            PricingRequest(
+                usage=record.usage,
+                operation=record.operation,
+                billing_period_key=record.billing_period_key,
+                is_estimated=record.usage_source is UsageSource.ESTIMATED,
+            ),
         )
         entry = ProviderCallLedgerEntry(
             idempotency_key=record.idempotency_key,

@@ -34,6 +34,7 @@ from episodic.cost.ports import (
     PricingSnapshotId,
     PricingSourceKind,
     ProviderCallLedgerEntry,
+    RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
@@ -55,6 +56,7 @@ __all__ = [
     "PricingSnapshotId",
     "PricingSourceKind",
     "ProviderCallLedgerEntry",
+    "RunPricingKey",
     "TaskRollupLedgerEntry",
     "UsageSource",
 ]
