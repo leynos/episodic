@@ -2,7 +2,7 @@
 
 import socket
 import subprocess
-import typing as typ
+from collections.abc import Callable  # noqa: ICN003, TC003 - requested test shape.
 
 import pytest
 
@@ -14,9 +14,6 @@ from scripts.local_k8s.validation import (
     ensure_loopback_port_available,
     require_tools,
 )
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
 
 
 class RecordingRunner:
@@ -223,19 +220,16 @@ def test_up_rejects_existing_cluster_with_conflicting_ingress_port(
 
 
 @pytest.mark.parametrize(
-    ("fn", "verb"),
-    [
-        (status, "status"),
-        (logs, "logs"),
-    ],
+    "command",
+    [status, logs],
+    ids=["status", "logs"],
 )
-def test_reports_missing_cluster_without_kubectl(
+def test_command_reports_missing_cluster_without_kubectl(
+    command: Callable[[PreviewConfig, RecordingRunner], None],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    fn: cabc.Callable[[PreviewConfig, commands.Runner], None],
-    verb: str,
 ) -> None:
-    """Avoid raw kubectl tracebacks when {verb} is requested before up."""
+    """Avoid raw kubectl tracebacks when a command is run before up."""
     monkeypatch.setattr(
         "scripts.local_k8s.orchestration.require_tools",
         lambda _: None,
@@ -244,7 +238,7 @@ def test_reports_missing_cluster_without_kubectl(
         subprocess.CompletedProcess(args=["k3d"], returncode=1, stdout="", stderr=""),
     ])
 
-    fn(PreviewConfig(cluster_name="missing"), runner)
+    command(PreviewConfig(cluster_name="missing"), runner)
 
     assert runner.commands == [["k3d", "cluster", "get", "missing"]]
     assert "does not exist" in capsys.readouterr().out
