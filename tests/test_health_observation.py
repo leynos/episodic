@@ -1,96 +1,64 @@
 """Tests for transport-free health observation semantics."""
 
 import asyncio
+import collections.abc as cabc
 import typing as typ
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+type HealthProbe = cabc.Callable[[], cabc.Awaitable[bool]]
 
-@pytest.mark.asyncio
-async def test_probe_health_observer_reports_successful_checks() -> None:
-    """Observe all configured checks without HTTP concepts."""
-    from episodic.canonical.health import HealthStatus, ProbeHealthObserver
 
-    async def database_ready() -> bool:
-        await asyncio.sleep(0)
-        return True
+async def _probe_returns_true() -> bool:
+    await asyncio.sleep(0)
+    return True
 
-    observer = ProbeHealthObserver.from_checks({"database": database_ready})
 
-    report = await observer.observe()
+async def _probe_returns_false() -> bool:
+    await asyncio.sleep(0)
+    return False
 
-    assert report.status is HealthStatus.OK, (
-        "Expected overall status OK for passing check"
-    )
-    assert [(check.name, check.status) for check in report.checks] == [
-        ("database", HealthStatus.OK)
-    ], "Expected database check to report OK status"
+
+async def _probe_raises() -> bool:
+    await asyncio.sleep(0)
+    msg = "database unavailable"
+    raise RuntimeError(msg)
 
 
 @pytest.mark.asyncio
-async def test_probe_health_observer_treats_exceptions_as_failed_checks() -> None:
-    """Convert unexpected readiness exceptions into failed observations."""
+@pytest.mark.parametrize(
+    ("probe", "use_list", "expect_ok"),
+    [
+        (_probe_returns_true, False, True),
+        (_probe_raises, False, False),
+        (_probe_returns_false, False, False),
+        (_probe_returns_true, True, True),
+    ],
+    ids=["success", "exception", "false-result", "iterable-pair"],
+)
+async def test_probe_health_observer_single_database_check(
+    probe: HealthProbe,
+    use_list: object,
+    expect_ok: object,
+) -> None:
+    """Observe a single database probe across check shapes and outcomes."""
     from episodic.canonical.health import HealthStatus, ProbeHealthObserver
 
-    async def database_ready() -> bool:
-        await asyncio.sleep(0)
-        msg = "database unavailable"
-        raise RuntimeError(msg)
+    checks_input: list[tuple[str, HealthProbe]] | dict[str, HealthProbe] = (
+        [("database", probe)] if use_list is True else {"database": probe}
+    )
 
-    observer = ProbeHealthObserver.from_checks({"database": database_ready})
+    observer = ProbeHealthObserver.from_checks(typ.cast("typ.Any", checks_input))
 
     report = await observer.observe()
 
-    assert report.status is HealthStatus.ERROR, (
-        "Expected overall status ERROR when check raises exception"
-    )
+    expected = HealthStatus.OK if expect_ok is True else HealthStatus.ERROR
+    assert report.status is expected, f"Expected overall status {expected!r}"
     assert [(check.name, check.status) for check in report.checks] == [
-        ("database", HealthStatus.ERROR)
-    ], "Expected database check to report ERROR status when check raises"
-
-
-@pytest.mark.asyncio
-async def test_probe_health_observer_treats_false_as_failed_check() -> None:
-    """Convert explicit false probe results into failed observations."""
-    from episodic.canonical.health import HealthStatus, ProbeHealthObserver
-
-    async def database_ready() -> bool:
-        await asyncio.sleep(0)
-        return False
-
-    observer = ProbeHealthObserver.from_checks({"database": database_ready})
-
-    report = await observer.observe()
-
-    assert report.status is HealthStatus.ERROR, (
-        "Expected overall status ERROR for false check result"
-    )
-    assert [(check.name, check.status) for check in report.checks] == [
-        ("database", HealthStatus.ERROR)
-    ], "Expected database check to report ERROR status for false result"
-
-
-@pytest.mark.asyncio
-async def test_probe_health_observer_accepts_iterable_check_pairs() -> None:
-    """Construct observers from iterable name/check pairs."""
-    from episodic.canonical.health import HealthStatus, ProbeHealthObserver
-
-    async def database_ready() -> bool:
-        await asyncio.sleep(0)
-        return True
-
-    observer = ProbeHealthObserver.from_checks([("database", database_ready)])
-
-    report = await observer.observe()
-
-    assert report.status is HealthStatus.OK, (
-        "Expected overall status OK for iterable check pair"
-    )
-    assert [(check.name, check.status) for check in report.checks] == [
-        ("database", HealthStatus.OK)
-    ], "Expected iterable database check to report OK status"
+        ("database", expected)
+    ], f"Expected database check to report {expected!r}"
 
 
 def test_probe_health_observer_rejects_invalid_check_names() -> None:
