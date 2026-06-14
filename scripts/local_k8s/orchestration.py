@@ -37,25 +37,41 @@ def cluster_exists(config: PreviewConfig, runner: commands.Runner) -> bool:
     return result.returncode == 0
 
 
+_HOST_PORT_KEYS: frozenset[str] = frozenset({"hostport", "host_port"})
+
+
+def _try_parse_port(item: object) -> int | None:
+    """Coerce *item* to an integer port number; return ``None`` on failure."""
+    try:
+        return int(typ.cast("str | int", item))
+    except TypeError, ValueError:
+        return None
+
+
+def _ports_from_dict(value: dict[object, object]) -> set[int]:
+    ports: set[int] = set()
+    for key, item in value.items():
+        if isinstance(key, str) and key.lower() in _HOST_PORT_KEYS:
+            port = _try_parse_port(item)
+            if port is not None:
+                ports.add(port)
+        ports.update(_collect_host_ports(item))
+    return ports
+
+
+def _ports_from_list(value: list[object]) -> set[int]:
+    ports: set[int] = set()
+    for item in value:
+        ports.update(_collect_host_ports(item))
+    return ports
+
+
 def _collect_host_ports(value: object) -> set[int]:
     """Return host ports from k3d JSON without depending on one exact schema."""
     if isinstance(value, dict):
-        ports: set[int] = set()
-        for key, item in value.items():
-            if isinstance(key, str) and key.lower() in {"hostport", "host_port"}:
-                try:
-                    ports.add(int(typ.cast("str | int", item)))
-                except TypeError:
-                    pass
-                except ValueError:
-                    pass
-            ports.update(_collect_host_ports(item))
-        return ports
+        return _ports_from_dict(typ.cast("dict[object, object]", value))
     if isinstance(value, list):
-        ports: set[int] = set()
-        for item in value:
-            ports.update(_collect_host_ports(item))
-        return ports
+        return _ports_from_list(typ.cast("list[object]", value))
     return set()
 
 

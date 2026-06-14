@@ -2,6 +2,7 @@
 
 import socket
 import subprocess
+import typing as typ
 
 import pytest
 
@@ -13,6 +14,9 @@ from scripts.local_k8s.validation import (
     ensure_loopback_port_available,
     require_tools,
 )
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 
 class RecordingRunner:
@@ -218,11 +222,20 @@ def test_up_rejects_existing_cluster_with_conflicting_ingress_port(
         )
 
 
-def test_status_reports_missing_cluster_without_kubectl(
+@pytest.mark.parametrize(
+    ("fn", "verb"),
+    [
+        (status, "status"),
+        (logs, "logs"),
+    ],
+)
+def test_reports_missing_cluster_without_kubectl(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    fn: cabc.Callable[[PreviewConfig, commands.Runner], None],
+    verb: str,
 ) -> None:
-    """Avoid raw kubectl tracebacks when status is requested before up."""
+    """Avoid raw kubectl tracebacks when {verb} is requested before up."""
     monkeypatch.setattr(
         "scripts.local_k8s.orchestration.require_tools",
         lambda _: None,
@@ -231,26 +244,7 @@ def test_status_reports_missing_cluster_without_kubectl(
         subprocess.CompletedProcess(args=["k3d"], returncode=1, stdout="", stderr=""),
     ])
 
-    status(PreviewConfig(cluster_name="missing"), runner)
-
-    assert runner.commands == [["k3d", "cluster", "get", "missing"]]
-    assert "does not exist" in capsys.readouterr().out
-
-
-def test_logs_reports_missing_cluster_without_kubectl(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Avoid raw kubectl tracebacks when logs are requested before up."""
-    monkeypatch.setattr(
-        "scripts.local_k8s.orchestration.require_tools",
-        lambda _: None,
-    )
-    runner = RecordingRunner([
-        subprocess.CompletedProcess(args=["k3d"], returncode=1, stdout="", stderr=""),
-    ])
-
-    logs(PreviewConfig(cluster_name="missing"), runner)
+    fn(PreviewConfig(cluster_name="missing"), runner)
 
     assert runner.commands == [["k3d", "cluster", "get", "missing"]]
     assert "does not exist" in capsys.readouterr().out
