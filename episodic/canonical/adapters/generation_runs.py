@@ -309,6 +309,40 @@ class InMemoryGenerationRunStore:
         async with self._lock:
             return self._checkpoints.get(checkpoint_id)
 
+    # pylint: disable-next=too-many-arguments  # Shared transition helper.
+    async def _apply_checkpoint_transition(  # noqa: PLR0913
+        self,
+        checkpoint_id: uuid.UUID,
+        transition: cabc.Callable[[Checkpoint], Checkpoint],
+        *,
+        missing_event: str,
+        done_event: str,
+        extra_fields: dict[str, str] | None = None,
+    ) -> Checkpoint:
+        """Apply a domain transition to a stored checkpoint under the lock."""
+        extra = extra_fields or {}
+        async with self._lock:
+            checkpoint = self._checkpoints.get(checkpoint_id)
+            if checkpoint is None:
+                _log_event(
+                    "warning",
+                    missing_event,
+                    checkpoint_id=str(checkpoint_id),
+                    **extra,
+                )
+                raise CheckpointNotFound(checkpoint_id)
+            updated = transition(checkpoint)
+            self._checkpoints[checkpoint_id] = updated
+            _log_event(
+                "info",
+                done_event,
+                checkpoint_id=str(checkpoint_id),
+                run_id=str(updated.generation_run_id),
+                status=updated.status.value,
+                **extra,
+            )
+            return updated
+
     async def respond_to_checkpoint(
         self,
         checkpoint_id: uuid.UUID,
@@ -316,27 +350,13 @@ class InMemoryGenerationRunStore:
         response: CheckpointResponse,
     ) -> Checkpoint:
         """Record a reviewer response using the checkpoint domain transition."""
-        async with self._lock:
-            checkpoint = self._checkpoints.get(checkpoint_id)
-            if checkpoint is None:
-                _log_event(
-                    "warning",
-                    "generation_run_store.respond_checkpoint_missing",
-                    checkpoint_id=str(checkpoint_id),
-                    action=response.action.value,
-                )
-                raise CheckpointNotFound(checkpoint_id)
-            responded = checkpoint.respond(response)
-            self._checkpoints[checkpoint_id] = responded
-            _log_event(
-                "info",
-                "generation_run_store.respond_checkpoint",
-                checkpoint_id=str(checkpoint_id),
-                run_id=str(responded.generation_run_id),
-                action=response.action.value,
-                status=responded.status.value,
-            )
-            return responded
+        return await self._apply_checkpoint_transition(
+            checkpoint_id,
+            lambda cp: cp.respond(response),
+            missing_event="generation_run_store.respond_checkpoint_missing",
+            done_event="generation_run_store.respond_checkpoint",
+            extra_fields={"action": response.action.value},
+        )
 
     async def time_out_checkpoint(
         self,
@@ -345,25 +365,12 @@ class InMemoryGenerationRunStore:
         at: dt.datetime,
     ) -> Checkpoint:
         """Record a checkpoint timeout using the domain transition."""
-        async with self._lock:
-            checkpoint = self._checkpoints.get(checkpoint_id)
-            if checkpoint is None:
-                _log_event(
-                    "warning",
-                    "generation_run_store.timeout_checkpoint_missing",
-                    checkpoint_id=str(checkpoint_id),
-                )
-                raise CheckpointNotFound(checkpoint_id)
-            timed_out = checkpoint.time_out(at)
-            self._checkpoints[checkpoint_id] = timed_out
-            _log_event(
-                "info",
-                "generation_run_store.timeout_checkpoint",
-                checkpoint_id=str(checkpoint_id),
-                run_id=str(timed_out.generation_run_id),
-                status=timed_out.status.value,
-            )
-            return timed_out
+        return await self._apply_checkpoint_transition(
+            checkpoint_id,
+            lambda cp: cp.time_out(at),
+            missing_event="generation_run_store.timeout_checkpoint_missing",
+            done_event="generation_run_store.timeout_checkpoint",
+        )
 
     async def cancel_checkpoint(
         self,
@@ -372,22 +379,9 @@ class InMemoryGenerationRunStore:
         at: dt.datetime,
     ) -> Checkpoint:
         """Record checkpoint cancellation using the domain transition."""
-        async with self._lock:
-            checkpoint = self._checkpoints.get(checkpoint_id)
-            if checkpoint is None:
-                _log_event(
-                    "warning",
-                    "generation_run_store.cancel_checkpoint_missing",
-                    checkpoint_id=str(checkpoint_id),
-                )
-                raise CheckpointNotFound(checkpoint_id)
-            cancelled = checkpoint.cancel(at)
-            self._checkpoints[checkpoint_id] = cancelled
-            _log_event(
-                "info",
-                "generation_run_store.cancel_checkpoint",
-                checkpoint_id=str(checkpoint_id),
-                run_id=str(cancelled.generation_run_id),
-                status=cancelled.status.value,
-            )
-            return cancelled
+        return await self._apply_checkpoint_transition(
+            checkpoint_id,
+            lambda cp: cp.cancel(at),
+            missing_event="generation_run_store.cancel_checkpoint_missing",
+            done_event="generation_run_store.cancel_checkpoint",
+        )

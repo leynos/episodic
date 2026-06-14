@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses as dc
 import datetime as dt
+import typing as typ
 import uuid
 
 import pytest
@@ -20,6 +21,9 @@ from episodic.canonical.domain import (
     GenerationRunStatus,
 )
 from episodic.canonical.generation_run_errors import CheckpointAlreadyTerminal
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 NOW = dt.datetime(2026, 6, 4, 8, 0, tzinfo=dt.UTC)
 _ACTION_PAYLOADS: dict[str, dict[str, object]] = {
@@ -198,16 +202,29 @@ def _require_checkpoint(
     return checkpoint
 
 
+def _apply_terminal_transition(
+    ctx: GenerationRunLifecycleContext,
+    coro: cabc.Awaitable[Checkpoint],
+) -> None:
+    """Run a terminal-transition coroutine and store the resulting checkpoint."""
+
+    async def await_transition() -> Checkpoint:
+        return await coro
+
+    ctx.checkpoint = asyncio.run(await_transition())
+
+
 @when("the checkpoint times out")
 def checkpoint_times_out(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Move the checkpoint to the timeout terminal state."""
-    generation_run_context.checkpoint = asyncio.run(
+    _apply_terminal_transition(
+        generation_run_context,
         generation_run_context.store.time_out_checkpoint(
             _require_checkpoint(generation_run_context).id,
             at=NOW + dt.timedelta(hours=1),
-        )
+        ),
     )
 
 
@@ -216,11 +233,12 @@ def checkpoint_is_cancelled(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Move the checkpoint to the cancelled terminal state."""
-    generation_run_context.checkpoint = asyncio.run(
+    _apply_terminal_transition(
+        generation_run_context,
         generation_run_context.store.cancel_checkpoint(
             _require_checkpoint(generation_run_context).id,
             at=NOW + dt.timedelta(minutes=10),
-        )
+        ),
     )
 
 
