@@ -699,6 +699,11 @@ loop for targeted redraft. This prepares the implementation for QA-gated
 generation workflows beyond the initial draft-only slice. Implementations must
 define single-writer ownership for run state, ordered event publication, and
 shutdown-safe cancellation before adding new loop transitions.
+Concurrency model: one graph runner owns mutation for a run, repository writes
+are guarded by sequence numbers and idempotency keys, and cancellation,
+shutdown, duplicate-event handling, and resume replay must be deterministic.
+Property-testing guidance: use Hypothesis to exercise routing, duration-class,
+and iteration-cap invariants across generated run states.
 
 - [ ] 4.4.1. Add QA-gated mode branching and Graph route plumbing.
   - Requires 2.1.1, 2.2.6, 2.4.2, and 4.3.2.
@@ -706,8 +711,8 @@ shutdown-safe cancellation before adding new loop transitions.
   - Preserve `draft_without_qa` as a direct route to draft persistence.
   - Route `qa_gated` runs into the full evaluation branch in the
     [Content Generation Graph](episodic-podcast-generation-system-design.md#content-generation-graph).
-  - Add property-based tests proving quality-mode routing reaches distinct
-    terminal states without ambiguous branch ownership.
+  - Add Hypothesis property-based tests proving quality-mode routing reaches
+    distinct terminal states without ambiguous branch ownership.
   - Success: `draft_without_qa` and `qa_gated` requests reach deterministic,
     distinct graph branches with clear terminal states.
 
@@ -718,8 +723,8 @@ shutdown-safe cancellation before adding new loop transitions.
   - Compare against minimum/maximum duration thresholds from configuration.
   - Emit a signed QA finding artifact and generation event for short/long-draft
     outcomes that can drive a refinement turn.
-  - Add property-based tests for below-threshold, in-range, and above-threshold
-    Chrono outcomes across generated TEI segment shapes.
+  - Add Hypothesis property-based tests for short, in-range, and long Chrono
+    duration outcomes across generated TEI segment shapes.
   - See
     [Quality assurance stack](episodic-podcast-generation-system-design.md#quality-assurance-stack),
     [ADR 006](adr/adr-006-chrono-spoken-text-semantics.md), and
@@ -733,10 +738,10 @@ shutdown-safe cancellation before adding new loop transitions.
     iteration reason and cap-adjusted retry count.
   - Enforce `max_iterations` from generation configuration and route exhausted
     runs to Escalate.
-  - Add property-based transition tests proving pass, redraft, cancel, and
-    Escalate outcomes terminate within the configured iteration cap.
-  - Define cancellation behaviour for mid-iteration shutdowns before the next
-    Generate node is scheduled.
+  - Add Hypothesis transition tests proving pass, redraft, cancel, and Escalate
+    outcomes terminate within the configured `max_iterations` cap.
+  - Define state sequencing and cancellation behaviour for mid-iteration
+    shutdowns before the next Generate node is scheduled.
   - See
     [Content Generation Graph](episodic-podcast-generation-system-design.md#content-generation-graph)
     and
@@ -754,8 +759,9 @@ shutdown-safe cancellation before adding new loop transitions.
     iteration cap is reached.
   - Store sequence numbers and idempotency keys so duplicate node completions,
     duplicate event delivery, and resume replay do not double-write state.
-  - Add interleaving tests for cancellation mid-iteration, worker shutdown after
-    Chrono before redraft, duplicate event delivery, and checkpoint resume.
+  - Add concrete interleaving tests for cancellation mid-iteration, worker
+    shutdown after Chrono before redraft, duplicate message delivery, duplicate
+    event delivery, and checkpoint resume.
   - See
     [Generation runs](episodic-tui-api-design.md#generation-runs),
     [Cost accounting and budget enforcement](episodic-podcast-generation-system-design.md#cost-accounting-and-budget-enforcement),
