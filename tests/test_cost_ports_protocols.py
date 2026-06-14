@@ -23,12 +23,41 @@ from episodic.cost.ports import (
 )
 from episodic.llm.ports import LLMResponse, LLMUsage, ProviderCallUsage
 
+_DEFAULT_BILLING_PERIOD = BillingPeriodKey("2026-06")
+_DEFAULT_SNAPSHOT_KEY = RunPricingKey(
+    workflow_run_id="run:test",
+    provider_name="vidai",
+    model="mock-gpt",
+    operation="chat_completions",
+    billing_period_key=_DEFAULT_BILLING_PERIOD,
+)
+
+
+def _make_snapshot(
+    pricing_snapshot_id: PricingSnapshotId,
+    *,
+    key: RunPricingKey = _DEFAULT_SNAPSHOT_KEY,
+) -> PricingSnapshot:
+    """Build a deterministic pricing snapshot for protocol tests."""
+    return PricingSnapshot(
+        pricing_snapshot_id=pricing_snapshot_id,
+        provider_name=key.provider_name,
+        model=key.model,
+        operation=key.operation,
+        source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
+        currency=CurrencyCode("USD"),
+        billing_period_key=key.billing_period_key,
+        rates_minor_per_metric={"input_tokens": 1_000_000},
+        source_metadata={"source": "test"},
+        content_hash="sha256:test",
+        retrieved_at="2026-06-04T00:00:00Z",
+    )
+
 
 class _InMemoryCostLedger:
     async def pin_run_pricing(
         self,
         key: RunPricingKey,
-        *,
         pricing_snapshot_id: PricingSnapshotId,
         pinned_at: str,
     ) -> None:
@@ -63,19 +92,7 @@ class _StaticPricingCatalogue:
         pricing_snapshot_id: PricingSnapshotId,
     ) -> PricingSnapshot:
         """Return a deterministic snapshot for protocol conformance tests."""
-        return PricingSnapshot(
-            pricing_snapshot_id=pricing_snapshot_id,
-            provider_name="vidai",
-            model="mock-gpt",
-            operation="chat_completions",
-            source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
-            currency=CurrencyCode("USD"),
-            billing_period_key=BillingPeriodKey("2026-06"),
-            rates_minor_per_metric={"input_tokens": 1_000_000},
-            source_metadata={"source": "test"},
-            content_hash="sha256:test",
-            retrieved_at="2026-06-04T00:00:00Z",
-        )
+        return _make_snapshot(pricing_snapshot_id)
 
     async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -85,18 +102,15 @@ class _StaticPricingCatalogue:
         billing_period_key: BillingPeriodKey,
     ) -> PricingSnapshot:
         """Return a deterministic snapshot for protocol conformance tests."""
-        return PricingSnapshot(
-            pricing_snapshot_id=PricingSnapshotId("snapshot:test"),
-            provider_name=provider_name,
-            model=model,
-            operation=operation,
-            source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
-            currency=CurrencyCode("USD"),
-            billing_period_key=billing_period_key,
-            rates_minor_per_metric={"input_tokens": 1_000_000},
-            source_metadata={"source": "test"},
-            content_hash="sha256:test",
-            retrieved_at="2026-06-04T00:00:00Z",
+        return _make_snapshot(
+            PricingSnapshotId("snapshot:test"),
+            key=RunPricingKey(
+                workflow_run_id="run:test",
+                provider_name=provider_name,
+                model=model,
+                operation=operation,
+                billing_period_key=billing_period_key,
+            ),
         )
 
 
@@ -134,19 +148,7 @@ def test_cost_protocol_fakes_satisfy_public_ports() -> None:
 
 def test_pricing_engine_returns_priced_call() -> None:
     """The pricing engine has the deterministic domain pricing surface."""
-    snapshot = PricingSnapshot(
-        pricing_snapshot_id=PricingSnapshotId("snapshot:test"),
-        provider_name="vidai",
-        model="mock-gpt",
-        operation="chat_completions",
-        source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
-        currency=CurrencyCode("USD"),
-        billing_period_key=BillingPeriodKey("2026-06"),
-        rates_minor_per_metric={"input_tokens": 1_000_000},
-        source_metadata={"source": "test"},
-        content_hash="sha256:test",
-        retrieved_at="2026-06-04T00:00:00Z",
-    )
+    snapshot = _make_snapshot(PricingSnapshotId("snapshot:test"))
 
     priced_call = PricingEngine().price(
         snapshot,

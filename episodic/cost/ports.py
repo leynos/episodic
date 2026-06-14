@@ -204,7 +204,10 @@ class TaskRollupLedgerEntry:
 
 @dc.dataclass(frozen=True, slots=True)
 class RunPricingKey:
-    """Composite key for one provider-operation pricing pin within a run."""
+    """Composite key identifying a pricing pin.
+
+    The key identifies one provider operation within a run.
+    """
 
     workflow_run_id: str
     provider_name: str
@@ -220,7 +223,6 @@ class CostLedgerPort(typ.Protocol):
     async def pin_run_pricing(
         self,
         key: RunPricingKey,
-        *,
         pricing_snapshot_id: PricingSnapshotId,
         pinned_at: str,
     ) -> None:

@@ -142,8 +142,8 @@ class CostRecorder:
             )
             await self.ledger.pin_run_pricing(
                 key,
-                pricing_snapshot_id=snapshot.pricing_snapshot_id,
-                pinned_at=pinned_at,
+                snapshot.pricing_snapshot_id,
+                pinned_at,
             )
 
     async def record_provider_call(

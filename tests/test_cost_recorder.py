@@ -66,7 +66,6 @@ class _PinnedLedger:
     async def pin_run_pricing(
         self,
         key: RunPricingKey,
-        *,
         pricing_snapshot_id: PricingSnapshotId,
         pinned_at: str,
     ) -> None:

@@ -168,17 +168,13 @@ async def test_run_pricing_pin_is_idempotent(
         )
         await store.pin_run_pricing(
             key,
-            pricing_snapshot_id=PricingSnapshotId(
-                "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
-            ),
-            pinned_at="2026-06-04T10:00:00Z",
+            PricingSnapshotId("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"),
+            "2026-06-04T10:00:00Z",
         )
         await store.pin_run_pricing(
             key,
-            pricing_snapshot_id=PricingSnapshotId(
-                "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
-            ),
-            pinned_at="2026-06-04T10:01:00Z",
+            PricingSnapshotId("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"),
+            "2026-06-04T10:01:00Z",
         )
         pinned_id = await store.get_run_pricing_pin(key)
         await session.commit()
@@ -214,10 +210,8 @@ async def test_run_pricing_pins_distinguish_models(
                     operation="chat_completions",
                     billing_period_key=BillingPeriodKey("2026-06"),
                 ),
-                pricing_snapshot_id=PricingSnapshotId(
-                    "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"
-                ),
-                pinned_at="2026-06-04T10:00:00Z",
+                PricingSnapshotId("018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f8f"),
+                "2026-06-04T10:00:00Z",
             )
         await session.commit()
 

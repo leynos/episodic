@@ -53,6 +53,62 @@ def _optional_entry_id(value: CostLedgerEntryId | None) -> uuid.UUID | None:
     return None if value is None else uuid.UUID(str(value))
 
 
+def _provider_call_values(entry: ProviderCallLedgerEntry) -> dict[str, object]:
+    """Build storage values for a provider-call ledger row."""
+    return {
+        "id": _new_id(),
+        "idempotency_key": str(entry.idempotency_key),
+        "parent_cost_entry_id": _optional_entry_id(entry.parent_cost_entry_id),
+        "scope": entry.scope.value,
+        "provider_type": entry.provider_type,
+        "provider_name": entry.provider_name,
+        "workflow_node": entry.workflow_node,
+        "operation": entry.operation,
+        "pricing_snapshot_id": uuid.UUID(str(entry.pricing_snapshot_id)),
+        "usage": dict(entry.usage),
+        "usage_source": entry.usage_source.value,
+        "usage_complete": entry.usage_complete,
+        "computed_cost_minor": entry.computed_cost_minor,
+        "currency": str(entry.currency),
+        "pricing_model": entry.pricing_model.value,
+        "retry_attempt": entry.retry_attempt,
+        "billing_period_key": str(entry.billing_period_key),
+        "workflow_run_id": entry.workflow_run_id,
+        "recorded_at": parse_instant(
+            entry.recorded_at,
+            error_message="timestamp must include timezone information.",
+        ),
+    }
+
+
+def _task_rollup_values(rollup: TaskRollupLedgerEntry) -> dict[str, object]:
+    """Build storage values for a task roll-up ledger row."""
+    return {
+        "id": _new_id(),
+        "idempotency_key": str(rollup.idempotency_key),
+        "parent_cost_entry_id": None,
+        "scope": LedgerScope.TASK.value,
+        "provider_type": "internal",
+        "provider_name": "episodic",
+        "workflow_node": rollup.workflow_node,
+        "operation": "task_rollup",
+        "pricing_snapshot_id": None,
+        "usage": {},
+        "usage_source": UsageSource.ROLLUP.value,
+        "usage_complete": True,
+        "computed_cost_minor": rollup.computed_cost_minor,
+        "currency": str(rollup.currency),
+        "pricing_model": PricingModel.ROLLUP.value,
+        "retry_attempt": 0,
+        "billing_period_key": str(rollup.billing_period_key),
+        "workflow_run_id": rollup.workflow_run_id,
+        "recorded_at": parse_instant(
+            rollup.recorded_at,
+            error_message="timestamp must include timezone information.",
+        ),
+    }
+
+
 class SqlAlchemyCostLedgerStore:
     """SQLAlchemy implementation of `CostLedgerPort`."""
 
@@ -62,7 +118,6 @@ class SqlAlchemyCostLedgerStore:
     async def pin_run_pricing(
         self,
         key: RunPricingKey,
-        *,
         pricing_snapshot_id: PricingSnapshotId,
         pinned_at: str,
     ) -> None:
@@ -127,62 +182,18 @@ class SqlAlchemyCostLedgerStore:
 
     async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
         """Persist or reuse a provider-call ledger row."""
-        values: dict[str, object] = {
-            "id": _new_id(),
-            "idempotency_key": str(entry.idempotency_key),
-            "parent_cost_entry_id": _optional_entry_id(entry.parent_cost_entry_id),
-            "scope": entry.scope.value,
-            "provider_type": entry.provider_type,
-            "provider_name": entry.provider_name,
-            "workflow_node": entry.workflow_node,
-            "operation": entry.operation,
-            "pricing_snapshot_id": uuid.UUID(str(entry.pricing_snapshot_id)),
-            "usage": dict(entry.usage),
-            "usage_source": entry.usage_source.value,
-            "usage_complete": entry.usage_complete,
-            "computed_cost_minor": entry.computed_cost_minor,
-            "currency": str(entry.currency),
-            "pricing_model": entry.pricing_model.value,
-            "retry_attempt": entry.retry_attempt,
-            "billing_period_key": str(entry.billing_period_key),
-            "workflow_run_id": entry.workflow_run_id,
-            "recorded_at": parse_instant(
-                entry.recorded_at,
-                error_message="timestamp must include timezone information.",
-            ),
-        }
-        return await self._insert_ledger_row(values, str(entry.idempotency_key))
+        return await self._insert_ledger_row(
+            _provider_call_values(entry), str(entry.idempotency_key)
+        )
 
     async def record_task_rollup(
         self,
         rollup: TaskRollupLedgerEntry,
     ) -> CostLedgerEntryId:
         """Persist or reuse a task roll-up ledger row."""
-        values: dict[str, object] = {
-            "id": _new_id(),
-            "idempotency_key": str(rollup.idempotency_key),
-            "parent_cost_entry_id": None,
-            "scope": LedgerScope.TASK.value,
-            "provider_type": "internal",
-            "provider_name": "episodic",
-            "workflow_node": rollup.workflow_node,
-            "operation": "task_rollup",
-            "pricing_snapshot_id": None,
-            "usage": {},
-            "usage_source": UsageSource.ROLLUP.value,
-            "usage_complete": True,
-            "computed_cost_minor": rollup.computed_cost_minor,
-            "currency": str(rollup.currency),
-            "pricing_model": PricingModel.ROLLUP.value,
-            "retry_attempt": 0,
-            "billing_period_key": str(rollup.billing_period_key),
-            "workflow_run_id": rollup.workflow_run_id,
-            "recorded_at": parse_instant(
-                rollup.recorded_at,
-                error_message="timestamp must include timezone information.",
-            ),
-        }
-        return await self._insert_ledger_row(values, str(rollup.idempotency_key))
+        return await self._insert_ledger_row(
+            _task_rollup_values(rollup), str(rollup.idempotency_key)
+        )
 
     async def _insert_ledger_row(
         self,
