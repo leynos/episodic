@@ -75,14 +75,13 @@ def _collect_host_ports(value: object) -> set[int]:
     return set()
 
 
-def _ensure_existing_cluster_ingress_port(
+def _parse_cluster_json(
     config: PreviewConfig,
-    runner: commands.Runner,
-) -> None:
-    """Fail clearly when an existing cluster uses a different ingress port."""
-    result = runner.run(commands.cluster_get_json_command(config))
+    result: subprocess.CompletedProcess[str],
+) -> object:
+    """Parse cluster JSON output; raise ``LocalK8sValidationError`` on failure."""
     try:
-        cluster_data = json.loads(result.stdout)
+        return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         msg = (
             f"Could not inspect {config.cluster_provider} cluster "
@@ -90,33 +89,54 @@ def _ensure_existing_cluster_ingress_port(
         )
         raise LocalK8sValidationError(msg) from exc
 
-    host_ports = _collect_host_ports(cluster_data)
-    if config.cluster_provider == "kind":
-        if config.ingress_port in host_ports:
-            msg = (
-                f"kind cluster {config.cluster_name!r} maps host port "
-                f"{config.ingress_port}; delete and recreate it so the preview "
-                "can use kubectl port-forward on that port."
-            )
-            raise LocalK8sValidationError(msg)
-        ensure_loopback_port_available(config.ingress_port)
-        return
 
+def _validate_kind_ingress_port(
+    config: PreviewConfig,
+    host_ports: set[int],
+) -> None:
+    """Reject a kind cluster that already maps the desired ingress port."""
+    if config.ingress_port in host_ports:
+        msg = (
+            f"kind cluster {config.cluster_name!r} maps host port "
+            f"{config.ingress_port}; delete and recreate it so the preview "
+            "can use kubectl port-forward on that port."
+        )
+        raise LocalK8sValidationError(msg)
+    ensure_loopback_port_available(config.ingress_port)
+
+
+def _validate_k3d_ingress_port(
+    config: PreviewConfig,
+    host_ports: set[int],
+) -> None:
+    """Reject a k3d cluster whose ingress port does not match the desired port."""
     if config.ingress_port in host_ports:
         return
-
-    if host_ports:
-        msg = (
-            f"{config.cluster_provider} cluster {config.cluster_name!r} exists, "
-            f"but its ingress port mapping is {sorted(host_ports)!r}, "
-            f"not {config.ingress_port}."
-        )
-    else:
-        msg = (
+    msg = (
+        f"{config.cluster_provider} cluster {config.cluster_name!r} exists, "
+        f"but its ingress port mapping is {sorted(host_ports)!r}, "
+        f"not {config.ingress_port}."
+        if host_ports
+        else (
             f"{config.cluster_provider} cluster {config.cluster_name!r} exists, "
             "but no ingress port mapping could be found."
         )
+    )
     raise LocalK8sValidationError(msg)
+
+
+def _ensure_existing_cluster_ingress_port(
+    config: PreviewConfig,
+    runner: commands.Runner,
+) -> None:
+    """Fail clearly when an existing cluster uses a different ingress port."""
+    result = runner.run(commands.cluster_get_json_command(config))
+    cluster_data = _parse_cluster_json(config, result)
+    host_ports = _collect_host_ports(cluster_data)
+    if config.cluster_provider == "kind":
+        _validate_kind_ingress_port(config, host_ports)
+    else:
+        _validate_k3d_ingress_port(config, host_ports)
 
 
 def _print_success_banner(config: PreviewConfig) -> None:
