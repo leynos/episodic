@@ -456,11 +456,13 @@ name = "domain_ports"
 prefixes = [
     "episodic.canonical.domain",
     "episodic.canonical.constraints",
-    "episodic.canonical.ingestion",
-    "episodic.canonical.ingestion_ports",
     "episodic.canonical.entity_protocols",
+    "episodic.canonical.generation_run_errors",
+    "episodic.canonical.generation_run_ports",
     "episodic.canonical.history_protocols",
     "episodic.canonical.idempotency",
+    "episodic.canonical.ingestion",
+    "episodic.canonical.ingestion_ports",
     "episodic.canonical.ingestion_sources",
     "episodic.canonical.object_store",
     "episodic.canonical.pagination",
@@ -480,9 +482,9 @@ prefixes = [
     "episodic.canonical.services",
     "episodic.canonical.ingestion_service",
     "episodic.canonical.idempotency_service",
-    "episodic.canonical.source_intake_service",
     "episodic.canonical.profile_templates",
     "episodic.canonical.reference_documents",
+    "episodic.canonical.source_intake_service",
     "episodic.generation",
 ]
 allowed = ["application", "domain_ports"]

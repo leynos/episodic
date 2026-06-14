@@ -309,7 +309,7 @@ future path to standalone evaluator services with explicit pricing contracts.
 Define the generation-run domain model and implement API endpoints. Completion
 enables real-time visibility into generation progress.
 
-- [ ] 2.6.1. Define `GenerationRunPort` and implement domain model.
+- [x] 2.6.1. Define `GenerationRunPort` and implement domain model.
   Requires 2.4.2.
   - Define `GenerationRun`, `GenerationEvent`, and `Checkpoint` entities.
   - Use frozen dataclasses with UUIDv7 identifiers.

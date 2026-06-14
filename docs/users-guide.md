@@ -134,6 +134,23 @@ the side-effecting execution step twice. Operators do not need to manage these
 checkpoints directly in this release; public generation-run checkpoint APIs are
 planned for a later roadmap item.
 
+#### Generation runs and review checkpoints
+
+Generation runs are now modelled as first-class domain resources for future
+Terminal User Interface (TUI) and REST workflows. A run records the target
+episode, source bundle, actor, lifecycle state, budget snapshot, configuration,
+and current orchestration node. Each run owns an append-only event log whose
+sequence numbers are allocated by the storage adapter, so clients never submit
+or guess event positions.
+
+Human review checkpoints are separate records attached to a generation run.
+They start in the `created` state and can finish as `responded`, `timed_out`, or
+`cancelled`. Reviewer responses record the action (`approve`,
+`request_changes`, or `edit`), response payload, reviewer identity, and
+timestamp. The public HTTP endpoints for creating and reviewing these resources
+are still planned; this release establishes the domain model and in-memory
+reference port used by those later endpoints.
+
 #### Failure behaviour
 
 If either stage returns a response that does not match the expected structured

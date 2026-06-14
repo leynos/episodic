@@ -858,16 +858,18 @@ UUIDv7 identifiers and timestamp fields.
 ```plaintext
 id: UUID
 episode_id: UUID
-template_id: UUID
+source_bundle_id: UUID
+actor: str
 status: GenerationRunStatus (pending | running | paused |
         succeeded | failed | cancelled)
 current_node: str | None
-started_at: datetime | None
-ended_at: datetime | None
 budget_snapshot: JsonMapping
 configuration: JsonMapping
 created_at: datetime
 updated_at: datetime
+started_at: datetime | None
+ended_at: datetime | None
+error_message: str | None
 ```
 
 #### GenerationEvent (append-only)
@@ -875,10 +877,11 @@ updated_at: datetime
 ```plaintext
 id: UUID
 generation_run_id: UUID
-seq: int
+seq: EventSeq
 kind: str
 payload: JsonMapping
 created_at: datetime
+occurred_at: datetime
 ```
 
 #### Checkpoint
@@ -886,11 +889,14 @@ created_at: datetime
 ```plaintext
 id: UUID
 generation_run_id: UUID
+node: str
 prompt: str
-options: list[str]
-response_action: str | None
-response_payload: JsonMapping | None
+options: tuple[str, ...]
+status: CheckpointStatus (created | responded | timed_out | cancelled)
+response_action: CheckpointAction | None
+response_payload: JsonMapping
 responded_at: datetime | None
+responded_by: str | None
 created_at: datetime
 ```
 
@@ -1147,34 +1153,40 @@ classDiagram
     class GenerationRun {
         +UUID id
         +UUID episode_id
-        +UUID template_id
+        +UUID source_bundle_id
+        +str actor
         +GenerationRunStatus status
         +str current_node
-        +datetime started_at
-        +datetime ended_at
         +JsonMapping budget_snapshot
         +JsonMapping configuration
         +datetime created_at
         +datetime updated_at
+        +datetime started_at
+        +datetime ended_at
+        +str error_message
     }
 
     class GenerationEvent {
         +UUID id
         +UUID generation_run_id
-        +int seq
+        +EventSeq seq
         +str kind
         +JsonMapping payload
         +datetime created_at
+        +datetime occurred_at
     }
 
     class Checkpoint {
         +UUID id
         +UUID generation_run_id
+        +str node
         +str prompt
-        +list~str~ options
-        +str response_action
+        +tuple~str~ options
+        +CheckpointStatus status
+        +CheckpointAction response_action
         +JsonMapping response_payload
         +datetime responded_at
+        +str responded_by
         +datetime created_at
     }
 
@@ -1265,15 +1277,30 @@ classDiagram
         +str notes
     }
 
+    class GenerationRunRepository {
+        <<interface>>
+        +create_run(GenerationRun run, str idempotency_key)
+        +get_run(UUID id)
+        +list_runs(UUID episode_id, GenerationRunStatus status, int limit, int offset)
+        +update_run_status(UUID run_id, GenerationRunStatus status, str current_node, datetime ended_at)
+    }
+
+    class GenerationEventLog {
+        <<interface>>
+        +append_event(UUID run_id, str kind, JsonMapping payload, datetime occurred_at)
+        +list_events(UUID run_id, EventSeq after_seq, int limit)
+    }
+
+    class GenerationCheckpointPort {
+        <<interface>>
+        +create_checkpoint(Checkpoint checkpoint)
+        +get_checkpoint(UUID checkpoint_id)
+        +respond_to_checkpoint(UUID checkpoint_id, CheckpointAction action)
+    }
+
     class GenerationRunPort {
         <<interface>>
-        +create_run(GenerationRun run)
-        +get_run(UUID id)
-        +list_runs(UUID episode_id, int limit, int offset)
-        +append_event(UUID run_id, GenerationEvent event)
-        +list_events(UUID run_id, int limit, int offset, int after_seq)
-        +create_checkpoint(Checkpoint checkpoint)
-        +submit_checkpoint_response(UUID checkpoint_id, str action, JsonMapping payload)
+        <<composite>>
     }
 
     class AudioRunPort {
@@ -1332,9 +1359,12 @@ classDiagram
 
     ScriptProjection "1" -- "*" ScriptSegment : has_segments
 
-    GenerationRunPort ..> GenerationRun
-    GenerationRunPort ..> GenerationEvent
-    GenerationRunPort ..> Checkpoint
+    GenerationRunRepository ..> GenerationRun
+    GenerationEventLog ..> GenerationEvent
+    GenerationCheckpointPort ..> Checkpoint
+    GenerationRunPort ..|> GenerationRunRepository
+    GenerationRunPort ..|> GenerationEventLog
+    GenerationRunPort ..|> GenerationCheckpointPort
 
     AudioRunPort ..> AudioRun
     AudioRunPort ..> PreviewAsset
