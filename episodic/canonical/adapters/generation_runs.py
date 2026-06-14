@@ -23,7 +23,7 @@ import uuid
 
 from episodic.canonical.domain import (
     Checkpoint,
-    CheckpointAction,
+    CheckpointResponse,
     GenerationEvent,
     GenerationRun,
     GenerationRunStatus,
@@ -205,26 +205,16 @@ class InMemoryGenerationRunStore:
         async with self._lock:
             return self._checkpoints.get(checkpoint_id)
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def respond_to_checkpoint(  # noqa: PLR0913 - port mirrors API contract.
+    async def respond_to_checkpoint(
         self,
         checkpoint_id: uuid.UUID,
-        *,
-        action: CheckpointAction,
-        payload: JsonMapping,
-        responded_at: dt.datetime,
-        responded_by: str,
+        response: CheckpointResponse,
     ) -> Checkpoint:
         """Record a reviewer response using the checkpoint domain transition."""
         async with self._lock:
             checkpoint = self._checkpoints.get(checkpoint_id)
             if checkpoint is None:
                 raise CheckpointNotFound(checkpoint_id)
-            responded = checkpoint.respond(
-                action=action,
-                payload=payload,
-                responded_at=responded_at,
-                responded_by=responded_by,
-            )
+            responded = checkpoint.respond(response)
             self._checkpoints[checkpoint_id] = responded
             return responded

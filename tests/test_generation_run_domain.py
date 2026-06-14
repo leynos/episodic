@@ -20,6 +20,7 @@ from hypothesis import HealthCheck, given, settings
 from episodic.canonical.domain import (
     Checkpoint,
     CheckpointAction,
+    CheckpointResponse,
     CheckpointStatus,
     GenerationEvent,
     GenerationRun,
@@ -173,10 +174,12 @@ def test_checkpoint_response_returns_new_responded_instance(
     responded_at = NOW + dt.timedelta(minutes=5)
 
     responded = checkpoint.respond(
-        action=CheckpointAction.APPROVE,
-        payload={"approved": True},
-        responded_at=responded_at,
-        responded_by="reviewer@example.com",
+        CheckpointResponse(
+            action=CheckpointAction.APPROVE,
+            payload={"approved": True},
+            responded_at=responded_at,
+            responded_by="reviewer@example.com",
+        )
     )
 
     assert responded is not checkpoint, "Respond must return a new instance."
@@ -196,16 +199,20 @@ def test_checkpoint_response_returns_new_responded_instance(
 def test_terminal_checkpoint_rejects_second_response(checkpoint: Checkpoint) -> None:
     """Terminal checkpoints must not accept repeated responses."""
     responded = checkpoint.respond(
-        action=CheckpointAction.APPROVE,
-        payload={},
-        responded_at=NOW,
-        responded_by="reviewer@example.com",
+        CheckpointResponse(
+            action=CheckpointAction.APPROVE,
+            payload={},
+            responded_at=NOW,
+            responded_by="reviewer@example.com",
+        )
     )
 
     with pytest.raises(CheckpointAlreadyTerminal):
         responded.respond(
-            action=CheckpointAction.EDIT,
-            payload={},
-            responded_at=NOW,
-            responded_by="reviewer@example.com",
+            CheckpointResponse(
+                action=CheckpointAction.EDIT,
+                payload={},
+                responded_at=NOW,
+                responded_by="reviewer@example.com",
+            )
         )

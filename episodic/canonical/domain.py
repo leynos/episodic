@@ -179,6 +179,21 @@ class GenerationEvent:
 
 
 @dc.dataclass(frozen=True, slots=True)
+class CheckpointResponse:
+    """Value object capturing a reviewer's response to a checkpoint."""
+
+    action: CheckpointAction
+    payload: JsonMapping
+    responded_at: dt.datetime
+    responded_by: str
+
+    def __post_init__(self) -> None:
+        """Validate response invariants."""
+        _validate_non_empty_text(self.responded_by, "responded_by")
+        _copy_json_mapping(self, "payload")
+
+
+@dc.dataclass(frozen=True, slots=True)
 class Checkpoint:
     """Human review checkpoint attached to a generation run."""
 
@@ -228,23 +243,16 @@ class Checkpoint:
             msg = "responded checkpoints require response_action."
             raise ValueError(msg)
 
-    def respond(
-        self,
-        *,
-        action: CheckpointAction,
-        payload: JsonMapping,
-        responded_at: dt.datetime,
-        responded_by: str,
-    ) -> Checkpoint:
+    def respond(self, response: CheckpointResponse) -> Checkpoint:
         """Return a responded checkpoint."""
         self._raise_if_terminal()
         return dc.replace(
             self,
             status=CheckpointStatus.RESPONDED,
-            responded_at=responded_at,
-            responded_by=responded_by,
-            response_action=action,
-            response_payload=payload,
+            responded_at=response.responded_at,
+            responded_by=response.responded_by,
+            response_action=response.action,
+            response_payload=response.payload,
         )
 
     def time_out(self, at: dt.datetime) -> Checkpoint:

@@ -12,6 +12,7 @@ from pytest_bdd import given, parsers, scenario, then, when
 from episodic.canonical.domain import (
     Checkpoint,
     CheckpointAction,
+    CheckpointResponse,
     CheckpointStatus,
     GenerationRun,
     GenerationRunStatus,
@@ -115,10 +116,12 @@ def responded_checkpoint(
 ) -> None:
     """Create a checkpoint that already reached a terminal response state."""
     generation_run_context.checkpoint = _checkpoint().respond(
-        action=CheckpointAction.APPROVE,
-        payload={"approved": True},
-        responded_at=NOW + dt.timedelta(minutes=1),
-        responded_by="reviewer@example.com",
+        CheckpointResponse(
+            action=CheckpointAction.APPROVE,
+            payload={"approved": True},
+            responded_at=NOW + dt.timedelta(minutes=1),
+            responded_by="reviewer@example.com",
+        )
     )
 
 
@@ -133,10 +136,12 @@ def reviewer_responds(
         msg = "Checkpoint was not prepared."
         raise AssertionError(msg)
     generation_run_context.checkpoint = checkpoint.respond(
-        action=CheckpointAction(action),
-        payload=_ACTION_PAYLOADS[action],
-        responded_at=NOW + dt.timedelta(minutes=1),
-        responded_by="reviewer@example.com",
+        CheckpointResponse(
+            action=CheckpointAction(action),
+            payload=_ACTION_PAYLOADS[action],
+            responded_at=NOW + dt.timedelta(minutes=1),
+            responded_by="reviewer@example.com",
+        )
     )
 
 
@@ -151,10 +156,12 @@ def reviewer_attempts_second_response(
         raise AssertionError(msg)
     try:
         checkpoint.respond(
-            action=CheckpointAction.EDIT,
-            payload={},
-            responded_at=NOW + dt.timedelta(minutes=2),
-            responded_by="reviewer@example.com",
+            CheckpointResponse(
+                action=CheckpointAction.EDIT,
+                payload={},
+                responded_at=NOW + dt.timedelta(minutes=2),
+                responded_by="reviewer@example.com",
+            )
         )
     except Exception as exc:  # noqa: BLE001 - BDD step captures the outcome.
         generation_run_context.error = exc
