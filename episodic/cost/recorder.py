@@ -25,6 +25,7 @@ from episodic.cost.ports import (
     CurrencyCode,
     IdempotencyKey,
     LedgerScope,
+    PricedCall,
     PricingCataloguePort,
     PricingModel,
     PricingSnapshot,
@@ -146,6 +147,59 @@ class CostRecorder:
                 pinned_at,
             )
 
+    @staticmethod
+    def _build_provider_call_entry(
+        record: ProviderCallRecord,
+        snapshot: PricingSnapshot,
+        priced_call: PricedCall,
+    ) -> ProviderCallLedgerEntry:
+        """Construct a provider-call ledger entry from priced call data."""
+        return ProviderCallLedgerEntry(
+            idempotency_key=record.idempotency_key,
+            parent_cost_entry_id=record.parent_cost_entry_id,
+            scope=LedgerScope.PROVIDER_CALL,
+            provider_type=record.provider_type,
+            provider_name=record.provider_name,
+            workflow_node=record.workflow_node,
+            operation=record.operation,
+            pricing_snapshot_id=snapshot.pricing_snapshot_id,
+            usage=record.usage,
+            usage_source=record.usage_source,
+            usage_complete=record.usage_complete,
+            computed_cost_minor=priced_call.computed_cost_minor,
+            currency=priced_call.currency,
+            pricing_model=record.pricing_model,
+            retry_attempt=record.retry_attempt,
+            billing_period_key=record.billing_period_key,
+            workflow_run_id=record.workflow_run_id,
+            recorded_at=record.recorded_at,
+        )
+
+    async def _resolve_snapshot_for_record(
+        self, record: ProviderCallRecord
+    ) -> PricingSnapshot:
+        """Resolve the pricing snapshot for a provider-call record.
+
+        Prefers a pinned snapshot for the run; falls back to catalogue resolution
+        when no pin exists.
+        """
+        key = RunPricingKey(
+            workflow_run_id=record.workflow_run_id,
+            provider_name=record.provider_name,
+            model=record.model,
+            operation=record.operation,
+            billing_period_key=record.billing_period_key,
+        )
+        pinned_snapshot_id = await self.ledger.get_run_pricing_pin(key)
+        if pinned_snapshot_id is None:
+            return await self._resolve_pricing_snapshot(
+                record.provider_name,
+                record.model,
+                record.operation,
+                record.billing_period_key,
+            )
+        return await self.pricing_catalogue.get_snapshot(pinned_snapshot_id)
+
     async def record_provider_call(
         self,
         record: ProviderCallRecord,
@@ -168,30 +222,8 @@ class CostRecorder:
             Propagated if pricing snapshot resolution fails.
         CostAccountingError
             Propagated if pricing validation fails.
-
-        Notes
-        -----
-        This method resolves pricing through `pin_run_pricing`, delegates cost
-        computation to `pricing_engine.price`, constructs a
-        `ProviderCallLedgerEntry`, and persists it with `ledger.record_call`.
         """
-        key = RunPricingKey(
-            workflow_run_id=record.workflow_run_id,
-            provider_name=record.provider_name,
-            model=record.model,
-            operation=record.operation,
-            billing_period_key=record.billing_period_key,
-        )
-        pinned_snapshot_id = await self.ledger.get_run_pricing_pin(key)
-        if pinned_snapshot_id is None:
-            snapshot = await self._resolve_pricing_snapshot(
-                record.provider_name,
-                record.model,
-                record.operation,
-                record.billing_period_key,
-            )
-        else:
-            snapshot = await self.pricing_catalogue.get_snapshot(pinned_snapshot_id)
+        snapshot = await self._resolve_snapshot_for_record(record)
         priced_call = self.pricing_engine.price(
             snapshot,
             PricingRequest(
@@ -201,26 +233,7 @@ class CostRecorder:
                 is_estimated=record.usage_source is UsageSource.ESTIMATED,
             ),
         )
-        entry = ProviderCallLedgerEntry(
-            idempotency_key=record.idempotency_key,
-            parent_cost_entry_id=record.parent_cost_entry_id,
-            scope=LedgerScope.PROVIDER_CALL,
-            provider_type=record.provider_type,
-            provider_name=record.provider_name,
-            workflow_node=record.workflow_node,
-            operation=record.operation,
-            pricing_snapshot_id=snapshot.pricing_snapshot_id,
-            usage=record.usage,
-            usage_source=record.usage_source,
-            usage_complete=record.usage_complete,
-            computed_cost_minor=priced_call.computed_cost_minor,
-            currency=priced_call.currency,
-            pricing_model=record.pricing_model,
-            retry_attempt=record.retry_attempt,
-            billing_period_key=record.billing_period_key,
-            workflow_run_id=record.workflow_run_id,
-            recorded_at=record.recorded_at,
-        )
+        entry = self._build_provider_call_entry(record, snapshot, priced_call)
         return await self.ledger.record_call(entry)
 
     async def finalize_run(
