@@ -198,21 +198,9 @@ def test_kind_down_is_idempotent_when_cluster_is_absent() -> None:
     )
 
 
-def test_kind_up_uses_podman_and_bootstraps_postgres(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    tmp_path: Path,
-) -> None:
-    """Drive the validated rootless Podman + kind preview path."""
-    monkeypatch.setattr(
-        "scripts.local_k8s.orchestration.require_tools",
-        lambda _: None,
-    )
-    monkeypatch.setattr(
-        "scripts.local_k8s.orchestration.ensure_loopback_port_available",
-        lambda _: None,
-    )
-    runner = RecordingRunner([
+def _make_kind_podman_runner() -> RecordingRunner:
+    """Return a runner pre-seeded for the rootless Podman + kind up path."""
+    return RecordingRunner([
         subprocess.CompletedProcess(args=["kind"], returncode=0, stdout="", stderr=""),
         subprocess.CompletedProcess(args=["kind"], returncode=0, stdout="", stderr=""),
         subprocess.CompletedProcess(
@@ -235,6 +223,10 @@ def test_kind_up_uses_podman_and_bootstraps_postgres(
             stderr="",
         ),
     ])
+
+
+def _make_kind_podman_config(tmp_path: Path) -> PreviewConfig:
+    """Return a PreviewConfig for the rootless Podman + kind up path."""
     config = PreviewConfig(
         cluster_name="demo",
         ingress_port=9090,
@@ -243,9 +235,11 @@ def test_kind_up_uses_podman_and_bootstraps_postgres(
         image_archive_path=tmp_path / "episodic-local.tar",
     )
     config.image_archive_path.write_text("stale archive", encoding="utf-8")
+    return config
 
-    up(config, runner)
 
+def _assert_kind_up_command_sequence(runner: RecordingRunner) -> None:
+    """Assert the expected command sequence produced by Podman + kind up."""
     assert runner.commands[0] == [
         "env",
         "KIND_EXPERIMENTAL_PROVIDER=podman",
@@ -264,17 +258,35 @@ def test_kind_up_uses_podman_and_bootstraps_postgres(
     assert runner.input_texts[1] is not None
     assert "kind: Cluster" in runner.input_texts[1]
     assert runner.commands[2][0] == "podman"
-    assert runner.commands[3][0:3] == [
-        "podman",
-        "save",
-        "--output",
-    ]
+    assert runner.commands[3][0:3] == ["podman", "save", "--output"]
     assert runner.commands[4][0:4] == [
         "env",
         "KIND_EXPERIMENTAL_PROVIDER=podman",
         "kind",
         "load",
     ]
+
+
+def test_kind_up_uses_podman_and_bootstraps_postgres(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """Drive the validated rootless Podman + kind preview path."""
+    monkeypatch.setattr(
+        "scripts.local_k8s.orchestration.require_tools",
+        lambda _: None,
+    )
+    monkeypatch.setattr(
+        "scripts.local_k8s.orchestration.ensure_loopback_port_available",
+        lambda _: None,
+    )
+    runner = _make_kind_podman_runner()
+    config = _make_kind_podman_config(tmp_path)
+
+    up(config, runner)
+
+    _assert_kind_up_command_sequence(runner)
     assert any(
         input_text and "kind: StatefulSet" in input_text
         for input_text in runner.input_texts
