@@ -69,6 +69,7 @@ from episodic.llm import (
     LLMResponse,
     LLMTokenBudget,
     LLMUsage,
+    ProviderCallUsage,
 )
 
 type JsonMapping = dict[str, object]
@@ -176,6 +177,8 @@ class ShowNotesResult:
         Provider-native response identifier.
     finish_reason : str | None
         Completion stop reason when provided by the vendor.
+    provider_call_usage : ProviderCallUsage | None
+        Provider-specific usage metrics for cost accounting.
     """
 
     entries: tuple[ShowNotesEntry, ...]
@@ -183,6 +186,7 @@ class ShowNotesResult:
     model: str = ""
     provider_response_id: str = ""
     finish_reason: str | None = None
+    provider_call_usage: ProviderCallUsage | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -346,6 +350,7 @@ class ShowNotesGenerator:
             model=response.model,
             provider_response_id=response.provider_response_id,
             finish_reason=response.finish_reason,
+            provider_call_usage=response.provider_call_usage,
         )
 
     async def generate(

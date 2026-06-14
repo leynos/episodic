@@ -423,6 +423,17 @@ require a live RabbitMQ broker.
 ### Cost Management
 
 - Understanding token usage and metering
+- Reviewing cost ledger entries for a generation run. Structured generation
+  records provider-call line items for planner and executor Large Language
+  Model (LLM) calls, then records a task roll-up whose cost is the sum of those
+  line items.
+- Managing pricing snapshot files. Provider rate cards live as immutable YAML
+  snapshots under `config/pricing-snapshots/`; each run pins the provider,
+  model, operation, and billing period through `run_pricing_pins` so later rate
+  changes do not rewrite historical costs.
+- Interpreting usage sources. Ledger rows marked as provider-sourced use usage
+  reported by the LLM adapter. Rows marked as estimated should be treated as
+  conservative accounting data rather than provider-confirmed billing data.
 - OpenAI adapter payloads are validated with explicit type guards, and malformed
   responses fail with deterministic validation errors before orchestration
   consumes generated content or usage metadata

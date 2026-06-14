@@ -5,6 +5,7 @@ Feature: Structured generation orchestration
     When the orchestration service plans and executes the request
     Then the orchestration result includes a structured plan and show-notes output
     And the orchestration requests use planning and execution models in order
+    And the cost ledger includes planner and show-notes entries totalled into a task roll-up
 
   Scenario: LangGraph suspends and resumes a structured generation run
     Given a Vidai Mock orchestration server is running

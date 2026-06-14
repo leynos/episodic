@@ -12,6 +12,8 @@ without knowing which queue, worker, or user interface produced them.
 import typing as typ
 
 if typ.TYPE_CHECKING:
+    from episodic.cost.ports import BillingPeriodKey, CostLedgerEntryId
+    from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
     from episodic.generation import GuestBioSource, GuestBiosResult, ShowNotesResult
     from episodic.orchestration._dto import (
         ActionExecutionResult,
@@ -42,6 +44,31 @@ class PlannerPort(typ.Protocol):
         request: GenerationOrchestrationRequest,
     ) -> PlannerResult:
         """Return a typed execution plan for the supplied generation request."""
+
+
+class CostRecorderPort(typ.Protocol):
+    """Application-level port for cost-ledger side effects."""
+
+    async def pin_run_pricing(
+        self,
+        workflow_run_id: str,
+        providers: tuple[CostProviderOperation, ...],
+        billing_period_key: BillingPeriodKey,
+    ) -> None:
+        """Pin pricing snapshots for a run before provider calls are recorded."""
+
+    async def record_provider_call(
+        self,
+        record: ProviderCallRecord,
+    ) -> CostLedgerEntryId:
+        """Record one priced provider call."""
+
+    async def finalize_run(
+        self,
+        workflow_run_id: str,
+        workflow_node: str | None,
+    ) -> CostLedgerEntryId:
+        """Write the final task roll-up for a completed run."""
 
 
 class CheckpointPort(typ.Protocol):

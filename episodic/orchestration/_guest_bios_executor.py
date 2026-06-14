@@ -252,5 +252,7 @@ class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments
             model=result.generation_result.model or self.config.execution_model,
             summary=f"Generated {entry_count} guest {noun}.",
             usage=result.generation_result.usage,
+            provider_call_usage=result.generation_result.provider_call_usage,
+            provider_operation=self.config.execution_provider_operation,
             guest_bios_result=result,
         )

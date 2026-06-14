@@ -780,6 +780,9 @@ adapter implementations.
   loads pinned provider rate cards for internal LangGraph nodes, whilst the
   same port can later discover evaluator OpenAPI and SLA4OAI documents if those
   evaluators are externalized.
+- `run_pricing_pins` records the pricing snapshot selected for a workflow run,
+  provider, and billing period so suspended workflows continue to use the same
+  rate card after resume.
 - `MeteringPort` provides atomic, concurrency-safe metric consumption counters
   used by pricing logic when quotas, allowances, or overages apply.
 - `CheckpointPort` saves and restores StateGraph checkpoints.
@@ -1326,6 +1329,9 @@ Chrono is a local estimator. The intent is determinism and auditability:
 historical bills must remain explainable even if provider pricing changes or an
 evaluator is later replaced with a cheaper implementation.
 
+ADR-015 records the accepted port shape, canonical usage metrics, pricing
+snapshot pinning strategy, and deterministic pricing rules for this design.
+
 #### Internal evaluator metering and deterministic pricing
 
 - `PricingCataloguePort` abstracts where pricing inputs come from. Today it can
@@ -1339,8 +1345,10 @@ evaluator is later replaced with a cheaper implementation.
   its decisions remain explainable even though it does not create an
   external-call charge in the initial design.
 - Immutable `pricing_snapshots` capture the provider rate cards used to compute
-  LLM and TTS cost for a run. These snapshots are pinned from cost ledger
-  entries so historical pricing stays reproducible.
+  Large Language Model (LLM) cost for a run. The initial implementation leaves
+  Text-to-Speech (TTS) tracking reserved for a later slice. Snapshots are
+  pinned through `run_pricing_pins` and referenced from cost ledger entries so
+  historical pricing stays reproducible.
 - `PricingEngine` computes the cost of an individual call deterministically
   from provider, model, operation, usage metrics, billing period,
   `pricing_snapshot_id`, and organization identifier.
@@ -1511,6 +1519,9 @@ Agentic workflow behaviour is configurable per series profile:
   architecture changes.
 - `metering_counters` stores per-organization metric consumption keyed by
   service, billing period, and metric name to support quota and overage pricing.
+- `run_pricing_pins` stores the pricing snapshot chosen for a workflow run,
+  provider, model, operation, and billing period, preventing resumed generation
+  runs from drifting onto a newer provider rate card.
 - `budget_limits` defines per-user, per-organization, and per-series spend
   caps, including reset cadence and enforcement policies.
 - `budget_usage` aggregates spend by scope and reporting window to support

@@ -10,6 +10,11 @@ import dataclasses as dc
 import enum
 import typing as typ
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+    from episodic.cost.ports import UsageSource
+
 
 class LLMProviderOperation(enum.StrEnum):
     """Supported OpenAI-compatible provider operation shapes."""
@@ -59,6 +64,19 @@ class LLMUsage:
 
 
 @dc.dataclass(frozen=True, slots=True)
+class ProviderCallUsage:
+    """Provider-specific usage envelope for cost accounting."""
+
+    usage_metrics: cabc.Mapping[str, int]
+    usage_source: UsageSource
+    usage_complete: bool
+    provider_response_id: str
+    finish_reason: str | None
+    started_at: str
+    latency_ms: int
+
+
+@dc.dataclass(frozen=True, slots=True)
 class LLMResponse:
     """Normalized LLM response payload.
 
@@ -74,6 +92,8 @@ class LLMResponse:
         Completion stop reason when provided by the vendor.
     usage : LLMUsage
         Normalized usage metadata used for accounting.
+    provider_call_usage : ProviderCallUsage | None
+        Provider-specific usage metrics for cost ledger pricing.
     """
 
     text: str
@@ -81,6 +101,7 @@ class LLMResponse:
     provider_response_id: str
     finish_reason: str | None
     usage: LLMUsage
+    provider_call_usage: ProviderCallUsage | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)

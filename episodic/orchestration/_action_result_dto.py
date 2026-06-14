@@ -7,7 +7,9 @@ from episodic.generation import (
     ShowNotesResult,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
 )
 from episodic.llm import (
-    LLMUsage,  # noqa: TC001 -- Python 3.14 lazy dataclass annotations are inspected by Hypothesis at runtime.
+    LLMProviderOperation,
+    LLMUsage,
+    ProviderCallUsage,
 )
 
 from ._dto import ExecutionPlan, _normalize_non_empty_text
@@ -23,6 +25,10 @@ class PlannerResult:
     model: str
     provider_response_id: str
     finish_reason: str | None
+    provider_call_usage: ProviderCallUsage | None = None
+    provider_operation: LLMProviderOperation | str = (
+        LLMProviderOperation.CHAT_COMPLETIONS
+    )
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -35,6 +41,10 @@ class ActionExecutionResult:
     model: str
     summary: str
     usage: LLMUsage | None = None
+    provider_call_usage: ProviderCallUsage | None = None
+    provider_operation: LLMProviderOperation | str = (
+        LLMProviderOperation.CHAT_COMPLETIONS
+    )
     show_notes_result: ShowNotesResult | None = None
     guest_bios_result: GuestBiosEnrichmentResult | None = None
 

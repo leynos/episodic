@@ -13,6 +13,7 @@ from .ports import (
     LLMTokenBudgetExceededError,
     LLMTransientProviderError,
     LLMUsage,
+    ProviderCallUsage,
 )
 
 __all__: list[str] = [
@@ -26,4 +27,5 @@ __all__: list[str] = [
     "LLMTokenBudgetExceededError",
     "LLMTransientProviderError",
     "LLMUsage",
+    "ProviderCallUsage",
 ]

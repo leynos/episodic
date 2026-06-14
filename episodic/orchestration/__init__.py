@@ -32,12 +32,16 @@ from episodic.orchestration.generation import (
     build_generation_result,
     build_workflow_step_idempotency_key,
 )
-from episodic.orchestration.langgraph import build_generation_orchestration_graph
+from episodic.orchestration.langgraph import (
+    GenerationGraphExtensions,
+    build_generation_orchestration_graph,
+)
 
 __all__ = [
     "ActionExecutionResult",
     "ActionKind",
     "ExecutionPlan",
+    "GenerationGraphExtensions",
     "GenerationGraphState",
     "GenerationOrchestrationConfig",
     "GenerationOrchestrationRequest",

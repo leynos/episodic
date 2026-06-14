@@ -276,5 +276,7 @@ class ShowNotesToolExecutor:
             model=result.model,
             summary=f"Generated {entry_count} show-notes {noun}.",
             usage=result.usage,
+            provider_call_usage=result.provider_call_usage,
+            provider_operation=self.config.execution_provider_operation,
             show_notes_result=result,
         )
