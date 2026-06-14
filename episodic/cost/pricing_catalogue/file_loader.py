@@ -86,6 +86,14 @@ def _is_non_negative_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
+def _is_string_mapping(value: object) -> bool:
+    """Return True when *value* is a dict whose every key and value is a str."""
+    return isinstance(value, dict) and all(
+        isinstance(k, str) and isinstance(v, str)
+        for k, v in value.items()  # type: ignore[union-attr]
+    )
+
+
 def _optional_string_mapping(
     data: cabc.Mapping[str, object],
     key: str,
@@ -93,9 +101,7 @@ def _optional_string_mapping(
 ) -> dict[str, str]:
     """Return an optional string mapping."""
     value = data.get(key, {})
-    if not isinstance(value, dict) or not all(
-        isinstance(k, str) and isinstance(v, str) for k, v in value.items()
-    ):
+    if not _is_string_mapping(value):
         msg = f"Pricing snapshot {path} field {key!r} must be a string mapping."
         raise ValueError(msg)
     return typ.cast("dict[str, str]", value)
