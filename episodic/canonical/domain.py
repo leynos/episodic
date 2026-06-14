@@ -131,21 +131,6 @@ class CheckpointAction(enum.StrEnum):
 
 
 @dc.dataclass(frozen=True, slots=True)
-class CheckpointResponse:
-    """Value object carrying a reviewer's response to a generation checkpoint."""
-
-    action: CheckpointAction
-    payload: JsonMapping
-    responded_at: dt.datetime
-    responded_by: str
-
-    def __post_init__(self) -> None:
-        """Validate response invariants."""
-        _validate_non_empty_text(self.responded_by, "responded_by")
-        _copy_json_mapping(self, "payload")
-
-
-@dc.dataclass(frozen=True, slots=True)
 class GenerationRun:
     """User-facing generation run aggregate root."""
 
@@ -190,6 +175,21 @@ class GenerationEvent:
             msg = "seq must be a positive integer."
             raise ValueError(msg)
         _validate_non_empty_text(self.kind, "kind")
+        _copy_json_mapping(self, "payload")
+
+
+@dc.dataclass(frozen=True, slots=True)
+class CheckpointResponse:
+    """Value-object capturing a reviewer's response to a checkpoint."""
+
+    action: CheckpointAction
+    payload: JsonMapping
+    responded_at: dt.datetime
+    responded_by: str
+
+    def __post_init__(self) -> None:
+        """Validate response invariants."""
+        _validate_non_empty_text(self.responded_by, "responded_by")
         _copy_json_mapping(self, "payload")
 
 
