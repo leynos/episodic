@@ -11,6 +11,7 @@ entity construction local and explicit.
 
 import dataclasses as dc
 import datetime as dt
+import typing as typ
 import uuid
 
 import hypothesis.strategies as st
@@ -26,10 +27,22 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
 )
-from episodic.canonical.generation_run_errors import CheckpointAlreadyTerminal
+from episodic.canonical.generation_run_errors import (
+    CheckpointAlreadyTerminal,
+    CheckpointNotFound,
+    RunAlreadyTerminal,
+    RunNotFound,
+)
 from episodic.canonical.generation_run_ports import event_seq
 
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
+
 NOW = dt.datetime(2026, 6, 4, 8, 0, tzinfo=dt.UTC)
+FIXED_RUN_ID = uuid.UUID("018fdcf0-0000-7000-8000-000000000001")
+FIXED_EPISODE_ID = uuid.UUID("018fdcf0-0000-7000-8000-000000000002")
+FIXED_SOURCE_BUNDLE_ID = uuid.UUID("018fdcf0-0000-7000-8000-000000000003")
+FIXED_CHECKPOINT_ID = uuid.UUID("018fdcf0-0000-7000-8000-000000000004")
 
 
 @pytest.fixture
@@ -194,6 +207,99 @@ def test_checkpoint_response_returns_new_responded_instance(
     assert responded.responded_by == "reviewer@example.com", (
         "Reviewer must be recorded."
     )
+
+
+def test_checkpoint_validation_messages_snapshot(
+    checkpoint: Checkpoint,
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Snapshot exact checkpoint validation failure messages."""
+
+    def validation_message(**changes: object) -> str:
+        try:
+            dc.replace(checkpoint, **changes)
+        except ValueError as exc:
+            return str(exc)
+        msg = "Expected checkpoint validation to fail."
+        raise AssertionError(msg)
+
+    assert {
+        "blank_node": validation_message(node=" "),
+        "blank_prompt": validation_message(prompt=" "),
+        "empty_options": validation_message(options=()),
+        "blank_option": validation_message(options=("approve", " ")),
+        "missing_responded_at": validation_message(
+            status=CheckpointStatus.RESPONDED,
+            responded_at=None,
+            responded_by="reviewer@example.com",
+            response_action=CheckpointAction.APPROVE,
+        ),
+        "missing_responded_by": validation_message(
+            status=CheckpointStatus.RESPONDED,
+            responded_at=NOW,
+            responded_by=None,
+            response_action=CheckpointAction.APPROVE,
+        ),
+        "missing_response_action": validation_message(
+            status=CheckpointStatus.RESPONDED,
+            responded_at=NOW,
+            responded_by="reviewer@example.com",
+            response_action=None,
+        ),
+    } == snapshot
+
+
+def test_generation_run_and_checkpoint_repr_snapshot(
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Snapshot stable dataclass repr output used in debugging."""
+    run = GenerationRun(
+        id=FIXED_RUN_ID,
+        episode_id=FIXED_EPISODE_ID,
+        source_bundle_id=FIXED_SOURCE_BUNDLE_ID,
+        actor="editor@example.com",
+        status=GenerationRunStatus.PENDING,
+        current_node=None,
+        budget_snapshot={"limit": 10},
+        configuration={"model": "gpt-4.1"},
+        created_at=NOW,
+        updated_at=NOW,
+        started_at=None,
+        ended_at=None,
+        error_message=None,
+    )
+    checkpoint = Checkpoint(
+        id=FIXED_CHECKPOINT_ID,
+        generation_run_id=FIXED_RUN_ID,
+        node="human_review",
+        prompt="Approve the draft?",
+        options=("approve", "request_changes"),
+        status=CheckpointStatus.CREATED,
+        created_at=NOW,
+        responded_at=None,
+        responded_by=None,
+        response_action=None,
+        response_payload={},
+    )
+
+    assert {
+        "generation_run": repr(run),
+        "checkpoint": repr(checkpoint),
+    } == snapshot
+
+
+def test_generation_run_error_messages_snapshot(
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Snapshot stable generation-run domain error messages."""
+    assert {
+        "checkpoint_already_terminal": str(
+            CheckpointAlreadyTerminal(FIXED_CHECKPOINT_ID)
+        ),
+        "checkpoint_not_found": str(CheckpointNotFound(FIXED_CHECKPOINT_ID)),
+        "run_already_terminal": str(RunAlreadyTerminal(FIXED_RUN_ID)),
+        "run_not_found": str(RunNotFound(FIXED_RUN_ID)),
+    } == snapshot
 
 
 def test_terminal_checkpoint_rejects_second_response(checkpoint: Checkpoint) -> None:

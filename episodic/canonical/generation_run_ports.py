@@ -136,6 +136,24 @@ class GenerationCheckpointPort(typ.Protocol):
         """Record a reviewer response for a checkpoint."""
         raise NotImplementedError
 
+    async def time_out_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint:
+        """Record that a checkpoint timed out."""
+        raise NotImplementedError
+
+    async def cancel_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint:
+        """Record that a checkpoint was cancelled."""
+        raise NotImplementedError
+
 
 @typ.runtime_checkable
 class GenerationRunPort(

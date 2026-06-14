@@ -16,6 +16,7 @@ event = await store.append_event(run.id, kind="created", payload={})
 """
 
 import asyncio
+import bisect
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
@@ -35,6 +36,7 @@ from episodic.canonical.generation_run_errors import (
     RunNotFound,
 )
 from episodic.canonical.generation_run_ports import EventSeq, event_seq
+from episodic.orchestration._types import _log_event
 
 TimeProvider = cabc.Callable[[], dt.datetime]
 
@@ -55,10 +57,40 @@ class InMemoryGenerationRunStore:
 
     time_provider: TimeProvider = dc.field(default_factory=_default_time_provider)
     _runs: dict[uuid.UUID, GenerationRun] = dc.field(default_factory=dict)
+    _run_ids_by_episode: dict[uuid.UUID, list[tuple[dt.datetime, uuid.UUID]]] = (
+        dc.field(default_factory=dict)
+    )
     _events: dict[uuid.UUID, list[GenerationEvent]] = dc.field(default_factory=dict)
     _checkpoints: dict[uuid.UUID, Checkpoint] = dc.field(default_factory=dict)
     _idempotency_keys: dict[str, uuid.UUID] = dc.field(default_factory=dict)
     _lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
+
+    def _runs_for_episode(
+        self,
+        episode_id: uuid.UUID,
+        *,
+        status: GenerationRunStatus | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[GenerationRun, ...]:
+        """Return indexed runs for one episode without scanning all runs."""
+        indexed_ids = self._run_ids_by_episode.get(episode_id, [])
+        if status is None:
+            selected_ids = indexed_ids[offset : offset + limit]
+            return tuple(self._runs[run_id] for _, run_id in selected_ids)
+        skipped = 0
+        selected: list[GenerationRun] = []
+        for _, run_id in indexed_ids:
+            run = self._runs[run_id]
+            if run.status is not status:
+                continue
+            if skipped < offset:
+                skipped += 1
+                continue
+            selected.append(run)
+            if len(selected) == limit:
+                break
+        return tuple(selected)
 
     async def create_run(
         self,
@@ -76,11 +108,30 @@ class InMemoryGenerationRunStore:
             if idempotency_key is not None:
                 existing_id = self._idempotency_keys.get(idempotency_key)
                 if existing_id is not None:
+                    _log_event(
+                        "info",
+                        "generation_run_store.create_run_reused",
+                        run_id=str(existing_id),
+                        supplied_run_id=str(run.id),
+                        episode_id=str(run.episode_id),
+                    )
                     return self._runs[existing_id]
             self._runs[run.id] = run
+            bisect.insort(
+                self._run_ids_by_episode.setdefault(run.episode_id, []),
+                (run.created_at, run.id),
+            )
             self._events.setdefault(run.id, [])
             if idempotency_key is not None:
                 self._idempotency_keys[idempotency_key] = run.id
+            _log_event(
+                "info",
+                "generation_run_store.create_run",
+                run_id=str(run.id),
+                episode_id=str(run.episode_id),
+                status=run.status.value,
+                idempotent=idempotency_key is not None,
+            )
             return run
 
     async def get_run(self, run_id: uuid.UUID) -> GenerationRun | None:
@@ -102,14 +153,12 @@ class InMemoryGenerationRunStore:
             msg = "limit and offset must be non-negative."
             raise ValueError(msg)
         async with self._lock:
-            runs = [
-                run
-                for run in self._runs.values()
-                if run.episode_id == episode_id
-                and (status is None or run.status == status)
-            ]
-            runs.sort(key=lambda run: (run.created_at, run.id))
-        return tuple(runs[offset : offset + limit])
+            return self._runs_for_episode(
+                episode_id,
+                status=status,
+                limit=limit,
+                offset=offset,
+            )
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def update_run_status(
@@ -124,8 +173,21 @@ class InMemoryGenerationRunStore:
         async with self._lock:
             run = self._runs.get(run_id)
             if run is None:
+                _log_event(
+                    "warning",
+                    "generation_run_store.update_run_missing",
+                    run_id=str(run_id),
+                    status=status.value,
+                )
                 raise RunNotFound(run_id)
             if run.status.is_terminal():
+                _log_event(
+                    "warning",
+                    "generation_run_store.update_run_terminal",
+                    run_id=str(run_id),
+                    current_status=run.status.value,
+                    requested_status=status.value,
+                )
                 raise RunAlreadyTerminal(run_id)
             updated = dc.replace(
                 run,
@@ -135,6 +197,14 @@ class InMemoryGenerationRunStore:
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated
+            _log_event(
+                "info",
+                "generation_run_store.update_run_status",
+                run_id=str(run_id),
+                previous_status=run.status.value,
+                status=status.value,
+                current_node=current_node,
+            )
             return updated
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
@@ -150,8 +220,21 @@ class InMemoryGenerationRunStore:
         async with self._lock:
             run = self._runs.get(run_id)
             if run is None:
+                _log_event(
+                    "warning",
+                    "generation_run_store.append_event_missing_run",
+                    run_id=str(run_id),
+                    kind=kind,
+                )
                 raise RunNotFound(run_id)
             if run.status.is_terminal():
+                _log_event(
+                    "warning",
+                    "generation_run_store.append_event_terminal_run",
+                    run_id=str(run_id),
+                    status=run.status.value,
+                    kind=kind,
+                )
                 raise RunAlreadyTerminal(run_id)
             events = self._events.setdefault(run_id, [])
             now = self.time_provider()
@@ -165,6 +248,14 @@ class InMemoryGenerationRunStore:
                 occurred_at=occurred_at or now,
             )
             events.append(event)
+            _log_event(
+                "info",
+                "generation_run_store.append_event",
+                run_id=str(run_id),
+                event_id=str(event.id),
+                seq=int(event.seq),
+                kind=kind,
+            )
             return event
 
     async def list_events(
@@ -193,8 +284,21 @@ class InMemoryGenerationRunStore:
         """Persist a checkpoint."""
         async with self._lock:
             if checkpoint.generation_run_id not in self._runs:
+                _log_event(
+                    "warning",
+                    "generation_run_store.create_checkpoint_missing_run",
+                    checkpoint_id=str(checkpoint.id),
+                    run_id=str(checkpoint.generation_run_id),
+                )
                 raise RunNotFound(checkpoint.generation_run_id)
             self._checkpoints[checkpoint.id] = checkpoint
+            _log_event(
+                "info",
+                "generation_run_store.create_checkpoint",
+                checkpoint_id=str(checkpoint.id),
+                run_id=str(checkpoint.generation_run_id),
+                status=checkpoint.status.value,
+            )
             return checkpoint
 
     async def get_checkpoint(
@@ -215,7 +319,75 @@ class InMemoryGenerationRunStore:
         async with self._lock:
             checkpoint = self._checkpoints.get(checkpoint_id)
             if checkpoint is None:
+                _log_event(
+                    "warning",
+                    "generation_run_store.respond_checkpoint_missing",
+                    checkpoint_id=str(checkpoint_id),
+                    action=response.action.value,
+                )
                 raise CheckpointNotFound(checkpoint_id)
             responded = checkpoint.respond(response)
             self._checkpoints[checkpoint_id] = responded
+            _log_event(
+                "info",
+                "generation_run_store.respond_checkpoint",
+                checkpoint_id=str(checkpoint_id),
+                run_id=str(responded.generation_run_id),
+                action=response.action.value,
+                status=responded.status.value,
+            )
             return responded
+
+    async def time_out_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint:
+        """Record a checkpoint timeout using the domain transition."""
+        async with self._lock:
+            checkpoint = self._checkpoints.get(checkpoint_id)
+            if checkpoint is None:
+                _log_event(
+                    "warning",
+                    "generation_run_store.timeout_checkpoint_missing",
+                    checkpoint_id=str(checkpoint_id),
+                )
+                raise CheckpointNotFound(checkpoint_id)
+            timed_out = checkpoint.time_out(at)
+            self._checkpoints[checkpoint_id] = timed_out
+            _log_event(
+                "info",
+                "generation_run_store.timeout_checkpoint",
+                checkpoint_id=str(checkpoint_id),
+                run_id=str(timed_out.generation_run_id),
+                status=timed_out.status.value,
+            )
+            return timed_out
+
+    async def cancel_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint:
+        """Record checkpoint cancellation using the domain transition."""
+        async with self._lock:
+            checkpoint = self._checkpoints.get(checkpoint_id)
+            if checkpoint is None:
+                _log_event(
+                    "warning",
+                    "generation_run_store.cancel_checkpoint_missing",
+                    checkpoint_id=str(checkpoint_id),
+                )
+                raise CheckpointNotFound(checkpoint_id)
+            cancelled = checkpoint.cancel(at)
+            self._checkpoints[checkpoint_id] = cancelled
+            _log_event(
+                "info",
+                "generation_run_store.cancel_checkpoint",
+                checkpoint_id=str(checkpoint_id),
+                run_id=str(cancelled.generation_run_id),
+                status=cancelled.status.value,
+            )
+            return cancelled

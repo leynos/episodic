@@ -193,9 +193,9 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   `tests/test_generation_run_domain.py`,
   `tests/test_generation_run_port_contract.py`,
   `tests/test_generation_run_properties.py`, and
-  `tests/steps/test_generation_run_lifecycle_steps.py`. Focused red run
-  a focused `uv run pytest -q ...` command with project cache environment
-  failed with the expected missing `Checkpoint` and
+  `tests/steps/test_generation_run_lifecycle_steps.py`. Focused red run a
+  focused `uv run pytest -q ...` command with project cache environment failed
+  with the expected missing `Checkpoint` and
   `episodic.canonical.adapters.generation_runs` imports; transcript:
   `/tmp/red-generation-run-2-6-1-generation-run-port-and-domain-model.out`.
 - 2026-06-04 01:20 Europe/Berlin: Stages B through F implemented. Focused
@@ -249,10 +249,9 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   `tests/test_generation_run_domain.py`. Fixes removed the redundant UUID
   wrapper, converted the test factories to fixtures, split event validation
   into focused tests, added assertion messages, and added Hypothesis coverage
-  for blank actors and non-mapping budget snapshots. Focused domain tests
-  passed (`11 passed`), followed by `make check-fmt`, `make lint`,
-  `make typecheck`, `make markdownlint`, `make nixie`, and `make test`
-  (`831 passed, 1 skipped`).
+  for blank actors and non-mapping budget snapshots. Focused domain tests passed
+  (`11 passed`), followed by `make check-fmt`, `make lint`, `make typecheck`,
+  `make markdownlint`, `make nixie`, and `make test` (`831 passed, 1 skipped`).
 - 2026-06-04 13:05 Europe/Berlin: CodeRabbit then reported four adapter and
   error-module findings. Fixes changed status filtering from enum identity to
   equality, expanded the in-memory `create_run` idempotency docstring, added
@@ -273,41 +272,40 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   composite-protocol test passed, followed by `make check-fmt`, `make lint`,
   `make typecheck`, and `make test` (`835 passed, 1 skipped`).
 - 2026-06-04 15:05 Europe/Berlin: CodeRabbit requested a combined
-  Hypothesis-generated adapter operation sequence. Added coverage that
-  exercises `create_run`, `append_event`, `update_run_status`, and
-  `list_events` together, including idempotency stability, terminal
-  immutability, gap-free event sequences, and cursor paging. Focused property
-  tests passed (`7 passed`), followed by `make check-fmt`, `make lint`,
-  `make typecheck`, and `make test` (`836 passed, 1 skipped`).
+  Hypothesis-generated adapter operation sequence. Added coverage that exercises
+  `create_run`, `append_event`, `update_run_status`, and `list_events`
+  together, including idempotency stability, terminal immutability, gap-free
+  event sequences, and cursor paging. Focused property tests passed
+  (`7 passed`), followed by `make check-fmt`, `make lint`, `make typecheck`, and
+  `make test` (`836 passed, 1 skipped`).
 - 2026-06-04 16:10 Europe/Berlin: CodeRabbit's next review reported ten
   mostly test-maintainability findings plus missing negative pagination
   contract cases. Fixes expanded generation-run domain and port-contract test
-  module docstrings, aligned checkpoint options with lifecycle fixtures,
-  added `list_runs` and `list_events` negative pagination contract tests,
-  converted the property-test clock to a fixture, updated the Hypothesis
-  character strategy API, switched generated adapter operation handling to
-  structural pattern matching, clarified the `AdapterExerciseState` docstring,
-  removed the error-module future import, and moved BDD action payloads into a
-  typed map. Focused generation-run tests passed (`33 passed`), followed by
-  `make check-fmt`, `make lint`, `make typecheck`, and a clean `make test`
-  rerun (`839 passed, 1 skipped`).
+  module docstrings, aligned checkpoint options with lifecycle fixtures, added
+  `list_runs` and `list_events` negative pagination contract tests, converted
+  the property-test clock to a fixture, updated the Hypothesis character
+  strategy API, switched generated adapter operation handling to structural
+  pattern matching, clarified the `AdapterExerciseState` docstring, removed the
+  error-module future import, and moved BDD action payloads into a typed map.
+  Focused generation-run tests passed (`33 passed`), followed by
+  `make check-fmt`, `make lint`, `make typecheck`, and a clean `make test` rerun
+  (`839 passed, 1 skipped`).
 - 2026-06-04 16:45 Europe/Berlin: CodeRabbit's follow-up review reported
   five cleanup findings. Fixes added explicit `RunAlreadyTerminal` message
   assertions in direct and generated adapter-operation tests, tightened the
   `NoopGenerationRunPort` stub signatures to exactly match the public
   protocols, clarified why the generation-run error module keeps a runtime
   `uuid` import, and trimmed property-test prose after the extra assertions
-  pushed the module over Pylint's file-length threshold. Focused
-  generation-run tests passed (`33 passed`), followed by `make check-fmt`,
-  `make lint`, `make typecheck`, and `make test` (`839 passed, 1 skipped`).
+  pushed the module over Pylint's file-length threshold. Focused generation-run
+  tests passed (`33 passed`), followed by `make check-fmt`, `make lint`,
+  `make typecheck`, and `make test` (`839 passed, 1 skipped`).
 - 2026-06-04 17:20 Europe/Berlin: CodeRabbit's next review reported two
-  property-test cleanup findings. Fixes converted the test-only type aliases
-  to Python 3.14 `type` declarations and replaced the `NamedTuple` adapter
+  property-test cleanup findings. Fixes converted the test-only type aliases to
+  Python 3.14 `type` declarations and replaced the `NamedTuple` adapter
   exercise state with a frozen slots dataclass while leaving the tracked
   `appended` list intentionally mutable. Focused generation-run tests passed
   (`33 passed`), followed by `make check-fmt`, `make lint`, `make typecheck`,
-  `make test` (`839 passed, 1 skipped`), `make markdownlint`, and
-  `make nixie`.
+  `make test` (`839 passed, 1 skipped`), `make markdownlint`, and `make nixie`.
 - 2026-06-04 18:05 Europe/Berlin: Final CodeRabbit review completed cleanly
   with zero findings after the PEP 695 alias and dataclass-state fixes.
 - 2026-06-14 15:20 Europe/Berlin: Rebasing onto `origin/main` stopped on a
@@ -320,6 +318,24 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   `composition_root`, `domain_ports`, `application`, `inbound_adapter`, and
   `outbound_adapter` groups while preserving this branch's
   `generation_run_errors` and `generation_run_ports` prefixes.
+- 2026-06-14 16:45 Europe/Berlin: Follow-up review reported four warnings:
+  BDD steps were still calling checkpoint domain transitions directly, domain
+  validation and repr output lacked snapshots, adapter decision points lacked
+  structured logs, and `list_runs` scanned every stored run before pagination.
+  The corrective pass adds adapter-level checkpoint timeout and cancellation
+  operations, routes BDD lifecycle steps through `InMemoryGenerationRunStore`,
+  adds Syrupy snapshots for checkpoint validation messages, dataclass repr
+  output, and generation-run error messages, emits structured adapter logs, and
+  indexes runs by episode before listing.
+- 2026-06-14 17:25 Europe/Berlin: Validation after the warning fixes passed:
+  focused generation-run tests (`31 passed`), `make check-fmt`, `make lint`
+  (including Hecate, Ruff, and Pylint), `make typecheck`, `make test`
+  (`938 passed`), `make markdownlint`, and `make nixie`. Checkpoint-port
+  contract tests were split into
+  `tests/test_generation_checkpoint_port_contract.py` to keep the original
+  port-contract module below the Pylint file-length ceiling.
+- 2026-06-14 17:45 Europe/Berlin: CodeRabbit review was requested after the
+  deterministic gates passed and completed with zero findings.
 
 ## Surprises & discoveries
 
@@ -358,8 +374,8 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   suppression scope, and examples in module docstrings. Keeping these changes
   small avoided changing the already-validated behaviour.
 - 2026-06-04: Adding CodeRabbit's requested `pytest.raises(..., match=...)`
-  assertions to the property test tipped the file over Pylint's 400-line
-  module limit. The fix was to reduce duplicated explanatory prose rather than
+  assertions to the property test tipped the file over Pylint's 400-line module
+  limit. The fix was to reduce duplicated explanatory prose rather than
   suppress the size warning or split the test helper prematurely.
 - 2026-06-04: CodeRabbit now enforces Python 3.14 idioms in tests as well as
   production code. The generated-operation property test uses PEP 695 aliases
@@ -376,6 +392,17 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   `episodic/canonical/domain.py`. The change is formatting-only and reflects
   current `origin/main` Ruff style interacting with this branch's dataclass
   additions.
+- 2026-06-14: Structured logging uses
+  `episodic.orchestration._types._log_event`, matching existing storage
+  adapters. Domain entities still do not import that helper because the
+  `domain_ports` Hecate group may import only other domain-port modules; domain
+  transition logging would need a domain-owned logging helper or port in a
+  later slice.
+- 2026-06-14: The in-memory adapter did not expose timeout or cancellation
+  methods even though the domain model had terminal transitions for them. Adding
+  `time_out_checkpoint` and `cancel_checkpoint` to the checkpoint port keeps
+  BDD lifecycle coverage at the port/adapter boundary without changing the
+  existing response contract.
 
 ## Decision log
 
@@ -416,6 +443,29 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   observe a non-terminal run concurrently with a terminal status update. The
   SQL adapter in `2.6.2` can recover concurrency with database constraints and
   transactions. Date/Author: 2026-06-04 / implementing agent.
+
+- Decision: keep checkpoint lifecycle behaviour observable through the
+  `GenerationCheckpointPort`, not through BDD steps that call domain entities
+  directly. Rationale: behavioural tests should verify the functional boundary
+  a TUI or REST service will exercise. The domain factory methods remain unit
+  tested, while BDD scenarios now persist the run and checkpoint and invoke
+  response, timeout, and cancellation through `InMemoryGenerationRunStore`.
+  Date/Author: 2026-06-14 / implementing agent.
+
+- Decision: index in-memory runs by `episode_id` and `(created_at, id)` for
+  listing. Rationale: `list_runs` is a reference adapter but should still avoid
+  scanning all runs when callers request a single episode. The per-episode
+  sorted index preserves existing ordering while limiting work to the relevant
+  episode and applying offset/limit before materialising unfiltered pages.
+  Date/Author: 2026-06-14 / implementing agent.
+
+- Decision: do not import orchestration logging helpers into
+  `episodic.canonical.domain`. Rationale: `_log_event` is the repository's
+  existing structured logging convention for adapters, but canonical domain
+  modules are in the `domain_ports` Hecate group and must remain independent of
+  orchestration. Adapter decisions now emit structured logs; adding domain
+  transition logs requires a domain-owned logging seam in a later change.
+  Date/Author: 2026-06-14 / implementing agent.
 
 - Decision: extend the checkpoint lifecycle from the roadmap's
   `created → responded` to `created → {responded, timed_out, cancelled}` from
@@ -722,10 +772,19 @@ class GenerationCheckpointPort(typing.Protocol):
         self,
         checkpoint_id: uuid.UUID,
         *,
-        action: CheckpointAction,
-        payload: JsonMapping,
-        responded_at: dt.datetime,
-        responded_by: str,
+        response: CheckpointResponse,
+    ) -> Checkpoint: ...
+    async def time_out_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint: ...
+    async def cancel_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
     ) -> Checkpoint: ...
 
 class GenerationRunPort(
@@ -765,11 +824,12 @@ Create `episodic/canonical/adapters/generation_runs.py`. The module follows the
   `GenerationRunPort`.
 - Internal state: `dict[UUID, GenerationRun]`,
   `dict[UUID, list[ GenerationEvent]]`, `dict[UUID, Checkpoint]`,
-  `dict[str, UUID]` for the `idempotency_key → run_id` index, plus
-  `dict[UUID, asyncio.Lock]` for per-run append serialisation.
+  `dict[str, UUID]` for the `idempotency_key → run_id` index, and a per-episode
+  sorted `dict[UUID, list[tuple[datetime, UUID]]]` index for run listing.
 - Injected `time_provider: cabc.Callable[[], dt.datetime]` defaulting to
-  `lambda: dt.datetime.now(dt.UTC)`, mirroring the existing pattern.
-- Adapter-allocated `seq`: under the per-run lock,
+  a dataclass factory returning `dt.datetime.now(dt.UTC)`, mirroring the
+  existing pattern.
+- Adapter-allocated `seq`: under the single in-memory lock,
   `seq = len( self._events[run_id]) + 1` after asserting the run exists and is
   not terminal. Return the persisted `GenerationEvent` to the caller.
 - First-write-wins idempotency for `create_run`: if `idempotency_key` is not
@@ -777,11 +837,13 @@ Create `episodic/canonical/adapters/generation_runs.py`. The module follows the
   otherwise insert and index the new run.
 - Domain-side transitions for `respond_to_checkpoint`: load the current
   `Checkpoint`, call `Checkpoint.respond(...)`, and persist the returned
-  instance. Raise `CheckpointAlreadyTerminal` when the loaded checkpoint is
-  already in a terminal state.
+  instance. Timeout and cancellation use the same boundary with
+  `Checkpoint.time_out(...)` and `Checkpoint.cancel(...)`. Raise
+  `CheckpointAlreadyTerminal` when the loaded checkpoint is already in a
+  terminal state.
 - Structured logging via `episodic.orchestration._types._log_event` (the
-  existing convention) or a fresh helper in
-  `episodic.canonical.generation_run_logging` if a circular import emerges.
+  existing adapter convention). Domain entities do not import this helper
+  because the canonical domain group must stay independent of orchestration.
 
 Wire the adapter into the existing `_orchestration_fakes.py` and
 `tests/api_fixtures.py` test surface where it does not pull in production-only

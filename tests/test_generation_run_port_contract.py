@@ -19,7 +19,6 @@ import pytest
 from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
 from episodic.canonical.domain import (
     Checkpoint,
-    CheckpointAction,
     CheckpointResponse,
     CheckpointStatus,
     GenerationEvent,
@@ -195,6 +194,24 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         """Raise for all responses."""
         raise CheckpointNotFound(checkpoint_id)
 
+    async def time_out_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint:
+        """Raise for all timeouts."""
+        raise CheckpointNotFound(checkpoint_id)
+
+    async def cancel_checkpoint(
+        self,
+        checkpoint_id: uuid.UUID,
+        *,
+        at: dt.datetime,
+    ) -> Checkpoint:
+        """Raise for all cancellations."""
+        raise CheckpointNotFound(checkpoint_id)
+
 
 class TestGenerationRunRepository:
     """Contract tests for generation-run repository operations."""
@@ -324,56 +341,6 @@ class TestGenerationEventLog:
 
         with pytest.raises(ValueError, match="limit"):
             await store.list_events(run.id, limit=-1)
-
-
-class TestGenerationCheckpointPort:
-    """Contract tests for generation checkpoint operations."""
-
-    @pytest.mark.asyncio
-    async def test_checkpoint_response_uses_domain_transition(
-        self,
-        store: InMemoryGenerationRunStore,
-    ) -> None:
-        """The checkpoint port persists the response returned by the entity."""
-        run = await store.create_run(make_generation_run())
-        checkpoint = await store.create_checkpoint(make_checkpoint(run.id))
-
-        responded = await store.respond_to_checkpoint(
-            checkpoint.id,
-            response=CheckpointResponse(
-                action=CheckpointAction.APPROVE,
-                payload={"approved": True},
-                responded_at=NOW + dt.timedelta(minutes=1),
-                responded_by="reviewer@example.com",
-            ),
-        )
-
-        assert responded.status is CheckpointStatus.RESPONDED, (
-            "checkpoint status must transition to RESPONDED"
-        )
-        assert responded.response_payload == {"approved": True}, (
-            "response payload must be persisted"
-        )
-        assert await store.get_checkpoint(checkpoint.id) == responded, (
-            "retrieved checkpoint must reflect response"
-        )
-
-    @pytest.mark.asyncio
-    async def test_checkpoint_response_rejects_unknown_checkpoint(
-        self,
-        store: InMemoryGenerationRunStore,
-    ) -> None:
-        """Responding to a missing checkpoint should raise the domain error."""
-        with pytest.raises(CheckpointNotFound, match=r"unknown generation checkpoint:"):
-            await store.respond_to_checkpoint(
-                uuid.uuid7(),
-                response=CheckpointResponse(
-                    action=CheckpointAction.APPROVE,
-                    payload={},
-                    responded_at=NOW,
-                    responded_by="reviewer@example.com",
-                ),
-            )
 
 
 class TestCompositeProtocol:

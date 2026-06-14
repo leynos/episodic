@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses as dc
 import datetime as dt
 import uuid
@@ -9,6 +10,7 @@ import uuid
 import pytest
 from pytest_bdd import given, parsers, scenario, then, when
 
+from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
 from episodic.canonical.domain import (
     Checkpoint,
     CheckpointAction,
@@ -31,6 +33,9 @@ _ACTION_PAYLOADS: dict[str, dict[str, object]] = {
 class GenerationRunLifecycleContext:
     """Shared state for checkpoint lifecycle scenarios."""
 
+    store: InMemoryGenerationRunStore = dc.field(
+        default_factory=InMemoryGenerationRunStore
+    )
     checkpoint: Checkpoint | None = None
     error: Exception | None = None
 
@@ -60,12 +65,11 @@ def _run() -> GenerationRun:
     )
 
 
-def _checkpoint() -> Checkpoint:
+def _checkpoint(run_id: uuid.UUID) -> Checkpoint:
     """Return a sample checkpoint for tests."""
-    run = _run()
     return Checkpoint(
         id=uuid.uuid7(),
-        generation_run_id=run.id,
+        generation_run_id=run_id,
         node="human_review",
         prompt="Approve the draft?",
         options=("approve", "request_changes", "edit"),
@@ -107,7 +111,10 @@ def created_checkpoint(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Create a generation run checkpoint awaiting review."""
-    generation_run_context.checkpoint = _checkpoint()
+    run = asyncio.run(generation_run_context.store.create_run(_run()))
+    generation_run_context.checkpoint = asyncio.run(
+        generation_run_context.store.create_checkpoint(_checkpoint(run.id))
+    )
 
 
 @given("a checkpoint that has already been responded to")
@@ -115,12 +122,19 @@ def responded_checkpoint(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Create a checkpoint that already reached a terminal response state."""
-    generation_run_context.checkpoint = _checkpoint().respond(
-        response=CheckpointResponse(
-            action=CheckpointAction.APPROVE,
-            payload={"approved": True},
-            responded_at=NOW + dt.timedelta(minutes=1),
-            responded_by="reviewer@example.com",
+    run = asyncio.run(generation_run_context.store.create_run(_run()))
+    checkpoint = asyncio.run(
+        generation_run_context.store.create_checkpoint(_checkpoint(run.id))
+    )
+    generation_run_context.checkpoint = asyncio.run(
+        generation_run_context.store.respond_to_checkpoint(
+            checkpoint.id,
+            response=CheckpointResponse(
+                action=CheckpointAction.APPROVE,
+                payload={"approved": True},
+                responded_at=NOW + dt.timedelta(minutes=1),
+                responded_by="reviewer@example.com",
+            ),
         )
     )
 
@@ -135,12 +149,15 @@ def reviewer_responds(
     if checkpoint is None:
         msg = "Checkpoint was not prepared."
         raise AssertionError(msg)
-    generation_run_context.checkpoint = checkpoint.respond(
-        response=CheckpointResponse(
-            action=CheckpointAction(action),
-            payload=_ACTION_PAYLOADS[action],
-            responded_at=NOW + dt.timedelta(minutes=1),
-            responded_by="reviewer@example.com",
+    generation_run_context.checkpoint = asyncio.run(
+        generation_run_context.store.respond_to_checkpoint(
+            checkpoint.id,
+            response=CheckpointResponse(
+                action=CheckpointAction(action),
+                payload=_ACTION_PAYLOADS[action],
+                responded_at=NOW + dt.timedelta(minutes=1),
+                responded_by="reviewer@example.com",
+            ),
         )
     )
 
@@ -155,12 +172,15 @@ def reviewer_attempts_second_response(
         msg = "Checkpoint was not prepared."
         raise AssertionError(msg)
     try:
-        checkpoint.respond(
-            response=CheckpointResponse(
-                action=CheckpointAction.EDIT,
-                payload={},
-                responded_at=NOW + dt.timedelta(minutes=2),
-                responded_by="reviewer@example.com",
+        asyncio.run(
+            generation_run_context.store.respond_to_checkpoint(
+                checkpoint.id,
+                response=CheckpointResponse(
+                    action=CheckpointAction.EDIT,
+                    payload={},
+                    responded_at=NOW + dt.timedelta(minutes=2),
+                    responded_by="reviewer@example.com",
+                ),
             )
         )
     except Exception as exc:  # noqa: BLE001 - BDD step captures the outcome.
@@ -183,9 +203,12 @@ def checkpoint_times_out(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Move the checkpoint to the timeout terminal state."""
-    generation_run_context.checkpoint = _require_checkpoint(
-        generation_run_context
-    ).time_out(NOW + dt.timedelta(hours=1))
+    generation_run_context.checkpoint = asyncio.run(
+        generation_run_context.store.time_out_checkpoint(
+            _require_checkpoint(generation_run_context).id,
+            at=NOW + dt.timedelta(hours=1),
+        )
+    )
 
 
 @when("the checkpoint is cancelled")
@@ -193,9 +216,12 @@ def checkpoint_is_cancelled(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Move the checkpoint to the cancelled terminal state."""
-    generation_run_context.checkpoint = _require_checkpoint(
-        generation_run_context
-    ).cancel(NOW + dt.timedelta(minutes=10))
+    generation_run_context.checkpoint = asyncio.run(
+        generation_run_context.store.cancel_checkpoint(
+            _require_checkpoint(generation_run_context).id,
+            at=NOW + dt.timedelta(minutes=10),
+        )
+    )
 
 
 @then(parsers.parse('the checkpoint status becomes "{status}"'))
