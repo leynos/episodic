@@ -3,16 +3,6 @@
 This module provides a reference implementation of the generation-run port
 protocols for tests and local development. It is ephemeral, single-process
 storage and is not a production persistence layer.
-
-`InMemoryGenerationRunStore` protects all mutable dictionaries with one
-`asyncio.Lock`, so callers get simple consistency guarantees at the cost of
-coarse-grained concurrency. Typical use:
-
-```python
-store = InMemoryGenerationRunStore()
-run = await store.create_run(generation_run)
-event = await store.append_event(run.id, kind="created", payload={})
-```
 """
 
 import asyncio
@@ -50,6 +40,15 @@ def _now_utc() -> dt.datetime:
 def _default_time_provider() -> TimeProvider:
     """Return the default in-memory timestamp provider."""
     return _now_utc
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _CheckpointTransitionSpec:
+    """Logging specification for a checkpoint domain transition."""
+
+    missing_event: str
+    done_event: str
+    extra_fields: dict[str, str] = dc.field(default_factory=dict)
 
 
 @dc.dataclass(slots=True)
@@ -310,26 +309,21 @@ class InMemoryGenerationRunStore:
         async with self._lock:
             return self._checkpoints.get(checkpoint_id)
 
-    # pylint: disable-next=too-many-arguments  # Shared transition helper.
-    async def _apply_checkpoint_transition(  # noqa: PLR0913
+    async def _apply_checkpoint_transition(
         self,
         checkpoint_id: uuid.UUID,
         transition: cabc.Callable[[Checkpoint], Checkpoint],
-        *,
-        missing_event: str,
-        done_event: str,
-        extra_fields: dict[str, str] | None = None,
+        spec: _CheckpointTransitionSpec,
     ) -> Checkpoint:
         """Apply a domain transition to a stored checkpoint under the lock."""
-        extra = extra_fields or {}
         async with self._lock:
             checkpoint = self._checkpoints.get(checkpoint_id)
             if checkpoint is None:
                 _log_event(
                     "warning",
-                    missing_event,
+                    spec.missing_event,
                     checkpoint_id=str(checkpoint_id),
-                    **extra,
+                    **spec.extra_fields,
                 )
                 raise CheckpointNotFound(checkpoint_id)
             try:
@@ -337,21 +331,21 @@ class InMemoryGenerationRunStore:
             except CheckpointAlreadyTerminal:
                 _log_event(
                     "warning",
-                    f"{done_event}_already_terminal",
+                    f"{spec.done_event}_already_terminal",
                     checkpoint_id=str(checkpoint_id),
                     run_id=str(checkpoint.generation_run_id),
                     status=checkpoint.status.value,
-                    **extra,
+                    **spec.extra_fields,
                 )
                 raise
             self._checkpoints[checkpoint_id] = updated
             _log_event(
                 "info",
-                done_event,
+                spec.done_event,
                 checkpoint_id=str(checkpoint_id),
                 run_id=str(updated.generation_run_id),
                 status=updated.status.value,
-                **extra,
+                **spec.extra_fields,
             )
             return updated
 
@@ -365,9 +359,11 @@ class InMemoryGenerationRunStore:
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.respond(response),
-            missing_event="generation_run_store.respond_checkpoint_missing",
-            done_event="generation_run_store.respond_checkpoint",
-            extra_fields={"action": response.action.value},
+            _CheckpointTransitionSpec(
+                missing_event="generation_run_store.respond_checkpoint_missing",
+                done_event="generation_run_store.respond_checkpoint",
+                extra_fields={"action": response.action.value},
+            ),
         )
 
     async def time_out_checkpoint(
@@ -380,8 +376,10 @@ class InMemoryGenerationRunStore:
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.time_out(at),
-            missing_event="generation_run_store.timeout_checkpoint_missing",
-            done_event="generation_run_store.timeout_checkpoint",
+            _CheckpointTransitionSpec(
+                missing_event="generation_run_store.timeout_checkpoint_missing",
+                done_event="generation_run_store.timeout_checkpoint",
+            ),
         )
 
     async def cancel_checkpoint(
@@ -394,6 +392,8 @@ class InMemoryGenerationRunStore:
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.cancel(at),
-            missing_event="generation_run_store.cancel_checkpoint_missing",
-            done_event="generation_run_store.cancel_checkpoint",
+            _CheckpointTransitionSpec(
+                missing_event="generation_run_store.cancel_checkpoint_missing",
+                done_event="generation_run_store.cancel_checkpoint",
+            ),
         )
