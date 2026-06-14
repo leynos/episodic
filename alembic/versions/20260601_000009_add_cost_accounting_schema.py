@@ -11,8 +11,8 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
-    """Create cost accounting tables."""
+def _create_pricing_snapshots() -> None:
+    """Create the pricing_snapshots table."""
     op.create_table(
         "pricing_snapshots",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -28,6 +28,10 @@ def upgrade() -> None:
         sa.Column("retrieved_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("effective_from", sa.DateTime(timezone=True), nullable=True),
     )
+
+
+def _create_cost_ledger_entries() -> None:
+    """Create the cost_ledger_entries table and its indexes."""
     op.create_table(
         "cost_ledger_entries",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -71,6 +75,10 @@ def upgrade() -> None:
         ["workflow_run_id", "scope"],
         postgresql_where=sa.text("scope IN ('provider_call', 'task')"),
     )
+
+
+def _create_metering_tables() -> None:
+    """Create metering tables and the updated_at trigger."""
     op.create_table(
         "metering_counters",
         sa.Column("counter_key", sa.Text(), primary_key=True),
@@ -118,6 +126,10 @@ def upgrade() -> None:
         EXECUTE FUNCTION update_metering_counters_updated_at();
         """
     )
+
+
+def _create_run_pricing_pins() -> None:
+    """Create the run_pricing_pins table."""
     op.create_table(
         "run_pricing_pins",
         sa.Column("workflow_run_id", sa.Text(), primary_key=True),
@@ -138,6 +150,14 @@ def upgrade() -> None:
             ondelete="RESTRICT",
         ),
     )
+
+
+def upgrade() -> None:
+    """Create cost accounting tables."""
+    _create_pricing_snapshots()
+    _create_cost_ledger_entries()
+    _create_metering_tables()
+    _create_run_pricing_pins()
 
 
 def downgrade() -> None:
