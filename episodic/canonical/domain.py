@@ -198,6 +198,13 @@ class Checkpoint:
         """Validate checkpoint lifecycle invariants."""
         _validate_non_empty_text(self.node, "node")
         _validate_non_empty_text(self.prompt, "prompt")
+        self._validate_options()
+        _validate_optional_text(self.responded_by, "responded_by")
+        _copy_json_mapping(self, "response_payload")
+        self._validate_responded_fields()
+
+    def _validate_options(self) -> None:
+        """Validate that checkpoint options are present and selectable."""
         if len(self.options) == 0:
             msg = "options must contain at least one action."
             raise ValueError(msg)
@@ -206,18 +213,20 @@ class Checkpoint:
         ):
             msg = "options must contain non-empty strings."
             raise ValueError(msg)
-        _validate_optional_text(self.responded_by, "responded_by")
-        _copy_json_mapping(self, "response_payload")
-        if self.status is CheckpointStatus.RESPONDED:
-            if self.responded_at is None:
-                msg = "responded checkpoints require responded_at."
-                raise ValueError(msg)
-            if self.responded_by is None:
-                msg = "responded checkpoints require responded_by."
-                raise ValueError(msg)
-            if self.response_action is None:
-                msg = "responded checkpoints require response_action."
-                raise ValueError(msg)
+
+    def _validate_responded_fields(self) -> None:
+        """Validate required fields for responded checkpoints."""
+        if self.status is not CheckpointStatus.RESPONDED:
+            return
+        if self.responded_at is None:
+            msg = "responded checkpoints require responded_at."
+            raise ValueError(msg)
+        if self.responded_by is None:
+            msg = "responded checkpoints require responded_by."
+            raise ValueError(msg)
+        if self.response_action is None:
+            msg = "responded checkpoints require response_action."
+            raise ValueError(msg)
 
     def respond(
         self,
