@@ -692,12 +692,90 @@ vertical slice].
     presenter context, poll completion over REST, and download a TEI-P5 XML
     file without using the QA, audio, or export-job pipelines.
 
-### 4.4. WebSocket event streaming
+### 4.4. Iterative generation and duration-based refinement
+
+This step answers whether a single generation run can complete a generation,
+quality gate, and refinement cycle end-to-end: the run should trigger Chrono on
+the generated draft, then route short or long drafts back into the same agent
+loop for targeted redraft. This prepares the implementation for QA-gated
+generation workflows beyond the initial draft-only slice. Implementations must
+define single-writer ownership for run state, ordered event publication, and
+shutdown-safe cancellation before adding new loop transitions.
+Concurrency model: one graph runner owns mutation for a run, repository writes
+are guarded by sequence numbers and idempotency keys, and cancellation,
+shutdown, duplicate-event handling, and resume replay must be deterministic.
+Property-testing guidance: use Hypothesis to exercise routing, duration-class,
+and iteration-cap invariants across generated run states.
+
+- [ ] 4.4.1. Add QA-gated mode branching and Graph route plumbing.
+  - Requires 2.1.1, 2.2.6, 2.4.2, and 4.3.2.
+  - Extend run creation and run state validation for `quality_mode=qa_gated`.
+  - Preserve `draft_without_qa` as a direct route to draft persistence.
+  - Route `qa_gated` runs into the full evaluation branch in the
+    [Content Generation Graph](episodic-podcast-generation-system-design.md#content-generation-graph).
+  - Add Hypothesis property-based tests proving quality-mode routing reaches
+    distinct terminal states without ambiguous branch ownership.
+  - Success: `draft_without_qa` and `qa_gated` requests reach deterministic,
+    distinct graph branches with clear terminal states.
+
+- [ ] 4.4.2. Invoke Chrono in-loop and emit duration-based QA findings.
+  - Requires 2.2.6 and 4.4.1.
+  - After each generation attempt, run generated TEI through Chrono and record
+    `estimated_seconds`, estimator identity, and policy check outcome.
+  - Compare against minimum/maximum duration thresholds from configuration.
+  - Emit a signed QA finding artifact and generation event for short/long-draft
+    outcomes that can drive a refinement turn.
+  - Add Hypothesis property-based tests for short, in-range, and long Chrono
+    duration outcomes across generated TEI segment shapes.
+  - See
+    [Quality assurance stack](episodic-podcast-generation-system-design.md#quality-assurance-stack),
+    [ADR 006](adr/adr-006-chrono-spoken-text-semantics.md), and
+    [LangGraph Integration Principles](episodic-podcast-generation-system-design.md#langgraph-integration-principles).
+
+- [ ] 4.4.3. Trigger targeted redraft from duration outcomes.
+  - Requires 4.4.2 and 2.4.2.
+  - Build refinement prompts from Chrono failure summaries and prior run
+    context.
+  - Route failed duration checks back to the Generate node with an explicit
+    iteration reason and cap-adjusted retry count.
+  - Enforce `max_iterations` from generation configuration and route exhausted
+    runs to Escalate.
+  - Add Hypothesis transition tests proving pass, redraft, cancel, and Escalate
+    outcomes terminate within the configured `max_iterations` cap.
+  - Define state sequencing and cancellation behaviour for mid-iteration
+    shutdowns before the next Generate node is scheduled.
+  - See
+    [Content Generation Graph](episodic-podcast-generation-system-design.md#content-generation-graph)
+    and
+    [Configuration and tunables](episodic-podcast-generation-system-design.md#configuration-and-tunables).
+  - Success: failed duration checks cause fresh generation attempts rather than
+    blind approval, while iteration caps prevent loops.
+
+- [ ] 4.4.4. Persist iterative quality context and resume points.
+  - Requires 2.6.1, 2.5.5, and 4.4.3.
+  - Extend iteration metadata to include generation hash, prior draft summary,
+    QA outcome snapshot, and refinement instructions.
+  - Persist per-iteration event details so run history explains why redrafts
+    were triggered.
+  - Persist escalation checkpoints for human-in-the-loop recovery when the
+    iteration cap is reached.
+  - Store sequence numbers and idempotency keys so duplicate node completions,
+    duplicate event delivery, and resume replay do not double-write state.
+  - Add concrete interleaving tests for cancellation mid-iteration, worker
+    shutdown after Chrono before redraft, duplicate message delivery, duplicate
+    event delivery, and checkpoint resume.
+  - See
+    [Generation runs](episodic-tui-api-design.md#generation-runs),
+    [Cost accounting and budget enforcement](episodic-podcast-generation-system-design.md#cost-accounting-and-budget-enforcement),
+    and
+    [State persistence and checkpointing](episodic-podcast-generation-system-design.md#state-persistence-and-checkpointing).
+
+### 4.5. WebSocket event streaming
 
 Implement real-time event streaming for generation runs. Completion enables
 live workflow observation and checkpoint intervention.
 
-- [ ] 4.4.1. Define `RunEventBusPort` and implement WebSocket streaming for
+- [ ] 4.5.1. Define `RunEventBusPort` and implement WebSocket streaming for
   generation runs. Requires 2.6.1.
   - Implement `/ws/runs/{run_id}` via Falcon-Pachinko.
   - Use `msgspec` tagged-union message dispatch.
@@ -711,7 +789,7 @@ live workflow observation and checkpoint intervention.
   - Note: Scope covers generation runs only; audio runs use REST polling.
   - See
     [WebSocket API for real-time generation events](episodic-tui-api-design.md#websocket-api-for-real-time-generation-events).
-- [ ] 4.4.2. Implement WebSocket backpressure and reconnection. Requires 4.4.1.
+- [ ] 4.5.2. Implement WebSocket backpressure and reconnection. Requires 4.5.1.
   - Implement acknowledgement-gated outbound buffering with bounded ring
     buffer.
   - Implement event compaction under acknowledgement lag.
@@ -720,34 +798,34 @@ live workflow observation and checkpoint intervention.
   - Provide REST fallback via `resume_unavailable` error.
   - See [Backpressure](episodic-tui-api-design.md#backpressure).
 
-### 4.5. CLI and web console
+### 4.6. CLI and web console
 
 Extend command-line tooling and ship the initial web console. Completion
 enables operator and editorial self-service.
 
-- [ ] 4.5.1. Extend CLI client for approval workflows.
+- [ ] 4.6.1. Extend CLI client for approval workflows.
   - Support approval actions (submit, approve, reject).
   - Support diff viewing between episode versions.
   - Support audio preview downloads.
-- [ ] 4.5.2. Ship initial web console for editorial workflows.
+- [ ] 4.6.2. Ship initial web console for editorial workflows.
   - Implement series profile and template management views.
   - Implement approval queue dashboard.
   - Implement real-time generation progress view.
 
-### 4.6. API documentation and specifications
+### 4.7. API documentation and specifications
 
 Publish OpenAPI and AsyncAPI specifications for all API surfaces. Completion
 enables client SDK generation and contract validation.
 
-- [x] 4.6.1. Publish TUI API design document.
+- [x] 4.7.1. Publish TUI API design document.
   - Document REST endpoint specifications.
   - Document WebSocket message schemas.
   - Document authentication, error, and pagination conventions.
   - See [episodic-tui-api-design.md](episodic-tui-api-design.md).
-- [ ] 4.6.2. Generate OpenAPI specification from endpoint definitions.
+- [ ] 4.7.2. Generate OpenAPI specification from endpoint definitions.
   - Validate specification against implemented endpoints.
   - Publish specification for client SDK generation.
-- [ ] 4.6.3. Generate AsyncAPI specification from WebSocket schemas.
+- [ ] 4.7.3. Generate AsyncAPI specification from WebSocket schemas.
   - Validate specification against implemented message handlers.
   - Complete contract review with TUI repository maintainers.
 
