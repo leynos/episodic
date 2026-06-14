@@ -160,16 +160,25 @@ def reviewer_attempts_second_response(
         generation_run_context.error = exc
 
 
+def _require_checkpoint(
+    ctx: GenerationRunLifecycleContext,
+) -> Checkpoint:
+    """Return the context checkpoint, raising AssertionError if absent."""
+    checkpoint = ctx.checkpoint
+    if checkpoint is None:
+        msg = "Checkpoint was not prepared."
+        raise AssertionError(msg)
+    return checkpoint
+
+
 @when("the checkpoint times out")
 def checkpoint_times_out(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Move the checkpoint to the timeout terminal state."""
-    checkpoint = generation_run_context.checkpoint
-    if checkpoint is None:
-        msg = "Checkpoint was not prepared."
-        raise AssertionError(msg)
-    generation_run_context.checkpoint = checkpoint.time_out(NOW + dt.timedelta(hours=1))
+    generation_run_context.checkpoint = _require_checkpoint(
+        generation_run_context
+    ).time_out(NOW + dt.timedelta(hours=1))
 
 
 @when("the checkpoint is cancelled")
@@ -177,13 +186,9 @@ def checkpoint_is_cancelled(
     generation_run_context: GenerationRunLifecycleContext,
 ) -> None:
     """Move the checkpoint to the cancelled terminal state."""
-    checkpoint = generation_run_context.checkpoint
-    if checkpoint is None:
-        msg = "Checkpoint was not prepared."
-        raise AssertionError(msg)
-    generation_run_context.checkpoint = checkpoint.cancel(
-        NOW + dt.timedelta(minutes=10)
-    )
+    generation_run_context.checkpoint = _require_checkpoint(
+        generation_run_context
+    ).cancel(NOW + dt.timedelta(minutes=10))
 
 
 @then(parsers.parse('the checkpoint status becomes "{status}"'))
@@ -192,11 +197,9 @@ def checkpoint_status_becomes(
     status: str,
 ) -> None:
     """Assert the final checkpoint status."""
-    checkpoint = generation_run_context.checkpoint
-    if checkpoint is None:
-        msg = "Checkpoint was not prepared."
-        raise AssertionError(msg)
-    assert checkpoint.status is CheckpointStatus(status)
+    assert _require_checkpoint(generation_run_context).status is CheckpointStatus(
+        status
+    )
 
 
 @then("the response payload is recorded")
