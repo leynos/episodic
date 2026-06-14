@@ -173,26 +173,36 @@ def attach_to_missing_job(
     )
 
 
+async def _attach_upload_to_new_job(
+    client: httpx.AsyncClient,
+    *,
+    upload_id: str,
+    idempotency_key: str,
+) -> httpx.Response:
+    """Create a profile and ingestion job, then POST an upload attachment."""
+    profile_id = await create_series_profile(client)
+    job_id = await create_ingestion_job(client, profile_id)
+    return await client.post(
+        f"/v1/ingestion-jobs/{job_id}/sources",
+        headers={"Idempotency-Key": idempotency_key},
+        json=upload_payload(upload_id),
+    )
+
+
 def attach_missing_upload(
     context: SourceIntakeContext,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
 ) -> None:
     """Attach an unknown upload to a known ingestion job."""
-
-    async def _request(client: httpx.AsyncClient) -> httpx.Response:
-        profile_id = await create_series_profile(client)
-        job_id = await create_ingestion_job(client, profile_id)
-        return await client.post(
-            f"/v1/ingestion-jobs/{job_id}/sources",
-            headers={"Idempotency-Key": "bdd-missing-upload"},
-            json=upload_payload(str(uuid.uuid4())),
-        )
-
     _run_single_error_call(
         context,
         _SourceIntakeAppConfig(session_factory=session_factory, tmp_path=tmp_path),
-        _request,
+        lambda client: _attach_upload_to_new_job(
+            client,
+            upload_id=str(uuid.uuid4()),
+            idempotency_key="bdd-missing-upload",
+        ),
     )
 
 
@@ -204,13 +214,11 @@ def attach_pending_upload(
     """Attach a pending upload to a known ingestion job."""
 
     async def _request(client: httpx.AsyncClient) -> httpx.Response:
-        profile_id = await create_series_profile(client)
-        job_id = await create_ingestion_job(client, profile_id)
         upload_id = await create_pending_upload(session_factory)
-        return await client.post(
-            f"/v1/ingestion-jobs/{job_id}/sources",
-            headers={"Idempotency-Key": "bdd-pending-upload"},
-            json=upload_payload(str(upload_id)),
+        return await _attach_upload_to_new_job(
+            client,
+            upload_id=str(upload_id),
+            idempotency_key="bdd-pending-upload",
         )
 
     _run_single_error_call(
