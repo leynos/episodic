@@ -3,7 +3,6 @@
 import typing as typ
 
 import sqlalchemy as sa
-from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.constraints import (
     UQ_REF_DOC_BINDINGS_JOB_REV,
@@ -25,7 +24,7 @@ from episodic.canonical.reference_protocols import (
     ReferenceDocumentRevisionRepository,
 )
 
-from .integrity_helpers import constraint_name
+from .integrity_helpers import add_translating_constraint_conflicts
 from .reference_mappers import (
     _reference_binding_from_record,
     _reference_binding_to_record,
@@ -45,13 +44,21 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
-_REVISION_CONTENT_HASH_CONSTRAINT = "uq_reference_document_revisions_document_hash"
+_REVISION_CONFLICT_CONSTRAINTS = frozenset({
+    "uq_reference_document_revisions_document_hash"
+})
+_REVISION_CONFLICT_MESSAGE = (
+    "Reference document revision conflict: duplicate content hash."
+)
 _BINDING_CONFLICT_CONSTRAINTS = frozenset({
     UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
     UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
     UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
     UQ_REF_DOC_BINDINGS_JOB_REV,
 })
+_BINDING_CONFLICT_MESSAGE = (
+    "Reference binding conflict: duplicate target/revision binding."
+)
 
 
 class SqlAlchemyReferenceDocumentRepository(
@@ -181,16 +188,12 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
         :class:`ReferenceConflictError`; any other ``IntegrityError`` is
         propagated unchanged so callers can decide how to handle it.
         """
-        record = _reference_document_revision_to_record(revision)
-        try:
-            async with self._session.begin_nested():
-                self._session.add(record)
-                await self._session.flush()
-        except IntegrityError as exc:
-            if constraint_name(exc) == _REVISION_CONTENT_HASH_CONSTRAINT:
-                msg = "Reference document revision conflict: duplicate content hash."
-                raise ReferenceConflictError(msg) from exc
-            raise
+        await add_translating_constraint_conflicts(
+            self._session,
+            _reference_document_revision_to_record(revision),
+            constraints=_REVISION_CONFLICT_CONSTRAINTS,
+            on_conflict=lambda: ReferenceConflictError(_REVISION_CONFLICT_MESSAGE),
+        )
 
     async def get(self, revision_id: uuid.UUID) -> ReferenceDocumentRevision | None:
         """Fetch a reusable reference revision by identifier."""
@@ -286,16 +289,12 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
         :class:`ReferenceConflictError`; unrelated ``IntegrityError`` instances
         are re-raised so callers can diagnose them.
         """
-        record = _reference_binding_to_record(binding)
-        try:
-            async with self._session.begin_nested():
-                self._session.add(record)
-                await self._session.flush()
-        except IntegrityError as exc:
-            if constraint_name(exc) in _BINDING_CONFLICT_CONSTRAINTS:
-                msg = "Reference binding conflict: duplicate target/revision binding."
-                raise ReferenceConflictError(msg) from exc
-            raise
+        await add_translating_constraint_conflicts(
+            self._session,
+            _reference_binding_to_record(binding),
+            constraints=_BINDING_CONFLICT_CONSTRAINTS,
+            on_conflict=lambda: ReferenceConflictError(_BINDING_CONFLICT_MESSAGE),
+        )
 
     async def get(self, binding_id: uuid.UUID) -> ReferenceBinding | None:
         """Fetch a reusable reference binding by identifier."""

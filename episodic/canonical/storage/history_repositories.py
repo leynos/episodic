@@ -4,7 +4,6 @@ import dataclasses as dc
 import typing as typ
 
 import sqlalchemy as sa
-from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import (
     EpisodeTemplateHistoryEntry,
@@ -23,13 +22,17 @@ from .history_mappers import (
     _series_profile_history_to_record,
 )
 from .history_models import EpisodeTemplateHistoryRecord, SeriesProfileHistoryRecord
-from .integrity_helpers import is_revision_conflict_integrity_error
+from .integrity_helpers import (
+    insert_with_conflict_translation,
+    is_revision_conflict_integrity_error,
+)
 from .repository_base import _RepositoryBase
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from sqlalchemy.exc import IntegrityError
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm.attributes import InstrumentedAttribute
 
@@ -76,18 +79,20 @@ class _HistoryRepositoryBase[HistoryEntryT, HistoryRecordT](_RepositoryBase):
         carrying the parent entity identifier so service-layer callers can
         report optimistic-lock conflicts without depending on SQLAlchemy.
         """
-        record = self._record_builder(entry)
-        try:
-            async with self._session.begin_nested():
-                self._session.add(record)
-                await self._session.flush()
-        except IntegrityError as exc:
+
+        def _translate(exc: IntegrityError) -> RevisionConflictError | None:
             if not is_revision_conflict_integrity_error(exc, self._parent_id_field):
-                raise
+                return None
             parent_id = getattr(entry, self._parent_id_field, None)
             entity_id = None if parent_id is None else str(parent_id)
             msg = "Revision conflict: concurrent history insert detected."
-            raise RevisionConflictError(msg, entity_id=entity_id) from exc
+            return RevisionConflictError(msg, entity_id=entity_id)
+
+        await insert_with_conflict_translation(
+            self._session,
+            self._record_builder(entry),
+            translate=_translate,
+        )
 
     async def _list_for_parent(self, parent_id: uuid.UUID) -> list[HistoryEntryT]:
         """List history entries for a parent entity."""

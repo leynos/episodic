@@ -9,49 +9,39 @@ that should propagate unchanged.
 
 import typing as typ
 
+from sqlalchemy.exc import IntegrityError
+
 from episodic.canonical.constraints import REVISION_CONSTRAINT_NAMES
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from sqlalchemy.exc import IntegrityError
-
-
-def _exception_chain(exc: object) -> cabc.Iterator[object]:
-    """Yield ``exc`` and its chained causes/contexts, then ``orig``, de-duplicated.
-
-    The chain follows ``__cause__`` first, then ``__context__``, beginning with
-    both the exception itself and any DB-API ``orig`` it carries so callers can
-    reach the driver-level error regardless of how the chain was raised.
-    """
-    seen: set[int] = set()
-    roots = (exc, getattr(exc, "orig", exc))
-    for root in roots:
-        current: object | None = root
-        while current is not None and id(current) not in seen:
-            seen.add(id(current))
-            yield current
-            current = getattr(current, "__cause__", None) or getattr(
-                current, "__context__", None
-            )
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def constraint_name(exc: BaseException) -> str | None:
     """Return the Postgres constraint name when the exception exposes one.
 
-    Walks the exception chain so callers can recover the constraint name from
-    SQLAlchemy ``IntegrityError`` instances, the wrapped DB-API ``orig``
-    exception, or any chained cause/context. Returns ``None`` when no driver
-    reports a constraint name.
+    Inspects the SQLAlchemy ``IntegrityError`` and its wrapped DB-API ``orig``
+    exception, including each candidate's ``diag.constraint_name``. Returns
+    ``None`` when no candidate reports a constraint name.
     """
-    for node in _exception_chain(exc):
-        direct = getattr(node, "constraint_name", None)
+
+    def _from_candidate(candidate: object | None) -> str | None:
+        if candidate is None:
+            return None
+        direct = getattr(candidate, "constraint_name", None)
         if direct is not None:
             return typ.cast("str", direct)
+        diag = getattr(candidate, "diag", None)
+        name = getattr(diag, "constraint_name", None)
+        return None if name is None else typ.cast("str", name)
 
-    orig_exc = getattr(exc, "orig", exc)
-    diag = getattr(orig_exc, "diag", None)
-    return typ.cast("str | None", getattr(diag, "constraint_name", None))
+    for candidate in (exc, getattr(exc, "orig", None)):
+        name = _from_candidate(candidate)
+        if name is not None:
+            return name
+    return None
 
 
 def is_revision_conflict_integrity_error(
@@ -69,6 +59,7 @@ def is_revision_conflict_integrity_error(
     name = constraint_name(exc)
     if name in REVISION_CONSTRAINT_NAMES:
         return True
+    # Last-resort fallback for drivers that do not report a constraint name.
     orig_exc = getattr(exc, "orig", exc)
     detail = str(orig_exc)
     return any(
@@ -79,3 +70,58 @@ def is_revision_conflict_integrity_error(
             f"{entity_id_field}, revision",
         )
     )
+
+
+async def insert_with_conflict_translation(
+    session: AsyncSession,
+    record: object,
+    *,
+    translate: cabc.Callable[[IntegrityError], BaseException | None],
+) -> None:
+    """Insert ``record`` in a savepoint, translating recognised conflicts.
+
+    The record is added inside a nested transaction and flushed immediately so
+    constraint violations surface here rather than at the outer commit, leaving
+    the caller's transaction intact for unrecognised failures. On
+    ``IntegrityError`` the ``translate`` callback decides the outcome: returning
+    a domain exception raises it chained from the original error, while
+    returning ``None`` re-raises the original ``IntegrityError`` unchanged.
+
+    Centralising the savepoint/flush/translate dance keeps every repository's
+    conflict handling consistent and avoids repeating the boilerplate per
+    ``add`` method.
+    """
+    try:
+        async with session.begin_nested():
+            session.add(record)
+            await session.flush()
+    except IntegrityError as exc:
+        translated = translate(exc)
+        if translated is None:
+            raise
+        raise translated from exc
+
+
+async def add_translating_constraint_conflicts(
+    session: AsyncSession,
+    record: object,
+    *,
+    constraints: cabc.Container[str],
+    on_conflict: cabc.Callable[[], BaseException],
+) -> None:
+    """Insert ``record``, translating known constraint violations to a domain error.
+
+    A convenience wrapper over :func:`insert_with_conflict_translation` for the
+    common case where a fixed set of named constraints maps to a single domain
+    exception. When the violated constraint is in ``constraints`` the exception
+    built by ``on_conflict`` is raised (chained from the original); any other
+    ``IntegrityError`` propagates unchanged.
+    """
+
+    def _translate(exc: IntegrityError) -> BaseException | None:
+        name = constraint_name(exc)
+        if name is not None and name in constraints:
+            return on_conflict()
+        return None
+
+    await insert_with_conflict_translation(session, record, translate=_translate)
