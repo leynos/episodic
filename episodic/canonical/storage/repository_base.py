@@ -7,6 +7,7 @@ import sqlalchemy as sa
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import uuid
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +56,45 @@ class _RepositoryBase:
         result = await self._session.execute(
             sa.select(record_type).where(where_clause).order_by(order_by_clause)
         )
+        return [mapper(row) for row in result.scalars()]
+
+    async def _list_by_ids(
+        self,
+        record_cls: typ.Any,  # noqa: ANN401  # SQLAlchemy mapped class exposing id/created_at columns
+        ids: cabc.Collection[uuid.UUID],
+        mapper: cabc.Callable[[typ.Any], typ.Any],
+    ) -> list[typ.Any]:
+        """Fetch all records whose ``id`` is in *ids*, ordered by ``created_at``."""
+        if not ids:
+            return []
+        return await self._list_where(
+            record_cls,
+            record_cls.id.in_(list(ids)),
+            record_cls.created_at,
+            mapper,
+        )
+
+    async def _list_paginated[RecordT, DomainT](  # noqa: PLR0913  # filters and pagination bounds are independent inputs
+        self,
+        record_type: type[RecordT],
+        where_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        order_by_clause: typ.Any,  # noqa: ANN401  # TODO(@codex): https://github.com/leynos/episodic/pull/14 - SQLAlchemy clause typing.
+        mapper: cabc.Callable[[RecordT], DomainT],
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[DomainT]:
+        """List mapped records with ordering and optional limit/offset paging."""
+        statement = (
+            sa
+            .select(record_type)
+            .where(where_clause)
+            .order_by(order_by_clause)
+            .offset(offset)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        result = await self._session.execute(statement)
         return [mapper(row) for row in result.scalars()]
 
     async def _get_latest_where[RecordT, DomainT](

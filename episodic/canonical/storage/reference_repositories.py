@@ -61,6 +61,27 @@ _BINDING_CONFLICT_MESSAGE = (
 )
 
 
+async def _add_with_conflict_translation(
+    session: typ.Any,  # noqa: ANN401
+    record: typ.Any,  # noqa: ANN401
+    *,
+    constraints: frozenset[str],
+    conflict_message: str,
+) -> None:
+    """Wrap ``add_translating_constraint_conflicts`` with a fixed error class.
+
+    Inserts *record* inside a savepoint and translates any matching constraint
+    violation to :class:`ReferenceConflictError`.  Unrelated
+    ``IntegrityError`` instances are propagated unchanged.
+    """
+    await add_translating_constraint_conflicts(
+        session,
+        record,
+        constraints=constraints,
+        on_conflict=lambda: ReferenceConflictError(conflict_message),
+    )
+
+
 class SqlAlchemyReferenceDocumentRepository(
     _RepositoryBase, ReferenceDocumentRepository
 ):
@@ -87,18 +108,14 @@ class SqlAlchemyReferenceDocumentRepository(
         offset: int = 0,
     ) -> list[ReferenceDocument]:
         """List reusable reference documents for one series profile."""
-        where_clause = _document_series_filter(series_profile_id, kind)
-        statement = (
-            sa
-            .select(ReferenceDocumentRecord)
-            .where(where_clause)
-            .order_by(ReferenceDocumentRecord.created_at)
-            .offset(offset)
+        return await self._list_paginated(
+            ReferenceDocumentRecord,
+            _document_series_filter(series_profile_id, kind),
+            ReferenceDocumentRecord.created_at,
+            _reference_document_from_record,
+            limit=limit,
+            offset=offset,
         )
-        if limit is not None:
-            statement = statement.limit(limit)
-        result = await self._session.execute(statement)
-        return [_reference_document_from_record(row) for row in result.scalars()]
 
     async def count_for_series(
         self,
@@ -121,12 +138,9 @@ class SqlAlchemyReferenceDocumentRepository(
         document_ids: cabc.Collection[uuid.UUID],
     ) -> list[ReferenceDocument]:
         """List reusable reference documents by identifiers."""
-        if not document_ids:
-            return []
-        return await self._list_where(
+        return await self._list_by_ids(
             ReferenceDocumentRecord,
-            ReferenceDocumentRecord.id.in_(list(document_ids)),
-            ReferenceDocumentRecord.created_at,
+            document_ids,
             _reference_document_from_record,
         )
 
@@ -188,11 +202,11 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
         :class:`ReferenceConflictError`; any other ``IntegrityError`` is
         propagated unchanged so callers can decide how to handle it.
         """
-        await add_translating_constraint_conflicts(
+        await _add_with_conflict_translation(
             self._session,
             _reference_document_revision_to_record(revision),
             constraints=_REVISION_CONFLICT_CONSTRAINTS,
-            on_conflict=lambda: ReferenceConflictError(_REVISION_CONFLICT_MESSAGE),
+            conflict_message=_REVISION_CONFLICT_MESSAGE,
         )
 
     async def get(self, revision_id: uuid.UUID) -> ReferenceDocumentRevision | None:
@@ -211,19 +225,14 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
         offset: int = 0,
     ) -> list[ReferenceDocumentRevision]:
         """List revisions for one reusable reference document."""
-        statement = (
-            sa
-            .select(ReferenceDocumentRevisionRecord)
-            .where(ReferenceDocumentRevisionRecord.reference_document_id == document_id)
-            .order_by(ReferenceDocumentRevisionRecord.created_at)
-            .offset(offset)
+        return await self._list_paginated(
+            ReferenceDocumentRevisionRecord,
+            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
+            ReferenceDocumentRevisionRecord.created_at,
+            _reference_document_revision_from_record,
+            limit=limit,
+            offset=offset,
         )
-        if limit is not None:
-            statement = statement.limit(limit)
-        result = await self._session.execute(statement)
-        return [
-            _reference_document_revision_from_record(row) for row in result.scalars()
-        ]
 
     async def count_for_document(self, document_id: uuid.UUID) -> int:
         """Count revisions for one reusable reference document."""
@@ -241,12 +250,9 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
         revision_ids: cabc.Collection[uuid.UUID],
     ) -> list[ReferenceDocumentRevision]:
         """List reusable reference document revisions by identifiers."""
-        if not revision_ids:
-            return []
-        return await self._list_where(
+        return await self._list_by_ids(
             ReferenceDocumentRevisionRecord,
-            ReferenceDocumentRevisionRecord.id.in_(list(revision_ids)),
-            ReferenceDocumentRevisionRecord.created_at,
+            revision_ids,
             _reference_document_revision_from_record,
         )
 
@@ -289,11 +295,11 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
         :class:`ReferenceConflictError`; unrelated ``IntegrityError`` instances
         are re-raised so callers can diagnose them.
         """
-        await add_translating_constraint_conflicts(
+        await _add_with_conflict_translation(
             self._session,
             _reference_binding_to_record(binding),
             constraints=_BINDING_CONFLICT_CONSTRAINTS,
-            on_conflict=lambda: ReferenceConflictError(_BINDING_CONFLICT_MESSAGE),
+            conflict_message=_BINDING_CONFLICT_MESSAGE,
         )
 
     async def get(self, binding_id: uuid.UUID) -> ReferenceBinding | None:
@@ -314,22 +320,17 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
     ) -> list[ReferenceBinding]:
         """List reusable reference bindings for one target context."""
         target_field = self._target_field(target_kind)
-        statement = (
-            sa
-            .select(ReferenceBindingRecord)
-            .where(
-                sa.and_(
-                    ReferenceBindingRecord.target_kind == target_kind,
-                    target_field == target_id,
-                )
-            )
-            .order_by(ReferenceBindingRecord.created_at)
-            .offset(offset)
+        return await self._list_paginated(
+            ReferenceBindingRecord,
+            sa.and_(
+                ReferenceBindingRecord.target_kind == target_kind,
+                target_field == target_id,
+            ),
+            ReferenceBindingRecord.created_at,
+            _reference_binding_from_record,
+            limit=limit,
+            offset=offset,
         )
-        if limit is not None:
-            statement = statement.limit(limit)
-        result = await self._session.execute(statement)
-        return [_reference_binding_from_record(row) for row in result.scalars()]
 
     async def list_for_targets(
         self,
