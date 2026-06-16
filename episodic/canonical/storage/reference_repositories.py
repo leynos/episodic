@@ -4,6 +4,12 @@ import typing as typ
 
 import sqlalchemy as sa
 
+from episodic.canonical.constraints import (
+    UQ_REF_DOC_BINDINGS_JOB_REV,
+    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
+    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
+    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
+)
 from episodic.canonical.domain import (
     ReferenceBinding,
     ReferenceBindingTargetKind,
@@ -11,12 +17,14 @@ from episodic.canonical.domain import (
     ReferenceDocumentKind,
     ReferenceDocumentRevision,
 )
+from episodic.canonical.reference_documents.types import ReferenceConflictError
 from episodic.canonical.reference_protocols import (
     ReferenceBindingRepository,
     ReferenceDocumentRepository,
     ReferenceDocumentRevisionRepository,
 )
 
+from .integrity_helpers import add_translating_constraint_conflicts
 from .reference_mappers import (
     _reference_binding_from_record,
     _reference_binding_to_record,
@@ -35,6 +43,43 @@ from .repository_base import _RepositoryBase
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
+
+_REVISION_CONFLICT_CONSTRAINTS = frozenset({
+    "uq_reference_document_revisions_document_hash"
+})
+_REVISION_CONFLICT_MESSAGE = (
+    "Reference document revision conflict: duplicate content hash."
+)
+_BINDING_CONFLICT_CONSTRAINTS = frozenset({
+    UQ_REF_DOC_BINDINGS_SERIES_REV_EFFECTIVE,
+    UQ_REF_DOC_BINDINGS_SERIES_REV_NO_EFFECTIVE,
+    UQ_REF_DOC_BINDINGS_TEMPLATE_REV,
+    UQ_REF_DOC_BINDINGS_JOB_REV,
+})
+_BINDING_CONFLICT_MESSAGE = (
+    "Reference binding conflict: duplicate target/revision binding."
+)
+
+
+async def _add_with_conflict_translation(
+    session: typ.Any,  # noqa: ANN401
+    record: typ.Any,  # noqa: ANN401
+    *,
+    constraints: frozenset[str],
+    conflict_message: str,
+) -> None:
+    """Wrap ``add_translating_constraint_conflicts`` with a fixed error class.
+
+    Inserts *record* inside a savepoint and translates any matching constraint
+    violation to :class:`ReferenceConflictError`.  Unrelated
+    ``IntegrityError`` instances are propagated unchanged.
+    """
+    await add_translating_constraint_conflicts(
+        session,
+        record,
+        constraints=constraints,
+        on_conflict=lambda: ReferenceConflictError(conflict_message),
+    )
 
 
 class SqlAlchemyReferenceDocumentRepository(
@@ -63,18 +108,14 @@ class SqlAlchemyReferenceDocumentRepository(
         offset: int = 0,
     ) -> list[ReferenceDocument]:
         """List reusable reference documents for one series profile."""
-        where_clause = _document_series_filter(series_profile_id, kind)
-        statement = (
-            sa
-            .select(ReferenceDocumentRecord)
-            .where(where_clause)
-            .order_by(ReferenceDocumentRecord.created_at)
-            .offset(offset)
+        return await self._list_paginated(
+            ReferenceDocumentRecord,
+            _document_series_filter(series_profile_id, kind),
+            ReferenceDocumentRecord.created_at,
+            _reference_document_from_record,
+            limit=limit,
+            offset=offset,
         )
-        if limit is not None:
-            statement = statement.limit(limit)
-        result = await self._session.execute(statement)
-        return [_reference_document_from_record(row) for row in result.scalars()]
 
     async def count_for_series(
         self,
@@ -97,12 +138,9 @@ class SqlAlchemyReferenceDocumentRepository(
         document_ids: cabc.Collection[uuid.UUID],
     ) -> list[ReferenceDocument]:
         """List reusable reference documents by identifiers."""
-        if not document_ids:
-            return []
-        return await self._list_where(
+        return await self._list_by_ids(
             ReferenceDocumentRecord,
-            ReferenceDocumentRecord.id.in_(list(document_ids)),
-            ReferenceDocumentRecord.created_at,
+            document_ids,
             _reference_document_from_record,
         )
 
@@ -156,8 +194,20 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
     """Persist reusable reference document revisions using SQLAlchemy."""
 
     async def add(self, revision: ReferenceDocumentRevision) -> None:
-        """Add an immutable reusable reference revision record."""
-        await self._add_record(_reference_document_revision_to_record(revision))
+        """Add an immutable reusable reference revision record.
+
+        The insert runs inside a savepoint and is flushed immediately so a
+        duplicate ``content_hash`` is surfaced here rather than at commit. A
+        matching constraint violation is translated to
+        :class:`ReferenceConflictError`; any other ``IntegrityError`` is
+        propagated unchanged so callers can decide how to handle it.
+        """
+        await _add_with_conflict_translation(
+            self._session,
+            _reference_document_revision_to_record(revision),
+            constraints=_REVISION_CONFLICT_CONSTRAINTS,
+            conflict_message=_REVISION_CONFLICT_MESSAGE,
+        )
 
     async def get(self, revision_id: uuid.UUID) -> ReferenceDocumentRevision | None:
         """Fetch a reusable reference revision by identifier."""
@@ -175,19 +225,14 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
         offset: int = 0,
     ) -> list[ReferenceDocumentRevision]:
         """List revisions for one reusable reference document."""
-        statement = (
-            sa
-            .select(ReferenceDocumentRevisionRecord)
-            .where(ReferenceDocumentRevisionRecord.reference_document_id == document_id)
-            .order_by(ReferenceDocumentRevisionRecord.created_at)
-            .offset(offset)
+        return await self._list_paginated(
+            ReferenceDocumentRevisionRecord,
+            ReferenceDocumentRevisionRecord.reference_document_id == document_id,
+            ReferenceDocumentRevisionRecord.created_at,
+            _reference_document_revision_from_record,
+            limit=limit,
+            offset=offset,
         )
-        if limit is not None:
-            statement = statement.limit(limit)
-        result = await self._session.execute(statement)
-        return [
-            _reference_document_revision_from_record(row) for row in result.scalars()
-        ]
 
     async def count_for_document(self, document_id: uuid.UUID) -> int:
         """Count revisions for one reusable reference document."""
@@ -205,12 +250,9 @@ class SqlAlchemyReferenceDocumentRevisionRepository(
         revision_ids: cabc.Collection[uuid.UUID],
     ) -> list[ReferenceDocumentRevision]:
         """List reusable reference document revisions by identifiers."""
-        if not revision_ids:
-            return []
-        return await self._list_where(
+        return await self._list_by_ids(
             ReferenceDocumentRevisionRecord,
-            ReferenceDocumentRevisionRecord.id.in_(list(revision_ids)),
-            ReferenceDocumentRevisionRecord.created_at,
+            revision_ids,
             _reference_document_revision_from_record,
         )
 
@@ -245,8 +287,20 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
                 raise ValueError(msg)
 
     async def add(self, binding: ReferenceBinding) -> None:
-        """Add a reusable reference binding record."""
-        await self._add_record(_reference_binding_to_record(binding))
+        """Add a reusable reference binding record.
+
+        The insert runs inside a savepoint and is flushed immediately so a
+        duplicate target/revision binding fails fast. Conflicts on any of the
+        binding uniqueness constraints are translated to
+        :class:`ReferenceConflictError`; unrelated ``IntegrityError`` instances
+        are re-raised so callers can diagnose them.
+        """
+        await _add_with_conflict_translation(
+            self._session,
+            _reference_binding_to_record(binding),
+            constraints=_BINDING_CONFLICT_CONSTRAINTS,
+            conflict_message=_BINDING_CONFLICT_MESSAGE,
+        )
 
     async def get(self, binding_id: uuid.UUID) -> ReferenceBinding | None:
         """Fetch a reusable reference binding by identifier."""
@@ -266,22 +320,17 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
     ) -> list[ReferenceBinding]:
         """List reusable reference bindings for one target context."""
         target_field = self._target_field(target_kind)
-        statement = (
-            sa
-            .select(ReferenceBindingRecord)
-            .where(
-                sa.and_(
-                    ReferenceBindingRecord.target_kind == target_kind,
-                    target_field == target_id,
-                )
-            )
-            .order_by(ReferenceBindingRecord.created_at)
-            .offset(offset)
+        return await self._list_paginated(
+            ReferenceBindingRecord,
+            sa.and_(
+                ReferenceBindingRecord.target_kind == target_kind,
+                target_field == target_id,
+            ),
+            ReferenceBindingRecord.created_at,
+            _reference_binding_from_record,
+            limit=limit,
+            offset=offset,
         )
-        if limit is not None:
-            statement = statement.limit(limit)
-        result = await self._session.execute(statement)
-        return [_reference_binding_from_record(row) for row in result.scalars()]
 
     async def list_for_targets(
         self,

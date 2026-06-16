@@ -4,28 +4,22 @@ import datetime as dt
 import typing as typ
 import uuid
 
-from sqlalchemy.exc import IntegrityError
-
 from episodic.canonical.domain import ReferenceDocumentRevision
 
 from .helpers import (
-    _constraint_name,
     _parse_uuid,
     _require_reference_document,
     _require_reference_revision,
     _validate_pagination,
 )
-from .types import (
-    ReferenceConflictError,
-    ReferenceDocumentRevisionData,
-    ReferenceDocumentRevisionListRequest,
-)
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
-
-_REVISION_CONTENT_HASH_CONSTRAINT = "uq_reference_document_revisions_document_hash"
+    from .types import (
+        ReferenceDocumentRevisionData,
+        ReferenceDocumentRevisionListRequest,
+    )
 
 
 async def create_reference_document_revision(
@@ -35,7 +29,13 @@ async def create_reference_document_revision(
     owner_series_profile_id: str,
     data: ReferenceDocumentRevisionData,
 ) -> ReferenceDocumentRevision:
-    """Create an immutable revision for one reference document."""
+    """Create an immutable revision for one reference document.
+
+    Duplicate ``content_hash`` violations are translated by the storage
+    adapter into ``ReferenceConflictError`` before they reach this layer, so
+    the service simply propagates the domain exception when the conflict
+    occurs.
+    """
     parsed_document_id = _parse_uuid(document_id, "document_id")
     parsed_owner_id = _parse_uuid(owner_series_profile_id, "owner_series_profile_id")
     document = await _require_reference_document(
@@ -54,15 +54,8 @@ async def create_reference_document_revision(
         created_at=dt.datetime.now(dt.UTC),
     )
 
-    try:
-        await uow.reference_document_revisions.add(revision)
-        await uow.commit()
-    except IntegrityError as exc:
-        await uow.rollback()
-        if _constraint_name(exc) != _REVISION_CONTENT_HASH_CONSTRAINT:
-            raise
-        msg = "Reference document revision conflict: duplicate content hash."
-        raise ReferenceConflictError(msg) from exc
+    await uow.reference_document_revisions.add(revision)
+    await uow.commit()
 
     return revision
 
