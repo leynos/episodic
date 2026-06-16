@@ -198,8 +198,12 @@ async def test_reference_revision_repository_translates_duplicate_content_hash(
         with pytest.raises(
             ReferenceConflictError,
             match=r"duplicate content hash",
-        ):
+        ) as exc_info:
             await uow.reference_document_revisions.add(duplicate_revision)
+
+    assert isinstance(exc_info.value.__cause__, IntegrityError), (
+        "expected the original IntegrityError to be chained as the cause"
+    )
 
 
 @pytest.mark.asyncio

@@ -146,8 +146,12 @@ async def test_reference_binding_repository_translates_duplicate_target_revision
         with pytest.raises(
             ReferenceConflictError,
             match=r"duplicate target/revision binding",
-        ):
+        ) as exc_info:
             await uow.reference_bindings.add(duplicate_binding)
+
+    assert isinstance(exc_info.value.__cause__, IntegrityError), (
+        "expected the original IntegrityError to be chained as the cause"
+    )
 
 
 @pytest.mark.asyncio
