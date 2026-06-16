@@ -154,10 +154,19 @@ async def _update_versioned_entity[EntityT: _VersionedEntity, HistoryT](  # noqa
     )
     # The storage adapter translates revision-uniqueness violations into
     # `RevisionConflictError`, so this domain helper does not need to inspect
-    # ORM-level integrity errors. Other failures propagate unchanged.
-    await entity_repo.update(updated_entity)
-    await history_repo.add(history_entry)
-    await uow.commit()
+    # ORM-level integrity errors. The adapter's savepoint only unwinds the
+    # failed history insert, leaving the preceding entity update pending in the
+    # outer transaction. Roll the unit of work back before propagating the
+    # conflict so a caller that catches it cannot later commit the entity
+    # update without its matching history revision. Other failures propagate
+    # unchanged.
+    try:
+        await entity_repo.update(updated_entity)
+        await history_repo.add(history_entry)
+        await uow.commit()
+    except RevisionConflictError:
+        await uow.rollback()
+        raise
     return updated_entity, next_revision
 
 
