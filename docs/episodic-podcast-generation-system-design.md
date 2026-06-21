@@ -637,6 +637,12 @@ an accepted design change.
 - The canonical REST adapter exposes `/health/live` and `/health/ready` so
   deployment platforms can distinguish process liveness from infrastructure
   readiness.
+- Health observations are represented in `episodic.canonical.health`, keeping
+  probe status independent of the Falcon adapter. The HTTP adapter maps the
+  domain health report to the stable JSON payload and status code contract.
+- Nile Valley preview and GitOps deployment use the chart under
+  `charts/episodic`, the non-root Docker image, and the local `k3d`
+  orchestration described in `docs/local-k3d-preview-design.md`.
 - CLI client provides ergonomics for ingest, generate, QA review, and approval
   commands.
 - Web console surfaces dashboards, approval queues, and configuration editors.
@@ -1980,8 +1986,8 @@ exercise the same semantics from a scenario-driven perspective.
 
 ### Multi-source ingestion service implementation
 
-The multi-source ingestion service composes a higher-level orchestrator
-(`ingest_multi_source`) around the existing `ingest_sources` persistence
+The multi-source ingestion service composes a higher-level orchestrator (
+`ingest_multi_source`) around the existing `ingest_sources` persistence
 function. Three Protocol-based port interfaces define the pipeline extension
 points:
 

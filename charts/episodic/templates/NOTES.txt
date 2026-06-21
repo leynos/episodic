@@ -1,0 +1,16 @@
+Episodic has been deployed.
+
+{{- if .Values.ingress.enabled }}
+Ingress URLs:
+{{- range .Values.ingress.hosts }}
+  http://{{ .host }}
+{{- end }}
+{{- else }}
+Port-forward access:
+  kubectl port-forward svc/{{ include "episodic.fullname" . }} 8080:{{ .Values.service.port }}
+  Open http://localhost:8080
+{{- end }}
+
+Health endpoints:
+  Liveness:  /health/live
+  Readiness: /health/ready

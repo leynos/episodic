@@ -71,7 +71,7 @@ def _register_health_routes(app: asgi.App, dependencies: ApiDependencies) -> Non
     app.add_route("/health/live", HealthLiveResource())
     app.add_route(
         "/health/ready",
-        HealthReadyResource(dependencies.readiness_probes),
+        HealthReadyResource(dependencies.readiness_observer()),
     )
 
 

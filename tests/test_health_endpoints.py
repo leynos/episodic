@@ -5,6 +5,7 @@ import typing as typ
 
 import httpx
 import pytest
+from falcon import asgi
 
 import tests.test_http_service_scaffold_support as scaffold_support
 
@@ -123,4 +124,38 @@ async def test_health_ready_route_treats_probe_exceptions_as_failures() -> None:
     assert response.json() == {
         "status": "error",
         "checks": [{"name": "database", "status": "error"}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_health_ready_route_uses_domain_health_observer() -> None:
+    """Adapt a domain observer to the established Falcon readiness contract."""
+    from episodic.api.resources.health import HealthReadyResource
+    from episodic.canonical.health import HealthCheck, HealthReport, HealthStatus
+
+    class StubHealthObserver:
+        async def observe(self) -> HealthReport:
+            await asyncio.sleep(0)
+            return HealthReport.from_checks((
+                HealthCheck("database", HealthStatus.OK),
+                HealthCheck("queue", HealthStatus.ERROR),
+            ))
+
+    resource = HealthReadyResource(StubHealthObserver())
+    app = asgi.App()
+    app.add_route("/health/ready", resource)
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "error",
+        "checks": [
+            {"name": "database", "status": "ok"},
+            {"name": "queue", "status": "error"},
+        ],
     }

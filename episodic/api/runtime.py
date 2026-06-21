@@ -36,6 +36,9 @@ class RuntimeConfig:
 _SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
 _SUPPORTED_ASYNC_POSTGRES_DRIVERS = frozenset({"asyncpg", "psycopg"})
 _DEFAULT_ASYNC_POSTGRES_DRIVER = "psycopg"
+GRANIAN_FACTORY_TARGET = "episodic.api.runtime:create_app_from_env"
+GRANIAN_INTERFACE = "asgi"
+HTTP_BIND_PORT = 8080
 
 
 class PsycopgConnectKwargs(typ.TypedDict, total=False):

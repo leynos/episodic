@@ -210,12 +210,14 @@ def given_granian_service_running(
             http_service_scaffold_context.object_store_root
         ),
     }
+    from episodic.api import runtime
+
     http_service_scaffold_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
         [
             granian_path,
-            "episodic.api.runtime:create_app_from_env",
+            runtime.GRANIAN_FACTORY_TARGET,
             "--interface",
-            "asgi",
+            runtime.GRANIAN_INTERFACE,
             "--factory",
             "--host",
             "127.0.0.1",

@@ -45,10 +45,10 @@ This guide will cover:
   profile. TEI headers automatically capture provenance metadata including
   source priorities, ingestion timestamps, and reviewer identities. Source
   normalisation fan-out now uses metadata-aware asyncio task creation, so
-  custom event-loop task factories can receive operation metadata
-  (`operation_name`, `correlation_id`, `priority_hint`) for diagnostics.
-  Storage identifiers generated during canonical ingestion use time-ordered
-  UUIDv7 values for improved chronological locality.
+  custom event-loop task factories can receive operation metadata (
+  `operation_name`, `correlation_id`, `priority_hint`) for diagnostics. Storage
+  identifiers generated during canonical ingestion use time-ordered UUIDv7
+  values for improved chronological locality.
 - Large canonical TEI XML payloads are compressed with standard-library
   Zstandard in persistence storage while API and domain read paths continue to
   return plain text transparently.
@@ -307,6 +307,46 @@ Health endpoints:
 - `GET /health/ready` returns `503 Service Unavailable` when a readiness probe
   fails, so deployment platforms can keep traffic away from an unhealthy
   instance.
+
+Container and Kubernetes deployment:
+
+- The production image runs Granian on port `8080` as a non-root user.
+- The image health check calls `/health/live` inside the container.
+- The Helm chart lives under `charts/episodic` and exposes configurable
+  ingress, non-secret configuration, existing Secret references, and
+  ExternalSecret support.
+- Default chart probes call `/health/live` and `/health/ready`.
+
+Local Kubernetes preview:
+
+```shell
+make local-k8s-up
+make local-k8s-status
+make local-k8s-logs
+make local-k8s-down
+```
+
+The preview workflow uses `k3d`, Docker, `kubectl`, Helm, and the local chart
+values in `charts/episodic/values.local.yaml` by default. It builds and deploys
+the `localhost/episodic:local` image into the `episodic-preview` cluster,
+bootstraps a local-only Postgres Service and StatefulSet, and exposes ingress
+through `http://episodic.localhost:8088`.
+
+On rootless Podman hosts, use the kind provider directly:
+
+```shell
+make local-k8s-up LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind
+kubectl --context kind-episodic-preview --namespace episodic \
+  port-forward svc/episodic 8088:80
+```
+
+Kind does not install the `traefik` ingress controller used by the local chart
+values, so the preview URL is reached through the printed port-forward command.
+
+If a cluster with the configured name already exists, `local-k8s-up` reuses it
+only when its ingress port matches the requested port. `local-k8s-status` and
+`local-k8s-logs` report a missing cluster clearly when the preview has not been
+created yet.
 
 ### Logging
 
