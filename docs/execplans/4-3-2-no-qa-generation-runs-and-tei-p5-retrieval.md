@@ -231,7 +231,7 @@ when any of the following is breached.
   `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
   `make nixie`. CodeRabbit review completed with zero findings after the
   required rate-limit backoff and retry.
-- [ ] (in progress, 2026-06-24) M2a: Durable generation-run and event
+- [x] (completed, 2026-06-24) M2a: Durable generation-run and event
   persistence. Initial orientation found that storage models are surfaced
   through `episodic/canonical/storage/models.py` for Alembic metadata, and
   `SqlAlchemyUnitOfWork` wires repositories during `__aenter__`, matching the
@@ -244,6 +244,7 @@ when any of the following is breached.
   checkpoint adapter split, the focused storage/port/lifecycle suite passed with
   `29 passed in 4.29s`; full deterministic gates passed: `make check-fmt`,
   `make typecheck`, `make lint`, `make test`, and `make check-migrations`.
+  CodeRabbit review completed with zero findings.
 - [ ] (pending) M2b: Episode TEI revisioning columns and optimistic update.
 - [ ] (pending) M3: Draft script generator port and TEI persistence service.
 - [ ] (pending) M4: In-process launcher, lifecycle events, cost wiring, and
@@ -1279,6 +1280,9 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
   reported `975 passed, 2 skipped, 7 xfailed in 73.81s`; and
   `make check-migrations` exited cleanly after applying migrations through
   `20260624_000010`.
+
+- M2a CodeRabbit evidence (2026-06-24): `coderabbit review --agent` ended with
+  `{"type":"complete","status":"review_completed","findings":0}`.
 
 ## Outcomes & retrospective
 
