@@ -231,7 +231,19 @@ when any of the following is breached.
   `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
   `make nixie`. CodeRabbit review completed with zero findings after the
   required rate-limit backoff and retry.
-- [ ] (pending) M2a: Durable generation-run and event persistence.
+- [ ] (in progress, 2026-06-24) M2a: Durable generation-run and event
+  persistence. Initial orientation found that storage models are surfaced
+  through `episodic/canonical/storage/models.py` for Alembic metadata, and
+  `SqlAlchemyUnitOfWork` wires repositories during `__aenter__`, matching the
+  pattern M2a should extend. Red storage tests were added at
+  `tests/canonical_storage/test_generation_runs.py`; the focused run failed
+  during collection because `GenerationEventRecord` is not yet exported from
+  `episodic.canonical.storage`. Green focused evidence: the new SQLAlchemy
+  storage tests passed with `8 passed in 3.53s`, and the updated generation-run
+  port contract/property tests passed with `17 passed in 0.68s`. After the
+  checkpoint adapter split, the focused storage/port/lifecycle suite passed with
+  `29 passed in 4.29s`; full deterministic gates passed: `make check-fmt`,
+  `make typecheck`, `make lint`, `make test`, and `make check-migrations`.
 - [ ] (pending) M2b: Episode TEI revisioning columns and optimistic update.
 - [ ] (pending) M3: Draft script generator port and TEI persistence service.
 - [ ] (pending) M4: In-process launcher, lifecycle events, cost wiring, and
@@ -301,6 +313,18 @@ when any of the following is breached.
   recoverable CodeRabbit rate limit. Impact: the implementation followed the
   required backoff command, `vsleep $(shuf -i 45-90 -n 1)m`, then retried the
   review successfully before starting M2a.
+- Observation: adding SQLAlchemy persistence plus guarded run claiming pushed
+  the in-memory generation-run adapter over the 400-line project limit. Impact:
+  the checkpoint methods were extracted into
+  `episodic/canonical/adapters/generation_checkpoints.py` as a mixin, keeping
+  the run/event adapter focused while preserving the existing public in-memory
+  test adapter surface.
+- Observation: SQL event sequence allocation cannot rely on `max(seq) + 1`
+  alone; concurrent appenders could read the same maximum and one would fail
+  the unique `(generation_run_id, seq)` constraint. Impact: the SQLAlchemy
+  store locks the owning generation-run row before allocating the next event
+  sequence, serialising appenders per run without introducing a separate
+  sequence table.
 
 ## Decision log
 
@@ -357,6 +381,20 @@ when any of the following is breached.
   approval gate is satisfied by the explicit implementation request, and the
   requester also required the plan to remain current during delivery.
   Date/Author: 2026-06-24, implementation agent.
+- Decision: preserve the existing `update_run_status(...) -> GenerationRun`
+  port contract for ordinary lifecycle updates and add
+  `claim_run_for_execution(...) -> GenerationRun | None` for the guarded
+  `pending -> running` transition. Rationale: this gives the launcher an
+  explicit compare-and-set operation that reports whether it won without
+  weakening the existing status-update API. `None` means another worker claimed
+  the run first; missing or terminal runs still raise the existing domain
+  errors. Date/Author: 2026-06-24, implementation agent.
+- Decision: allocate SQL generation-event sequences while holding a row-level
+  lock on the parent `generation_runs` record. Rationale: the append-only log
+  requires gap-free, monotonic sequence numbers per run; locking the parent run
+  row is the smallest durable serialisation point already present in the schema
+  and keeps the event table append-only. Date/Author: 2026-06-24,
+  implementation agent.
 
 ## Context and orientation
 
@@ -1203,6 +1241,44 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
   recoverable `rate_limit` response; after the required `vsleep` backoff, the
   retry ended with
   `{"type":"complete","status":"review_completed","findings":0}`.
+
+- M2a red evidence (2026-06-24):
+
+  ```plaintext
+  E   ImportError: cannot import name 'GenerationEventRecord' from
+  E   'episodic.canonical.storage'
+  ```
+
+- M2a focused green evidence (2026-06-24):
+
+  ```plaintext
+  $ uv run pytest tests/canonical_storage/test_generation_runs.py -q
+  ........                                                                 [100%]
+  8 passed in 3.53s
+
+  $ uv run pytest tests/test_generation_run_port_contract.py \
+      tests/test_generation_run_properties.py -q
+  .................                                                        [100%]
+  17 passed in 0.68s
+
+  $ uv run pytest tests/canonical_storage/test_generation_runs.py \
+      tests/test_generation_run_port_contract.py \
+      tests/test_generation_run_properties.py \
+      tests/steps/test_generation_run_lifecycle_steps.py -q
+  .............................                                            [100%]
+  29 passed in 4.29s
+  ```
+
+- M2a migration gate evidence (2026-06-24): `make check-migrations` applied
+  migrations through `20260624_000010` and exited cleanly with no schema drift
+  reported.
+
+- M2a deterministic gate evidence (2026-06-24): `make check-fmt` reported
+  `426 files already formatted`; `make typecheck` reported `All checks passed!`;
+  `make lint` passed Hecate and Ruff and rated Pylint `10.00/10`; `make test`
+  reported `975 passed, 2 skipped, 7 xfailed in 73.81s`; and
+  `make check-migrations` exited cleanly after applying migrations through
+  `20260624_000010`.
 
 ## Outcomes & retrospective
 

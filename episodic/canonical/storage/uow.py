@@ -17,6 +17,7 @@ import typing as typ
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.logging import get_logger
 
+from .generation_runs import SqlAlchemyGenerationRunStore
 from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
@@ -90,6 +91,8 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for immutable reusable reference document revisions.
     reference_bindings : SqlAlchemyReferenceBindingRepository
         Repository for reusable reference binding persistence.
+    generation_runs : SqlAlchemyGenerationRunStore
+        Repository and event log for durable generation runs.
     """
 
     def __init__(
@@ -143,6 +146,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
                 monotonic_clock=self._clock,
             ),
         )
+        self.generation_runs = SqlAlchemyGenerationRunStore(self._session)
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
             self._session,
             metrics=self._metrics,

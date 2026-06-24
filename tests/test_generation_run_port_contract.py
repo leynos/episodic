@@ -157,6 +157,17 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         """Raise for all updates."""
         raise RunNotFound(run_id)
 
+    async def claim_run_for_execution(
+        self,
+        run_id: uuid.UUID,
+        *,
+        current_node: str | None,
+        started_at: dt.datetime,
+        lease_expires_at: dt.datetime | None,
+    ) -> GenerationRun | None:
+        """Raise for all execution claims."""
+        raise RunNotFound(run_id)
+
     async def append_event(
         self,
         run_id: uuid.UUID,
@@ -302,6 +313,33 @@ class TestGenerationRunRepository:
         """Run pagination offsets must be non-negative."""
         with pytest.raises(ValueError, match="offset"):
             await store.list_runs(uuid.uuid7(), offset=-1)
+
+    @pytest.mark.asyncio
+    async def test_claim_run_for_execution_is_first_writer_wins(
+        self,
+        store: InMemoryGenerationRunStore,
+    ) -> None:
+        """A pending run can be claimed once for execution."""
+        run = await store.create_run(make_generation_run())
+
+        claimed = await store.claim_run_for_execution(
+            run.id,
+            current_node="draft",
+            started_at=NOW,
+            lease_expires_at=NOW + dt.timedelta(minutes=5),
+        )
+        lost = await store.claim_run_for_execution(
+            run.id,
+            current_node="draft",
+            started_at=NOW,
+            lease_expires_at=NOW + dt.timedelta(minutes=5),
+        )
+
+        assert claimed is not None
+        assert claimed.status is GenerationRunStatus.RUNNING
+        assert claimed.current_node == "draft"
+        assert claimed.started_at == NOW
+        assert lost is None
 
 
 class TestGenerationEventLog:
