@@ -210,7 +210,7 @@ when any of the following is breached.
 
 ## Progress
 
-- [ ] (in progress, 2026-06-24) M0: Branch, plan baseline, and red
+- [x] (completed, 2026-06-24) M0: Branch, plan baseline, and red
   end-to-end scaffold. Implementation approval was given in this Lody session;
   the branch already had the requested name, and branch tracking plus
   PR/session metadata were aligned. The red behavioural scaffold now exists at
@@ -218,8 +218,8 @@ when any of the following is breached.
   `tests/steps/test_no_qa_generation_slice.py`; the focused run produced
   `7 xfailed in 0.48s` as expected. Deterministic gates passed:
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
-  `make markdownlint`, and `make nixie`. CodeRabbit review remains before M0 is
-  complete.
+  `make markdownlint`, and `make nixie`. CodeRabbit review completed with zero
+  findings.
 - [ ] (pending) M1: Domain model extensions (quality mode, QA status,
   rationale).
 - [ ] (pending) M2a: Durable generation-run and event persistence.
@@ -1156,6 +1156,10 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
   Pylint `10.00/10`; `make test` reported
   `962 passed, 2 skipped, 7 xfailed in 74.14s`; `make markdownlint` reported
   `Summary: 0 error(s)`; and `make nixie` reported all diagrams validated.
+
+- M0 CodeRabbit evidence (2026-06-24):
+  `coderabbit review --agent` ended with
+  `{"type":"complete","status":"review_completed","findings":0}`.
 
 ## Outcomes & retrospective
 
