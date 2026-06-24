@@ -263,13 +263,21 @@ when any of the following is breached.
   `episodic.generation.draft_script` and
   `episodic.canonical.generation_persistence` modules. Green focused evidence:
   `tests/test_draft_script_generation.py` and
-  `tests/test_generation_persistence.py` passed with `9 passed in 2.82s`.
-  Full deterministic gates passed: `make check-fmt`, `make typecheck`,
-  `make lint`, `make test` (`988 passed, 2 skipped, 7 xfailed`),
-  `make markdownlint`, and `make nixie`. CodeRabbit review completed with zero
-  findings.
-- [ ] (pending) M4: In-process launcher, lifecycle events, cost wiring, and
-  observability.
+  `tests/test_generation_persistence.py` passed with `9 passed in 2.82s`. Full
+  deterministic gates passed: `make check-fmt`, `make typecheck`, `make lint`,
+  `make test` (`988 passed, 2 skipped, 7 xfailed`), `make markdownlint`, and
+  `make nixie`. CodeRabbit review completed with zero findings.
+- [ ] (implemented, deterministic gates passed, 2026-06-24) M4: In-process
+  launcher, lifecycle events, cost wiring, and observability. The launcher now
+  claims pending no-QA runs, records `run.started`, emits `draft.generated`
+  before TEI persistence, persists valid TEI, records cost ledger entries when
+  a recorder is configured, and marks terminal success/failure states with
+  stable error categories. Green focused evidence:
+  `tests/test_generation_run_launcher.py` and
+  `tests/test_env_runtime_wiring.py` passed with `15 passed in 14.24s`. Full
+  deterministic gates passed: `make check-fmt`, `make typecheck`, `make lint`,
+  `make test` (`994 passed, 2 skipped, 7 xfailed`), `make markdownlint`, and
+  `make nixie`. CodeRabbit review remains pending for this milestone.
 - [ ] (pending) M5: Generation-run REST endpoints with idempotency (incl.
   Location/Retry-After replay).
 - [ ] (pending) M6: Episode TEI retrieval endpoint with content negotiation.
@@ -364,6 +372,12 @@ when any of the following is breached.
   `NULL` target episode as the normal pre-generation state and allocates the
   episode id while projecting attached intake sources into canonical source
   documents.
+- Observation: M4 source documents preserve rich source text in
+  `SourceDocument.metadata["content"]` when it is available, while older or URI
+  only sources may only have `source_uri`. Impact: the launcher builds
+  `DraftScriptSource.content` from non-blank metadata content first, falling
+  back to `source_uri` so legacy rows still produce deterministic generator
+  requests.
 
 ## Decision log
 

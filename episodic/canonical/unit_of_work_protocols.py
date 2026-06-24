@@ -5,6 +5,8 @@ import typing as typ
 if typ.TYPE_CHECKING:
     from types import TracebackType
 
+    from episodic.cost.ports import CostLedgerPort
+
     from .entity_protocols import (
         ApprovalEventRepository,
         EpisodeRepository,
@@ -51,6 +53,7 @@ class CanonicalUnitOfWork(typ.Protocol):
     ingestion_job_sources: IngestionJobSourceRepository
     idempotency: IdempotencyStore
     generation_runs: GenerationRunEventStore
+    cost_ledger: CostLedgerPort
 
     async def __aenter__(self) -> CanonicalUnitOfWork:
         """Enter the unit-of-work context."""
