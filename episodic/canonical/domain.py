@@ -4,6 +4,7 @@ import dataclasses as dc
 import enum
 import typing as typ
 
+from .generation_quality import QaStatus, QualityMode
 from .generation_run_errors import CheckpointAlreadyTerminal
 
 if typ.TYPE_CHECKING:
@@ -147,12 +148,20 @@ class GenerationRun:
     started_at: dt.datetime | None
     ended_at: dt.datetime | None
     error_message: str | None
+    quality_mode: QualityMode = QualityMode.DRAFT_WITHOUT_QA
+    qa_status: QaStatus | None = None
+    skip_qa_rationale: str | None = None
 
     def __post_init__(self) -> None:
         """Validate generation-run invariants."""
         _validate_non_empty_text(self.actor, "actor")
         _validate_optional_text(self.current_node, "current_node")
         _validate_optional_text(self.error_message, "error_message")
+        _validate_draft_without_qa_metadata(
+            quality_mode=self.quality_mode,
+            qa_status=self.qa_status,
+            skip_qa_rationale=self.skip_qa_rationale,
+        )
         _copy_json_mapping(self, "budget_snapshot")
         _copy_json_mapping(self, "configuration")
 
@@ -616,6 +625,25 @@ def _validate_optional_text(value: str | None, field_name: str) -> None:
     """Validate an optional string field when present."""
     if value is not None:
         _validate_non_empty_text(value, field_name)
+
+
+def _validate_draft_without_qa_metadata(
+    *,
+    quality_mode: QualityMode,
+    qa_status: QaStatus | None,
+    skip_qa_rationale: str | None,
+) -> None:
+    """Validate the no-QA slice's required audit metadata."""
+    if quality_mode is not QualityMode.DRAFT_WITHOUT_QA:
+        msg = f"Unsupported quality_mode: {quality_mode!s}."
+        raise ValueError(msg)
+    if qa_status is not QaStatus.SKIPPED:
+        msg = "qa_status must be skipped for draft_without_qa runs."
+        raise ValueError(msg)
+    if skip_qa_rationale is None:
+        msg = "skip_qa_rationale must be a non-empty string."
+        raise ValueError(msg)
+    _validate_non_empty_text(skip_qa_rationale, "skip_qa_rationale")
 
 
 def _copy_json_mapping(owner: object, field_name: str) -> None:

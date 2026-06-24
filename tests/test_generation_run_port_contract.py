@@ -26,6 +26,7 @@ from episodic.canonical.domain import (
     GenerationRunStatus,
     JsonMapping,
 )
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import CheckpointNotFound, RunNotFound
 from episodic.canonical.generation_run_ports import (
     EventSeq,
@@ -75,6 +76,9 @@ def make_generation_run(
         started_at=None,
         ended_at=None,
         error_message=None,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="No-QA vertical-slice draft.",
     )
 
 
