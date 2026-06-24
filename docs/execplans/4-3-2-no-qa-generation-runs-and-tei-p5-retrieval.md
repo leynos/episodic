@@ -213,8 +213,13 @@ when any of the following is breached.
 - [ ] (in progress, 2026-06-24) M0: Branch, plan baseline, and red
   end-to-end scaffold. Implementation approval was given in this Lody session;
   the branch already had the requested name, and branch tracking plus
-  PR/session metadata are being aligned before the red behavioural scaffold is
-  added.
+  PR/session metadata were aligned. The red behavioural scaffold now exists at
+  `tests/features/no_qa_generation_slice.feature` and
+  `tests/steps/test_no_qa_generation_slice.py`; the focused run produced
+  `7 xfailed in 0.48s` as expected. Deterministic gates passed:
+  `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+  `make markdownlint`, and `make nixie`. CodeRabbit review remains before M0 is
+  complete.
 - [ ] (pending) M1: Domain model extensions (quality mode, QA status,
   rationale).
 - [ ] (pending) M2a: Durable generation-run and event persistence.
@@ -1136,6 +1141,21 @@ Capture as work proceeds: the M0 red xfail transcript; the M2a/M2b
 `make check-migrations` clean output; the M3 emitted-TEI snapshot diff; the M4
 detached-session test transcript; and the M7 green behavioural-slice transcript
 on a `vidaimock`-equipped host (mandatory acceptance evidence).
+
+- M0 red scaffold evidence (2026-06-24):
+
+  ```plaintext
+  $ uv run pytest tests/steps/test_no_qa_generation_slice.py -q
+  xxxxxxx                                                                  [100%]
+  7 xfailed in 0.48s
+  ```
+
+- M0 deterministic gate evidence (2026-06-24):
+  `make check-fmt` reported `420 files already formatted`; `make typecheck`
+  reported `All checks passed!`; `make lint` passed Hecate and Ruff and rated
+  Pylint `10.00/10`; `make test` reported
+  `962 passed, 2 skipped, 7 xfailed in 74.14s`; `make markdownlint` reported
+  `Summary: 0 error(s)`; and `make nixie` reported all diagrams validated.
 
 ## Outcomes & retrospective
 
