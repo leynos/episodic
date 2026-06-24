@@ -1,11 +1,10 @@
 # Implement no-QA generation runs and TEI-P5 retrieval (4.3.2)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -82,19 +81,19 @@ escalation, not a workaround.
 
 - Respect the hexagonal architecture boundary rules enforced by
   [ADR 014](../adr/adr-014-hexagonal-architecture-enforcement.md) and
-  `make lint` (`make check-architecture`). Domain code in
-  `episodic/canonical/` and `episodic/generation/` must not import Falcon,
-  SQLAlchemy, httpx, Celery, or LangGraph. The architecture groups are defined
-  by exact module-prefix lists in `pyproject.toml` (the `domain_ports`,
-  `application`, `outbound_adapter`, `inbound_adapter`, and `composition_root`
-  groups). There is **no blanket `episodic.canonical` prefix**, so every new
-  module must be added to the correct prefix list in `pyproject.toml` or it
-  falls outside enforcement.
+  `make lint` (`make check-architecture`). Domain code in `episodic/canonical/`
+  and `episodic/generation/` must not import Falcon, SQLAlchemy, httpx, Celery,
+  or LangGraph. The architecture groups are defined by exact module-prefix
+  lists in `pyproject.toml` (the `domain_ports`, `application`,
+  `outbound_adapter`, `inbound_adapter`, and `composition_root` groups). There
+  is **no blanket `episodic.canonical` prefix**, so every new module must be
+  added to the correct prefix list in `pyproject.toml` or it falls outside
+  enforcement.
 - Preserve TEI-P5 as the canonical episode artefact. All script content is
   produced, stored, and served as valid TEI-P5 XML parsed, validated, and
   emitted through the `tei-rapporteur` library (see
-  [TEI Rapporteur users' guide](../tei-rapporteur-users-guide.md)). Do not add a
-  second TEI parser or hand-roll XML traversal (the spoken-text semantic
+  [TEI Rapporteur users' guide](../tei-rapporteur-users-guide.md)). Do not add
+  a second TEI parser or hand-roll XML traversal (the spoken-text semantic
   contract is owned by
   [ADR 006](../adr/adr-006-chrono-spoken-text-semantics.md)).
 - Honour the ADR 009 API contract exactly: `quality_mode=draft_without_qa` runs
@@ -156,18 +155,16 @@ when any of the following is breached.
   request's unit of work or session, causing use-after-free on a recycled
   connection (silent cross-episode corruption or `IllegalStateChangeError`).
   Severity: high. Likelihood: high (this is the natural-but-wrong
-  implementation).
-  Mitigation: a hard constraint (above) plus a dedicated Milestone 4 test that
-  launches through real `asyncio.create_task` against py-pglite and asserts the
-  task writes through its own session while the request unit of work is already
-  closed. The "drive deterministically" shortcut covers logic only; one test
-  must exercise the detached-session path.
+  implementation). Mitigation: a hard constraint (above) plus a dedicated
+  Milestone 4 test that launches through real `asyncio.create_task` against
+  py-pglite and asserts the task writes through its own session while the
+  request unit of work is already closed. The "drive deterministically"
+  shortcut covers logic only; one test must exercise the detached-session path.
 - Risk: a run is left stuck in `running` after a deploy/restart/crash, its
   idempotency record stuck `InFlight`, so every retry with the same key returns
-  `409` forever and the client cannot resubmit.
-  Severity: high. Likelihood: high (happens on every deploy overlapping an
-  in-flight run).
-  Mitigation: persist `started_at` (indexed) and add `lease_expires_at` and
+  `409` forever and the client cannot resubmit. Severity: high. Likelihood:
+  high (happens on every deploy overlapping an in-flight run). Mitigation:
+  persist `started_at` (indexed) and add `lease_expires_at` and
   `error_category` columns now (additive); make `pending → running` a
   conditional update; emit a startup stuck-run gauge (count of `running` older
   than a threshold) so the state is alertable; document a manual-fail runbook.
@@ -176,48 +173,48 @@ when any of the following is breached.
   require this regardless of when the worker lands).
 - Risk: idempotency partial failure — the run row is created but task scheduling
   fails, orphaning a `pending` run while the idempotency record is `failed` or
-  `complete`.
-  Severity: high. Likelihood: medium.
-  Mitigation: specify the ordering — create the run row and schedule the task
-  inside the same `work()`; if scheduling fails, mark the run `failed` with an
-  `error_message` (do not merely fail the idempotency record) so the orphan is
-  visible and the stuck-run gauge catches it.
+  `complete`. Severity: high. Likelihood: medium. Mitigation: specify the
+  ordering — create the run row and schedule the task inside the same `work()`;
+  if scheduling fails, mark the run `failed` with an `error_message` (do not
+  merely fail the idempotency record) so the orphan is visible and the
+  stuck-run gauge catches it.
 - Risk: the generated draft is not valid TEI-P5 and fails `tei-rapporteur`
   validation on persistence, raising inside the detached task with no Falcon
-  handler.
-  Severity: high. Likelihood: medium.
-  Mitigation: the launcher's outer try/except covers generation AND persistence
-  AND validation, mapping any exception to `run.failed` + `error_message` +
-  terminal status with a distinct `tei.invalid` event kind; a unit test feeds
-  invalid TEI and asserts `failed` rather than a leaked exception.
+  handler. Severity: high. Likelihood: medium. Mitigation: the launcher's outer
+  try/except covers generation AND persistence AND validation, mapping any
+  exception to `run.failed` + `error_message` + terminal status with a distinct
+  `tei.invalid` event kind; a unit test feeds invalid TEI and asserts `failed`
+  rather than a leaked exception.
 - Risk: snapshot tests are non-deterministic because TEI `xml:id` values or
-  timestamps vary per run.
-  Severity: high. Likelihood: high (without mitigation; the codebase reaches for
-  `uuid.uuid4().hex` for fresh ids elsewhere).
-  Mitigation: a deterministic id scheme (`sp-1`, `p-1`, …) and the existing
-  injected `clock()` provider routed into the generator, persistence service,
-  and run store; freeze the clock and pin ids in snapshot tests.
+  timestamps vary per run. Severity: high. Likelihood: high (without
+  mitigation; the codebase reaches for `uuid.uuid4().hex` for fresh ids
+  elsewhere). Mitigation: a deterministic id scheme (`sp-1`, `p-1`, …) and the
+  existing injected `clock()` provider routed into the generator, persistence
+  service, and run store; freeze the clock and pin ids in snapshot tests.
 - Risk: LLM draft spend is never ledgered because the cost recorder is not wired
   into the launcher's composition root (a regression against the just-landed
-  2.4.4 cost accounting and an ADR 009 observability requirement).
-  Severity: medium. Likelihood: high (the plan's earlier "if available" hedge
-  would silently skip it).
-  Mitigation: wiring `CostRecorder` (over `SqlAlchemyCostLedgerStore`) into the
-  composition root and the launcher is an explicit Milestone 4 deliverable, not
-  a conditional.
+  2.4.4 cost accounting and an ADR 009 observability requirement). Severity:
+  medium. Likelihood: high (the plan's earlier "if available" hedge would
+  silently skip it). Mitigation: wiring `CostRecorder` (over
+  `SqlAlchemyCostLedgerStore`) into the composition root and the launcher is an
+  explicit Milestone 4 deliverable, not a conditional.
 - Risk: detached tasks are garbage-collected mid-run or run unbounded,
-  competing with request handling on the event loop.
-  Severity: medium. Likelihood: medium.
-  Mitigation: hold strong task references in a registry, bound concurrency with
-  a semaphore, drain the registry in a shutdown hook (marking drained runs
-  `failed`), and document the single-worker assumption in the new ADR.
+  competing with request handling on the event loop. Severity: medium.
+  Likelihood: medium. Mitigation: hold strong task references in a registry,
+  bound concurrency with a semaphore, drain the registry in a shutdown hook
+  (marking drained runs `failed`), and document the single-worker assumption in
+  the new ADR.
 - Risk: scope bleed into roadmap items 2.6.2, 2.6.3, or 4.4.1.
-  Severity: medium. Likelihood: medium.
-  Mitigation: the `Scope and roadmap relationship` section fixes the boundary.
+  Severity: medium. Likelihood: medium. Mitigation: the
+  `Scope and roadmap relationship` section fixes the boundary.
 
 ## Progress
 
-- [ ] (pending) M0: Branch, plan baseline, and red end-to-end scaffold.
+- [ ] (in progress, 2026-06-24) M0: Branch, plan baseline, and red
+  end-to-end scaffold. Implementation approval was given in this Lody session;
+  the branch already had the requested name, and branch tracking plus
+  PR/session metadata are being aligned before the red behavioural scaffold is
+  added.
 - [ ] (pending) M1: Domain model extensions (quality mode, QA status,
   rationale).
 - [ ] (pending) M2a: Durable generation-run and event persistence.
@@ -236,104 +233,112 @@ when any of the following is breached.
 
 - Observation: the existing generation-orchestration graph
   (`episodic/orchestration/langgraph.py`,
-  `build_generation_orchestration_graph`) takes an existing `script_tei_xml` and
-  *enriches* it (default action `GENERATE_SHOW_NOTES`); it does not generate the
-  initial script from sources, and `GenerationOrchestrationRequest` requires a
-  non-empty `script_tei_xml`.
+  `build_generation_orchestration_graph`) takes an existing `script_tei_xml`
+  and *enriches* it (default action `GENERATE_SHOW_NOTES`); it does not
+  generate the initial script from sources, and
+  `GenerationOrchestrationRequest` requires a non-empty `script_tei_xml`.
   Evidence: `episodic/orchestration/_dto.py` (`GenerationOrchestrationRequest`
   around line 177; `enabled_action_kinds=(ActionKind.GENERATE_SHOW_NOTES,)`
-  around line 221).
-  Impact: 4.3.2 introduces a separate minimal `DraftScriptGenerator`; the
-  orchestration graph is not on the critical path for this slice.
+  around line 221). Impact: 4.3.2 introduces a separate minimal
+  `DraftScriptGenerator`; the orchestration graph is not on the critical path
+  for this slice.
 - Observation: there is **no** service that materialises a `CanonicalEpisode`
   from intake-stage (4.3.1) sources. `_create_canonical_episode`
   (`episodic/canonical/services.py` around line 91) needs a `TeiHeader` parsed
   from caller-supplied TEI, and the 4.3.1 intake path
   (`episodic/canonical/source_intake_service.py`) creates only ingestion jobs
   and sources — never an episode. The draft TEI is *produced by generation*, so
-  there is an ordering problem.
-  Evidence: greps over `episodes.add`, `source_intake_service.py`.
-  Impact: Milestone 3 adds an explicit "materialise episode from ingestion job"
-  step that creates the episode with a minimal placeholder TEI header before
-  generation, then the launcher updates it with the generated script. This is a
-  new step, not pure reuse; the construction helpers may be reused but the path
-  is new.
+  there is an ordering problem. Evidence: greps over `episodes.add`,
+  `source_intake_service.py`. Impact: Milestone 3 adds an explicit "materialise
+  episode from ingestion job" step that creates the episode with a minimal
+  placeholder TEI header before generation, then the launcher updates it with
+  the generated script. This is a new step, not pure reuse; the construction
+  helpers may be reused but the path is new.
 - Observation: `GenerationRun.source_bundle_id` exists with no producer; the
   ingestion job whose sources materialise the episode is the natural bundle.
   Evidence: `episodic/canonical/domain.py` around line 139; no `SourceBundle`
-  aggregate exists.
-  Impact: map `source_bundle_id` to the ingestion job id.
+  aggregate exists. Impact: map `source_bundle_id` to the ingestion job id.
 - Observation: `GenerationRun` and `CanonicalEpisode` are `frozen=True` with no
   field defaults; adding fields breaks ~5 `GenerationRun(` and ~18
   `CanonicalEpisode(` construction sites and the full-repr snapshot
-  `tests/__snapshots__/test_generation_run_domain.ambr`.
-  Evidence: `domain.py` around lines 133 and 308.
-  Impact: give the new fields safe defaults where possible and regenerate the
-  affected snapshot as an explicit M1 step.
+  `tests/__snapshots__/test_generation_run_domain.ambr`. Evidence: `domain.py`
+  around lines 133 and 308. Impact: give the new fields safe defaults where
+  possible and regenerate the affected snapshot as an explicit M1 step.
 - Observation: Vidai Mock subprocess fixtures already exist in the repo
   (`tests/steps/test_guest_bios_steps.py` has `_start_vidaimock_process`,
   `_await_port_ready`, `_terminate_process_gracefully`, and a `shutil.which`
-  skip); the `model="vidai-mock"` name convention is established.
-  Evidence: `tests/steps/test_guest_bios_steps.py`,
-  `tests/steps/generation_orchestration_vidaimock.py`, `tests/_guest_bios_helpers.py`.
-  Impact: Milestone 7 extracts these helpers into a shared
-  `tests/fixtures/` module and reuses them rather than writing a third copy.
+  skip); the `model="vidai-mock"` name convention is established. Evidence:
+  `tests/steps/test_guest_bios_steps.py`,
+  `tests/steps/generation_orchestration_vidaimock.py`,
+  `tests/_guest_bios_helpers.py`. Impact: Milestone 7 extracts these helpers
+  into a shared `tests/fixtures/` module and reuses them rather than writing a
+  third copy.
+- Observation: on 2026-06-24 the local branch was already named
+  `4-3-2-no-qa-generation-runs-and-tei-p5-retrieval` and the matching remote
+  branch existed at `origin`, but the worktree did not have an upstream branch
+  configured. The original Concrete steps section still referenced the planning
+  worktree path. Evidence: `git branch --show-current`,
+  `git ls-remote --heads origin 4-3-2-no-qa-generation-runs-and-tei-p5-retrieval`,
+  and `git branch -vv`. Impact: Milestone 0 sets tracking with
+  `git branch --set-upstream-to` instead of renaming an already correctly named
+  branch, and the Concrete steps path is updated to this implementation
+  worktree.
 
 ## Decision log
 
 - Decision: execution model is in-process async behind a `GenerationRunLauncher`
   port; Celery dispatch deferred; the launcher is documented as a degenerate
-  `TaskResumePort`.
-  Rationale: ADR 007 records that LangGraph-to-Celery dispatch has not landed
-  and that `TaskResumePort` is the future seam; the slice only needs the
-  202/poll/download contract, which durable run/event records satisfy without a
-  worker. Documenting the convergence keeps 2.6.2/4.4.1 collapsing onto the
-  checkpoint model instead of replacing the launcher. Confirmed with requester
-  on 2026-06-15.
-  Date/Author: 2026-06-15, planning agent.
+  `TaskResumePort`. Rationale: ADR 007 records that LangGraph-to-Celery
+  dispatch has not landed and that `TaskResumePort` is the future seam; the
+  slice only needs the 202/poll/download contract, which durable run/event
+  records satisfy without a worker. Documenting the convergence keeps
+  2.6.2/4.4.1 collapsing onto the checkpoint model instead of replacing the
+  launcher. Confirmed with requester on 2026-06-15. Date/Author: 2026-06-15,
+  planning agent.
 - Decision: the episode is materialised from the ingestion job's attached
   sources (with a placeholder TEI header created before generation) rather than
-  via a new `POST /v1/episodes`.
-  Rationale: keeps the client flow upload → ingest → generate; aligns with
-  `GenerationRun.source_bundle_id`; avoids adding episode-CRUD surface owned by
-  later roadmap work. Confirmed with requester on 2026-06-15.
-  Date/Author: 2026-06-15, planning agent.
+  via a new `POST /v1/episodes`. Rationale: keeps the client flow upload →
+  ingest → generate; aligns with `GenerationRun.source_bundle_id`; avoids
+  adding episode-CRUD surface owned by later roadmap work. Confirmed with
+  requester on 2026-06-15. Date/Author: 2026-06-15, planning agent.
 - Decision: 4.3.2 ships a minimal real single-pass `DraftScriptGenerator`
-  behind a port; the full QA-bypass draft graph is left to 4.4.1.
-  Rationale: roadmap 4.4.1 (requires 4.3.2) owns the draft generation graph
-  with explicit QA bypass; a port keeps the engine swappable. Confirmed with
-  requester on 2026-06-15.
-  Date/Author: 2026-06-15, planning agent.
+  behind a port; the full QA-bypass draft graph is left to 4.4.1. Rationale:
+  roadmap 4.4.1 (requires 4.3.2) owns the draft generation graph with explicit
+  QA bypass; a port keeps the engine swappable. Confirmed with requester on
+  2026-06-15. Date/Author: 2026-06-15, planning agent.
 - Decision: 4.3.2 implements durable SQLAlchemy persistence for generation runs
   and events plus the generation-run REST endpoints it needs, as a subset of
-  2.6.2/2.6.3.
-  Rationale: cross-process REST polling is impossible with the in-memory
-  adapter (ADR 007 calls it tests/local only).
-  Date/Author: 2026-06-15, planning agent.
+  2.6.2/2.6.3. Rationale: cross-process REST polling is impossible with the
+  in-memory adapter (ADR 007 calls it tests/local only). Date/Author:
+  2026-06-15, planning agent.
 - Decision: an unsupported-but-recognised `quality_mode` value returns
   `422 Unprocessable Entity`; a malformed body or missing/blank
-  `skip_qa_rationale` returns `400 Bad Request`.
-  Rationale: a shape-valid body carrying `quality_mode="qa_gated"` is
-  semantically unsupported in this slice; 422 lets `qa_gated` later become a
-  `202` without flipping a wire status from `400` (which clients may treat as
-  "never valid") — `422 → 202` is forward-compatible, `400 → 202` is not. Aligns
-  with the TUI design error table.
-  Date/Author: 2026-06-15, planning agent.
+  `skip_qa_rationale` returns `400 Bad Request`. Rationale: a shape-valid body
+  carrying `quality_mode="qa_gated"` is semantically unsupported in this slice;
+  422 lets `qa_gated` later become a `202` without flipping a wire status from
+  `400` (which clients may treat as "never valid") — `422 → 202` is
+  forward-compatible, `400 → 202` is not. Aligns with the TUI design error
+  table. Date/Author: 2026-06-15, planning agent.
 - Decision: `GET /v1/episodes/{id}/tei` before any draft exists returns
   `404 Not Found` (recorded as a contract, not a TODO, so it does not silently
-  flip to `200` empty later, which would be breaking).
-  Date/Author: 2026-06-15, planning agent.
+  flip to `200` empty later, which would be breaking). Date/Author: 2026-06-15,
+  planning agent.
 - Decision: optimistic concurrency (`expected_revision`) is out of scope for
   this slice's read-only `GET /tei` and append-only run creation, but the
-  episode `tei_revision` integer returned as the envelope `version` is the exact
-  value a later `expected_revision` (on `PUT /tei` / `PATCH /script`) will
-  compare against, so the contract composes later without renaming.
+  episode `tei_revision` integer returned as the envelope `version` is the
+  exact value a later `expected_revision` (on `PUT /tei` / `PATCH /script`)
+  will compare against, so the contract composes later without renaming.
   Date/Author: 2026-06-15, planning agent.
 - Decision: the no-QA slice keeps idempotency in Python (reusing
-  `IdempotencyStore` and `run_idempotent`); no Rust extension or formal proof is
-  introduced. ADR 009 anticipates Kani/Verus only if the idempotency state
-  machine moves into Rust; that is a future task.
-  Date/Author: 2026-06-15, planning agent.
+  `IdempotencyStore` and `run_idempotent`); no Rust extension or formal proof
+  is introduced. ADR 009 anticipates Kani/Verus only if the idempotency state
+  machine moves into Rust; that is a future task. Date/Author: 2026-06-15,
+  planning agent.
+- Decision: treat the 2026-06-24 user request to proceed as ExecPlan approval
+  and move this document from draft to in-progress. Rationale: the plan
+  approval gate is satisfied by the explicit implementation request, and the
+  requester also required the plan to remain current during delivery.
+  Date/Author: 2026-06-24, implementation agent.
 
 ## Context and orientation
 
@@ -355,16 +360,18 @@ slice:
   `<ab>`, `<seg>`; `<speaker>`/`<stage>`/`<note>` excluded). This fixes the
   shape the generator must emit and Chrono will later consume.
 - [ADR 015: Generation-run port split](../adr/adr-015-generation-run-port-split.md)
-  and [ADR 015: Upload and idempotency ports](../adr/adr-015-upload-and-idempotency-ports.md).
+  and
+  [ADR 015: Upload and idempotency ports](../adr/adr-015-upload-and-idempotency-ports.md).
 - [ADR 014: Hexagonal architecture enforcement](../adr/adr-014-hexagonal-architecture-enforcement.md).
 - [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md),
   section "Source-to-script vertical slice".
 - [Episodic TUI API design](../episodic-tui-api-design.md), sections
   "Episodes and TEI" and "Generation runs", and the standard error table.
-- [Async SQLAlchemy with PostgreSQL and Falcon](../async-sqlalchemy-with-pg-and-falcon.md),
-  [Testing async Falcon endpoints](../testing-async-falcon-endpoints.md),
-  [Testing SQLAlchemy with pytest and py-pglite](../testing-sqlalchemy-with-pytest-and-py-pglite.md),
-  and [Agentic systems with LangGraph and Celery](../agentic-systems-with-langgraph-and-celery.md).
+- [Async SQLAlchemy with PostgreSQL and Falcon](../async-sqlalchemy-with-pg-and-falcon.md).
+- [Testing async Falcon endpoints](../testing-async-falcon-endpoints.md).
+- [Testing SQLAlchemy with pytest and py-pglite](../testing-sqlalchemy-with-pytest-and-py-pglite.md).
+- Read
+  [Agentic systems with LangGraph and Celery](../agentic-systems-with-langgraph-and-celery.md).
 
 Relevant skills to load when implementing: `hexagonal-architecture`,
 `python-router` (then `python-types-and-apis`, `python-data-shapes`,
@@ -457,17 +464,17 @@ HTTP API:
   `require_str`), `episodic/api/dependencies.py` (`ApiDependencies`),
   `episodic/api/types.py` (`UowFactory = Callable[[], CanonicalUnitOfWork]`).
 - `episodic/api/source_idempotency.py` — `run_idempotent`,
-  `IdempotencyContext`, `IdempotentResponse` (currently stores only
-  `status` + `media`), `apply_response`, `_encode_outcome`/`_decode_outcome`.
+  `IdempotencyContext`, `IdempotentResponse` (currently stores only `status` +
+  `media`), `apply_response`, `_encode_outcome`/`_decode_outcome`.
 - `episodic/api/source_intake_support.py` — `json_body_hash` (note: this is the
   correct module for the hash helper).
 
 Tests and fixtures:
 
 - `tests/fixtures/database.py` (`session_factory`, `migrated_engine`,
-  `pglite_session`), `tests/fixtures/api.py`
-  (`build_api_dependencies`, `canonical_api_async_client`),
-  `tests/fixtures/llm.py`, `tests/conftest.py` (`pytest_plugins`).
+  `pglite_session`), `tests/fixtures/api.py` (`build_api_dependencies`,
+  `canonical_api_async_client`), `tests/fixtures/llm.py`, `tests/conftest.py`
+  (`pytest_plugins`).
 - `tests/show_notes_support.py` — `FakeLLMPort`, `valid_llm_response`.
 - `tests/test_source_intake_api.py` — httpx `ASGITransport` end-to-end pattern.
 - `tests/steps/test_guest_bios_steps.py`,
@@ -480,9 +487,9 @@ Tests and fixtures:
 ### Terms
 
 - TEI-P5: Text Encoding Initiative Guidelines, fifth edition; the canonical XML
-  format for the episode script. Spoken script uses the Performance Texts module
-  elements (`<sp>` speech, `<speaker>` label, `<u>` utterance, `<p>`/`<l>`/`<ab>`
-  spoken blocks) within `<text><body>`.
+  format for the episode script. Spoken script uses the Performance Texts
+  module elements (`<sp>` speech, `<speaker>` label, `<u>` utterance, `<p>`/
+  `<l>`/`<ab>` spoken blocks) within `<text><body>`.
 - Generation run: a first-class resource representing one attempt to turn
   ingested source material into a script, with a status lifecycle and an
   append-only event log.
@@ -503,8 +510,8 @@ Tests and fixtures:
 
 The following names must exist at the end of the listed milestone. Prefer these
 exact names and paths. Every new `episodic/canonical/*` module must be added to
-the matching `pyproject.toml` architecture-group prefix list (`domain_ports` for
-pure domain/ports, `application` for services, `outbound_adapter` for
+the matching `pyproject.toml` architecture-group prefix list (`domain_ports`
+for pure domain/ports, `application` for services, `outbound_adapter` for
 storage/adapters); `episodic/generation/*` and `episodic/canonical/storage/*`
 may already be blanket-covered — verify and add prefixes if not.
 
@@ -554,8 +561,8 @@ regenerate `tests/__snapshots__/test_generation_run_domain.ambr`.
   `(generation_run_id, seq)` and allocates `seq` per run.
 - `SqlAlchemyGenerationRunStore` implementing `GenerationRunRepository` and
   `GenerationEventLog` (not `GenerationCheckpointPort`; checkpoints are out of
-  scope) in `episodic/canonical/storage/generation_runs.py`. `update_run_status`
-  for `pending → running` MUST be a conditional update
+  scope) in `episodic/canonical/storage/generation_runs.py`.
+  `update_run_status` for `pending → running` MUST be a conditional update
   (`UPDATE … SET status='running' WHERE id=:id AND status='pending'`) returning
   whether it won, so only one worker proceeds.
 - `SqlAlchemyUnitOfWork` exposes `generation_runs` (run repository + event log)
@@ -591,8 +598,8 @@ class DraftScriptGenerator(typing.Protocol):
 
 - `DraftScriptRequest` carries the source material (normalised text or source
   TEI), presenter profiles (host/guest reference-document revisions), the
-  episode/series identifiers, and an injected `clock()` plus a deterministic
-  id factory (sequential `sp-1`, `p-1`, …) so output is reproducible.
+  episode/series identifiers, and an injected `clock()` plus a deterministic id
+  factory (sequential `sp-1`, `p-1`, …) so output is reproducible.
 - `DraftScriptResult` carries the emitted TEI-P5 XML, the content hash (bare
   SHA-256 hex; the envelope adds any `sha256:` prefix — pin one and snapshot
   it), and the LLM `LLMUsage`/`ProviderCallUsage` for cost accounting.
@@ -610,8 +617,8 @@ In `episodic/canonical/generation_persistence.py` (new, `application` group):
 - `persist_draft_script(...)` writes the generated TEI into the episode within
   one unit of work: increments `tei_revision` (optimistic), sets
   `tei_content_hash`, sets `qa_status='skipped'`, and sets
-  `last_generation_run_id`. Validation failure raises a typed error the launcher
-  maps to `run.failed` + `tei.invalid`.
+  `last_generation_run_id`. Validation failure raises a typed error the
+  launcher maps to `run.failed` + `tei.invalid`.
 
 ### Launcher (Milestone 4) — `episodic/generation/`
 
@@ -653,12 +660,12 @@ New resources, wired by a new `_register_generation_run_routes` and
 - `POST /v1/episodes/{episode_id}/generation-runs` — `GenerationRunsResource`.
   Body: required `quality_mode`, `skip_qa_rationale`, `actor`; optional
   accepted-and-ignored `template_id`, `prompt_overrides`, `budget_hints` (do not
-  `400` on them; round-trip them into `configuration`/`budget_snapshot` so they
-  survive). Validation: missing/blank rationale or malformed body → `400`;
+  `400` on them; round-trip them into `configuration`/`budget_snapshot` so
+  they survive). Validation: missing/blank rationale or malformed body → `400`;
   recognised-but-unsupported `quality_mode` → `422`. Returns `202` with
   `Location: /v1/generation-runs/{run_id}` and `Retry-After`. The handler
-  creates the run row AND schedules the launcher inside one `work()`; scheduling
-  failure marks the run `failed`.
+  creates the run row AND schedules the launcher inside one `work()`;
+  scheduling failure marks the run `failed`.
 - `GET  /v1/generation-runs/{run_id}` — `GenerationRunResource` (run snapshot;
   `Retry-After` while non-terminal).
 - `GET  /v1/generation-runs/{run_id}/events` — `GenerationRunEventsResource`
@@ -676,10 +683,11 @@ persist them and `apply_response` sets the headers, so a replayed/in-flight
 New serializers in `episodic/api/serializers.py`: `serialize_generation_run`,
 `serialize_generation_event`, `serialize_tei_envelope`. The TEI envelope maps
 internal `tei_revision → version` and `tei_content_hash → content_hash`, and
-exposes `episode_id, tei_header_id, tei_xml, content_hash, version,
-last_generation_run_id, quality_mode, qa_status, updated_at`. A content
-negotiation helper `negotiate_tei_media_type` in `episodic/api/helpers.py`; the
-`tei+xml` response sets `Content-Type: application/tei+xml` and
+exposes `episode_id`, `tei_header_id`, `tei_xml`, `content_hash`, `version`,
+`last_generation_run_id`, `quality_mode`, `qa_status`, and `updated_at`. A
+content negotiation helper `negotiate_tei_media_type` in
+`episodic/api/helpers.py`; the `tei+xml` response sets
+`Content-Type: application/tei+xml` and
 `Content-Disposition: attachment; filename="episode-<id>.xml"`, and an `ETag`
 derived from `tei_content_hash` for conditional GETs.
 
@@ -697,10 +705,10 @@ ExecPlan.
 Stage B (red): add a strict-xfail end-to-end behavioural feature
 `tests/features/no_qa_generation_slice.feature` and a step module
 `tests/steps/test_no_qa_generation_slice.py` whose scenarios express the whole
-slice, bound with `@pytest.mark.xfail(strict=True, reason="4.3.2 not
-implemented")` so `make test` stays green while the target behaviour is
-captured. This is the executable definition of done; the markers are removed in
-Milestone 7.
+slice, bound with
+`@pytest.mark.xfail(strict=True, reason="4.3.2 not implemented")` so
+`make test` stays green while the target behaviour is captured. This is the
+executable definition of done; the markers are removed in Milestone 7.
 
 The feature (full text embedded here so the plan is self-contained):
 
@@ -809,8 +817,17 @@ Green: add `generation_run_models.py`, the `generation_runs.py` store, the
 `SqlAlchemyIdempotencyStore` is already wired on the unit of work; if absent,
 escalate per Tolerances.
 
-Gate: `make check-fmt && make typecheck && make lint && make check-migrations &&
-make test`. Commit.
+Gate:
+
+```bash
+make check-fmt
+make typecheck
+make lint
+make check-migrations
+make test
+```
+
+Commit.
 
 ### Milestone 2b — Episode TEI revisioning columns and optimistic update
 
@@ -829,12 +846,12 @@ Gate: full Python gates including `make check-migrations`. Commit.
 ### Milestone 3 — Draft script generator, episode materialisation, persistence
 
 Red: add unit tests in `tests/test_draft_script_generation.py` using
-`FakeLLMPort` returning a canned script-shaped payload, an injected frozen clock,
-and the deterministic id factory. Assert the generator emits TEI-P5 that
-`tei-rapporteur` parses and validates, contains the expected
-`<sp>`/`<speaker>`/`<p>` turns, and reports a stable content hash; add a syrupy
-snapshot of the emitted TEI XML (clock frozen, ids pinned). Add tests for each
-`LLMError` subclass mapping to a typed failure. Add tests for
+`FakeLLMPort` returning a canned script-shaped payload, an injected frozen
+clock, and the deterministic id factory. Assert the generator emits TEI-P5 that
+`tei-rapporteur` parses and validates, contains the expected `<sp>`/`<speaker>`/
+`<p>` turns, and reports a stable content hash; add a syrupy snapshot of the
+emitted TEI XML (clock frozen, ids pinned). Add tests for each `LLMError`
+subclass mapping to a typed failure. Add tests for
 `materialise_episode_from_ingestion` (creates episode + placeholder TEI from an
 ingestion job) and `persist_draft_script` (episode TEI, revision, hash,
 `qa_status`, `last_generation_run_id`; invalid TEI raises the typed error).
@@ -853,15 +870,16 @@ Gate: full Python gates. Commit.
 Red: add tests in `tests/test_generation_run_launcher.py`:
 
 - a logic test driving the launcher to completion against a persisted `pending`
-  run and a `FakeLLMPort`, asserting status transitions, appended event kinds in
-  order, persisted TEI, and recorded cost-ledger entry;
+  run and a `FakeLLMPort`, asserting status transitions, appended event kinds
+  in order, persisted TEI, and recorded cost-ledger entry;
 - a failure test asserting an LLM error and an invalid-TEI case each yield
   `failed` with `error_message`/`error_category`, `run.failed`, and (for
   invalid TEI) a `tei.invalid` event — not a leaked exception;
 - a **detached-session** test that launches through real `asyncio.create_task`
   against py-pglite and asserts the task writes through its own session while a
   request-scoped unit of work is already closed;
-- a shutdown-drain test asserting a still-running drained run is marked `failed`.
+- a shutdown-drain test asserting a still-running drained run is marked
+  `failed`.
 
 Green: implement `InProcessGenerationRunLauncher`; construct it plus a
 `CostRecorder` over `SqlAlchemyCostLedgerStore` in `episodic/api/runtime.py`;
@@ -871,8 +889,8 @@ counters, draft error rate by category, QA-bypass rate; idempotency
 replay/conflict counters are emitted in M5).
 
 Refactor: ensure the launcher depends only on ports (run store, event log,
-generator, persistence, cost recorder, clock), holds strong task references, and
-bounds concurrency with a semaphore.
+generator, persistence, cost recorder, clock), holds strong task references,
+and bounds concurrency with a semaphore.
 
 Gate: full Python gates. Commit.
 
@@ -885,8 +903,8 @@ Red: add endpoint tests in `tests/test_generation_run_api.py` using
 launcher; missing rationale → `400`; `quality_mode="qa_gated"` → `422`;
 `GET /generation-runs/{id}` → snapshot + `Retry-After` while non-terminal;
 `GET /generation-runs/{id}/events` paginates by `after_seq`/`limit`; an
-idempotent replay returns the same run id AND the same `Location`/`Retry-After`;
-a different body with the same key → `409`.
+idempotent replay returns the same run id AND the same `Location`/
+`Retry-After`; a different body with the same key → `409`.
 
 Add Hypothesis property tests for idempotency invariants against the in-memory
 `IdempotencyStore`/`run_idempotent` (fast, pure): identical body + same key
@@ -897,10 +915,10 @@ Hypothesis × py-pglite flake).
 
 Green: extend `IdempotentResponse` with `location`/`retry_after` and update
 `_encode_outcome`/`_decode_outcome`/`apply_response`; implement the three
-resources, serializers, and route registration; reuse
-`run_idempotent`/`IdempotencyContext` and `json_body_hash` (from
-`source_intake_support`). Inject the launcher and clock via `ApiDependencies`.
-Emit idempotency replay/conflict metrics.
+resources, serializers, and route registration; reuse `run_idempotent`/
+`IdempotencyContext` and `json_body_hash` (from `source_intake_support`).
+Inject the launcher and clock via `ApiDependencies`. Emit idempotency
+replay/conflict metrics.
 
 Refactor: keep resources thin (parse → service/port → serialize); map domain
 errors through the existing error-envelope helpers.
@@ -909,8 +927,8 @@ Gate: full Python gates. Commit.
 
 ### Milestone 6 — Episode TEI retrieval with content negotiation
 
-Red: add tests in `tests/test_episode_tei_api.py`: default `GET .../tei` returns
-the JSON envelope (with the `tei_revision → version`,
+Red: add tests in `tests/test_episode_tei_api.py`: default `GET .../tei`
+returns the JSON envelope (with the `tei_revision → version`,
 `tei_content_hash → content_hash` mapping and a stable, snapshotted shape under
 a frozen clock); `Accept: application/tei+xml` returns the raw TEI-P5 body with
 `Content-Type: application/tei+xml`,
@@ -928,14 +946,14 @@ Gate: full Python gates. Commit.
 ### Milestone 7 — End-to-end behavioural slice with Vidai Mock
 
 Red→Green: implement the Milestone 0 step module and remove the xfail markers.
-Extract the existing Vidai Mock subprocess helpers
-(`_start_vidaimock_process`, `_await_port_ready`,
-`_terminate_process_gracefully`, and the `shutil.which` skip) from
-`tests/steps/test_guest_bios_steps.py` into a shared `tests/fixtures/` module
-and reuse them. Configure a provider template returning a deterministic
-TEI-script-shaped completion; use `X-Vidai-Chaos-Drop: 100` for the failure
-scenario and a non-TEI completion template for the malformed-completion
-scenario. Drive the full flow with the async HTTP client.
+Extract the existing Vidai Mock subprocess helpers (`_start_vidaimock_process`,
+`_await_port_ready`, `_terminate_process_gracefully`, and the `shutil.which`
+skip) from `tests/steps/test_guest_bios_steps.py` into a shared
+`tests/fixtures/` module and reuse them. Configure a provider template
+returning a deterministic TEI-script-shaped completion; use
+`X-Vidai-Chaos-Drop: 100` for the failure scenario and a non-TEI completion
+template for the malformed-completion scenario. Drive the full flow with the
+async HTTP client.
 
 Acceptance gate (not optional): the slice's headline scenario MUST be observed
 passing at least once on a host where `vidaimock` is available; capture that
@@ -949,12 +967,12 @@ Gate: full Python gates including the now-active scenarios. Commit.
 
 1. Add `docs/adr/adr-016-no-qa-generation-run-execution-and-tei-persistence.md`
    recording: the in-process launcher port (a degenerate `TaskResumePort`) and
-   the Celery deferral, the single-worker assumption and stuck-run hooks
-   (lease columns, conditional transitions, stuck-run gauge, manual-fail
-   runbook), episode materialisation from ingestion, the `DraftScriptGenerator`
-   port and its 4.4.1 successor, episode TEI revisioning and optimistic update,
-   the 422-vs-400 and 404 contract decisions, and the content-negotiation
-   approach. Reference it from ADR 009 and the system design.
+   the Celery deferral, the single-worker assumption and stuck-run hooks (lease
+   columns, conditional transitions, stuck-run gauge, manual-fail runbook),
+   episode materialisation from ingestion, the `DraftScriptGenerator` port and
+   its 4.4.1 successor, episode TEI revisioning and optimistic update, the
+   422-vs-400 and 404 contract decisions, and the content-negotiation approach.
+   Reference it from ADR 009 and the system design.
 2. Update `docs/episodic-podcast-generation-system-design.md`
    (source-to-script vertical slice) with the implemented decisions.
 3. Update `docs/users-guide.md` with the trigger → poll → download workflow,
@@ -965,13 +983,24 @@ Gate: full Python gates including the now-active scenarios. Commit.
    `docs/repository-layout.md` and index new docs in `docs/contents.md`.
 5. Mark roadmap item 4.3.2 as done in `docs/roadmap.md`.
 
-Gate: `make check-fmt && make typecheck && make lint && make check-migrations &&
-make test && make markdownlint && make nixie`. Commit.
+Gate:
+
+```bash
+make check-fmt
+make typecheck
+make lint
+make check-migrations
+make test
+make markdownlint
+make nixie
+```
+
+Commit.
 
 ## Concrete steps
 
 Run all commands from the repository root
-(`/home/leynos/.lody/repos/github---leynos---episodic/worktrees/a592b364-06b7-4c45-a296-37491b0ae40c`).
+(`/home/leynos/.lody/repos/github---leynos---episodic/worktrees/7cb51da6-204f-4329-8dfd-ca46598e888c`).
 
 Branch rename and tracking (Milestone 0):
 
@@ -1031,15 +1060,15 @@ The slice is done when:
   `make test`, `make markdownlint`, and `make nixie` all pass.
 - The behavioural scenarios in `tests/features/no_qa_generation_slice.feature`
   pass, and the headline scenario has been **observed passing at least once**
-  with a `vidaimock` binary present (transcript captured in `Artifacts and
-  notes`). The `shutil.which` skip only protects binary-less CI; it does not
-  satisfy the acceptance gate.
+  with a `vidaimock` binary present (transcript captured in
+  `Artifacts and notes`). The `shutil.which` skip only protects binary-less CI;
+  it does not satisfy the acceptance gate.
 - Manually, against a running service with a Vidai Mock backend:
   `POST /v1/episodes/{episode_id}/generation-runs` with
-  `{"quality_mode":"draft_without_qa","skip_qa_rationale":"vertical-slice
-  demo","actor":"editor@example.test"}` and an `Idempotency-Key` returns
-  `202 Accepted` with `Location: /v1/generation-runs/{run_id}` and
-  `Retry-After`; polling `GET /v1/generation-runs/{run_id}` reaches `succeeded`;
+  `{"quality_mode":"draft_without_qa","skip_qa_rationale":"vertical-slice demo","actor":"editor@example.test"}`
+  and an `Idempotency-Key` returns `202 Accepted` with
+  `Location: /v1/generation-runs/{run_id}` and `Retry-After`; polling
+  `GET /v1/generation-runs/{run_id}` reaches `succeeded`;
   `GET /v1/generation-runs/{run_id}/events` shows a `tei.persisted` event; and
   `GET /v1/episodes/{episode_id}/tei` with `Accept: application/tei+xml`
   downloads a TEI-P5 attachment with `qa_status=skipped`. Replaying the same
@@ -1048,18 +1077,18 @@ The slice is done when:
 
 Red-Green-Refactor evidence must be recorded per milestone: the focused test
 command and its red failure (the M0 scenarios use
-`@pytest.mark.xfail(strict=True, ...)` to prove the red stage; markers removed in
-M7), the green pass after the minimal change, and the wider-gate pass after
+`@pytest.mark.xfail(strict=True, ...)` to prove the red stage; markers removed
+in M7), the green pass after the minimal change, and the wider-gate pass after
 refactor.
 
 Quality criteria:
 
 - Tests: unit (`pytest`), behavioural (`pytest-bdd`), snapshot (`syrupy` for TEI
   XML and the JSON envelope, with a frozen clock and pinned ids), and property
-  (`hypothesis` for idempotency invariants and event-seq monotonicity/pagination)
-  all pass. CrossHair (`make crosshair`) is only extended if a new pure
-  PEP-316-contracted helper is introduced (e.g. a content-hash or
-  revision-increment helper); otherwise it is unchanged.
+  (`hypothesis` for idempotency invariants and event-seq
+  monotonicity/pagination) all pass. CrossHair (`make crosshair`) is only
+  extended if a new pure PEP-316-contracted helper is introduced (e.g. a
+  content-hash or revision-increment helper); otherwise it is unchanged.
 - Observability: the ADR-009-required structured logs, metrics, and
   correlation-id propagation across the asyncio boundary are present and
   asserted in M4/M5 tests.
@@ -1067,13 +1096,13 @@ Quality criteria:
   `make typecheck`, and `make check-migrations` clean.
 
 Verification method: run the gate commands after each milestone and run
-`coderabbit review --agent`, clearing all concerns, before moving on. CodeRabbit
-must only see code that already passes the deterministic gates.
+`coderabbit review --agent`, clearing all concerns, before moving on.
+CodeRabbit must only see code that already passes the deterministic gates.
 
 ### Verification note (Rust/Verus and Kani)
 
-ADR 009 anticipates Kani/Verus only "if the idempotency state machine moves into
-Rust". This slice keeps idempotency in Python (reusing the existing
+ADR 009 anticipates Kani/Verus only "if the idempotency state machine moves
+into Rust". This slice keeps idempotency in Python (reusing the existing
 `IdempotencyStore` and `run_idempotent`), so no Rust extension or formal proof
 is introduced; the idempotency invariants are covered by Hypothesis property
 tests. If a future task moves the state machine to Rust, add the bounded model
@@ -1113,8 +1142,8 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
 To be completed at major milestones and at the end. Compare the delivered
 behaviour against the Purpose section, record gaps handed to 2.6.2 / 2.6.3 /
 4.4.1 (durable checkpoints and the automated stuck-run reaper, the full
-generation-run and checkpoint REST surface, the QA-bypass draft graph), and note
-what would be done differently.
+generation-run and checkpoint REST surface, the QA-bypass draft graph), and
+note what would be done differently.
 
 ## Revision note
 
@@ -1124,13 +1153,13 @@ to respect the file/line tolerance; made the launcher own a fresh unit of work
 (use-after-free fix) with a dedicated detached-session test; added durable
 stuck-run hooks (indexed `started_at`, `lease_expires_at`, `error_category`,
 conditional `pending → running`, optimistic TEI update, startup stuck-run
-gauge); extended idempotency replay to carry `Location`/`Retry-After`; corrected
-the `json_body_hash` module path and added the `generation_run.create`
-operation; specified the request-body required/optional split and the
-422-vs-400 and 404 contract decisions; made cost-recorder wiring an explicit
-deliverable; specified deterministic TEI ids and clock injection for stable
-snapshots; clarified that episode materialisation is a new step (not pure
-reuse); mandated `pyproject.toml` architecture-group registration for new
+gauge); extended idempotency replay to carry `Location`/`Retry-After`;
+corrected the `json_body_hash` module path and added the
+`generation_run.create` operation; specified the request-body required/optional
+split and the 422-vs-400 and 404 contract decisions; made cost-recorder wiring
+an explicit deliverable; specified deterministic TEI ids and clock injection
+for stable snapshots; clarified that episode materialisation is a new step (not
+pure reuse); mandated `pyproject.toml` architecture-group registration for new
 modules; broadened LLM-failure and malformed-completion handling and tests;
 required observability acceptance; and turned the Vidai Mock skip into a
 must-run-once acceptance gate reusing existing helpers. These strengthen
