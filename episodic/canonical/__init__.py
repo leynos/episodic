@@ -55,6 +55,7 @@ from .entity_protocols import (
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
+from .generation_quality import QaStatus, QualityMode
 from .history_protocols import (
     EpisodeTemplateHistoryRepository,
     SeriesProfileHistoryRepository,
@@ -125,6 +126,8 @@ __all__: list[str] = [
     "IngestionStatus",
     "MultiSourceRequest",
     "NormalizedSource",
+    "QaStatus",
+    "QualityMode",
     "RawSourceInput",
     "ReferenceBinding",
     "ReferenceBindingRepository",

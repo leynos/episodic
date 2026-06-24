@@ -220,8 +220,16 @@ when any of the following is breached.
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie`. CodeRabbit review completed with zero
   findings.
-- [ ] (pending) M1: Domain model extensions (quality mode, QA status,
-  rationale).
+- [ ] (in progress, 2026-06-24) M1: Domain model extensions (quality mode, QA
+  status, rationale). Red evidence captured the missing
+  `episodic.canonical.generation_quality` module. Green focused evidence:
+  `tests/test_generation_run_domain.py`,
+  `tests/test_generation_run_port_contract.py`,
+  `tests/test_generation_run_properties.py`, and
+  `tests/steps/test_generation_run_lifecycle_steps.py` passed with
+  `38 passed in 1.43s`. Full deterministic gates passed: `make check-fmt`,
+  `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
+  `make nixie`. CodeRabbit review remains before M1 is complete.
 - [ ] (pending) M2a: Durable generation-run and event persistence.
 - [ ] (pending) M2b: Episode TEI revisioning columns and optimistic update.
 - [ ] (pending) M3: Draft script generator port and TEI persistence service.
@@ -1160,6 +1168,31 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
 - M0 CodeRabbit evidence (2026-06-24):
   `coderabbit review --agent` ended with
   `{"type":"complete","status":"review_completed","findings":0}`.
+
+- M1 red evidence (2026-06-24):
+
+  ```plaintext
+  E   ModuleNotFoundError: No module named
+  E   'episodic.canonical.generation_quality'
+  ```
+
+- M1 focused green evidence (2026-06-24):
+
+  ```plaintext
+  $ uv run pytest tests/test_generation_run_domain.py \
+      tests/test_generation_run_port_contract.py \
+      tests/test_generation_run_properties.py \
+      tests/steps/test_generation_run_lifecycle_steps.py -q
+  ......................................                                   [100%]
+  38 passed in 1.43s
+  ```
+
+- M1 deterministic gate evidence (2026-06-24):
+  `make check-fmt` reported `421 files already formatted`; `make typecheck`
+  reported `All checks passed!`; `make lint` passed Hecate and Ruff and rated
+  Pylint `10.00/10`; `make test` reported
+  `966 passed, 2 skipped, 7 xfailed in 68.44s`; `make markdownlint` reported
+  `Summary: 0 error(s)`; and `make nixie` reported all diagrams validated.
 
 ## Outcomes & retrospective
 
