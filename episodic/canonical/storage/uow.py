@@ -17,11 +17,11 @@ import typing as typ
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.logging import get_logger
 
+from .episode_repository import SqlAlchemyEpisodeRepository
 from .generation_runs import SqlAlchemyGenerationRunStore
 from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
-    SqlAlchemyEpisodeRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemyEpisodeTemplateRepository,
     SqlAlchemyReferenceBindingRepository,

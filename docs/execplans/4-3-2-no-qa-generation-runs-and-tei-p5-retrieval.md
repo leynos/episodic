@@ -245,7 +245,16 @@ when any of the following is breached.
   `29 passed in 4.29s`; full deterministic gates passed: `make check-fmt`,
   `make typecheck`, `make lint`, `make test`, and `make check-migrations`.
   CodeRabbit review completed with zero findings.
-- [ ] (pending) M2b: Episode TEI revisioning columns and optimistic update.
+- [ ] (in progress, 2026-06-24) M2b: Episode TEI revisioning columns and
+  optimistic update. Red evidence captured the missing
+  `episodic.canonical.episode_errors` module after adding failing storage
+  tests. Green focused evidence: `tests/canonical_storage/test_episodes.py`,
+  `tests/canonical_storage/test_episode_tei_updates.py`, and
+  `tests/test_protocol_stubs.py` passed with `64 passed in 3.97s`. The new
+  migration applies through `20260624_000011`, and full deterministic gates
+  passed: `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+  `make check-migrations`, `make markdownlint`, and `make nixie`. CodeRabbit
+  review is pending for this milestone.
 - [ ] (pending) M3: Draft script generator port and TEI persistence service.
 - [ ] (pending) M4: In-process launcher, lifecycle events, cost wiring, and
   observability.
@@ -326,6 +335,12 @@ when any of the following is breached.
   store locks the owning generation-run row before allocating the next event
   sequence, serialising appenders per run without introducing a separate
   sequence table.
+- Observation: adding optimistic episode TEI updates would have pushed the
+  existing storage repository and episode test module beyond the project
+  400-line guideline. Impact: the SQLAlchemy episode repository now lives in
+  `episodic/canonical/storage/episode_repository.py`, and the TEI update tests
+  live in `tests/canonical_storage/test_episode_tei_updates.py`, keeping the
+  changed modules focused.
 
 ## Decision log
 
@@ -396,6 +411,12 @@ when any of the following is breached.
   row is the smallest durable serialisation point already present in the schema
   and keeps the event table append-only. Date/Author: 2026-06-24,
   implementation agent.
+- Decision: episode TEI updates use an `EpisodeTeiUpdate` request object
+  instead of expanding `EpisodeRepository.update` with several scalar keyword
+  parameters. Rationale: the update operation must carry TEI XML, QA status,
+  generation-run provenance, expected revision, and an optional timestamp as
+  one coherent command; grouping them keeps the port stable and avoids a long,
+  error-prone parameter list. Date/Author: 2026-06-24, implementation agent.
 
 ## Context and orientation
 
