@@ -9,6 +9,7 @@ if typ.TYPE_CHECKING:
     from .domain import (
         ApprovalEvent,
         CanonicalEpisode,
+        EpisodeTeiUpdate,
         EpisodeTemplate,
         IngestionJob,
         IngestionJobListFilters,
@@ -70,6 +71,15 @@ class EpisodeRepository(typ.Protocol):
         self, episode_ids: cabc.Collection[uuid.UUID]
     ) -> list[CanonicalEpisode]:
         """Fetch canonical episodes by identifiers."""
+        raise NotImplementedError
+
+    async def update(
+        self,
+        episode_id: uuid.UUID,
+        *,
+        update: EpisodeTeiUpdate,
+    ) -> CanonicalEpisode:
+        """Update episode TEI with an optimistic revision precondition."""
         raise NotImplementedError
 
 

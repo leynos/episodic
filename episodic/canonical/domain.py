@@ -327,6 +327,39 @@ class CanonicalEpisode:
     approval_state: ApprovalState
     created_at: dt.datetime
     updated_at: dt.datetime
+    tei_revision: int = 1
+    tei_content_hash: str | None = None
+    qa_status: QaStatus | None = None
+    last_generation_run_id: uuid.UUID | None = None
+
+    def __post_init__(self) -> None:
+        """Validate TEI revision metadata."""
+        if not isinstance(self.tei_revision, int) or self.tei_revision < 1:
+            msg = "tei_revision must be a positive integer."
+            raise ValueError(msg)
+        if self.tei_content_hash is not None and self.tei_content_hash.strip() == "":
+            msg = "tei_content_hash must be a non-empty string when set."
+            raise ValueError(msg)
+
+
+@dc.dataclass(frozen=True)
+class EpisodeTeiUpdate:
+    """Optimistic TEI update request for a canonical episode."""
+
+    tei_xml: str
+    qa_status: QaStatus
+    last_generation_run_id: uuid.UUID
+    expected_revision: int
+    updated_at: dt.datetime | None = None
+
+    def __post_init__(self) -> None:
+        """Validate optimistic TEI update invariants."""
+        if self.tei_xml.strip() == "":
+            msg = "tei_xml must be a non-empty string."
+            raise ValueError(msg)
+        if not isinstance(self.expected_revision, int) or self.expected_revision < 1:
+            msg = "expected_revision must be a positive integer."
+            raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True)
