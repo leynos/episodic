@@ -245,16 +245,16 @@ when any of the following is breached.
   `29 passed in 4.29s`; full deterministic gates passed: `make check-fmt`,
   `make typecheck`, `make lint`, `make test`, and `make check-migrations`.
   CodeRabbit review completed with zero findings.
-- [ ] (in progress, 2026-06-24) M2b: Episode TEI revisioning columns and
+- [x] (completed, 2026-06-24) M2b: Episode TEI revisioning columns and
   optimistic update. Red evidence captured the missing
   `episodic.canonical.episode_errors` module after adding failing storage
   tests. Green focused evidence: `tests/canonical_storage/test_episodes.py`,
   `tests/canonical_storage/test_episode_tei_updates.py`, and
-  `tests/test_protocol_stubs.py` passed with `64 passed in 3.97s`. The new
+  `tests/test_protocol_stubs.py` passed with `64 passed in 3.51s`. The new
   migration applies through `20260624_000011`, and full deterministic gates
   passed: `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make check-migrations`, `make markdownlint`, and `make nixie`. CodeRabbit
-  review is pending for this milestone.
+  review completed with zero findings.
 - [ ] (pending) M3: Draft script generator port and TEI persistence service.
 - [ ] (pending) M4: In-process launcher, lifecycle events, cost wiring, and
   observability.
