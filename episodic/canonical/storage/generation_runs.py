@@ -208,19 +208,24 @@ class SqlAlchemyGenerationRunStore:
         result = await self._session.execute(statement)
         return tuple(_run_from_record(record) for record in result.scalars())
 
-    async def update_run_status(
+    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
+    async def update_run_status(  # noqa: PLR0913
         self,
         run_id: uuid.UUID,
         *,
         status: GenerationRunStatus,
         current_node: str | None,
         ended_at: dt.datetime | None,
+        error_message: str | None = None,
+        error_category: str | None = None,
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
         record = await self._require_mutable_run(run_id)
         record.status = status
         record.current_node = current_node
         record.ended_at = ended_at
+        record.error_message = error_message
+        record.error_category = error_category
         record.updated_at = _now()
         await self._session.flush()
         await self._session.refresh(record)

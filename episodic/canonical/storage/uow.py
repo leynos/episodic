@@ -15,6 +15,7 @@ Commit work in a single unit-of-work:
 import typing as typ
 
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+from episodic.cost.storage import SqlAlchemyCostLedgerStore
 from episodic.logging import get_logger
 
 from .episode_repository import SqlAlchemyEpisodeRepository
@@ -93,6 +94,8 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for reusable reference binding persistence.
     generation_runs : SqlAlchemyGenerationRunStore
         Repository and event log for durable generation runs.
+    cost_ledger : SqlAlchemyCostLedgerStore
+        Cost ledger adapter bound to the same session.
     """
 
     def __init__(
@@ -147,6 +150,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             ),
         )
         self.generation_runs = SqlAlchemyGenerationRunStore(self._session)
+        self.cost_ledger = SqlAlchemyCostLedgerStore(self._session)
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
             self._session,
             metrics=self._metrics,

@@ -1,5 +1,7 @@
 """Tests for runtime environment wiring of the HTTP app."""
 
+from __future__ import annotations
+
 import hashlib
 import typing as typ
 
@@ -12,6 +14,9 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
     from httpx._transports.asgi import _ASGIApp
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from episodic.llm import LLMRequest, LLMResponse
 
 
 def test_create_app_from_env_requires_database_url(
@@ -80,7 +85,21 @@ def test_normalize_database_urls_uses_query_port_for_probe() -> None:
     assert probe_kwargs["host"] == "/var/run/postgresql"
     assert probe_kwargs["port"] == 6544
 
+def test_build_generation_launcher_wires_cost_recorder(
+    session_factory: object,
+) -> None:
+    """Runtime launcher construction should use the SQL-backed cost ledger."""
+    from episodic.api.runtime import _build_generation_launcher
+    from episodic.canonical.storage import SqlAlchemyUnitOfWork
+    from episodic.generation import InProcessGenerationRunLauncher
 
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    launcher = _build_generation_launcher(
+        lambda: SqlAlchemyUnitOfWork(factory),
+        _UnusedLLMPort(),
+    )
+
+    assert isinstance(launcher, InProcessGenerationRunLauncher)
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "strip_driver",
@@ -261,3 +280,11 @@ async def test_create_app_from_env_wires_object_store_for_uploads(
     assert response_body["content_hash"] == f"sha256:{expected_hash}"
     assert stored_path.is_file(), f"expected upload payload at {stored_path}"
     assert stored_path.read_bytes() == payload
+
+class _UnusedLLMPort:
+    """LLM port fake used only to satisfy runtime launcher construction."""
+
+    async def generate(self, request: LLMRequest) -> LLMResponse:
+        """Fail if runtime wiring accidentally invokes the fake."""
+        _ = request
+        raise AssertionError

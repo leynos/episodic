@@ -41,6 +41,10 @@ from episodic.generation.guest_bios import (
     generate_guest_bios_from_reference_bindings,
     project_guest_bio_sources,
 )
+from episodic.generation.launcher import (
+    GenerationRunLauncher,
+    InProcessGenerationRunLauncher,
+)
 from episodic.generation.show_notes import (
     ShowNotesEntry,
     ShowNotesGenerator,
@@ -68,6 +72,7 @@ __all__ = [
     "DraftScriptTokenBudgetError",
     "DraftScriptTransientProviderError",
     "DraftTurn",
+    "GenerationRunLauncher",
     "GuestBioEntry",
     "GuestBioSource",
     "GuestBiosEnrichmentRequest",
@@ -76,6 +81,7 @@ __all__ = [
     "GuestBiosGeneratorConfig",
     "GuestBiosResponseFormatError",
     "GuestBiosResult",
+    "InProcessGenerationRunLauncher",
     "LLMDraftScriptGenerator",
     "LLMDraftScriptGeneratorConfig",
     "ShowNotesEntry",

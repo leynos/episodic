@@ -10,6 +10,15 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
+from episodic.cost.engine import PricingEngine
+from episodic.cost.pricing_catalogue import FilePricingCatalogue
+from episodic.cost.recorder import CostRecorder
+from episodic.generation import (
+    InProcessGenerationRunLauncher,
+    LLMDraftScriptGenerator,
+    LLMDraftScriptGeneratorConfig,
+)
+from episodic.llm import LLMProviderOperation
 from episodic.logging import get_logger, log_info, log_warning
 
 from . import create_app
@@ -21,6 +30,7 @@ if typ.TYPE_CHECKING:
     from falcon import asgi
 
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+    from episodic.llm import LLMPort
 
     from .types import UowFactory
 
@@ -39,6 +49,8 @@ _DEFAULT_ASYNC_POSTGRES_DRIVER = "psycopg"
 GRANIAN_FACTORY_TARGET = "episodic.api.runtime:create_app_from_env"
 GRANIAN_INTERFACE = "asgi"
 HTTP_BIND_PORT = 8080
+_DEFAULT_DRAFT_MODEL = "gpt-4o-mini"
+_DEFAULT_LLM_PROVIDER_NAME = "openai"
 
 
 class PsycopgConnectKwargs(typ.TypedDict, total=False):
@@ -121,6 +133,40 @@ def _build_database_probe(
     )
 
 
+def _build_generation_launcher(
+    uow_factory: UowFactory,
+    llm_port: LLMPort | None,
+    *,
+    draft_model: str = _DEFAULT_DRAFT_MODEL,
+    pricing_directory: pathlib.Path | str = "config/pricing-snapshots",
+) -> InProcessGenerationRunLauncher | None:
+    """Build the no-QA generation-run launcher when an LLM port is configured."""
+    if llm_port is None:
+        return None
+    pricing_catalogue = FilePricingCatalogue(pricing_directory)
+
+    def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
+        return CostRecorder(
+            ledger=uow.cost_ledger,
+            pricing_catalogue=pricing_catalogue,
+            pricing_engine=PricingEngine(),
+        )
+
+    return InProcessGenerationRunLauncher(
+        uow_factory=uow_factory,
+        draft_generator=LLMDraftScriptGenerator(
+            llm=llm_port,
+            config=LLMDraftScriptGeneratorConfig(
+                model=draft_model,
+                provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
+            ),
+        ),
+        cost_recorder_factory=_cost_recorder,
+        provider_name=_DEFAULT_LLM_PROVIDER_NAME,
+        provider_operation=LLMProviderOperation.CHAT_COMPLETIONS.value,
+    )
+
+
 def _normalize_database_urls(database_url: str) -> tuple[URL, PsycopgConnectKwargs]:
     """Build async-engine and sync-probe URLs from one operator-facing setting."""
     url = make_url(database_url)
@@ -194,11 +240,21 @@ def create_app_from_env() -> asgi.App:
     database_probe, uow_factory, shutdown_hook = _build_database_probe(
         config.database_url
     )
+    launcher = _build_generation_launcher(uow_factory, None)
+    shutdown_hooks = (
+        (shutdown_hook,)
+        if launcher is None
+        else (
+            shutdown_hook,
+            launcher.shutdown,
+        )
+    )
     return create_app(
         ApiDependencies(
             uow_factory=uow_factory,
             object_store=FilesystemObjectStore(config.source_intake_object_store_root),
             readiness_probes=(database_probe,),
-            shutdown_hooks=(shutdown_hook,),
+            shutdown_hooks=shutdown_hooks,
+            launcher=launcher,
         )
     )
