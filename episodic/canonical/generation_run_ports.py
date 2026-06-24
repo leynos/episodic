@@ -68,13 +68,15 @@ class GenerationRunRepository(typ.Protocol):
         raise NotImplementedError
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def update_run_status(
+    async def update_run_status(  # noqa: PLR0913
         self,
         run_id: uuid.UUID,
         *,
         status: GenerationRunStatus,
         current_node: str | None,
         ended_at: dt.datetime | None,
+        error_message: str | None = None,
+        error_category: str | None = None,
     ) -> GenerationRun:
         """Update the run lifecycle state and return the stored run."""
         raise NotImplementedError
