@@ -21,6 +21,7 @@ from hypothesis import given, settings
 
 from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal
 from episodic.canonical.generation_run_ports import event_seq
 
@@ -101,6 +102,9 @@ def make_generation_run(
         started_at=None,
         ended_at=None,
         error_message=None,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="No-QA vertical-slice draft.",
     )
 
 
