@@ -12,6 +12,7 @@ Use the unit-of-work to fetch a canonical episode:
 ...     episode = await uow.episodes.get(episode_id)
 """
 
+from .episode_repository import SqlAlchemyEpisodeRepository
 from .filesystem_object_store import FilesystemObjectStore
 from .generation_runs import SqlAlchemyGenerationRunStore
 from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
@@ -39,7 +40,6 @@ from .models import (
 )
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
-    SqlAlchemyEpisodeRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemyEpisodeTemplateRepository,
     SqlAlchemyReferenceBindingRepository,
