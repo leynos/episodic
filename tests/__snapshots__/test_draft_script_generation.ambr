@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_draft_script_generator_emits_valid_stable_tei
+  '<TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader><fileDesc><title>Bridgewater Futures</title></fileDesc></teiHeader><text><body><u xml:id="u-1" who="Host">Welcome to Bridgewater Futures.</u><u xml:id="u-2" who="Guest">Thanks for inviting me.</u><p xml:id="p-1">The conversation turns to implementation risks.</p></body></text></TEI>'
+# ---

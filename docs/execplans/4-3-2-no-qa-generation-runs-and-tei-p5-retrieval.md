@@ -255,7 +255,19 @@ when any of the following is breached.
   passed: `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make check-migrations`, `make markdownlint`, and `make nixie`. CodeRabbit
   review completed with zero findings.
-- [ ] (pending) M3: Draft script generator port and TEI persistence service.
+- [ ] (in progress, 2026-06-24) M3: Draft script generator port and TEI
+  persistence service. Orientation found that the installed `tei_rapporteur`
+  Python binding accepts `utterance` payloads emitted as `<u who="...">`, while
+  `<sp><speaker>...</speaker><p>...</p></sp>` XML is not currently accepted by
+  `parse_xml`. Red focused evidence captured the missing
+  `episodic.generation.draft_script` and
+  `episodic.canonical.generation_persistence` modules. Green focused evidence:
+  `tests/test_draft_script_generation.py` and
+  `tests/test_generation_persistence.py` passed with `9 passed in 2.82s`.
+  Full deterministic gates passed: `make check-fmt`, `make typecheck`,
+  `make lint`, `make test` (`988 passed, 2 skipped, 7 xfailed`),
+  `make markdownlint`, and `make nixie`. CodeRabbit review is pending before
+  this milestone is marked complete.
 - [ ] (pending) M4: In-process launcher, lifecycle events, cost wiring, and
   observability.
 - [ ] (pending) M5: Generation-run REST endpoints with idempotency (incl.
@@ -341,6 +353,17 @@ when any of the following is breached.
   `episodic/canonical/storage/episode_repository.py`, and the TEI update tests
   live in `tests/canonical_storage/test_episode_tei_updates.py`, keeping the
   changed modules focused.
+- Observation: `tei_rapporteur.parse_xml` rejects `<sp>` blocks in the current
+  binding (`unknown variant sp`) but accepts body `utterance` payloads, which
+  emit as TEI `<u who="...">` elements. Impact: Milestone 3 uses
+  `tei_rapporteur.from_dict` with `utterance`/`paragraph` blocks for the
+  minimal draft script, preserving TEI validation without hand-written XML.
+- Observation: `ingestion_jobs.target_episode_id` has a foreign key to
+  `episodes.id`, so an intake job cannot point at an episode id that the
+  materialisation step has not created yet. Impact: M3 materialisation treats a
+  `NULL` target episode as the normal pre-generation state and allocates the
+  episode id while projecting attached intake sources into canonical source
+  documents.
 
 ## Decision log
 
