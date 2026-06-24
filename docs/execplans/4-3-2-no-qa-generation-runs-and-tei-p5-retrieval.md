@@ -220,7 +220,7 @@ when any of the following is breached.
   `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make markdownlint`, and `make nixie`. CodeRabbit review completed with zero
   findings.
-- [ ] (in progress, 2026-06-24) M1: Domain model extensions (quality mode, QA
+- [x] (completed, 2026-06-24) M1: Domain model extensions (quality mode, QA
   status, rationale). Red evidence captured the missing
   `episodic.canonical.generation_quality` module. Green focused evidence:
   `tests/test_generation_run_domain.py`,
@@ -229,7 +229,8 @@ when any of the following is breached.
   `tests/steps/test_generation_run_lifecycle_steps.py` passed with
   `38 passed in 1.43s`. Full deterministic gates passed: `make check-fmt`,
   `make typecheck`, `make lint`, `make test`, `make markdownlint`, and
-  `make nixie`. CodeRabbit review remains before M1 is complete.
+  `make nixie`. CodeRabbit review completed with zero findings after the
+  required rate-limit backoff and retry.
 - [ ] (pending) M2a: Durable generation-run and event persistence.
 - [ ] (pending) M2b: Episode TEI revisioning columns and optimistic update.
 - [ ] (pending) M3: Draft script generator port and TEI persistence service.
@@ -296,6 +297,10 @@ when any of the following is breached.
   `git branch --set-upstream-to` instead of renaming an already correctly named
   branch, and the Concrete steps path is updated to this implementation
   worktree.
+- Observation: the first M1 `coderabbit review --agent` request hit a
+  recoverable CodeRabbit rate limit. Impact: the implementation followed the
+  required backoff command, `vsleep $(shuf -i 45-90 -n 1)m`, then retried the
+  review successfully before starting M2a.
 
 ## Decision log
 
@@ -1193,6 +1198,11 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
   Pylint `10.00/10`; `make test` reported
   `966 passed, 2 skipped, 7 xfailed in 68.44s`; `make markdownlint` reported
   `Summary: 0 error(s)`; and `make nixie` reported all diagrams validated.
+
+- M1 CodeRabbit evidence (2026-06-24): the first review attempt returned a
+  recoverable `rate_limit` response; after the required `vsleep` backoff, the
+  retry ended with
+  `{"type":"complete","status":"review_completed","findings":0}`.
 
 ## Outcomes & retrospective
 
