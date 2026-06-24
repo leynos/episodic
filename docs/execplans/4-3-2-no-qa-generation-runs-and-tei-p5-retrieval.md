@@ -255,7 +255,7 @@ when any of the following is breached.
   passed: `make check-fmt`, `make typecheck`, `make lint`, `make test`,
   `make check-migrations`, `make markdownlint`, and `make nixie`. CodeRabbit
   review completed with zero findings.
-- [ ] (in progress, 2026-06-24) M3: Draft script generator port and TEI
+- [x] (completed, 2026-06-24) M3: Draft script generator port and TEI
   persistence service. Orientation found that the installed `tei_rapporteur`
   Python binding accepts `utterance` payloads emitted as `<u who="...">`, while
   `<sp><speaker>...</speaker><p>...</p></sp>` XML is not currently accepted by
@@ -266,8 +266,8 @@ when any of the following is breached.
   `tests/test_generation_persistence.py` passed with `9 passed in 2.82s`.
   Full deterministic gates passed: `make check-fmt`, `make typecheck`,
   `make lint`, `make test` (`988 passed, 2 skipped, 7 xfailed`),
-  `make markdownlint`, and `make nixie`. CodeRabbit review is pending before
-  this milestone is marked complete.
+  `make markdownlint`, and `make nixie`. CodeRabbit review completed with zero
+  findings.
 - [ ] (pending) M4: In-process launcher, lifecycle events, cost wiring, and
   observability.
 - [ ] (pending) M5: Generation-run REST endpoints with idempotency (incl.
