@@ -151,15 +151,18 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
             )
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def update_run_status(
+    async def update_run_status(  # noqa: PLR0913
         self,
         run_id: uuid.UUID,
         *,
         status: GenerationRunStatus,
         current_node: str | None,
         ended_at: dt.datetime | None,
+        error_message: str | None = None,
+        error_category: str | None = None,
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
+        _ = error_category
         async with self._lock:
             run = self._runs.get(run_id)
             if run is None:
@@ -184,6 +187,7 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
                 status=status,
                 current_node=current_node,
                 ended_at=ended_at,
+                error_message=error_message,
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated

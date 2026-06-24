@@ -15,6 +15,7 @@ from .authorization import AuthorizationPort, PermitAll
 if typ.TYPE_CHECKING:
     from episodic.canonical.health import HealthObserver
     from episodic.canonical.object_store import ObjectStorePort
+    from episodic.generation import GenerationRunLauncher
     from episodic.llm import LLMPort
 
     from .types import UowFactory
@@ -97,6 +98,7 @@ class ApiDependencies:
     health_observer: HealthObserver | None = None
     shutdown_hooks: tuple[ShutdownHook, ...] = ()
     llm_port: LLMPort | None = None
+    launcher: GenerationRunLauncher | None = None
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
 
     def __post_init__(self) -> None:

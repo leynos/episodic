@@ -1,12 +1,8 @@
 """Contract tests for generation-run port implementations.
 
-These tests define the behavioural contract for adapters implementing
-`GenerationRunRepository`, `GenerationEventLog`, `GenerationCheckpointPort`,
-and the composite `GenerationRunPort`. They validate protocol compliance,
-lifecycle guarantees, error and edge-case behaviour, idempotency, pagination
-guardrails, event sequence allocation, and checkpoint response persistence.
-Use the `store` fixture plus `make_generation_run()` and `make_checkpoint()`
-when adding scenarios for another implementation.
+These tests define the behavioural contract for generation-run adapters. Use
+the `store` fixture plus `make_generation_run()` and `make_checkpoint()` when
+adding scenarios for another implementation.
 """
 
 import dataclasses as dc
@@ -153,8 +149,11 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         status: GenerationRunStatus,
         current_node: str | None,
         ended_at: dt.datetime | None,
+        error_message: str | None = None,
+        error_category: str | None = None,
     ) -> GenerationRun:
         """Raise for all updates."""
+        _ = (status, current_node, ended_at, error_message, error_category)
         raise RunNotFound(run_id)
 
     async def claim_run_for_execution(
