@@ -23,7 +23,11 @@ from episodic.canonical.generation_run_errors import (
     RunAlreadyTerminal,
     RunNotFound,
 )
-from episodic.canonical.generation_run_ports import EventSeq, event_seq
+from episodic.canonical.generation_run_ports import (
+    EventSeq,
+    GenerationRunStatusUpdate,
+    event_seq,
+)
 from episodic.orchestration._types import _log_event
 
 from .generation_checkpoints import InMemoryGenerationCheckpointMixin
@@ -54,6 +58,15 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
     _checkpoints: dict[uuid.UUID, Checkpoint] = dc.field(default_factory=dict)
     _idempotency_keys: dict[str, uuid.UUID] = dc.field(default_factory=dict)
     _lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
+
+    def _require_mutable_run(self, run_id: uuid.UUID) -> GenerationRun:
+        """Return a run that may still accept lifecycle mutations."""
+        run = self._runs.get(run_id)
+        if run is None:
+            raise RunNotFound(run_id)
+        if run.status.is_terminal():
+            raise RunAlreadyTerminal(run_id)
+        return run
 
     def _runs_for_episode(
         self,
@@ -150,44 +163,40 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
                 offset=offset,
             )
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def update_run_status(  # noqa: PLR0913
+    async def update_run_status(
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
-        error_message: str | None = None,
-        error_category: str | None = None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
-        _ = error_category
         async with self._lock:
-            run = self._runs.get(run_id)
-            if run is None:
+            try:
+                run = self._require_mutable_run(run_id)
+            except RunNotFound:
                 _log_event(
                     "warning",
                     "generation_run_store.update_run_missing",
                     run_id=str(run_id),
-                    status=status.value,
+                    status=update.status.value,
                 )
-                raise RunNotFound(run_id)
-            if run.status.is_terminal():
+                raise
+            except RunAlreadyTerminal:
+                run = self._runs[run_id]
                 _log_event(
                     "warning",
                     "generation_run_store.update_run_terminal",
                     run_id=str(run_id),
                     current_status=run.status.value,
-                    requested_status=status.value,
+                    requested_status=update.status.value,
                 )
-                raise RunAlreadyTerminal(run_id)
+                raise
             updated = dc.replace(
                 run,
-                status=status,
-                current_node=current_node,
-                ended_at=ended_at,
-                error_message=error_message,
+                status=update.status,
+                current_node=update.current_node,
+                ended_at=update.ended_at,
+                error_message=update.error_message,
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated
@@ -196,8 +205,8 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
                 "generation_run_store.update_run_status",
                 run_id=str(run_id),
                 previous_status=run.status.value,
-                status=status.value,
-                current_node=current_node,
+                status=update.status.value,
+                current_node=update.current_node,
             )
             return updated
 
@@ -212,22 +221,24 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
     ) -> GenerationRun | None:
         """Atomically claim a pending run for execution."""
         async with self._lock:
-            run = self._runs.get(run_id)
-            if run is None:
+            try:
+                run = self._require_mutable_run(run_id)
+            except RunNotFound:
                 _log_event(
                     "warning",
                     "generation_run_store.claim_run_missing",
                     run_id=str(run_id),
                 )
-                raise RunNotFound(run_id)
-            if run.status.is_terminal():
+                raise
+            except RunAlreadyTerminal:
+                run = self._runs[run_id]
                 _log_event(
                     "warning",
                     "generation_run_store.claim_run_terminal",
                     run_id=str(run_id),
                     status=run.status.value,
                 )
-                raise RunAlreadyTerminal(run_id)
+                raise
             if run.status is not GenerationRunStatus.PENDING:
                 _log_event(
                     "info",
@@ -266,16 +277,18 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
     ) -> GenerationEvent:
         """Append an event with an adapter-allocated sequence."""
         async with self._lock:
-            run = self._runs.get(run_id)
-            if run is None:
+            try:
+                self._require_mutable_run(run_id)
+            except RunNotFound:
                 _log_event(
                     "warning",
                     "generation_run_store.append_event_missing_run",
                     run_id=str(run_id),
                     kind=kind,
                 )
-                raise RunNotFound(run_id)
-            if run.status.is_terminal():
+                raise
+            except RunAlreadyTerminal:
+                run = self._runs[run_id]
                 _log_event(
                     "warning",
                     "generation_run_store.append_event_terminal_run",
@@ -283,7 +296,7 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
                     status=run.status.value,
                     kind=kind,
                 )
-                raise RunAlreadyTerminal(run_id)
+                raise
             events = self._events.setdefault(run_id, [])
             now = self.time_provider()
             event = GenerationEvent(

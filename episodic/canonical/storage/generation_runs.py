@@ -16,7 +16,11 @@ from episodic.canonical.domain import (
     JsonMapping,
 )
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import EventSeq, event_seq
+from episodic.canonical.generation_run_ports import (
+    EventSeq,
+    GenerationRunStatusUpdate,
+    event_seq,
+)
 from episodic.orchestration._types import _log_event
 
 from .generation_run_models import GenerationEventRecord, GenerationRunRecord
@@ -208,24 +212,19 @@ class SqlAlchemyGenerationRunStore:
         result = await self._session.execute(statement)
         return tuple(_run_from_record(record) for record in result.scalars())
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def update_run_status(  # noqa: PLR0913
+    async def update_run_status(
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
-        error_message: str | None = None,
-        error_category: str | None = None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
         record = await self._require_mutable_run(run_id)
-        record.status = status
-        record.current_node = current_node
-        record.ended_at = ended_at
-        record.error_message = error_message
-        record.error_category = error_category
+        record.status = update.status
+        record.current_node = update.current_node
+        record.ended_at = update.ended_at
+        record.error_message = update.error_message
+        record.error_category = update.error_category
         record.updated_at = _now()
         await self._session.flush()
         await self._session.refresh(record)
@@ -233,8 +232,8 @@ class SqlAlchemyGenerationRunStore:
             "info",
             "sql_generation_run_store.update_run_status",
             run_id=str(run_id),
-            status=status.value,
-            current_node=current_node,
+            status=update.status.value,
+            current_node=update.current_node,
         )
         return _run_from_record(record)
 

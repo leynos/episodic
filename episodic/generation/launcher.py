@@ -14,6 +14,7 @@ from episodic.canonical.generation_persistence import (
 )
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
+from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.cost.ports import BillingPeriodKey
 from episodic.cost.recorder import CostProviderOperation
 from episodic.generation.launcher_support import (
@@ -277,9 +278,11 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         )
         await uow.generation_runs.update_run_status(
             claimed.run.id,
-            status=GenerationRunStatus.SUCCEEDED,
-            current_node="complete",
-            ended_at=self.clock(),
+            update=GenerationRunStatusUpdate(
+                status=GenerationRunStatus.SUCCEEDED,
+                current_node="complete",
+                ended_at=self.clock(),
+            ),
         )
 
     async def _record_costs(
@@ -327,11 +330,13 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
                 await self._append_failure_events(uow, run_id, failure)
                 await uow.generation_runs.update_run_status(
                     run_id,
-                    status=GenerationRunStatus.FAILED,
-                    current_node="failed",
-                    ended_at=self.clock(),
-                    error_message=failure.message,
-                    error_category=failure.category,
+                    update=GenerationRunStatusUpdate(
+                        status=GenerationRunStatus.FAILED,
+                        current_node="failed",
+                        ended_at=self.clock(),
+                        error_message=failure.message,
+                        error_category=failure.category,
+                    ),
                 )
                 await uow.commit()
             except RunAlreadyTerminal, RunNotFound:

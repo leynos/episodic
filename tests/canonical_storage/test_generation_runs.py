@@ -22,6 +22,7 @@ from episodic.canonical.generation_run_errors import RunAlreadyTerminal
 from episodic.canonical.generation_run_ports import (
     GenerationEventLog,
     GenerationRunRepository,
+    GenerationRunStatusUpdate,
     event_seq,
 )
 from episodic.canonical.storage import (
@@ -214,15 +215,19 @@ async def test_generation_run_store_updates_status_and_rejects_terminal_mutation
         await uow.generation_runs.create_run(run)
         running = await uow.generation_runs.update_run_status(
             run.id,
-            status=GenerationRunStatus.RUNNING,
-            current_node="draft",
-            ended_at=None,
+            update=GenerationRunStatusUpdate(
+                status=GenerationRunStatus.RUNNING,
+                current_node="draft",
+                ended_at=None,
+            ),
         )
         succeeded = await uow.generation_runs.update_run_status(
             run.id,
-            status=GenerationRunStatus.SUCCEEDED,
-            current_node=None,
-            ended_at=NOW,
+            update=GenerationRunStatusUpdate(
+                status=GenerationRunStatus.SUCCEEDED,
+                current_node=None,
+                ended_at=NOW,
+            ),
         )
         await uow.commit()
 
@@ -235,9 +240,11 @@ async def test_generation_run_store_updates_status_and_rejects_terminal_mutation
         with pytest.raises(RunAlreadyTerminal, match="generation run is already"):
             await uow.generation_runs.update_run_status(
                 run.id,
-                status=GenerationRunStatus.RUNNING,
-                current_node="retry",
-                ended_at=None,
+                update=GenerationRunStatusUpdate(
+                    status=GenerationRunStatus.RUNNING,
+                    current_node="retry",
+                    ended_at=None,
+                ),
             )
         with pytest.raises(RunAlreadyTerminal, match="generation run is already"):
             await uow.generation_runs.append_event(
