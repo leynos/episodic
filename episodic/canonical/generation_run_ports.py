@@ -12,6 +12,7 @@ async def use_runs(port: GenerationRunPort) -> None:
 ```
 """
 
+import dataclasses as dc
 import typing as typ
 
 if typ.TYPE_CHECKING:
@@ -28,6 +29,17 @@ if typ.TYPE_CHECKING:
     )
 
 EventSeq = typ.NewType("EventSeq", int)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationRunStatusUpdate:
+    """Lifecycle fields to apply to a generation run."""
+
+    status: GenerationRunStatus
+    current_node: str | None
+    ended_at: dt.datetime | None
+    error_message: str | None = None
+    error_category: str | None = None
 
 
 def event_seq(value: int) -> EventSeq:
@@ -67,16 +79,11 @@ class GenerationRunRepository(typ.Protocol):
         """List runs for an episode, ordered by creation time."""
         raise NotImplementedError
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
-    async def update_run_status(  # noqa: PLR0913
+    async def update_run_status(
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
-        error_message: str | None = None,
-        error_category: str | None = None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Update the run lifecycle state and return the stored run."""
         raise NotImplementedError

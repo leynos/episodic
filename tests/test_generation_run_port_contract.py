@@ -30,6 +30,7 @@ from episodic.canonical.generation_run_ports import (
     GenerationEventLog,
     GenerationRunPort,
     GenerationRunRepository,
+    GenerationRunStatusUpdate,
     event_seq,
 )
 
@@ -146,14 +147,10 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
-        error_message: str | None = None,
-        error_category: str | None = None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Raise for all updates."""
-        _ = (status, current_node, ended_at, error_message, error_category)
+        _ = update
         raise RunNotFound(run_id)
 
     async def claim_run_for_execution(
