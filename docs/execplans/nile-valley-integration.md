@@ -751,13 +751,13 @@ repository quality gates pass.
   preview on rootless Podman" section.
 
 - Observation (2026-06-13): when the Podman socket is live, the repository's
-  `act` workflow tests also need an artifact server reachable from rootless
-  job containers. Evidence:
+  `act` workflow tests also need an artifact server reachable from rootless job
+  containers. Evidence:
   `/tmp/workflow-act-rootless-artifacts-episodic-nile-valley-integration-rerun.out`
   passed after binding the artifact server to `0.0.0.0` with a concrete free
-  port instead of advertising port `0`. Impact: the helper still skips on
-  hosts without a usable Podman socket, but a live rootless Podman host now
-  exercises the workflow tests successfully.
+  port instead of advertising port `0`. Impact: the helper still skips on hosts
+  without a usable Podman socket, but a live rootless Podman host now exercises
+  the workflow tests successfully.
 
 - Observation (2026-06-13): the post-fix CodeRabbit review first returned five
   test-hygiene findings: add NumPy-style docstrings to the kind
@@ -900,12 +900,11 @@ Rootless Podman/kind follow-up validation evidence:
 `/tmp/test-kind-podman-episodic-nile-valley-integration-post-coderabbit.out`,
 `/tmp/markdownlint-kind-podman-episodic-nile-valley-integration-final.out`,
 `/tmp/nixie-kind-podman-episodic-nile-valley-integration.out`,
-`/tmp/coderabbit-focused-kind-podman-episodic-nile-valley-integration.out`,
-and
-`/tmp/coderabbit-kind-podman-episodic-nile-valley-integration.out`.
-The final full test run reported `704 passed, 1 skipped`. CodeRabbit's
-completed post-follow-up review findings were addressed; two later reruns
-stalled in remote sandbox setup before emitting findings.
+`/tmp/coderabbit-focused-kind-podman-episodic-nile-valley-integration.out`, and
+`/tmp/coderabbit-kind-podman-episodic-nile-valley-integration.out`. The final
+full test run reported `704 passed, 1 skipped`. CodeRabbit's completed
+post-follow-up review findings were addressed; two later reruns stalled in
+remote sandbox setup before emitting findings.
 
 On 2026-06-13, with rootless Podman plus freshly installed `k3d`, `kind`, and
 `kubectl`, `uv run scripts/local_k8s.py up --engine podman --provider kind`
@@ -1279,8 +1278,7 @@ The feature is accepted when all of the following are true:
 - `make local-k8s-up` can create or reuse a local cluster and deploy the chart,
   or skips with a clear documented reason when required CLIs are absent in the
   test environment. Docker plus `k3d` remains the default; rootless Podman
-  hosts can use kind through `LOCAL_K8S_ENGINE=podman
-  LOCAL_K8S_PROVIDER=kind`.
+  hosts can use kind through `LOCAL_K8S_ENGINE=podman LOCAL_K8S_PROVIDER=kind`.
 - The local preview success banner includes the preview URL, health URL, status
   command, logs command, and teardown command.
 - Unit tests cover the health port, health aggregation, Falcon adapter
