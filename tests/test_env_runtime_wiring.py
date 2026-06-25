@@ -85,6 +85,7 @@ def test_normalize_database_urls_uses_query_port_for_probe() -> None:
     assert probe_kwargs["host"] == "/var/run/postgresql"
     assert probe_kwargs["port"] == 6544
 
+
 def test_build_generation_launcher_wires_cost_recorder(
     session_factory: object,
 ) -> None:
@@ -100,6 +101,8 @@ def test_build_generation_launcher_wires_cost_recorder(
     )
 
     assert isinstance(launcher, InProcessGenerationRunLauncher)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "strip_driver",
@@ -280,6 +283,7 @@ async def test_create_app_from_env_wires_object_store_for_uploads(
     assert response_body["content_hash"] == f"sha256:{expected_hash}"
     assert stored_path.is_file(), f"expected upload payload at {stored_path}"
     assert stored_path.read_bytes() == payload
+
 
 class _UnusedLLMPort:
     """LLM port fake used only to satisfy runtime launcher construction."""
