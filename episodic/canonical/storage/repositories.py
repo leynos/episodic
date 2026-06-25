@@ -20,7 +20,6 @@ import sqlalchemy as sa
 
 from episodic.canonical.entity_protocols import (
     ApprovalEventRepository,
-    EpisodeRepository,
     EpisodeTemplateRepository,
     IngestionJobRepository,
     SeriesProfileRepository,
@@ -31,10 +30,8 @@ from episodic.canonical.entity_protocols import (
 from .entity_mappers import (
     _approval_event_from_record,
     _approval_event_to_record,
-    _episode_from_record,
     _episode_template_from_record,
     _episode_template_to_record,
-    _episode_to_record,
     _ingestion_job_from_record,
     _ingestion_job_to_record,
     _series_profile_from_record,
@@ -46,7 +43,6 @@ from .entity_mappers import (
 )
 from .entity_models import (
     ApprovalEventRecord,
-    EpisodeRecord,
     IngestionJobRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
@@ -69,7 +65,6 @@ if typ.TYPE_CHECKING:
 
     from episodic.canonical.domain import (
         ApprovalEvent,
-        CanonicalEpisode,
         EpisodeTemplate,
         IngestionJob,
         SeriesProfile,
@@ -170,42 +165,6 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
             TeiHeaderRecord,
             TeiHeaderRecord.id == header_id,
             _tei_header_from_record,
-        )
-
-
-class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
-    """Persist canonical episodes using SQLAlchemy."""
-
-    async def add(self, episode: CanonicalEpisode) -> None:
-        """Add a canonical episode record.
-
-        Parameters
-        ----------
-        episode : CanonicalEpisode
-            Canonical episode domain entity to persist.
-
-        """
-        await self._add_record(_episode_to_record(episode))
-
-    async def get(self, episode_id: uuid.UUID) -> CanonicalEpisode | None:
-        """Fetch a canonical episode by identifier."""
-        return await self._get_one_or_none(
-            EpisodeRecord,
-            EpisodeRecord.id == episode_id,
-            _episode_from_record,
-        )
-
-    async def list_by_ids(
-        self, episode_ids: cabc.Collection[uuid.UUID]
-    ) -> list[CanonicalEpisode]:
-        """Fetch canonical episodes by identifiers."""
-        if not episode_ids:
-            return []
-
-        return await self._get_many(
-            EpisodeRecord,
-            EpisodeRecord.id.in_(episode_ids),
-            _episode_from_record,
         )
 
 
@@ -382,7 +341,6 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
 
 __all__ = (
     "SqlAlchemyApprovalEventRepository",
-    "SqlAlchemyEpisodeRepository",
     "SqlAlchemyEpisodeTemplateHistoryRepository",
     "SqlAlchemyEpisodeTemplateRepository",
     "SqlAlchemyIngestionJobRepository",

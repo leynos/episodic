@@ -219,21 +219,20 @@ Update this list with every stopping point. Add timestamps.
   findings before commit.
 - [x] Milestone D — orchestrator integration: `CostRecorder` collaborator,
   LangGraph wiring through the orchestrator's existing finish path, run pricing
-  pins, and the structured-planning behavioural scenario. Completed
-  2026-06-04: added provider-call usage propagation through planner/action
-  DTOs, optional cost-recorder wiring for the structured orchestrator and
-  LangGraph direct finish path, ledger pin/aggregate adapter methods, exact
-  pinned-snapshot retrieval, and focused orchestrator, graph, storage,
-  recorder, and BDD tests. All reported CodeRabbit concerns were cleared; the
-  final follow-up emitted no findings but did not print the usual terminal
-  `complete` JSON line.
+  pins, and the structured-planning behavioural scenario. Completed 2026-06-04:
+  added provider-call usage propagation through planner/action DTOs, optional
+  cost-recorder wiring for the structured orchestrator and LangGraph direct
+  finish path, ledger pin/aggregate adapter methods, exact pinned-snapshot
+  retrieval, and focused orchestrator, graph, storage, recorder, and BDD tests.
+  All reported CodeRabbit concerns were cleared; the final follow-up emitted no
+  findings but did not print the usual terminal `complete` JSON line.
 - [x] Milestone E — Alembic migration, py-pglite-backed integration tests,
-  documentation updates, CodeRabbit review, roadmap tick. Completed
-  2026-06-04: the migration and py-pglite tests were completed in earlier
-  milestones to satisfy migration gates; Stage E accepted ADR-015, updated
-  operator and maintainer documentation, recorded the system-design
-  cross-reference, ticked roadmap item `2.4.4`, passed the final gates, and
-  completed the final CodeRabbit review with zero findings.
+  documentation updates, CodeRabbit review, roadmap tick. Completed 2026-06-04:
+  the migration and py-pglite tests were completed in earlier milestones to
+  satisfy migration gates; Stage E accepted ADR-015, updated operator and
+  maintainer documentation, recorded the system-design cross-reference, ticked
+  roadmap item `2.4.4`, passed the final gates, and completed the final
+  CodeRabbit review with zero findings.
 
 ## Surprises & discoveries
 
@@ -448,10 +447,10 @@ observation, evidence, and impact.
 
 - Observation: Stage D deterministic gates passed again after the CodeRabbit
   test-fake fix. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `368 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/test-langgraph-costs-episodic-2-4-4-cost-accounting-and-usage-metering.out`
@@ -465,16 +464,16 @@ observation, evidence, and impact.
   `/tmp/coderabbit-stage-d-rerun2-episodic-2-4-4-cost-accounting-and-usage-metering.out`
   ended with `{"type":"complete","status":"review_completed","findings":1}`
   and asked for the graph cost test to derive its expected total from fixture
-  helpers instead of hardcoding `38`. Impact: the test now narrows the
-  fixture usage values and computes the expected total from the planner and
-  action fixture DTOs.
+  helpers instead of hardcoding `38`. Impact: the test now narrows the fixture
+  usage values and computes the expected total from the planner and action
+  fixture DTOs.
 
 - Observation: Stage D deterministic gates passed after the fixture-derived
   expected total change. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `368 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/test-langgraph-costs-episodic-2-4-4-cost-accounting-and-usage-metering.out`
@@ -497,10 +496,10 @@ observation, evidence, and impact.
   assertion-message and docstring fixes. Evidence:
   `/tmp/test-stage-d-coderabbit-fixes-episodic-2-4-4-cost-accounting-and-usage-metering.out`
   reports `2 passed in 0.12s`;
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `368 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/migrations-episodic-2-4-4-cost-accounting-and-usage-metering.out`
@@ -530,10 +529,10 @@ observation, evidence, and impact.
 
 - Observation: Stage E deterministic gates passed after the documentation and
   roadmap updates. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `368 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/migrations-episodic-2-4-4-cost-accounting-and-usage-metering.out`
@@ -550,8 +549,8 @@ observation, evidence, and impact.
   after one prior Stage E run timed out after `tools_completed`. Evidence:
   `/tmp/coderabbit-stage-e-rerun-episodic-2-4-4-cost-accounting-and-usage-metering.out`
   ended with `{"type":"complete","status":"review_completed","findings":0}`.
-  Impact: all CodeRabbit concerns reported during the work are cleared, and
-  the final branch state has external-review coverage.
+  Impact: all CodeRabbit concerns reported during the work are cleared, and the
+  final branch state has external-review coverage.
 
 ## Decision log
 

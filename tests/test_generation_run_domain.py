@@ -27,6 +27,7 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
 )
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import (
     CheckpointAlreadyTerminal,
     CheckpointNotFound,
@@ -62,6 +63,9 @@ def generation_run() -> GenerationRun:
         started_at=None,
         ended_at=None,
         error_message=None,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="No-QA vertical-slice draft.",
     )
 
 
@@ -95,6 +99,57 @@ def test_generation_run_status_terminal_states_are_explicit() -> None:
     assert GenerationRunStatus.SUCCEEDED.is_terminal(), "SUCCEEDED must be terminal."
     assert GenerationRunStatus.FAILED.is_terminal(), "FAILED must be terminal."
     assert GenerationRunStatus.CANCELLED.is_terminal(), "CANCELLED must be terminal."
+
+
+def test_quality_enums_pin_no_qa_slice_values() -> None:
+    """Quality metadata uses stable wire values for the no-QA slice."""
+    assert QualityMode.DRAFT_WITHOUT_QA == "draft_without_qa"
+    assert QaStatus.SKIPPED == "skipped"
+
+
+def test_generation_run_records_no_qa_quality_metadata(
+    generation_run: GenerationRun,
+) -> None:
+    """Draft-without-QA runs record their QA bypass rationale."""
+    run = dc.replace(
+        generation_run,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="Initial vertical-slice draft.",
+    )
+
+    assert run.quality_mode is QualityMode.DRAFT_WITHOUT_QA
+    assert run.qa_status is QaStatus.SKIPPED
+    assert run.skip_qa_rationale == "Initial vertical-slice draft."
+
+
+@pytest.mark.parametrize(
+    ("changes", "match"),
+    [
+        pytest.param(
+            {"qa_status": None, "skip_qa_rationale": "Valid rationale."},
+            "qa_status",
+            id="missing-qa-status",
+        ),
+        pytest.param(
+            {"qa_status": QaStatus.SKIPPED, "skip_qa_rationale": " "},
+            "skip_qa_rationale",
+            id="blank-rationale",
+        ),
+    ],
+)
+def test_generation_run_rejects_incomplete_no_qa_metadata(
+    generation_run: GenerationRun,
+    changes: dict[str, object],
+    match: str,
+) -> None:
+    """Draft-without-QA runs require skipped status and rationale."""
+    with pytest.raises(ValueError, match=match):
+        dc.replace(
+            generation_run,
+            quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+            **changes,
+        )
 
 
 def test_checkpoint_status_terminal_states_are_explicit() -> None:
@@ -267,6 +322,9 @@ def test_generation_run_and_checkpoint_repr_snapshot(
         started_at=None,
         ended_at=None,
         error_message=None,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="No-QA vertical-slice draft.",
     )
     checkpoint = Checkpoint(
         id=FIXED_CHECKPOINT_ID,
