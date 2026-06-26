@@ -138,7 +138,7 @@ Adjust per milestone; stop and escalate when a threshold is breached.
       production changes).
 - [x] M1 Dedicated `orchestration` Hecate group and node/builder split.
 - [x] M2 Celery task enforcement and `WorkloadClass` extraction.
-- [ ] M3 Checkpoint payload boundary audit (Hecate group plus structural and
+- [x] M3 Checkpoint payload boundary audit (Hecate group plus structural and
       property tests).
 - [ ] M4 Behavioural tests, snapshots, documentation, and roadmap update.
 
@@ -176,6 +176,20 @@ config now classifies `episodic.worker.workloads` as `domain_ports` and
 The full milestone gates passed: `make check-fmt`, `make typecheck`,
 `make lint`, and `make test` (`1020 passed, 3 skipped, 1 xfailed`).
 CodeRabbit review completed with 0 findings.
+
+2026-06-26: M3 extracted provider-neutral payload DTOs and normalisation
+helpers into `episodic/orchestration/_payload_dto.py`, retargeted checkpoint
+payload and checkpoint DTO modules away from the application-coupled `_dto`
+barrel, and kept existing public orchestration imports working through
+compatibility aliases. The production Hecate config now declares
+`orchestration_checkpoint` before `orchestration`, and checkpoint modules may
+only import their own group plus `domain_ports`. `WorkflowCheckpoint` now
+rejects non-JSON payload values, and
+`tests/test_checkpoint_payload_boundaries.py` adds a structural DTO field audit
+plus a Hypothesis JSON round-trip property. Focused validation passed with
+`88 passed`. The full milestone gates passed: `make check-fmt`,
+`make test` (`1024 passed, 3 skipped`), `make typecheck`, and `make lint`.
+CodeRabbit review is pending for this milestone.
 
 ## Surprises & discoveries
 
@@ -231,6 +245,26 @@ CodeRabbit review completed with 0 findings.
   barrel re-export the same symbol for existing callers.
   Impact: M2 could preserve the public worker API while giving the task module
   a vendor-free import path.
+
+- Observation: the durable SQLAlchemy checkpoint store is an outbound adapter
+  that legitimately implements `CheckpointPort` using `WorkflowCheckpoint`.
+  Evidence: `episodic.canonical.storage.workflow_checkpoints` maps SQLAlchemy
+  rows to `WorkflowCheckpoint` and accepts `WorkflowCheckpoint` in
+  `save_or_reuse`.
+  Impact: the production `outbound_adapter` group must be allowed to import
+  `orchestration_checkpoint`; the checkpoint DTO group remains strict because
+  its own `allowed` list excludes both application and adapter groups.
+
+- Observation: `ActionExecutionResult` carries rich show-notes and guest-bios
+  attachments for in-process orchestration results, but checkpoint payload
+  serialisation deliberately ignores those attachment fields.
+  Evidence: `_action_result_to_payload` stores only action identity, kind,
+  model tier, model, summary, and usage, while tests still assert rich
+  attachment attributes on direct tool results.
+  Impact: `_payload_dto.py` now uses local structural Protocols for attachment
+  shapes instead of importing generation DTOs. The structural checkpoint audit
+  skips these non-persisted attachment fields and separately enforces
+  `WorkflowCheckpoint.payload` JSON serialisability.
 
 ## Decision log
 
@@ -304,6 +338,25 @@ CodeRabbit review completed with 0 findings.
   creating a task-to-topology edge or broadening task permissions.
   Date/Author: 2026-06-26, implementation agent.
 
+- Decision: classify checkpoint DTO and payload modules in a dedicated
+  `orchestration_checkpoint` Hecate group, and allow outbound adapters to
+  import that group.
+  Rationale: checkpoint DTOs are provider-neutral port contracts. Outbound
+  checkpoint stores need those contracts to implement `CheckpointPort`, but the
+  DTO modules themselves must not import application services, storage, ORM
+  models, or vendor SDKs.
+  Date/Author: 2026-06-26, implementation agent.
+
+- Decision: keep rich tool-result attachments on `ActionExecutionResult` as
+  provider-neutral structural Protocols rather than importing concrete
+  generation result DTOs.
+  Rationale: existing callers rely on `show_notes_result` and
+  `guest_bios_result` attributes for direct orchestration results, but
+  checkpoint payload serialisation does not persist those attachments. Local
+  Protocols preserve static type usefulness without reintroducing a
+  checkpoint-to-application import edge.
+  Date/Author: 2026-06-26, implementation agent.
+
 ## Outcomes & retrospective
 
 M1 outcome: the LangGraph node functions now live in
@@ -319,9 +372,14 @@ objects. The production architecture gate now groups `episodic.worker.tasks`
 as `orchestration_tasks`, so task code may import application and domain port
 contracts but not inbound or outbound adapters.
 
-Remaining outcomes to complete: a developer importing an adapter into a
-checkpoint payload must see `make lint` fail in production, and a non-neutral
-checkpoint payload field must fail `make test`.
+M3 outcome: checkpoint payload modules now belong to
+`orchestration_checkpoint`, and `make lint` fails if they import application or
+adapter modules. A structural test audits checkpoint payload DTO field types,
+and a property test verifies JSON-shaped `WorkflowCheckpoint.payload` values
+round-trip unchanged through JSON serialisation.
+
+Remaining outcomes to complete: the behavioural, snapshot, documentation, and
+roadmap updates in M4 remain.
 
 ## Context and orientation
 
