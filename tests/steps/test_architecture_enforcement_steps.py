@@ -61,6 +61,38 @@ def test_composition_root_wiring_is_accepted() -> None:
     """Run the composition-root acceptance scenario."""
 
 
+@scenario(
+    "../features/architecture_enforcement.feature",
+    "A clean orchestration fixture passes",
+)
+def test_clean_orchestration_fixture_is_accepted() -> None:
+    """Run the orchestration acceptance scenario."""
+
+
+@scenario(
+    "../features/architecture_enforcement.feature",
+    "A LangGraph node importing an adapter is rejected",
+)
+def test_langgraph_node_adapter_violation_is_rejected() -> None:
+    """Run the LangGraph-node violation scenario."""
+
+
+@scenario(
+    "../features/architecture_enforcement.feature",
+    "A Celery task importing an adapter is rejected",
+)
+def test_celery_task_adapter_violation_is_rejected() -> None:
+    """Run the Celery-task violation scenario."""
+
+
+@scenario(
+    "../features/architecture_enforcement.feature",
+    "A checkpoint payload importing storage is rejected",
+)
+def test_checkpoint_payload_storage_violation_is_rejected() -> None:
+    """Run the checkpoint-payload violation scenario."""
+
+
 @given(parsers.parse('the architecture fixture package "{package_name}"'))
 def architecture_fixture_package(
     context: ArchitectureContext,
