@@ -454,6 +454,7 @@ allowed = [
     "domain_ports",
     "inbound_adapter",
     "orchestration",
+    "orchestration_checkpoint",
     "orchestration_tasks",
     "outbound_adapter",
 ]
@@ -486,13 +487,22 @@ prefixes = [
 allowed = ["domain_ports"]
 
 [[tool.hecate.groups]]
+name = "orchestration_checkpoint"
+prefixes = [
+    "episodic.orchestration._checkpoint_payload",
+    "episodic.orchestration._checkpoint_dto",
+    "episodic.orchestration._payload_dto",
+]
+allowed = ["orchestration_checkpoint", "domain_ports"]
+
+[[tool.hecate.groups]]
 name = "orchestration"
 prefixes = [
     "episodic.orchestration._graph_builder",
     "episodic.orchestration._graph_nodes",
     "episodic.orchestration.langgraph",
 ]
-allowed = ["orchestration", "application", "domain_ports"]
+allowed = ["orchestration", "application", "domain_ports", "orchestration_checkpoint"]
 
 [[tool.hecate.groups]]
 name = "application"
@@ -534,7 +544,7 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports"]
+allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
