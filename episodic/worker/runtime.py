@@ -27,7 +27,8 @@ from celery import Celery
 from episodic.logging import get_logger
 
 from .tasks import SCAFFOLD_TASK_WORKLOADS, WorkerDependencies, register_scaffold_tasks
-from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology, WorkloadClass
+from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology
+from .workloads import WorkloadClass
 
 logger = get_logger(__name__)
 
