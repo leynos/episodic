@@ -453,6 +453,7 @@ allowed = [
     "composition_root",
     "domain_ports",
     "inbound_adapter",
+    "orchestration",
     "outbound_adapter",
 ]
 
@@ -483,6 +484,15 @@ prefixes = [
 allowed = ["domain_ports"]
 
 [[tool.hecate.groups]]
+name = "orchestration"
+prefixes = [
+    "episodic.orchestration._graph_builder",
+    "episodic.orchestration._graph_nodes",
+    "episodic.orchestration.langgraph",
+]
+allowed = ["orchestration", "application", "domain_ports"]
+
+[[tool.hecate.groups]]
 name = "application"
 prefixes = [
     "episodic.canonical.services",
@@ -493,7 +503,6 @@ prefixes = [
     "episodic.canonical.reference_documents",
     "episodic.cost.recorder",
     "episodic.generation",
-    "episodic.orchestration",
 ]
 allowed = ["application", "domain_ports"]
 
