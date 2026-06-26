@@ -137,7 +137,7 @@ Adjust per milestone; stop and escalate when a threshold is breached.
 - [x] M0 Orientation and red harness (fixtures and failing tests, no
       production changes).
 - [x] M1 Dedicated `orchestration` Hecate group and node/builder split.
-- [ ] M2 Celery task enforcement and `WorkloadClass` extraction.
+- [x] M2 Celery task enforcement and `WorkloadClass` extraction.
 - [ ] M3 Checkpoint payload boundary audit (Hecate group plus structural and
       property tests).
 - [ ] M4 Behavioural tests, snapshots, documentation, and roadmap update.
@@ -165,6 +165,17 @@ Focused validation passed with `68 passed, 1 xfailed`. The full milestone
 gates passed: `make check-fmt`, `make typecheck`, `make lint`, and
 `make test` (`1020 passed, 3 skipped, 1 xfailed`). CodeRabbit review completed
 with 0 findings.
+
+2026-06-26: M2 extracted `WorkloadClass` to the provider-neutral
+`episodic/worker/workloads.py` module, retargeted task/runtime imports to that
+module, and kept `episodic.worker.WorkloadClass` plus
+`episodic.worker.topology.WorkloadClass` importable. The production Hecate
+config now classifies `episodic.worker.workloads` as `domain_ports` and
+`episodic.worker.tasks` as `orchestration_tasks`, ordered before
+`inbound_adapter`. Focused validation passed with `56 passed, 1 xfailed`.
+The full milestone gates passed: `make check-fmt`, `make typecheck`,
+`make lint`, and `make test` (`1020 passed, 3 skipped, 1 xfailed`).
+CodeRabbit review is pending for this milestone.
 
 ## Surprises & discoveries
 
@@ -212,6 +223,14 @@ with 0 findings.
   `episodic.logging.log_event` and scoped the production `orchestration` group
   to graph modules only. M3 remains responsible for the checkpoint DTO group
   and the durable checkpoint adapter edge.
+
+- Observation: `WorkloadClass` had only two internal production consumers that
+  needed retargeting away from `topology`: `worker.tasks` and `worker.runtime`.
+  Evidence: `leta refs WorkloadClass` after the move shows internal imports
+  from `episodic.worker.workloads`, while `topology` and the public worker
+  barrel re-export the same symbol for existing callers.
+  Impact: M2 could preserve the public worker API while giving the task module
+  a vendor-free import path.
 
 ## Decision log
 
@@ -277,6 +296,14 @@ with 0 findings.
   the existing neutral home for logging helpers.
   Date/Author: 2026-06-26, implementation agent.
 
+- Decision: classify `episodic.worker.workloads` as `domain_ports`, not
+  `application`.
+  Rationale: `WorkloadClass` is a provider-neutral routing contract enum shared
+  by task code and the Kombu-backed topology adapter. Treating it as
+  `domain_ports` lets both task and topology layers depend on it without
+  creating a task-to-topology edge or broadening task permissions.
+  Date/Author: 2026-06-26, implementation agent.
+
 ## Outcomes & retrospective
 
 M1 outcome: the LangGraph node functions now live in
@@ -286,9 +313,15 @@ M1 outcome: the LangGraph node functions now live in
 The production architecture gate now groups those graph modules separately
 from `application`, while leaving checkpoint DTO grouping for M3.
 
-Remaining outcomes to complete: a developer importing an adapter into a Celery
-task or checkpoint payload must see `make lint` fail in production, and a
-non-neutral checkpoint payload field must fail `make test`.
+M2 outcome: Celery task code imports `WorkloadClass` from a provider-neutral
+worker workload module, while topology remains responsible for Kombu queue
+objects. The production architecture gate now groups `episodic.worker.tasks`
+as `orchestration_tasks`, so task code may import application and domain port
+contracts but not inbound or outbound adapters.
+
+Remaining outcomes to complete: a developer importing an adapter into a
+checkpoint payload must see `make lint` fail in production, and a non-neutral
+checkpoint payload field must fail `make test`.
 
 ## Context and orientation
 

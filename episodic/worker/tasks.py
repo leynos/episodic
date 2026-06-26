@@ -14,7 +14,7 @@ import dataclasses as dc
 import hashlib
 import typing as typ
 
-from .topology import WorkloadClass
+from .workloads import WorkloadClass
 
 if typ.TYPE_CHECKING:
     from celery import Celery
