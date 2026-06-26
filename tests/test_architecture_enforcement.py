@@ -8,7 +8,9 @@ in `tests/steps/test_architecture_enforcement_steps.py`; helper-level unit
 coverage lives in `tests/test_architecture_hecate_config.py`.
 """
 
+import tomllib
 import typing as typ
+from pathlib import Path
 
 import pytest
 from architecture_hecate_config import (
@@ -19,9 +21,13 @@ from architecture_hecate_config import (
 
 if typ.TYPE_CHECKING:
     import subprocess  # noqa: S404  # Type-only CompletedProcess reference.
-    from pathlib import Path
 
     from syrupy.assertion import SnapshotAssertion
+
+
+def _fixture_module(package_name: str, module_name: str) -> str:
+    """Return a fully qualified architecture fixture module name."""
+    return f"tests.fixtures.architecture.{package_name}.{module_name}"
 
 
 @pytest.mark.parametrize(
@@ -83,6 +89,86 @@ if typ.TYPE_CHECKING:
                 "tests.fixtures.architecture.explicit_empty_all.storage",
             ),
         ),
+        (
+            "orchestration_node_imports_outbound_adapter",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "orchestration_node_imports_outbound_adapter",
+                    "orchestration._graph_nodes",
+                ),
+                _fixture_module(
+                    "orchestration_node_imports_outbound_adapter",
+                    "storage",
+                ),
+            ),
+        ),
+        (
+            "orchestration_imports_inbound_adapter",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "orchestration_imports_inbound_adapter",
+                    "orchestration.generation",
+                ),
+                _fixture_module("orchestration_imports_inbound_adapter", "api"),
+            ),
+        ),
+        (
+            "celery_task_imports_inbound_adapter",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "celery_task_imports_inbound_adapter",
+                    "worker.tasks",
+                ),
+                _fixture_module("celery_task_imports_inbound_adapter", "api"),
+            ),
+        ),
+        (
+            "celery_task_imports_outbound_adapter",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "celery_task_imports_outbound_adapter",
+                    "worker.tasks",
+                ),
+                _fixture_module("celery_task_imports_outbound_adapter", "storage"),
+            ),
+        ),
+        (
+            "checkpoint_payload_imports_storage",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "checkpoint_payload_imports_storage",
+                    "orchestration._checkpoint_payload",
+                ),
+                _fixture_module("checkpoint_payload_imports_storage", "storage"),
+            ),
+        ),
+        (
+            "checkpoint_payload_imports_application",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "checkpoint_payload_imports_application",
+                    "orchestration._checkpoint_payload",
+                ),
+                _fixture_module("checkpoint_payload_imports_application", "service"),
+            ),
+        ),
+        (
+            "ungrouped_adapter_is_caught",
+            (
+                "ARCH001",
+                _fixture_module(
+                    "ungrouped_adapter_is_caught",
+                    "orchestration.generation",
+                ),
+                _fixture_module("ungrouped_adapter_is_caught", "adapter"),
+            ),
+        ),
     ],
 )
 def test_checker_reports_fixture_boundary_violations(
@@ -137,6 +223,44 @@ def test_checker_accepts_composition_root_fixture_wiring(tmp_path: Path) -> None
 
     rendered = f"{completed_process.stdout}\n{completed_process.stderr}"
     assert completed_process.returncode == 0, rendered
+
+
+@pytest.mark.parametrize(
+    "package_name",
+    [
+        "orchestration_node_imports_port",
+        "orchestration_imports_domain_service",
+        "celery_task_imports_domain_service",
+    ],
+)
+def test_checker_accepts_orchestration_fixture_graphs(
+    package_name: str,
+    tmp_path: Path,
+) -> None:
+    """Allowed orchestration fixture imports do not produce violations."""
+    config_path = write_fixture_config(tmp_path, package_name)
+
+    completed_process = run_hecate_fixture_check(package_name, config_path)
+
+    rendered = f"{completed_process.stdout}\n{completed_process.stderr}"
+    assert completed_process.returncode == 0, rendered
+
+
+@pytest.mark.xfail(strict=True, reason="groups added in M1-M3")
+def test_production_config_declares_orchestration_groups() -> None:
+    """Production Hecate config names the orchestration enforcement groups."""
+    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    config = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    tool_config = typ.cast("dict[str, object]", config["tool"])
+    hecate_config = typ.cast("dict[str, object]", tool_config["hecate"])
+    groups = typ.cast("list[dict[str, object]]", hecate_config["groups"])
+    group_names = {typ.cast("str", group["name"]) for group in groups}
+
+    assert {
+        "orchestration",
+        "orchestration_tasks",
+        "orchestration_checkpoint",
+    } <= group_names
 
 
 def test_production_checker_accepts_scoped_packages() -> None:
