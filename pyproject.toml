@@ -490,7 +490,7 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports"]
+allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
 
 [[tool.hecate.groups]]
 name = "outbound_adapter"
@@ -503,7 +503,7 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports"]
+allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
 
 [[tool.hecate.groups]]
 name = "outbound_adapter"
@@ -516,7 +516,7 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports"]
+allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
 
 [[tool.hecate.groups]]
 name = "outbound_adapter"
@@ -529,7 +529,7 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports"]
+allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
 
 [[tool.hecate.groups]]
 name = "outbound_adapter"
@@ -542,7 +542,7 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports"]
+allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]

@@ -246,7 +246,6 @@ def test_checker_accepts_orchestration_fixture_graphs(
     assert completed_process.returncode == 0, rendered
 
 
-@pytest.mark.xfail(strict=True, reason="groups added in M1-M3")
 def test_production_config_declares_orchestration_groups() -> None:
     """Production Hecate config names the orchestration enforcement groups."""
     pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
