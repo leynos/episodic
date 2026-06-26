@@ -27,10 +27,34 @@ COMPOSITION_ROOT_GROUPS: tuple[str, ...] = (
     "composition_root",
     "domain",
     "inbound_adapter",
+    "orchestration",
+    "orchestration_checkpoint",
+    "orchestration_nodes",
+    "orchestration_tasks",
     "outbound_adapter",
 )
 DOMAIN_GROUPS: tuple[str, ...] = ("domain",)
 APPLICATION_GROUPS: tuple[str, ...] = ("application", "domain")
+ORCHESTRATION_CHECKPOINT_GROUPS: tuple[str, ...] = (
+    "orchestration_checkpoint",
+    "domain",
+)
+ORCHESTRATION_NODE_GROUPS: tuple[str, ...] = (
+    "orchestration_nodes",
+    "domain",
+    "orchestration_checkpoint",
+)
+ORCHESTRATION_GROUPS: tuple[str, ...] = (
+    "orchestration",
+    "application",
+    "domain",
+    "orchestration_checkpoint",
+)
+ORCHESTRATION_TASK_GROUPS: tuple[str, ...] = (
+    "orchestration_tasks",
+    "application",
+    "domain",
+)
 INBOUND_ADAPTER_GROUPS: tuple[str, ...] = ("inbound_adapter", "application", "domain")
 OUTBOUND_ADAPTER_GROUPS: tuple[str, ...] = (
     "outbound_adapter",
@@ -208,13 +232,19 @@ def run_hecate_production_check(
 def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) -> str:
     """Return fixture-specific Hecate TOML."""
     outbound_prefixes = (
-        f'"{package}.storage", "{package}"'
+        f'"{package}.storage", "{package}.adapter", "{package}"'
         if treats_package_barrel_as_outbound
-        else f'"{package}.storage"'
+        else f'"{package}.storage", "{package}.adapter"'
     )
     composition_root_allowed = _toml_string_array(COMPOSITION_ROOT_GROUPS)
     domain_allowed = _toml_string_array(DOMAIN_GROUPS)
     application_allowed = _toml_string_array(APPLICATION_GROUPS)
+    orchestration_checkpoint_allowed = _toml_string_array(
+        ORCHESTRATION_CHECKPOINT_GROUPS,
+    )
+    orchestration_node_allowed = _toml_string_array(ORCHESTRATION_NODE_GROUPS)
+    orchestration_allowed = _toml_string_array(ORCHESTRATION_GROUPS)
+    orchestration_task_allowed = _toml_string_array(ORCHESTRATION_TASK_GROUPS)
     inbound_adapter_allowed = _toml_string_array(INBOUND_ADAPTER_GROUPS)
     outbound_adapter_allowed = _toml_string_array(OUTBOUND_ADAPTER_GROUPS)
     return textwrap.dedent(
@@ -230,8 +260,32 @@ def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) ->
 
         [[tool.hecate.groups]]
         name = "domain"
-        prefixes = ["{package}.domain"]
+        prefixes = ["{package}.domain", "{package}.worker.workloads"]
         allowed = {domain_allowed}
+
+        [[tool.hecate.groups]]
+        name = "orchestration_checkpoint"
+        prefixes = [
+            "{package}.orchestration._checkpoint_payload",
+            "{package}.orchestration._checkpoint_dto",
+            "{package}.orchestration._payload_dto",
+        ]
+        allowed = {orchestration_checkpoint_allowed}
+
+        [[tool.hecate.groups]]
+        name = "orchestration_nodes"
+        prefixes = ["{package}.orchestration._graph_nodes"]
+        allowed = {orchestration_node_allowed}
+
+        [[tool.hecate.groups]]
+        name = "orchestration_tasks"
+        prefixes = ["{package}.worker.tasks"]
+        allowed = {orchestration_task_allowed}
+
+        [[tool.hecate.groups]]
+        name = "orchestration"
+        prefixes = ["{package}.orchestration"]
+        allowed = {orchestration_allowed}
 
         [[tool.hecate.groups]]
         name = "application"
@@ -240,7 +294,7 @@ def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) ->
 
         [[tool.hecate.groups]]
         name = "inbound_adapter"
-        prefixes = ["{package}.api"]
+        prefixes = ["{package}.api", "{package}.worker.topology"]
         allowed = {inbound_adapter_allowed}
 
         [[tool.hecate.groups]]

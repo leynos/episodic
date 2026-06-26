@@ -134,7 +134,7 @@ Adjust per milestone; stop and escalate when a threshold is breached.
 
 ## Progress
 
-- [ ] M0 Orientation and red harness (fixtures and failing tests, no
+- [x] M0 Orientation and red harness (fixtures and failing tests, no
       production changes).
 - [ ] M1 Dedicated `orchestration` Hecate group and node/builder split.
 - [ ] M2 Celery task enforcement and `WorkloadClass` extraction.
@@ -147,6 +147,12 @@ conflicts. Post-rebase gates passed: `make check-fmt`, `make test`,
 `make typecheck`, and `make lint`. The branch was force-pushed with lease, the
 PR title was updated to remove the `Plan:` prefix, and the PR references now
 point at the active Lody session.
+
+2026-06-26: M0 added the fixture-only orchestration Hecate groups, synthetic
+node/task/checkpoint fixtures, and the strict-xfailed production group
+expectation. Focused architecture tests passed with `30 passed, 1 xfailed`.
+The full milestone gates passed: `make check-fmt`, `make typecheck`,
+`make lint`, and `make test` (`1020 passed, 3 skipped, 1 xfailed`).
 
 ## Surprises & discoveries
 
@@ -175,6 +181,14 @@ point at the active Lody session.
   and `episodic/worker/*.py`.
   Impact: the enforcement is mostly preventative; the two real fixes are the
   `WorkloadClass` extraction (M2) and the checkpoint DTO decoupling (M3).
+
+- Observation: the fixture generator needs an explicit outbound `.adapter`
+  prefix as well as `.storage` so the `ungrouped_adapter_is_caught` fixture
+  fails if a reachable adapter-like module is left invisible to Hecate.
+  Evidence: helper-level tests now assert the outbound prefixes include both
+  modules.
+  Impact: future fixture additions can model non-storage adapters without
+  adding fixture-specific TOML.
 
 ## Decision log
 
@@ -212,6 +226,13 @@ point at the active Lody session.
   Rationale: a plan is cheaper to narrow than to re-expand, and PR review is the
   approval gate.
   Date/Author: 2026-06-15, planning agent.
+
+- Decision: model production-like specific prefixes in architecture fixtures
+  (`orchestration._graph_nodes`, `orchestration._checkpoint_payload`, and
+  `worker.tasks`) instead of flat toy module names.
+  Rationale: this makes M0 cover the first-match ordering hazard that M1-M3
+  must preserve in the real `[tool.hecate]` configuration.
+  Date/Author: 2026-06-26, implementation agent.
 
 ## Outcomes & retrospective
 
