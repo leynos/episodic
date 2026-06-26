@@ -293,6 +293,8 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
             / "architecture"
             / "allowed_case",
         ),
+        "--format",
+        "text",
     ]
 
 

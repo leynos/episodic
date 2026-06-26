@@ -8,6 +8,7 @@ in `tests/steps/test_architecture_enforcement_steps.py`; helper-level unit
 coverage lives in `tests/test_architecture_hecate_config.py`.
 """
 
+import json
 import tomllib
 import typing as typ
 from pathlib import Path
@@ -203,6 +204,30 @@ def test_checker_diagnostic_output_matches_snapshot(
     assert _render_process(completed_process) == snapshot
 
 
+def test_orchestration_json_diagnostics_match_snapshot(
+    tmp_path: Path,
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Orchestration boundary JSON diagnostics keep a stable shape."""
+    package_names = (
+        "orchestration_node_imports_outbound_adapter",
+        "celery_task_imports_inbound_adapter",
+        "checkpoint_payload_imports_storage",
+    )
+    reports: dict[str, object] = {}
+    for package_name in package_names:
+        config_path = write_fixture_config(tmp_path, package_name)
+        completed_process = run_hecate_fixture_check(
+            package_name,
+            config_path,
+            output_format="json",
+        )
+        assert completed_process.returncode == 1
+        reports[package_name] = _normalise_hecate_json_report(completed_process)
+
+    assert reports == snapshot
+
+
 def test_checker_accepts_allowed_fixture_graph(tmp_path: Path) -> None:
     """Allowed fixture imports do not produce architecture violations."""
     package_name = "allowed_case"
@@ -273,3 +298,15 @@ def test_production_checker_accepts_scoped_packages() -> None:
 def _render_process(completed_process: subprocess.CompletedProcess[str]) -> str:
     """Return captured Hecate output in assertion form."""
     return f"stdout:\n{completed_process.stdout}\nstderr:\n{completed_process.stderr}"
+
+
+def _normalise_hecate_json_report(
+    completed_process: subprocess.CompletedProcess[str],
+) -> object:
+    """Return Hecate JSON output with workspace-specific paths normalised."""
+    report = json.loads(completed_process.stdout)
+    for violation in report["violations"]:
+        violation["source_path"] = str(
+            Path(violation["source_path"]).relative_to(Path(__file__).parents[1])
+        )
+    return report

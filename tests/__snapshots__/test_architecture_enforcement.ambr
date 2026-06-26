@@ -8,3 +8,49 @@
   
   '''
 # ---
+# name: test_orchestration_json_diagnostics_match_snapshot
+  dict({
+    'celery_task_imports_inbound_adapter': dict({
+      'ok': False,
+      'violations': list([
+        dict({
+          'imported': 'tests.fixtures.architecture.celery_task_imports_inbound_adapter.api',
+          'imported_group': 'inbound_adapter',
+          'importer': 'tests.fixtures.architecture.celery_task_imports_inbound_adapter.worker.tasks',
+          'importer_group': 'orchestration_tasks',
+          'line': 3,
+          'rule_id': 'ARCH001',
+          'source_path': 'tests/fixtures/architecture/celery_task_imports_inbound_adapter/worker/tasks.py',
+        }),
+      ]),
+    }),
+    'checkpoint_payload_imports_storage': dict({
+      'ok': False,
+      'violations': list([
+        dict({
+          'imported': 'tests.fixtures.architecture.checkpoint_payload_imports_storage.storage',
+          'imported_group': 'outbound_adapter',
+          'importer': 'tests.fixtures.architecture.checkpoint_payload_imports_storage.orchestration._checkpoint_payload',
+          'importer_group': 'orchestration_checkpoint',
+          'line': 3,
+          'rule_id': 'ARCH001',
+          'source_path': 'tests/fixtures/architecture/checkpoint_payload_imports_storage/orchestration/_checkpoint_payload.py',
+        }),
+      ]),
+    }),
+    'orchestration_node_imports_outbound_adapter': dict({
+      'ok': False,
+      'violations': list([
+        dict({
+          'imported': 'tests.fixtures.architecture.orchestration_node_imports_outbound_adapter.storage',
+          'imported_group': 'outbound_adapter',
+          'importer': 'tests.fixtures.architecture.orchestration_node_imports_outbound_adapter.orchestration._graph_nodes',
+          'importer_group': 'orchestration_nodes',
+          'line': 3,
+          'rule_id': 'ARCH001',
+          'source_path': 'tests/fixtures/architecture/orchestration_node_imports_outbound_adapter/orchestration/_graph_nodes.py',
+        }),
+      ]),
+    }),
+  })
+# ---
