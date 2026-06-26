@@ -136,7 +136,7 @@ Adjust per milestone; stop and escalate when a threshold is breached.
 
 - [x] M0 Orientation and red harness (fixtures and failing tests, no
       production changes).
-- [ ] M1 Dedicated `orchestration` Hecate group and node/builder split.
+- [x] M1 Dedicated `orchestration` Hecate group and node/builder split.
 - [ ] M2 Celery task enforcement and `WorkloadClass` extraction.
 - [ ] M3 Checkpoint payload boundary audit (Hecate group plus structural and
       property tests).
@@ -154,6 +154,17 @@ expectation. Focused architecture tests passed with `30 passed, 1 xfailed`.
 The full milestone gates passed: `make check-fmt`, `make typecheck`,
 `make lint`, and `make test` (`1020 passed, 3 skipped, 1 xfailed`).
 CodeRabbit review completed with 0 findings.
+
+2026-06-26: M1 split `episodic/orchestration/langgraph.py` into
+`_graph_nodes.py` for plan/execute/finish node functions, `_graph_builder.py`
+for LangGraph assembly plus callback and cost wiring, and a 57-line
+compatibility barrel that preserves the historical `langgraph` import path.
+The production Hecate `orchestration` group is now ordered before
+`application` and scoped to `_graph_builder`, `_graph_nodes`, and `langgraph`.
+Focused validation passed with `68 passed, 1 xfailed`. The full milestone
+gates passed: `make check-fmt`, `make typecheck`, `make lint`, and
+`make test` (`1020 passed, 3 skipped, 1 xfailed`). CodeRabbit review is
+pending for this milestone.
 
 ## Surprises & discoveries
 
@@ -190,6 +201,17 @@ CodeRabbit review completed with 0 findings.
   modules.
   Impact: future fixture additions can model non-storage adapters without
   adding fixture-specific TOML.
+
+- Observation: a broad production prefix of `episodic.orchestration` catches
+  the durable checkpoint adapter before M3 has separated checkpoint DTOs.
+  Evidence: the first M1 focused run failed `run_hecate_production_check()`
+  because `episodic.canonical.storage.workflow_checkpoints` imports
+  `WorkflowCheckpoint`, and because two adapters still imported the
+  orchestration-local `_log_event` helper.
+  Impact: M1 moved the reusable structured logging helper to
+  `episodic.logging.log_event` and scoped the production `orchestration` group
+  to graph modules only. M3 remains responsible for the checkpoint DTO group
+  and the durable checkpoint adapter edge.
 
 ## Decision log
 
@@ -235,12 +257,38 @@ CodeRabbit review completed with 0 findings.
   must preserve in the real `[tool.hecate]` configuration.
   Date/Author: 2026-06-26, implementation agent.
 
+- Decision: scope the first production `orchestration` Hecate group to graph
+  modules (`_graph_builder`, `_graph_nodes`, and the compatibility
+  `langgraph` barrel) rather than the whole `episodic.orchestration` package.
+  Rationale: M1 proves the node/builder split and prevents graph modules from
+  importing adapters without prematurely grouping checkpoint DTOs. A package-
+  wide prefix would force the M3 checkpoint DTO decision into M1 and would
+  make the durable checkpoint adapter fail before its port DTO boundary has
+  been audited.
+  Date/Author: 2026-06-26, implementation agent.
+
+- Decision: promote the structured event helper from
+  `episodic.orchestration._types._log_event` to
+  `episodic.logging.log_event`, while keeping `_types._log_event` as a
+  compatibility alias.
+  Rationale: canonical adapters were using the helper for generic structured
+  logging. Keeping that helper in orchestration created an adapter-to-
+  orchestration dependency unrelated to graph policy; the logging module is
+  the existing neutral home for logging helpers.
+  Date/Author: 2026-06-26, implementation agent.
+
 ## Outcomes & retrospective
 
-To be completed at milestone boundaries and at completion. Compare the result
-against the Purpose: a developer importing an adapter into a node, task, or
-checkpoint payload must see `make lint` fail, and a non-neutral checkpoint
-payload field must fail `make test`.
+M1 outcome: the LangGraph node functions now live in
+`episodic/orchestration/_graph_nodes.py`, graph assembly lives in
+`episodic/orchestration/_graph_builder.py`, and the historical
+`episodic.orchestration.langgraph` import path re-exports the moved symbols.
+The production architecture gate now groups those graph modules separately
+from `application`, while leaving checkpoint DTO grouping for M3.
+
+Remaining outcomes to complete: a developer importing an adapter into a Celery
+task or checkpoint payload must see `make lint` fail in production, and a
+non-neutral checkpoint payload field must fail `make test`.
 
 ## Context and orientation
 

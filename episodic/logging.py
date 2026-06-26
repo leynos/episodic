@@ -13,6 +13,7 @@ Configure logging and emit a message:
 """
 
 import enum
+import json
 import logging
 import typing as typ
 import warnings
@@ -280,12 +281,39 @@ def log_error(
         )
 
 
+_event_log = getLogger(__name__)
+
+
+def log_event(level: str, message: str, **fields: object) -> None:
+    """Emit one structured log event with a JSON fallback.
+
+    Logger convenience methods only accept ``exc_info`` and ``stack_info``
+    beside the message. Structured fields are serialized into one JSON message
+    when needed.
+    """
+    log_method = getattr(_event_log, level)
+    allowed_kwargs = {
+        k: v for k, v in fields.items() if k in {"exc_info", "stack_info"}
+    }
+    extra_fields = {k: v for k, v in fields.items() if k not in allowed_kwargs}
+    if extra_fields:
+        payload = {"event": message, **extra_fields}
+        log_method(json.dumps(payload, sort_keys=True), **allowed_kwargs)
+        return
+    try:
+        log_method(message, **allowed_kwargs)
+    except TypeError:
+        payload = {"event": message}
+        log_method(json.dumps(payload, sort_keys=True), **allowed_kwargs)
+
+
 __all__ = (
     "LogLevel",
     "configure_logging",
     "getLogger",
     "get_logger",
     "log_error",
+    "log_event",
     "log_info",
     "log_warning",
 )
