@@ -125,6 +125,7 @@ def run_hecate_fixture_check(
     config_path: Path,
     *,
     python_executable: str | Path = sys.executable,
+    output_format: str = "text",
 ) -> subprocess.CompletedProcess[str]:
     """Run Hecate against one architecture fixture package.
 
@@ -137,6 +138,9 @@ def run_hecate_fixture_check(
     python_executable : str | Path
         Python executable used to invoke `python -m hecate`. Tests may inject a
         substitute executable when validating command construction.
+    output_format : str
+        Hecate output renderer to request. Supported values are `text` and
+        `json`.
 
     Returns
     -------
@@ -167,6 +171,8 @@ def run_hecate_fixture_check(
         package,
         "--root",
         str(package_root),
+        "--format",
+        output_format,
     ]
     try:
         return subprocess.run(  # noqa: S603  # shell=False with trusted test args.

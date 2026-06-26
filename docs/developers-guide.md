@@ -646,13 +646,26 @@ The enforced groups are:
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
   OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
   `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
+- `orchestration_checkpoint`: provider-neutral checkpoint payload DTO and
+  serialisation modules.
+- `orchestration`: LangGraph builders, graph state, planning orchestration, and
+  tool execution policy.
+- `orchestration_tasks`: Celery task entrypoints.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
 
 When adding a new port or adapter, update `[tool.hecate]` in `pyproject.toml`
-in the same change as the package. Keep composition-root prefixes before
-broader adapter prefixes because Hecate uses first-match group ordering. Add or
-adjust fixture coverage in `tests/fixtures/architecture/` and run:
+in the same change as the package. Keep specific prefixes before broader
+prefixes because Hecate uses first-match group ordering:
+`composition_root` before adapter prefixes, `orchestration_checkpoint` and
+`orchestration_nodes` before the broad `orchestration` prefix, and
+`orchestration_tasks` before worker adapter prefixes.
+
+`episodic.worker.topology.WorkloadClass` is a worker workload contract that
+task modules may import without pulling in the Celery app or runtime wiring.
+Worker runtime modules own concrete Celery configuration.
+
+Add or adjust fixture coverage in `tests/fixtures/architecture/` and run:
 
 ```shell
 uv run pytest -q tests/test_architecture_enforcement.py \
@@ -662,6 +675,13 @@ uv run pytest -q tests/test_architecture_enforcement.py \
 Port contract coverage lives in `tests/test_port_contracts.py`. Future
 behavioural tests that exercise real `LLMPort` inference paths should use Vidai
 Mock; structural conformance tests do not need an inference server.
+
+For orchestration boundary fixtures, model the violating importer under the
+same prefix Hecate will classify in production. Use
+`orchestration/_graph_nodes.py` for node-only checks, `worker/tasks.py` for
+Celery task checks, and `orchestration/_checkpoint_payload.py` for checkpoint
+payload checks. Snapshot JSON diagnostics only after normalising workspace
+paths.
 
 ### TEI payload compression
 
@@ -1237,8 +1257,13 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
 
 ### Package structure
 
-- `episodic/orchestration/_dto.py` contains the orchestration DTOs and shared
-  checkpoint DTOs.
+- `episodic/orchestration/_dto.py` contains public request/config DTOs and
+  compatibility re-exports.
+- `episodic/orchestration/_payload_dto.py` contains provider-neutral planner,
+  plan, and action-result payload DTOs.
+- `episodic/orchestration/_checkpoint_dto.py` and
+  `episodic/orchestration/_checkpoint_payload.py` contain checkpoint state DTOs
+  and JSON payload serialisation helpers.
 - `episodic/orchestration/_protocols.py` contains the planner, executor,
   checkpoint, and resume ports that keep graph policy independent of storage,
   queue, and provider adapters.
@@ -1252,9 +1277,13 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   `GuestBiosToolExecutor` implementation. It resolves the request's
   `series_profile_id`, optional `episode_id`, and optional `template_id`
   through the configured binding resolver before invoking the generation helper.
-- `episodic/orchestration/langgraph.py` contains the in-process LangGraph path
-  used for `plan -> execute -> finish` and the checkpointing path that pauses
-  after planning.
+- `episodic/orchestration/_graph_nodes.py` contains node functions that depend
+  on orchestration ports and DTOs only.
+- `episodic/orchestration/_graph_builder.py` wires nodes, callbacks, and cost
+  recording into the compiled graph.
+- `episodic/orchestration/langgraph.py` is the public graph facade for
+  `plan -> execute -> finish` and the checkpointing path that pauses after
+  planning.
 - `episodic/orchestration/checkpoints.py` contains the in-memory checkpoint
   adapter used by fast tests.
 - `episodic/canonical/storage/workflow_checkpoints.py` contains the SQLAlchemy
