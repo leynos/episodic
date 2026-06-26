@@ -175,7 +175,7 @@ config now classifies `episodic.worker.workloads` as `domain_ports` and
 `inbound_adapter`. Focused validation passed with `56 passed, 1 xfailed`.
 The full milestone gates passed: `make check-fmt`, `make typecheck`,
 `make lint`, and `make test` (`1020 passed, 3 skipped, 1 xfailed`).
-CodeRabbit review is pending for this milestone.
+CodeRabbit review completed with 0 findings.
 
 ## Surprises & discoveries
 
