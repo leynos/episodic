@@ -453,6 +453,9 @@ allowed = [
     "composition_root",
     "domain_ports",
     "inbound_adapter",
+    "orchestration",
+    "orchestration_checkpoint",
+    "orchestration_tasks",
     "outbound_adapter",
 ]
 
@@ -479,8 +482,27 @@ prefixes = [
     "episodic.cost.engine",
     "episodic.llm.ports",
     "episodic.metrics_ports",
+    "episodic.worker.workloads",
 ]
 allowed = ["domain_ports"]
+
+[[tool.hecate.groups]]
+name = "orchestration_checkpoint"
+prefixes = [
+    "episodic.orchestration._checkpoint_payload",
+    "episodic.orchestration._checkpoint_dto",
+    "episodic.orchestration._payload_dto",
+]
+allowed = ["orchestration_checkpoint", "domain_ports"]
+
+[[tool.hecate.groups]]
+name = "orchestration"
+prefixes = [
+    "episodic.orchestration._graph_builder",
+    "episodic.orchestration._graph_nodes",
+    "episodic.orchestration.langgraph",
+]
+allowed = ["orchestration", "application", "domain_ports", "orchestration_checkpoint"]
 
 [[tool.hecate.groups]]
 name = "application"
@@ -493,15 +515,20 @@ prefixes = [
     "episodic.canonical.reference_documents",
     "episodic.cost.recorder",
     "episodic.generation",
-    "episodic.orchestration",
 ]
 allowed = ["application", "domain_ports"]
+
+[[tool.hecate.groups]]
+name = "orchestration_tasks"
+prefixes = [
+    "episodic.worker.tasks",
+]
+allowed = ["orchestration_tasks", "application", "domain_ports"]
 
 [[tool.hecate.groups]]
 name = "inbound_adapter"
 prefixes = [
     "episodic.api",
-    "episodic.worker.tasks",
     "episodic.worker.topology",
 ]
 allowed = ["inbound_adapter", "application", "domain_ports"]
@@ -517,7 +544,7 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports"]
+allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]

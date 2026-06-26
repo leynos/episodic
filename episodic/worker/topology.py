@@ -8,19 +8,13 @@ exchanges, and route metadata consumed by
 
 import collections.abc as cabc  # noqa: TC003
 import dataclasses as dc
-import enum
 import types
 
 from kombu import Exchange, Queue
 
+from .workloads import WorkloadClass as WorkloadClass
+
 MIN_DOTTED_TASK_NAME_PARTS = 2
-
-
-class WorkloadClass(enum.StrEnum):
-    """Canonical workload classes for routed Celery tasks."""
-
-    IO_BOUND = "io_bound"
-    CPU_BOUND = "cpu_bound"
 
 
 def _validate_queue_spec_strings(

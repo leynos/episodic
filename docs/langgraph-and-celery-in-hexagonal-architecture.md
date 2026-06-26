@@ -36,6 +36,40 @@ mixing infrastructure calls into what should be a domain workflow. Therefore,
 logic should remain in the application layer and invoke only domain services or
 ports, never directly calling outbound adapters in-line.
 
+## Enforced Orchestration Boundaries
+
+Roadmap item `2.4.5` makes those orchestration rules executable through
+Hecate. The production configuration classifies orchestration modules before
+broader adapter prefixes so the first matching group is the strictest useful
+boundary.
+
+- `orchestration_nodes` covers `episodic.orchestration._graph_nodes`. Node
+  functions may import orchestration DTOs and ports, but not Falcon, Celery,
+  SQLAlchemy, OpenAI adapters, or other concrete infrastructure.
+- `orchestration` covers graph builders, planning orchestration, and tool
+  execution policy. This layer may depend on application services and domain
+  ports, but still cannot import inbound or outbound adapters.
+- `orchestration_tasks` covers `episodic.worker.tasks`. Tasks may import
+  `episodic.worker.topology.WorkloadClass`, domain services, and ports; the
+  worker runtime remains the composition root that wires Celery.
+- `orchestration_checkpoint` covers checkpoint DTO and payload serialisation
+  modules. These modules may import domain-port value types and their own DTO
+  group only. `WorkflowCheckpoint` also rejects non-JSON payload values at
+  construction time.
+
+The node/builder split keeps framework mechanics out of node functions without
+making LangGraph itself a domain dependency. `_graph_nodes.py` holds the
+side-effect-free node bodies that receive injected planner, executor,
+checkpoint, resume, and cost collaborators. `_graph_builder.py` owns LangGraph
+assembly, callback wrapping, and cost-recording edges. The public
+`langgraph.py` module stays as the stable facade.
+
+Checkpoint payload auditing is both static and runtime checked. Hecate prevents
+payload modules from importing storage or application services. A structural
+test walks the persisted checkpoint DTO annotations to reject provider-specific
+or ORM-shaped fields, whilst the `WorkflowCheckpoint` constructor verifies that
+payload mappings can be serialised as JSON.
+
 **Graph-Based Logic vs. Domain Rules Clarity:** Another friction point is how
 business rules are encoded. In a hexagonal design, business rules belong in the
 domain layer or application logic, not scattered across infrastructure.
