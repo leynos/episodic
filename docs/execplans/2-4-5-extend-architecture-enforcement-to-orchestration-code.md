@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -141,6 +141,12 @@ Adjust per milestone; stop and escalate when a threshold is breached.
 - [ ] M3 Checkpoint payload boundary audit (Hecate group plus structural and
       property tests).
 - [ ] M4 Behavioural tests, snapshots, documentation, and roadmap update.
+
+2026-06-26: Rebasing the branch onto `origin/main` completed cleanly with no
+conflicts. Post-rebase gates passed: `make check-fmt`, `make test`,
+`make typecheck`, and `make lint`. The branch was force-pushed with lease, the
+PR title was updated to remove the `Plan:` prefix, and the PR references now
+point at the active Lody session.
 
 ## Surprises & discoveries
 
