@@ -189,7 +189,7 @@ rejects non-JSON payload values, and
 plus a Hypothesis JSON round-trip property. Focused validation passed with
 `88 passed`. The full milestone gates passed: `make check-fmt`,
 `make test` (`1024 passed, 3 skipped`), `make typecheck`, and `make lint`.
-CodeRabbit review is pending for this milestone.
+CodeRabbit review completed with 0 findings.
 
 ## Surprises & discoveries
 
