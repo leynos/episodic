@@ -454,6 +454,7 @@ allowed = [
     "domain_ports",
     "inbound_adapter",
     "orchestration",
+    "orchestration_tasks",
     "outbound_adapter",
 ]
 
@@ -480,6 +481,7 @@ prefixes = [
     "episodic.cost.engine",
     "episodic.llm.ports",
     "episodic.metrics_ports",
+    "episodic.worker.workloads",
 ]
 allowed = ["domain_ports"]
 
@@ -507,10 +509,16 @@ prefixes = [
 allowed = ["application", "domain_ports"]
 
 [[tool.hecate.groups]]
+name = "orchestration_tasks"
+prefixes = [
+    "episodic.worker.tasks",
+]
+allowed = ["orchestration_tasks", "application", "domain_ports"]
+
+[[tool.hecate.groups]]
 name = "inbound_adapter"
 prefixes = [
     "episodic.api",
-    "episodic.worker.tasks",
     "episodic.worker.topology",
 ]
 allowed = ["inbound_adapter", "application", "domain_ports"]
