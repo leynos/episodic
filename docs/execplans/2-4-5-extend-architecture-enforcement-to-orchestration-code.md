@@ -202,7 +202,7 @@ ADR-016, the node/builder split, the `orchestration_nodes`,
 payload audit, and roadmap item `2.4.5` as complete. The full milestone gates
 passed: `make check-fmt`, `make test` (`1030 passed, 3 skipped`),
 `make typecheck`, `make lint`, `make markdownlint`, and `make nixie`.
-CodeRabbit review is pending.
+CodeRabbit review completed with 0 findings.
 
 ## Surprises & discoveries
 
