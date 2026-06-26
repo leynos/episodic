@@ -25,7 +25,7 @@ from episodic.canonical.generation_run_ports import (
     event_page_minimum_sequence,
     event_seq,
 )
-from episodic.orchestration._types import _log_event
+from episodic.logging import log_event as _log_event
 
 from .generation_checkpoints import InMemoryGenerationCheckpointMixin
 

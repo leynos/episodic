@@ -1,12 +1,4 @@
-"""Graph node bodies for the generation orchestration LangGraph.
-
-This module owns the `plan`, `execute`, and `finish` node implementations
-that `langgraph.py` wires into the compiled `StateGraph`. Each node validates
-the required state, delegates to the relevant port, and emits structured
-log events around the call. `_invoke_finish_callback` runs the optional
-finish callback supplied through `GenerationGraphExtensions` after the
-`finish` node has produced its result.
-"""
+"""Ports-only graph nodes for structured generation orchestration."""
 
 import importlib
 import time
@@ -160,7 +152,7 @@ def _finish_node(
         "generation_graph.finish_node.start",
         correlation_id=correlation_id,
     )
-    _, planner_result = _require_request_and_planner(state)
+    request, planner_result = _require_request_and_planner(state)
     try:
         orchestration_result = build_generation_result(
             planner_result,
@@ -181,32 +173,3 @@ def _finish_node(
         correlation_id=correlation_id,
     )
     return result
-
-
-def _invoke_finish_callback(
-    finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None],
-    result: dict[str, dto.GenerationOrchestrationResult],
-    correlation_id: str | None,
-) -> None:
-    """Invoke *finish_callback* with the aggregated domain result.
-
-    Logs a debug event on success and an error event on failure.
-    Exceptions are swallowed so that callback failures do not replace
-    the already-computed graph result. The callback is invoked synchronously
-    in the graph execution context; callbacks shared across concurrent graph
-    invocations must provide their own synchronization.
-    """
-    try:
-        finish_callback(result["orchestration_result"])
-        _log_event(
-            "debug",
-            "generation_graph.finish_node.callback.finish",
-            correlation_id=correlation_id,
-        )
-    except Exception as exc:  # ruff: ignore[blind-except]  # Deliberately swallow callback failures to preserve the computed graph result.
-        _log_event(
-            "error",
-            "generation_graph.finish_node.callback.error",
-            correlation_id=correlation_id,
-            error=str(exc),
-        )
