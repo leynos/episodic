@@ -140,7 +140,7 @@ Adjust per milestone; stop and escalate when a threshold is breached.
 - [x] M2 Celery task enforcement and `WorkloadClass` extraction.
 - [x] M3 Checkpoint payload boundary audit (Hecate group plus structural and
       property tests).
-- [ ] M4 Behavioural tests, snapshots, documentation, and roadmap update.
+- [x] M4 Behavioural tests, snapshots, documentation, and roadmap update.
 
 2026-06-26: Rebasing the branch onto `origin/main` completed cleanly with no
 conflicts. Post-rebase gates passed: `make check-fmt`, `make test`,
@@ -190,6 +190,19 @@ plus a Hypothesis JSON round-trip property. Focused validation passed with
 `88 passed`. The full milestone gates passed: `make check-fmt`,
 `make test` (`1024 passed, 3 skipped`), `make typecheck`, and `make lint`.
 CodeRabbit review completed with 0 findings.
+
+2026-06-26: M4 extended the architecture BDD feature with clean orchestration,
+LangGraph-node, Celery-task, and checkpoint-payload scenarios; added a
+normalised `hecate check --format json` snapshot covering representative
+orchestration violations; and added a direct Vidai Mock-backed LangGraph
+`plan -> execute -> finish` behavioural test. Focused validation passed
+with `33 passed` before documentation updates. Documentation now records
+ADR-016, the node/builder split, the `orchestration_nodes`,
+`orchestration_tasks`, and `orchestration_checkpoint` groups, the checkpoint
+payload audit, and roadmap item `2.4.5` as complete. The full milestone gates
+passed: `make check-fmt`, `make test` (`1030 passed, 3 skipped`),
+`make typecheck`, `make lint`, `make markdownlint`, and `make nixie`.
+CodeRabbit review is pending.
 
 ## Surprises & discoveries
 
@@ -355,6 +368,12 @@ CodeRabbit review completed with 0 findings.
   checkpoint payload serialisation does not persist those attachments. Local
   Protocols preserve static type usefulness without reintroducing a
   checkpoint-to-application import edge.
+  Date/Author: 2026-06-26, implementation agent.
+
+- Decision: no `docs/users-guide.md` update is required for M4.
+  Rationale: the slice changes maintainer-facing architecture enforcement,
+  tests, and documentation only; no public user workflow, command, or API
+  behaviour changed.
   Date/Author: 2026-06-26, implementation agent.
 
 ## Outcomes & retrospective
@@ -773,32 +792,30 @@ Place under the project's feature directory (confirm the path and step-module
 convention first). Keep the specification synchronized with M4.
 
 ```gherkin
-Feature: Orchestration architecture enforcement
-  As a maintainer of Episodic
-  I want Hecate to reject adapter imports from orchestration code
-  So that LangGraph nodes, Celery tasks, and checkpoint payloads stay
-  behind ports
+Feature: Architecture enforcement
 
   Scenario: A clean orchestration fixture passes
-    Given the "orchestration_node_imports_port" fixture
-    When I run the architecture check on the fixture
-    Then the check passes with no violations
+    Given the architecture fixture package "orchestration_node_imports_port"
+    When the architecture checker runs
+    Then the architecture check passes
 
   Scenario: A LangGraph node importing an adapter is rejected
-    Given the "orchestration_node_imports_outbound_adapter" fixture
-    When I run the architecture check on the fixture
+    Given the architecture fixture package "orchestration_node_imports_outbound_adapter"
+    When the architecture checker runs
     Then the check fails with an ARCH001 violation
-    And the violation names the node module as the importer
+    And the architecture diagnostic mentions "orchestration._graph_nodes"
 
   Scenario: A Celery task importing an adapter is rejected
-    Given the "celery_task_imports_inbound_adapter" fixture
-    When I run the architecture check on the fixture
+    Given the architecture fixture package "celery_task_imports_inbound_adapter"
+    When the architecture checker runs
     Then the check fails with an ARCH001 violation
+    And the architecture diagnostic mentions "worker.tasks"
 
   Scenario: A checkpoint payload importing storage is rejected
-    Given the "checkpoint_payload_imports_storage" fixture
-    When I run the architecture check on the fixture
+    Given the architecture fixture package "checkpoint_payload_imports_storage"
+    When the architecture checker runs
     Then the check fails with an ARCH001 violation
+    And the architecture diagnostic mentions "orchestration._checkpoint_payload"
 ```
 
 ## Concrete steps

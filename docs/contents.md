@@ -101,6 +101,8 @@ or delivery planning.
   - source-intake upload storage and idempotency port decisions.
 - [ADR 016: Adopt Skylos dead-code detection](adr/adr-016-adopt-skylos-dead-code-detection.md)
   - blocking static dead-code detection and exception policy.
+- [ADR 016: Orchestration architecture enforcement](adr/adr-016-orchestration-architecture-enforcement.md)
+  - LangGraph node, Celery task, and checkpoint payload enforcement decisions.
 - [ADR 017: No-QA generation execution and TEI persistence][adr-017]
   - generation launcher, draft persistence, recovery, and TEI retrieval
     decisions.
@@ -162,6 +164,8 @@ or delivery planning.
   - orchestration checkpoint plan.
 - [Configure Celery queue routing](execplans/2-4-3-configure-celery-queue-routing.md)
   - worker routing plan.
+- [Extend architecture enforcement to orchestration code](execplans/2-4-5-extend-architecture-enforcement-to-orchestration-code.md)
+  - orchestration architecture enforcement plan.
 - [LLM port adapter](execplans/3-2-1-llm-port-adapter.md) - large language
   model adapter plan.
 - [Introduce v1 target API prefix](execplans/4-1-1-introduce-v1-target-api-prefix.md)
