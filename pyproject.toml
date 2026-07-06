@@ -17,7 +17,7 @@ dependencies = [
     "kombu>=5.5,<6.0",
     "langgraph>=1.1,<2.0",
     "psycopg[binary]>=3.3.4,<4.0",
-    "sqlalchemy>=2.0.34,<3.0.0",
+    "sqlalchemy>=2.0.51,<3.0.0",
     "tenacity>=8.0,<10",
     "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@89fc86ef3952ecfde0bb7f653cde217e2651b895",
     "eventlet>=0.39,<0.41",
