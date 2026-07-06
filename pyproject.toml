@@ -12,7 +12,7 @@ dependencies = [
     "celery>=5.5,<6.0",
     "falcon>=4.3.1,<5.0",
     "femtologging @ git+https://github.com/leynos/femtologging@691a73962df8f99308a82348d99c4f707c245e63",
-    "granian>=2.2,<3.0",
+    "granian>=2.7.7,<3.0",
     "httpx>=0.28,<1.0",
     "kombu>=5.5,<6.0",
     "langgraph>=1.2.6,<2.0",
