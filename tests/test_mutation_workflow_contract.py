@@ -19,35 +19,42 @@ WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "mutation-testing.ym
 
 #: The commit SHA the caller pins ``mutation-mutmut.yml`` to. Bump the
 #: workflow and this test together.
-PINNED_SHA = "47aea18960d24f33aedc4782ec6b73e365418313"
+PINNED_SHA = "5dce6e093f70f0f09a0c6f5d06eea4efb695a52c"
 
 EXPECTED_USES = (
     "leynos/shared-actions/.github/workflows/mutation-mutmut.yml@" + PINNED_SHA
 )
 
 #: The exact caller configuration: flat package layout, so the mutable
-#: source lives under ``episodic/`` and no ``src/`` prefix is stripped.
+#: source lives under ``episodic/`` and no ``src/`` prefix is stripped;
+#: Python 3.14 because the project declares ``requires-python >= 3.14``
+#: and the shared workflow's default (3.13) cannot satisfy it.
 EXPECTED_WITH = {
     "paths": "episodic/",
     "module-prefix-strip": "",
+    "python-version": "3.14",
 }
 
 EXPECTED_CRON = "5 7 * * *"
 
 
-def _load() -> dict[str, typ.Any]:
-    """Parse the workflow file."""
+def _load() -> dict[typ.Any, typ.Any]:
+    """Parse the workflow file.
+
+    The key type is ``Any`` because PyYAML 1.1 parses the bare ``on:``
+    key as the boolean ``True``, not the string ``"on"``.
+    """
     return yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
 
-def _triggers(workflow: dict[str, typ.Any]) -> dict[str, typ.Any]:
+def _triggers(workflow: dict[typ.Any, typ.Any]) -> dict[str, typ.Any]:
     """Return the ``on:`` mapping (PyYAML parses the bare key as True)."""
     triggers = workflow.get("on", workflow.get(True))
     assert isinstance(triggers, dict), "the workflow must declare an on: mapping"
     return triggers
 
 
-def _mutation_job(workflow: dict[str, typ.Any]) -> dict[str, typ.Any]:
+def _mutation_job(workflow: dict[typ.Any, typ.Any]) -> dict[str, typ.Any]:
     """Return the single calling job."""
     jobs = workflow.get("jobs")
     assert isinstance(jobs, dict), "the workflow must declare a jobs mapping"

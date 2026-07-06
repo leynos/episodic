@@ -18,8 +18,11 @@ jobs:
     permissions:
       contents: read
       id-token: write # OIDC workflow-source resolution
-    uses: leynos/shared-actions/.github/workflows/mutation-mutmut.yml@47aea18960d24f33aedc4782ec6b73e365418313
+    uses: leynos/shared-actions/.github/workflows/mutation-mutmut.yml@5dce6e093f70f0f09a0c6f5d06eea4efb695a52c
     with:
       # Flat package layout: the mutable source lives in episodic/, not src/.
       paths: "episodic/"
       module-prefix-strip: ""
+      # The project declares requires-python >= 3.14; the shared workflow's
+      # default (3.13) would fail `uv run` inside the project.
+      python-version: "3.14"
