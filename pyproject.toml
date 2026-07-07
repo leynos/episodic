@@ -21,7 +21,7 @@ dependencies = [
     "tenacity>=8.0,<10",
     "tei-rapporteur @ git+https://github.com/leynos/tei-rapporteur@89fc86ef3952ecfde0bb7f653cde217e2651b895",
     "eventlet>=0.39,<0.41",
-    "gevent>=24.0,<26.0",
+    "gevent>=26.5.0,<27.0",
 ]
 
 [project.urls]
