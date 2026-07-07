@@ -45,7 +45,7 @@ dev = [
     "py-pglite[async]>=0.5.3,<0.6.0",
     "ruff",
     "pyright",
-    "syrupy>=5.3.2,<6",
+    "syrupy>=5.3.4,<6",
     "ty",
     "pytest-timeout",
     "pyyaml>=6.0.3",
