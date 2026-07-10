@@ -93,7 +93,7 @@ segment, not a second segment. For example:
 <p>Hello <seg>there</seg></p>
 ```
 
-This produces one spoken segment with the normalised text `Hello there`. It
+This produces one spoken segment with the normalized text `Hello there`. It
 must not produce both `Hello there` and `there`.
 
 Speech containers may contain multiple spoken blocks. For example:
@@ -110,10 +110,10 @@ This produces two spoken segments, `First line.` and `Second line.`. It must
 not count `Host`, and it must not count the whole `<sp>` subtree as a third
 segment.
 
-### Text normalisation before tokenisation
+### Text normalization before tokenization
 
 `tei-rapporteur` must return spoken text segments in document order with stable
-normalisation:
+normalization:
 
 - Trim leading and trailing whitespace from each segment.
 - Collapse runs of XML text whitespace to a single American Standard Code for
@@ -127,7 +127,7 @@ normalisation:
 - Do not expand abbreviations, numbers, symbols, references, or pronunciation
   hints during the initial Chrono estimate.
 
-Chrono then applies its versioned word-token heuristic to the normalised
+Chrono then applies its versioned word-token heuristic to the normalized
 segments. The initial `chrono-naive-word-count` estimator counts Latin-script
 word tokens using the current baseline token pattern: an ASCII letter followed
 by zero or more ASCII letters, digits, apostrophes, or hyphens.
@@ -163,7 +163,7 @@ interface (API) that:
 - accepts a complete TEI P5 XML document string;
 - validates it using the same parser and Episodic profile as `parse_xml(...)`;
 - returns ordered spoken text segments;
-- includes normalised text for each segment;
+- includes normalized text for each segment;
 - includes provenance for each segment, such as an `xml:id`, XML Path Language
   (XPath)-like locator, event path, or equivalent stable location;
 - excludes the content defined in this ADR;
@@ -228,7 +228,7 @@ enforce the same input preconditions at Chrono's runtime boundaries.
 - Existing Chrono tests that use minimal TEI-shaped snippets must be replaced
   with valid TEI P5 fixtures.
 - Non-Latin scripts and pure numeric speech are undercounted by the first naive
-  estimator unless a later version broadens tokenisation.
+  estimator unless a later version broadens tokenization.
 - CrossHair covers the pure numeric helper only. It does not replace the
   behavioural, property, or TEI-validation tests that exercise Chrono's parser
   boundary and orchestration side effects.
@@ -239,7 +239,7 @@ enforce the same input preconditions at Chrono's runtime boundaries.
   content.
 - JSON projections remain acceptable for prompts and test helpers, but TEI P5
   remains the canonical script interchange format.
-- Later estimators may use richer tokenisation, speech-rate models, language
+- Later estimators may use richer tokenization, speech-rate models, language
   metadata, or audio evidence if they change estimator identity or version.
 
 ## Deferred work
@@ -250,7 +250,7 @@ enforce the same input preconditions at Chrono's runtime boundaries.
 - Update Chrono tests to use valid TEI P5 fixtures and validation-failure
   assertions.
 - Decide whether future runtime estimators should use language-specific
-  tokenisation or pronunciation dictionaries.
+  tokenization or pronunciation dictionaries.
 
 ## References
 

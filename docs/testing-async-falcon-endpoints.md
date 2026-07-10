@@ -838,7 +838,7 @@ Testing asynchronous hooks generally involves:
 - **Verifying Side Effects:** If a hook modifies req.context, resp.context, or
   response headers, tests should assert these modifications after a request
   that triggers the hook.
-- **Verifying Behavior Modification:** If a hook is designed to alter control
+- **Verifying Behaviour Modification:** If a hook is designed to alter control
   flow, for instance, by raising an HTTP exception (e.g.,
   falcon.HTTPUnauthorized in an authentication hook), tests should use
   pytest.raises to confirm that the correct exception is raised under
@@ -1380,7 +1380,7 @@ The adoption of these practices is crucial, especially given Falcon's common
 application in building mission-critical REST APIs and microservices where
 reliability is paramount. Comprehensive asynchronous testing provides the
 confidence needed to deploy and maintain these systems effectively.
-Asynchronous code, if not rigorously tested, can harbor subtle bugs related to
+Asynchronous code, if not rigorously tested, can harbour subtle bugs related to
 concurrency, state management, and resource handling. The techniques outlined
 serve as a foundation for mitigating these risks. The landscape of asynchronous
 Python and its testing ecosystem is continually evolving. Therefore, while this

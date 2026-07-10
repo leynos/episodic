@@ -199,7 +199,7 @@ Delivered outcomes:
 
 Retrospective notes:
 
-- Additive migration and port-first modeling kept hexagonal boundaries intact
+- Additive migration and port-first modelling kept hexagonal boundaries intact
   and avoided endpoint-scope creep into 2.2.7.
 - `uow.flush()` sequencing for dependent binding inserts is a practical
   invariant for the same unit of work (UoW) and should remain explicit in

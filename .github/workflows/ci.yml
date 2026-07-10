@@ -27,7 +27,7 @@ jobs:
 
       - name: Install CLI tools
         run: |
-          for tool in mbake ty ruff; do uv tool install ${tool}; done
+          for tool in mbake ty ruff; do uv tool install "${tool}"; done
           npm install -g markdownlint-cli2
 
       - name: Install VidaiMock
@@ -43,7 +43,7 @@ jobs:
           mv vidaimock/vidaimock "$HOME/.local/bin/"
           chmod +x "$HOME/.local/bin/vidaimock"
           rm -rf vidaimock vidaimock-linux-x64.tar.gz
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/vidaimock" --version
 
       - name: Validate Makefile
@@ -60,6 +60,9 @@ jobs:
 
       - name: Run lint
         run: make lint
+
+      - name: Check spelling
+        run: make spelling
 
       - name: Check CPython syntax with Pylint
         run: |

@@ -34,7 +34,7 @@ Introduce two driven ports under `episodic.canonical.*`:
   `Conflict(record_id: UUID)`, or `InFlight(record_id: UUID)`. `complete`
   accepts `(record_id: UUID, serialised_outcome: bytes)` and stores only the
   opaque bytes and expiry timestamp. The HTTP adapter is responsible for
-  serialising status, body, and headers before completion and deserialising
+  serializing status, body, and headers before completion and deserializing
   them when replaying.
 
 The intake slice also introduces:

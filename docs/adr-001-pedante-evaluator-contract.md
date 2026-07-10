@@ -116,7 +116,7 @@ more specialized service later, to:
 - compare each catalogued claim against the cited source packets;
 - decide the support level and severity;
 - generate remediation guidance; and
-- emit findings for uncatalogued material discovered during verification so
+- emit findings for uncataloged material discovered during verification so
   claim extraction is not the hard recall ceiling for the evaluator.
 
 This split is an internal implementation detail. The application layer still

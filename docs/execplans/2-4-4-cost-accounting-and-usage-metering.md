@@ -13,7 +13,7 @@ Episodic generation orchestrator auditable and priceable. After this change,
 each provider call placed by a LangGraph node (planner, show-notes executor,
 guest-bios executor, and the LLM-backed evaluator nodes Pedante, Bromide,
 Chiltern, Anthem, and Caesura) records a hierarchical ledger entry that names
-the model used, the normalised token usage, the pinned pricing snapshot, and
+the model used, the normalized token usage, the pinned pricing snapshot, and
 the computed cost in integer minor currency units. A maintainer can resume any
 historical generation run, list its ledger entries, and explain the bill in
 full without consulting provider dashboards.
@@ -72,7 +72,7 @@ escalation, not workarounds.
 - The domain `LLMUsage` value object in `episodic/llm/ports.py` remains a
   three-field record (`input_tokens`, `output_tokens`, `total_tokens`).
   Provider-specific details (cached tokens, reasoning tokens, audio tokens,
-  cache writes) MUST be normalised into a separate
+  cache writes) MUST be normalized into a separate
   `ProviderCallUsage.usage_metrics: Mapping[str, int]` envelope rather than
   added as optional fields on `LLMUsage`.
 - `episodic.cost.ports` and `episodic.cost.engine` MUST NOT import
@@ -174,13 +174,13 @@ Each risk records severity, likelihood, and mitigation.
   inserts under high fan-out. Severity: low. Likelihood: low. Mitigation: the
   table is append-only with a unique index on `idempotency_key`; task roll-ups
   are computed once at run completion via a single `record_task_rollup` insert.
-  No denormalised parent row is maintained, so there is no hot row.
+  No denormalized parent row is maintained, so there is no hot row.
 
 - Risk: cached input tokens (OpenAI `prompt_tokens_details.cached_tokens`,
   Anthropic `cache_read_input_tokens`) are silently dropped by the adapter
-  normalisation, producing incorrect cost. Severity: medium. Likelihood:
+  normalization, producing incorrect cost. Severity: medium. Likelihood:
   medium. Mitigation: the canonical usage vocabulary is documented in the
-  design doc and enforced by adapter normalisation; tests assert that an OpenAI
+  design doc and enforced by adapter normalization; tests assert that an OpenAI
   response with `cached_tokens` populates
   `usage_metrics["cached_input_tokens"]` and that the pricing engine applies a
   separate rate to that metric when the snapshot includes it.
@@ -219,21 +219,20 @@ Update this list with every stopping point. Add timestamps.
   findings before commit.
 - [x] Milestone D — orchestrator integration: `CostRecorder` collaborator,
   LangGraph wiring through the orchestrator's existing finish path, run pricing
-  pins, and the structured-planning behavioural scenario. Completed
-  2026-06-04: added provider-call usage propagation through planner/action
-  DTOs, optional cost-recorder wiring for the structured orchestrator and
-  LangGraph direct finish path, ledger pin/aggregate adapter methods, exact
-  pinned-snapshot retrieval, and focused orchestrator, graph, storage,
-  recorder, and BDD tests. All reported CodeRabbit concerns were cleared; the
-  final follow-up emitted no findings but did not print the usual terminal
-  `complete` JSON line.
+  pins, and the structured-planning behavioural scenario. Completed 2026-06-04:
+  added provider-call usage propagation through planner/action DTOs, optional
+  cost-recorder wiring for the structured orchestrator and LangGraph direct
+  finish path, ledger pin/aggregate adapter methods, exact pinned-snapshot
+  retrieval, and focused orchestrator, graph, storage, recorder, and BDD tests.
+  All reported CodeRabbit concerns were cleared; the final follow-up emitted no
+  findings but did not print the usual terminal `complete` JSON line.
 - [x] Milestone E — Alembic migration, py-pglite-backed integration tests,
-  documentation updates, CodeRabbit review, roadmap tick. Completed
-  2026-06-04: the migration and py-pglite tests were completed in earlier
-  milestones to satisfy migration gates; Stage E accepted ADR-015, updated
-  operator and maintainer documentation, recorded the system-design
-  cross-reference, ticked roadmap item `2.4.4`, passed the final gates, and
-  completed the final CodeRabbit review with zero findings.
+  documentation updates, CodeRabbit review, roadmap tick. Completed 2026-06-04:
+  the migration and py-pglite tests were completed in earlier milestones to
+  satisfy migration gates; Stage E accepted ADR-015, updated operator and
+  maintainer documentation, recorded the system-design cross-reference, ticked
+  roadmap item `2.4.4`, passed the final gates, and completed the final
+  CodeRabbit review with zero findings.
 
 ## Surprises & discoveries
 
@@ -252,8 +251,8 @@ observation, evidence, and impact.
   document before production implementation so the data model and ADR align.
 
 - Observation: CodeRabbit Stage A review found four minor Oxford spelling
-  issues in ADR-015: three headings using "Normalised metrics" and one
-  "normalisation" instance. Evidence: `coderabbit review --agent` completed on
+  issues in ADR-015: three headings using "Normalized metrics" and one
+  "normalization" instance. Evidence: `coderabbit review --agent` completed on
   2026-06-04 with four minor findings, all in
   `docs/adr/adr-015-cost-accounting-ports-and-pricing-engine.md`. Impact: the
   ADR now uses Oxford-preferred `-ize` spelling: "Normalized metrics" and
@@ -448,10 +447,10 @@ observation, evidence, and impact.
 
 - Observation: Stage D deterministic gates passed again after the CodeRabbit
   test-fake fix. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `368 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/test-langgraph-costs-episodic-2-4-4-cost-accounting-and-usage-metering.out`
@@ -465,16 +464,16 @@ observation, evidence, and impact.
   `/tmp/coderabbit-stage-d-rerun2-episodic-2-4-4-cost-accounting-and-usage-metering.out`
   ended with `{"type":"complete","status":"review_completed","findings":1}`
   and asked for the graph cost test to derive its expected total from fixture
-  helpers instead of hardcoding `38`. Impact: the test now narrows the
-  fixture usage values and computes the expected total from the planner and
-  action fixture DTOs.
+  helpers instead of hardcoding `38`. Impact: the test now narrows the fixture
+  usage values and computes the expected total from the planner and action
+  fixture DTOs.
 
 - Observation: Stage D deterministic gates passed after the fixture-derived
   expected total change. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `368 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/test-langgraph-costs-episodic-2-4-4-cost-accounting-and-usage-metering.out`
@@ -497,10 +496,10 @@ observation, evidence, and impact.
   assertion-message and docstring fixes. Evidence:
   `/tmp/test-stage-d-coderabbit-fixes-episodic-2-4-4-cost-accounting-and-usage-metering.out`
   reports `2 passed in 0.12s`;
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `368 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/migrations-episodic-2-4-4-cost-accounting-and-usage-metering.out`
@@ -530,10 +529,10 @@ observation, evidence, and impact.
 
 - Observation: Stage E deterministic gates passed after the documentation and
   roadmap updates. Evidence:
-  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `368 files already formatted`;
-  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out`
-  reports `All checks passed!`;
+  `/tmp/check-fmt-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `368 files already formatted`;
+  `/tmp/typecheck-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
+  `All checks passed!`;
   `/tmp/lint-episodic-2-4-4-cost-accounting-and-usage-metering.out` reports
   Hecate passed, Ruff passed, and Pylint rated the code `10.00/10`;
   `/tmp/migrations-episodic-2-4-4-cost-accounting-and-usage-metering.out`
@@ -550,8 +549,8 @@ observation, evidence, and impact.
   after one prior Stage E run timed out after `tools_completed`. Evidence:
   `/tmp/coderabbit-stage-e-rerun-episodic-2-4-4-cost-accounting-and-usage-metering.out`
   ended with `{"type":"complete","status":"review_completed","findings":0}`.
-  Impact: all CodeRabbit concerns reported during the work are cleared, and
-  the final branch state has external-review coverage.
+  Impact: all CodeRabbit concerns reported during the work are cleared, and the
+  final branch state has external-review coverage.
 
 ## Decision log
 
@@ -607,7 +606,7 @@ Record every significant decision with rationale and timestamp.
 
 - Decision: aggregate-on-read for task roll-ups during the run, and write
   a single `record_task_rollup` row at run completion. Rationale: maintaining a
-  denormalised parent row creates a write-hot row under fan-out. The single
+  denormalized parent row creates a write-hot row under fan-out. The single
   final insert keeps the historical audit-trail row available without
   contention. The roll-up read query uses the `(generation_run_id, scope)`
   partial index. Date/Author: 2026-05-29, plan author.
@@ -735,8 +734,8 @@ Existing code surfaces this plan integrates with:
   dataclass in `episodic/llm/ports.py`. The three-field public `LLMUsage` shape
   is unchanged.
 - `episodic/llm/openai_adapter.py` is the only concrete `LLMPort`
-  implementation today. It already normalises usage at the boundary; this plan
-  extends the normalisation to populate `ProviderCallUsage` with the canonical
+  implementation today. It already normalizes usage at the boundary; this plan
+  extends the normalization to populate `ProviderCallUsage` with the canonical
   metric vocabulary listed above.
 - `episodic/orchestration/_usage.py` already sums `LLMUsage` across
   planner and action results into `GenerationOrchestrationResult.total_usage`.
@@ -1039,7 +1038,7 @@ This stage builds the persistent and provider-side concretions.
    `config/pricing-snapshots/anthropic-2026-05.yaml` ship as documented
    examples.
 
-4. `episodic/llm/openai_adapter.py` normalises `ProviderCallUsage`:
+4. `episodic/llm/openai_adapter.py` normalizes `ProviderCallUsage`:
 
    - OpenAI Chat Completions: `usage.prompt_tokens` →
      `input_tokens`; `completion_tokens` → `output_tokens`;
@@ -1092,7 +1091,7 @@ LangGraph generation graph.
    `cost_recorder: CostRecorder | None` constructor argument. When present,
    `orchestrate` pins pricing at the start of the run, records a provider call
    after the planner returns, records one per action after each tool execution
-   returns, and finalises the run roll-up after `build_generation_result`
+   returns, and finalizes the run roll-up after `build_generation_result`
    returns. The orchestrator continues to compute and return the in-memory
    `total_usage` aggregate; ledger writes are a side channel.
 

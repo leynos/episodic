@@ -104,13 +104,13 @@ Success is observable when:
   same UoW commit as their parent entities (series profiles, TEI headers) fail
   with foreign-key violations when `autoflush=False` is configured on the
   session factory. SQLAlchemy does not guarantee INSERT ordering within a
-  single flush, so parent rows may not be visible when child INSERTs execute.
-  Evidence: `test_ingestion_job_round_trip` and the BDD "weight constraint"
-  scenario both failed with `ForeignKeyViolation` until parent entities were
-  committed in a separate UoW before adding children. Impact: Tests that build
-  entity dependency graphs must commit parent entities before adding children,
-  or use `flush()` to enforce ordering within a single transaction (as the
-  existing `ingest_sources` service does).
+  single flush, so parent rows may not be visible when child `INSERT`
+  statements execute. Evidence: `test_ingestion_job_round_trip` and the BDD
+  "weight constraint" scenario both failed with `ForeignKeyViolation` until
+  parent entities were committed in a separate UoW before adding children.
+  Impact: Tests that build entity dependency graphs must commit parent entities
+  before adding children, or use `flush()` to enforce ordering within a single
+  transaction (as the existing `ingest_sources` service does).
 
 - Observation: The ruff lint rule PT012 rejects `pytest.raises()` blocks
   containing multiple statements. The initial

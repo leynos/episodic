@@ -93,7 +93,7 @@ Term definitions used in this plan:
 - Control plane: The orchestration layer that manages agent state and routing
   decisions, implemented with LangGraph.
 - Data plane: The execution layer that performs heavy or blocking work, handled
-  by Celery tasks and specialised workers.
+  by Celery tasks and specialized workers.
 - Suspend and resume pattern: An orchestration pattern where LangGraph pauses a
   graph with an interrupt, a Celery task completes work asynchronously, and a
   callback resumes the graph with results.
@@ -213,7 +213,7 @@ Document the following conceptual interfaces in the design update:
 
 - `BudgetPort` for checking and reserving per user, per episode, and per
   organization budgets.
-- `CostLedgerPort` for persisting per task cost entries and summarised run
+- `CostLedgerPort` for persisting per task cost entries and summarized run
   totals.
 - `CheckpointPort` for saving and restoring LangGraph checkpoints.
 - `TaskResumePort` for receiving Celery callback data and resuming a suspended

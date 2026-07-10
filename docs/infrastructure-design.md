@@ -28,7 +28,7 @@ without manual intervention.
 ## Non-goals
 
 - Application deployment mechanics beyond the GitOps repository layout.
-- Detailed service sizing, cost optimisation, or capacity modelling.
+- Detailed service sizing, cost optimization, or capacity modelling.
 - TLS, DNS, and certificate issuance beyond required Phase 0 decisions.
 
 ## Executive decisions
@@ -134,7 +134,7 @@ Two GitHub workflows provide full, no-manual bootstrap coverage:
 
 1. `bootstrap-gitops-repo.yml`
    - Creates or reconciles the GitOps repository under the target GitHub
-     organisation.
+     organization.
    - Seeds the required layout, initial sources, and baseline platform
      manifests.
    - Generates a Flux deploy key and attaches it to the GitOps repo.
@@ -197,7 +197,7 @@ baseline dashboards and alert routes.
 
 - Terratest integration tests provision ephemeral DigitalOcean resources with a
   strict naming prefix, environment tags, and automatic cleanup.
-- GitOps bootstrap tests target the `df12-test` GitHub organisation.
+- GitOps bootstrap tests target the `df12-test` GitHub organization.
 - GitHub Actions are validated locally with act and pytest before Continuous
   Integration (CI).
 

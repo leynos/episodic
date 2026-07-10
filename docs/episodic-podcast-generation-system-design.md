@@ -995,7 +995,7 @@ ADR 015 records the implementation ports for the first task. Upload bytes go
 through an `ObjectStorePort`, retryable `POST` requests go through an
 `IdempotencyStore`, and pre-generation attachments are stored separately from
 post-merge `source_documents`. The first implementation serves only
-`POST /v1/uploads`; resumable upload initialisation and direct byte `PUT`
+`POST /v1/uploads`; resumable upload initialization and direct byte `PUT`
 routes are deferred until a concrete S3-compatible adapter lands.
 
 TEI retrieval remains attached to the episode resource rather than to export
@@ -1307,7 +1307,7 @@ flowchart TD
 
 LangGraph checkpointing integrates with the platform's Postgres storage:
 
-- **Checkpoint tables** store serialised graph state, keyed by episode ID and
+- **Checkpoint tables** store serialized graph state, keyed by episode ID and
   workflow type.
 - **Valkey checkpointer** provides low-latency state caching when enabled,
   whilst Postgres remains the system of record for durable checkpoints.
@@ -1499,7 +1499,7 @@ Agentic workflow behaviour is configurable per series profile:
   job. Each row references either an `upload` or a remote `source_uri`, but not
   both.
 - `idempotency_records` stores accepted retryable operation keys, body hashes,
-  opaque serialised outcomes, and expiry timestamps.
+  opaque serialized outcomes, and expiry timestamps.
 - `source_documents` records ingestion-run inputs, document types, weighting
   factors, and original files in object storage.
 - `episodes` holds canonical TEI, generation status, QA verdicts, and approval
@@ -1549,7 +1549,7 @@ Agentic workflow behaviour is configurable per series profile:
   requested output constraints.
 - `speech_render_artifacts` records generated audio artefacts, transcripts,
   timings, provider request identifiers, warnings, and billable usage.
-- `workflow_checkpoints` stores serialised LangGraph state for resumable
+- `workflow_checkpoints` stores serialized LangGraph state for resumable
   workflows, keyed by episode ID, workflow type (generation or synthesis), and
   checkpoint timestamp.
 - `audio_feedback` captures stakeholder comments on preview segments, linked to
@@ -2010,7 +2010,7 @@ persisted as `SourceDocument` entities regardless of whether they were
 preferred or rejected during conflict resolution. This ensures rejected content
 is retained for audit as specified in the system design.
 
-Normalisation fan-out now uses metadata-aware asyncio task creation through
+Normalization fan-out now uses metadata-aware asyncio task creation through
 `episodic/asyncio_tasks.py`. Tasks are created with explicit names and optional
 metadata (`operation_name`, `correlation_id`, `priority_hint`) that is
 forwarded to custom loop task factories when present. This keeps business logic
@@ -2240,7 +2240,7 @@ stateDiagram-v2
 
 ## Core Workflows
 
-### Multi-source Ingestion and Prioritisation
+### Multi-source Ingestion and Prioritization
 
 1. Producer submits new sources through the API or scheduled connectors.
 2. Ingestion service classifies documents, computes freshness and reliability
@@ -2374,7 +2374,7 @@ explicit control over false-positive filtering.
   agentic workflows, suspend-and-resume execution patterns, hybrid inference,
   and cost accounting instrumentation alongside integrated QA and brand
   compliance automation.
-- Phase 3 realises the audio synthesis pipeline with preview-feedback-
+- Phase 3 realizes the audio synthesis pipeline with preview-feedback-
   regeneration cycles, including music integration and checkpoint-enabled
   stakeholder review.
 - Phase 4 activates the client experience layer and editorial approval service,

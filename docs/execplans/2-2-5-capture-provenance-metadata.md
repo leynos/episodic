@@ -28,9 +28,9 @@ Success is observable when:
    computed weights.
 3. Unit tests (pytest) fail before implementation and pass after implementation
    for provenance capture and ordering.
-4. Behavior-driven development (BDD) tests (`pytest-bdd`) fail before
+4. Behaviour-driven development (BDD) tests (`pytest-bdd`) fail before
    implementation and pass after implementation for user-observable provenance
-   behavior.
+   behaviour.
 5. Documentation is updated in:
    - `docs/episodic-podcast-generation-system-design.md`
    - `docs/users-guide.md`
@@ -46,7 +46,7 @@ Success is observable when:
   - Domain layer owns provenance schema and merge logic.
   - Storage adapters persist domain outputs but do not invent provenance.
   - No adapter-to-adapter calls.
-- Keep existing ingestion behavior unchanged except for adding provenance
+- Keep existing ingestion behaviour unchanged except for adding provenance
   metadata.
 - Do not add external dependencies.
 - Keep provenance payload serializable to PostgreSQL JSONB (JSONB) and
@@ -86,7 +86,7 @@ Success is observable when:
 - Risk: Source priority ordering could become inconsistent with canonical
   winner selection on equal weights. Severity: medium Likelihood: medium
   Mitigation: preserve source input order for equal-weight ties to match
-  conflict-resolution behavior, and test for determinism.
+  conflict-resolution behaviour, and test for determinism.
 
 - Risk: Reviewer identities for ingestion are currently a single actor
   (`requested_by`), while the requirement is plural. Severity: low Likelihood:
@@ -94,7 +94,7 @@ Success is observable when:
   ingestion, and document that script generation will populate multi-reviewer
   sets.
 
-- Risk: Behavioral tests may only verify approval payload today, not TEI
+- Risk: Behavioural tests may only verify approval payload today, not TEI
   header payload. Severity: low Likelihood: medium Mitigation: add explicit BDD
   steps that query persisted TEI headers and assert provenance fields.
 
@@ -104,7 +104,7 @@ Success is observable when:
 - [x] (2026-02-18 21:15Z) Stage A: Baseline and test-first setup completed.
 - [x] (2026-02-18 21:18Z) Stage B: Unit tests added and confirmed failing
   pre-change (`ModuleNotFoundError` for provenance module).
-- [x] (2026-02-18 21:20Z) Stage C: Behavioral provenance assertions added and
+- [x] (2026-02-18 21:20Z) Stage C: Behavioural provenance assertions added and
   validated in targeted scenario runs.
 - [x] (2026-02-18 21:23Z) Stage D: Shared provenance module implemented and
   ingestion TEI header enrichment wired in `ingest_sources`.
@@ -160,12 +160,12 @@ Key outcomes:
   `source_ingestion` and `script_generation` contexts.
 - Ingestion now applies provenance automatically via
   `episodic/canonical/services.py`.
-- Unit and behavioral provenance tests were added and pass.
+- Unit and behavioural provenance tests were added and pass.
 - `docs/roadmap.md` item `2.2.5` is marked done.
 
 At completion, this section must report:
 
-- Delivered behavior against Purpose criteria.
+- Delivered behaviour against Purpose criteria.
 - Deviations from planned scope.
 - Any tolerance breaches and escalation outcomes.
 - Lessons for script-generation provenance reuse.
@@ -188,10 +188,10 @@ Relevant current implementation and documents:
   - Covers end-to-end multi-source ingestion persistence.
 - `tests/steps/test_canonical_ingestion_steps.py` and
   `tests/features/canonical_ingestion.feature`
-  - Current BDD ingestion behavior.
+  - Current BDD ingestion behaviour.
 - `tests/steps/test_multi_source_ingestion_steps.py` and
   `tests/features/multi_source_ingestion.feature`
-  - Current BDD multi-source behavior.
+  - Current BDD multi-source behaviour.
 - `docs/roadmap.md`
   - Item `2.2.5` is currently unchecked.
 - `docs/episodic-podcast-generation-system-design.md`
@@ -233,11 +233,11 @@ Add and update pytest unit tests before implementation.
 
 Run targeted tests and confirm expected failures before implementation.
 
-Go/no-go: proceed only after failures demonstrate missing behavior.
+Go/no-go: proceed only after failures demonstrate missing behaviour.
 
-### Stage C: behavioral tests first
+### Stage C: behavioural tests first
 
-Update pytest-bdd coverage to express user-visible provenance behavior.
+Update pytest-bdd coverage to express user-visible provenance behaviour.
 
 - Extend `tests/features/canonical_ingestion.feature` with provenance
   expectations.
@@ -263,20 +263,20 @@ Implement minimal production changes to satisfy failing tests.
 - Ensure source priorities are computed from `request.sources` weights with
   deterministic rank assignment.
 - Populate reviewer identities from `request.requested_by` as a list.
-- Keep `raw_xml` behavior unchanged unless tests require explicit provenance
+- Keep `raw_xml` behaviour unchanged unless tests require explicit provenance
   emission in XML.
 
 Go/no-go: proceed to docs only when all new tests pass.
 
 ### Stage E: documentation updates
 
-Update required docs after behavior is implemented.
+Update required docs after behaviour is implemented.
 
 - `docs/episodic-podcast-generation-system-design.md`
   - Record provenance contract and reusable builder approach.
   - Clarify script-generation integration expectation.
 - `docs/users-guide.md`
-  - Add user-facing behavior for automatic TEI provenance fields.
+  - Add user-facing behaviour for automatic TEI provenance fields.
 - `docs/developers-guide.md`
   - Document internal provenance interface and extension rules.
   - State that script-generation flows must call the shared builder.
@@ -368,7 +368,7 @@ Acceptance criteria:
 - A shared provenance builder supports both `ingestion` and
   `script_generation` contexts (script generation use is documented for future
   implementation).
-- Unit tests and behavioral tests for provenance pass.
+- Unit tests and behavioural tests for provenance pass.
 - `make check-fmt`, `make typecheck`, `make lint`, and `make test` pass.
 - Documentation updates are present in system design, users' guide, and
   developers' guide.
@@ -415,7 +415,7 @@ Dependencies already present and reused:
 
 - Python 3.13 standard library (`datetime`, dataclasses, typing).
 - SQLAlchemy async stack and Postgres JSONB persistence.
-- pytest and pytest-bdd for unit and behavioral tests.
+- pytest and pytest-bdd for unit and behavioural tests.
 - Existing Makefile quality gates.
 
 No new dependencies are expected.

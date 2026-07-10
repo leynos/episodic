@@ -175,7 +175,7 @@ are always available to the pipeline.
   episode lookups where possible, and add database indexes on
   `episodes.created_at` if profiling shows this is a bottleneck.
 - The algorithm is more complex than latest-binding-wins. Mitigation:
-  comprehensive unit tests and behavioral tests document the precedence rules.
+  comprehensive unit tests and behavioural tests document the precedence rules.
 
 ### Neutral
 

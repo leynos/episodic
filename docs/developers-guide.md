@@ -66,6 +66,36 @@ targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
 the wrapper and skipped, which keeps parse incompatibilities visible without
 hiding other diagnostics from files that PyPy can analyse.
 
+## Spelling policy
+
+`make all` and `make markdownlint` enforce en-GB-oxendict spelling using the
+`TYPOS_VERSION` pin in the `Makefile`. The gate tests the policy helper,
+refreshes the shared base dictionary, generates `typos.toml`, and scans tracked
+Markdown files.
+
+The application targets Python 3.14, while the shared helper retains a Python
+3.13 compatibility contract for the wider estate. Project Ruff excludes the
+four spelling-policy files; `spelling-helper-test` applies its separately
+pinned, isolated Ruff format and lint checks with `--target-version py313`
+before running the helper tests under Python 3.13.
+
+The shared dictionary is maintained in `leynos/agent-helper-scripts`. Its
+repository-local cache and freshness metadata are untracked. The helper
+replaces the cache only when the authoritative copy is newer and can reuse a
+valid cached copy while offline. A clean checkout with an unavailable network
+retains the reviewed, tracked `typos.toml` policy.
+
+Do not edit generated entries in `typos.toml`. Put only repository-specific
+proper nouns, quoted upstream titles, fixtures, stems or exclusions in
+`typos.local.toml`, then regenerate with:
+
+```bash
+uv run scripts/generate_typos_config.py
+```
+
+Keep upstream API spellings in inline or fenced code where practical. The
+spelling gate deliberately ignores code spans and fenced code blocks.
+
 ## Falcon HTTP runtime
 
 The canonical HTTP adapter has two layers:
@@ -680,7 +710,7 @@ implemented in `episodic/canonical/reference_documents/services.py`.
 See also:
 [`docs/reference-binding-resolution.md`](reference-binding-resolution.md) for
 the episode-aware resolver, provenance snapshot APIs, and endpoint-specific
-binding-resolution behavior.
+binding-resolution behaviour.
 
 Supported endpoints:
 
@@ -1071,7 +1101,7 @@ async def enrich(llm_port, script_tei_xml: str) -> str:
   `<div type="chapters">` element into the TEI body using the representation
   defined by
   [`adr-008-chapter-marker-tei-representation.md`](adr/adr-008-chapter-marker-tei-representation.md).
-   The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
+  The `<list>` contains one `<item>` per chapter, `<label>` carries the title,
   `@n` stores the required start time, and `@corresp` stores an optional source
   locator. Optional DTO `end` and `duration` values are validated but not
   emitted into TEI until the TEI tooling exposes supported attributes.

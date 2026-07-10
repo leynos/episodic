@@ -40,7 +40,7 @@ Success is observable in seven ways:
    `refsDecl`-backed citation declarations, and explicit "citation absent"
    outcomes.
 4. Verification tests show that pass-two findings remain claim-centric and can
-   still emit uncatalogued findings when verification discovers a missed claim.
+   still emit uncataloged findings when verification discovers a missed claim.
 5. Behavioural tests (`pytest-bdd`) using Vidai Mock prove that one Pedante
    evaluation can drive two LLM calls and still return aggregated usage metrics.
 6. The design, user, and developer documentation explain the new internal
@@ -119,8 +119,8 @@ into line with the amended ADR.
 
 - Risk: a cheap claim-catalogue pass may miss claims that the verifier would
   have found in the old single-pass design. Severity: high. Likelihood: medium.
-  Mitigation: require the verifier to emit uncatalogued claims and add tests
-  for that escape hatch.
+  Mitigation: require the verifier to emit uncataloged claims and add tests for
+  that escape hatch.
 
 - Risk: the current result shape only exposes one `LLMUsage` object plus one
   set of provider metadata. Severity: medium. Likelihood: high. Mitigation:
@@ -273,7 +273,7 @@ Terms used in this plan:
 - Builtins projection: a nested tree of normal Python objects derived from
   `tei_rapporteur` or `msgspec` that preserves the TEI structure without
   forcing prompt code to parse raw XML text.
-- Uncatalogued claim: a claim that the verifier discovers even though the
+- Uncataloged claim: a claim that the verifier discovers even though the
   catalogue pass did not emit it. The revised ADR allows this escape hatch to
   avoid making pass one the hard recall ceiling.
 
@@ -303,7 +303,7 @@ Extend `tests/test_pedante.py` with new failing tests for:
 - explicit citation-absent handling for claims that lack a usable TEI citation
   binding,
 - aggregation of usage from more than one `LLMResponse`,
-- verifier-emitted uncatalogued claims, and
+- verifier-emitted uncataloged claims, and
 - stable final `PedanteEvaluationResult` behaviour after internal aggregation.
 
 Update `tests/test_pedante_langgraph.py` so it continues to assert the same
@@ -396,7 +396,7 @@ plus the bounded source packets and decide whether the cited source material
 supports each claim.
 
 The verifier should continue to emit the existing claim-centric
-`PedanteFinding` taxonomy. It may also emit uncatalogued claims when pass two
+`PedanteFinding` taxonomy. It may also emit uncataloged claims when pass two
 discovers issues that pass one missed.
 
 Add a small pure helper that aggregates `LLMUsage` across passes. The final
@@ -412,7 +412,7 @@ Acceptance for Stage D:
 - one call to `PedanteEvaluator.evaluate(...)` can drive two `LLMPort`
   interactions and return one stable `PedanteEvaluationResult`,
 - usage is aggregated correctly across both passes, and
-- verifier logic can emit uncatalogued findings without breaking the result
+- verifier logic can emit uncataloged findings without breaking the result
   contract.
 
 ### Stage E: update the LangGraph seam and behavioural tests
@@ -534,7 +534,7 @@ pytest tests/test_pedante.py -q
 pytest tests/test_pedante.py -q
 ```
 
-1. Add the verification pass, uncatalogued-claim handling, and usage
+1. Add the verification pass, uncataloged-claim handling, and usage
    aggregation.
 
 ```plaintext
