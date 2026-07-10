@@ -3,8 +3,12 @@ out/
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
 .ruff_cache/
 .uv-cache/
+.uv-tools/
+.typos-oxendict-base.json
+.typos-oxendict-base.toml
 .venv/
 .bin/
 .claude/

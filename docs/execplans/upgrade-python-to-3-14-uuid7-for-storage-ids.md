@@ -148,7 +148,7 @@ Validation outcomes:
 
 ## Context and orientation
 
-The current ID generation surface for canonical persistence is centered in
+The current ID generation surface for canonical persistence is centred in
 `episodic/canonical/services.py`, where helper constructors call
 `uuid.uuid4()`. Repository adapters in
 `episodic/canonical/storage/repositories.py` and ORM models in

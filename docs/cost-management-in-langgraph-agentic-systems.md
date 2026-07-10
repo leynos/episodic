@@ -380,7 +380,7 @@ scopes:
 
 **Feedback into Decision-Making:** A sophisticated agent could modify its
 strategy based on budget feedback. For instance, if the budget remaining is
-low, the agent could favor shorter answers or avoid expensive tools. If an
+low, the agent could favour shorter answers or avoid expensive tools. If an
 agent knows it has only 1000 tokens left, it might skip a time-consuming
 brainstorming step and directly provide a concise answer. Implementing this
 requires the agent’s policy (perhaps encoded in the prompt or logic) to be

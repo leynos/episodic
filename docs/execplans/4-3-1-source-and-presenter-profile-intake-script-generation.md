@@ -257,7 +257,7 @@ Known uncertainties identified upfront:
   `idempotency_records` table grows at one row per side-effecting `POST` per
   `Idempotency-Key`. With a 24-hour retention and even modest opaque
   `serialised_outcome` payloads, the table grows fastest of any in the slice.
-  Severity: medium. Likelihood: medium. Mitigation: cap the serialised outcome
+  Severity: medium. Likelihood: medium. Mitigation: cap the serialized outcome
   at 64 kilobytes (KB) in the HTTP adapter before calling
   `IdempotencyStore.complete`. Add an Alembic-shipped index on `expires_at` so
   a future purge job can scan efficiently. The purge job itself is deferred to
@@ -347,7 +347,7 @@ timestamps as milestones land.
   end-to-end upload/job/source/poll flow, a pytest-bdd source-intake feature,
   and a syrupy snapshot for stable source-intake response envelopes.
 - [x] (2026-06-12T01:29Z) Milestone D7 — Documentation final pass, roadmap
-  toggle, and assessment follow-up. Finalised `docs/users-guide.md` and
+  toggle, and assessment follow-up. Finalized `docs/users-guide.md` and
   `docs/developers-guide.md`, reconciled `docs/roadmap.md` with the accepted
   `/v1/uploads/init` deferral, ran the final gate sequence including
   `make check-migrations`, and marked `4.3.1` complete after the blockers
@@ -645,7 +645,7 @@ Seed entries (DRAFT):
 - Decision: Keep idempotency outcome storage domain-only. Rationale:
   `IdempotencyStore` is a driven domain port, so it should not know HTTP
   routing or response-envelope details. It stores operation-keyed records and
-  opaque serialised outcomes; the HTTP adapter serialises and deserialises
+  opaque serialized outcomes; the HTTP adapter serializes and deserializes
   replay payloads at the edge. Date/Author: 2026-06-10T13:57Z / Codex.
 - Decision: Source-intake observability must include bounded metrics, tracing,
   and actionable alerts in addition to structured logs. Rationale: orphan
@@ -658,7 +658,7 @@ Seed entries (DRAFT):
   `upload.create`, `ingestion_job.create`, and `ingestion_job.source.attach`
   require operation-specific canonical body hashes, including multipart
   byte-stream hashing for uploads. The helper still uses the domain
-  `IdempotencyStore` outcomes and keeps HTTP status/body replay serialisation
+  `IdempotencyStore` outcomes and keeps HTTP status/body replay serialization
   in the adapter layer. Date/Author: 2026-06-10T16:45Z / Codex.
 - Decision: Raise the pytest-timeout budget to 180 seconds for this repository.
   Rationale: the suite intentionally uses function-scoped py-pglite databases
@@ -686,7 +686,7 @@ Seed entries (DRAFT):
 
 ## Outcomes & retrospective
 
-Summarise outcomes, gaps, and lessons after the final milestone. Compare the
+Summarize outcomes, gaps, and lessons after the final milestone. Compare the
 result against the success criteria above. Note what would be done differently
 next time. Update this section at the close-out commit.
 
@@ -807,7 +807,7 @@ This section assumes the reader has only the current working tree.
   Internet Engineering Task Force (IETF)
   `draft-ietf-httpapi-idempotency-key-header` and ADR 009.
 - **Request-body fingerprint.** A SHA-256 hash over the canonical request
-  bytes. JSON requests are canonicalised by sorting keys and removing
+  bytes. JSON requests are canonicalized by sorting keys and removing
   whitespace; multipart requests hash the body bytes and the metadata fields
   that change the side effect.
 - **Two-step upload (deferred).** A future `POST /v1/uploads/init` would
@@ -944,7 +944,7 @@ Each addition lives in the `domain_ports` Hecate group and may not import from
    §"Interfaces and dependencies"; in short, an async `put`, an `open` context
    manager, and a `delete`, all returning domain types. The port forbids `..`,
    leading slashes, and absolute paths in `key` at the port boundary so
-   adapters can rely on sanitised input.
+   adapters can rely on sanitized input.
 8. Add the new ports to `episodic/canonical/unit_of_work_protocols.py` so the
    unit-of-work exposes them, and update the `domain_ports` group in
    `pyproject.toml` `[tool.hecate]` to include `episodic.canonical.uploads`,
@@ -994,7 +994,7 @@ These additions sit in the `outbound_adapter` Hecate group.
    hasher and the running byte count as it goes, and raises
    `PayloadTooLargeError` *before* writing a chunk that would push the count
    past the cap. On completion the adapter atomically renames the temporary
-   file into `{root}/{key}`. Defence in depth on the path: after sanitising
+   file into `{root}/{key}`. Defence in depth on the path: after sanitizing
    `key`, the adapter joins the path, calls `pathlib.Path.resolve()`, and
    asserts `os.path.commonpath([resolved, root_resolved]) == root_resolved` so
    symlink escape is blocked even if a previous deploy left a malicious link
@@ -1127,7 +1127,7 @@ and `domain_ports`.
    the unit of work, and short-circuits with a replayed payload when the
    outcome is `Replay`. On `InFlight` or `Conflict` it returns the documented
    `409` envelope. On `Acquired` it runs the resource work, records failure
-   through `IdempotencyStore.fail` for retryability, and serialises the HTTP
+   through `IdempotencyStore.fail` for retryability, and serializes the HTTP
    status and body into the opaque outcome bytes passed to
    `IdempotencyStore.complete`.
 2. Add `episodic/api/upload_helpers.py` with the multipart parser, the
@@ -1194,7 +1194,7 @@ Tests are split into the layers defined by the testing strategy in
    guarantee: interleave many concurrent attach-source operations against the
    same job and assert that exactly one observer sees the
    `AWAITING_SOURCES → READY_FOR_GENERATION` transition. Mark the tests with
-   `@pytest.mark.hypothesis` and use the derandomised CI profile defined in the
+   `@pytest.mark.hypothesis` and use the derandomized CI profile defined in the
    existing repo convention.
 3. **Behavioural tests (`tests/features/source_intake.feature` and
    `tests/steps/test_source_intake_steps.py`).** Cover the end-to-end intake
@@ -1222,8 +1222,8 @@ Tests are split into the layers defined by the testing strategy in
 4. **Snapshot tests (`tests/test_source_intake_snapshots.py`).** Use
    `syrupy` to lock in the canonical JSON envelopes for upload, upload-init,
    ingestion-job, ingestion-job-list, and source-attachment responses. Snapshot
-   only the deterministic fields; canonicalise UUIDs and timestamps in the test
-   serialiser.
+   only the deterministic fields; canonicalize UUIDs and timestamps in the test
+   serializer.
 5. **Integration tests (`tests/test_source_intake_integration.py`).**
    Drive the py-pglite-backed `canonical_api_client` end to end. Confirm
    migrations are applied and the new tables exist.
@@ -1242,10 +1242,10 @@ slice's user-visible behaviour and runs under `pytest-bdd`.
 
 ### Stage G — Documentation final pass and roadmap toggle (Milestone D7)
 
-1. Finalise `docs/users-guide.md` with the integration-client narrative for
+1. Finalize `docs/users-guide.md` with the integration-client narrative for
    the source-to-script intake workflow, showing the request and response
    bodies for each endpoint.
-2. Finalise the error-code table and Idempotency-Key conventions in
+2. Finalize the error-code table and Idempotency-Key conventions in
    `docs/developers-guide.md`.
 3. Refresh the table of contents in `docs/contents.md` to include ADR 015
    and the new sections.
@@ -1515,7 +1515,7 @@ When working on this slice, load the following before touching code:
   - `python-types-and-apis` for `Protocol` design and overload signatures
     in the idempotency outcome union.
   - `python-errors-and-logging` for the new error-code envelope and
-    parameterised logging.
+    parameterized logging.
   - `python-iterators-and-generators` for streaming hashes and async
     iteration through Falcon's request streams.
   - `python-concurrency` for the unit-of-work transactional boundary.

@@ -38,7 +38,7 @@ Table: Parameters for `resolve_bindings()`
 
 `list[ResolvedBinding]`: Resolved bindings with their revisions and documents.
 
-### `resolve_bindings()` Behavior
+### `resolve_bindings()` Behaviour
 
 1. **Validation**: If `episode_id` is provided, validates that the episode
    exists and belongs to the series profile. If `template_id` is provided,

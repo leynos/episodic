@@ -137,7 +137,7 @@ without adding those future endpoints here.
   This route-prefix task should not need Vidai Mock because it does not call an
   `LLMPort`.
 - Use property tests only if the implementation introduces a reusable route
-  joining or normalisation function with invariants over many path fragments. A
+  joining or normalization function with invariants over many path fragments. A
   direct constant prefix does not need Hypothesis.
 - Do not mark roadmap item `4.1.1` done in a pre-implementation plan PR.
   Mark it done only after implementation, documentation, gates and review are
@@ -162,7 +162,7 @@ without adding those future endpoints here.
   `episodic.api`.
 - Interface: stop and escalate if resource request or response bodies must
   change to introduce the prefix.
-- Tests: stop and escalate after three unsuccessful attempts to stabilise the
+- Tests: stop and escalate after three unsuccessful attempts to stabilize the
   same failing test cluster.
 - Ambiguity: stop and present options if there are two materially different
   interpretations of which endpoints are "TUI-facing" after reviewing the
@@ -264,7 +264,7 @@ Add syrupy snapshot coverage only where the response shape is contractually
 important and not already covered by clear field assertions. Strong candidates
 are the structured brief envelope, resolved-binding response, reference
 document list envelope, revision envelope, and binding envelope. Do not add
-snapshots for volatile identifiers or timestamps unless they are normalised.
+snapshots for volatile identifiers or timestamps unless they are normalized.
 
 Run a focused red test pass:
 
@@ -615,7 +615,7 @@ The final implementation should include short transcripts in this plan's
 - `docs/episodic-tui-api-design.md` and ADR 009 already describe `/v1` as the
   target API, but `docs/developers-guide.md` and `docs/users-guide.md` still
   contain unversioned examples for currently implemented canonical endpoints.
-- The Falcon route table is centralised in `episodic/api/app.py`; no separate
+- The Falcon route table is centralized in `episodic/api/app.py`; no separate
   route grouping abstraction currently exists.
 - Existing API tests and BDD step files hard-code many route paths, so the
   implementation will be mostly coordinated test and documentation churn plus a

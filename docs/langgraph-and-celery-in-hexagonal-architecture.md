@@ -329,7 +329,7 @@ within a Hexagonal Architecture if used with discipline:
   domain-relevant portions in a neutral format (JSON of statuses, etc.), but
   since the checkpoint is largely an internal concern, this is a minor issue.
   Overall, state persistence via LangGraph can coexist with hexagonal
-  architecture as long as it’s funneled through the persistence adapter and
+  architecture as long as it’s funnelled through the persistence adapter and
   kept in sync with domain state (as done with linking checkpoints to episode
   status and approval events).
 

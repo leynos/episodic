@@ -236,9 +236,9 @@ Success is observable in these behaviours:
   a legacy `markdownlint --fix` path that reports repository-wide MD013
   findings in existing documents. Evidence: `/tmp/fmt-episodic-2-4-2-plan.out`
   reported existing long-line findings, while `make check-fmt` and
-  `make markdownlint` both passed afterward. Impact: implementation work should
-  rely on the explicit gate commands unless the formatter target is repaired in
-  a separate change.
+  `make markdownlint` both passed afterwards. Impact: implementation work
+  should rely on the explicit gate commands unless the formatter target is
+  repaired in a separate change.
 
 - Observation: the minimal graph can support `2.4.2` by adding a checkpointing
   branch that stops after `plan` and persists the first executable action,

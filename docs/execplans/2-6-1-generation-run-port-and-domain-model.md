@@ -127,7 +127,7 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   Severity: high. Likelihood: high once `2.6.3` wires the orchestrator.
   Mitigation: the port contract allocates `seq` *inside* the adapter from
   `append_event(run_id, kind, payload) -> GenerationEvent`. The in-memory
-  reference adapter serialises run-status updates and event appends with a
+  reference adapter serializes run-status updates and event appends with a
   single `asyncio.Lock`; the SQL adapter in `2.6.2` will use
   `UNIQUE(generation_run_id, seq)` plus `INSERT ... RETURNING`. See *Decision
   log*.
@@ -226,7 +226,7 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   standard Python position immediately after the module docstring.
 - 2026-06-04 07:35 Europe/Berlin: Later CodeRabbit review requested narrower
   Pylint suppressions, a simpler in-memory lock model, a contract-test fixture,
-  and descriptive assertion messages. The adapter now serialises run-status
+  and descriptive assertion messages. The adapter now serializes run-status
   updates and event appends under the same global in-memory lock, which is
   conservative and sufficient for this reference adapter. Current deterministic
   validation after those changes: `make check-fmt`, `make lint`,
@@ -437,7 +437,7 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   the highest-severity production risk identified in review. Prior art (Marten
   `AppendOptimistic`, EventStoreDB stream revision, the Stack Overflow
   canonical pattern) supports adapter-side allocation backed by a
-  `UNIQUE(aggregate_id, seq)` index. The port contract returns the materialised
+  `UNIQUE(aggregate_id, seq)` index. The port contract returns the materialized
   `GenerationEvent` so the caller observes the allocated `seq`. Date/Author:
   2026-05-29 / plan author.
 
@@ -462,7 +462,7 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   listing. Rationale: `list_runs` is a reference adapter but should still avoid
   scanning all runs when callers request a single episode. The per-episode
   sorted index preserves existing ordering while limiting work to the relevant
-  episode and applying offset/limit before materialising unfiltered pages.
+  episode and applying offset/limit before materializing unfiltered pages.
   Date/Author: 2026-06-14 / implementing agent.
 
 - Decision: do not import orchestration logging helpers into
@@ -539,7 +539,7 @@ The delivered implementation matches the observable success criteria:
   checkpoint protocols, with a composite `GenerationRunPort` retained for the
   design-document vocabulary.
 - The in-memory adapter allocates gap-free per-run event sequences internally
-  and serialises event appends with run terminal-state updates under one
+  and serializes event appends with run terminal-state updates under one
   `asyncio.Lock`.
 - Unit, contract, property, and BDD tests cover entity validation, idempotent
   run creation, event ordering, concurrent append preservation, checkpoint
@@ -553,7 +553,7 @@ The delivered implementation matches the observable success criteria:
 The main follow-up for `2.6.2` is to preserve the same port semantics in the
 SQL adapter with database constraints and transactions rather than copying the
 in-memory adapter's global-lock strategy. `2.6.3` will also likely need a
-read-optimised run snapshot DTO for REST/TUI polling; that was intentionally
+read-optimized run snapshot DTO for REST/TUI polling; that was intentionally
 left out of `2.6.1` to keep this change at the domain-port boundary.
 
 ## Context and orientation
@@ -632,7 +632,7 @@ Terms of art used in this plan:
   reach a given key (here, `idempotency_key`) succeeds and subsequent writers
   with the same key receive the originally-written record unchanged. Used by
   the existing `CheckpointPort.save_or_reuse` (`2.4.2`).
-- **UUIDv7**: a Universally Unique Identifier variant standardised in RFC
+- **UUIDv7**: a Universally Unique Identifier variant standardized in RFC
   9562 that embeds a 48-bit millisecond timestamp and a 42-bit counter,
   providing in-process intra-millisecond monotonicity and overall time ordering.
   `uuid.uuid7()` is part of Python 3.14's standard library.

@@ -487,7 +487,7 @@ Write unit tests in `tests/test_show_notes.py` (extending from Stage B):
 - Test `_result_from_response` with a well-formed JSON response and with
   malformed responses (missing `entries` key, non-list entries, invalid entry
   shape).
-- Test `ShowNotesResponseFormatError` is raised for unparseable responses.
+- Test `ShowNotesResponseFormatError` is raised for unparsable responses.
 
 Acceptance for Stage C:
 
@@ -549,7 +549,7 @@ Write unit tests:
 - Test `build_prompt(...)` includes the TEI XML and template structure.
 - Test `generate(...)` with a mock `LLMPort` returning a valid JSON response.
 - Test `generate(...)` raises `ShowNotesResponseFormatError` when the LLM
-  returns unparseable content.
+  returns unparsable content.
 - Test `generate(...)` raises `LLMProviderResponseError` when the LLM call
   fails.
 
