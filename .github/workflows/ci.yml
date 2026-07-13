@@ -11,6 +11,11 @@ jobs:
     env:
       CARGO_HTTP_MULTIPLEXING: "false"
       CARGO_NET_RETRY: "10"
+      # The Makefile exports this for its own uv invocations, but the
+      # shared generate-coverage action runs uv directly and rebuilds
+      # the tei-rapporteur PyO3 extension, which needs the stable-ABI
+      # escape hatch under Python 3.14 (PyO3 0.23 supports up to 3.13).
+      PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
