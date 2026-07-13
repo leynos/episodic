@@ -19,7 +19,7 @@ WORKFLOW_PATH = REPOSITORY_ROOT / ".github" / "workflows" / "mutation-testing.ym
 
 #: The commit SHA the caller pins ``mutation-mutmut.yml`` to. Bump the
 #: workflow and this test together.
-PINNED_SHA = "5dce6e093f70f0f09a0c6f5d06eea4efb695a52c"
+PINNED_SHA = "927edd45ae77be4251a8a18ca9eb5613a2e32cbd"
 
 EXPECTED_USES = (
     "leynos/shared-actions/.github/workflows/mutation-mutmut.yml@" + PINNED_SHA
