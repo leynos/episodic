@@ -384,9 +384,9 @@ Acceptance criteria:
 - If provenance key naming changes mid-implementation, update all tests and
   docs in the same change to keep consistency.
 
-## Artifacts and notes
+## Artefacts and notes
 
-Expected log artifacts:
+Expected log artefacts:
 
 - `/tmp/2-2-5-target-unit-before.log`
 - `/tmp/2-2-5-target-bdd-before.log`

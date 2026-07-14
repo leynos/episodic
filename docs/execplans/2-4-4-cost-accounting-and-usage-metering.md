@@ -1245,7 +1245,7 @@ respectively). If a behavioural scenario is interrupted mid-run, rerunning it
 produces the same ledger row count because every insert is keyed by a
 deterministic idempotency key.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Key transcripts and snapshots produced during implementation are stored under
 `/tmp/<action>-episodic-<branch>.out` for review per the agent guidance in

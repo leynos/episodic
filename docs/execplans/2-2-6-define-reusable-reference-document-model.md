@@ -404,7 +404,7 @@ Quality acceptance:
   backward-compatible fields and document deprecation path instead of removing
   keys.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture and keep concise evidence:
 

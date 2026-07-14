@@ -219,7 +219,7 @@ Acceptance criteria:
 - If lint churn becomes broad, limit fixes to annotation-related changes and
   escalate on scope breach.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture during implementation:
 

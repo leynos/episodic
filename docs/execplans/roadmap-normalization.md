@@ -368,9 +368,9 @@ PATH=/root/.bun/bin:$PATH make markdownlint && make nixie
 All edits are to a single Markdown file. If a stage fails, revert to the
 previous committed state and retry. No destructive operations are involved.
 
-## Artifacts and notes
+## Artefacts and notes
 
-Evidence artifacts (to be captured during implementation):
+Evidence artefacts (to be captured during implementation):
 
 - `/tmp/roadmap-norm-make-fmt.log`
 - `/tmp/roadmap-norm-make-markdownlint.log`

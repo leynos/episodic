@@ -232,7 +232,7 @@ Acceptance is met when all of the following are true:
 - If full test suite runtime is long, re-run targeted files first to localize
   regressions before repeating `make test`.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture the following evidence during implementation:
 

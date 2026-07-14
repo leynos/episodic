@@ -278,7 +278,7 @@ repository quality gates pass.
       path can be driven through `make local-k8s-up` while preserving
       Docker/`k3d` defaults.
 - [x] (2026-06-13T15:55:00Z) Full validation passed after fixing the rootless
-      Podman `act` artifact server binding: `make check-fmt`, `make typecheck`,
+      Podman `act` artefact server binding: `make check-fmt`, `make typecheck`,
       `make lint`, `make test` (`704 passed, 1 skipped`), `make markdownlint`,
       and `make nixie`.
 - [x] (2026-06-13T16:20:00Z) CodeRabbit review found only assertion-message
@@ -751,10 +751,10 @@ repository quality gates pass.
   preview on rootless Podman" section.
 
 - Observation (2026-06-13): when the Podman socket is live, the repository's
-  `act` workflow tests also need an artifact server reachable from rootless job
+  `act` workflow tests also need an artefact server reachable from rootless job
   containers. Evidence:
   `/tmp/workflow-act-rootless-artifacts-episodic-nile-valley-integration-rerun.out`
-  passed after binding the artifact server to `0.0.0.0` with a concrete free
+  passed after binding the artefact server to `0.0.0.0` with a concrete free
   port instead of advertising port `0`. Impact: the helper still skips on hosts
   without a usable Podman socket, but a live rootless Podman host now exercises
   the workflow tests successfully.
@@ -1320,7 +1320,7 @@ If a quality gate fails after formatting or docs changes, update this ExecPlan
 with the failure and remediation before continuing. If a tolerance threshold is
 hit, stop implementation and ask for direction.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Primary project files to inspect before implementation:
 

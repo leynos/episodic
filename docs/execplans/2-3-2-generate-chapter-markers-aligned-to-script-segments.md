@@ -548,7 +548,7 @@ with a clear `pytest.skip(...)` message, matching the existing show-notes
 behavioural test pattern. Do not replace Vidai Mock with a different inference
 harness.
 
-## Artifacts and notes
+## Artefacts and notes
 
 The closest existing implementation artefacts are:
 

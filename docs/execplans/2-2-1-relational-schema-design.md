@@ -275,7 +275,7 @@ ingestion job that created it. Reference document revisions belong to a parent
 reference document owned by a series profile. This design supports versioned
 reference content, multi-source episode assembly, and full ingestion provenance.
 
-## Artifacts and notes
+## Artefacts and notes
 
 - `/tmp/make-fmt.log` records formatting output.
 - `/tmp/make-markdownlint.log` records Markdown lint results.

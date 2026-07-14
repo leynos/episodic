@@ -195,7 +195,7 @@ the offending Markdown and re-run the relevant `make` target using the same
 `set -o pipefail` and `tee` pattern. The log files in `/tmp` provide the last
 failure context and can be overwritten safely.
 
-## Artifacts and notes
+## Artefacts and notes
 
 - `/tmp/make-fmt.log` records formatting output.
 - `/tmp/make-markdownlint.log` records Markdown lint results.

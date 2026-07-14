@@ -510,9 +510,9 @@ The migration is complete only when all of the following are true:
   `Surprises & Discoveries`.
 - Preserve all `/tmp/femtologging-migration-*.log` files as the evidence trail.
 
-## Artifacts and notes
+## Artefacts and notes
 
-Expected evidence artifacts:
+Expected evidence artefacts:
 
 - `/tmp/femtologging-migration-git-status.log`
 - `/tmp/femtologging-migration-scan.log`

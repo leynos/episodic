@@ -210,7 +210,7 @@ Acceptance criteria:
   isolated hardening.
 - All commands are safe to rerun; logs can be overwritten.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture during implementation:
 

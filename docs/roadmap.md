@@ -723,7 +723,7 @@ and iteration-cap invariants across generated run states.
   - After each generation attempt, run generated TEI through Chrono and record
     `estimated_seconds`, estimator identity, and policy check outcome.
   - Compare against minimum/maximum duration thresholds from configuration.
-  - Emit a signed QA finding artifact and generation event for short/long-draft
+  - Emit a signed QA finding artefact and generation event for short/long-draft
     outcomes that can drive a refinement turn.
   - Add Hypothesis property-based tests for short, in-range, and long Chrono
     duration outcomes across generated TEI segment shapes.
