@@ -284,7 +284,7 @@ Acceptance is documentation behaviour, not runtime behaviour.
   re-apply wording aligned to the comparison rule: ingestion-bound
   `SourceDocument` versus reusable `ReferenceDocument`.
 
-## Artifacts and notes
+## Artefacts and notes
 
 During implementation, capture concise evidence here:
 

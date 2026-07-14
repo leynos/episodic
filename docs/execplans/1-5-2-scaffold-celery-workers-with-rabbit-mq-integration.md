@@ -462,7 +462,7 @@ If live broker testing is attempted and proves unstable, stop at the tolerance
 boundary, document the issue in `Decision Log`, and request direction rather
 than improvising a broad infrastructure detour.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Implementation should preserve a concise record of:
 

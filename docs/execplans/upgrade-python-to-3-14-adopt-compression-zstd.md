@@ -13,7 +13,7 @@ Status: COMPLETE
 After this change, Episodic will use Python 3.14 standard-library Zstandard
 compression for large text payloads where storage and transfer costs matter,
 beginning with canonical Text Encoding Initiative (TEI)-adjacent payloads and
-future orchestration artifacts. The observable outcome is reduced payload size
+future orchestration artefacts. The observable outcome is reduced payload size
 while preserving exact round-trip content semantics for domain consumers.
 
 Success is visible when payloads can be compressed and decompressed losslessly,
@@ -167,7 +167,7 @@ first-party compression without an extra dependency.
 
 Stage A defines policy. Decide initial compression targets, minimum size
 thresholds, and where metadata indicating compression state will be stored.
-Confirm whether first milestone is schema-additive or purely in-memory artifact
+Confirm whether first milestone is schema-additive or purely in-memory artefact
 compression.
 
 Stage B creates tests first. Add round-trip tests for text payloads,
@@ -232,7 +232,7 @@ Acceptance criteria:
 - Migration rollback path must be documented before applying production schema
   changes.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture during implementation:
 

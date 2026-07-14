@@ -480,9 +480,9 @@ are true:
 - If scope or dependency tolerances are exceeded, stop and update this ExecPlan
   before continuing.
 
-## Artifacts and notes
+## Artefacts and notes
 
-Expected evidence artifacts:
+Expected evidence artefacts:
 
 - `/tmp/impl-2-2-7-git-status.log`
 - `/tmp/impl-2-2-7-roadmap-spec-scan.log`

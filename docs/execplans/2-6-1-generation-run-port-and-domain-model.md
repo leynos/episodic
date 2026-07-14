@@ -1055,7 +1055,7 @@ All operations are local; no remote-state mutation occurs in this plan. There
 is no destructive change to the database, the CI configuration, or the
 published documentation.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Expected transcripts and short examples will be inlined as each stage
 completes. The minimum capture is one short *pass* transcript per gate and one

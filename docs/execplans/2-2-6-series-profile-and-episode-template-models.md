@@ -133,7 +133,7 @@ Success is observable when:
 - Decision: keep this ExecPlan aligned to the requested filename
   `docs/execplans/2-2-6-series-profile-and-episode-template-models.md` while
   grounding completion against the current roadmap text. Rationale: preserves
-  requested artifact naming without risking checklist drift. Date/Author:
+  requested artefact naming without risking checklist drift. Date/Author:
   2026-02-20 / Codex.
 
 - Decision: treat REST endpoints as inbound adapters over domain services, not
@@ -369,7 +369,7 @@ Acceptance requires all of the following:
   stop, log the issue in `Decision Log`, and re-baseline from failing tests
   before resuming.
 
-## Artifacts and notes
+## Artefacts and notes
 
 When implementation starts, capture concise excerpts from:
 

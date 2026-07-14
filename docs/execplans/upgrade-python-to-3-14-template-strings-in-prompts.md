@@ -214,7 +214,7 @@ Acceptance criteria:
   defer additional adapters to follow-up plans.
 - Failed rendering tests should be corrected before wider integration.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture during implementation:
 

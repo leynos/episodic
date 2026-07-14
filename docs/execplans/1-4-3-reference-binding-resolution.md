@@ -723,9 +723,9 @@ are true:
 - If scope or dependency tolerances are exceeded, stop and update this ExecPlan
   before continuing.
 
-## Artifacts and notes
+## Artefacts and notes
 
-Expected evidence artifacts:
+Expected evidence artefacts:
 
 - `/tmp/impl-1-4-3-git-status.log`
 - `/tmp/impl-1-4-3-episode-schema.log`

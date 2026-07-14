@@ -275,9 +275,9 @@ All steps are re-runnable. If a step fails:
 - If upstream typed API differs, pause at the tolerance gate and record
   options in `Decision log` before proceeding.
 
-## Artifacts and notes
+## Artefacts and notes
 
-Expected execution artifacts:
+Expected execution artefacts:
 
 - `/tmp/update-tei-typecheck-before.log`
 - `/tmp/update-tei-uv-lock.log`

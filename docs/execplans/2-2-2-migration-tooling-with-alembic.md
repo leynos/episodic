@@ -477,7 +477,7 @@ fails, the developer creates or corrects the migration and reruns
 If tests fail, fix the issue and rerun the relevant `make` target. Log files in
 `/tmp` are overwritten on each run.
 
-## Artifacts and notes
+## Artefacts and notes
 
 - `/tmp/make-check-fmt.log` — formatting check output.
 - `/tmp/make-typecheck.log` — type check output.

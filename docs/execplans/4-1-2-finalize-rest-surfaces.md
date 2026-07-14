@@ -1150,7 +1150,7 @@ an accidental import from `episodic.api` into `episodic.canonical`. Run
 `uv run hecate check` directly to see the offending edge (the verbose output
 includes the diagnostic identifier `ARCH001` and the source/target group names).
 
-## Artifacts and notes
+## Artefacts and notes
 
 Evidence artefacts to retain:
 

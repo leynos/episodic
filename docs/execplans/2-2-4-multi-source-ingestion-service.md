@@ -651,7 +651,7 @@ are discarded after each test. If tests fail, fix the issue and rerun
 
 Documentation edits are idempotent and may be repeated safely.
 
-## Artifacts and notes
+## Artefacts and notes
 
 - `/tmp/make-fmt.log` — formatting output.
 - `/tmp/make-check-fmt.log` — formatting check output.

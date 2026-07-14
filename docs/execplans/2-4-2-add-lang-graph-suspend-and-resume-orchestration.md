@@ -598,7 +598,7 @@ or database commands without explicit approval. If a checkpoint is persisted
 but the graph resume fails, keep the checkpoint in a non-resumed state with
 diagnostic metadata so a later retry can resume or mark it failed.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Useful existing entrypoints:
 

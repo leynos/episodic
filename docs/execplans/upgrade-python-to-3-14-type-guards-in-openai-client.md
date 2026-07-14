@@ -204,7 +204,7 @@ Acceptance criteria:
 - If SDK changes break guards, update only normalization layer and fixtures.
 - Test commands are deterministic and safe to rerun.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture during implementation:
 

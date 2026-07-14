@@ -235,7 +235,7 @@ Acceptance criteria:
   to baseline execution only.
 - Benchmark and test commands are safe to re-run and overwrite logs.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture during implementation:
 

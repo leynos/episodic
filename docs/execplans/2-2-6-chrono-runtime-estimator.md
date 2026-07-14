@@ -892,7 +892,7 @@ segments with normalized text and locator/provenance metadata. Chrono should
 depend on that surface instead of depending on lower-level parser events unless
 the ADR explicitly chooses an event-level integration.
 
-## Artifacts and notes
+## Artefacts and notes
 
 This plan was drafted before implementation. Validation evidence for the plan
 branch:
