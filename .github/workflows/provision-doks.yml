@@ -56,7 +56,7 @@ jobs:
         run: scripts/provision_doks.sh
 
       - name: Upload provisioning artefact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: doks-provision-result
           path: /tmp/doks-provision/provision-result.json
