@@ -20,8 +20,8 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
-          # Full history so a future `cs-coverage check` can reach the
-          # pull request's merge base (see the deferred gate note below).
+          # Full history so `cs-coverage check` can reach the pull
+          # request's merge base.
           fetch-depth: 0
 
       - name: Set up Python
@@ -99,17 +99,6 @@ jobs:
       # own coverage (and advance the ratchet baseline) via
       # coverage-main.yml, so generating it here as well would duplicate
       # the work and the CodeScene upload for the same commit.
-      #
-      # The `mode: check` gate step is deliberately not wired in yet:
-      # CodeScene project 76628 has no coverage-gates configuration, so
-      # `cs-coverage check` fails every run with "HTTP call succeeded,
-      # but the received project-config isn't valid. Lacks the gates
-      # configuration." — a CodeScene-side per-project setting, not a CI
-      # defect (ddlint#287 and chutoro#156 hit the byte-identical error).
-      # Add the check step in a fast-follow PR once coverage-main.yml has
-      # uploaded to main at least once and the gate is confirmed to
-      # resolve, or once CodeScene confirms the project's coverage gate
-      # is enabled.
       - name: Generate coverage
         if: github.event_name == 'pull_request'
         uses: leynos/shared-actions/.github/actions/generate-coverage@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
@@ -123,3 +112,20 @@ jobs:
           # xdist-clean under coverage instrumentation.
           pytest-workers: ''
           with-ratchet: 'true'
+
+      # CodeScene project 76628's coverage gate has been enabled
+      # CodeScene-side (verified via GET /v2/code-coverage/projects/76628/config
+      # returning a populated `gates` array, matching mxd's working
+      # project), so `cs-coverage check` now has a gates configuration
+      # to evaluate against.
+      - name: Check coverage against CodeScene gates
+        env:
+          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+        if: env.CS_ACCESS_TOKEN != '' && github.event_name == 'pull_request'
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
+        with:
+          format: cobertura
+          mode: check
+          project-url: https://api.codescene.io/v2/projects/76628
+          access-token: ${{ env.CS_ACCESS_TOKEN }}
+          installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
