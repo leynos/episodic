@@ -36,7 +36,7 @@ dev = [
     "crosshair-tool>=0.0.107,<0.1",
     "cyclopts>=4.20.0,<5",
     "hecate @ git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12",
-    "hypothesis[asyncio]>=6.156.1,<7",
+    "hypothesis[asyncio]>=6.156.4,<7",
     "mypy>=2.2.0,<3",
     "pytest>=9.1.1,<11",
     "pytest-bdd",
