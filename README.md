@@ -1,5 +1,8 @@
 # 🎙️ Episodic
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](
+https://deepwiki.com/leynos/episodic)
+
 > **AI-powered podcast generation that sounds human, works like software.**
 
 _Totally not a versificator. Honest._
