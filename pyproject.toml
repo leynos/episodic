@@ -33,7 +33,7 @@ stilyagi = "stilyagi.stilyagi:main"
 
 [dependency-groups]
 dev = [
-    "crosshair-tool>=0.0.107,<0.1",
+    "crosshair-tool>=0.0.108,<0.1",
     "cyclopts>=4.21.0,<5",
     "hecate @ git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12",
     "hypothesis[asyncio]>=6.156.6,<7",
