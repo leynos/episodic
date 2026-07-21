@@ -80,7 +80,10 @@ async def _count_records(
 ) -> int:
     """Count persisted records of one SQLAlchemy model type."""
     async with factory() as session:
-        return await session.scalar(sa.select(sa.func.count()).select_from(record_type))
+        result = await session.execute(
+            sa.select(sa.func.count()).select_from(record_type)
+        )
+        return result.scalar_one()
 
 
 @pytest.mark.asyncio
