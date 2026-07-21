@@ -12,8 +12,8 @@ groups.
 
 ## Context and problem statement
 
-ADR-014 introduced Hecate as the import-boundary checker for the core
-hexagonal architecture. That policy covered domain, application, adapter, and
+ADR-014 introduced Hecate as the import-boundary checker for the core hexagonal
+architecture. That policy covered domain, application, adapter, and
 composition-root modules, but roadmap item `2.4.5` still needed deeper
 orchestration-specific checks.
 
@@ -53,7 +53,7 @@ The accepted groups are:
   DTOs but not adapters.
 - `orchestration_tasks` for `episodic.worker.tasks`, allowed to depend on
   domain services, domain ports, and `episodic.worker.topology.WorkloadClass`.
-- `orchestration_checkpoint` for checkpoint DTO and payload serialisation
+- `orchestration_checkpoint` for checkpoint DTO and payload serialization
   modules, allowed to depend on itself and domain-port value types only.
 
 `episodic.worker.topology.WorkloadClass` is treated as a domain-port-like
