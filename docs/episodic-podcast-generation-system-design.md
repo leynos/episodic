@@ -209,8 +209,8 @@ Enforcement mechanisms:
   adherence as part of `make test`.
 - The current Hecate policy covers canonical domain and port modules,
   application services, Falcon and worker adapter seams, SQLAlchemy and LLM
-  outbound adapters, explicit composition roots, LangGraph node modules,
-  Celery task modules, and orchestration checkpoint payload modules.
+  outbound adapters, explicit composition roots, LangGraph node modules, Celery
+  task modules, and orchestration checkpoint payload modules.
 - Contract tests exercise port behaviour against adapter implementations, so
   adapters are verified without coupling to infrastructure in the domain.
 - Roadmap item `2.4.5` delivered LangGraph-node-specific imports, Celery task
@@ -2250,17 +2250,6 @@ stateDiagram-v2
 ```
 
 ## Core Workflows
-
-
-### Multi-source Ingestion and Prioritization
-
-1. Producer submits new sources through the API or scheduled connectors.
-2. Ingestion service classifies documents, computes freshness and reliability
-   scores, and applies weighting heuristics defined per series.
-3. Conflicts resolve using the weighting matrix; rejected content is retained
-   for audit.
-4. Normalized TEI fragments merge into the canonical episode; provenance is
-   logged and downstream events trigger generation.
 
 ### Multi-source Ingestion and Prioritization
 

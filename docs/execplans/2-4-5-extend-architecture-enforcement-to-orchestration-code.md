@@ -1,9 +1,8 @@
 # Extend architecture enforcement to orchestration code (2.4.5)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: IN PROGRESS
 
@@ -12,10 +11,10 @@ Status: IN PROGRESS
 Episodic enforces hexagonal architecture (ports and adapters) with the Hecate
 import checker, run by `make check-architecture` (a dependency of `make lint`)
 against the `[tool.hecate]` configuration in `pyproject.toml`. Today the
-orchestration code is lumped into the generic `application` group and the Celery
-worker tasks sit in the permissive `inbound_adapter` group. The system design
-explicitly reserved orchestration-specific enforcement for this roadmap slice
-(see `docs/episodic-podcast-generation-system-design.md`, the "Hexagonal
+orchestration code is lumped into the generic `application` group and the
+Celery worker tasks sit in the permissive `inbound_adapter` group. The system
+design explicitly reserved orchestration-specific enforcement for this roadmap
+slice (see `docs/episodic-podcast-generation-system-design.md`, the "Hexagonal
 architecture enforcement" section, which states that "direct adapter access is
 reserved for the later orchestration-specific enforcement slice").
 
@@ -30,9 +29,9 @@ or vendor SDK into a LangGraph node, a Celery task, or a checkpoint payload DTO
 will see `make lint` fail with a Hecate `ARCH001` violation, and a structural
 test will fail if a checkpoint payload DTO grows a field whose type is not
 provider-neutral (for example an ORM model or a canonical aggregate entity).
-Success is observable by running `make lint` and `make test`: new
-architecture fixtures and tests fail before the enforcement is added and pass
-after, while the production `hecate check` continues to pass.
+Success is observable by running `make lint` and `make test`: new architecture
+fixtures and tests fail before the enforcement is added and pass after, while
+the production `hecate check` continues to pass.
 
 This work is preventative: the current orchestration code is already free of
 adapter imports, so the new rules pass once the supporting refactors land. The
@@ -53,13 +52,13 @@ escalation, not a workaround.
   this slice. The enforcement model is allow-list only, first-match by config
   order, with no per-rule identifiers; design within those limits.
 - Public, importable names that other packages already consume must remain
-  importable from their current modules. In particular the orchestration
-  barrel `episodic.orchestration.__init__` and the worker barrel
+  importable from their current modules. In particular the orchestration barrel
+  `episodic.orchestration.__init__` and the worker barrel
   `episodic.worker.__init__` must keep re-exporting every symbol they export
   today (verify with `leta refs <symbol>` before moving a definition).
-- No single code file may exceed 400 lines (AGENTS.md). `episodic/orchestration/
-  langgraph.py` is already 460 lines; any split must leave each resulting file
-  under 400 lines.
+- No single code file may exceed 400 lines (AGENTS.md).
+  `episodic/orchestration/ langgraph.py` is already 460 lines; any split must
+  leave each resulting file under 400 lines.
 - Domain purity: orchestration and worker code must not gain imports of
   transport, storage, ORM, or vendor SDK modules. Cross-adapter imports remain
   forbidden.
@@ -94,43 +93,38 @@ Adjust per milestone; stop and escalate when a threshold is breached.
 - Risk: Hecate counts `TYPE_CHECKING`-guarded and function-body imports as
   dependencies (confirmed from source: it walks the whole AST with `ast.walk`
   and has no type-only exemption). A ports-only group will trip on a type-only
-  import of an application DTO.
-  Severity: high. Likelihood: high.
-  Mitigation: design groups so type-only imports stay within the allowed set,
-  or break the coupling by extracting a provider-neutral DTO core. Use a single
-  documented `[[tool.hecate.ignore_imports]]` edge only as a last resort, paired
-  with the structural test as the binding guarantee.
+  import of an application DTO. Severity: high. Likelihood: high. Mitigation:
+  design groups so type-only imports stay within the allowed set, or break the
+  coupling by extracting a provider-neutral DTO core. Use a single documented
+  `[[tool.hecate.ignore_imports]]` edge only as a last resort, paired with the
+  structural test as the binding guarantee.
 
 - Risk: Ungrouped modules inside the `episodic` root are invisible to Hecate
   (imports of them are silently allowed, and they are not checked). A future
-  adapter placed in an ungrouped module would bypass enforcement.
-  Severity: medium. Likelihood: low.
-  Mitigation: ensure every adapter-bearing module the orchestration or worker
-  code can reach is matched by a group prefix; add a regression fixture proving
-  an adapter import is caught.
+  adapter placed in an ungrouped module would bypass enforcement. Severity:
+  medium. Likelihood: low. Mitigation: ensure every adapter-bearing module the
+  orchestration or worker code can reach is matched by a group prefix; add a
+  regression fixture proving an adapter import is caught.
 
 - Risk: Splitting `langgraph.py` or moving DTO definitions breaks an import that
-  another package relies on.
-  Severity: medium. Likelihood: medium.
-  Mitigation: keep barrels (`__init__.py`) re-exporting all current names;
-  verify every moved symbol with `leta refs` before and after; rely on the full
-  test suite plus `make typecheck`.
+  another package relies on. Severity: medium. Likelihood: medium. Mitigation:
+  keep barrels (`__init__.py`) re-exporting all current names; verify every
+  moved symbol with `leta refs` before and after; rely on the full test suite
+  plus `make typecheck`.
 
-- Risk: First-match ordering mistakes silently mis-classify a module (for
+- Risk: First-match ordering mistakes silently misclassify a module (for
   example a new specific prefix placed after a broader one never matches).
-  Severity: medium. Likelihood: medium.
-  Mitigation: place specific prefixes before broader ones, mirror the existing
-  composition-root-before-adapter convention, and add fixtures that would fail
-  under a mis-ordering.
+  Severity: medium. Likelihood: medium. Mitigation: place specific prefixes
+  before broader ones, mirror the existing composition-root-before-adapter
+  convention, and add fixtures that would fail under a misordering.
 
 - Risk: The checkpoint DTO decoupling proves more invasive than expected because
-  `ActionExecutionResult` transitively references generation types.
-  Severity: medium. Likelihood: medium.
-  Mitigation: if a clean ports-only checkpoint group is not reachable within
-  tolerance, scope the Hecate group to the genuinely neutral payload modules,
-  record a single governed `ignore_imports` edge, and make the structural
-  reflection test the primary guarantee. Escalate if more than two ignores are
-  needed.
+  `ActionExecutionResult` transitively references generation types. Severity:
+  medium. Likelihood: medium. Mitigation: if a clean ports-only checkpoint
+  group is not reachable within tolerance, scope the Hecate group to the
+  genuinely neutral payload modules, record a single governed `ignore_imports`
+  edge, and make the structural reflection test the primary guarantee. Escalate
+  if more than two ignores are needed.
 
 ## Progress
 
@@ -150,21 +144,21 @@ point at the active Lody session.
 
 2026-06-26: M0 added the fixture-only orchestration Hecate groups, synthetic
 node/task/checkpoint fixtures, and the strict-xfailed production group
-expectation. Focused architecture tests passed with `30 passed, 1 xfailed`.
-The full milestone gates passed: `make check-fmt`, `make typecheck`,
-`make lint`, and `make test` (`1020 passed, 3 skipped, 1 xfailed`).
-CodeRabbit review completed with 0 findings.
+expectation. Focused architecture tests passed with `30 passed, 1 xfailed`. The
+full milestone gates passed: `make check-fmt`, `make typecheck`, `make lint`,
+and `make test` (`1020 passed, 3 skipped, 1 xfailed`). CodeRabbit review
+completed with 0 findings.
 
 2026-06-26: M1 split `episodic/orchestration/langgraph.py` into
 `_graph_nodes.py` for plan/execute/finish node functions, `_graph_builder.py`
 for LangGraph assembly plus callback and cost wiring, and a 57-line
-compatibility barrel that preserves the historical `langgraph` import path.
-The production Hecate `orchestration` group is now ordered before
-`application` and scoped to `_graph_builder`, `_graph_nodes`, and `langgraph`.
-Focused validation passed with `68 passed, 1 xfailed`. The full milestone
-gates passed: `make check-fmt`, `make typecheck`, `make lint`, and
-`make test` (`1020 passed, 3 skipped, 1 xfailed`). CodeRabbit review completed
-with 0 findings.
+compatibility barrel that preserves the historical `langgraph` import path. The
+production Hecate `orchestration` group is now ordered before `application` and
+scoped to `_graph_builder`, `_graph_nodes`, and `langgraph`. Focused validation
+passed with `68 passed, 1 xfailed`. The full milestone gates passed:
+`make check-fmt`, `make typecheck`, `make lint`, and `make test`
+(`1020 passed, 3 skipped, 1 xfailed`). CodeRabbit review completed with 0
+findings.
 
 2026-06-26: M2 extracted `WorkloadClass` to the provider-neutral
 `episodic/worker/workloads.py` module, retargeted task/runtime imports to that
@@ -172,12 +166,12 @@ module, and kept `episodic.worker.WorkloadClass` plus
 `episodic.worker.topology.WorkloadClass` importable. The production Hecate
 config now classifies `episodic.worker.workloads` as `domain_ports` and
 `episodic.worker.tasks` as `orchestration_tasks`, ordered before
-`inbound_adapter`. Focused validation passed with `56 passed, 1 xfailed`.
-The full milestone gates passed: `make check-fmt`, `make typecheck`,
-`make lint`, and `make test` (`1020 passed, 3 skipped, 1 xfailed`).
-CodeRabbit review completed with 0 findings.
+`inbound_adapter`. Focused validation passed with `56 passed, 1 xfailed`. The
+full milestone gates passed: `make check-fmt`, `make typecheck`, `make lint`,
+and `make test` (`1020 passed, 3 skipped, 1 xfailed`). CodeRabbit review
+completed with 0 findings.
 
-2026-06-26: M3 extracted provider-neutral payload DTOs and normalisation
+2026-06-26: M3 extracted provider-neutral payload DTOs and normalization
 helpers into `episodic/orchestration/_payload_dto.py`, retargeted checkpoint
 payload and checkpoint DTO modules away from the application-coupled `_dto`
 barrel, and kept existing public orchestration imports working through
@@ -187,111 +181,104 @@ only import their own group plus `domain_ports`. `WorkflowCheckpoint` now
 rejects non-JSON payload values, and
 `tests/test_checkpoint_payload_boundaries.py` adds a structural DTO field audit
 plus a Hypothesis JSON round-trip property. Focused validation passed with
-`88 passed`. The full milestone gates passed: `make check-fmt`,
-`make test` (`1024 passed, 3 skipped`), `make typecheck`, and `make lint`.
-CodeRabbit review completed with 0 findings.
+`88 passed`. The full milestone gates passed: `make check-fmt`, `make test`
+(`1024 passed, 3 skipped`), `make typecheck`, and `make lint`. CodeRabbit
+review completed with 0 findings.
 
 2026-06-26: M4 extended the architecture BDD feature with clean orchestration,
 LangGraph-node, Celery-task, and checkpoint-payload scenarios; added a
-normalised `hecate check --format json` snapshot covering representative
+normalized `hecate check --format json` snapshot covering representative
 orchestration violations; and added a direct Vidai Mock-backed LangGraph
-`plan -> execute -> finish` behavioural test. Focused validation passed
-with `33 passed` before documentation updates. Documentation now records
-ADR-016, the node/builder split, the `orchestration_nodes`,
-`orchestration_tasks`, and `orchestration_checkpoint` groups, the checkpoint
-payload audit, and roadmap item `2.4.5` as complete. The full milestone gates
-passed: `make check-fmt`, `make test` (`1030 passed, 3 skipped`),
-`make typecheck`, `make lint`, `make markdownlint`, and `make nixie`.
-CodeRabbit review completed with 0 findings.
+`plan -> execute -> finish` behavioural test. Focused validation passed with
+`33 passed` before documentation updates. Documentation now records ADR-016,
+the node/builder split, the `orchestration_nodes`, `orchestration_tasks`, and
+`orchestration_checkpoint` groups, the checkpoint payload audit, and roadmap
+item `2.4.5` as complete. The full milestone gates passed: `make check-fmt`,
+`make test` (`1030 passed, 3 skipped`), `make typecheck`, `make lint`,
+`make markdownlint`, and `make nixie`. CodeRabbit review completed with 0
+findings.
 
 ## Surprises & discoveries
 
 - Observation: Hecate counts imports inside `if TYPE_CHECKING:` blocks and
-  inside function bodies identically to module-level imports.
-  Evidence: source review of the pinned Hecate commit; `collect_imports` uses
-  `ast.walk` with no guard inspection.
-  Impact: ports-only groups must be reachable for type-only imports too; drives
-  the DTO-core decoupling in M3.
+  inside function bodies identically to module-level imports. Evidence: source
+  review of the pinned Hecate commit; `collect_imports` uses `ast.walk` with no
+  guard inspection. Impact: ports-only groups must be reachable for type-only
+  imports too; drives the DTO-core decoupling in M3.
 
 - Observation: imports of ungrouped in-root modules are silently allowed and
-  ungrouped modules are not checked.
-  Evidence: `_record_import_edge` returns early when either side's group is
-  `None`.
-  Impact: `episodic.logging` and similar cross-cutting modules need no group;
-  but every adapter must stay grouped or enforcement leaks. Add a guard
-  fixture.
+  ungrouped modules are not checked. Evidence: `_record_import_edge` returns
+  early when either side's group is `None`. Impact: `episodic.logging` and
+  similar cross-cutting modules need no group; but every adapter must stay
+  grouped or enforcement leaks. Add a guard fixture.
 
 - Observation: the current orchestration package imports no adapters; worker
   tasks import only `WorkloadClass` from the `kombu`-coupled
   `episodic.worker.topology`; checkpoint DTOs reach `episodic.generation`
-  (application tier) only through the `_dto` barrel
-  (`_checkpoint_dto` to `_dto` to `_action_result_dto` to
-  `episodic.generation`).
-  Evidence: import map gathered with grep over `episodic/orchestration/*.py`
-  and `episodic/worker/*.py`.
-  Impact: the enforcement is mostly preventative; the two real fixes are the
-  `WorkloadClass` extraction (M2) and the checkpoint DTO decoupling (M3).
+  (application tier) only through the `_dto` barrel (`_checkpoint_dto` to
+  `_dto` to `_action_result_dto` to `episodic.generation`). Evidence: import
+  map gathered with grep over `episodic/orchestration/*.py` and
+  `episodic/worker/*.py`. Impact: the enforcement is mostly preventative; the
+  two real fixes are the `WorkloadClass` extraction (M2) and the checkpoint DTO
+  decoupling (M3).
 
 - Observation: the fixture generator needs an explicit outbound `.adapter`
   prefix as well as `.storage` so the `ungrouped_adapter_is_caught` fixture
   fails if a reachable adapter-like module is left invisible to Hecate.
   Evidence: helper-level tests now assert the outbound prefixes include both
-  modules.
-  Impact: future fixture additions can model non-storage adapters without
-  adding fixture-specific TOML.
+  modules. Impact: future fixture additions can model non-storage adapters
+  without adding fixture-specific TOML.
 
 - Observation: a broad production prefix of `episodic.orchestration` catches
   the durable checkpoint adapter before M3 has separated checkpoint DTOs.
   Evidence: the first M1 focused run failed `run_hecate_production_check()`
   because `episodic.canonical.storage.workflow_checkpoints` imports
   `WorkflowCheckpoint`, and because two adapters still imported the
-  orchestration-local `_log_event` helper.
-  Impact: M1 moved the reusable structured logging helper to
-  `episodic.logging.log_event` and scoped the production `orchestration` group
-  to graph modules only. M3 remains responsible for the checkpoint DTO group
-  and the durable checkpoint adapter edge.
+  orchestration-local `_log_event` helper. Impact: M1 moved the reusable
+  structured logging helper to `episodic.logging.log_event` and scoped the
+  production `orchestration` group to graph modules only. M3 remains
+  responsible for the checkpoint DTO group and the durable checkpoint adapter
+  edge.
 
 - Observation: `WorkloadClass` had only two internal production consumers that
   needed retargeting away from `topology`: `worker.tasks` and `worker.runtime`.
-  Evidence: `leta refs WorkloadClass` after the move shows internal imports
-  from `episodic.worker.workloads`, while `topology` and the public worker
-  barrel re-export the same symbol for existing callers.
-  Impact: M2 could preserve the public worker API while giving the task module
-  a vendor-free import path.
+  Evidence: `leta refs WorkloadClass` after the move shows internal imports from
+  `episodic.worker.workloads`, while `topology` and the public worker barrel
+  re-export the same symbol for existing callers. Impact: M2 could preserve the
+  public worker API while giving the task module a vendor-free import path.
 
 - Observation: the durable SQLAlchemy checkpoint store is an outbound adapter
   that legitimately implements `CheckpointPort` using `WorkflowCheckpoint`.
   Evidence: `episodic.canonical.storage.workflow_checkpoints` maps SQLAlchemy
   rows to `WorkflowCheckpoint` and accepts `WorkflowCheckpoint` in
-  `save_or_reuse`.
-  Impact: the production `outbound_adapter` group must be allowed to import
-  `orchestration_checkpoint`; the checkpoint DTO group remains strict because
-  its own `allowed` list excludes both application and adapter groups.
+  `save_or_reuse`. Impact: the production `outbound_adapter` group must be
+  allowed to import `orchestration_checkpoint`; the checkpoint DTO group
+  remains strict because its own `allowed` list excludes both application and
+  adapter groups.
 
 - Observation: `ActionExecutionResult` carries rich show-notes and guest-bios
   attachments for in-process orchestration results, but checkpoint payload
-  serialisation deliberately ignores those attachment fields.
-  Evidence: `_action_result_to_payload` stores only action identity, kind,
-  model tier, model, summary, and usage, while tests still assert rich
-  attachment attributes on direct tool results.
-  Impact: `_payload_dto.py` now uses local structural Protocols for attachment
-  shapes instead of importing generation DTOs. The structural checkpoint audit
-  skips these non-persisted attachment fields and separately enforces
-  `WorkflowCheckpoint.payload` JSON serialisability.
+  serialization deliberately ignores those attachment fields. Evidence:
+  `_action_result_to_payload` stores only action identity, kind, model tier,
+  model, summary, and usage, while tests still assert rich attachment
+  attributes on direct tool results. Impact: `_payload_dto.py` now uses local
+  structural Protocols for attachment shapes instead of importing generation
+  DTOs. The structural checkpoint audit skips these non-persisted attachment
+  fields and separately enforces `WorkflowCheckpoint.payload` JSON
+  serialisability.
 
 ## Decision log
 
 - Decision: interpret "depend on ports only" as "depend on the application and
   domain-ports layers only; never import adapters (inbound or outbound),
   storage, ORM, or vendor SDKs", and apply the strictest reading (ports and
-  provider-neutral DTOs only) to checkpoint payloads.
-  Rationale: the roadmap wording "ports only" is reconciled with the system
-  design, which states orchestration "will depend on domain services and ports
-  only". Domain services live in the application layer and are not adapters.
-  Checkpoint payloads carry a stricter rule because the design says they must
-  hold orchestration metadata only, with canonical state persisted through
-  repositories.
-  Date/Author: 2026-06-15, planning agent.
+  provider-neutral DTOs only) to checkpoint payloads. Rationale: the roadmap
+  wording "ports only" is reconciled with the system design, which states
+  orchestration "will depend on domain services and ports only". Domain
+  services live in the application layer and are not adapters. Checkpoint
+  payloads carry a stricter rule because the design says they must hold
+  orchestration metadata only, with canonical state persisted through
+  repositories. Date/Author: 2026-06-15, planning agent.
 
 - Decision: pursue genuine node-level ports-only enforcement by splitting
   `episodic/orchestration/langgraph.py` into a ports-only node module and an
@@ -299,82 +286,73 @@ CodeRabbit review completed with 0 findings.
   Rationale: it is the most faithful reading of "validate LangGraph nodes
   depend on ports only", and it also resolves the existing 400-line file
   violation. AGENTS.md requires actioning requested changes rather than
-  treating them as optional.
-  Date/Author: 2026-06-15, planning agent.
+  treating them as optional. Date/Author: 2026-06-15, planning agent.
 
 - Decision: enforce checkpoint payload boundaries with both a Hecate group and
-  a structural reflection test (plus a property test).
-  Rationale: Hecate's layer model cannot forbid embedding canonical domain
-  entities, because those classify as `domain_ports`. A reflection-based test
-  over payload DTO field types is required to fully cover the design rule.
-  Date/Author: 2026-06-15, planning agent.
+  a structural reflection test (plus a property test). Rationale: Hecate's
+  layer model cannot forbid embedding canonical domain entities, because those
+  classify as `domain_ports`. A reflection-based test over payload DTO field
+  types is required to fully cover the design rule. Date/Author: 2026-06-15,
+  planning agent.
 
 - Decision: the clarifying question on strictness and audit mechanism was
   offered to the user but not answered; the plan adopts the more thorough
   options and records them here so reviewers can scope down during PR review.
-  Rationale: a plan is cheaper to narrow than to re-expand, and PR review is the
-  approval gate.
-  Date/Author: 2026-06-15, planning agent.
+  Rationale: a plan is cheaper to narrow than to re-expand, and PR review is
+  the approval gate. Date/Author: 2026-06-15, planning agent.
 
 - Decision: model production-like specific prefixes in architecture fixtures
   (`orchestration._graph_nodes`, `orchestration._checkpoint_payload`, and
-  `worker.tasks`) instead of flat toy module names.
-  Rationale: this makes M0 cover the first-match ordering hazard that M1-M3
-  must preserve in the real `[tool.hecate]` configuration.
-  Date/Author: 2026-06-26, implementation agent.
+  `worker.tasks`) instead of flat toy module names. Rationale: this makes M0
+  cover the first-match ordering hazard that M1-M3 must preserve in the real
+  `[tool.hecate]` configuration. Date/Author: 2026-06-26, implementation agent.
 
 - Decision: scope the first production `orchestration` Hecate group to graph
-  modules (`_graph_builder`, `_graph_nodes`, and the compatibility
-  `langgraph` barrel) rather than the whole `episodic.orchestration` package.
-  Rationale: M1 proves the node/builder split and prevents graph modules from
-  importing adapters without prematurely grouping checkpoint DTOs. A package-
-  wide prefix would force the M3 checkpoint DTO decision into M1 and would
-  make the durable checkpoint adapter fail before its port DTO boundary has
-  been audited.
+  modules (`_graph_builder`, `_graph_nodes`, and the compatibility `langgraph`
+  barrel) rather than the whole `episodic.orchestration` package. Rationale: M1
+  proves the node/builder split and prevents graph modules from importing
+  adapters without prematurely grouping checkpoint DTOs. A package- wide prefix
+  would force the M3 checkpoint DTO decision into M1 and would make the durable
+  checkpoint adapter fail before its port DTO boundary has been audited.
   Date/Author: 2026-06-26, implementation agent.
 
 - Decision: promote the structured event helper from
-  `episodic.orchestration._types._log_event` to
-  `episodic.logging.log_event`, while keeping `_types._log_event` as a
-  compatibility alias.
-  Rationale: canonical adapters were using the helper for generic structured
-  logging. Keeping that helper in orchestration created an adapter-to-
-  orchestration dependency unrelated to graph policy; the logging module is
-  the existing neutral home for logging helpers.
-  Date/Author: 2026-06-26, implementation agent.
+  `episodic.orchestration._types._log_event` to `episodic.logging.log_event`,
+  while keeping `_types._log_event` as a compatibility alias. Rationale:
+  canonical adapters were using the helper for generic structured logging.
+  Keeping that helper in orchestration created an adapter-to- orchestration
+  dependency unrelated to graph policy; the logging module is the existing
+  neutral home for logging helpers. Date/Author: 2026-06-26, implementation
+  agent.
 
 - Decision: classify `episodic.worker.workloads` as `domain_ports`, not
-  `application`.
-  Rationale: `WorkloadClass` is a provider-neutral routing contract enum shared
-  by task code and the Kombu-backed topology adapter. Treating it as
-  `domain_ports` lets both task and topology layers depend on it without
-  creating a task-to-topology edge or broadening task permissions.
+  `application`. Rationale: `WorkloadClass` is a provider-neutral routing
+  contract enum shared by task code and the Kombu-backed topology adapter.
+  Treating it as `domain_ports` lets both task and topology layers depend on it
+  without creating a task-to-topology edge or broadening task permissions.
   Date/Author: 2026-06-26, implementation agent.
 
 - Decision: classify checkpoint DTO and payload modules in a dedicated
   `orchestration_checkpoint` Hecate group, and allow outbound adapters to
-  import that group.
-  Rationale: checkpoint DTOs are provider-neutral port contracts. Outbound
-  checkpoint stores need those contracts to implement `CheckpointPort`, but the
-  DTO modules themselves must not import application services, storage, ORM
-  models, or vendor SDKs.
-  Date/Author: 2026-06-26, implementation agent.
+  import that group. Rationale: checkpoint DTOs are provider-neutral port
+  contracts. Outbound checkpoint stores need those contracts to implement
+  `CheckpointPort`, but the DTO modules themselves must not import application
+  services, storage, ORM models, or vendor SDKs. Date/Author: 2026-06-26,
+  implementation agent.
 
 - Decision: keep rich tool-result attachments on `ActionExecutionResult` as
   provider-neutral structural Protocols rather than importing concrete
-  generation result DTOs.
-  Rationale: existing callers rely on `show_notes_result` and
-  `guest_bios_result` attributes for direct orchestration results, but
-  checkpoint payload serialisation does not persist those attachments. Local
-  Protocols preserve static type usefulness without reintroducing a
-  checkpoint-to-application import edge.
-  Date/Author: 2026-06-26, implementation agent.
+  generation result DTOs. Rationale: existing callers rely on
+  `show_notes_result` and `guest_bios_result` attributes for direct
+  orchestration results, but checkpoint payload serialization does not persist
+  those attachments. Local Protocols preserve static type usefulness without
+  reintroducing a checkpoint-to-application import edge. Date/Author:
+  2026-06-26, implementation agent.
 
 - Decision: no `docs/users-guide.md` update is required for M4.
   Rationale: the slice changes maintainer-facing architecture enforcement,
   tests, and documentation only; no public user workflow, command, or API
-  behaviour changed.
-  Date/Author: 2026-06-26, implementation agent.
+  behaviour changed. Date/Author: 2026-06-26, implementation agent.
 
 ## Outcomes & retrospective
 
@@ -382,20 +360,20 @@ M1 outcome: the LangGraph node functions now live in
 `episodic/orchestration/_graph_nodes.py`, graph assembly lives in
 `episodic/orchestration/_graph_builder.py`, and the historical
 `episodic.orchestration.langgraph` import path re-exports the moved symbols.
-The production architecture gate now groups those graph modules separately
-from `application`, while leaving checkpoint DTO grouping for M3.
+The production architecture gate now groups those graph modules separately from
+`application`, while leaving checkpoint DTO grouping for M3.
 
 M2 outcome: Celery task code imports `WorkloadClass` from a provider-neutral
 worker workload module, while topology remains responsible for Kombu queue
-objects. The production architecture gate now groups `episodic.worker.tasks`
-as `orchestration_tasks`, so task code may import application and domain port
+objects. The production architecture gate now groups `episodic.worker.tasks` as
+`orchestration_tasks`, so task code may import application and domain port
 contracts but not inbound or outbound adapters.
 
 M3 outcome: checkpoint payload modules now belong to
 `orchestration_checkpoint`, and `make lint` fails if they import application or
 adapter modules. A structural test audits checkpoint payload DTO field types,
 and a property test verifies JSON-shaped `WorkflowCheckpoint.payload` values
-round-trip unchanged through JSON serialisation.
+round-trip unchanged through JSON serialization.
 
 Remaining outcomes to complete: the behavioural, snapshot, documentation, and
 roadmap updates in M4 remain.
@@ -453,10 +431,10 @@ the allowed case, composition-root wiring, and several violation cases
 including re-exported and star-re-exported barrels.
 
 `tests/test_architecture_hecate_config.py` tests the helper itself (TOML shape
-and subprocess error wrapping). The fixtures are exercised by the
-architecture test and behaviour-driven development (BDD) steps that assert exit
-codes and emitted violations. Use `leta grep` and `leta refs` to locate the
-exact test entry points before editing; do not assume file names.
+and subprocess error wrapping). The fixtures are exercised by the architecture
+test and behaviour-driven development (BDD) steps that assert exit codes and
+emitted violations. Use `leta grep` and `leta refs` to locate the exact test
+entry points before editing; do not assume file names.
 
 ### The code under enforcement
 
@@ -465,11 +443,11 @@ take a state and return a state update). The orchestration package builds one
 such graph for generation:
 
 - `episodic/orchestration/langgraph.py` (460 lines) defines the node functions
-  `_plan_node`, `_execute_node`, `_finish_node`, cost-recording helpers, and the
-  graph builder `build_generation_orchestration_graph`. It imports the LangGraph
-  library plus sibling orchestration modules. The node functions receive their
-  collaborators (`PlannerPort`, `ToolExecutorPort`) by injection; the builder is
-  the module's only consumer of `_planning_orchestrator`
+  `_plan_node`, `_execute_node`, `_finish_node`, cost-recording helpers, and
+  the graph builder `build_generation_orchestration_graph`. It imports the
+  LangGraph library plus sibling orchestration modules. The node functions
+  receive their collaborators (`PlannerPort`, `ToolExecutorPort`) by injection;
+  the builder is the module's only consumer of `_planning_orchestrator`
   (`StructuredPlanningOrchestrator`, application tier).
 - `episodic/orchestration/_protocols.py` defines the port protocols
   (`PlannerPort`, `ToolExecutorPort`, `CostRecorderPort`, and similar).
@@ -488,12 +466,12 @@ Celery is a distributed task queue. The worker package:
 - `episodic/worker/runtime.py` is the composition root that wires Celery.
 
 Checkpoint payloads are the durable orchestration state saved when a graph
-pauses. `episodic/orchestration/_checkpoint_dto.py` defines `WorkflowCheckpoint`
-(its `payload` is a `dict[str, object]`), `SuspendedWorkflowResult`,
-`ResumeWorkflowCommand`, and `WorkflowStepIdentity`. It imports
-`ActionExecutionResult` and two normalisation helpers from the `_dto` barrel;
-the barrel transitively imports `episodic.generation` (application tier) through
-`_action_result_dto`.
+pauses. `episodic/orchestration/_checkpoint_dto.py` defines
+`WorkflowCheckpoint` (its `payload` is a `dict[str, object]`),
+`SuspendedWorkflowResult`, `ResumeWorkflowCommand`, and `WorkflowStepIdentity`.
+It imports `ActionExecutionResult` and two normalization helpers from the
+`_dto` barrel; the barrel transitively imports `episodic.generation`
+(application tier) through `_action_result_dto`.
 
 ### Hecate facts that constrain the design (verified from source)
 
@@ -518,9 +496,9 @@ the barrel transitively imports `episodic.generation` (application tier) through
 Load and follow these skills while implementing:
 
 - `hexagonal-architecture` for layer boundaries and drift detection.
-- `python-router`, then `python-data-shapes` (DTO design), `python-types-and-apis`
-  (Protocols and signatures), and `python-testing` (fixtures, parametrization,
-  snapshots).
+- `python-router`, then `python-data-shapes` (DTO design),
+  `python-types-and-apis` (Protocols and signatures), and `python-testing`
+  (fixtures, parametrization, snapshots).
 - `python-verification`, then `hypothesis` for the checkpoint property test
   (and `crosshair` only if a PEP 316 contract is added).
 - `vidai-mock` for behavioural tests that exercise the generation graph against
@@ -574,14 +552,14 @@ production or configuration change, and confirm the current baseline.
    expected exit codes and violations must be added and observed failing or
    xfailing before the corresponding production or config change.
 3. Extend the fixture-config generator in
-   `tests/architecture_hecate_config.py` so it can emit the new
-   orchestration, orchestration-tasks, and checkpoint groups for the synthetic
-   packages. Keep the generator data-driven; do not hard-code per-fixture TOML
-   beyond what already exists.
+   `tests/architecture_hecate_config.py` so it can emit the new orchestration,
+   orchestration-tasks, and checkpoint groups for the synthetic packages. Keep
+   the generator data-driven; do not hard-code per-fixture TOML beyond what
+   already exists.
 4. Add a production-level red expectation: a test asserting that the production
-   Hecate config declares the new groups
-   (`orchestration`, `orchestration_tasks`, `orchestration_checkpoint`). Mark
-   it `@pytest.mark.xfail(strict=True, reason="groups added in M1-M3")` and
+   Hecate config declares the new groups (`orchestration`,
+   `orchestration_tasks`, `orchestration_checkpoint`). Mark it
+   `@pytest.mark.xfail(strict=True, reason="groups added in M1-M3")` and
    confirm it xfails; remove the marker as the groups land.
 
 Validation: the new fixture tests fail or xfail for the expected reason;
@@ -605,8 +583,8 @@ graph assembly.
      application-tier wiring, importing the nodes plus the planning
      orchestrator.
    Keep both files under 400 lines. Preserve every name currently re-exported by
-   `episodic/orchestration/__init__.py`; verify with `leta refs` for each moved
-   symbol.
+   `episodic/orchestration/__init__.py`; verify with `leta refs` for each
+   moved symbol.
 2. Add the `orchestration` group to `[tool.hecate]` in `pyproject.toml`,
    placed before the `application` group (first-match). Remove
    `episodic.orchestration` from the `application` group's prefixes and add it
@@ -622,13 +600,13 @@ graph assembly.
    ordered before `orchestration`.
 3. Add fixtures and tests proving: a node-tier module importing an outbound
    adapter fails; a node-tier module importing a port passes; an orchestration
-   (non-node) module importing a domain service passes; any orchestration module
-   importing an inbound or outbound adapter fails.
+   (non-node) module importing a domain service passes; any orchestration
+   module importing an inbound or outbound adapter fails.
 
 Validation: run `make check-fmt`, `make typecheck`, `make lint` (includes
 `hecate check`), and `make test`. The new node-violation fixture fails the
-fixture check; the production check passes; the previously xfailing
-"declares orchestration group" expectation now passes (remove its marker).
+fixture check; the production check passes; the previously xfailing "declares
+orchestration group" expectation now passes (remove its marker).
 
 ### M2 Celery task enforcement and `WorkloadClass` extraction
 
@@ -643,9 +621,9 @@ Goal: make Celery task code ports-only by removing its dependence on the
 2. Update `episodic/worker/tasks.py` to import `WorkloadClass` from
    `episodic.worker.workloads`.
 3. Classify `episodic.worker.workloads` as `domain_ports` (it is a
-   provider-neutral contract type that both tasks and topology must import; both
-   layers already allow `domain_ports`). Add its prefix to the `domain_ports`
-   group.
+   provider-neutral contract type that both tasks and topology must import;
+   both layers already allow `domain_ports`). Add its prefix to the
+   `domain_ports` group.
 4. Add an `orchestration_tasks` group with prefix `episodic.worker.tasks`,
    ordered before the `inbound_adapter` group, with
    `allowed = ["orchestration_tasks", "application", "domain_ports"]` (no
@@ -671,7 +649,7 @@ canonical or ORM state.
    transitively reference generation types (use `leta show` and
    `leta calls --from`). Extract a provider-neutral DTO core module, for example
    `episodic/orchestration/_payload_dto.py`, that defines or holds the neutral
-   DTOs and normalisation helpers and imports only `episodic.llm` (ports) and
+   DTOs and normalization helpers and imports only `episodic.llm` (ports) and
    `_types`. Re-point `_checkpoint_dto.py`, `_checkpoint_payload.py`, and
    `_result_dto.py` at the core. Keep the `_dto` barrel re-exporting every
    current name for backward compatibility.
@@ -681,9 +659,9 @@ canonical or ORM state.
    ordered before the `orchestration` group, with
    `allowed = ["orchestration_checkpoint", "domain_ports"]` (ports and neutral
    DTOs only). If, after step 1, exactly one unavoidable type-only edge to an
-   application DTO remains, record a single
-   `[[tool.hecate.ignore_imports]]` entry with a clear reason; more than one
-   such edge is a tolerance breach to escalate.
+   application DTO remains, record a single `[[tool.hecate.ignore_imports]]`
+   entry with a clear reason; more than one such edge is a tolerance breach to
+   escalate.
 3. Add a structural reflection test (the audit) over the checkpoint payload
    DTOs that asserts each field's type is within an allow-list of
    provider-neutral types (primitives, `enum` members, `datetime`, mappings of
@@ -693,8 +671,8 @@ canonical or ORM state.
    entities classify as `domain_ports`.
 4. Add a Hypothesis property test asserting an invariant over the checkpoint
    payload, for example: for any generated `WorkflowCheckpoint`, its `payload`
-   round-trips through JSON serialisation unchanged (proving payloads stay
-   JSON-shaped and free of non-serialisable adapter or ORM objects). Follow the
+   round-trips through JSON serialization unchanged (proving payloads stay
+   JSON-shaped and free of non-serializable adapter or ORM objects). Follow the
    `hypothesis` skill; keep the strategy bounded and the regression database
    committed per project convention.
 
@@ -722,10 +700,10 @@ the new boundaries.
    protected. Only snapshot fixture output (deterministic), never the
    production tree.
 3. Add a behavioural test that exercises `build_generation_orchestration_graph`
-   end to end against a simulated inference service using `vidai-mock`
-   (per the `vidai-mock` skill), asserting the graph still plans, executes, and
-   finishes after the node/builder split, with the mock standing in for the
-   `LLMPort` adapter. This proves the refactor preserved observable behaviour.
+   end to end against a simulated inference service using `vidai-mock` (per the
+   `vidai-mock` skill), asserting the graph still plans, executes, and finishes
+   after the node/builder split, with the mock standing in for the `LLMPort`
+   adapter. This proves the refactor preserved observable behaviour.
 4. Documentation:
    - Update `docs/episodic-podcast-generation-system-design.md` to mark the
      orchestration enforcement slice as delivered and to describe the three new
@@ -775,11 +753,11 @@ to match the generated group prefixes the helper emits. Suggested fixtures
    outbound adapter; expected violation.
 7. `checkpoint_payload_imports_storage` — a checkpoint payload module imports a
    storage module; expected violation.
-8. `checkpoint_payload_imports_application` — a checkpoint payload module imports
-   an application service; expected violation.
+8. `checkpoint_payload_imports_application` — a checkpoint payload module
+   imports an application service; expected violation.
 9. `ungrouped_adapter_is_caught` — a guard fixture proving that an adapter the
-   orchestration layer can reach is grouped (not invisible), so enforcement does
-   not leak through an ungrouped module.
+   orchestration layer can reach is grouped (not invisible), so enforcement
+   does not leak through an ungrouped module.
 
 Each fixture gets a positive or negative test case parametrized in the
 architecture test, mirroring the existing fixture tests. Extend the helper's
@@ -936,7 +914,7 @@ the Decision Log when chosen):
 - `episodic/orchestration/_graph_builder.py` (or retained `langgraph.py`)
   containing `build_generation_orchestration_graph`.
 - `episodic/orchestration/_payload_dto.py` containing the provider-neutral
-  checkpoint DTO core and normalisation helpers.
+  checkpoint DTO core and normalization helpers.
 - `episodic/worker/workloads.py` containing `WorkloadClass`, re-exported from
   `episodic/worker/topology.py` and `episodic/worker/__init__.py`.
 - `[tool.hecate]` groups `orchestration` (and optionally `orchestration_nodes`),
@@ -944,8 +922,8 @@ the Decision Log when chosen):
   broader counterparts, with `domain_ports` extended to include
   `episodic.worker.workloads`.
 - Architecture fixtures and tests as listed under "Fixtures to add", a
-  structural reflection test, a Hypothesis property test, a `syrupy` snapshot,
-  a `pytest-bdd` feature, and a `vidai-mock`-backed behavioural test.
+  structural reflection test, a Hypothesis property test, a `syrupy` snapshot, a
+  `pytest-bdd` feature, and a `vidai-mock`-backed behavioural test.
 - `docs/adr/adr-016-*.md` recording the decisions, cross-referenced from
   ADR-014 and the system design.
 

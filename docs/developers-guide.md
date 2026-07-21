@@ -98,15 +98,15 @@ spelling gate deliberately ignores code spans and fenced code blocks.
 
 ## Workflow pins and Dependabot
 
-Dependabot owns the upgrade of GitHub Actions and reusable workflows,
-including calls into `leynos/shared-actions`. Contract tests that assert a
-caller's exact commit SHA create a lockstep dependency: every time Dependabot
-opens a bump PR, the test fails until a human edits the pinned constant to
-match. That defeats the purpose of automated dependency updates and turns a
-routine bump into a manual chore.
+Dependabot owns the upgrade of GitHub Actions and reusable workflows, including
+calls into `leynos/shared-actions`. Contract tests that assert a caller's exact
+commit SHA create a lockstep dependency: every time Dependabot opens a bump PR,
+the test fails until a human edits the pinned constant to match. That defeats
+the purpose of automated dependency updates and turns a routine bump into a
+manual chore.
 
-Contract tests may still verify the *shape* of a reusable-workflow caller.
-They must not verify the specific SHA value.
+Contract tests may still verify the *shape* of a reusable-workflow caller. They
+must not verify the specific SHA value.
 
 - Do assert the workflow references the correct reusable workflow path.
 - Do assert the ref is pinned to a full 40-character commit SHA, not a
@@ -647,7 +647,7 @@ The enforced groups are:
   OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
   `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
 - `orchestration_checkpoint`: provider-neutral checkpoint payload DTO and
-  serialisation modules.
+  serialization modules.
 - `orchestration`: LangGraph builders, graph state, planning orchestration, and
   tool execution policy.
 - `orchestration_tasks`: Celery task entrypoints.
@@ -656,10 +656,10 @@ The enforced groups are:
 
 When adding a new port or adapter, update `[tool.hecate]` in `pyproject.toml`
 in the same change as the package. Keep specific prefixes before broader
-prefixes because Hecate uses first-match group ordering:
-`composition_root` before adapter prefixes, `orchestration_checkpoint` and
-`orchestration_nodes` before the broad `orchestration` prefix, and
-`orchestration_tasks` before worker adapter prefixes.
+prefixes because Hecate uses first-match group ordering: `composition_root`
+before adapter prefixes, `orchestration_checkpoint` and `orchestration_nodes`
+before the broad `orchestration` prefix, and `orchestration_tasks` before
+worker adapter prefixes.
 
 `episodic.worker.topology.WorkloadClass` is a worker workload contract that
 task modules may import without pulling in the Celery app or runtime wiring.
@@ -680,7 +680,7 @@ For orchestration boundary fixtures, model the violating importer under the
 same prefix Hecate will classify in production. Use
 `orchestration/_graph_nodes.py` for node-only checks, `worker/tasks.py` for
 Celery task checks, and `orchestration/_checkpoint_payload.py` for checkpoint
-payload checks. Snapshot JSON diagnostics only after normalising workspace
+payload checks. Snapshot JSON diagnostics only after normalizing workspace
 paths.
 
 ### TEI payload compression
@@ -879,7 +879,7 @@ The following error codes are reserved for the source-intake implementation:
 | `ingestion_job_not_found`  | 404         | Referenced ingestion job does not exist.                      |
 | `series_profile_not_found` | 404         | Referenced series profile does not exist.                     |
 
-_Table 4: Reserved source-intake API error codes._
+*Table 4: Reserved source-intake API error codes.*
 
 Source-intake observability follows
 [ADR 015](adr/adr-015-upload-and-idempotency-ports.md). Implement the metrics
@@ -1263,7 +1263,7 @@ Roadmap item `2.4.1` introduces a dedicated orchestration package in
   plan, and action-result payload DTOs.
 - `episodic/orchestration/_checkpoint_dto.py` and
   `episodic/orchestration/_checkpoint_payload.py` contain checkpoint state DTOs
-  and JSON payload serialisation helpers.
+  and JSON payload serialization helpers.
 - `episodic/orchestration/_protocols.py` contains the planner, executor,
   checkpoint, and resume ports that keep graph policy independent of storage,
   queue, and provider adapters.
