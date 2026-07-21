@@ -859,7 +859,7 @@ The following error codes are reserved for the source-intake implementation:
 | `ingestion_job_not_found`  | 404         | Referenced ingestion job does not exist.                      |
 | `series_profile_not_found` | 404         | Referenced series profile does not exist.                     |
 
-_Table 4: Reserved source-intake API error codes._
+*Table 4: Reserved source-intake API error codes.*
 
 Source-intake observability follows
 [ADR 015](adr/adr-015-upload-and-idempotency-ports.md). Implement the metrics
