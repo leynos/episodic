@@ -66,7 +66,7 @@ Three slice-shaping decisions were confirmed with the requester before drafting
    future seam). The launcher is documented as a degenerate `TaskResumePort` so
    2.6.2/4.4.1 can converge it onto the durable checkpoint model.
 2. **Episode provisioning:** the episode and its initial canonical TEI are
-   materialised from the ingestion job's attached sources, so the client flow
+   materialized from the ingestion job's attached sources, so the client flow
    stays upload → ingest → generate without a separate episode-creation API.
 3. **Generation engine:** a minimal but real single-pass, large language model
    (LLM)-driven draft generator behind a `DraftScriptGenerator` port, producing
@@ -298,20 +298,20 @@ when any of the following is breached.
   around line 221). Impact: 4.3.2 introduces a separate minimal
   `DraftScriptGenerator`; the orchestration graph is not on the critical path
   for this slice.
-- Observation: there is **no** service that materialises a `CanonicalEpisode`
+- Observation: there is **no** service that materializes a `CanonicalEpisode`
   from intake-stage (4.3.1) sources. `_create_canonical_episode`
   (`episodic/canonical/services.py` around line 91) needs a `TeiHeader` parsed
   from caller-supplied TEI, and the 4.3.1 intake path
   (`episodic/canonical/source_intake_service.py`) creates only ingestion jobs
   and sources — never an episode. The draft TEI is *produced by generation*, so
   there is an ordering problem. Evidence: greps over `episodes.add`,
-  `source_intake_service.py`. Impact: Milestone 3 adds an explicit "materialise
+  `source_intake_service.py`. Impact: Milestone 3 adds an explicit "materialize
   episode from ingestion job" step that creates the episode with a minimal
   placeholder TEI header before generation, then the launcher updates it with
   the generated script. This is a new step, not pure reuse; the construction
   helpers may be reused but the path is new.
 - Observation: `GenerationRun.source_bundle_id` exists with no producer; the
-  ingestion job whose sources materialise the episode is the natural bundle.
+  ingestion job whose sources materialize the episode is the natural bundle.
   Evidence: `episodic/canonical/domain.py` around line 139; no `SourceBundle`
   aggregate exists. Impact: map `source_bundle_id` to the ingestion job id.
 - Observation: `GenerationRun` and `CanonicalEpisode` are `frozen=True` with no
@@ -353,7 +353,7 @@ when any of the following is breached.
   alone; concurrent appenders could read the same maximum and one would fail
   the unique `(generation_run_id, seq)` constraint. Impact: the SQLAlchemy
   store locks the owning generation-run row before allocating the next event
-  sequence, serialising appenders per run without introducing a separate
+  sequence, serializing appenders per run without introducing a separate
   sequence table.
 - Observation: adding optimistic episode TEI updates would have pushed the
   existing storage repository and episode test module beyond the project
@@ -368,7 +368,7 @@ when any of the following is breached.
   minimal draft script, preserving TEI validation without hand-written XML.
 - Observation: `ingestion_jobs.target_episode_id` has a foreign key to
   `episodes.id`, so an intake job cannot point at an episode id that the
-  materialisation step has not created yet. Impact: M3 materialisation treats a
+  materialization step has not created yet. Impact: M3 materialization treats a
   `NULL` target episode as the normal pre-generation state and allocates the
   episode id while projecting attached intake sources into canonical source
   documents.
@@ -390,7 +390,7 @@ when any of the following is breached.
   2.6.2/4.4.1 collapsing onto the checkpoint model instead of replacing the
   launcher. Confirmed with requester on 2026-06-15. Date/Author: 2026-06-15,
   planning agent.
-- Decision: the episode is materialised from the ingestion job's attached
+- Decision: the episode is materialized from the ingestion job's attached
   sources (with a placeholder TEI header created before generation) rather than
   via a new `POST /v1/episodes`. Rationale: keeps the client flow upload →
   ingest → generate; aligns with `GenerationRun.source_bundle_id`; avoids
@@ -406,7 +406,7 @@ when any of the following is breached.
   2.6.2/2.6.3. Rationale: cross-process REST polling is impossible with the
   in-memory adapter (ADR 007 calls it tests/local only). Date/Author:
   2026-06-15, planning agent.
-- Decision: an unsupported-but-recognised `quality_mode` value returns
+- Decision: an unsupported-but-recognized `quality_mode` value returns
   `422 Unprocessable Entity`; a malformed body or missing/blank
   `skip_qa_rationale` returns `400 Bad Request`. Rationale: a shape-valid body
   carrying `quality_mode="qa_gated"` is semantically unsupported in this slice;
@@ -445,7 +445,7 @@ when any of the following is breached.
 - Decision: allocate SQL generation-event sequences while holding a row-level
   lock on the parent `generation_runs` record. Rationale: the append-only log
   requires gap-free, monotonic sequence numbers per run; locking the parent run
-  row is the smallest durable serialisation point already present in the schema
+  row is the smallest durable serialization point already present in the schema
   and keeps the event table append-only. Date/Author: 2026-06-24,
   implementation agent.
 - Decision: episode TEI updates use an `EpisodeTeiUpdate` request object
@@ -651,7 +651,7 @@ class QaStatus(enum.StrEnum):
 ```
 
 Extend `GenerationRun` in `episodic/canonical/domain.py` with three fields
-(defaults chosen to minimise construction-site churn) and validation:
+(defaults chosen to minimize construction-site churn) and validation:
 
 ```python
 quality_mode: QualityMode = QualityMode.DRAFT_WITHOUT_QA
@@ -711,7 +711,7 @@ class DraftScriptGenerator(typing.Protocol):
     ) -> DraftScriptResult: ...
 ```
 
-- `DraftScriptRequest` carries the source material (normalised text or source
+- `DraftScriptRequest` carries the source material (normalized text or source
   TEI), presenter profiles (host/guest reference-document revisions), the
   episode/series identifiers, and an injected `clock()` plus a deterministic id
   factory (sequential `sp-1`, `p-1`, …) so output is reproducible.
@@ -777,7 +777,7 @@ New resources, wired by a new `_register_generation_run_routes` and
   accepted-and-ignored `template_id`, `prompt_overrides`, `budget_hints` (do not
   `400` on them; round-trip them into `configuration`/`budget_snapshot` so
   they survive). Validation: missing/blank rationale or malformed body → `400`;
-  recognised-but-unsupported `quality_mode` → `422`. Returns `202` with
+  recognized-but-unsupported `quality_mode` → `422`. Returns `202` with
   `Location: /v1/generation-runs/{run_id}` and `Retry-After`. The handler
   creates the run row AND schedules the launcher inside one `work()`;
   scheduling failure marks the run `failed`.
@@ -958,7 +958,7 @@ Green: add the four episode columns and mappers, the
 
 Gate: full Python gates including `make check-migrations`. Commit.
 
-### Milestone 3 — Draft script generator, episode materialisation, persistence
+### Milestone 3 — Draft script generator, episode materialization, persistence
 
 Red: add unit tests in `tests/test_draft_script_generation.py` using
 `FakeLLMPort` returning a canned script-shaped payload, an injected frozen
@@ -1072,7 +1072,7 @@ async HTTP client.
 
 Acceptance gate (not optional): the slice's headline scenario MUST be observed
 passing at least once on a host where `vidaimock` is available; capture that
-transcript in `Artifacts and notes`. The graceful `shutil.which` skip keeps CI
+transcript in `Artefacts and notes`. The graceful `shutil.which` skip keeps CI
 green where the binary is absent, but the plan is not done until the green
 transcript exists. Record where CI obtains the `vidaimock` binary.
 
@@ -1084,7 +1084,7 @@ Gate: full Python gates including the now-active scenarios. Commit.
    recording: the in-process launcher port (a degenerate `TaskResumePort`) and
    the Celery deferral, the single-worker assumption and stuck-run hooks (lease
    columns, conditional transitions, stuck-run gauge, manual-fail runbook),
-   episode materialisation from ingestion, the `DraftScriptGenerator` port and
+   episode materialization from ingestion, the `DraftScriptGenerator` port and
    its 4.4.1 successor, episode TEI revisioning and optimistic update, the
    422-vs-400 and 404 contract decisions, and the content-negotiation approach.
    Reference it from ADR 009 and the system design.
@@ -1154,7 +1154,7 @@ Run a single focused test during Red-Green:
 uv run pytest tests/test_generation_run_api.py -k idempotency -x -q
 ```
 
-Expected transcripts (illustrative until captured for real in Artifacts):
+Expected transcripts (illustrative until captured for real in Artefacts):
 
 ```plaintext
 $ uv run pytest tests/steps/test_no_qa_generation_slice.py -q   # M0 (red, before impl)
@@ -1176,7 +1176,7 @@ The slice is done when:
 - The behavioural scenarios in `tests/features/no_qa_generation_slice.feature`
   pass, and the headline scenario has been **observed passing at least once**
   with a `vidaimock` binary present (transcript captured in
-  `Artifacts and notes`). The `shutil.which` skip only protects binary-less CI;
+  `Artefacts and notes`). The `shutil.which` skip only protects binary-less CI;
   it does not satisfy the acceptance gate.
 - Manually, against a running service with a Vidai Mock backend:
   `POST /v1/episodes/{episode_id}/generation-runs` with
@@ -1245,7 +1245,7 @@ checking then.
   TTL could let a replayed key create a second run; documented for the 2.6.2
   recovery work.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture as work proceeds: the M0 red xfail transcript; the M2a/M2b
 `make check-migrations` clean output; the M3 emitted-TEI snapshot diff; the M4
@@ -1363,7 +1363,7 @@ corrected the `json_body_hash` module path and added the
 `generation_run.create` operation; specified the request-body required/optional
 split and the 422-vs-400 and 404 contract decisions; made cost-recorder wiring
 an explicit deliverable; specified deterministic TEI ids and clock injection
-for stable snapshots; clarified that episode materialisation is a new step (not
+for stable snapshots; clarified that episode materialization is a new step (not
 pure reuse); mandated `pyproject.toml` architecture-group registration for new
 modules; broadened LLM-failure and malformed-completion handling and tests;
 required observability acceptance; and turned the Vidai Mock skip into a
