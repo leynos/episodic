@@ -37,7 +37,7 @@ dev = [
     "cyclopts>=4.21.0,<5",
     "hecate @ git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12",
     "hypothesis[asyncio]>=6.156.6,<7",
-    "mypy>=2.2.0,<3",
+    "mypy>=2.3.0,<3",
     "pytest>=9.1.1,<11",
     "pytest-bdd",
     "pytest-asyncio",
