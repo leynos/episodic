@@ -480,56 +480,92 @@ root_packages = ["episodic"]
 default_rule_id = "ARCH001"
 
 [[tool.hecate.groups]]
-name = "outbound_adapter"
-prefixes = [
-    "episodic.canonical.adapters",
-    "episodic.canonical.storage",
-    "episodic.cost.storage",
-    "episodic.cost.pricing_catalogue",
-    "episodic.llm.openai_api",
-    "episodic.llm.openai_adapter",
-    "episodic.llm.openai_client",
+name = "composition_root"
+prefixes = ["episodic.api.runtime", "episodic.worker.runtime"]
+allowed = [
+    "application",
+    "composition_root",
+    "domain_ports",
+    "inbound_adapter",
+    "orchestration",
+    "orchestration_checkpoint",
+    "orchestration_tasks",
+    "outbound_adapter",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
 
 [[tool.hecate.groups]]
-name = "outbound_adapter"
+name = "domain_ports"
 prefixes = [
-    "episodic.canonical.adapters",
-    "episodic.canonical.storage",
-    "episodic.cost.storage",
-    "episodic.cost.pricing_catalogue",
-    "episodic.llm.openai_api",
-    "episodic.llm.openai_adapter",
-    "episodic.llm.openai_client",
+    "episodic.canonical.domain",
+    "episodic.canonical.constraints",
+    "episodic.canonical.ingestion",
+    "episodic.canonical.ingestion_ports",
+    "episodic.canonical.entity_protocols",
+    "episodic.canonical.history_protocols",
+    "episodic.canonical.health",
+    "episodic.canonical.idempotency",
+    "episodic.canonical.ingestion_sources",
+    "episodic.canonical.object_store",
+    "episodic.canonical.pagination",
+    "episodic.canonical.ports",
+    "episodic.canonical.reference_protocols",
+    "episodic.canonical.unit_of_work_protocols",
+    "episodic.canonical.upload_protocols",
+    "episodic.canonical.uploads",
+    "episodic.cost.ports",
+    "episodic.cost.engine",
+    "episodic.llm.ports",
+    "episodic.metrics_ports",
+    "episodic.worker.workloads",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
+allowed = ["domain_ports"]
 
 [[tool.hecate.groups]]
-name = "outbound_adapter"
+name = "orchestration_checkpoint"
 prefixes = [
-    "episodic.canonical.adapters",
-    "episodic.canonical.storage",
-    "episodic.cost.storage",
-    "episodic.cost.pricing_catalogue",
-    "episodic.llm.openai_api",
-    "episodic.llm.openai_adapter",
-    "episodic.llm.openai_client",
+    "episodic.orchestration._checkpoint_payload",
+    "episodic.orchestration._checkpoint_dto",
+    "episodic.orchestration._payload_dto",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
+allowed = ["orchestration_checkpoint", "domain_ports"]
 
 [[tool.hecate.groups]]
-name = "outbound_adapter"
+name = "orchestration"
 prefixes = [
-    "episodic.canonical.adapters",
-    "episodic.canonical.storage",
-    "episodic.cost.storage",
-    "episodic.cost.pricing_catalogue",
-    "episodic.llm.openai_api",
-    "episodic.llm.openai_adapter",
-    "episodic.llm.openai_client",
+    "episodic.orchestration._graph_builder",
+    "episodic.orchestration._graph_nodes",
+    "episodic.orchestration.langgraph",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports", "orchestration_checkpoint"]
+allowed = ["orchestration", "application", "domain_ports", "orchestration_checkpoint"]
+
+[[tool.hecate.groups]]
+name = "application"
+prefixes = [
+    "episodic.canonical.services",
+    "episodic.canonical.ingestion_service",
+    "episodic.canonical.idempotency_service",
+    "episodic.canonical.source_intake_service",
+    "episodic.canonical.profile_templates",
+    "episodic.canonical.reference_documents",
+    "episodic.cost.recorder",
+    "episodic.generation",
+]
+allowed = ["application", "domain_ports"]
+
+[[tool.hecate.groups]]
+name = "orchestration_tasks"
+prefixes = [
+    "episodic.worker.tasks",
+]
+allowed = ["orchestration_tasks", "application", "domain_ports"]
+
+[[tool.hecate.groups]]
+name = "inbound_adapter"
+prefixes = [
+    "episodic.api",
+    "episodic.worker.topology",
+]
+allowed = ["inbound_adapter", "application", "domain_ports"]
 
 [[tool.hecate.groups]]
 name = "outbound_adapter"
