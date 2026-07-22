@@ -295,7 +295,14 @@ when any of the following is breached.
   reported `1068 passed, 1 skipped, 7 xfailed`. After staging the complete
   milestone delta, CodeRabbit reviewed the new resource and tests explicitly
   and reported zero findings.
-- [ ] (pending) M6: Episode TEI retrieval endpoint with content negotiation.
+- [x] (completed, 2026-07-22) M6: Episode TEI retrieval
+  endpoint with content negotiation. Red evidence was HTTP 404 after a draft
+  had been persisted because the route was absent. Green evidence covers the
+  pre-draft 404, default JSON envelope, raw `application/tei+xml` attachment,
+  content disposition, ETag, and unsupported-media 406; the combined M5-M6
+  endpoint suite reports `3 passed`. Full gates passed; `make test` reported
+  `1069 passed, 1 skipped, 7 xfailed`. A staged-delta CodeRabbit review included
+  the new resource and tests and reported zero findings.
 - [ ] (pending) M7: End-to-end behavioural slice with Vidai Mock (observed
   passing at least once).
 - [ ] (pending) M8: Documentation, roadmap update, and final gates.
@@ -1437,6 +1444,13 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
   and `make nixie` passed. A staged-delta `coderabbit review --agent` included
   `episodic/api/resources/generation_runs.py` and
   `tests/test_generation_run_api.py` and ended with
+  `{"type":"complete","status":"review_completed","findings":0}`.
+
+- M6 review evidence (2026-07-22): `make check-fmt`, `make test`,
+  `make typecheck`, `make lint`, `make check-migrations`, `make markdownlint`,
+  and `make nixie` passed. A staged-delta `coderabbit review --agent` included
+  `episodic/api/resources/episode_tei.py` and `tests/test_episode_tei_api.py`
+  and ended with
   `{"type":"complete","status":"review_completed","findings":0}`.
 
 ## Outcomes & retrospective
