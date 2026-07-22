@@ -86,6 +86,26 @@ different canonical body returns `409 Conflict`. The resumable
 `POST /v1/uploads/init` flow remains a future extension for an object-store
 adapter that can use pre-signed upload URLs.
 
+#### Generate and download a no-QA draft
+
+After an ingestion job is ready, create a draft run with
+`POST /v1/episodes/{ingestion_job_id}/generation-runs`. Supply an
+`Idempotency-Key` and a JSON body containing `quality_mode` set to
+`draft_without_qa`, `skip_qa_rationale`, and `actor`. The server returns
+`202 Accepted`, a `Location` header for the run, and `Retry-After` guidance.
+
+Poll the `Location` resource until its status is `succeeded` or `failed`.
+Lifecycle details are available from
+`GET /v1/generation-runs/{run_id}/events`. Replaying the original request with
+the same key and body returns the same run and polling headers; changing the
+body under that key returns `409 Conflict`.
+
+After success, request `GET /v1/episodes/{episode_id}/tei` for the JSON
+metadata envelope, or add `Accept: application/tei+xml` to download the raw TEI
+file. The response includes an entity tag and attachment filename. This path
+deliberately bypasses QA: the run and TEI revision are marked `skipped`, and
+the output remains an editorial draft until a later review and approval flow.
+
 #### Show notes and chapter markers
 
 Show notes are the episode summaries and topic lists that appear alongside a
