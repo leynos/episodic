@@ -55,6 +55,13 @@ async def test_launcher_completes_run_and_records_cost(
         "run.succeeded",
     ]
     assert generator.requests[0].sources[0].content == "Bridgewater launch source text."
+    assert [
+        profile.display_name for profile in generator.requests[0].presenter_profiles
+    ] == ["Host One", "Guest One"]
+    assert [profile.role for profile in generator.requests[0].presenter_profiles] == [
+        "host",
+        "guest",
+    ]
     assert cost_recorder.provider_calls[0].workflow_run_id == str(run_id)
     assert cost_recorder.provider_calls[0].usage == {
         "input_tokens": 10,

@@ -5,8 +5,10 @@ from __future__ import annotations
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
+import json
 import typing as typ
 
+from episodic.canonical.domain import ReferenceDocumentKind
 from episodic.canonical.generation_persistence import InvalidDraftTeiError
 from episodic.canonical.generation_run_errors import RunNotFound
 from episodic.cost.ports import (
@@ -38,6 +40,7 @@ if typ.TYPE_CHECKING:
         JsonMapping,
         SourceDocument,
     )
+    from episodic.canonical.reference_documents.resolution import ResolvedBinding
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 Clock = cabc.Callable[[], dt.datetime]
@@ -172,6 +175,53 @@ def draft_request(
         clock=clock,
         id_factory=id_factory_factory(),
     )
+
+
+def project_presenter_profiles(
+    resolved_bindings: list[ResolvedBinding],
+) -> tuple[DraftPresenterProfile, ...]:
+    """Project resolved host and guest revisions into draft input records."""
+    presenter_kinds = {
+        ReferenceDocumentKind.HOST_PROFILE,
+        ReferenceDocumentKind.GUEST_PROFILE,
+    }
+    profiles: list[DraftPresenterProfile] = []
+    for resolved in resolved_bindings:
+        if resolved.document.kind not in presenter_kinds:
+            continue
+        content = resolved.revision.content
+        metadata = resolved.document.metadata
+        display_name = _first_string(content, "display_name", "name", "title")
+        display_name = display_name or _first_string(
+            metadata, "display_name", "name", "title"
+        )
+        source_content = _first_string(
+            content,
+            "source_content",
+            "profile",
+            "bio",
+            "biography",
+            "summary",
+            "content",
+            "text",
+        )
+        profiles.append(
+            DraftPresenterProfile(
+                display_name=display_name or str(resolved.document.id),
+                role=resolved.document.kind.value.removesuffix("_profile"),
+                source_content=source_content or json.dumps(content, sort_keys=True),
+            )
+        )
+    return tuple(profiles)
+
+
+def _first_string(values: cabc.Mapping[str, object], *keys: str) -> str | None:
+    """Return the first non-empty string from the requested mapping keys."""
+    for key in keys:
+        value = values.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def draft_generated_payload(result: DraftScriptResult) -> JsonMapping:

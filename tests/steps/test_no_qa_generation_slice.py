@@ -130,8 +130,48 @@ def series_profile_exists(context: NoQaGenerationSliceContext) -> None:
 
 @given("a host presenter profile and a guest presenter profile are bound")
 def presenter_profiles_are_bound(context: NoQaGenerationSliceContext) -> None:
-    """Confirm the editorial profile setup precedes source ingestion."""
-    assert context.profile_id is not None
+    """Create and bind host and guest profile revisions to the series."""
+    profile_id = require(context.profile_id, "series profile")
+    for kind, name in (("host_profile", "BDD Host"), ("guest_profile", "BDD Guest")):
+        document = context.run(
+            context.request(
+                "POST",
+                f"/v1/series-profiles/{profile_id}/reference-documents",
+                json={
+                    "kind": kind,
+                    "lifecycle_state": "active",
+                    "metadata": {"name": name},
+                },
+            )
+        )
+        assert document.status_code == 201, document.text
+        document_id = document.json()["id"]
+        revision = context.run(
+            context.request(
+                "POST",
+                f"/v1/series-profiles/{profile_id}/reference-documents/"
+                f"{document_id}/revisions",
+                json={
+                    "content": {"summary": f"{name} profile content."},
+                    "content_hash": f"no-qa-{kind}",
+                    "author": "editor@example.com",
+                    "change_note": "Create BDD presenter.",
+                },
+            )
+        )
+        assert revision.status_code == 201, revision.text
+        binding = context.run(
+            context.request(
+                "POST",
+                "/v1/reference-bindings",
+                json={
+                    "reference_document_revision_id": revision.json()["id"],
+                    "target_kind": "series_profile",
+                    "series_profile_id": profile_id,
+                },
+            )
+        )
+        assert binding.status_code == 201, binding.text
 
 
 @given("an ingestion job with an attached source document")
