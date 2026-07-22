@@ -6,12 +6,11 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: IN PROGRESS
 
-Current implementation status (audited 2026-07-22): Milestones 0-3 are
-complete. Milestone 4 is implemented and passes deterministic gates, but its
-required CodeRabbit review is not recorded. Milestones 5-8 remain outstanding;
-in particular, the REST resources and TEI retrieval route are not registered,
-and the seven behavioural scenarios remain strict expected failures. Roadmap
-item 4.3.2 therefore remains open.
+Current implementation status (audited 2026-07-22): Milestones 0-4 are
+complete. Milestones 5-8 remain outstanding; in particular, the REST resources
+and TEI retrieval route are not registered, and the seven behavioural
+scenarios remain strict expected failures. Roadmap item 4.3.2 therefore remains
+open.
 
 ## Purpose / big picture
 
@@ -274,7 +273,7 @@ when any of the following is breached.
   deterministic gates passed: `make check-fmt`, `make typecheck`, `make lint`,
   `make test` (`988 passed, 2 skipped, 7 xfailed`), `make markdownlint`, and
   `make nixie`. CodeRabbit review completed with zero findings.
-- [ ] (implemented, deterministic gates passed, 2026-06-24) M4: In-process
+- [x] (completed, 2026-07-22) M4: In-process
   launcher, lifecycle events, cost wiring, and observability. The launcher now
   claims pending no-QA runs, records `run.started`, emits `draft.generated`
   before TEI persistence, persists valid TEI, records cost ledger entries when
@@ -284,7 +283,10 @@ when any of the following is breached.
   `tests/test_env_runtime_wiring.py` passed with `15 passed in 14.24s`. Full
   deterministic gates passed: `make check-fmt`, `make typecheck`, `make lint`,
   `make test` (`994 passed, 2 skipped, 7 xfailed`), `make markdownlint`, and
-  `make nixie`. CodeRabbit review remains pending for this milestone.
+  `make nixie`. The 2026-07-22 milestone revalidation also passed
+  `make check-migrations`; `make test` reported
+  `1066 passed, 1 skipped, 7 xfailed`. CodeRabbit reviewed the complete branch
+  delta and reported zero findings.
 - [ ] (pending) M5: Generation-run REST endpoints with idempotency (incl.
   Location/Retry-After replay).
 - [ ] (pending) M6: Episode TEI retrieval endpoint with content negotiation.
@@ -297,8 +299,8 @@ when any of the following is breached.
   including the post-rebase `GenerationRunStatusUpdate` parameter-object
   refactor. It does not contain the M5-M6 inbound HTTP adapters. The focused M7
   suite reports `7 xfailed`, so neither M7 nor the roadmap success criterion is
-  complete. Post-rebase Python and documentation gates pass; M4 CodeRabbit and
-  the remaining milestone work are still required before M8 can close.
+  complete. Post-rebase Python and documentation gates pass; the remaining
+  milestone work is still required before M8 can close.
 
 ## Surprises & discoveries
 
@@ -1404,6 +1406,11 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
 
   Each scenario is still a strict expected failure with the reason
   `4.3.2 no-QA source-to-script slice is not implemented yet`.
+
+- M4 review evidence (2026-07-22): after `make check-fmt`, `make test`,
+  `make typecheck`, `make lint`, `make check-migrations`, `make markdownlint`,
+  and `make nixie` passed, `coderabbit review --agent` ended with
+  `{"type":"complete","status":"review_completed","findings":0}`.
 
 ## Outcomes & retrospective
 
