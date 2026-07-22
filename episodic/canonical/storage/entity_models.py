@@ -92,6 +92,14 @@ class EpisodeRecord(Base):
         Raw TEI XML associated with the episode.
     tei_xml_zstd : bytes | None
         Zstandard-compressed TEI XML associated with the episode.
+    tei_revision : int
+        Monotonic TEI revision number for the episode.
+    tei_content_hash : str | None
+        Content hash for the current TEI payload, when available.
+    qa_status : QaStatus | None
+        Quality-assurance status for the current episode content.
+    last_generation_run_id : uuid.UUID | None
+        Most recent generation run associated with the episode.
     status : EpisodeStatus
         Episode status enum.
     approval_state : ApprovalState
