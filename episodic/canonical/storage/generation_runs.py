@@ -220,7 +220,7 @@ class SqlAlchemyGenerationRunStore:
         update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
-        record = await self._require_mutable_run(run_id)
+        record = await self._require_mutable_run(run_id, lock=True)
         record.status = update.status
         record.current_node = update.current_node
         record.ended_at = update.ended_at

@@ -1,13 +1,17 @@
 """Tests for in-process generation-run launching."""
 
+import asyncio
+import datetime as dt
 import typing as typ
+import uuid
 
 import pytest
 
-from episodic.canonical.domain import GenerationRunStatus
+from episodic.canonical.domain import GenerationRunStatus, SourceDocument
 from episodic.canonical.generation_quality import QaStatus
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptTransientProviderError
+from episodic.generation.launcher_support import source_from_document
 from tests.generation_run_launcher_support import (
     BlockingDraftGenerator,
     FailingDraftGenerator,
@@ -20,7 +24,40 @@ from tests.generation_run_launcher_support import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    from pathlib import Path
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+async def _uploaded_chunks() -> cabc.AsyncIterator[bytes]:
+    """Yield uploaded source bytes with mixed line endings."""
+    await asyncio.sleep(0)
+    yield b"Uploaded source line one.\r\n"
+    yield b"Line two.\n"
+
+
+@pytest.mark.asyncio
+async def test_upload_backed_source_reads_object_content(tmp_path: Path) -> None:
+    """Upload provenance should resolve to normalized text before generation."""
+    store = FilesystemObjectStore(tmp_path)
+    await store.put("uploads/source", _uploaded_chunks(), max_bytes=1_000)
+    document = SourceDocument(
+        id=uuid.uuid4(),
+        ingestion_job_id=uuid.uuid4(),
+        canonical_episode_id=uuid.uuid4(),
+        reference_document_revision_id=None,
+        source_type="research_brief",
+        source_uri="upload:uploads/source",
+        weight=1.0,
+        content_hash="sha256:source",
+        metadata={},
+        created_at=dt.datetime(2026, 6, 24, tzinfo=dt.UTC),
+    )
+
+    source = await source_from_document(document, store)
+
+    assert source.content == "Uploaded source line one.\nLine two."
 
 
 @pytest.mark.asyncio

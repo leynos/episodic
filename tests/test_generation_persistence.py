@@ -192,6 +192,46 @@ async def test_materialise_episode_from_ingestion_creates_placeholder_episode(
 
 
 @pytest.mark.asyncio
+async def test_materialise_episode_from_ingestion_reuses_persisted_episode(
+    session_factory: object,
+) -> None:
+    """Repeated materialization should converge on the job's first episode."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    _, job = await _persist_ready_job(factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        first = await materialise_episode_from_ingestion(
+            uow,
+            EpisodeMaterialisationRequest(
+                ingestion_job_id=job.id,
+                title="Bridgewater Futures",
+                clock=_clock,
+                uuid_factory=SequentialUuids(),
+            ),
+        )
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        second = await materialise_episode_from_ingestion(
+            uow,
+            EpisodeMaterialisationRequest(
+                ingestion_job_id=job.id,
+                title="Ignored retry title",
+                clock=_clock,
+                uuid_factory=uuid.uuid4,
+            ),
+        )
+        persisted_job = await uow.ingestion_jobs.get(job.id)
+        documents = await uow.source_documents.list_for_job(job.id)
+
+    assert second.id == first.id
+    assert second.title == "Bridgewater Futures"
+    assert persisted_job is not None
+    assert persisted_job.target_episode_id == first.id
+    assert len(documents) == 1
+
+
+@pytest.mark.asyncio
 async def test_persist_draft_script_records_no_qa_revision_metadata(
     session_factory: object,
 ) -> None:
