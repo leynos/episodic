@@ -356,7 +356,9 @@ when any of the following is breached.
   milestone passed `make check-fmt`, `make lint`, `make typecheck`, `make
   test` (`1089 passed, 1 skipped`), `make check-migrations`, `make
   markdownlint`, `make nixie`, `mbake validate Makefile`, and `git diff
-  --check`. CodeRabbit remains pending and is not claimed here.
+  --check`. `coderabbit review --agent` ran against clean commit `e02f2c3`,
+  returned terminal `review_completed` with zero findings, and did not require
+  a rate-limit retry.
 
 ## Surprises & discoveries
 
