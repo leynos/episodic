@@ -311,7 +311,10 @@ when any of the following is breached.
   typing, lint, migration, Markdown, and Mermaid gates also passed. CodeRabbit
   reviewed the staged milestone, including both BDD modules, and reported zero
   findings.
-- [ ] (pending) M8: Documentation, roadmap update, and final gates.
+- [x] (completed, 2026-07-22) M8: Documentation, roadmap update, and final
+  gates. ADR 016, system/user/developer guidance, repository indexes, and the
+  completed roadmap checkbox are present. Markdown and Mermaid gates passed,
+  and final CodeRabbit review reported zero findings.
 
 - [x] (status audit, 2026-07-22) Reconciled this plan with PR head
   `471254111375567ffe1094831aa94e32ee099702`. The branch contains M0-M4 code,
@@ -1502,6 +1505,14 @@ then records the final architecture and user guidance and closes the roadmap
 item. The existing hand-offs to 2.6.2 / 2.6.3 / 4.4.1 remain unchanged:
 automated stuck-run recovery, the broader checkpoint REST surface, and the
 full QA-bypass generation graph are out of scope for 4.3.2.
+
+All eight milestones are complete. The implementation exposes durable no-QA
+generation runs and event polling, resolves source and presenter context,
+persists revisioned TEI with explicit skipped-QA provenance, and serves JSON
+or downloadable TEI representations. Full deterministic gates pass with
+`1076 passed, 1 skipped`; three Milestone 7/8 CodeRabbit reviews, including the
+presenter-context correction, each reported zero findings. ADR 016 and the
+maintainer and user guides record the operational limits and successor work.
 
 ## Revision note
 

@@ -70,7 +70,8 @@ The `episodic/` package is grouped by feature and boundary:
   adapters, pagination, ingestion services, profile templates, and reference
   document functionality.
 - `episodic/generation/` contains generation services for show notes, chapter
-  markers, guest biographies, and Text Encoding Initiative (TEI) payloads.
+  markers, guest biographies, draft scripts, generation-run launching, and
+  Text Encoding Initiative (TEI) payloads.
 - `episodic/llm/` contains large language model ports and OpenAI adapter code.
 - `episodic/orchestration/` contains workflow state, checkpoint payloads,
   suspend-and-resume support, and executor integration.
@@ -108,6 +109,8 @@ The `tests/` directory mirrors the system's test surfaces:
 
 - `tests/features/` stores behavioural feature files.
 - `tests/steps/` stores pytest-bdd step implementations.
+- `tests/steps/no_qa_generation_slice_support.py` owns the live Vidai Mock and
+  application-stack support for the source-to-script behavioural slice.
 - `tests/fixtures/` stores shared fixture data and architecture-check fixtures.
 - `tests/canonical_storage/` stores persistence-focused tests for canonical
   storage behaviour.
