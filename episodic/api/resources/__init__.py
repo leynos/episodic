@@ -31,6 +31,7 @@ Examples
 """
 
 from .base import _GetHistoryResourceBase, _GetResourceBase
+from .episode_tei import EpisodeTeiResource
 from .episode_templates import (
     EpisodeTemplateHistoryResource,
     EpisodeTemplateResource,
@@ -65,6 +66,7 @@ from .source_intake import (
 )
 
 __all__ = [
+    "EpisodeTeiResource",
     "EpisodeTemplateHistoryResource",
     "EpisodeTemplateResource",
     "EpisodeTemplatesResource",
