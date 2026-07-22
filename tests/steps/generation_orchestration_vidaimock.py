@@ -13,8 +13,6 @@ import pytest
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
-    from tests.steps.test_generation_orchestration_steps import OrchestrationBDDContext
-
 
 def find_free_port() -> int:
     """Bind to an ephemeral port and return its number before releasing it."""
@@ -146,7 +144,7 @@ def _await_port_ready(
 
 
 def start_vidaimock_process(
-    orchestration_context: OrchestrationBDDContext,
+    orchestration_context: VidaiMockProcessContext,
     config_dir: Path,
     port: int,
 ) -> None:
@@ -174,3 +172,9 @@ def start_vidaimock_process(
     )
 
     _await_port_ready(orchestration_context.process, "127.0.0.1", port)
+
+class VidaiMockProcessContext(typ.Protocol):
+    """Minimal mutable state required by the Vidai Mock process helper."""
+
+    process: subprocess.Popen[str] | None
+    base_url: str

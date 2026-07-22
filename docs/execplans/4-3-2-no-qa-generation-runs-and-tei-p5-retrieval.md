@@ -303,8 +303,14 @@ when any of the following is breached.
   endpoint suite reports `3 passed`. Full gates passed; `make test` reported
   `1069 passed, 1 skipped, 7 xfailed`. A staged-delta CodeRabbit review included
   the new resource and tests and reported zero findings.
-- [ ] (pending) M7: End-to-end behavioural slice with Vidai Mock (observed
-  passing at least once).
+- [x] (completed, 2026-07-22) M7: End-to-end behavioural slice with Vidai
+  Mock. The seven strict xfails are now live scenarios driving the Falcon API,
+  SQL persistence, in-process launcher, OpenAI-compatible adapter, and Vidai
+  Mock. Focused evidence is `7 passed in 5.36s` with `vidaimock 0.1.3`. Full
+  gates passed: `make test` reported `1076 passed, 1 skipped`; formatting,
+  typing, lint, migration, Markdown, and Mermaid gates also passed. CodeRabbit
+  reviewed the staged milestone, including both BDD modules, and reported zero
+  findings.
 - [ ] (pending) M8: Documentation, roadmap update, and final gates.
 
 - [x] (status audit, 2026-07-22) Reconciled this plan with PR head
@@ -356,9 +362,20 @@ when any of the following is breached.
   skip); the `model="vidai-mock"` name convention is established. Evidence:
   `tests/steps/test_guest_bios_steps.py`,
   `tests/steps/generation_orchestration_vidaimock.py`,
-  `tests/_guest_bios_helpers.py`. Impact: Milestone 7 extracts these helpers
-  into a shared `tests/fixtures/` module and reuses them rather than writing a
-  third copy.
+  `tests/_guest_bios_helpers.py`. Impact: Milestone 7 reuses the already
+  extracted `generation_orchestration_vidaimock.py` process helper and narrows
+  its context requirement to a structural protocol rather than writing a
+  third process manager.
+- Observation: cancelling the launcher during replay-scenario teardown can
+  interrupt PGlite database work and make later scenarios lose the shared test
+  server. Impact: the M7 context drains scheduled generation before launcher
+  shutdown, matching the application's graceful-shutdown contract and keeping
+  the seven-scenario suite deterministic.
+- Observation: malformed draft JSON is classified as `response.format` and
+  does not emit `tei.invalid`; that event is reserved for failures while
+  constructing or validating TEI. Impact: the malformed-completion scenario
+  returns structurally valid draft JSON containing an XML-invalid speaker,
+  which exercises the intended `tei.invalid` branch.
 - Observation: on 2026-06-24 the local branch was already named
   `4-3-2-no-qa-generation-runs-and-tei-p5-retrieval` and the matching remote
   branch existed at `origin`, but the worktree did not have an upstream branch
@@ -1237,9 +1254,17 @@ N xfailed in N.Ns
 ```
 
 ```plaintext
-$ uv run pytest tests/steps/test_no_qa_generation_slice.py -q   # M7 (green, vidaimock present)
-N passed in N.Ns
+$ command -v vidaimock && vidaimock --version
+/home/leynos/.local/bin/vidaimock
+vidaimock 0.1.3
+$ uv run pytest tests/steps/test_no_qa_generation_slice.py -q
+.......                                                                  [100%]
+7 passed, 1 warning in 5.36s
 ```
+
+CI installs the pinned Vidai Mock release from the `vidaiUK/VidaiMock` GitHub
+release archive in `.github/workflows/ci.yml`, verifies its SHA-256 digest,
+and places the binary in `$HOME/.local/bin` before running tests.
 
 ## Validation and acceptance
 
@@ -1463,14 +1488,14 @@ handling. The later `GenerationRunStatusUpdate` refactor keeps lifecycle
 updates cohesive, and `_require_mutable_run` removes duplicated missing and
 terminal checks from the in-memory adapter.
 
-The Purpose section is not yet satisfied end to end. No inbound generation-run
-resource, polling resource, event resource, or episode-TEI retrieval resource
-is registered, and the Vidai Mock behavioural slice has not passed. Milestones
-5-7 therefore remain the critical path. Milestone 8 must update the roadmap
-only after those routes and scenarios meet the stated success criterion. The
-existing hand-offs to 2.6.2 / 2.6.3 / 4.4.1 remain unchanged: automated stuck
-run recovery, the broader checkpoint REST surface, and the full QA-bypass
-generation graph are out of scope for 4.3.2.
+The Purpose section is now demonstrated end to end by the live Vidai Mock BDD
+slice: clients create and replay runs, poll terminal state and events, and
+download validated TEI while failures retain stable diagnostics. Milestone 7
+still requires full deterministic gates and CodeRabbit clearance; Milestone 8
+then records the final architecture and user guidance and closes the roadmap
+item. The existing hand-offs to 2.6.2 / 2.6.3 / 4.4.1 remain unchanged:
+automated stuck-run recovery, the broader checkpoint REST surface, and the
+full QA-bypass generation graph are out of scope for 4.3.2.
 
 ## Revision note
 
