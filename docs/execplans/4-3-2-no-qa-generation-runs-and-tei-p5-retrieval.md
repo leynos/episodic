@@ -325,9 +325,9 @@ when any of the following is breached.
   `make check-fmt`, `make lint`, `make typecheck`, `make check-migrations`,
   `make test` (`1078 passed, 1 skipped`), `make markdownlint`, and `make nixie`.
   CodeRabbit reviewed the complete branch delta and reported zero findings.
-- [x] (completed, 2026-07-22) Review follow-up: verified the live BDD fix and
-  the row-locking, `error_category`, and idempotency work already landed in the
-  current tree; the remaining review findings are stale.
+- [x] (completed, 2026-07-22) Review follow-up: verified the live BDD fix plus
+  the row-locking, `error_category`, and idempotency work in the current tree;
+  the remaining review findings are stale.
 
 ## Surprises & discoveries
 
