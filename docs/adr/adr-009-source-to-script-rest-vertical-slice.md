@@ -127,7 +127,9 @@ vertical-slice tasks:
 The first task owns upload resources, ingestion-job source attachment, and
 presenter-profile use through existing reusable reference-document semantics.
 The second task depends on the first task and owns the generation-run contract,
-the explicit no-QA quality mode, run polling, and TEI retrieval.
+the explicit no-QA quality mode, run polling, and TEI retrieval. ADR 016
+records its execution, persistence, recovery-hook, and content-negotiation
+decisions.
 
 The target API is `/v1`. Existing unversioned routes do not need preservation
 when the vertical slice is implemented because the project has not reached
@@ -248,7 +250,8 @@ the same first-write-wins and conflict-detection invariants.
 
 ## References
 
-See also the system design[^7] and TUI API design.[^8]
+See also the system design[^7], TUI API design,[^8] and the no-QA execution
+decision.[^9]
 
 [^1]: [RFC 6129: The `application/tei+xml` media type](https://datatracker.ietf.org/doc/html/rfc6129)
 [^2]: [ADR 014: Hexagonal architecture enforcement](adr-014-hexagonal-architecture-enforcement.md)
@@ -258,3 +261,4 @@ See also the system design[^7] and TUI API design.[^8]
 [^6]: [Stripe idempotent request guidance](https://docs.stripe.com/api/idempotent_requests)
 [^7]: [Episodic podcast generation system design](../episodic-podcast-generation-system-design.md)
 [^8]: [Episodic TUI API design](../episodic-tui-api-design.md)
+[^9]: [ADR 016: No-QA generation execution and TEI persistence](adr-016-no-qa-generation-run-execution-and-tei-persistence.md)

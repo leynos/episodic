@@ -22,6 +22,7 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-014-hexagonal-architecture-enforcement.md`](adr/adr-014-hexagonal-architecture-enforcement.md)
 - [`adr-015-generation-run-port-split.md`](adr/adr-015-generation-run-port-split.md)
 - [`adr-015-upload-and-idempotency-ports.md`](adr/adr-015-upload-and-idempotency-ports.md)
+- [`adr-016-no-qa-generation-run-execution-and-tei-persistence.md`](adr/adr-016-no-qa-generation-run-execution-and-tei-persistence.md)
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
 
 ## Local development
@@ -1352,6 +1353,34 @@ review checkpoint attached to a generation run. It is not the same as
 `episodic.orchestration.WorkflowCheckpoint`, which stores internal LangGraph
 suspend/resume state through `CheckpointPort`. Do not convert between the two
 implicitly; bridge logic belongs in the later orchestration and REST work.
+
+### No-QA launcher and TEI retrieval
+
+`GenerationRunLauncher` is the scheduling seam used by the generation-run HTTP
+resource. The current `InProcessGenerationRunLauncher` owns background task
+references, bounds concurrency, and opens a fresh unit of work for each
+lifecycle phase. Shutdown hooks must drain or cancel those tasks before the
+database engine is disposed. Do not pass request-scoped sessions into launcher
+tasks.
+
+The launcher conditionally claims pending runs, resolves host and guest
+profiles, and emits ordered events before persisting terminal status. Preserve
+the stable failure categories and bounded-cardinality metric labels when adding
+new generation failures. Lease expiry and the stuck-run gauge are operational
+recovery hooks, not an automatic retry mechanism.
+
+TEI representation selection is centralized in
+`episodic.api.resources.episode_tei.negotiate_tei_media_type`. Keep JSON as the
+default, raw XML for `application/tei+xml`, and `406` for unsupported types.
+Apply attachment and entity-tag headers only to the raw TEI representation.
+
+The end-to-end contract lives in
+`tests/features/no_qa_generation_slice.feature`. Its steps start Vidai Mock
+through the shared process helper, configure deterministic valid and invalid
+draft completions, inject provider failure with `X-Vidai-Chaos-Drop`, and drive
+the real Falcon, SQLAlchemy, launcher, and LLM adapter stack. CI installs the
+pinned Vidai Mock binary before tests; local runs skip only when the binary is
+absent.
 
 ### Maintainer rules
 
