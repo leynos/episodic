@@ -343,6 +343,20 @@ when any of the following is breached.
   lint`, `make typecheck`, `make test` (`1089 passed, 1 skipped`), `make
   check-migrations`, `make markdownlint`, `make nixie`, and `mbake`. Final
   CodeRabbit review is not yet claimed.
+- [x] (completed, 2026-07-23) Post-completion quality check: live PR
+  reconciliation found current CodeScene diagnostics in
+  `episodic/canonical/domain.py` (two complex `__post_init__` methods),
+  `episodic/api/runtime.py` (`_load_runtime_config` and module average),
+  `tests/test_generation_run_launcher.py` (duplication plus missing
+  diagnostic assertion messages), and `tests/test_generation_persistence.py`
+  (duplication). The implementation extracted behaviour-preserving
+  validation/config/test helpers and added assertion context. Focused tests
+  passed with `34 passed, 1 environment warning`; `cs check` now reports
+  `10.00` with no findings for all four files. The 2026-07-23 quality
+  milestone passed `make check-fmt`, `make lint`, `make typecheck`, `make
+  test` (`1089 passed, 1 skipped`), `make check-migrations`, `make
+  markdownlint`, `make nixie`, `mbake validate Makefile`, and `git diff
+  --check`. CodeRabbit remains pending and is not claimed here.
 
 ## Surprises & discoveries
 
