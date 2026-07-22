@@ -4,12 +4,13 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
-Current implementation status (audited 2026-07-22): Milestones 0-4 are
-complete. Milestones 5-8 remain outstanding; in particular, the REST resources
-and TEI retrieval route are not registered, and the seven behavioural scenarios
-remain strict expected failures. Roadmap item 4.3.2 therefore remains open.
+Current implementation status (completed 2026-07-22): Milestones 0-8 and the
+post-implementation correctness review are complete. The REST resources, TEI
+retrieval route, upload-backed source hydration, presenter resolution,
+idempotent episode materialization, and serialized terminal updates are
+implemented. Roadmap item 4.3.2 is checked complete.
 
 ## Purpose / big picture
 
@@ -457,14 +458,14 @@ when any of the following is breached.
   `update_run_status` now acquires a row lock before checking terminal state,
   so a later writer observes the committed terminal status and raises the
   existing `RunAlreadyTerminal` exception.
-- Observation: the 2026-07-22 current-state audit found no registered
+- Observation: an intermediate 2026-07-22 current-state audit found no
   generation-run or episode-TEI REST route under `episodic/api`; the only API
   integration added by M4 is launcher dependency/runtime wiring. The seven
-  scenarios in `tests/steps/test_no_qa_generation_slice.py` are still marked
+  scenarios in `tests/steps/test_no_qa_generation_slice.py` were still marked
   `xfail(strict=True)` and their creation steps deliberately fail with
   `4.3.2 no-QA source-to-script slice is not implemented yet`. Impact:
-  Milestones 5-7 and the roadmap item must remain open despite completion of
-  the domain, persistence, generation, and launcher foundations.
+  this prevented premature completion, and Milestones 5-7 subsequently added
+  the missing routes and activated all seven scenarios.
 - Observation: after rebasing onto `origin/main`, updated SQLAlchemy typing
   required count queries in the storage tests to use `scalar_one()`. The local
   `act` artefact server also lacks the request schema used by the current
@@ -1492,14 +1493,15 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
 - M2a CodeRabbit evidence (2026-06-24): `coderabbit review --agent` ended with
   `{"type":"complete","status":"review_completed","findings":0}`.
 
-- Post-rebase validation evidence (2026-07-22): `make check-fmt`,
+- Intermediate post-rebase validation evidence (2026-07-22): `make check-fmt`,
   `make typecheck`, and `make lint` passed; Pylint rated the branch `10.00/10`.
-  `make test` reported `1066 passed, 1 skipped, 7 xfailed`. The xfails are the
-  unchanged M7 behavioural scaffold, not completed acceptance evidence.
+  `make test` reported `1066 passed, 1 skipped, 7 xfailed`. At that point, the
+  xfails were the unchanged M7 behavioural scaffold, not completed acceptance
+  evidence.
   `make markdownlint` and `make nixie` also passed after refreshing the
   generated spelling configuration and correcting Markdown drift.
 
-- Current-state behavioural evidence (2026-07-22):
+- Intermediate red-state behavioural evidence (2026-07-22):
 
   ```plaintext
   $ uv run pytest tests/steps/test_no_qa_generation_slice.py -q
@@ -1507,8 +1509,21 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
   7 xfailed in 0.15s
   ```
 
-  Each scenario is still a strict expected failure with the reason
+  Each scenario was a strict expected failure with the reason
   `4.3.2 no-QA source-to-script slice is not implemented yet`.
+
+- Final behavioural evidence (2026-07-22):
+
+  ```plaintext
+  $ uv run pytest tests/steps/test_no_qa_generation_slice.py -q
+  .......                                                                  [100%]
+  7 passed, 1 warning in 5.36s
+  ```
+
+- Final correctness-review evidence (2026-07-22): focused regression tests
+  reported `30 passed`; all deterministic gates passed, with `make test`
+  reporting `1078 passed, 1 skipped`. The complete-branch
+  `coderabbit review --agent` run reported zero findings.
 
 - M4 review evidence (2026-07-22): after `make check-fmt`, `make test`,
   `make typecheck`, `make lint`, `make check-migrations`, `make markdownlint`,
