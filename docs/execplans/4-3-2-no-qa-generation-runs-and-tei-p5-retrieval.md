@@ -328,6 +328,21 @@ when any of the following is breached.
 - [x] (completed, 2026-07-22) Review follow-up: verified the live BDD fix plus
   the row-locking, `error_category`, and idempotency work in the current tree;
   the remaining review findings are stale.
+- [x] (completed, 2026-07-23) Review follow-up at commit `42757a3`: verified
+  and fixed the still-valid runtime LLM wiring, `READY_FOR_GENERATION`
+  boundary, exact TEI validation, `Error`-suffixed episode exceptions, shared
+  SHA-256 helper, launcher semaphore cancellation safety, SQL paging
+  validation tests, and concurrent claim coverage. Skipped stale/already-fixed
+  findings for executable BDD scenarios, SQL status-row lock/error_category
+  roundtrip, in-memory `error_category` and duplicate exception wrappers,
+  stable materialization identity, roadmap/plan completion, and
+  users/developer docs coverage. No metric-driven split of
+  `_runs_for_episode` and no new tracing infrastructure or source-count policy
+  were introduced from broad warnings without a scoped design. Focused suites
+  passed; deterministic gates passed on 2026-07-23: `make check-fmt`, `make
+  lint`, `make typecheck`, `make test` (`1089 passed, 1 skipped`), `make
+  check-migrations`, `make markdownlint`, `make nixie`, and `mbake`. Final
+  CodeRabbit review is not yet claimed.
 
 ## Surprises & discoveries
 
