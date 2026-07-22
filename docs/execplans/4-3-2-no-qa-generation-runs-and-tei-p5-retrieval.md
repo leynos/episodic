@@ -8,9 +8,8 @@ Status: IN PROGRESS
 
 Current implementation status (audited 2026-07-22): Milestones 0-4 are
 complete. Milestones 5-8 remain outstanding; in particular, the REST resources
-and TEI retrieval route are not registered, and the seven behavioural
-scenarios remain strict expected failures. Roadmap item 4.3.2 therefore remains
-open.
+and TEI retrieval route are not registered, and the seven behavioural scenarios
+remain strict expected failures. Roadmap item 4.3.2 therefore remains open.
 
 ## Purpose / big picture
 
@@ -287,8 +286,15 @@ when any of the following is breached.
   `make check-migrations`; `make test` reported
   `1066 passed, 1 skipped, 7 xfailed`. CodeRabbit reviewed the complete branch
   delta and reported zero findings.
-- [ ] (pending) M5: Generation-run REST endpoints with idempotency (incl.
-  Location/Retry-After replay).
+- [x] (completed, 2026-07-22) M5: Generation-run REST
+  endpoints with idempotency (including Location/Retry-After replay). Red
+  evidence was HTTP 404 for both creation tests before route registration.
+  Green focused evidence covers create, replay, conflict, validation, polling,
+  event cursor pagination, domain/storage mapping, and existing intake
+  idempotency with `42 passed in 6.22s`. Full gates passed; `make test`
+  reported `1068 passed, 1 skipped, 7 xfailed`. After staging the complete
+  milestone delta, CodeRabbit reviewed the new resource and tests explicitly
+  and reported zero findings.
 - [ ] (pending) M6: Episode TEI retrieval endpoint with content negotiation.
 - [ ] (pending) M7: End-to-end behavioural slice with Vidai Mock (observed
   passing at least once).
@@ -410,6 +416,12 @@ when any of the following is breached.
   `unknown field "mime_type"` incompatibility and preserves all other workflow
   failures. Impact: the complete post-rebase test suite passes without masking
   unrelated workflow errors.
+- Observation: M5 polling exposed that `error_category` was written to the SQL
+  record by launcher failure updates but was absent from `GenerationRun`, the
+  SQL record mapper, and the in-memory adapter replacement. Impact: M5 restores
+  the field across the domain and both adapters so failed-run polling can
+  satisfy the behavioural contract instead of silently dropping the stable
+  failure category.
 
 ## Decision log
 
@@ -501,6 +513,14 @@ when any of the following is breached.
   validation. Splitting the retrieval solely to lower a file-average metric
   would add metric-driven churn without a concrete design improvement.
   Date/Author: 2026-07-22, implementation agent.
+- Decision: before materialization, the identifier in
+  `POST /v1/episodes/{episode_id}/generation-runs` names the ready ingestion
+  job and is reused as the newly materialized episode id; it is also stored as
+  `GenerationRun.source_bundle_id`. Rationale: the request contract has no
+  separate source-bundle field, intake jobs cannot reference a not-yet-created
+  episode because of the foreign key, and using one stable identifier preserves
+  the documented upload → ingest → generate flow without adding an episode
+  creation endpoint. Date/Author: 2026-07-22, implementation agent.
 
 ## Context and orientation
 
@@ -1410,6 +1430,13 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
 - M4 review evidence (2026-07-22): after `make check-fmt`, `make test`,
   `make typecheck`, `make lint`, `make check-migrations`, `make markdownlint`,
   and `make nixie` passed, `coderabbit review --agent` ended with
+  `{"type":"complete","status":"review_completed","findings":0}`.
+
+- M5 review evidence (2026-07-22): `make check-fmt`, `make test`,
+  `make typecheck`, `make lint`, `make check-migrations`, `make markdownlint`,
+  and `make nixie` passed. A staged-delta `coderabbit review --agent` included
+  `episodic/api/resources/generation_runs.py` and
+  `tests/test_generation_run_api.py` and ended with
   `{"type":"complete","status":"review_completed","findings":0}`.
 
 ## Outcomes & retrospective

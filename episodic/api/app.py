@@ -23,6 +23,9 @@ from .resources import (
     EpisodeTemplateHistoryResource,
     EpisodeTemplateResource,
     EpisodeTemplatesResource,
+    GenerationRunEventsResource,
+    GenerationRunResource,
+    GenerationRunsResource,
     HealthLiveResource,
     HealthReadyResource,
     IngestionJobResource,
@@ -161,6 +164,25 @@ def _register_intake_routes(
     )
 
 
+def _register_generation_run_routes(
+    app: asgi.App,
+    uow_factory: UowFactory,
+    dependencies: ApiDependencies,
+) -> None:
+    app.add_route(
+        "/v1/episodes/{episode_id}/generation-runs",
+        GenerationRunsResource(uow_factory, launcher=dependencies.launcher),
+    )
+    app.add_route(
+        "/v1/generation-runs/{run_id}",
+        GenerationRunResource(uow_factory),
+    )
+    app.add_route(
+        "/v1/generation-runs/{run_id}/events",
+        GenerationRunEventsResource(uow_factory),
+    )
+
+
 def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
@@ -181,5 +203,6 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     _register_reference_document_routes(app, uow_factory)
     _register_reference_binding_routes(app, uow_factory)
     _register_intake_routes(app, uow_factory, dependencies)
+    _register_generation_run_routes(app, uow_factory, dependencies)
 
     return app
