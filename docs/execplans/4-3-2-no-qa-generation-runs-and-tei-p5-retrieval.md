@@ -315,6 +315,15 @@ when any of the following is breached.
   gates. ADR 016, system/user/developer guidance, repository indexes, and the
   completed roadmap checkbox are present. Markdown and Mermaid gates passed,
   and final CodeRabbit review reported zero findings.
+- [x] (completed, 2026-07-22) Post-implementation correctness review:
+  presenter-profile resolution was already present at PR head. The remaining
+  corrections now hydrate `upload:` sources from object storage, persist and
+  lock the ingestion-job-to-episode association during materialization, and
+  lock generation-run rows before mutable status updates. Focused lint and
+  regression evidence passes with `30 passed`. Full deterministic gates pass:
+  `make check-fmt`, `make lint`, `make typecheck`, `make check-migrations`,
+  `make test` (`1078 passed, 1 skipped`), `make markdownlint`, and `make nixie`.
+  CodeRabbit reviewed the complete branch delta and reported zero findings.
 
 - [x] (status audit, 2026-07-22) Reconciled this plan with PR head
   `471254111375567ffe1094831aa94e32ee099702`. The branch contains M0-M4 code,
@@ -440,6 +449,22 @@ when any of the following is breached.
   `DraftScriptSource.content` from non-blank metadata content first, falling
   back to `source_uri` so legacy rows still produce deterministic generator
   requests.
+- Observation: upload-backed source documents intentionally retain an
+  `upload:<storage-key>` provenance URI, while their bytes live only in the
+  configured object store. Impact: launcher source projection now reads those
+  bytes, decodes UTF-8 text (including a byte-order mark), normalizes line
+  endings, and rejects missing, undecodable, or empty upload content before an
+  LLM request can be made.
+- Observation: a null `IngestionJob.target_episode_id` caused each
+  materialization retry to allocate another episode and duplicate its source
+  projections. Impact: materialization now locks the ingestion-job row,
+  creates the episode, and persists the association in one transaction;
+  subsequent calls return the original episode.
+- Observation: separate SQLAlchemy units of work could both read a running
+  generation run before either committed a terminal update. Impact:
+  `update_run_status` now acquires a row lock before checking terminal state,
+  so a later writer observes the committed terminal status and raises the
+  existing `RunAlreadyTerminal` exception.
 - Observation: the 2026-07-22 current-state audit found no registered
   generation-run or episode-TEI REST route under `episodic/api`; the only API
   integration added by M4 is launcher dependency/runtime wiring. The seven
@@ -560,6 +585,25 @@ when any of the following is breached.
   episode because of the foreign key, and using one stable identifier preserves
   the documented upload → ingest → generate flow without adding an episode
   creation endpoint. Date/Author: 2026-07-22, implementation agent.
+
+- Decision: serialize episode materialization on the ingestion-job row and
+  persist `target_episode_id` after the episode row is flushed, all within the
+  caller's transaction. Rationale: the existing foreign key requires the
+  episode to exist before association, while the row lock ensures concurrent
+  and repeated requests converge without orphan episodes or duplicate source
+  projections. Date/Author: 2026-07-22, implementation agent.
+- Decision: resolve `upload:` source provenance through `ObjectStorePort` at
+  launcher claim time and treat uploads as normalized UTF-8 text. Rationale:
+  attachment metadata does not contain normal upload bytes, and passing the
+  provenance URI to the LLM loses the user's source material; resolving at the
+  launcher keeps object-storage access out of the draft-generator port.
+  Date/Author: 2026-07-22, implementation agent.
+- Decision: use the generation-run row lock already employed for event
+  sequencing to serialize status mutations. Rationale: after a competing
+  terminal commit, the waiting transaction reloads terminal state through the
+  existing mutable-run guard and preserves the established domain exception
+  without introducing a second transition API. Date/Author: 2026-07-22,
+  implementation agent.
 
 ## Context and orientation
 

@@ -87,7 +87,7 @@ async def materialise_episode_from_ingestion(
     request: EpisodeMaterialisationRequest,
 ) -> CanonicalEpisode:
     """Create a placeholder canonical episode for a ready ingestion job."""
-    job = await _get_ingestion_job(uow, request.ingestion_job_id)
+    job = await _get_ingestion_job_for_update(uow, request.ingestion_job_id)
     sources = await _list_all_sources(uow, request.ingestion_job_id)
     if len(sources) == 0:
         msg = f"Ingestion job {request.ingestion_job_id} has no attached sources."
@@ -114,6 +114,8 @@ async def materialise_episode_from_ingestion(
     await uow.tei_headers.add(header)
     await uow.flush()
     await uow.episodes.add(episode)
+    await uow.flush()
+    await uow.ingestion_jobs.set_target_episode(job.id, episode_id=episode.id)
     for source in sources:
         upload = await _upload_for_source(uow, source)
         await uow.source_documents.add(
@@ -152,12 +154,12 @@ async def persist_draft_script(
     )
 
 
-async def _get_ingestion_job(
+async def _get_ingestion_job_for_update(
     uow: CanonicalUnitOfWork,
     ingestion_job_id: uuid.UUID,
 ) -> IngestionJob:
-    """Return one ingestion job or raise a source-intake not-found error."""
-    job = await uow.ingestion_jobs.get(ingestion_job_id)
+    """Return and lock one ingestion job or raise a not-found error."""
+    job = await uow.ingestion_jobs.get_for_update(ingestion_job_id)
     if job is None:
         raise IngestionJobNotFoundError(str(ingestion_job_id))
     return job

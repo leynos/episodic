@@ -40,6 +40,7 @@ if typ.TYPE_CHECKING:
         JsonMapping,
         SourceDocument,
     )
+    from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.reference_documents.resolution import ResolvedBinding
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
@@ -142,14 +143,18 @@ async def require_episode(
     return episode
 
 
-def source_from_document(document: SourceDocument) -> DraftScriptSource:
+async def source_from_document(
+    document: SourceDocument,
+    object_store: ObjectStorePort | None,
+) -> DraftScriptSource:
     """Build generator source input from canonical source provenance."""
     metadata_content = document.metadata.get("content")
-    content = (
-        metadata_content.strip()
-        if isinstance(metadata_content, str) and metadata_content.strip()
-        else document.source_uri
-    )
+    if isinstance(metadata_content, str) and metadata_content.strip():
+        content = metadata_content.strip()
+    elif document.source_uri.startswith("upload:"):
+        content = await _read_uploaded_source(document.source_uri, object_store)
+    else:
+        content = document.source_uri
     return DraftScriptSource(
         source_id=str(document.id),
         source_type=document.source_type,
@@ -157,6 +162,29 @@ def source_from_document(document: SourceDocument) -> DraftScriptSource:
         content=content,
         weight=document.weight,
     )
+
+
+async def _read_uploaded_source(
+    source_uri: str,
+    object_store: ObjectStorePort | None,
+) -> str:
+    """Read and normalize UTF-8 source text from an upload provenance URI."""
+    if object_store is None:
+        msg = "An object store is required to load uploaded source content."
+        raise DraftScriptGenerationError(msg)
+    key = source_uri.removeprefix("upload:")
+    async with object_store.open(key) as chunks:
+        payload = b"".join([chunk async for chunk in chunks])
+    try:
+        content = payload.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        msg = f"Uploaded source {key!r} is not valid UTF-8 text."
+        raise DraftScriptGenerationError(msg) from exc
+    normalized = "\n".join(content.splitlines()).strip()
+    if not normalized:
+        msg = f"Uploaded source {key!r} contains no text."
+        raise DraftScriptGenerationError(msg)
+    return normalized
 
 
 def draft_request(

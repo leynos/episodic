@@ -29,6 +29,7 @@ if typ.TYPE_CHECKING:
 
     from falcon import asgi
 
+    from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.llm import LLMPort
 
@@ -51,6 +52,7 @@ GRANIAN_INTERFACE = "asgi"
 HTTP_BIND_PORT = 8080
 _DEFAULT_DRAFT_MODEL = "gpt-4o-mini"
 _DEFAULT_LLM_PROVIDER_NAME = "openai"
+_DEFAULT_PRICING_DIRECTORY = pathlib.Path("config/pricing-snapshots")
 
 
 class PsycopgConnectKwargs(typ.TypedDict, total=False):
@@ -137,13 +139,13 @@ def _build_generation_launcher(
     uow_factory: UowFactory,
     llm_port: LLMPort | None,
     *,
+    object_store: ObjectStorePort | None = None,
     draft_model: str = _DEFAULT_DRAFT_MODEL,
-    pricing_directory: pathlib.Path | str = "config/pricing-snapshots",
 ) -> InProcessGenerationRunLauncher | None:
     """Build the no-QA generation-run launcher when an LLM port is configured."""
     if llm_port is None:
         return None
-    pricing_catalogue = FilePricingCatalogue(pricing_directory)
+    pricing_catalogue = FilePricingCatalogue(_DEFAULT_PRICING_DIRECTORY)
 
     def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
         return CostRecorder(
@@ -161,6 +163,7 @@ def _build_generation_launcher(
                 provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
             ),
         ),
+        object_store=object_store,
         cost_recorder_factory=_cost_recorder,
         provider_name=_DEFAULT_LLM_PROVIDER_NAME,
         provider_operation=LLMProviderOperation.CHAT_COMPLETIONS.value,
@@ -240,7 +243,12 @@ def create_app_from_env() -> asgi.App:
     database_probe, uow_factory, shutdown_hook = _build_database_probe(
         config.database_url
     )
-    launcher = _build_generation_launcher(uow_factory, None)
+    object_store = FilesystemObjectStore(config.source_intake_object_store_root)
+    launcher = _build_generation_launcher(
+        uow_factory,
+        None,
+        object_store=object_store,
+    )
     shutdown_hooks = (
         (shutdown_hook,)
         if launcher is None
@@ -252,7 +260,7 @@ def create_app_from_env() -> asgi.App:
     return create_app(
         ApiDependencies(
             uow_factory=uow_factory,
-            object_store=FilesystemObjectStore(config.source_intake_object_store_root),
+            object_store=object_store,
             readiness_probes=(database_probe,),
             shutdown_hooks=shutdown_hooks,
             launcher=launcher,

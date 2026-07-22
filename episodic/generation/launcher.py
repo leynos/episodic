@@ -47,6 +47,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import (
         DraftScriptGenerator,
@@ -78,6 +79,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
 
     uow_factory: cabc.Callable[[], CanonicalUnitOfWork]
     draft_generator: DraftScriptGenerator
+    object_store: ObjectStorePort | None = None
     cost_recorder_factory: CostRecorderFactory | None = None
     clock: Clock = lambda: dt.datetime.now(dt.UTC)
     draft_id_factory_factory: DraftIdFactoryFactory = SequentialDraftIds
@@ -166,7 +168,11 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
                 return None
             episode = await require_episode(uow, run.episode_id)
             documents = await uow.source_documents.list_for_job(run.source_bundle_id)
-            sources = tuple(source_from_document(document) for document in documents)
+            source_inputs = [
+                await source_from_document(document, self.object_store)
+                for document in documents
+            ]
+            sources = tuple(source_inputs)
             presenter_profiles = project_presenter_profiles(
                 await resolve_bindings(
                     uow,

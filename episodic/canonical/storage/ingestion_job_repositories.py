@@ -38,6 +38,31 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
             _ingestion_job_from_record,
         )
 
+    async def get_for_update(self, job_id: uuid.UUID) -> IngestionJob | None:
+        """Fetch and lock an ingestion job for transactional mutation."""
+        result = await self._session.execute(
+            sa
+            .select(IngestionJobRecord)
+            .where(IngestionJobRecord.id == job_id)
+            .with_for_update()
+        )
+        record = result.scalar_one_or_none()
+        return None if record is None else _ingestion_job_from_record(record)
+
+    async def set_target_episode(
+        self,
+        job_id: uuid.UUID,
+        *,
+        episode_id: uuid.UUID,
+    ) -> None:
+        """Associate an ingestion job with its materialized episode."""
+        await self._session.execute(
+            sa
+            .update(IngestionJobRecord)
+            .where(IngestionJobRecord.id == job_id)
+            .values(target_episode_id=episode_id, updated_at=sa.func.now())
+        )
+
     async def list_paged(
         self,
         filters: IngestionJobListFilters,
