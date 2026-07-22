@@ -33,7 +33,7 @@ This validates the `/v1` resource contract defined in
 [ADR 009](../adr/adr-009-source-to-script-rest-vertical-slice.md) before the
 full approval, QA, audio, and export surfaces land.
 
-You can observe success by running the end-to-end behavioural scenario
+Success is observable by running the end-to-end behavioural scenario
 `tests/features/no_qa_generation_slice.feature` (added by this plan) against a
 running service backed by a Vidai Mock inference server: a `POST` to
 `/v1/episodes/{episode_id}/generation-runs` returns `202 Accepted` with a
@@ -325,6 +325,9 @@ when any of the following is breached.
   `make check-fmt`, `make lint`, `make typecheck`, `make check-migrations`,
   `make test` (`1078 passed, 1 skipped`), `make markdownlint`, and `make nixie`.
   CodeRabbit reviewed the complete branch delta and reported zero findings.
+- [x] (completed, 2026-07-22) Review follow-up: verified the live BDD fix and
+  the row-locking, `error_category`, and idempotency work already landed in the
+  current tree; the remaining review findings are stale.
 
 ## Surprises & discoveries
 
