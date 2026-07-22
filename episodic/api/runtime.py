@@ -76,36 +76,64 @@ class PsycopgConnectKwargs(typ.TypedDict, total=False):
 logger = get_logger(__name__)
 
 
+def _required_setting(
+    environment: cabc.Mapping[str, str],
+    name: str,
+    error_message: str,
+) -> str:
+    """Return a required, non-empty environment setting."""
+    value = environment.get(name, "").strip()
+    if not value:
+        raise RuntimeError(error_message)
+    return value
+
+
+def _llm_settings(
+    environment: cabc.Mapping[str, str],
+) -> tuple[str | None, str | None]:
+    """Return the optional, paired OpenAI-compatible provider settings."""
+    base_url = environment.get("OPENAI_BASE_URL", "").strip() or None
+    api_key = environment.get("OPENAI_API_KEY", "").strip() or None
+    if (base_url is None) != (api_key is None):
+        msg = "OPENAI_BASE_URL and OPENAI_API_KEY must be configured together."
+        raise RuntimeError(msg)
+    return base_url, api_key
+
+
 def _load_runtime_config(
     environ: cabc.Mapping[str, str] | None = None,
 ) -> RuntimeConfig:
     """Read and validate runtime configuration from environment variables."""
     environment = os.environ if environ is None else environ
-    database_url = environment.get("DATABASE_URL", "").strip()
-    if not database_url:
-        msg = "DATABASE_URL must be set before starting the HTTP service."
-        raise RuntimeError(msg)
-    object_store_root = environment.get("SOURCE_INTAKE_OBJECT_STORE_ROOT", "").strip()
-    if not object_store_root:
+    database_url = _required_setting(
+        environment,
+        "DATABASE_URL",
+        "DATABASE_URL must be set before starting the HTTP service.",
+    )
+    try:
+        object_store_root = _required_setting(
+            environment,
+            "SOURCE_INTAKE_OBJECT_STORE_ROOT",
+            "SOURCE_INTAKE_OBJECT_STORE_ROOT must be set before starting "
+            "the HTTP service.",
+        )
+    except RuntimeError:
         log_warning(
             logger,
             "runtime_config_missing setting=%s",
             "SOURCE_INTAKE_OBJECT_STORE_ROOT",
         )
-        msg = (
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT must be set before starting "
-            "the HTTP service."
+        raise
+    llm_base_url, llm_api_key = _llm_settings(environment)
+    draft_model = (
+        _required_setting(
+            environment,
+            "DRAFT_MODEL",
+            "DRAFT_MODEL must be a non-empty string.",
         )
-        raise RuntimeError(msg)
-    llm_base_url = environment.get("OPENAI_BASE_URL", "").strip() or None
-    llm_api_key = environment.get("OPENAI_API_KEY", "").strip() or None
-    if (llm_base_url is None) != (llm_api_key is None):
-        msg = "OPENAI_BASE_URL and OPENAI_API_KEY must be configured together."
-        raise RuntimeError(msg)
-    draft_model = environment.get("DRAFT_MODEL", _DEFAULT_DRAFT_MODEL).strip()
-    if not draft_model:
-        msg = "DRAFT_MODEL must be a non-empty string."
-        raise RuntimeError(msg)
+        if "DRAFT_MODEL" in environment
+        else _DEFAULT_DRAFT_MODEL
+    )
     log_info(
         logger,
         "runtime_config_loaded source_intake_object_store_configured",

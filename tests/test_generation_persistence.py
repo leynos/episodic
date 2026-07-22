@@ -57,6 +57,42 @@ def _clock() -> dt.datetime:
     return NOW
 
 
+async def _persist_materialisation_input(
+    factory: async_sessionmaker[AsyncSession],
+    job: IngestionJob,
+    *,
+    source: IngestionJobSource | None = None,
+) -> None:
+    """Persist one ingestion job and its optional attached source."""
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(_series_profile())
+        await uow.flush()
+        await uow.ingestion_jobs.add(job)
+        if source is not None:
+            await uow.ingestion_job_sources.add(source)
+        await uow.commit()
+
+
+async def _assert_materialisation_rejected(
+    factory: async_sessionmaker[AsyncSession],
+    job: IngestionJob,
+    *,
+    message_pattern: str,
+) -> None:
+    """Assert that an invalid ingestion job cannot be materialized."""
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        with pytest.raises(DraftScriptPersistenceError, match=message_pattern):
+            await materialise_episode_from_ingestion(
+                uow,
+                EpisodeMaterialisationRequest(
+                    ingestion_job_id=job.id,
+                    title="Bridgewater Futures",
+                    clock=_clock,
+                    uuid_factory=SequentialUuids(),
+                ),
+            )
+
+
 def _series_profile() -> SeriesProfile:
     """Return a series profile fixture."""
     return SeriesProfile(
@@ -317,25 +353,10 @@ async def test_materialise_episode_requires_attached_sources(
 ) -> None:
     """Materialisation should fail loudly when an intake job has no sources."""
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    series = _series_profile()
-    job = _ingestion_job(series.id, None)
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        await uow.series_profiles.add(series)
-        await uow.flush()
-        await uow.ingestion_jobs.add(job)
-        await uow.commit()
+    job = _ingestion_job(_series_profile().id, None)
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        with pytest.raises(DraftScriptPersistenceError, match="sources"):
-            await materialise_episode_from_ingestion(
-                uow,
-                EpisodeMaterialisationRequest(
-                    ingestion_job_id=job.id,
-                    title="Bridgewater Futures",
-                    clock=_clock,
-                    uuid_factory=SequentialUuids(),
-                ),
-            )
+    await _persist_materialisation_input(factory, job)
+    await _assert_materialisation_rejected(factory, job, message_pattern="sources")
 
 
 @pytest.mark.asyncio
@@ -344,27 +365,11 @@ async def test_materialise_episode_requires_ready_ingestion_job(
 ) -> None:
     """Materialization should reject source bundles that are not ready."""
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    series = _series_profile()
     job = _ingestion_job(
-        series.id,
+        _series_profile().id,
         None,
         intake_state=IntakeState.AWAITING_SOURCES,
     )
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        await uow.series_profiles.add(series)
-        await uow.flush()
-        await uow.ingestion_jobs.add(job)
-        await uow.ingestion_job_sources.add(_source(job.id))
-        await uow.commit()
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        with pytest.raises(DraftScriptPersistenceError, match="not ready"):
-            await materialise_episode_from_ingestion(
-                uow,
-                EpisodeMaterialisationRequest(
-                    ingestion_job_id=job.id,
-                    title="Bridgewater Futures",
-                    clock=_clock,
-                    uuid_factory=SequentialUuids(),
-                ),
-            )
+    await _persist_materialisation_input(factory, job, source=_source(job.id))
+    await _assert_materialisation_rejected(factory, job, message_pattern="not ready")
