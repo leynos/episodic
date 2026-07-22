@@ -15,6 +15,12 @@ from episodic.canonical.domain import (
     IngestionJob,
     IngestionStatus,
     IntakeState,
+    ReferenceBinding,
+    ReferenceBindingTargetKind,
+    ReferenceDocument,
+    ReferenceDocumentKind,
+    ReferenceDocumentLifecycleState,
+    ReferenceDocumentRevision,
     SeriesProfile,
 )
 from episodic.canonical.generation_persistence import (
@@ -164,6 +170,47 @@ def _source(job_id: uuid.UUID) -> IngestionJobSource:
     )
 
 
+def _presenter_sets(
+    series_profile_id: uuid.UUID,
+) -> tuple[tuple[ReferenceDocument, ReferenceDocumentRevision, ReferenceBinding], ...]:
+    """Return host and guest profiles bound to the series."""
+    sets = []
+    for offset, kind, name, summary in (
+        (1, ReferenceDocumentKind.HOST_PROFILE, "Host One", "Host profile."),
+        (2, ReferenceDocumentKind.GUEST_PROFILE, "Guest One", "Guest profile."),
+    ):
+        document = ReferenceDocument(
+            id=uuid.UUID(f"00000000-0000-0000-0000-{600 + offset:012d}"),
+            owner_series_profile_id=series_profile_id,
+            kind=kind,
+            lifecycle_state=ReferenceDocumentLifecycleState.ACTIVE,
+            metadata={"name": name},
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        revision = ReferenceDocumentRevision(
+            id=uuid.UUID(f"00000000-0000-0000-0000-{700 + offset:012d}"),
+            reference_document_id=document.id,
+            content={"summary": summary},
+            content_hash=f"presenter-{offset}",
+            author="editor@example.test",
+            change_note="Create presenter profile.",
+            created_at=NOW,
+        )
+        binding = ReferenceBinding(
+            id=uuid.UUID(f"00000000-0000-0000-0000-{800 + offset:012d}"),
+            reference_document_revision_id=revision.id,
+            target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
+            series_profile_id=series_profile_id,
+            episode_template_id=None,
+            ingestion_job_id=None,
+            effective_from_episode_id=None,
+            created_at=NOW,
+        )
+        sets.append((document, revision, binding))
+    return tuple(sets)
+
+
 def draft_result(tei_xml: str) -> DraftScriptResult:
     """Return a generated draft result with provider usage."""
     return DraftScriptResult(
@@ -227,6 +274,11 @@ async def prepare_pending_run(
         await uow.flush()
         await uow.ingestion_jobs.add(job)
         await uow.ingestion_job_sources.add(_source(job.id))
+        for document, revision, binding in _presenter_sets(series.id):
+            await uow.reference_documents.add(document)
+            await uow.reference_document_revisions.add(revision)
+            await uow.flush()
+            await uow.reference_bindings.add(binding)
         episode = await materialise_episode_from_ingestion(
             uow,
             EpisodeMaterialisationRequest(

@@ -15,6 +15,7 @@ from episodic.canonical.generation_persistence import (
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
+from episodic.canonical.reference_documents import resolve_bindings
 from episodic.cost.ports import BillingPeriodKey
 from episodic.cost.recorder import CostProviderOperation
 from episodic.generation.launcher_support import (
@@ -29,6 +30,7 @@ from episodic.generation.launcher_support import (
     classify_failure,
     draft_generated_payload,
     draft_request,
+    project_presenter_profiles,
     provider_call_record,
     require_episode,
     source_from_document,
@@ -165,6 +167,13 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             episode = await require_episode(uow, run.episode_id)
             documents = await uow.source_documents.list_for_job(run.source_bundle_id)
             sources = tuple(source_from_document(document) for document in documents)
+            presenter_profiles = project_presenter_profiles(
+                await resolve_bindings(
+                    uow,
+                    series_profile_id=episode.series_profile_id,
+                    episode_id=episode.id,
+                )
+            )
             await uow.generation_runs.append_event(
                 run.id,
                 kind="run.started",
@@ -180,7 +189,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             run=run,
             episode=episode,
             sources=sources,
-            presenter_profiles=(),
+            presenter_profiles=presenter_profiles,
         )
 
     async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:

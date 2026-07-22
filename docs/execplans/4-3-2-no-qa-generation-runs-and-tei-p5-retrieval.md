@@ -376,6 +376,12 @@ when any of the following is breached.
   constructing or validating TEI. Impact: the malformed-completion scenario
   returns structurally valid draft JSON containing an XML-invalid speaker,
   which exercises the intended `tei.invalid` branch.
+- Observation: the M7 documentation reconciliation exposed that launcher
+  claims still supplied `presenter_profiles=()` and the original BDD presenter
+  step created no documents or bindings. Impact: the launcher now resolves
+  series-level bindings for the materialized episode and projects host and
+  guest revisions into `DraftPresenterProfile`; the BDD setup creates both
+  bound revisions, and focused launcher plus slice evidence is `12 passed`.
 - Observation: on 2026-06-24 the local branch was already named
   `4-3-2-no-qa-generation-runs-and-tei-p5-retrieval` and the matching remote
   branch existed at `origin`, but the worktree did not have an upstream branch
