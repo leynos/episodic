@@ -5,6 +5,7 @@ import uuid  # noqa: TC003
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
+        CanonicalEpisode,
         EpisodeTemplate,
         EpisodeTemplateHistoryEntry,
         GenerationEvent,
@@ -240,4 +241,19 @@ def serialize_generation_event(event: GenerationEvent) -> dict[str, typ.Any]:
         "payload": event.payload,
         "occurred_at": event.occurred_at.isoformat(),
         "created_at": event.created_at.isoformat(),
+    }
+
+
+def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
+    """Serialize generated TEI metadata using the public field names."""
+    return {
+        "episode_id": str(episode.id),
+        "tei_header_id": str(episode.tei_header_id),
+        "tei_xml": episode.tei_xml,
+        "content_hash": episode.tei_content_hash,
+        "version": episode.tei_revision,
+        "last_generation_run_id": _optional_uuid_str(episode.last_generation_run_id),
+        "quality_mode": "draft_without_qa",
+        "qa_status": None if episode.qa_status is None else episode.qa_status.value,
+        "updated_at": episode.updated_at.isoformat(),
     }
