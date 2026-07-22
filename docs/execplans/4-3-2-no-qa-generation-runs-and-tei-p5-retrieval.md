@@ -325,14 +325,6 @@ when any of the following is breached.
   `make test` (`1078 passed, 1 skipped`), `make markdownlint`, and `make nixie`.
   CodeRabbit reviewed the complete branch delta and reported zero findings.
 
-- [x] (status audit, 2026-07-22) Reconciled this plan with PR head
-  `471254111375567ffe1094831aa94e32ee099702`. The branch contains M0-M4 code,
-  including the post-rebase `GenerationRunStatusUpdate` parameter-object
-  refactor. It does not contain the M5-M6 inbound HTTP adapters. The focused M7
-  suite reports `7 xfailed`, so neither M7 nor the roadmap success criterion is
-  complete. Post-rebase Python and documentation gates pass; the remaining
-  milestone work is still required before M8 can close.
-
 ## Surprises & discoveries
 
 - Observation: the existing generation-orchestration graph
@@ -1547,22 +1539,17 @@ handling. The later `GenerationRunStatusUpdate` refactor keeps lifecycle
 updates cohesive, and `_require_mutable_run` removes duplicated missing and
 terminal checks from the in-memory adapter.
 
-The Purpose section is now demonstrated end to end by the live Vidai Mock BDD
-slice: clients create and replay runs, poll terminal state and events, and
-download validated TEI while failures retain stable diagnostics. Milestone 7
-still requires full deterministic gates and CodeRabbit clearance; Milestone 8
-then records the final architecture and user guidance and closes the roadmap
-item. The existing hand-offs to 2.6.2 / 2.6.3 / 4.4.1 remain unchanged:
-automated stuck-run recovery, the broader checkpoint REST surface, and the
-full QA-bypass generation graph are out of scope for 4.3.2.
-
 All eight milestones are complete. The implementation exposes durable no-QA
 generation runs and event polling, resolves source and presenter context,
 persists revisioned TEI with explicit skipped-QA provenance, and serves JSON
-or downloadable TEI representations. Full deterministic gates pass with
-`1076 passed, 1 skipped`; three Milestone 7/8 CodeRabbit reviews, including the
-presenter-context correction, each reported zero findings. ADR 016 and the
-maintainer and user guides record the operational limits and successor work.
+or downloadable TEI representations. Upload-backed sources are hydrated from
+object storage before generation, repeated materialization converges on the
+ingestion job's persisted episode, and terminal status updates are serialized.
+Full deterministic gates pass with `1078 passed, 1 skipped`; CodeRabbit's final
+complete-branch review reported zero findings. ADR 016 and the maintainer and
+user guides record the operational limits and successor work. Automated
+stuck-run recovery, the broader checkpoint REST surface, and the full
+QA-bypass generation graph remain assigned to 2.6.2, 2.6.3, and 4.4.1.
 
 ## Revision note
 
@@ -1585,8 +1572,15 @@ must-run-once acceptance gate reusing existing helpers. These strengthen
 correctness and operability without enlarging the externally observable
 contract.
 
-Revised 2026-07-22 after a PR-head status audit. Recorded the completed M0-M4
-foundation, post-rebase status-update parameter object, CodeScene complexity
-disposition, deterministic gate evidence, and the still-missing M5-M7 REST and
-behavioural deliverables. The roadmap checkbox remains open because the branch
-does not yet meet its source-to-script REST success criterion.
+Revised 2026-07-22 after a PR-head status audit. The audit identified the then
+missing M5-M7 REST and behavioural deliverables; subsequent milestones closed
+those gaps, completed M8 documentation, and checked the roadmap item complete.
+The audit also recorded the post-rebase status-update parameter object and the
+CodeScene complexity disposition.
+
+Revised 2026-07-22 after post-implementation correctness review. Recorded that
+presenter resolution was already present, then added object-store hydration for
+uploaded source text, transactional ingestion-job episode association, and
+row-locked terminal status mutation. Final test evidence is
+`1078 passed, 1 skipped`; the complete-branch CodeRabbit review reported zero
+findings.
