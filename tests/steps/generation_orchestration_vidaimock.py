@@ -13,7 +13,12 @@ import pytest
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
-    from tests.steps.test_generation_orchestration_steps import OrchestrationBDDContext
+
+class VidaiMockProcessContext(typ.Protocol):
+    """Minimal mutable state required by the Vidai Mock process helper."""
+
+    process: subprocess.Popen[str] | None
+    base_url: str
 
 
 def find_free_port() -> int:
@@ -146,7 +151,7 @@ def _await_port_ready(
 
 
 def start_vidaimock_process(
-    orchestration_context: OrchestrationBDDContext,
+    orchestration_context: VidaiMockProcessContext,
     config_dir: Path,
     port: int,
 ) -> None:
