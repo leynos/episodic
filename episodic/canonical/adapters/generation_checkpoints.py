@@ -57,11 +57,11 @@ class InMemoryGenerationCheckpointMixin:
     True
     """
 
-    _lock: "asyncio.Lock"
-    _runs: "dict[uuid.UUID, GenerationRun]"
-    _checkpoints: "dict[uuid.UUID, Checkpoint]"
+    _lock: asyncio.Lock
+    _runs: dict[uuid.UUID, GenerationRun]
+    _checkpoints: dict[uuid.UUID, Checkpoint]
 
-    async def create_checkpoint(self, checkpoint: "Checkpoint") -> "Checkpoint":
+    async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
         """Persist a checkpoint in the in-memory store.
 
         Parameters
@@ -107,8 +107,8 @@ class InMemoryGenerationCheckpointMixin:
 
     async def get_checkpoint(
         self,
-        checkpoint_id: "uuid.UUID",
-    ) -> "Checkpoint | None":
+        checkpoint_id: uuid.UUID,
+    ) -> Checkpoint | None:
         """Return a checkpoint by identifier.
 
         Parameters
@@ -132,10 +132,10 @@ class InMemoryGenerationCheckpointMixin:
 
     async def _apply_checkpoint_transition(
         self,
-        checkpoint_id: "uuid.UUID",
-        transition: "cabc.Callable[[Checkpoint], Checkpoint]",
-        spec: "_CheckpointTransitionSpec",
-    ) -> "Checkpoint":
+        checkpoint_id: uuid.UUID,
+        transition: cabc.Callable[[Checkpoint], Checkpoint],
+        spec: _CheckpointTransitionSpec,
+    ) -> Checkpoint:
         """Apply a domain transition to a stored checkpoint under the lock.
 
         Parameters
@@ -200,10 +200,10 @@ class InMemoryGenerationCheckpointMixin:
 
     async def respond_to_checkpoint(
         self,
-        checkpoint_id: "uuid.UUID",
+        checkpoint_id: uuid.UUID,
         *,
-        response: "CheckpointResponse",
-    ) -> "Checkpoint":
+        response: CheckpointResponse,
+    ) -> Checkpoint:
         """Record a reviewer response using the checkpoint domain transition.
 
         Parameters
@@ -243,10 +243,10 @@ class InMemoryGenerationCheckpointMixin:
 
     async def time_out_checkpoint(
         self,
-        checkpoint_id: "uuid.UUID",
+        checkpoint_id: uuid.UUID,
         *,
-        at: "dt.datetime",
-    ) -> "Checkpoint":
+        at: dt.datetime,
+    ) -> Checkpoint:
         """Record a checkpoint timeout using the domain transition.
 
         Parameters
@@ -285,10 +285,10 @@ class InMemoryGenerationCheckpointMixin:
 
     async def cancel_checkpoint(
         self,
-        checkpoint_id: "uuid.UUID",
+        checkpoint_id: uuid.UUID,
         *,
-        at: "dt.datetime",
-    ) -> "Checkpoint":
+        at: dt.datetime,
+    ) -> Checkpoint:
         """Record checkpoint cancellation using the domain transition.
 
         Parameters

@@ -6,8 +6,6 @@ These tests exercise durable generation-run and event-log persistence through
 event sequence allocation, terminal immutability, and transaction rollback.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -69,13 +67,13 @@ def make_generation_run(
 
 def _factory(
     session_factory: object,
-) -> async_sessionmaker[AsyncSession]:
+) -> "async_sessionmaker[AsyncSession]":  # noqa: UP037
     """Return the typed async session factory fixture."""
     return typ.cast("async_sessionmaker[AsyncSession]", session_factory)
 
 
 async def _count_records(
-    factory: async_sessionmaker[AsyncSession],
+    factory: "async_sessionmaker[AsyncSession]",  # noqa: UP037
     record_type: type[object],
 ) -> int:
     """Count persisted records of one SQLAlchemy model type."""
@@ -326,6 +324,30 @@ async def test_generation_run_store_lists_runs_by_episode_status_and_page(
 
     assert page == (running,)
     assert running_only == (running,)
+
+
+@pytest.mark.asyncio
+async def test_generation_run_store_rejects_negative_limit(
+    session_factory: object,
+) -> None:
+    """SQL-backed run listing should reject negative limits."""
+    factory = _factory(session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        with pytest.raises(ValueError, match="limit"):
+            await uow.generation_runs.list_runs(uuid.uuid7(), limit=-1)
+
+
+@pytest.mark.asyncio
+async def test_generation_run_store_rejects_negative_offset(
+    session_factory: object,
+) -> None:
+    """SQL-backed run listing should reject negative offsets."""
+    factory = _factory(session_factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        with pytest.raises(ValueError, match="offset"):
+            await uow.generation_runs.list_runs(uuid.uuid7(), offset=-1)
 
 
 @pytest.mark.asyncio

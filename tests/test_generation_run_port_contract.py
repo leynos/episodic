@@ -5,6 +5,7 @@ the `store` fixture plus `make_generation_run()` and `make_checkpoint()` when
 adding scenarios for another implementation.
 """
 
+import asyncio
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -318,24 +319,26 @@ class TestGenerationRunRepository:
         """A pending run can be claimed once for execution."""
         run = await store.create_run(make_generation_run())
 
-        claimed = await store.claim_run_for_execution(
-            run.id,
-            current_node="draft",
-            started_at=NOW,
-            lease_expires_at=NOW + dt.timedelta(minutes=5),
+        results = await asyncio.gather(
+            store.claim_run_for_execution(
+                run.id,
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=NOW + dt.timedelta(minutes=5),
+            ),
+            store.claim_run_for_execution(
+                run.id,
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=NOW + dt.timedelta(minutes=5),
+            ),
         )
-        lost = await store.claim_run_for_execution(
-            run.id,
-            current_node="draft",
-            started_at=NOW,
-            lease_expires_at=NOW + dt.timedelta(minutes=5),
-        )
+        claimed = next(result for result in results if result is not None)
 
-        assert claimed is not None
+        assert sum(result is not None for result in results) == 1
         assert claimed.status is GenerationRunStatus.RUNNING
         assert claimed.current_node == "draft"
         assert claimed.started_at == NOW
-        assert lost is None
 
 
 class TestGenerationEventLog:

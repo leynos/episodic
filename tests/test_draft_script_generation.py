@@ -1,7 +1,5 @@
 """Tests for single-pass draft script generation."""
 
-from __future__ import annotations
-
 import datetime as dt
 import hashlib
 import json

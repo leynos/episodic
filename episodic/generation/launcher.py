@@ -1,7 +1,5 @@
 """In-process generation-run launcher for the no-QA slice."""
 
-from __future__ import annotations
-
 import asyncio
 import dataclasses as dc
 import datetime as dt
@@ -105,7 +103,6 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
 
     async def launch(self, run_id: uuid.UUID) -> None:
         """Schedule a background task for one generation run."""
-        await self._semaphore.acquire()
         task = asyncio.create_task(
             self._run_task(run_id),
             name=f"generation-run-{run_id}",
@@ -131,10 +128,17 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         """Remove finished tasks from the strong-reference registry."""
         self._tasks.discard(task)
         self._task_run_ids.pop(task, None)
-        self._semaphore.release()
 
     async def _run_task(self, run_id: uuid.UUID) -> None:
         """Execute one scheduled generation run."""
+        try:
+            async with self._semaphore:
+                await self._execute_run(run_id)
+        except asyncio.CancelledError:
+            await self._record_cancellation(run_id)
+
+    async def _execute_run(self, run_id: uuid.UUID) -> None:
+        """Execute one generation run while its concurrency permit is held."""
         try:
             claimed = await self._claim(run_id)
             if claimed is None:
@@ -143,15 +147,19 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             await self._record_draft_generated(claimed.run.id, result)
             await self._persist_success(claimed, result)
         except asyncio.CancelledError:
-            await self._record_failure(
-                run_id,
-                Failure(
-                    message="Generation task cancelled during shutdown.",
-                    category="launcher.shutdown",
-                ),
-            )
-        except Exception as exc:  # noqa: BLE001
+            await self._record_cancellation(run_id)
+        except Exception as exc:  # noqa: BLE001  # Task boundary must persist unexpected failures.
             await self._record_failure(run_id, classify_failure(exc))
+
+    async def _record_cancellation(self, run_id: uuid.UUID) -> None:
+        """Record cancellation consistently before or during execution."""
+        await self._record_failure(
+            run_id,
+            Failure(
+                message="Generation task cancelled during shutdown.",
+                category="launcher.shutdown",
+            ),
+        )
 
     async def _claim(self, run_id: uuid.UUID) -> ClaimedRun | None:
         """Claim a pending run and load generation input data."""

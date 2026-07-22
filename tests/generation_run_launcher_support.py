@@ -32,6 +32,7 @@ from episodic.canonical.ingestion_sources import AttachmentKind, IngestionJobSou
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.cost.ports import BillingPeriodKey, CostLedgerEntryId, UsageSource
 from episodic.generation.draft_script import (
+    DraftScriptGenerator,
     DraftScriptRequest,
     DraftScriptResult,
 )
@@ -295,15 +296,18 @@ async def prepare_pending_run(
 
 def launcher(
     factory: async_sessionmaker[AsyncSession],
-    generator: object,
+    generator: DraftScriptGenerator,
     cost_recorder: RecordingCostRecorder | None = None,
+    *,
+    max_concurrency: int = 4,
 ) -> InProcessGenerationRunLauncher:
     """Build a launcher for tests."""
     return InProcessGenerationRunLauncher(
         uow_factory=lambda: SqlAlchemyUnitOfWork(factory),
-        draft_generator=typ.cast("typ.Any", generator),
+        draft_generator=generator,
         cost_recorder_factory=(
             None if cost_recorder is None else lambda uow: cost_recorder
         ),
         clock=_clock,
+        max_concurrency=max_concurrency,
     )

@@ -502,6 +502,7 @@ prefixes = [
     "episodic.canonical.generation_quality",
     "episodic.canonical.history_protocols",
     "episodic.canonical.health",
+    "episodic.canonical.hashing",
     "episodic.canonical.idempotency",
     "episodic.canonical.ingestion_sources",
     "episodic.canonical.object_store",

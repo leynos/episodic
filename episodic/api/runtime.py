@@ -19,6 +19,10 @@ from episodic.generation import (
     LLMDraftScriptGeneratorConfig,
 )
 from episodic.llm import LLMProviderOperation
+from episodic.llm.openai_adapter import (
+    OpenAICompatibleLLMAdapter,
+    OpenAICompatibleLLMConfig,
+)
 from episodic.logging import get_logger, log_info, log_warning
 
 from . import create_app
@@ -42,6 +46,9 @@ class RuntimeConfig:
 
     database_url: str
     source_intake_object_store_root: pathlib.Path
+    llm_base_url: str | None
+    llm_api_key: str | None
+    draft_model: str
 
 
 _SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
@@ -90,6 +97,15 @@ def _load_runtime_config(
             "the HTTP service."
         )
         raise RuntimeError(msg)
+    llm_base_url = environment.get("OPENAI_BASE_URL", "").strip() or None
+    llm_api_key = environment.get("OPENAI_API_KEY", "").strip() or None
+    if (llm_base_url is None) != (llm_api_key is None):
+        msg = "OPENAI_BASE_URL and OPENAI_API_KEY must be configured together."
+        raise RuntimeError(msg)
+    draft_model = environment.get("DRAFT_MODEL", _DEFAULT_DRAFT_MODEL).strip()
+    if not draft_model:
+        msg = "DRAFT_MODEL must be a non-empty string."
+        raise RuntimeError(msg)
     log_info(
         logger,
         "runtime_config_loaded source_intake_object_store_configured",
@@ -97,6 +113,22 @@ def _load_runtime_config(
     return RuntimeConfig(
         database_url=database_url,
         source_intake_object_store_root=pathlib.Path(object_store_root),
+        llm_base_url=llm_base_url,
+        llm_api_key=llm_api_key,
+        draft_model=draft_model,
+    )
+
+
+def _build_llm_port(config: RuntimeConfig) -> OpenAICompatibleLLMAdapter | None:
+    """Build the environment-configured OpenAI-compatible LLM adapter."""
+    if config.llm_base_url is None or config.llm_api_key is None:
+        return None
+    return OpenAICompatibleLLMAdapter(
+        config=OpenAICompatibleLLMConfig(
+            base_url=config.llm_base_url,
+            api_key=config.llm_api_key,
+            provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
+        )
     )
 
 
@@ -244,25 +276,33 @@ def create_app_from_env() -> asgi.App:
         config.database_url
     )
     object_store = FilesystemObjectStore(config.source_intake_object_store_root)
+    llm_port = _build_llm_port(config)
     launcher = _build_generation_launcher(
         uow_factory,
-        None,
+        llm_port,
         object_store=object_store,
+        draft_model=config.draft_model,
     )
-    shutdown_hooks = (
-        (shutdown_hook,)
-        if launcher is None
-        else (
-            shutdown_hook,
-            launcher.shutdown,
-        )
-    )
+    if launcher is None:
+        shutdown_hooks = (shutdown_hook,)
+    else:
+        if llm_port is None:  # pragma: no cover - launcher construction requires it.
+            msg = "Generation launcher requires an LLM port."
+            raise RuntimeError(msg)
+
+        async def shutdown_generation() -> None:
+            """Drain generation work before closing its provider client."""
+            await launcher.shutdown()
+            await llm_port.aclose()
+
+        shutdown_hooks = (shutdown_hook, shutdown_generation)
     return create_app(
         ApiDependencies(
             uow_factory=uow_factory,
             object_store=object_store,
             readiness_probes=(database_probe,),
             shutdown_hooks=shutdown_hooks,
+            llm_port=llm_port,
             launcher=launcher,
         )
     )

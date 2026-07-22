@@ -6,10 +6,14 @@ import typing as typ
 import sqlalchemy as sa
 
 from episodic.canonical.entity_protocols import EpisodeRepository
-from episodic.canonical.episode_errors import EpisodeNotFound, EpisodeRevisionConflict
+from episodic.canonical.episode_errors import (
+    EpisodeNotFoundError,
+    EpisodeRevisionConflictError,
+)
+from episodic.canonical.hashing import sha256_text
 
 from .compression import encode_text_for_storage
-from .entity_mappers import _episode_from_record, _episode_to_record, _tei_content_hash
+from .entity_mappers import _episode_from_record, _episode_to_record
 from .entity_models import EpisodeRecord
 from .repository_base import _RepositoryBase
 
@@ -82,7 +86,7 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
                 tei_xml=stored_tei_xml,
                 tei_xml_zstd=tei_xml_zstd,
                 tei_revision=update.expected_revision + 1,
-                tei_content_hash=_tei_content_hash(update.tei_xml),
+                tei_content_hash=sha256_text(update.tei_xml),
                 qa_status=update.qa_status,
                 last_generation_run_id=update.last_generation_run_id,
                 updated_at=now,
@@ -92,11 +96,11 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
         if cursor_result.rowcount != 1:
             existing = await self.get(episode_id)
             if existing is None:
-                raise EpisodeNotFound(episode_id)
-            raise EpisodeRevisionConflict(episode_id, update.expected_revision)
+                raise EpisodeNotFoundError(episode_id)
+            raise EpisodeRevisionConflictError(episode_id, update.expected_revision)
 
         await self._session.flush()
         updated = await self.get(episode_id)
         if updated is None:  # pragma: no cover - guarded by updated row.
-            raise EpisodeNotFound(episode_id)
+            raise EpisodeNotFoundError(episode_id)
         return updated

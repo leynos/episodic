@@ -211,3 +211,20 @@ async def test_launcher_shutdown_marks_running_task_failed(
     assert run.error_message == "Generation task cancelled during shutdown."
     assert events[-1].kind == "run.failed"
     assert events[-1].payload["error_category"] == "launcher.shutdown"
+
+
+@pytest.mark.asyncio
+async def test_launcher_returns_while_concurrency_slot_is_busy(
+    session_factory: object,
+) -> None:
+    """Scheduling should not wait for an execution semaphore permit."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    run_id, _ = await prepare_pending_run(factory)
+    generator = BlockingDraftGenerator()
+    run_launcher = launcher(factory, generator, max_concurrency=1)
+
+    await run_launcher.launch(run_id)
+    await generator.started.wait()
+    await asyncio.wait_for(run_launcher.launch(uuid.uuid7()), timeout=0.1)
+
+    await run_launcher.shutdown()

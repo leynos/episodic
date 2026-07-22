@@ -23,7 +23,6 @@ Typical usage maps a stored record before domain consumption:
 """
 
 import copy
-import hashlib
 
 from episodic.canonical.domain import (
     ApprovalEvent,
@@ -34,6 +33,7 @@ from episodic.canonical.domain import (
     SourceDocument,
     TeiHeader,
 )
+from episodic.canonical.hashing import sha256_text
 
 from .compression import decode_text_from_storage, encode_text_for_storage
 from .entity_models import (
@@ -44,11 +44,6 @@ from .entity_models import (
     TeiHeaderRecord,
 )
 from .profile_models import EpisodeTemplateRecord, SeriesProfileRecord
-
-
-def _tei_content_hash(tei_xml: str) -> str:
-    """Return the canonical storage hash for a TEI payload."""
-    return f"sha256:{hashlib.sha256(tei_xml.encode()).hexdigest()}"
 
 
 def _series_profile_from_record(record: SeriesProfileRecord) -> SeriesProfile:
@@ -143,7 +138,7 @@ def _episode_to_record(episode: CanonicalEpisode) -> EpisodeRecord:
         tei_xml=tei_xml,
         tei_xml_zstd=tei_xml_zstd,
         tei_revision=episode.tei_revision,
-        tei_content_hash=episode.tei_content_hash or _tei_content_hash(episode.tei_xml),
+        tei_content_hash=episode.tei_content_hash or sha256_text(episode.tei_xml),
         qa_status=episode.qa_status,
         last_generation_run_id=episode.last_generation_run_id,
         status=episode.status,

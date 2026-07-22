@@ -1,7 +1,6 @@
 """Tests for runtime environment wiring of the HTTP app."""
 
-from __future__ import annotations
-
+import asyncio
 import hashlib
 import typing as typ
 
@@ -86,12 +85,14 @@ def test_normalize_database_urls_uses_query_port_for_probe() -> None:
     assert probe_kwargs["port"] == 6544
 
 
-def test_build_generation_launcher_wires_cost_recorder(
+@pytest.mark.asyncio
+async def test_build_generation_launcher_wires_cost_recorder(
     session_factory: object,
 ) -> None:
     """Runtime launcher construction should use the SQL-backed cost ledger."""
     from episodic.api.runtime import _build_generation_launcher
     from episodic.canonical.storage import SqlAlchemyUnitOfWork
+    from episodic.cost.recorder import CostRecorder
     from episodic.generation import InProcessGenerationRunLauncher
 
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
@@ -101,6 +102,67 @@ def test_build_generation_launcher_wires_cost_recorder(
     )
 
     assert isinstance(launcher, InProcessGenerationRunLauncher)
+    assert launcher.cost_recorder_factory is not None
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        recorder = launcher.cost_recorder_factory(uow)
+        assert isinstance(recorder, CostRecorder)
+        assert recorder.ledger is uow.cost_ledger
+
+
+@pytest.mark.asyncio
+async def test_create_app_from_env_wires_configured_llm_launcher(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Provider configuration should create a launcher and shutdown hook."""
+    from unittest import mock
+
+    from episodic.api import runtime as runtime_module
+    from episodic.generation import InProcessGenerationRunLauncher
+    from episodic.llm.openai_adapter import OpenAICompatibleLLMAdapter
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example.test/episodic")
+    monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.test/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured_dependencies = None
+
+    async def shutdown_database() -> None:
+        await asyncio.sleep(0)
+
+    async def check_database() -> bool:
+        await asyncio.sleep(0)
+        return True
+
+    def unit_of_work_factory() -> object:
+        return object()
+
+    def capture_dependencies(dependencies: object) -> object:
+        nonlocal captured_dependencies
+        captured_dependencies = dependencies
+        return object()
+
+    probe = runtime_module.ReadinessProbe(name="database", check=check_database)
+    with (
+        mock.patch.object(
+            runtime_module,
+            "_build_database_probe",
+            return_value=(probe, unit_of_work_factory, shutdown_database),
+        ),
+        mock.patch.object(
+            runtime_module,
+            "create_app",
+            side_effect=capture_dependencies,
+        ),
+    ):
+        runtime_module.create_app_from_env()
+
+    assert captured_dependencies is not None
+    dependencies = typ.cast("typ.Any", captured_dependencies)
+    assert isinstance(dependencies.llm_port, OpenAICompatibleLLMAdapter)
+    assert isinstance(dependencies.launcher, InProcessGenerationRunLauncher)
+    assert len(dependencies.shutdown_hooks) == 2
+    await dependencies.shutdown_hooks[1]()
 
 
 @pytest.mark.asyncio
@@ -288,7 +350,10 @@ async def test_create_app_from_env_wires_object_store_for_uploads(
 class _UnusedLLMPort:
     """LLM port fake used only to satisfy runtime launcher construction."""
 
-    async def generate(self, request: LLMRequest) -> LLMResponse:
+    async def generate(
+        self,
+        request: "LLMRequest",  # noqa: UP037
+    ) -> "LLMResponse":  # noqa: UP037
         """Fail if runtime wiring accidentally invokes the fake."""
         _ = request
         raise AssertionError

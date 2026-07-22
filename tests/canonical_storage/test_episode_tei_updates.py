@@ -1,7 +1,6 @@
 """Tests for optimistic episode TEI updates."""
 
-from __future__ import annotations
-
+import dataclasses as dc
 import datetime as dt
 import hashlib
 import typing as typ
@@ -15,7 +14,7 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
 )
-from episodic.canonical.episode_errors import EpisodeRevisionConflict
+from episodic.canonical.episode_errors import EpisodeRevisionConflictError
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.storage.models import EpisodeRecord
@@ -57,6 +56,69 @@ def _generation_run(episode: CanonicalEpisode) -> GenerationRun:
         qa_status=QaStatus.SKIPPED,
         skip_qa_rationale="Storage test bypasses QA.",
     )
+
+
+def test_episode_revision_rejects_boolean(
+    episode_fixture: tuple[
+        SeriesProfile,
+        TeiHeader,
+        CanonicalEpisode,
+        IngestionJob,
+        SourceDocument,
+    ],
+) -> None:
+    """Boolean revisions must not pass as integers."""
+    _, _, episode, _, _ = episode_fixture
+
+    with pytest.raises(ValueError, match="positive integer"):
+        dc.replace(episode, tei_revision=True)
+
+
+def test_episode_content_hash_requires_string(
+    episode_fixture: tuple[
+        SeriesProfile,
+        TeiHeader,
+        CanonicalEpisode,
+        IngestionJob,
+        SourceDocument,
+    ],
+) -> None:
+    """Set content hashes must be strings before whitespace validation."""
+    _, _, episode, _, _ = episode_fixture
+
+    with pytest.raises(TypeError, match="must be a string"):
+        dc.replace(episode, tei_content_hash=typ.cast("typ.Any", 42))
+
+
+@pytest.mark.parametrize(
+    ("overrides", "error_type", "message"),
+    [
+        ({"tei_xml": 42}, TypeError, "tei_xml must be a string"),
+        ({"qa_status": None}, TypeError, "qa_status must be set"),
+        (
+            {"last_generation_run_id": None},
+            TypeError,
+            "last_generation_run_id must be set",
+        ),
+        ({"expected_revision": True}, ValueError, "positive integer"),
+    ],
+)
+def test_episode_tei_update_rejects_invalid_domain_values(
+    overrides: dict[str, object],
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    """TEI updates require typed content, provenance, and exact revisions."""
+    values: dict[str, object] = {
+        "tei_xml": "<TEI/>",
+        "qa_status": QaStatus.SKIPPED,
+        "last_generation_run_id": uuid.uuid7(),
+        "expected_revision": 1,
+    }
+    values.update(overrides)
+
+    with pytest.raises(error_type, match=message):
+        EpisodeTeiUpdate(**typ.cast("typ.Any", values))
 
 
 async def _persist_episode_parents(
@@ -198,7 +260,7 @@ async def test_episode_update_tei_rejects_stale_revision(
         await uow.commit()
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
-        with pytest.raises(EpisodeRevisionConflict):
+        with pytest.raises(EpisodeRevisionConflictError):
             await uow.episodes.update(
                 episode.id,
                 update=EpisodeTeiUpdate(
