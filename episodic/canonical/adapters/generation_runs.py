@@ -197,6 +197,7 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
                 current_node=update.current_node,
                 ended_at=update.ended_at,
                 error_message=update.error_message,
+                error_category=update.error_category,
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated
