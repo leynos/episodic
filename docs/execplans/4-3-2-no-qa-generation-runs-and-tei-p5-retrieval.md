@@ -1616,4 +1616,6 @@ presenter resolution was already present, then added object-store hydration for
 uploaded source text, transactional ingestion-job episode association, and
 row-locked terminal status mutation. Final test evidence is
 `1078 passed, 1 skipped`; the complete-branch CodeRabbit review reported zero
+findings. Final review evidence: `coderabbit review --agent` ran against commit
+`f8609b4` on 2026-07-23 and returned terminal `review_completed` with zero
 findings.
