@@ -148,6 +148,7 @@ class GenerationRun:
     started_at: dt.datetime | None
     ended_at: dt.datetime | None
     error_message: str | None
+    error_category: str | None = None
     quality_mode: QualityMode = QualityMode.DRAFT_WITHOUT_QA
     qa_status: QaStatus | None = None
     skip_qa_rationale: str | None = None
@@ -157,6 +158,7 @@ class GenerationRun:
         _validate_non_empty_text(self.actor, "actor")
         _validate_optional_text(self.current_node, "current_node")
         _validate_optional_text(self.error_message, "error_message")
+        _validate_optional_text(self.error_category, "error_category")
         _validate_draft_without_qa_metadata(
             quality_mode=self.quality_mode,
             qa_status=self.qa_status,
