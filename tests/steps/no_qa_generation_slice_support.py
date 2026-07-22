@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses as dc
 import json
+import subprocess  # noqa: S404 - terminates a controlled local test process.
 import typing as typ
 
 import httpx
@@ -27,7 +28,6 @@ from tests.steps.generation_orchestration_vidaimock import (
 if typ.TYPE_CHECKING:
     import asyncio
     import collections.abc as cabc
-    import subprocess  # noqa: S404 - type for a controlled local test process.
     from pathlib import Path
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -95,6 +95,18 @@ class NoQaGenerationSliceContext:
             await self.launcher.shutdown()
         if self.llm_adapter is not None:
             await self.llm_adapter.aclose()
+
+    def tear_down(self) -> None:
+        """Release asynchronous resources and stop the Vidai Mock process."""
+        self.run(self.close())
+        if self.process is None:
+            return
+        self.process.terminate()
+        try:
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(timeout=5)
 
 
 def require[RequiredValue](
