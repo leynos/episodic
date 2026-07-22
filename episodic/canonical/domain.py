@@ -336,12 +336,22 @@ class CanonicalEpisode:
 
     def __post_init__(self) -> None:
         """Validate TEI revision metadata."""
-        if not isinstance(self.tei_revision, int) or self.tei_revision < 1:
+        if not isinstance(self.tei_xml, str):
+            msg = "tei_xml must be a string."
+            raise TypeError(msg)
+        if self.tei_xml.strip() == "":
+            msg = "tei_xml must be a non-empty string."
+            raise ValueError(msg)
+        if type(self.tei_revision) is not int or self.tei_revision < 1:
             msg = "tei_revision must be a positive integer."
             raise ValueError(msg)
-        if self.tei_content_hash is not None and self.tei_content_hash.strip() == "":
-            msg = "tei_content_hash must be a non-empty string when set."
-            raise ValueError(msg)
+        if self.tei_content_hash is not None:
+            if not isinstance(self.tei_content_hash, str):
+                msg = "tei_content_hash must be a string when set."
+                raise TypeError(msg)
+            if self.tei_content_hash.strip() == "":
+                msg = "tei_content_hash must be a non-empty string when set."
+                raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True)
@@ -356,10 +366,19 @@ class EpisodeTeiUpdate:
 
     def __post_init__(self) -> None:
         """Validate optimistic TEI update invariants."""
+        if not isinstance(self.tei_xml, str):
+            msg = "tei_xml must be a string."
+            raise TypeError(msg)
         if self.tei_xml.strip() == "":
             msg = "tei_xml must be a non-empty string."
             raise ValueError(msg)
-        if not isinstance(self.expected_revision, int) or self.expected_revision < 1:
+        if self.qa_status is None:
+            msg = "qa_status must be set."
+            raise TypeError(msg)
+        if self.last_generation_run_id is None:
+            msg = "last_generation_run_id must be set."
+            raise TypeError(msg)
+        if type(self.expected_revision) is not int or self.expected_revision < 1:
             msg = "expected_revision must be a positive integer."
             raise ValueError(msg)
 

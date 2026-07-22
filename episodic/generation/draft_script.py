@@ -2,12 +2,12 @@
 
 import collections.abc as cabc
 import dataclasses as dc
-import hashlib
 import json
 import typing as typ
 
 import tei_rapporteur as tei
 
+from episodic.canonical.hashing import sha256_text
 from episodic.generation.tei_payload import (
     require_mapping,
     require_non_empty_str_value,
@@ -171,6 +171,8 @@ class DraftScriptGenerator(typ.Protocol):
 
 @dc.dataclass(frozen=True, slots=True)
 class _ParsedDraft:
+    """Represent a parsed draft title and its ordered turns."""
+
     title: str
     turns: tuple[DraftTurn, ...]
 
@@ -204,7 +206,7 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
         tei_xml = _emit_tei(parsed, request.id_factory)
         return DraftScriptResult(
             tei_xml=tei_xml,
-            content_hash=_content_hash(tei_xml),
+            content_hash=sha256_text(tei_xml),
             usage=response.usage,
             model=response.model,
             provider_response_id=response.provider_response_id,
@@ -325,8 +327,3 @@ def _turn_to_block(turn: DraftTurn, id_factory: DraftIdFactory) -> JsonMapping:
         "xml_id": id_factory("u"),
         "content": content,
     }
-
-
-def _content_hash(tei_xml: str) -> str:
-    """Return the canonical draft TEI content hash."""
-    return f"sha256:{hashlib.sha256(tei_xml.encode()).hexdigest()}"

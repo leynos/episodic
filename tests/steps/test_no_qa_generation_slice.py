@@ -1,7 +1,5 @@
 """Behavioural coverage for the no-QA source-to-script REST slice."""
 
-from __future__ import annotations
-
 import asyncio  # noqa: TC003 - pytest resolves fixture annotations at runtime.
 import typing as typ
 from pathlib import Path  # noqa: TC003 - pytest resolves step annotations at runtime.

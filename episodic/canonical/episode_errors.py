@@ -12,18 +12,23 @@ class EpisodeError(Exception):
     """Base class for canonical episode errors."""
 
 
-class EpisodeNotFound(EpisodeError):  # noqa: N818 - mirrors existing domain errors.
+class EpisodeNotFoundError(EpisodeError):
     """Raised when an episode row cannot be found."""
 
     def __init__(self, episode_id: uuid.UUID) -> None:
-        super().__init__(f"Episode {episode_id} was not found.")
+        self.episode_id = episode_id
+        message = f"Episode {episode_id} was not found."
+        super().__init__(message)
 
 
-class EpisodeRevisionConflict(EpisodeError):  # noqa: N818 - stable storage contract.
+class EpisodeRevisionConflictError(EpisodeError):
     """Raised when an optimistic TEI revision precondition fails."""
 
     def __init__(self, episode_id: uuid.UUID, expected_revision: int) -> None:
-        super().__init__(
+        self.episode_id = episode_id
+        self.expected_revision = expected_revision
+        message = (
             f"Episode {episode_id} revision did not match expected revision "
             f"{expected_revision}."
         )
+        super().__init__(message)
