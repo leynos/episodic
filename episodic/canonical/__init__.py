@@ -56,7 +56,11 @@ from .entity_protocols import (
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
-from .episode_errors import EpisodeError, EpisodeNotFound, EpisodeRevisionConflict
+from .episode_errors import (
+    EpisodeError,
+    EpisodeNotFoundError,
+    EpisodeRevisionConflictError,
+)
 from .generation_quality import QaStatus, QualityMode
 from .history_protocols import (
     EpisodeTemplateHistoryRepository,
@@ -113,9 +117,9 @@ __all__: list[str] = [
     "EntityKind",
     "EntityNotFoundError",
     "EpisodeError",
-    "EpisodeNotFound",
+    "EpisodeNotFoundError",
     "EpisodeRepository",
-    "EpisodeRevisionConflict",
+    "EpisodeRevisionConflictError",
     "EpisodeStatus",
     "EpisodeTeiUpdate",
     "EpisodeTemplate",

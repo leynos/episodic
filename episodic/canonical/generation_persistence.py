@@ -1,7 +1,5 @@
 """Persistence services for draft-generation output."""
 
-from __future__ import annotations
-
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
@@ -17,6 +15,7 @@ from episodic.canonical.domain import (
     EpisodeStatus,
     EpisodeTeiUpdate,
     IngestionJob,
+    IntakeState,
     SourceDocument,
     TeiHeader,
 )
@@ -88,15 +87,19 @@ async def materialise_episode_from_ingestion(
 ) -> CanonicalEpisode:
     """Create a placeholder canonical episode for a ready ingestion job."""
     job = await _get_ingestion_job_for_update(uow, request.ingestion_job_id)
-    sources = await _list_all_sources(uow, request.ingestion_job_id)
-    if len(sources) == 0:
-        msg = f"Ingestion job {request.ingestion_job_id} has no attached sources."
+    if job.intake_state is not IntakeState.READY_FOR_GENERATION:
+        msg = f"Ingestion job {request.ingestion_job_id} is not ready for generation."
         raise DraftScriptPersistenceError(msg)
 
     episode_id = job.target_episode_id or request.uuid_factory()
     existing_episode = await uow.episodes.get(episode_id)
     if existing_episode is not None:
         return existing_episode
+
+    sources = await _list_all_sources(uow, request.ingestion_job_id)
+    if len(sources) == 0:
+        msg = f"Ingestion job {request.ingestion_job_id} has no attached sources."
+        raise DraftScriptPersistenceError(msg)
 
     now = request.clock()
     header = _build_placeholder_header(

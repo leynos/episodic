@@ -74,6 +74,8 @@ def _series_profile() -> SeriesProfile:
 def _ingestion_job(
     series_profile_id: uuid.UUID,
     episode_id: uuid.UUID | None,
+    *,
+    intake_state: IntakeState = IntakeState.READY_FOR_GENERATION,
 ) -> IngestionJob:
     """Return an intake job ready for generation."""
     return IngestionJob(
@@ -87,7 +89,7 @@ def _ingestion_job(
         error_message=None,
         created_at=NOW,
         updated_at=NOW,
-        intake_state=IntakeState.READY_FOR_GENERATION,
+        intake_state=intake_state,
     )
 
 
@@ -325,6 +327,38 @@ async def test_materialise_episode_requires_attached_sources(
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         with pytest.raises(DraftScriptPersistenceError, match="sources"):
+            await materialise_episode_from_ingestion(
+                uow,
+                EpisodeMaterialisationRequest(
+                    ingestion_job_id=job.id,
+                    title="Bridgewater Futures",
+                    clock=_clock,
+                    uuid_factory=SequentialUuids(),
+                ),
+            )
+
+
+@pytest.mark.asyncio
+async def test_materialise_episode_requires_ready_ingestion_job(
+    session_factory: object,
+) -> None:
+    """Materialization should reject source bundles that are not ready."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    series = _series_profile()
+    job = _ingestion_job(
+        series.id,
+        None,
+        intake_state=IntakeState.AWAITING_SOURCES,
+    )
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        await uow.series_profiles.add(series)
+        await uow.flush()
+        await uow.ingestion_jobs.add(job)
+        await uow.ingestion_job_sources.add(_source(job.id))
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        with pytest.raises(DraftScriptPersistenceError, match="not ready"):
             await materialise_episode_from_ingestion(
                 uow,
                 EpisodeMaterialisationRequest(
