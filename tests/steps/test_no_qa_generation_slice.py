@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio  # noqa: TC003 - pytest resolves fixture annotations at runtime.
-import subprocess  # noqa: S404 - fixture terminates its local Vidai Mock process.
 import typing as typ
 from pathlib import Path  # noqa: TC003 - pytest resolves step annotations at runtime.
 
@@ -35,14 +34,7 @@ def context(
     """Provide shared scenario state and release external resources afterward."""
     ctx = NoQaGenerationSliceContext(session_factory, _function_scoped_runner)
     yield ctx
-    ctx.run(ctx.close())
-    if ctx.process is not None:
-        ctx.process.terminate()
-        try:
-            ctx.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            ctx.process.kill()
-            ctx.process.wait(timeout=5)
+    ctx.tear_down()
 
 
 @scenario(

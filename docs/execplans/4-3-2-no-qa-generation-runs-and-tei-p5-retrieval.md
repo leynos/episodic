@@ -385,6 +385,12 @@ when any of the following is breached.
   series-level bindings for the materialized episode and projects host and
   guest revisions into `DraftPresenterProfile`; the BDD setup creates both
   bound revisions, and focused launcher plus slice evidence is `12 passed`.
+- Observation: the post-turn lint hook found the final no-QA BDD step module at
+  408 lines, above the repository's 400-line module limit. Impact: scenario
+  resource cleanup moved into `NoQaGenerationSliceContext.tear_down`, where
+  the launcher, adapter, and Vidai Mock process lifecycle now remain cohesive.
+  The step module is 400 lines; focused scenarios and the full formatting,
+  lint, and type-check gates pass.
 - Observation: on 2026-06-24 the local branch was already named
   `4-3-2-no-qa-generation-runs-and-tei-p5-retrieval` and the matching remote
   branch existed at `origin`, but the worktree did not have an upstream branch
