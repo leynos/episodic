@@ -7,7 +7,12 @@ import uuid
 
 import pytest
 
-from episodic.canonical.domain import GenerationRunStatus, SourceDocument
+from episodic.canonical.domain import (
+    GenerationEvent,
+    GenerationRun,
+    GenerationRunStatus,
+    SourceDocument,
+)
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptTransientProviderError
@@ -29,12 +34,29 @@ if typ.TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.generation.launcher import InProcessGenerationRunLauncher
+
 
 async def _uploaded_chunks() -> cabc.AsyncIterator[bytes]:
     """Yield uploaded source bytes with mixed line endings."""
     await asyncio.sleep(0)
     yield b"Uploaded source line one.\r\n"
     yield b"Line two.\n"
+
+
+async def _launch_and_load_run(
+    factory: async_sessionmaker[AsyncSession],
+    run_id: uuid.UUID,
+    run_launcher: "InProcessGenerationRunLauncher",  # noqa: UP037
+) -> tuple[GenerationRun, tuple[GenerationEvent, ...]]:
+    """Launch a run and return its persisted terminal state and events."""
+    await run_launcher.launch(run_id)
+    await run_launcher.drain()
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        run = await uow.generation_runs.get_run(run_id)
+        events = await uow.generation_runs.list_events(run_id)
+    assert run is not None, f"run {run_id} was not persisted; events={events!r}"
+    return run, events
 
 
 @pytest.mark.asyncio
@@ -57,7 +79,9 @@ async def test_upload_backed_source_reads_object_content(tmp_path: Path) -> None
 
     source = await source_from_document(document, store)
 
-    assert source.content == "Uploaded source line one.\nLine two."
+    assert source.content == "Uploaded source line one.\nLine two.", (
+        f"unexpected uploaded source content: {source.content!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -79,32 +103,48 @@ async def test_launcher_completes_run_and_records_cost(
         episode = await uow.episodes.get(episode_id)
         events = await uow.generation_runs.list_events(run_id)
 
-    assert run is not None
-    assert run.status is GenerationRunStatus.SUCCEEDED
-    assert run.current_node == "complete"
-    assert episode is not None
-    assert episode.tei_xml == valid_tei()
-    assert episode.qa_status is QaStatus.SKIPPED
+    assert run is not None, f"run {run_id} was not persisted; events={events!r}"
+    assert run.status is GenerationRunStatus.SUCCEEDED, (
+        f"run {run_id} status={run.status}; events={events!r}"
+    )
+    assert run.current_node == "complete", (
+        f"run {run_id} current_node={run.current_node!r}"
+    )
+    assert episode is not None, f"episode {episode_id} was not persisted"
+    assert episode.tei_xml == valid_tei(), (
+        f"episode {episode_id} TEI={episode.tei_xml!r}"
+    )
+    assert episode.qa_status is QaStatus.SKIPPED, (
+        f"episode {episode_id} qa_status={episode.qa_status!r}"
+    )
     assert [event.kind for event in events] == [
         "run.started",
         "draft.generated",
         "tei.persisted",
         "run.succeeded",
-    ]
-    assert generator.requests[0].sources[0].content == "Bridgewater launch source text."
+    ], f"run {run_id} events={events!r}"
+    assert (
+        generator.requests[0].sources[0].content == "Bridgewater launch source text."
+    ), f"run {run_id} source={generator.requests[0].sources[0]!r}"
     assert [
         profile.display_name for profile in generator.requests[0].presenter_profiles
-    ] == ["Host One", "Guest One"]
+    ] == ["Host One", "Guest One"], (
+        f"run {run_id} profiles={generator.requests[0].presenter_profiles!r}"
+    )
     assert [profile.role for profile in generator.requests[0].presenter_profiles] == [
         "host",
         "guest",
-    ]
-    assert cost_recorder.provider_calls[0].workflow_run_id == str(run_id)
+    ], f"run {run_id} profiles={generator.requests[0].presenter_profiles!r}"
+    assert cost_recorder.provider_calls[0].workflow_run_id == str(run_id), (
+        f"run {run_id} provider calls={cost_recorder.provider_calls!r}"
+    )
     assert cost_recorder.provider_calls[0].usage == {
         "input_tokens": 10,
         "output_tokens": 20,
-    }
-    assert cost_recorder.finalized_runs == [(str(run_id), "draft")]
+    }, f"run {run_id} usage={cost_recorder.provider_calls[0].usage!r}"
+    assert cost_recorder.finalized_runs == [(str(run_id), "draft")], (
+        f"run {run_id} finalized runs={cost_recorder.finalized_runs!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -119,19 +159,23 @@ async def test_launcher_records_provider_failure(
         FailingDraftGenerator(DraftScriptTransientProviderError("try again later")),
     )
 
-    await run_launcher.launch(run_id)
-    await run_launcher.drain()
+    run, events = await _launch_and_load_run(factory, run_id, run_launcher)
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        run = await uow.generation_runs.get_run(run_id)
-        events = await uow.generation_runs.list_events(run_id)
-
-    assert run is not None
-    assert run.status is GenerationRunStatus.FAILED
-    assert run.error_message == "try again later"
-    assert run.current_node == "failed"
-    assert [event.kind for event in events] == ["run.started", "run.failed"]
-    assert events[-1].payload["error_category"] == "provider.transient"
+    assert run.status is GenerationRunStatus.FAILED, (
+        f"run {run_id} status={run.status}; events={events!r}"
+    )
+    assert run.error_message == "try again later", (
+        f"run {run_id} error={run.error_message!r}"
+    )
+    assert run.current_node == "failed", (
+        f"run {run_id} current_node={run.current_node!r}"
+    )
+    assert [event.kind for event in events] == ["run.started", "run.failed"], (
+        f"run {run_id} events={events!r}"
+    )
+    assert events[-1].payload["error_category"] == "provider.transient", (
+        f"run {run_id} final event={events[-1]!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -145,22 +189,20 @@ async def test_launcher_records_invalid_tei_failure(
         factory, RecordingDraftGenerator(draft_result("<TEI>broken"))
     )
 
-    await run_launcher.launch(run_id)
-    await run_launcher.drain()
+    run, events = await _launch_and_load_run(factory, run_id, run_launcher)
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        run = await uow.generation_runs.get_run(run_id)
-        events = await uow.generation_runs.list_events(run_id)
-
-    assert run is not None
-    assert run.status is GenerationRunStatus.FAILED
+    assert run.status is GenerationRunStatus.FAILED, (
+        f"run {run_id} status={run.status}; events={events!r}"
+    )
     assert [event.kind for event in events] == [
         "run.started",
         "draft.generated",
         "tei.invalid",
         "run.failed",
-    ]
-    assert events[-1].payload["error_category"] == "tei.invalid"
+    ], f"run {run_id} events={events!r}"
+    assert events[-1].payload["error_category"] == "tei.invalid", (
+        f"run {run_id} final event={events[-1]!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -173,7 +215,9 @@ async def test_launcher_uses_detached_unit_of_work(
     run_launcher = launcher(factory, RecordingDraftGenerator(draft_result(valid_tei())))
 
     async with SqlAlchemyUnitOfWork(factory) as request_uow:
-        assert await request_uow.generation_runs.get_run(run_id) is not None
+        assert await request_uow.generation_runs.get_run(run_id) is not None, (
+            f"run {run_id} was unavailable in the request unit of work"
+        )
 
     await run_launcher.launch(run_id)
     await run_launcher.drain()
@@ -182,10 +226,14 @@ async def test_launcher_uses_detached_unit_of_work(
         run = await uow.generation_runs.get_run(run_id)
         episode = await uow.episodes.get(episode_id)
 
-    assert run is not None
-    assert run.status is GenerationRunStatus.SUCCEEDED
-    assert episode is not None
-    assert episode.tei_xml == valid_tei()
+    assert run is not None, f"run {run_id} was not persisted"
+    assert run.status is GenerationRunStatus.SUCCEEDED, (
+        f"run {run_id} status={run.status}"
+    )
+    assert episode is not None, f"episode {episode_id} was not persisted"
+    assert episode.tei_xml == valid_tei(), (
+        f"episode {episode_id} TEI={episode.tei_xml!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -206,11 +254,17 @@ async def test_launcher_shutdown_marks_running_task_failed(
         run = await uow.generation_runs.get_run(run_id)
         events = await uow.generation_runs.list_events(run_id)
 
-    assert run is not None
-    assert run.status is GenerationRunStatus.FAILED
-    assert run.error_message == "Generation task cancelled during shutdown."
-    assert events[-1].kind == "run.failed"
-    assert events[-1].payload["error_category"] == "launcher.shutdown"
+    assert run is not None, f"run {run_id} was not persisted; events={events!r}"
+    assert run.status is GenerationRunStatus.FAILED, (
+        f"run {run_id} status={run.status}; events={events!r}"
+    )
+    assert run.error_message == "Generation task cancelled during shutdown.", (
+        f"run {run_id} error={run.error_message!r}"
+    )
+    assert events[-1].kind == "run.failed", f"run {run_id} final event={events[-1]!r}"
+    assert events[-1].payload["error_category"] == "launcher.shutdown", (
+        f"run {run_id} final event={events[-1]!r}"
+    )
 
 
 @pytest.mark.asyncio
