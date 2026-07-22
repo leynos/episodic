@@ -6,6 +6,13 @@ and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: IN PROGRESS
 
+Current implementation status (audited 2026-07-22): Milestones 0-3 are
+complete. Milestone 4 is implemented and passes deterministic gates, but its
+required CodeRabbit review is not recorded. Milestones 5-8 remain outstanding;
+in particular, the REST resources and TEI retrieval route are not registered,
+and the seven behavioural scenarios remain strict expected failures. Roadmap
+item 4.3.2 therefore remains open.
+
 ## Purpose / big picture
 
 After this change an integration client can drive the narrowest useful
@@ -285,6 +292,14 @@ when any of the following is breached.
   passing at least once).
 - [ ] (pending) M8: Documentation, roadmap update, and final gates.
 
+- [x] (status audit, 2026-07-22) Reconciled this plan with PR head
+  `471254111375567ffe1094831aa94e32ee099702`. The branch contains M0-M4 code,
+  including the post-rebase `GenerationRunStatusUpdate` parameter-object
+  refactor. It does not contain the M5-M6 inbound HTTP adapters. The focused M7
+  suite reports `7 xfailed`, so neither M7 nor the roadmap success criterion is
+  complete. Post-rebase Python and documentation gates pass; M4 CodeRabbit and
+  the remaining milestone work are still required before M8 can close.
+
 ## Surprises & discoveries
 
 - Observation: the existing generation-orchestration graph
@@ -378,6 +393,21 @@ when any of the following is breached.
   `DraftScriptSource.content` from non-blank metadata content first, falling
   back to `source_uri` so legacy rows still produce deterministic generator
   requests.
+- Observation: the 2026-07-22 current-state audit found no registered
+  generation-run or episode-TEI REST route under `episodic/api`; the only API
+  integration added by M4 is launcher dependency/runtime wiring. The seven
+  scenarios in `tests/steps/test_no_qa_generation_slice.py` are still marked
+  `xfail(strict=True)` and their creation steps deliberately fail with
+  `4.3.2 no-QA source-to-script slice is not implemented yet`. Impact:
+  Milestones 5-7 and the roadmap item must remain open despite completion of
+  the domain, persistence, generation, and launcher foundations.
+- Observation: after rebasing onto `origin/main`, updated SQLAlchemy typing
+  required count queries in the storage tests to use `scalar_one()`. The local
+  `act` artefact server also lacks the request schema used by the current
+  `actions/upload-artifact`; the workflow helper now skips only the explicit
+  `unknown field "mime_type"` incompatibility and preserves all other workflow
+  failures. Impact: the complete post-rebase test suite passes without masking
+  unrelated workflow errors.
 
 ## Decision log
 
@@ -454,6 +484,21 @@ when any of the following is breached.
   generation-run provenance, expected revision, and an optional timestamp as
   one coherent command; grouping them keeps the port stable and avoids a long,
   error-prone parameter list. Date/Author: 2026-06-24, implementation agent.
+- Decision: lifecycle status mutations use the frozen, slotted
+  `GenerationRunStatusUpdate` parameter object rather than five scalar update
+  arguments. Rationale: status, node, completion time, and optional failure
+  details form one coherent command; the object removes the excess-arguments
+  warning while preserving the repository contract and domain exceptions.
+  Date/Author: 2026-06-26, implementation agent.
+- Decision: suppress the module-level CodeScene “Overall Code Complexity”
+  diagnostic for `episodic/canonical/adapters/generation_runs.py` rather than
+  split `_runs_for_episode`. Rationale: configured Ruff C901 at complexity 8
+  passes; a diagnostic threshold of 4 reports only `_runs_for_episode` at 6.
+  That method cohesively owns indexed retrieval, optional status filtering, and
+  pagination, while `_require_mutable_run` already centralizes mutable-run
+  validation. Splitting the retrieval solely to lower a file-average metric
+  would add metric-driven churn without a concrete design improvement.
+  Date/Author: 2026-07-22, implementation agent.
 
 ## Context and orientation
 
@@ -1342,13 +1387,42 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
 - M2a CodeRabbit evidence (2026-06-24): `coderabbit review --agent` ended with
   `{"type":"complete","status":"review_completed","findings":0}`.
 
+- Post-rebase validation evidence (2026-07-22): `make check-fmt`,
+  `make typecheck`, and `make lint` passed; Pylint rated the branch `10.00/10`.
+  `make test` reported `1066 passed, 1 skipped, 7 xfailed`. The xfails are the
+  unchanged M7 behavioural scaffold, not completed acceptance evidence.
+  `make markdownlint` and `make nixie` also passed after refreshing the
+  generated spelling configuration and correcting Markdown drift.
+
+- Current-state behavioural evidence (2026-07-22):
+
+  ```plaintext
+  $ uv run pytest tests/steps/test_no_qa_generation_slice.py -q
+  xxxxxxx                                                                  [100%]
+  7 xfailed in 0.15s
+  ```
+
+  Each scenario is still a strict expected failure with the reason
+  `4.3.2 no-QA source-to-script slice is not implemented yet`.
+
 ## Outcomes & retrospective
 
-To be completed at major milestones and at the end. Compare the delivered
-behaviour against the Purpose section, record gaps handed to 2.6.2 / 2.6.3 /
-4.4.1 (durable checkpoints and the automated stuck-run reaper, the full
-generation-run and checkpoint REST surface, the QA-bypass draft graph), and
-note what would be done differently.
+The branch has delivered the domain metadata, durable generation-run and event
+persistence, episode TEI revisioning, deterministic draft generation and
+persistence services, and the in-process launcher with lifecycle events, cost
+wiring, failure classification, detached unit-of-work ownership, and shutdown
+handling. The later `GenerationRunStatusUpdate` refactor keeps lifecycle
+updates cohesive, and `_require_mutable_run` removes duplicated missing and
+terminal checks from the in-memory adapter.
+
+The Purpose section is not yet satisfied end to end. No inbound generation-run
+resource, polling resource, event resource, or episode-TEI retrieval resource
+is registered, and the Vidai Mock behavioural slice has not passed. Milestones
+5-7 therefore remain the critical path. Milestone 8 must update the roadmap
+only after those routes and scenarios meet the stated success criterion. The
+existing hand-offs to 2.6.2 / 2.6.3 / 4.4.1 remain unchanged: automated stuck
+run recovery, the broader checkpoint REST surface, and the full QA-bypass
+generation graph are out of scope for 4.3.2.
 
 ## Revision note
 
@@ -1370,3 +1444,9 @@ required observability acceptance; and turned the Vidai Mock skip into a
 must-run-once acceptance gate reusing existing helpers. These strengthen
 correctness and operability without enlarging the externally observable
 contract.
+
+Revised 2026-07-22 after a PR-head status audit. Recorded the completed M0-M4
+foundation, post-rebase status-update parameter object, CodeScene complexity
+disposition, deterministic gate evidence, and the still-missing M5-M7 REST and
+behavioural deliverables. The roadmap checkbox remains open because the branch
+does not yet meet its source-to-script REST success criterion.
