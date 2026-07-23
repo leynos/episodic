@@ -21,6 +21,7 @@ Accepted decision records:
 - [ADR 013: Speech synthesis adapters](adr/adr-013-speech-synthesis-adapters.md)
 - [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
 - [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
+- [ADR 016: Orchestration architecture enforcement](adr/adr-016-orchestration-architecture-enforcement.md)
 
 ## Overview
 
@@ -116,14 +117,15 @@ Boundary rules:
   domain and ports, but never on outbound adapter implementations.
 - **Outbound adapters** (database, object storage, message broker, LLM/TTS
   vendors) depend on the domain and ports, but never on inbound adapters.
-- **Orchestration code** (LangGraph nodes and Celery tasks) will depend on
-  domain services and ports only; direct adapter access is reserved for the
-  later orchestration-specific enforcement slice.
+- **Orchestration code** (LangGraph nodes and Celery tasks) depends on domain
+  services, ports, and provider-neutral orchestration DTOs only. Direct adapter
+  access is rejected by orchestration-specific Hecate groups.
 - **Cross-adapter imports** are forbidden; interactions happen through ports or
   well-defined message schemas.
-- **Checkpoint payloads** should hold orchestration metadata; canonical domain
-  state is persisted through repositories rather than state blobs. Dedicated
-  checkpoint audits are part of the later orchestration enforcement slice.
+- **Checkpoint payloads** hold orchestration metadata and JSON-shaped
+  provider-neutral DTOs; canonical domain state is persisted through
+  repositories rather than state blobs. Hecate grouping and structural tests
+  audit this boundary.
 
 For screen readers: The following class diagram shows the module categories
 used by the Hecate architecture checker, the allowed dependency directions
@@ -207,11 +209,13 @@ Enforcement mechanisms:
   adherence as part of `make test`.
 - The current Hecate policy covers canonical domain and port modules,
   application services, Falcon and worker adapter seams, SQLAlchemy and LLM
-  outbound adapters, and explicit composition roots.
+  outbound adapters, explicit composition roots, LangGraph node modules, Celery
+  task modules, and orchestration checkpoint payload modules.
 - Contract tests exercise port behaviour against adapter implementations, so
   adapters are verified without coupling to infrastructure in the domain.
-- Roadmap item `2.4.5` extends the same mechanism to LangGraph-node-specific
-  imports, Celery task policies, and checkpoint payload boundaries.
+- Roadmap item `2.4.5` delivered LangGraph-node-specific imports, Celery task
+  policies, and checkpoint payload boundary enforcement. ADR-016 records the
+  orchestration-specific decisions.
 - Code review checklists enforce idempotency keys, single-responsibility task
   scope, and checkpoint payload audits for orchestration changes.
 
@@ -221,6 +225,13 @@ The following rules are normative for LangGraph nodes and Celery tasks:
 
 - Orchestration code depends on domain services and ports only; adapters are
   accessed exclusively through port interfaces.
+- LangGraph node modules are classified separately from graph builders. Nodes
+  may depend on orchestration DTOs and ports, whilst builders and application
+  orchestration code may assemble domain services.
+- Celery task modules depend on `WorkloadClass`, domain services, and ports;
+  worker runtime modules remain composition roots for concrete wiring.
+- Checkpoint payload DTO modules are grouped before general orchestration
+  modules so Hecate's first-match ordering keeps them provider-neutral.
 - Celery tasks are single-responsibility and idempotent, with idempotency keys
   persisted per task or workflow step.
 - Checkpoint payloads store orchestration metadata only; canonical domain data

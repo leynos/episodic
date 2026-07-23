@@ -39,7 +39,10 @@ def test_fixture_config_normal_fixture_excludes_package_barrel(
 
     config = _read_fixture_config(tmp_path, package_name)
 
-    assert _group_prefixes(config, "outbound_adapter") == [f"{package}.storage"]
+    assert _group_prefixes(config, "outbound_adapter") == [
+        f"{package}.storage",
+        f"{package}.adapter",
+    ]
 
 
 def test_fixture_config_barrel_fixture_includes_package_barrel(
@@ -52,6 +55,7 @@ def test_fixture_config_barrel_fixture_includes_package_barrel(
 
     assert _group_prefixes(config, "outbound_adapter") == [
         f"{package}.storage",
+        f"{package}.adapter",
         package,
     ]
 
@@ -66,16 +70,73 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
     hecate_config = _hecate_config(config)
     assert hecate_config["root_packages"] == [package]
     assert hecate_config["default_rule_id"] == "ARCH001"
+    assert _group_names(config) == [
+        "composition_root",
+        "domain",
+        "orchestration_checkpoint",
+        "orchestration_nodes",
+        "orchestration_tasks",
+        "orchestration",
+        "application",
+        "inbound_adapter",
+        "outbound_adapter",
+    ]
     assert _group_prefixes(config, "composition_root") == [f"{package}.runtime"]
     assert _group_allowed(config, "composition_root") == [
         "application",
         "composition_root",
         "domain",
         "inbound_adapter",
+        "orchestration",
+        "orchestration_checkpoint",
+        "orchestration_nodes",
+        "orchestration_tasks",
         "outbound_adapter",
     ]
+    assert _group_prefixes(config, "domain") == [
+        f"{package}.domain",
+        f"{package}.worker.workloads",
+    ]
     assert _group_allowed(config, "domain") == ["domain"]
+    assert _group_prefixes(config, "orchestration_checkpoint") == [
+        f"{package}.orchestration._checkpoint_payload",
+        f"{package}.orchestration._checkpoint_dto",
+        f"{package}.orchestration._payload_dto",
+    ]
+    assert _group_allowed(config, "orchestration_checkpoint") == [
+        "orchestration_checkpoint",
+        "domain",
+    ]
+    assert _group_prefixes(config, "orchestration_nodes") == [
+        f"{package}.orchestration._graph_nodes",
+    ]
+    assert _group_allowed(config, "orchestration_nodes") == [
+        "orchestration_nodes",
+        "domain",
+        "orchestration_checkpoint",
+    ]
+    assert _group_prefixes(config, "orchestration_tasks") == [
+        f"{package}.worker.tasks",
+    ]
+    assert _group_allowed(config, "orchestration_tasks") == [
+        "orchestration_tasks",
+        "application",
+        "domain",
+    ]
+    assert _group_prefixes(config, "orchestration") == [
+        f"{package}.orchestration",
+    ]
+    assert _group_allowed(config, "orchestration") == [
+        "orchestration",
+        "application",
+        "domain",
+        "orchestration_checkpoint",
+    ]
     assert _group_allowed(config, "application") == ["application", "domain"]
+    assert _group_prefixes(config, "inbound_adapter") == [
+        f"{package}.api",
+        f"{package}.worker.topology",
+    ]
     assert _group_allowed(config, "inbound_adapter") == [
         "inbound_adapter",
         "application",
@@ -232,6 +293,8 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
             / "architecture"
             / "allowed_case",
         ),
+        "--format",
+        "text",
     ]
 
 
@@ -282,6 +345,13 @@ def _group_prefixes(config: dict[str, object], group_name: str) -> list[str]:
         if group["name"] == group_name:
             return typ.cast("list[str]", group["prefixes"])
     raise AssertionError(group_name)
+
+
+def _group_names(config: dict[str, object]) -> list[str]:
+    """Return generated Hecate group names in matching order."""
+    hecate_config = _hecate_config(config)
+    groups = typ.cast("list[dict[str, object]]", hecate_config["groups"])
+    return [typ.cast("str", group["name"]) for group in groups]
 
 
 def _group_allowed(config: dict[str, object], group_name: str) -> list[str]:

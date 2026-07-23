@@ -268,10 +268,14 @@ metering. Completion enables reliable, auditable generation workflows.
   - Aggregate run totals with hierarchical ledger entries.
   - See
     [Cost accounting and budget enforcement](episodic-podcast-generation-system-design.md#cost-accounting-and-budget-enforcement).
-- [ ] 2.4.5. Extend architecture enforcement to orchestration code.
+- [x] 2.4.5. Extend architecture enforcement to orchestration code.
   - Validate LangGraph nodes depend on ports only.
   - Validate Celery tasks depend on ports only.
   - Audit checkpoint payload boundaries.
+  - Added Hecate groups for LangGraph nodes, orchestration task modules, and
+    checkpoint payload DTOs.
+  - Added BDD, snapshot, structural, property, and Vidai Mock-backed graph
+    coverage for the enforced boundaries.
 
 ### 2.5. Pricing catalogue and budget enforcement
 
@@ -700,10 +704,10 @@ the generated draft, then route short or long drafts back into the same agent
 loop for targeted redraft. This prepares the implementation for QA-gated
 generation workflows beyond the initial draft-only slice. Implementations must
 define single-writer ownership for run state, ordered event publication, and
-shutdown-safe cancellation before adding new loop transitions.
-Concurrency model: one graph runner owns mutation for a run, repository writes
-are guarded by sequence numbers and idempotency keys, and cancellation,
-shutdown, duplicate-event handling, and resume replay must be deterministic.
+shutdown-safe cancellation before adding new loop transitions. Concurrency
+model: one graph runner owns mutation for a run, repository writes are guarded
+by sequence numbers and idempotency keys, and cancellation, shutdown,
+duplicate-event handling, and resume replay must be deterministic.
 Property-testing guidance: use Hypothesis to exercise routing, duration-class,
 and iteration-cap invariants across generated run states.
 
