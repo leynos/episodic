@@ -407,7 +407,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.18.5,<2.0" },
     { name = "asyncpg", specifier = ">=0.20.0,<1.0" },
     { name = "celery", specifier = ">=5.5,<6.0" },
-    { name = "eventlet", specifier = ">=0.41.0,<0.42" },
+    { name = "eventlet", specifier = ">=0.41.1,<0.42" },
     { name = "falcon", specifier = ">=4.3.1,<5.0" },
     { name = "femtologging", git = "https://github.com/leynos/femtologging?rev=691a73962df8f99308a82348d99c4f707c245e63" },
     { name = "gevent", specifier = ">=26.5.0,<27.0" },
@@ -443,15 +443,15 @@ dev = [
 
 [[package]]
 name = "eventlet"
-version = "0.41.0"
+version = "0.41.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dnspython" },
     { name = "greenlet" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/90/32772ae7c9897554c56b9367b67478a3dc89c70d9b4d12e241746f6fdae3/eventlet-0.41.0.tar.gz", hash = "sha256:35df85f0ccd3e73effb6fd9f1ceae46b500b966c7da1817289c323a307bd397b", size = 565911, upload-time = "2026-04-02T07:33:23.605Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/03/9562f7aa854e001e3a63034c0a97590a1546e4fe530abf511c2ce07b0cb1/eventlet-0.41.1.tar.gz", hash = "sha256:e91010caa1880bb511de6ce2ed2186ef3493e0762a4d3ee93e97a0fcccdaaa28", size = 566159, upload-time = "2026-07-15T08:15:01.353Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/1c/febe9acf1b4f0d67603b231c28d6d17d647d68c90c1963fecdeb64046d6d/eventlet-0.41.0-py3-none-any.whl", hash = "sha256:bc22396093cb4119ff7007776be6a5348a613ccd42eeb0f9519853a6efcbcabe", size = 364574, upload-time = "2026-04-02T07:33:21.756Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/55/92d859c16a37a9b70e2c682747750184b389a6b4d25321a4a1ec48d94b33/eventlet-0.41.1-py3-none-any.whl", hash = "sha256:6f7bb5c2309d1c4527bf15fc2a5da0b829e68e495430b890993b47dfea258ae5", size = 364580, upload-time = "2026-07-15T08:14:59.536Z" },
 ]
 
 [[package]]
