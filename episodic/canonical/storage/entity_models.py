@@ -13,12 +13,14 @@ from episodic.canonical.domain import (  # SQLAlchemy evaluates annotations at r
     IngestionStatus,
     IntakeState,
 )
+from episodic.canonical.generation_quality import QaStatus  # noqa: TC001
 
 from .models_base import (
     APPROVAL_STATE,
     EPISODE_STATUS,
     INGESTION_STATUS,
     INTAKE_STATE,
+    QA_STATUS,
     Base,
 )
 
@@ -90,6 +92,14 @@ class EpisodeRecord(Base):
         Raw TEI XML associated with the episode.
     tei_xml_zstd : bytes | None
         Zstandard-compressed TEI XML associated with the episode.
+    tei_revision : int
+        Monotonic TEI revision number for the episode.
+    tei_content_hash : str | None
+        Content hash for the current TEI payload, when available.
+    qa_status : QaStatus | None
+        Quality-assurance status for the current episode content.
+    last_generation_run_id : uuid.UUID | None
+        Most recent generation run associated with the episode.
     status : EpisodeStatus
         Episode status enum.
     approval_state : ApprovalState
@@ -121,6 +131,24 @@ class EpisodeRecord(Base):
     tei_xml: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     tei_xml_zstd: orm.Mapped[bytes | None] = orm.mapped_column(
         postgresql.BYTEA,
+        nullable=True,
+    )
+    tei_revision: orm.Mapped[int] = orm.mapped_column(
+        sa.Integer,
+        nullable=False,
+        server_default="1",
+    )
+    tei_content_hash: orm.Mapped[str | None] = orm.mapped_column(
+        sa.String(128),
+        nullable=True,
+    )
+    qa_status: orm.Mapped[QaStatus | None] = orm.mapped_column(
+        QA_STATUS,
+        nullable=True,
+    )
+    last_generation_run_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("generation_runs.id"),
         nullable=True,
     )
     status: orm.Mapped[EpisodeStatus] = orm.mapped_column(

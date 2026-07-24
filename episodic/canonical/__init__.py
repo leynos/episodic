@@ -26,6 +26,7 @@ from .domain import (
     CheckpointResponse,
     CheckpointStatus,
     EpisodeStatus,
+    EpisodeTeiUpdate,
     EpisodeTemplate,
     EpisodeTemplateHistoryEntry,
     GenerationEvent,
@@ -55,6 +56,12 @@ from .entity_protocols import (
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
+from .episode_errors import (
+    EpisodeError,
+    EpisodeNotFoundError,
+    EpisodeRevisionConflictError,
+)
+from .generation_quality import QaStatus, QualityMode
 from .history_protocols import (
     EpisodeTemplateHistoryRepository,
     SeriesProfileHistoryRepository,
@@ -109,8 +116,12 @@ __all__: list[str] = [
     "ConflictOutcome",
     "EntityKind",
     "EntityNotFoundError",
+    "EpisodeError",
+    "EpisodeNotFoundError",
     "EpisodeRepository",
+    "EpisodeRevisionConflictError",
     "EpisodeStatus",
+    "EpisodeTeiUpdate",
     "EpisodeTemplate",
     "EpisodeTemplateHistoryEntry",
     "EpisodeTemplateHistoryRepository",
@@ -125,6 +136,8 @@ __all__: list[str] = [
     "IngestionStatus",
     "MultiSourceRequest",
     "NormalizedSource",
+    "QaStatus",
+    "QualityMode",
     "RawSourceInput",
     "ReferenceBinding",
     "ReferenceBindingRepository",

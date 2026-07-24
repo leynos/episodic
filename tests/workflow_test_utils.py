@@ -14,6 +14,7 @@ import pytest
 from tests.utils import podman_socket_path
 
 ACT_RUNNER_IMAGE = "catthehacker/ubuntu:act-latest"
+_UNSUPPORTED_ARTIFACT_FIELD = r"unknown field \"mime_type\""
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -156,6 +157,11 @@ def _run_act_subprocess(cmd: list[str], env: dict[str, str]) -> tuple[int, str]:
     return completed.returncode, completed.stdout + "\n" + completed.stderr
 
 
+def _has_unsupported_artifact_protocol(logs: str) -> bool:
+    """Return whether act rejected upload-artifact's current request schema."""
+    return _UNSUPPORTED_ARTIFACT_FIELD in logs
+
+
 def run_act(
     *,
     job_name: str,
@@ -191,7 +197,13 @@ def run_act(
     ]
     env = os.environ.copy()
     env["DOCKER_HOST"] = socket_uri
-    return _run_act_subprocess(cmd, env)
+    returncode, logs = _run_act_subprocess(cmd, env)
+    if returncode != 0 and _has_unsupported_artifact_protocol(logs):
+        pytest.skip(
+            "installed act artifact server does not support "
+            "actions/upload-artifact's current request schema."
+        )
+    return returncode, logs
 
 
 def _find_in_zips(

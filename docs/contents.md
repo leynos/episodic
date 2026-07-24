@@ -97,6 +97,9 @@ or delivery planning.
   - import-boundary enforcement model.
 - [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
   - source-intake upload storage and idempotency port decisions.
+- [ADR 016: No-QA generation execution and TEI persistence](adr/adr-016-no-qa-generation-run-execution-and-tei-persistence.md)
+  - generation launcher, draft persistence, recovery, and TEI retrieval
+    decisions.
 
 ## Execution plans
 

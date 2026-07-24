@@ -75,6 +75,12 @@ async def _assert_async_stub_raises(
         (EpisodeRepository, "add", (None,), {}),
         (EpisodeRepository, "get", (None,), {}),
         (EpisodeRepository, "list_by_ids", ((),), {}),
+        (
+            EpisodeRepository,
+            "update",
+            (None,),
+            {"update": None},
+        ),
         (IngestionJobRepository, "add", (None,), {}),
         (IngestionJobRepository, "get", (None,), {}),
         (SourceDocumentRepository, "add", (None,), {}),

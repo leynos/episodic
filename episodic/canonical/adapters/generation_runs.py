@@ -14,20 +14,23 @@ import uuid
 
 from episodic.canonical.domain import (
     Checkpoint,
-    CheckpointResponse,
     GenerationEvent,
     GenerationRun,
     GenerationRunStatus,
     JsonMapping,
 )
 from episodic.canonical.generation_run_errors import (
-    CheckpointAlreadyTerminal,
-    CheckpointNotFound,
     RunAlreadyTerminal,
     RunNotFound,
 )
-from episodic.canonical.generation_run_ports import EventSeq, event_seq
+from episodic.canonical.generation_run_ports import (
+    EventSeq,
+    GenerationRunStatusUpdate,
+    event_seq,
+)
 from episodic.orchestration._types import _log_event
+
+from .generation_checkpoints import InMemoryGenerationCheckpointMixin
 
 TimeProvider = cabc.Callable[[], dt.datetime]
 
@@ -42,17 +45,8 @@ def _default_time_provider() -> TimeProvider:
     return _now_utc
 
 
-@dc.dataclass(frozen=True, slots=True)
-class _CheckpointTransitionSpec:
-    """Logging specification for a checkpoint domain transition."""
-
-    missing_event: str
-    done_event: str
-    extra_fields: dict[str, str] = dc.field(default_factory=dict)
-
-
 @dc.dataclass(slots=True)
-class InMemoryGenerationRunStore:
+class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
     """In-memory reference adapter for the composite generation-run port."""
 
     time_provider: TimeProvider = dc.field(default_factory=_default_time_provider)
@@ -64,6 +58,15 @@ class InMemoryGenerationRunStore:
     _checkpoints: dict[uuid.UUID, Checkpoint] = dc.field(default_factory=dict)
     _idempotency_keys: dict[str, uuid.UUID] = dc.field(default_factory=dict)
     _lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
+
+    def _require_mutable_run(self, run_id: uuid.UUID) -> GenerationRun:
+        """Return a run that may still accept lifecycle mutations."""
+        run = self._runs.get(run_id)
+        if run is None:
+            raise RunNotFound(run_id)
+        if run.status.is_terminal():
+            raise RunAlreadyTerminal(run_id)
+        return run
 
     def _runs_for_episode(
         self,
@@ -160,40 +163,41 @@ class InMemoryGenerationRunStore:
                 offset=offset,
             )
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def update_run_status(
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
         async with self._lock:
-            run = self._runs.get(run_id)
-            if run is None:
+            try:
+                run = self._require_mutable_run(run_id)
+            except RunNotFound:
                 _log_event(
                     "warning",
                     "generation_run_store.update_run_missing",
                     run_id=str(run_id),
-                    status=status.value,
+                    status=update.status.value,
                 )
-                raise RunNotFound(run_id)
-            if run.status.is_terminal():
+                raise
+            except RunAlreadyTerminal:
+                run = self._runs[run_id]
                 _log_event(
                     "warning",
                     "generation_run_store.update_run_terminal",
                     run_id=str(run_id),
                     current_status=run.status.value,
-                    requested_status=status.value,
+                    requested_status=update.status.value,
                 )
-                raise RunAlreadyTerminal(run_id)
+                raise
             updated = dc.replace(
                 run,
-                status=status,
-                current_node=current_node,
-                ended_at=ended_at,
+                status=update.status,
+                current_node=update.current_node,
+                ended_at=update.ended_at,
+                error_message=update.error_message,
+                error_category=update.error_category,
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated
@@ -202,8 +206,64 @@ class InMemoryGenerationRunStore:
                 "generation_run_store.update_run_status",
                 run_id=str(run_id),
                 previous_status=run.status.value,
-                status=status.value,
+                status=update.status.value,
+                current_node=update.current_node,
+            )
+            return updated
+
+    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
+    async def claim_run_for_execution(
+        self,
+        run_id: uuid.UUID,
+        *,
+        current_node: str | None,
+        started_at: dt.datetime,
+        lease_expires_at: dt.datetime | None,
+    ) -> GenerationRun | None:
+        """Atomically claim a pending run for execution."""
+        async with self._lock:
+            try:
+                run = self._require_mutable_run(run_id)
+            except RunNotFound:
+                _log_event(
+                    "warning",
+                    "generation_run_store.claim_run_missing",
+                    run_id=str(run_id),
+                )
+                raise
+            except RunAlreadyTerminal:
+                run = self._runs[run_id]
+                _log_event(
+                    "warning",
+                    "generation_run_store.claim_run_terminal",
+                    run_id=str(run_id),
+                    status=run.status.value,
+                )
+                raise
+            if run.status is not GenerationRunStatus.PENDING:
+                _log_event(
+                    "info",
+                    "generation_run_store.claim_run_lost",
+                    run_id=str(run_id),
+                    status=run.status.value,
+                )
+                return None
+            updated = dc.replace(
+                run,
+                status=GenerationRunStatus.RUNNING,
                 current_node=current_node,
+                started_at=started_at,
+                updated_at=self.time_provider(),
+            )
+            self._runs[run_id] = updated
+            _log_event(
+                "info",
+                "generation_run_store.claim_run",
+                run_id=str(run_id),
+                current_node=current_node,
+                lease_expires_at=lease_expires_at.isoformat()
+                if lease_expires_at is not None
+                else None,
             )
             return updated
 
@@ -218,16 +278,18 @@ class InMemoryGenerationRunStore:
     ) -> GenerationEvent:
         """Append an event with an adapter-allocated sequence."""
         async with self._lock:
-            run = self._runs.get(run_id)
-            if run is None:
+            try:
+                self._require_mutable_run(run_id)
+            except RunNotFound:
                 _log_event(
                     "warning",
                     "generation_run_store.append_event_missing_run",
                     run_id=str(run_id),
                     kind=kind,
                 )
-                raise RunNotFound(run_id)
-            if run.status.is_terminal():
+                raise
+            except RunAlreadyTerminal:
+                run = self._runs[run_id]
                 _log_event(
                     "warning",
                     "generation_run_store.append_event_terminal_run",
@@ -235,7 +297,7 @@ class InMemoryGenerationRunStore:
                     status=run.status.value,
                     kind=kind,
                 )
-                raise RunAlreadyTerminal(run_id)
+                raise
             events = self._events.setdefault(run_id, [])
             now = self.time_provider()
             event = GenerationEvent(
@@ -279,121 +341,3 @@ class InMemoryGenerationRunStore:
                 if event.seq > minimum_seq
             ]
             return tuple(events[:limit])
-
-    async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
-        """Persist a checkpoint."""
-        async with self._lock:
-            if checkpoint.generation_run_id not in self._runs:
-                _log_event(
-                    "warning",
-                    "generation_run_store.create_checkpoint_missing_run",
-                    checkpoint_id=str(checkpoint.id),
-                    run_id=str(checkpoint.generation_run_id),
-                )
-                raise RunNotFound(checkpoint.generation_run_id)
-            self._checkpoints[checkpoint.id] = checkpoint
-            _log_event(
-                "info",
-                "generation_run_store.create_checkpoint",
-                checkpoint_id=str(checkpoint.id),
-                run_id=str(checkpoint.generation_run_id),
-                status=checkpoint.status.value,
-            )
-            return checkpoint
-
-    async def get_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-    ) -> Checkpoint | None:
-        """Return a checkpoint by identifier."""
-        async with self._lock:
-            return self._checkpoints.get(checkpoint_id)
-
-    async def _apply_checkpoint_transition(
-        self,
-        checkpoint_id: uuid.UUID,
-        transition: cabc.Callable[[Checkpoint], Checkpoint],
-        spec: _CheckpointTransitionSpec,
-    ) -> Checkpoint:
-        """Apply a domain transition to a stored checkpoint under the lock."""
-        async with self._lock:
-            checkpoint = self._checkpoints.get(checkpoint_id)
-            if checkpoint is None:
-                _log_event(
-                    "warning",
-                    spec.missing_event,
-                    checkpoint_id=str(checkpoint_id),
-                    **spec.extra_fields,
-                )
-                raise CheckpointNotFound(checkpoint_id)
-            try:
-                updated = transition(checkpoint)
-            except CheckpointAlreadyTerminal:
-                _log_event(
-                    "warning",
-                    f"{spec.done_event}_already_terminal",
-                    checkpoint_id=str(checkpoint_id),
-                    run_id=str(checkpoint.generation_run_id),
-                    status=checkpoint.status.value,
-                    **spec.extra_fields,
-                )
-                raise
-            self._checkpoints[checkpoint_id] = updated
-            _log_event(
-                "info",
-                spec.done_event,
-                checkpoint_id=str(checkpoint_id),
-                run_id=str(updated.generation_run_id),
-                status=updated.status.value,
-                **spec.extra_fields,
-            )
-            return updated
-
-    async def respond_to_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        response: CheckpointResponse,
-    ) -> Checkpoint:
-        """Record a reviewer response using the checkpoint domain transition."""
-        return await self._apply_checkpoint_transition(
-            checkpoint_id,
-            lambda cp: cp.respond(response),
-            _CheckpointTransitionSpec(
-                missing_event="generation_run_store.respond_checkpoint_missing",
-                done_event="generation_run_store.respond_checkpoint",
-                extra_fields={"action": response.action.value},
-            ),
-        )
-
-    async def time_out_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        at: dt.datetime,
-    ) -> Checkpoint:
-        """Record a checkpoint timeout using the domain transition."""
-        return await self._apply_checkpoint_transition(
-            checkpoint_id,
-            lambda cp: cp.time_out(at),
-            _CheckpointTransitionSpec(
-                missing_event="generation_run_store.timeout_checkpoint_missing",
-                done_event="generation_run_store.timeout_checkpoint",
-            ),
-        )
-
-    async def cancel_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        at: dt.datetime,
-    ) -> Checkpoint:
-        """Record checkpoint cancellation using the domain transition."""
-        return await self._apply_checkpoint_transition(
-            checkpoint_id,
-            lambda cp: cp.cancel(at),
-            _CheckpointTransitionSpec(
-                missing_event="generation_run_store.cancel_checkpoint_missing",
-                done_event="generation_run_store.cancel_checkpoint",
-            ),
-        )

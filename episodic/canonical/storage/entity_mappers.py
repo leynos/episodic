@@ -33,6 +33,7 @@ from episodic.canonical.domain import (
     SourceDocument,
     TeiHeader,
 )
+from episodic.canonical.hashing import sha256_text
 
 from .compression import decode_text_from_storage, encode_text_for_storage
 from .entity_models import (
@@ -119,6 +120,10 @@ def _episode_from_record(record: EpisodeRecord) -> CanonicalEpisode:
         approval_state=record.approval_state,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        tei_revision=record.tei_revision,
+        tei_content_hash=record.tei_content_hash,
+        qa_status=record.qa_status,
+        last_generation_run_id=record.last_generation_run_id,
     )
 
 
@@ -132,6 +137,10 @@ def _episode_to_record(episode: CanonicalEpisode) -> EpisodeRecord:
         title=episode.title,
         tei_xml=tei_xml,
         tei_xml_zstd=tei_xml_zstd,
+        tei_revision=episode.tei_revision,
+        tei_content_hash=episode.tei_content_hash or sha256_text(episode.tei_xml),
+        qa_status=episode.qa_status,
+        last_generation_run_id=episode.last_generation_run_id,
         status=episode.status,
         approval_state=episode.approval_state,
         created_at=episode.created_at,

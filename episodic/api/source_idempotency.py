@@ -40,6 +40,8 @@ class IdempotentResponse:
 
     status: str
     media: JsonPayload
+    location: str | None = None
+    retry_after: str | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -83,6 +85,10 @@ def apply_response(resp: falcon.Response, response: IdempotentResponse) -> None:
     """Apply an idempotent response to the Falcon response object."""
     resp.status = response.status
     resp.media = response.media
+    if response.location is not None:
+        resp.location = response.location
+    if response.retry_after is not None:
+        resp.set_header("Retry-After", response.retry_after)
 
 
 def principal_id(req: falcon.Request) -> str | None:
@@ -158,7 +164,12 @@ def _idempotency_in_flight(record_id: uuid.UUID) -> falcon.HTTPConflict:
 
 def _encode_outcome(response: IdempotentResponse) -> bytes:
     """Serialize an HTTP adapter response for idempotent replay."""
-    payload = canonical_json_bytes({"status": response.status, "media": response.media})
+    payload = canonical_json_bytes({
+        "status": response.status,
+        "media": response.media,
+        "location": response.location,
+        "retry_after": response.retry_after,
+    })
     if len(payload) > _SERIALISED_OUTCOME_MAX_BYTES:
         raise ValueError(_SERIALISED_OUTCOME_TOO_LARGE)
     return payload
@@ -172,4 +183,6 @@ def _decode_outcome(payload: bytes) -> IdempotentResponse:
     return IdempotentResponse(
         status=typ.cast("str", raw["status"]),
         media=typ.cast("JsonPayload", raw["media"]),
+        location=typ.cast("str | None", raw.get("location")),
+        retry_after=typ.cast("str | None", raw.get("retry_after")),
     )

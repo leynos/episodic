@@ -9,6 +9,7 @@ if typ.TYPE_CHECKING:
     from .domain import (
         ApprovalEvent,
         CanonicalEpisode,
+        EpisodeTeiUpdate,
         EpisodeTemplate,
         IngestionJob,
         IngestionJobListFilters,
@@ -72,6 +73,15 @@ class EpisodeRepository(typ.Protocol):
         """Fetch canonical episodes by identifiers."""
         raise NotImplementedError
 
+    async def update(
+        self,
+        episode_id: uuid.UUID,
+        *,
+        update: EpisodeTeiUpdate,
+    ) -> CanonicalEpisode:
+        """Update episode TEI with an optimistic revision precondition."""
+        raise NotImplementedError
+
 
 class IngestionJobRepository(typ.Protocol):
     """Persistence interface for ingestion jobs."""
@@ -82,6 +92,19 @@ class IngestionJobRepository(typ.Protocol):
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
         """Fetch an ingestion job by identifier."""
+        raise NotImplementedError
+
+    async def get_for_update(self, job_id: uuid.UUID) -> IngestionJob | None:
+        """Fetch and lock an ingestion job for transactional mutation."""
+        raise NotImplementedError
+
+    async def set_target_episode(
+        self,
+        job_id: uuid.UUID,
+        *,
+        episode_id: uuid.UUID,
+    ) -> None:
+        """Associate an ingestion job with its materialized episode."""
         raise NotImplementedError
 
     async def list_paged(

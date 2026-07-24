@@ -675,7 +675,7 @@ vertical slice].
   - Success: a client can upload a research paper, attach it to an ingestion
     job, create or bind presenter profile revisions, and observe JSON status
     until the source context is ready for generation.
-- [ ] 4.3.2. Implement no-QA generation runs and TEI-P5 retrieval.
+- [x] 4.3.2. Implement no-QA generation runs and TEI-P5 retrieval.
   - Requires 2.1.1, 2.4.2, and 4.3.1.
   - Implement `/v1/episodes/{episode_id}/generation-runs` creation with
     `quality_mode=draft_without_qa`, `skip_qa_rationale`, actor metadata, and
@@ -700,10 +700,10 @@ the generated draft, then route short or long drafts back into the same agent
 loop for targeted redraft. This prepares the implementation for QA-gated
 generation workflows beyond the initial draft-only slice. Implementations must
 define single-writer ownership for run state, ordered event publication, and
-shutdown-safe cancellation before adding new loop transitions.
-Concurrency model: one graph runner owns mutation for a run, repository writes
-are guarded by sequence numbers and idempotency keys, and cancellation,
-shutdown, duplicate-event handling, and resume replay must be deterministic.
+shutdown-safe cancellation before adding new loop transitions. Concurrency
+model: one graph runner owns mutation for a run, repository writes are guarded
+by sequence numbers and idempotency keys, and cancellation, shutdown,
+duplicate-event handling, and resume replay must be deterministic.
 Property-testing guidance: use Hypothesis to exercise routing, duration-class,
 and iteration-cap invariants across generated run states.
 

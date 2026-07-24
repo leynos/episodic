@@ -6,6 +6,7 @@ from sqlalchemy import orm
 from episodic.canonical.domain import (
     ApprovalState,
     EpisodeStatus,
+    GenerationRunStatus,
     IngestionStatus,
     IntakeState,
     ReferenceBindingTargetKind,
@@ -13,6 +14,7 @@ from episodic.canonical.domain import (
     ReferenceDocumentLifecycleState,
     WorkflowCheckpointStatus,
 )
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.idempotency import IdempotencyState
 from episodic.canonical.ingestion_sources import AttachmentKind
 from episodic.canonical.uploads import UploadState
@@ -81,5 +83,20 @@ REFERENCE_BINDING_TARGET_KIND = sa.Enum(
 WORKFLOW_CHECKPOINT_STATUS = sa.Enum(
     WorkflowCheckpointStatus,
     name="workflow_checkpoint_status",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+GENERATION_RUN_STATUS = sa.Enum(
+    GenerationRunStatus,
+    name="generation_run_status",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+QUALITY_MODE = sa.Enum(
+    QualityMode,
+    name="quality_mode",
+    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+)
+QA_STATUS = sa.Enum(
+    QaStatus,
+    name="qa_status",
     values_callable=lambda enum_cls: [item.value for item in enum_cls],
 )

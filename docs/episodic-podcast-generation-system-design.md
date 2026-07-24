@@ -998,6 +998,14 @@ post-merge `source_documents`. The first implementation serves only
 `POST /v1/uploads`; resumable upload initialization and direct byte `PUT`
 routes are deferred until a concrete S3-compatible adapter lands.
 
+ADR 016 records the implemented second task. A process-local launcher claims a
+pending run, resolves series-level host and guest profiles, invokes the
+single-pass draft generator, and writes validated TEI through an optimistic
+episode revision update. Run status and append-only events are durable even
+though scheduling is currently in-process. Lease timestamps, conditional
+claims, and stuck-run metrics support manual recovery until Celery assumes the
+launcher port.
+
 TEI retrieval remains attached to the episode resource rather than to export
 jobs. `GET /v1/episodes/{episode_id}/tei` returns a JSON envelope by default,
 including TEI XML, content hash, revision, last generation run id, quality
@@ -1005,6 +1013,11 @@ mode, and QA status. The same resource returns the TEI-P5 file directly when
 the request uses `Accept: application/tei+xml`; this response uses the TEI
 media type registered by RFC 6129 and includes
 `Content-Disposition: attachment`.
+
+Generation creation accepts only `draft_without_qa`; the run and episode both
+record skipped-QA provenance and the supplied rationale. Recognized but
+unsupported QA-gated requests return `422`, malformed requests return `400`,
+and TEI retrieval returns `404` before generation has persisted a draft.
 
 #### Content Request Decision Tree
 

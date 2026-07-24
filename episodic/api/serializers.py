@@ -5,8 +5,11 @@ import uuid  # noqa: TC003
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
+        CanonicalEpisode,
         EpisodeTemplate,
         EpisodeTemplateHistoryEntry,
+        GenerationEvent,
+        GenerationRun,
         IngestionJob,
         ReferenceBinding,
         ReferenceDocument,
@@ -202,4 +205,55 @@ def serialize_ingestion_job_source(
         "weight": source.weight,
         "metadata": source.metadata,
         "created_at": source.created_at.isoformat(),
+    }
+
+
+def serialize_generation_run(run: GenerationRun) -> dict[str, typ.Any]:
+    """Serialize a generation-run polling resource."""
+    return {
+        "id": str(run.id),
+        "episode_id": str(run.episode_id),
+        "source_bundle_id": str(run.source_bundle_id),
+        "actor": run.actor,
+        "status": run.status.value,
+        "current_node": run.current_node,
+        "budget_snapshot": run.budget_snapshot,
+        "configuration": run.configuration,
+        "quality_mode": run.quality_mode.value,
+        "qa_status": None if run.qa_status is None else run.qa_status.value,
+        "skip_qa_rationale": run.skip_qa_rationale,
+        "error_message": run.error_message,
+        "error_category": run.error_category,
+        "started_at": (None if run.started_at is None else run.started_at.isoformat()),
+        "ended_at": None if run.ended_at is None else run.ended_at.isoformat(),
+        "created_at": run.created_at.isoformat(),
+        "updated_at": run.updated_at.isoformat(),
+    }
+
+
+def serialize_generation_event(event: GenerationEvent) -> dict[str, typ.Any]:
+    """Serialize one append-only generation event."""
+    return {
+        "id": str(event.id),
+        "generation_run_id": str(event.generation_run_id),
+        "seq": int(event.seq),
+        "kind": event.kind,
+        "payload": event.payload,
+        "occurred_at": event.occurred_at.isoformat(),
+        "created_at": event.created_at.isoformat(),
+    }
+
+
+def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
+    """Serialize generated TEI metadata using the public field names."""
+    return {
+        "episode_id": str(episode.id),
+        "tei_header_id": str(episode.tei_header_id),
+        "tei_xml": episode.tei_xml,
+        "content_hash": episode.tei_content_hash,
+        "version": episode.tei_revision,
+        "last_generation_run_id": _optional_uuid_str(episode.last_generation_run_id),
+        "quality_mode": "draft_without_qa",
+        "qa_status": None if episode.qa_status is None else episode.qa_status.value,
+        "updated_at": episode.updated_at.isoformat(),
     }

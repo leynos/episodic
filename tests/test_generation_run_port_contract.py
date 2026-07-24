@@ -1,14 +1,11 @@
 """Contract tests for generation-run port implementations.
 
-These tests define the behavioural contract for adapters implementing
-`GenerationRunRepository`, `GenerationEventLog`, `GenerationCheckpointPort`,
-and the composite `GenerationRunPort`. They validate protocol compliance,
-lifecycle guarantees, error and edge-case behaviour, idempotency, pagination
-guardrails, event sequence allocation, and checkpoint response persistence.
-Use the `store` fixture plus `make_generation_run()` and `make_checkpoint()`
-when adding scenarios for another implementation.
+These tests define the behavioural contract for generation-run adapters. Use
+the `store` fixture plus `make_generation_run()` and `make_checkpoint()` when
+adding scenarios for another implementation.
 """
 
+import asyncio
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -26,6 +23,7 @@ from episodic.canonical.domain import (
     GenerationRunStatus,
     JsonMapping,
 )
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import CheckpointNotFound, RunNotFound
 from episodic.canonical.generation_run_ports import (
     EventSeq,
@@ -33,6 +31,7 @@ from episodic.canonical.generation_run_ports import (
     GenerationEventLog,
     GenerationRunPort,
     GenerationRunRepository,
+    GenerationRunStatusUpdate,
     event_seq,
 )
 
@@ -75,6 +74,9 @@ def make_generation_run(
         started_at=None,
         ended_at=None,
         error_message=None,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="No-QA vertical-slice draft.",
     )
 
 
@@ -146,11 +148,21 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Raise for all updates."""
+        _ = update
+        raise RunNotFound(run_id)
+
+    async def claim_run_for_execution(
+        self,
+        run_id: uuid.UUID,
+        *,
+        current_node: str | None,
+        started_at: dt.datetime,
+        lease_expires_at: dt.datetime | None,
+    ) -> GenerationRun | None:
+        """Raise for all execution claims."""
         raise RunNotFound(run_id)
 
     async def append_event(
@@ -298,6 +310,35 @@ class TestGenerationRunRepository:
         """Run pagination offsets must be non-negative."""
         with pytest.raises(ValueError, match="offset"):
             await store.list_runs(uuid.uuid7(), offset=-1)
+
+    @pytest.mark.asyncio
+    async def test_claim_run_for_execution_is_first_writer_wins(
+        self,
+        store: InMemoryGenerationRunStore,
+    ) -> None:
+        """A pending run can be claimed once for execution."""
+        run = await store.create_run(make_generation_run())
+
+        results = await asyncio.gather(
+            store.claim_run_for_execution(
+                run.id,
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=NOW + dt.timedelta(minutes=5),
+            ),
+            store.claim_run_for_execution(
+                run.id,
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=NOW + dt.timedelta(minutes=5),
+            ),
+        )
+        claimed = next(result for result in results if result is not None)
+
+        assert sum(result is not None for result in results) == 1
+        assert claimed.status is GenerationRunStatus.RUNNING
+        assert claimed.current_node == "draft"
+        assert claimed.started_at == NOW
 
 
 class TestGenerationEventLog:
