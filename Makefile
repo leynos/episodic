@@ -35,7 +35,7 @@ DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
 	--ignore-paths='^tests/steps/test_.*_steps[.]py$$'
 AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
-SKYLOS = $(UV_ENV) $(UV) run skylos
+SKYLOS = $(UV_ENV) $(UV) run skylos --config-file pyproject.toml
 SKYLOS_TARGETS ?= $(PYLINT_TARGETS)
 
 .PHONY: help all clean build build-release lint fmt check-fmt \

@@ -55,7 +55,9 @@ def test_make_lint_runs_local_blocking_dead_code_scan() -> None:
         "--format concise --no-upload --no-provenance"
     )
     assert expected_command in makefile
-    assert "SKYLOS = $(UV_ENV) $(UV) run skylos" in makefile
+    assert (
+        "SKYLOS = $(UV_ENV) $(UV) run skylos --config-file pyproject.toml" in makefile
+    )
     assert "SKYLOS_TARGETS ?= $(PYLINT_TARGETS)" in makefile
 
 
