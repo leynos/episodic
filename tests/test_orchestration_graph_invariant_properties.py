@@ -77,32 +77,14 @@ def _request(correlation_id: str = "callback-probe") -> GenerationOrchestrationR
     )
 
 
-@given(
-    tokens=token_inputs_strategy,
-    correlation_id=st.text(
-        min_size=1,
-        max_size=48,
-        alphabet=string.ascii_letters + string.digits + "-",
-    ),
-)
-@settings(max_examples=50)
-@pytest.mark.asyncio
-async def test_langgraph_total_tokens_non_negative(
-    tokens: PropTokenInputs,
-    correlation_id: str,
-) -> None:
-    """Property test: LangGraph rollups keep total token counts semiring-safe."""
+def _planner_result_from_tokens(tokens: PropTokenInputs) -> PlannerResult:
+    """Build a planner result from generated token counts."""
     planner_usage = LLMUsage(
         tokens.planner_input,
         tokens.planner_output,
         tokens.planner_input + tokens.planner_output,
     )
-    tool_usage = LLMUsage(
-        tokens.action_input,
-        tokens.action_output,
-        tokens.action_input + tokens.action_output,
-    )
-    planner_result = PlannerResult(
+    return PlannerResult(
         plan=ExecutionPlan(
             plan_version="1.0",
             selected_planning_model="prop-plan-model",
@@ -122,7 +104,16 @@ async def test_langgraph_total_tokens_non_negative(
         provider_response_id="prop-planner",
         finish_reason="stop",
     )
-    tool_result = ActionExecutionResult(
+
+
+def _action_result_from_tokens(tokens: PropTokenInputs) -> ActionExecutionResult:
+    """Build an action result from generated token counts."""
+    tool_usage = LLMUsage(
+        tokens.action_input,
+        tokens.action_output,
+        tokens.action_input + tokens.action_output,
+    )
+    return ActionExecutionResult(
         action_id="action-1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
         model_tier=ModelTier.EXECUTION,
@@ -131,34 +122,45 @@ async def test_langgraph_total_tokens_non_negative(
         usage=tool_usage,
     )
 
+
+def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
+    """Assert non-negative token counts and the expected aggregate total."""
+    assert usage.input_tokens >= 0, "Expected values to satisfy the required ordering"
+    assert usage.output_tokens >= 0, "Expected values to satisfy the required ordering"
+    assert usage.total_tokens >= 0, "Expected values to satisfy the required ordering"
+    assert usage.total_tokens == expected_total, "Expected values to match"
+
+
+@given(
+    tokens=token_inputs_strategy,
+    correlation_id=st.text(
+        min_size=1,
+        max_size=48,
+        alphabet=string.ascii_letters + string.digits + "-",
+    ),
+)
+@settings(max_examples=50)
+@pytest.mark.asyncio
+async def test_langgraph_total_tokens_non_negative(
+    tokens: PropTokenInputs,
+    correlation_id: str,
+) -> None:
+    """Property test: LangGraph rollups keep total token counts semiring-safe."""
+    planner_result = _planner_result_from_tokens(tokens)
+    tool_result = _action_result_from_tokens(tokens)
+
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=planner_result),
         tool_executor=PropGraphToolExecutor(result=tool_result),
     )
 
-    request = GenerationOrchestrationRequest(
-        correlation_id=correlation_id,
-        script_tei_xml=(
-            "<TEI><text><body><p>Hypothesis-driven graph workload</p></body>"
-            "</text></TEI>"
-        ),
-        template_structure=None,
-    )
+    request = _request(correlation_id)
     state = await graph.ainvoke(GenerationGraphState(request=request))
     orchestration_result = state["orchestration_result"]
-    expected_total_tokens = planner_usage.total_tokens + tool_usage.total_tokens
-    assert orchestration_result.total_usage.input_tokens >= 0, (
-        "Expected values to satisfy the required ordering"
-    )
-    assert orchestration_result.total_usage.output_tokens >= 0, (
-        "Expected values to satisfy the required ordering"
-    )
-    assert orchestration_result.total_usage.total_tokens >= 0, (
-        "Expected values to satisfy the required ordering"
-    )
-    assert orchestration_result.total_usage.total_tokens == expected_total_tokens, (
-        "Expected values to match"
-    )
+    expected_planner_total = tokens.planner_input + tokens.planner_output
+    expected_tool_total = tokens.action_input + tokens.action_output
+    expected_total_tokens = expected_planner_total + expected_tool_total
+    _assert_non_negative_usage(orchestration_result.total_usage, expected_total_tokens)
     assert state["planner_result"] == planner_result, "Expected values to match"
     assert state["action_results"][0].model == "prop-exec-model", (
         "Expected values to match"
