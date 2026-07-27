@@ -112,27 +112,31 @@ async def test_interpreter_executor_records_lifecycle_observability(
     finally:
         executor.shutdown()
 
-    assert results == [4, 9]
+    assert results == [4, 9], "Expected values to match"
     assert (
         "interpreter_pool.map.calls",
         {"outcome": "success"},
-    ) in metrics.counters
+    ) in metrics.counters, "Expected collection to contain the value"
     assert (
         "interpreter_pool.map.items",
         2.0,
         {"outcome": "success"},
-    ) in metrics.observations
+    ) in metrics.observations, "Expected collection to contain the value"
     assert (
         "interpreter_pool.creations",
         {"outcome": "success"},
-    ) in metrics.counters
+    ) in metrics.counters, "Expected collection to contain the value"
     assert (
         "interpreter_pool.shutdown.latency_ms",
         pytest.approx(25.0),
         {"outcome": "success"},
-    ) in metrics.observations
-    assert "Created interpreter-pool executor" in logger.messages
-    assert "Shut down interpreter-pool executor" in logger.messages
+    ) in metrics.observations, "Expected collection to contain the value"
+    assert "Created interpreter-pool executor" in logger.messages, (
+        "Expected collection to contain the value"
+    )
+    assert "Shut down interpreter-pool executor" in logger.messages, (
+        "Expected collection to contain the value"
+    )
 
 
 def test_builder_records_executor_selection_metrics(
@@ -155,20 +159,22 @@ def test_builder_records_executor_selection_metrics(
         metrics=metrics,
         _capability_check=lambda: True,
     )
-    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
+    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
+        "Expected value to have the required type"
+    )
 
     assert (
         "cpu_task_executor.selections",
         {"executor": "inline", "reason": "feature_flag_disabled"},
-    ) in metrics.counters
+    ) in metrics.counters, "Expected collection to contain the value"
     assert (
         "cpu_task_executor.selections",
         {"executor": "inline", "reason": "interpreter_pool_unavailable"},
-    ) in metrics.counters
+    ) in metrics.counters, "Expected collection to contain the value"
     assert (
         "cpu_task_executor.selections",
         {"executor": "interpreter_pool", "reason": "enabled"},
-    ) in metrics.counters
+    ) in metrics.counters, "Expected collection to contain the value"
     _shutdown_if_supported(disabled_executor)
     _shutdown_if_supported(unsupported_executor)
     executor.shutdown()
@@ -190,10 +196,14 @@ async def test_builder_passes_metrics_to_interpreter_executor(
         metrics=metrics,
         _capability_check=lambda: True,
     )
-    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
+    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
+        "Expected value to have the required type"
+    )
 
     try:
-        assert await executor.map_ordered(_square, (2,)) == [4]
+        assert await executor.map_ordered(_square, (2,)) == [4], (
+            "Expected values to match"
+        )
     finally:
         executor.shutdown()
 
@@ -201,4 +211,4 @@ async def test_builder_passes_metrics_to_interpreter_executor(
         "interpreter_pool.map.items",
         1.0,
         {"outcome": "success"},
-    ) in metrics.observations
+    ) in metrics.observations, "Expected collection to contain the value"

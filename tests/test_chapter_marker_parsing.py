@@ -30,12 +30,12 @@ def test_result_from_response_parses_valid_json() -> None:
 
     result = make_generator()._result_from_response(response)
 
-    assert len(result.chapters) == 2
-    assert result.chapters[0].title == "Introduction"
-    assert result.chapters[0].start == "PT0S"
-    assert result.chapters[0].tei_locator == "#seg-intro"
-    assert result.chapters[1].duration == "PT10M"
-    assert result.usage.total_tokens == 15
+    assert len(result.chapters) == 2, "Expected values to match"
+    assert result.chapters[0].title == "Introduction", "Expected values to match"
+    assert result.chapters[0].start == "PT0S", "Expected values to match"
+    assert result.chapters[0].tei_locator == "#seg-intro", "Expected values to match"
+    assert result.chapters[1].duration == "PT10M", "Expected values to match"
+    assert result.usage.total_tokens == 15, "Expected values to match"
 
 
 @pytest.mark.parametrize(

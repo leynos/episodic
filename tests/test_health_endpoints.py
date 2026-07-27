@@ -10,6 +10,9 @@ from falcon import asgi
 import tests.test_http_service_scaffold_support as scaffold_support
 
 if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
+
+if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
 
 
@@ -46,8 +49,8 @@ async def test_health_endpoints_without_probes_return_ok(
     ) as client:
         response = await client.get(endpoint)
 
-    assert response.status_code == 200
-    assert response.json() == expected_body
+    assert response.status_code == 200, "Expected values to match"
+    assert response.json() == expected_body, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -93,8 +96,8 @@ async def test_health_ready_route_reflects_probe_result(
     ) as client:
         response = await client.get("/health/ready")
 
-    assert response.status_code == expected_status
-    assert response.json() == expected_body
+    assert response.status_code == expected_status, "Expected values to match"
+    assert response.json() == expected_body, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -120,15 +123,17 @@ async def test_health_ready_route_treats_probe_exceptions_as_failures() -> None:
     ) as client:
         response = await client.get("/health/ready")
 
-    assert response.status_code == 503
+    assert response.status_code == 503, "Expected values to match"
     assert response.json() == {
         "status": "error",
         "checks": [{"name": "database", "status": "error"}],
-    }
+    }, "Expected values to match"
 
 
 @pytest.mark.asyncio
-async def test_health_ready_route_uses_domain_health_observer() -> None:
+async def test_health_ready_route_uses_domain_health_observer(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Adapt a domain observer to the established Falcon readiness contract."""
     from episodic.api.resources.health import HealthReadyResource
     from episodic.canonical.health import HealthCheck, HealthReport, HealthStatus
@@ -151,11 +156,5 @@ async def test_health_ready_route_uses_domain_health_observer() -> None:
     ) as client:
         response = await client.get("/health/ready")
 
-    assert response.status_code == 503
-    assert response.json() == {
-        "status": "error",
-        "checks": [
-            {"name": "database", "status": "ok"},
-            {"name": "queue", "status": "error"},
-        ],
-    }
+    assert response.status_code == 503, "Expected values to match"
+    assert response.json() == snapshot, "actual output must match snapshot"

@@ -2,4 +2,4 @@
 
 from . import *  # noqa: F403  # Fixture requires star-imported re-exports.
 
-ADAPTER = StorageAdapter()  # noqa: F405
+ADAPTER = StorageAdapter()  # noqa: F405  # The fixture deliberately exercises architecture analysis of star re-exports.

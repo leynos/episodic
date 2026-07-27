@@ -158,7 +158,7 @@ def start_vidaimock_process(
         pytest.skip("vidaimock executable not found in PATH")
 
     orchestration_context.base_url = f"http://127.0.0.1:{port}/v1"
-    orchestration_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
+    orchestration_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
         [
             vidaimock_path,
             "--host",

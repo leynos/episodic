@@ -42,7 +42,7 @@ def test_show_notes_entry_accepts_optional_timestamp() -> None:
     entry = ShowNotesEntry(
         topic="Introduction", summary="Opening remarks", timestamp="PT1M30S"
     )
-    assert entry.timestamp == "PT1M30S"
+    assert entry.timestamp == "PT1M30S", "Expected values to match"
 
 
 def test_show_notes_entry_rejects_non_iso8601_timestamp() -> None:
@@ -60,7 +60,7 @@ def test_show_notes_entry_accepts_optional_locator() -> None:
     entry = ShowNotesEntry(
         topic="Introduction", summary="Opening remarks", tei_locator="#p1"
     )
-    assert entry.tei_locator == "#p1"
+    assert entry.tei_locator == "#p1", "Expected values to match"
 
 
 def test_result_from_response_parses_valid_json(
@@ -77,9 +77,9 @@ def test_result_from_response_parses_valid_json(
 
     result = show_notes_generator._result_from_response(response)
 
-    assert len(result.entries) == 2
-    assert result.entries[0].topic == "Topic 1"
-    assert result.entries[1].timestamp == "PT5M"
+    assert len(result.entries) == 2, "Expected values to match"
+    assert result.entries[0].topic == "Topic 1", "Expected values to match"
+    assert result.entries[1].timestamp == "PT5M", "Expected values to match"
 
 
 @pytest.mark.parametrize(
@@ -168,4 +168,4 @@ def test_show_notes_entry_normalizes_blank_locator_to_none() -> None:
         tei_locator="   ",
     )
 
-    assert entry.tei_locator is None
+    assert entry.tei_locator is None, "Expected value to be absent"

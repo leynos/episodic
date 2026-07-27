@@ -14,6 +14,10 @@ from episodic.canonical.domain import (
     ReferenceDocumentRevision,
 )
 from episodic.canonical.reference_documents import ResolvedBinding
+from tests.snapshot_redaction import redact_snapshot_uuids
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 
 def _make_reference_document(**overrides: object) -> ReferenceDocument:
@@ -28,7 +32,7 @@ def _make_reference_document(**overrides: object) -> ReferenceDocument:
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
         "updated_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # type: ignore[arg-type]
+    defaults.update(overrides)  # type: ignore[arg-type]  # The fixture builder intentionally accepts heterogeneous typed overrides.
     return ReferenceDocument(**defaults)
 
 
@@ -45,7 +49,7 @@ def _make_reference_document_revision(
         "change_note": "Test change",
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # type: ignore[arg-type]
+    defaults.update(overrides)  # type: ignore[arg-type]  # The fixture builder intentionally accepts heterogeneous typed overrides.
     return ReferenceDocumentRevision(**defaults)
 
 
@@ -61,11 +65,11 @@ def _make_reference_binding(**overrides: object) -> ReferenceBinding:
         "effective_from_episode_id": None,
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # type: ignore[arg-type]
+    defaults.update(overrides)  # type: ignore[arg-type]  # The fixture builder intentionally accepts heterogeneous typed overrides.
     return ReferenceBinding(**defaults)
 
 
-def test_serialize_resolved_binding_structure() -> None:
+def test_serialize_resolved_binding_structure(snapshot: SnapshotAssertion) -> None:
     """serialize_resolved_binding should return binding, revision, and document keys."""
     document = _make_reference_document()
     revision = _make_reference_document_revision(
@@ -82,9 +86,8 @@ def test_serialize_resolved_binding_structure() -> None:
 
     result = serialize_resolved_binding(resolved)
 
-    assert "binding" in result
-    assert "revision" in result
-    assert "document" in result
+    stable_result = redact_snapshot_uuids(result)
+    assert stable_result == snapshot, "actual output must match snapshot"
 
 
 def test_serialize_resolved_binding_binding_content() -> None:
@@ -106,14 +109,20 @@ def test_serialize_resolved_binding_binding_content() -> None:
     result = serialize_resolved_binding(resolved)
     binding_result = typ.cast("dict[str, typ.Any]", result["binding"])
 
-    assert binding_result["id"] == str(binding.id)
-    assert binding_result["reference_document_revision_id"] == str(revision.id)
-    assert binding_result["target_kind"] == "series_profile"
-    assert binding_result["series_profile_id"] == str(binding.series_profile_id)
-    assert binding_result["episode_template_id"] is None
-    assert binding_result["ingestion_job_id"] is None
-    assert binding_result["effective_from_episode_id"] is None
-    assert "created_at" in binding_result
+    assert binding_result["id"] == str(binding.id), "Expected values to match"
+    assert binding_result["reference_document_revision_id"] == str(revision.id), (
+        "Expected values to match"
+    )
+    assert binding_result["target_kind"] == "series_profile", "Expected values to match"
+    assert binding_result["series_profile_id"] == str(binding.series_profile_id), (
+        "Expected values to match"
+    )
+    assert binding_result["episode_template_id"] is None, "Expected value to be absent"
+    assert binding_result["ingestion_job_id"] is None, "Expected value to be absent"
+    assert binding_result["effective_from_episode_id"] is None, (
+        "Expected value to be absent"
+    )
+    assert "created_at" in binding_result, "Expected collection to contain the value"
 
 
 def test_serialize_resolved_binding_revision_content() -> None:
@@ -138,13 +147,21 @@ def test_serialize_resolved_binding_revision_content() -> None:
     result = serialize_resolved_binding(resolved)
     revision_result = typ.cast("dict[str, typ.Any]", result["revision"])
 
-    assert revision_result["id"] == str(revision.id)
-    assert revision_result["reference_document_id"] == str(document.id)
-    assert revision_result["content"] == {"summary": "Custom summary"}
-    assert revision_result["content_hash"] == "customhash456"
-    assert revision_result["author"] == "author@example.com"
-    assert revision_result["change_note"] == "Important change"
-    assert "created_at" in revision_result
+    assert revision_result["id"] == str(revision.id), "Expected values to match"
+    assert revision_result["reference_document_id"] == str(document.id), (
+        "Expected values to match"
+    )
+    assert revision_result["content"] == {"summary": "Custom summary"}, (
+        "Expected values to match"
+    )
+    assert revision_result["content_hash"] == "customhash456", (
+        "Expected values to match"
+    )
+    assert revision_result["author"] == "author@example.com", "Expected values to match"
+    assert revision_result["change_note"] == "Important change", (
+        "Expected values to match"
+    )
+    assert "created_at" in revision_result, "Expected collection to contain the value"
 
 
 def test_serialize_resolved_binding_document_content() -> None:
@@ -170,16 +187,18 @@ def test_serialize_resolved_binding_document_content() -> None:
     result = serialize_resolved_binding(resolved)
     document_result = typ.cast("dict[str, typ.Any]", result["document"])
 
-    assert document_result["id"] == str(document.id)
+    assert document_result["id"] == str(document.id), "Expected values to match"
     assert document_result["owner_series_profile_id"] == str(
         document.owner_series_profile_id
+    ), "Expected values to match"
+    assert document_result["kind"] == "guest_profile", "Expected values to match"
+    assert document_result["lifecycle_state"] == "archived", "Expected values to match"
+    assert document_result["metadata"] == {"name": "Guest Document"}, (
+        "Expected values to match"
     )
-    assert document_result["kind"] == "guest_profile"
-    assert document_result["lifecycle_state"] == "archived"
-    assert document_result["metadata"] == {"name": "Guest Document"}
-    assert document_result["lock_version"] == 3
-    assert "created_at" in document_result
-    assert "updated_at" in document_result
+    assert document_result["lock_version"] == 3, "Expected values to match"
+    assert "created_at" in document_result, "Expected collection to contain the value"
+    assert "updated_at" in document_result, "Expected collection to contain the value"
 
 
 def test_serialize_resolved_binding_with_template_target() -> None:
@@ -204,9 +223,13 @@ def test_serialize_resolved_binding_with_template_target() -> None:
     result = serialize_resolved_binding(resolved)
     binding_result = typ.cast("dict[str, typ.Any]", result["binding"])
 
-    assert binding_result["target_kind"] == "episode_template"
-    assert binding_result["series_profile_id"] is None
-    assert binding_result["episode_template_id"] == str(template_id)
+    assert binding_result["target_kind"] == "episode_template", (
+        "Expected values to match"
+    )
+    assert binding_result["series_profile_id"] is None, "Expected value to be absent"
+    assert binding_result["episode_template_id"] == str(template_id), (
+        "Expected values to match"
+    )
 
 
 def test_serialize_resolved_binding_with_effective_from_episode() -> None:
@@ -229,7 +252,9 @@ def test_serialize_resolved_binding_with_effective_from_episode() -> None:
     result = serialize_resolved_binding(resolved)
     binding_result = typ.cast("dict[str, typ.Any]", result["binding"])
 
-    assert binding_result["effective_from_episode_id"] == str(episode_id)
+    assert binding_result["effective_from_episode_id"] == str(episode_id), (
+        "Expected values to match"
+    )
 
 
 def test_serialize_resolved_binding_uuid_string_conversion() -> None:
@@ -250,9 +275,21 @@ def test_serialize_resolved_binding_uuid_string_conversion() -> None:
     result = serialize_resolved_binding(resolved)
 
     # All ID fields should be strings, not UUID objects
-    assert isinstance(result["binding"]["id"], str)
-    assert isinstance(result["binding"]["reference_document_revision_id"], str)
-    assert isinstance(result["revision"]["id"], str)
-    assert isinstance(result["revision"]["reference_document_id"], str)
-    assert isinstance(result["document"]["id"], str)
-    assert isinstance(result["document"]["owner_series_profile_id"], str)
+    assert isinstance(result["binding"]["id"], str), (
+        "Expected value to have the required type"
+    )
+    assert isinstance(result["binding"]["reference_document_revision_id"], str), (
+        "Expected value to have the required type"
+    )
+    assert isinstance(result["revision"]["id"], str), (
+        "Expected value to have the required type"
+    )
+    assert isinstance(result["revision"]["reference_document_id"], str), (
+        "Expected value to have the required type"
+    )
+    assert isinstance(result["document"]["id"], str), (
+        "Expected value to have the required type"
+    )
+    assert isinstance(result["document"]["owner_series_profile_id"], str), (
+        "Expected value to have the required type"
+    )

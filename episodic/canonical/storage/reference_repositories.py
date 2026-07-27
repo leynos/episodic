@@ -62,8 +62,8 @@ _BINDING_CONFLICT_MESSAGE = (
 
 
 async def _add_with_conflict_translation(
-    session: typ.Any,  # noqa: ANN401
-    record: typ.Any,  # noqa: ANN401
+    session: typ.Any,  # noqa: ANN401  # SQLAlchemy row values are dynamically shaped at this repository boundary.
+    record: typ.Any,  # noqa: ANN401  # SQLAlchemy row values are dynamically shaped at this repository boundary.
     *,
     constraints: frozenset[str],
     conflict_message: str,
@@ -89,7 +89,7 @@ class SqlAlchemyReferenceDocumentRepository(
 
     async def add(self, document: ReferenceDocument) -> None:
         """Add a reusable reference document record."""
-        await self._add_record(_reference_document_to_record(document))
+        self._session.add(_reference_document_to_record(document))
 
     async def get(self, document_id: uuid.UUID) -> ReferenceDocument | None:
         """Fetch a reusable reference document by identifier."""
@@ -273,7 +273,7 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
     """Persist reusable reference bindings using SQLAlchemy."""
 
     @staticmethod
-    def _target_field(target_kind: ReferenceBindingTargetKind) -> typ.Any:  # noqa: ANN401
+    def _target_field(target_kind: ReferenceBindingTargetKind) -> typ.Any:  # noqa: ANN401  # SQLAlchemy row values are dynamically shaped at this repository boundary.
         """Resolve the SQLAlchemy target column for a binding target kind."""
         match target_kind:
             case ReferenceBindingTargetKind.SERIES_PROFILE:
@@ -382,7 +382,7 @@ class SqlAlchemyReferenceBindingRepository(_RepositoryBase, ReferenceBindingRepo
 def _document_series_filter(
     series_profile_id: uuid.UUID,
     kind: ReferenceDocumentKind | None,
-) -> typ.Any:  # noqa: ANN401
+) -> typ.Any:  # noqa: ANN401  # SQLAlchemy row values are dynamically shaped at this repository boundary.
     """Return the reusable-reference document series filter."""
     where_clause = ReferenceDocumentRecord.owner_series_profile_id == series_profile_id
     if kind is not None:

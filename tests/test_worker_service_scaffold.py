@@ -15,17 +15,19 @@ def test_worker_topology_defines_io_and_cpu_queues() -> None:
     """Expose the canonical queue, exchange, and routing-key taxonomy."""
     from episodic.worker import DEFAULT_WORKER_TOPOLOGY, WorkloadClass
 
-    assert DEFAULT_WORKER_TOPOLOGY.exchange_name == "episodic.tasks"
-    assert DEFAULT_WORKER_TOPOLOGY.exchange_type == "topic"
-    assert DEFAULT_WORKER_TOPOLOGY.default_workload is WorkloadClass.IO_BOUND
+    assert DEFAULT_WORKER_TOPOLOGY.exchange_name == "episodic.tasks", "must match"
+    assert DEFAULT_WORKER_TOPOLOGY.exchange_type == "topic", "must match"
+    assert DEFAULT_WORKER_TOPOLOGY.default_workload is WorkloadClass.IO_BOUND, (
+        "must match"
+    )
 
     io_queue = DEFAULT_WORKER_TOPOLOGY.queue_for(WorkloadClass.IO_BOUND)
     cpu_queue = DEFAULT_WORKER_TOPOLOGY.queue_for(WorkloadClass.CPU_BOUND)
 
-    assert io_queue.name == "episodic.io"
-    assert io_queue.routing_key == "episodic.io.#"
-    assert cpu_queue.name == "episodic.cpu"
-    assert cpu_queue.routing_key == "episodic.cpu.#"
+    assert io_queue.name == "episodic.io", "must match"
+    assert io_queue.routing_key == "episodic.io.#", "must match"
+    assert cpu_queue.name == "episodic.cpu", "must match"
+    assert cpu_queue.routing_key == "episodic.cpu.#", "must match"
 
 
 def test_worker_topology_rejects_duplicate_queue_names() -> None:
@@ -188,12 +190,12 @@ def test_build_worker_launch_profiles_maps_workloads_to_distinct_pools(
 
     profiles = build_worker_launch_profiles(config)
 
-    assert profiles[WorkloadClass.IO_BOUND].pool is WorkerPool.EVENTLET
-    assert profiles[WorkloadClass.IO_BOUND].concurrency == 128
-    assert profiles[WorkloadClass.IO_BOUND].queue_name == "episodic.io"
-    assert profiles[WorkloadClass.CPU_BOUND].pool is WorkerPool.PREFORK
-    assert profiles[WorkloadClass.CPU_BOUND].concurrency == 6
-    assert profiles[WorkloadClass.CPU_BOUND].queue_name == "episodic.cpu"
+    assert profiles[WorkloadClass.IO_BOUND].pool is WorkerPool.EVENTLET, "must match"
+    assert profiles[WorkloadClass.IO_BOUND].concurrency == 128, "must match"
+    assert profiles[WorkloadClass.IO_BOUND].queue_name == "episodic.io", "must match"
+    assert profiles[WorkloadClass.CPU_BOUND].pool is WorkerPool.PREFORK, "must match"
+    assert profiles[WorkloadClass.CPU_BOUND].concurrency == 6, "must match"
+    assert profiles[WorkloadClass.CPU_BOUND].queue_name == "episodic.cpu", "must match"
 
 
 @pytest.mark.asyncio
@@ -246,35 +248,24 @@ def test_create_celery_app_registers_task_routes_and_queues(
     app = create_celery_app(load_runtime_config(runtime_environ))
     queues = typ.cast("tuple[Queue, ...]", app.conf.task_queues)
 
-    assert app.conf.task_default_exchange == DEFAULT_WORKER_TOPOLOGY.exchange_name
-    assert app.conf.task_default_routing_key == "episodic.io.diagnostic"
-    assert {queue.name for queue in queues} == {"episodic.io", "episodic.cpu"}
-    assert (
-        typ.cast("dict[str, str]", app.conf.task_routes[IO_DIAGNOSTIC_TASK_NAME])[
-            "queue"
-        ]
-        == "episodic.io"
+    assert app.conf.task_default_exchange == DEFAULT_WORKER_TOPOLOGY.exchange_name, (
+        "must match"
     )
-    assert (
-        typ.cast("dict[str, str]", app.conf.task_routes[IO_DIAGNOSTIC_TASK_NAME])[
-            "routing_key"
-        ]
-        == "episodic.io.diagnostic"
+    assert app.conf.task_default_routing_key == "episodic.io.diagnostic", "must match"
+    assert {queue.name for queue in queues} == {"episodic.io", "episodic.cpu"}, (
+        "must contain"
     )
-    assert (
-        typ.cast("dict[str, str]", app.conf.task_routes[CPU_DIAGNOSTIC_TASK_NAME])[
-            "queue"
-        ]
-        == "episodic.cpu"
+    routes = typ.cast("dict[str, dict[str, str]]", app.conf.task_routes)
+    actual_routes = tuple(
+        (routes[task_name]["queue"], routes[task_name]["routing_key"])
+        for task_name in (IO_DIAGNOSTIC_TASK_NAME, CPU_DIAGNOSTIC_TASK_NAME)
     )
-    assert (
-        typ.cast("dict[str, str]", app.conf.task_routes[CPU_DIAGNOSTIC_TASK_NAME])[
-            "routing_key"
-        ]
-        == "episodic.cpu.diagnostic"
-    )
-    assert IO_DIAGNOSTIC_TASK_NAME in app.tasks
-    assert CPU_DIAGNOSTIC_TASK_NAME in app.tasks
+    assert actual_routes == (
+        ("episodic.io", "episodic.io.diagnostic"),
+        ("episodic.cpu", "episodic.cpu.diagnostic"),
+    ), "task routes must match"
+    assert IO_DIAGNOSTIC_TASK_NAME in app.tasks, "must contain"
+    assert CPU_DIAGNOSTIC_TASK_NAME in app.tasks, "must contain"
 
 
 def test_create_celery_app_executes_representative_tasks_through_dependencies(
@@ -308,18 +299,18 @@ def test_create_celery_app_executes_representative_tasks_through_dependencies(
         "iterations": 4,
     })
 
-    assert io_handler.seen_messages == ["hello"]
-    assert cpu_handler.seen_iterations == [4]
+    assert io_handler.seen_messages == ["hello"], "must match"
+    assert cpu_handler.seen_iterations == [4], "must match"
     assert io_result.get() == {
         "message": "hello",
         "correlation_id": "trace-1",
         "worker_kind": "io-bound",
-    }
+    }, "must match"
     assert cpu_result.get() == {
         "digest": "digest-4",
         "iterations": 4,
         "worker_kind": "cpu-bound",
-    }
+    }, "must match"
 
 
 def test_task_payload_requests_require_json_object_payloads() -> None:
@@ -392,5 +383,6 @@ def test_create_celery_app_from_env_reads_runtime_configuration(
 
     app = create_celery_app_from_env()
 
-    assert app.conf.broker_url == "amqp://guest:guest@localhost:5672//"
-    assert bool(app.conf.task_always_eager) is True
+    expected_broker_url = "amqp://guest:guest@localhost:5672//"
+    assert app.conf.broker_url == expected_broker_url, "broker URL must match"
+    assert bool(app.conf.task_always_eager) is True, "eager mode must be enabled"

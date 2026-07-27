@@ -37,9 +37,11 @@ async def test_planner_returns_typed_plan_and_uses_planning_model() -> None:
 
     result = await planner.plan(_request())
 
-    assert result.plan.plan_version == "1.0"
-    assert result.plan.selected_planning_model == "gpt-4.1"
-    assert result.plan.selected_execution_model == "gpt-4o-mini"
+    assert result.plan.plan_version == "1.0", "Expected values to match"
+    assert result.plan.selected_planning_model == "gpt-4.1", "Expected values to match"
+    assert result.plan.selected_execution_model == "gpt-4o-mini", (
+        "Expected values to match"
+    )
     assert result.plan.steps == (
         PlannedAction(
             action_id="action-1",
@@ -48,15 +50,21 @@ async def test_planner_returns_typed_plan_and_uses_planning_model() -> None:
             model_tier=ModelTier.EXECUTION,
             required_inputs=("script_tei_xml", "template_structure"),
         ),
-    )
-    assert result.usage is not None
-    assert result.usage.total_tokens == 52
+    ), "Expected values to match"
+    assert result.usage is not None, "Expected value to be present"
+    assert result.usage.total_tokens == 52, "Expected values to match"
 
     request = llm.requests[0]
-    assert request.model == "gpt-4.1"
-    assert request.provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
-    assert "enabled_action_kinds" in request.prompt
-    assert "script_tei_xml" in request.prompt
+    assert request.model == "gpt-4.1", "Expected values to match"
+    assert request.provider_operation == LLMProviderOperation.CHAT_COMPLETIONS, (
+        "Expected values to match"
+    )
+    assert "enabled_action_kinds" in request.prompt, (
+        "Expected collection to contain the value"
+    )
+    assert "script_tei_xml" in request.prompt, (
+        "Expected collection to contain the value"
+    )
 
 
 @pytest.mark.asyncio

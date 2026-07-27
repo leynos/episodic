@@ -41,8 +41,12 @@ def test_config_normalises_arbitrary_string_and_enum_mixes(
         execution_provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
         enabled_action_kinds=tuple(kinds),
     )
-    assert all(isinstance(kind, ActionKind) for kind in cfg.enabled_action_kinds)
-    assert cfg.enabled_action_kinds == tuple(ActionKind(str(kind)) for kind in kinds)
+    assert all(isinstance(kind, ActionKind) for kind in cfg.enabled_action_kinds), (
+        "Expected value to have the required type"
+    )
+    assert cfg.enabled_action_kinds == tuple(ActionKind(str(kind)) for kind in kinds), (
+        "Expected collection to contain the value"
+    )
 
 
 @given(
@@ -104,5 +108,7 @@ async def test_planned_action_execution_model_tier_is_accepted() -> None:
 
     result = await tool_executor.execute(action, _request())
 
-    assert result.model_tier is ModelTier.EXECUTION
-    assert result.summary == "Generated 0 show-notes entries."
+    assert result.model_tier is ModelTier.EXECUTION, "Expected values to match"
+    assert result.summary == "Generated 0 show-notes entries.", (
+        "Expected values to match"
+    )

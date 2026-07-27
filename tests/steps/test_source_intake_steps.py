@@ -1,10 +1,13 @@
 """Behavioural tests for source-intake upload and attachment workflows."""
 
-from __future__ import annotations
-
 import typing as typ
+from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
 from pytest_bdd import given, parsers, scenario, then, when
+from sqlalchemy.ext.asyncio import (  # noqa: TC002  # pytest-bdd evaluates step annotations.
+    AsyncSession,
+    async_sessionmaker,
+)
 
 from tests.steps.source_intake_support import (
     SourceIntakeContext,
@@ -17,11 +20,6 @@ from tests.steps.source_intake_support import (
     upload_oversized_source,
     upload_unsupported_content_type,
 )
-
-if typ.TYPE_CHECKING:
-    from pathlib import Path
-
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 @scenario(
@@ -170,28 +168,34 @@ def list_sources(
 @then("the ingestion job is ready for generation")
 def assert_job_ready(context: SourceIntakeContext) -> None:
     """Verify the source attachment transitioned the intake state."""
-    assert context.upload is not None
-    assert context.job is not None
-    assert context.source is not None
-    assert context.status is not None
-    assert context.job["intake_state"] == "awaiting_sources"
-    assert context.source["upload_id"] == context.upload["id"]
-    assert context.status["intake_state"] == "ready_for_generation"
+    assert context.upload is not None, "Expected value to be present"
+    assert context.job is not None, "Expected value to be present"
+    assert context.source is not None, "Expected value to be present"
+    assert context.status is not None, "Expected value to be present"
+    assert context.job["intake_state"] == "awaiting_sources", "Expected values to match"
+    assert context.source["upload_id"] == context.upload["id"], (
+        "Expected values to match"
+    )
+    assert context.status["intake_state"] == "ready_for_generation", (
+        "Expected values to match"
+    )
 
 
 @then("repeated upload requests replay the stored response")
 def assert_upload_replay(context: SourceIntakeContext) -> None:
     """Verify an identical idempotency key/body pair returns the stored upload."""
-    assert context.upload is not None
-    assert context.upload_replay == context.upload
+    assert context.upload is not None, "Expected value to be present"
+    assert context.upload_replay == context.upload, "Expected values to match"
 
 
 @then("changed upload bodies with the same idempotency key conflict")
 def assert_upload_conflict(context: SourceIntakeContext) -> None:
     """Verify a reused idempotency key with a different body returns 409."""
-    assert context.conflict_status == 409
-    assert context.conflict is not None
-    assert context.conflict["code"] == "idempotency_conflict"
+    assert context.conflict_status == 409, "Expected values to match"
+    assert context.conflict is not None, "Expected value to be present"
+    assert context.conflict["code"] == "idempotency_conflict", (
+        "Expected values to match"
+    )
 
 
 @then(parsers.parse('the source-intake API rejects the request with "{error_code}"'))
@@ -200,16 +204,18 @@ def assert_source_intake_error(
     error_code: str,
 ) -> None:
     """Verify the source-intake API returned a documented error envelope."""
-    assert context.error_status is not None
-    assert context.error_status >= 400
-    assert context.error_code == error_code
+    assert context.error_status is not None, "Expected value to be present"
+    assert context.error_status >= 400, (
+        "Expected values to satisfy the required ordering"
+    )
+    assert context.error_code == error_code, "Expected values to match"
 
 
 @then("the source-intake API returns the attached source material")
 def assert_source_list(context: SourceIntakeContext) -> None:
     """Verify the attached source appears in the source-list endpoint."""
-    assert context.upload is not None
-    assert context.source_list is not None
-    assert context.source_list["total"] == 1
+    assert context.upload is not None, "Expected value to be present"
+    assert context.source_list is not None, "Expected value to be present"
+    assert context.source_list["total"] == 1, "Expected values to match"
     items = typ.cast("list[dict[str, object]]", context.source_list["items"])
-    assert items[0]["upload_id"] == context.upload["id"]
+    assert items[0]["upload_id"] == context.upload["id"], "Expected values to match"

@@ -1,7 +1,5 @@
 """HTTP-adapter idempotency helpers for source-intake routes."""
 
-from __future__ import annotations
-
 import dataclasses
 import datetime as dt
 import json

@@ -1,7 +1,6 @@
 """Behavioural tests for the show notes generator."""
 
-from __future__ import annotations
-
+import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json
 import shutil
@@ -9,6 +8,7 @@ import socket
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
 import time
 import typing as typ
+from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
 import pytest
 from pytest_bdd import given, scenario, then, when
@@ -25,9 +25,7 @@ from episodic.llm.openai_adapter import (
 )
 
 if typ.TYPE_CHECKING:
-    import asyncio
     import collections.abc as cabc
-    from pathlib import Path
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
 
@@ -102,6 +100,11 @@ def _build_assistant_content_literal() -> str:
     string, not a raw object. The inner ``json.dumps`` produces the show-notes
     result object; the outer ``json.dumps`` wraps it in a JSON string literal so
     that the Jinja template emits a valid ``"content": "<escaped-json>"`` field.
+
+    Returns
+    -------
+    str
+        Result produced by the operation.
     """
     assistant_content = json.dumps({
         "entries": [
@@ -229,7 +232,7 @@ def _start_vidaimock_process(
     last_error: RuntimeError | None = None
     for _ in range(_VIDAIMOCK_PORT_START_ATTEMPTS):
         port = _find_free_port()
-        process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
+        process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
             [
                 vidaimock_path,
                 "--host",
@@ -343,21 +346,25 @@ def assert_show_notes_result_structure(show_notes_context: ShowNotesBDDContext) 
     )
 
     first_entry = result.entries[0]
-    assert first_entry.topic == "Introduction"
-    assert "Opening remarks" in first_entry.summary
-    assert first_entry.timestamp == "PT0M30S"
+    assert first_entry.topic == "Introduction", "Expected values to match"
+    assert "Opening remarks" in first_entry.summary, (
+        "Expected collection to contain the value"
+    )
+    assert first_entry.timestamp == "PT0M30S", "Expected values to match"
 
     second_entry = result.entries[1]
-    assert second_entry.topic == "Main Discussion"
-    assert "In-depth analysis" in second_entry.summary
-    assert second_entry.timestamp == "PT5M15S"
+    assert second_entry.topic == "Main Discussion", "Expected values to match"
+    assert "In-depth analysis" in second_entry.summary, (
+        "Expected collection to contain the value"
+    )
+    assert second_entry.timestamp == "PT5M15S", "Expected values to match"
 
     # Verify normalized usage metadata
-    assert result.usage.input_tokens == 50
-    assert result.usage.output_tokens == 30
-    assert result.usage.total_tokens == 80
-    assert result.model == "gpt-4o-mini"
-    assert result.finish_reason == "stop"
+    assert result.usage.input_tokens == 50, "Expected values to match"
+    assert result.usage.output_tokens == 30, "Expected values to match"
+    assert result.usage.total_tokens == 80, "Expected values to match"
+    assert result.model == "gpt-4o-mini", "Expected values to match"
+    assert result.finish_reason == "stop", "Expected values to match"
 
 
 @then("the show-notes prompt includes the TEI script body")

@@ -73,6 +73,11 @@ class RecordingMetrics:
         ``.ambr`` output stays deterministic and human-readable. ``StepClock``
         already advances by exactly 1 ms per call, so the latency values appear
         verbatim in the snapshot and need no further redaction.
+
+        Returns
+        -------
+        dict[str, list[dict[str, object]]]
+            Result produced by the operation.
         """
         return {
             "counters": [
@@ -120,6 +125,11 @@ def make_vanishing_conflict_session() -> VanishingConflictSession:
     ``flush()`` raises an ``IntegrityError`` (duplicate idempotency key) and
     the subsequent ``execute()`` returns no row, simulating the conflicting
     checkpoint vanishing before recovery can read it back.
+
+    Returns
+    -------
+    VanishingConflictSession
+        Result produced by the operation.
     """
     savepoint_cm = mock.MagicMock()
     savepoint_cm.__aenter__ = mock.AsyncMock(return_value=savepoint_cm)

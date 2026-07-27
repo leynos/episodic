@@ -152,12 +152,16 @@ def test_chrono_estimator_returns_predictable_default_runtime() -> None:
 
     result = ChronoRuntimeEstimator().estimate(request)
 
-    assert result.estimated_seconds == 4
-    assert result.metadata.spoken_word_count == 9
-    assert result.metadata.words_per_minute == 150
-    assert result.metadata.estimator_name == "chrono-naive-word-count"
-    assert result.metadata.estimator_version == "1"
-    assert result.metadata.input_character_count == len(request.script_tei_xml)
+    assert result.estimated_seconds == 4, "Expected values to match"
+    assert result.metadata.spoken_word_count == 9, "Expected values to match"
+    assert result.metadata.words_per_minute == 150, "Expected values to match"
+    assert result.metadata.estimator_name == "chrono-naive-word-count", (
+        "Expected values to match"
+    )
+    assert result.metadata.estimator_version == "1", "Expected values to match"
+    assert result.metadata.input_character_count == len(request.script_tei_xml), (
+        "Expected values to match"
+    )
 
 
 def test_chrono_estimator_records_success_metrics() -> None:
@@ -172,10 +176,10 @@ def test_chrono_estimator_records_success_metrics() -> None:
 
     assert metrics.counters == [
         ("chrono.runtime_estimator.evaluations", {"outcome": "success"})
-    ]
+    ], "Expected values to match"
     assert metrics.latencies == [
         ("chrono.runtime_estimator.latency_ms", 125.0, {"outcome": "success"})
-    ]
+    ], "Expected values to match"
 
 
 def test_chrono_estimator_ignores_markup_only_script() -> None:
@@ -186,9 +190,11 @@ def test_chrono_estimator_ignores_markup_only_script() -> None:
 
     result = ChronoRuntimeEstimator().estimate(request)
 
-    assert result.estimated_seconds == 0
-    assert result.metadata.spoken_word_count == 0
-    assert result.metadata.input_character_count == len(request.script_tei_xml)
+    assert result.estimated_seconds == 0, "Expected values to match"
+    assert result.metadata.spoken_word_count == 0, "Expected values to match"
+    assert result.metadata.input_character_count == len(request.script_tei_xml), (
+        "Expected values to match"
+    )
 
 
 def test_chrono_estimator_does_not_double_count_nested_spoken_elements() -> None:
@@ -201,8 +207,8 @@ def test_chrono_estimator_does_not_double_count_nested_spoken_elements() -> None
 
     result = ChronoRuntimeEstimator().estimate(request)
 
-    assert result.metadata.spoken_word_count == 4
-    assert result.estimated_seconds == 2
+    assert result.metadata.spoken_word_count == 4, "Expected values to match"
+    assert result.estimated_seconds == 2, "Expected values to match"
 
 
 def test_chrono_estimator_uses_custom_metadata() -> None:
@@ -218,9 +224,9 @@ def test_chrono_estimator_uses_custom_metadata() -> None:
 
     result = ChronoRuntimeEstimator(config=config).estimate(request)
 
-    assert result.estimated_seconds == 3
-    assert result.metadata.estimator_version == "2"
-    assert result.metadata.words_per_minute == 60
+    assert result.estimated_seconds == 3, "Expected values to match"
+    assert result.metadata.estimator_version == "2", "Expected values to match"
+    assert result.metadata.words_per_minute == 60, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -306,20 +312,20 @@ def test_chrono_estimator_propagates_tei_validation_errors(
             (len(script_tei_xml),),
             {"exc_info": True},
         )
-    ]
+    ], "Expected values to match"
     assert metrics.counters == [
         (
             "chrono.runtime_estimator.evaluations",
             {"outcome": "error", "error_type": "ValueError"},
         )
-    ]
+    ], "Expected values to match"
     assert metrics.latencies == [
         (
             "chrono.runtime_estimator.latency_ms",
             250.0,
             {"outcome": "error", "error_type": "ValueError"},
         )
-    ]
+    ], "Expected values to match"
 
 
 @pytest.mark.parametrize(
@@ -345,4 +351,4 @@ def test_chrono_estimator_counts_alternate_spoken_tags(
         f"expected {expected_words} words from <{tag}> element, "
         f"got {result.metadata.spoken_word_count}"
     )
-    assert result.estimated_seconds == expected_seconds
+    assert result.estimated_seconds == expected_seconds, "Expected values to match"

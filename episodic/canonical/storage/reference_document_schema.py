@@ -14,9 +14,24 @@ REFERENCE_BINDING_TARGET_KIND_VALUES = tuple(
     member.value for member in ReferenceBindingTargetKind
 )
 
-TARGET_KIND_SERIES_PROFILE = ReferenceBindingTargetKind.SERIES_PROFILE.value
-TARGET_KIND_EPISODE_TEMPLATE = ReferenceBindingTargetKind.EPISODE_TEMPLATE.value
-TARGET_KIND_INGESTION_JOB = ReferenceBindingTargetKind.INGESTION_JOB.value
+
+_TARGET_KIND_VALUES = {
+    kind: kind.value
+    for kind in (
+        ReferenceBindingTargetKind.SERIES_PROFILE,
+        ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+        ReferenceBindingTargetKind.INGESTION_JOB,
+    )
+}
+TARGET_KIND_SERIES_PROFILE = _TARGET_KIND_VALUES[
+    ReferenceBindingTargetKind.SERIES_PROFILE
+]
+TARGET_KIND_EPISODE_TEMPLATE = _TARGET_KIND_VALUES[
+    ReferenceBindingTargetKind.EPISODE_TEMPLATE
+]
+TARGET_KIND_INGESTION_JOB = _TARGET_KIND_VALUES[
+    ReferenceBindingTargetKind.INGESTION_JOB
+]
 
 REFERENCE_BINDINGS_TARGET_CHECK_SQL = (
     f"((target_kind = '{TARGET_KIND_SERIES_PROFILE}' "

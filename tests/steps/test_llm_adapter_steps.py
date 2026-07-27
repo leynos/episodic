@@ -1,7 +1,6 @@
 """Behavioural tests for the OpenAI-compatible LLM adapter."""
 
-from __future__ import annotations
-
+import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json
 import threading
@@ -24,7 +23,6 @@ from episodic.llm.openai_adapter import (
 )
 
 if typ.TYPE_CHECKING:
-    import asyncio
     import collections.abc as cabc
 
 
@@ -102,7 +100,7 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
 class _MockLLMServer(ThreadingHTTPServer):
     """HTTP server carrying mutable test state."""
 
-    # pylint: disable-next=too-many-arguments
+    # pylint: disable-next=too-many-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
     def __init__(
         self,
         server_address: tuple[str, int],

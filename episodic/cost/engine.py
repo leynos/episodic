@@ -18,8 +18,6 @@ priced_call = PricingEngine.price(snapshot, request)
 ```
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
@@ -63,14 +61,9 @@ class PricingEngine:
         ----------
         snapshot : PricingSnapshot
             Immutable pricing rates selected for the provider operation.
-        usage : Mapping[str, int]
-            Canonical usage metrics reported or estimated for one call.
-        operation : str
-            Provider operation being priced.
-        billing_period_key : BillingPeriodKey
-            Billing period that must match the pricing snapshot.
-        is_estimated : bool, optional
-            Whether the usage came from an estimate rather than the provider.
+        request : PricingRequest
+            Usage, provider operation, billing period, and estimation status for
+            the call being priced.
 
         Returns
         -------

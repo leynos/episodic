@@ -15,7 +15,7 @@ from episodic.canonical.reference_documents.snapshots import (
 if typ.TYPE_CHECKING:
     from tests.fixtures.binding import _SnapshotTestFixtures
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio]
 
 
 async def _assert_snapshot_persistence(
@@ -40,24 +40,32 @@ async def _assert_snapshot_persistence(
         ),
     )
 
-    assert len(created_documents) == 1
+    assert len(created_documents) == 1, "Expected values to match"
     created = created_documents[0]
-    assert created.source_type == "reference_document"
-    assert created.reference_document_revision_id == fx.revision_v1.id
-    assert created.canonical_episode_id == fx.episode.id
+    assert created.source_type == "reference_document", "Expected values to match"
+    assert created.reference_document_revision_id == fx.revision_v1.id, (
+        "Expected values to match"
+    )
+    assert created.canonical_episode_id == fx.episode.id, "Expected values to match"
     assert created.source_uri == (
         f"ref://{fx.document.id}/revisions/{fx.revision_v1.id}"
+    ), "Expected values to match"
+    assert created.metadata["binding_id"] == str(fx.reference_binding.id), (
+        "Expected values to match"
     )
-    assert created.metadata["binding_id"] == str(fx.reference_binding.id)
-    assert created.metadata["document_kind"] == fx.document.kind.value
-    assert created.created_at == expected_created_at
+    assert created.metadata["document_kind"] == fx.document.kind.value, (
+        "Expected values to match"
+    )
+    assert created.created_at == expected_created_at, "Expected values to match"
 
     await fx.uow.commit()
 
     persisted = await fx.uow.source_documents.list_for_job(fx.job.id)
-    assert len(persisted) == 1
-    assert persisted[0].reference_document_revision_id == fx.revision_v1.id
-    assert persisted[0].created_at == expected_created_at
+    assert len(persisted) == 1, "Expected values to match"
+    assert persisted[0].reference_document_revision_id == fx.revision_v1.id, (
+        "Expected values to match"
+    )
+    assert persisted[0].created_at == expected_created_at, "Expected values to match"
 
 
 @pytest.mark.parametrize(
@@ -89,7 +97,7 @@ async def test_snapshot_resolved_bindings_persists_reference_source_documents(
             cls,
             tz: dt.tzinfo | None = None,
         ) -> dt.datetime:
-            assert tz == dt.UTC
+            assert tz == dt.UTC, "Expected values to match"
             return expected_created_at
 
     if requested_created_at is None:

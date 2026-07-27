@@ -26,6 +26,11 @@ def _build_reference_binding(
         target_kind: The kind of binding target.
         **kwargs: Optional target identifiers (series_profile_id,
             episode_template_id, ingestion_job_id, effective_from_episode_id).
+
+    Returns
+    -------
+    ReferenceBinding
+        Result produced by the operation.
     """
     now = dt.datetime.now(dt.UTC)
     return ReferenceBinding(

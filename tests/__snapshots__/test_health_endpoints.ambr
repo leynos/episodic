@@ -1,0 +1,16 @@
+# serializer version: 1
+# name: test_health_ready_route_uses_domain_health_observer
+  dict({
+    'checks': list([
+      dict({
+        'name': 'database',
+        'status': 'ok',
+      }),
+      dict({
+        'name': 'queue',
+        'status': 'error',
+      }),
+    ]),
+    'status': 'error',
+  })
+# ---

@@ -113,8 +113,8 @@ def test_checker_diagnostic_output_matches_snapshot(
 
     completed_process = run_hecate_fixture_check(package_name, config_path)
 
-    assert completed_process.returncode == 1
-    assert _render_process(completed_process) == snapshot
+    assert completed_process.returncode == 1, "Expected values to match"
+    assert _render_process(completed_process) == snapshot, "Expected values to match"
 
 
 def test_checker_accepts_allowed_fixture_graph(tmp_path: Path) -> None:

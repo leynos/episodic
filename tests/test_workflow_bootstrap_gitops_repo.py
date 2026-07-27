@@ -22,5 +22,5 @@ def test_bootstrap_gitops_repo_workflow(tmp_path: Path) -> None:
     assert code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
 
     data = read_artifact_json(artifact_dir, "bootstrap-result.json", logs)
-    assert data["status"] == "ok"
-    assert data["execution_mode"] == "validate"
+    assert data["status"] == "ok", "Expected values to match"
+    assert data["execution_mode"] == "validate", "Expected values to match"

@@ -7,6 +7,9 @@ import pytest
 from episodic.canonical.prompts import render_series_guardrail_prompt
 
 if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
+
+if typ.TYPE_CHECKING:
     from episodic.canonical.domain import JsonMapping
 
 
@@ -42,16 +45,15 @@ def _build_brief_payload() -> JsonMapping:
     }
 
 
-def test_render_series_guardrail_prompt_includes_persisted_guardrails() -> None:
+def test_render_series_guardrail_prompt_includes_persisted_guardrails(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Render guardrail text from persisted profile and template fields."""
     brief = _build_brief_payload()
 
     rendered = render_series_guardrail_prompt(brief)
 
-    assert "Avoid hype and keep claims attributable." in rendered.text
-    assert "Always include a recap in the outro." in rendered.text
-    assert "game changer" in rendered.text
-    assert "required_sections" in rendered.text
+    assert rendered.text.splitlines() == snapshot, "actual output must match snapshot"
 
 
 def test_render_series_guardrail_prompt_rejects_missing_guardrails() -> None:
@@ -88,8 +90,10 @@ def test_render_series_guardrail_prompt_handles_optional_template_guardrails() -
 
     rendered = render_series_guardrail_prompt(brief)
 
-    assert '"guardrails": null' not in rendered.text
-    assert rendered.text.count('"guardrails": {}') == 2
+    assert '"guardrails": null' not in rendered.text, (
+        "Expected collection to exclude the value"
+    )
+    assert rendered.text.count('"guardrails": {}') == 2, "Expected values to match"
 
 
 def test_render_series_guardrail_prompt_is_deterministic_for_guardrail_key_order() -> (
@@ -109,7 +113,7 @@ def test_render_series_guardrail_prompt_is_deterministic_for_guardrail_key_order
     rendered_a = render_series_guardrail_prompt(brief_a)
     rendered_b = render_series_guardrail_prompt(brief_b)
 
-    assert rendered_a.text == rendered_b.text
+    assert rendered_a.text == rendered_b.text, "Expected values to match"
 
 
 def test_render_series_guardrail_prompt_can_target_one_episode_template() -> None:
@@ -131,5 +135,9 @@ def test_render_series_guardrail_prompt_can_target_one_episode_template() -> Non
         active_template_id="template-2",
     )
 
-    assert "Close with a sources note." in rendered.text
-    assert "Always include a recap in the outro." not in rendered.text
+    assert "Close with a sources note." in rendered.text, (
+        "Expected collection to contain the value"
+    )
+    assert "Always include a recap in the outro." not in rendered.text, (
+        "Expected collection to exclude the value"
+    )

@@ -46,7 +46,9 @@ def test_config_normalises_string_action_kinds() -> None:
         enabled_action_kinds=("generate_show_notes",),
     )
 
-    assert config.enabled_action_kinds == (ActionKind.GENERATE_SHOW_NOTES,)
+    assert config.enabled_action_kinds == (ActionKind.GENERATE_SHOW_NOTES,), (
+        "Expected values to match"
+    )
 
 
 def test_planner_rejects_non_json_serializable_template_structure() -> None:
@@ -98,8 +100,12 @@ def test_config_normalises_string_provider_operations() -> None:
         execution_provider_operation="chat_completions",
     )
 
-    assert config.planning_provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
-    assert config.execution_provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
+    assert (
+        config.planning_provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
+    ), "Expected values to match"
+    assert (
+        config.execution_provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
+    ), "Expected values to match"
 
 
 @pytest.mark.parametrize(
@@ -132,8 +138,10 @@ def test_planned_action_normalizes_string_enum_fields() -> None:
         model_tier="execution",
     )
 
-    assert action.action_kind == ActionKind.GENERATE_SHOW_NOTES
-    assert action.model_tier == ModelTier.EXECUTION
+    assert action.action_kind == ActionKind.GENERATE_SHOW_NOTES, (
+        "Expected values to match"
+    )
+    assert action.model_tier == ModelTier.EXECUTION, "Expected values to match"
 
 
 @pytest.mark.parametrize(
@@ -185,8 +193,10 @@ def test_action_execution_result_normalizes_string_enum_fields() -> None:
         summary="Generated show notes.",
     )
 
-    assert result.action_kind == ActionKind.GENERATE_SHOW_NOTES
-    assert result.model_tier == ModelTier.EXECUTION
+    assert result.action_kind == ActionKind.GENERATE_SHOW_NOTES, (
+        "Expected values to match"
+    )
+    assert result.model_tier == ModelTier.EXECUTION, "Expected values to match"
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -269,7 +279,7 @@ def test_generation_orchestration_result_freezes_action_results() -> None:
         total_usage=_empty_usage(),
     )
 
-    assert aggregate.action_results == (action_result,)
+    assert aggregate.action_results == (action_result,), "Expected values to match"
     assert isinstance(aggregate.action_results, tuple), (
         "action_results should be frozen as a tuple"
     )

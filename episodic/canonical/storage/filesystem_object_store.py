@@ -43,6 +43,11 @@ async def _write_stream_to_file(
 
     Raises PayloadTooLargeError if accumulated size exceeds max_bytes.
     Updates digest in place when supplied.
+
+    Returns
+    -------
+    int
+        Result produced by the operation.
     """
     size = 0
     async for chunk in stream:
@@ -81,7 +86,7 @@ class FilesystemObjectStore(ObjectStorePort):
         self._root = root
         self._tmp_root = root / "_tmp"
 
-    # pylint: disable-next=too-many-arguments
+    # pylint: disable-next=too-many-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
     async def put(
         self,
         key: str,

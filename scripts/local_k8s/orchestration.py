@@ -68,11 +68,13 @@ def _ports_from_list(value: list[object]) -> set[int]:
 
 def _collect_host_ports(value: object) -> set[int]:
     """Return host ports from k3d JSON without depending on one exact schema."""
-    if isinstance(value, dict):
-        return _ports_from_dict(typ.cast("dict[object, object]", value))
-    if isinstance(value, list):
-        return _ports_from_list(typ.cast("list[object]", value))
-    return set()
+    match value:
+        case dict():
+            return _ports_from_dict(typ.cast("dict[object, object]", value))
+        case list():
+            return _ports_from_list(typ.cast("list[object]", value))
+        case _:
+            return set()
 
 
 def _parse_cluster_json(

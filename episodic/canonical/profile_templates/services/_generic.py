@@ -219,13 +219,6 @@ async def get_entity_with_revision(
     -------
     tuple[object, int]
         Tuple of the loaded entity object and its latest revision number.
-
-    Raises
-    ------
-    EntityNotFoundError
-        Raised when the requested entity does not exist.
-    ValueError
-        Raised when ``kind`` is unsupported.
     """
     dispatch = _get_repos_for_kind(uow, kind)
     return await _get_entity_with_latest_revision(
@@ -260,11 +253,6 @@ async def list_history(
     -------
     list[object]
         History entries for the requested parent entity.
-
-    Raises
-    ------
-    ValueError
-        Raised when ``kind`` is unsupported.
     """
     dispatch = _get_repos_for_kind(uow, kind)
     return await dispatch.list_history_for_parent(parent_id)
@@ -307,11 +295,6 @@ async def list_entities_with_revisions(
     -------
     list[tuple[object, int]]
         Sequence of ``(entity, latest_revision)`` pairs.
-
-    Raises
-    ------
-    ValueError
-        Raised when ``kind`` is unsupported.
     """
     dispatch = _get_repos_for_kind(uow, kind)
     entities = await dispatch.list_entities(series_profile_id, None, 0)

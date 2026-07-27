@@ -64,15 +64,6 @@ async def build_series_brief(
         ``reference_documents`` (``list[dict[str, object]]``), where entries
         contain serialized entity fields and revision metadata expected by
         downstream generation flows.
-
-    Raises
-    ------
-    EntityNotFoundError
-        Raised when the profile/template does not exist, or when a selected
-        template does not belong to the requested profile.
-    ValueError
-        Raised when an unsupported entity kind is passed to delegated generic
-        loaders.
     """
     profile_obj, profile_revision = await get_entity_with_revision(
         uow,

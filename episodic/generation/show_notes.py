@@ -239,6 +239,16 @@ def _require_optional_string(value: object, field_name: str) -> str | None:
     """Return *value* typed as ``str | None``.
 
     Raise if it is a non-null non-string.
+
+    Returns
+    -------
+    str | None
+        Result produced by the operation.
+
+    Raises
+    ------
+    ShowNotesResponseFormatError
+        If the operation cannot be completed.
     """
     if value is not None and not isinstance(value, str):
         msg = f"{field_name} must be a string or null."
@@ -372,15 +382,6 @@ class ShowNotesGenerator:
         -------
         ShowNotesResult
             Structured show-notes entries with LLM usage metadata.
-
-        Raises
-        ------
-        ShowNotesResponseFormatError
-            If the LLM response cannot be parsed into the expected format.
-        LLMProviderResponseError
-            If the LLM call fails with a non-retryable error.
-        LLMTransientProviderError
-            If the LLM call fails transiently after exhausting retries.
         """
         prompt = self.build_prompt(
             script_tei_xml, template_structure=template_structure

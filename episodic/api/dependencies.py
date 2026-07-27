@@ -44,16 +44,16 @@ def _validate_readiness_probe(
     label: str = "ApiDependencies.readiness_probes entries",
 ) -> None:
     """Require a readiness-probe entry to have a non-empty name and async check."""
-    if not hasattr(probe, "name") or not isinstance(probe.name, str):  # type: ignore[union-attr]
+    if not hasattr(probe, "name") or not isinstance(probe.name, str):  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
         msg = f"{label} must define a string name."
         raise TypeError(msg)
-    if not probe.name.strip():  # type: ignore[union-attr]
+    if not probe.name.strip():  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
         msg = f"{label} must define a non-empty name."
         raise ValueError(msg)
     if not hasattr(probe, "check"):
         msg = f"{label} must define an async check."
         raise TypeError(msg)
-    _validate_async_callable(probe.check, label)  # type: ignore[union-attr]
+    _validate_async_callable(probe.check, label)  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
 
 
 def _validate_authorization_port(port: object) -> None:

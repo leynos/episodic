@@ -3,7 +3,7 @@
 import json
 import os
 import socket
-import subprocess  # noqa: S404
+import subprocess  # noqa: S404  # The test utility owns controlled subprocess lifecycle operations.
 import typing as typ
 import uuid
 from shutil import which
@@ -35,10 +35,10 @@ def _ensure_string_kv(key: object, item: object) -> tuple[str, str]:
     """Assert *key* and *item* are both strings and return them typed."""
     if not isinstance(key, str):
         msg = f"Expected a string key, got {type(key).__name__}"
-        raise AssertionError(msg)  # noqa: TRY004
+        raise AssertionError(msg)  # noqa: TRY004  # The polling helper raises AssertionError to report an unmet test expectation.
     if not isinstance(item, str):
         msg = f"Expected a string value for key {key!r}, got {type(item).__name__}"
-        raise AssertionError(msg)  # noqa: TRY004
+        raise AssertionError(msg)  # noqa: TRY004  # The polling helper raises AssertionError to report an unmet test expectation.
     return key, item
 
 
@@ -46,7 +46,7 @@ def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:
     """Return a mapping with str keys and str values, or raise with diagnostics."""
     if not isinstance(value, dict):
         msg = f"Expected a mapping[str, str], got {type(value).__name__}"
-        raise AssertionError(msg)  # noqa: TRY004
+        raise AssertionError(msg)  # noqa: TRY004  # The polling helper raises AssertionError to report an unmet test expectation.
     result: dict[str, str] = {}
     for key, item in value.items():
         k, v = _ensure_string_kv(key, item)
@@ -90,7 +90,7 @@ def _run_preflight_container(
         ACT_RUNNER_IMAGE,
     ]
     try:
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
             cmd,
             text=True,
             capture_output=True,
@@ -111,7 +111,7 @@ def _cleanup_preflight_container(
     container_name: str,
 ) -> None:
     """Force-remove a stalled preflight container."""
-    subprocess.run(  # noqa: S603
+    subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
         [podman_path, "--remote", "--url", socket_uri, "rm", "-f", container_name],
         text=True,
         capture_output=True,
@@ -139,7 +139,7 @@ def _ensure_act_runner_backend(socket_uri: str) -> None:
 def _run_act_subprocess(cmd: list[str], env: dict[str, str]) -> tuple[int, str]:
     """Execute act and return (returncode, combined_logs); raise on timeout."""
     try:
-        completed = subprocess.run(  # noqa: S603
+        completed = subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
             cmd,
             text=True,
             capture_output=True,

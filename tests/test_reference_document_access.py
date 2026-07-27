@@ -22,7 +22,7 @@ def test_series_aligned_host_guest_access_paths(
             "metadata": {"name": "Aligned Host"},
         },
     )
-    assert host_response.status_code == 201
+    assert host_response.status_code == 201, "Expected values to match"
     host_document_id = typ.cast(
         "str", typ.cast("dict[str, object]", host_response.json)["id"]
     )
@@ -35,13 +35,13 @@ def test_series_aligned_host_guest_access_paths(
             "metadata": {"name": "Aligned Guest"},
         },
     )
-    assert guest_response.status_code == 201
+    assert guest_response.status_code == 201, "Expected values to match"
 
     host_list_response = canonical_api_client.simulate_get(
         f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents",
         params={"kind": "host_profile", "limit": "10", "offset": "0"},
     )
-    assert host_list_response.status_code == 200
+    assert host_list_response.status_code == 200, "Expected values to match"
     host_list_items = typ.cast(
         "list[dict[str, object]]",
         typ.cast("dict[str, object]", host_list_response.json)["items"],
@@ -52,7 +52,7 @@ def test_series_aligned_host_guest_access_paths(
         f"/v1/series-profiles/{fixture.primary_profile_id}/reference-documents",
         params={"kind": "guest_profile", "limit": "10", "offset": "0"},
     )
-    assert guest_list_response.status_code == 200
+    assert guest_list_response.status_code == 200, "Expected values to match"
     guest_list_items = typ.cast(
         "list[dict[str, object]]",
         typ.cast("dict[str, object]", guest_list_response.json)["items"],

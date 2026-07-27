@@ -90,7 +90,7 @@ def _is_string_mapping(value: object) -> bool:
     """Return True when *value* is a dict whose every key and value is a str."""
     return isinstance(value, dict) and all(
         isinstance(k, str) and isinstance(v, str)
-        for k, v in value.items()  # type: ignore[union-attr]
+        for k, v in value.items()  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
     )
 
 

@@ -1,7 +1,7 @@
 """Response serializers for Falcon profile and template endpoints."""
 
 import typing as typ
-import uuid  # noqa: TC003
+import uuid  # noqa: TC003  # This type remains available at runtime for annotation introspection.
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (

@@ -1,0 +1,8 @@
+[allowlist]
+# These are public standards or intentional container/preview contract values,
+# not machine-specific paths or production endpoints.
+values = [
+  '^http://www\.tei-c\.org/ns/1\.0$',
+  '^http://episodic\.localhost(?::[0-9]+)?(?:/.*)?$',
+  '^/(?:var/lib/apt/lists|app/\.venv/bin|usr/sbin/nologin)$',
+]

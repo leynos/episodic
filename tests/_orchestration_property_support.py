@@ -30,7 +30,7 @@ class GraphEventRecorder:
 
     def record(self, event: str) -> None:
         """Append one observed graph-node event."""
-        self.events.append(event)
+        self.events += [event]
 
 
 class PropGraphPlanner:

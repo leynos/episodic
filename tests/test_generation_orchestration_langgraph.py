@@ -195,13 +195,17 @@ class TestGenerationOrchestrationGraph:
         state = await graph.ainvoke(GenerationGraphState(request=_request()))
 
         suspended_result = state["suspended_result"]
-        assert suspended_result.workflow_id == "corr-graph"
-        assert suspended_result.step_name == "execute"
+        assert suspended_result.workflow_id == "corr-graph", "Expected values to match"
+        assert suspended_result.step_name == "execute", "Expected values to match"
         checkpoint = await checkpoint_store.get(suspended_result.checkpoint_id)
-        assert checkpoint is not None
-        assert checkpoint.idempotency_key == suspended_result.idempotency_key
-        assert checkpoint.payload["request"] == {"correlation_id": "corr-graph"}
-        assert not tool_executor.calls
+        assert checkpoint is not None, "Expected value to be present"
+        assert checkpoint.idempotency_key == suspended_result.idempotency_key, (
+            "Expected values to match"
+        )
+        assert checkpoint.payload["request"] == {"correlation_id": "corr-graph"}, (
+            "Expected values to match"
+        )
+        assert not tool_executor.calls, "Expected condition to be false"
 
     @pytest.mark.asyncio
     async def test_generation_graph_reuses_checkpoint_for_same_step_key(self) -> None:
@@ -219,7 +223,7 @@ class TestGenerationOrchestrationGraph:
         assert (
             second_state["suspended_result"].checkpoint_id
             == first_state["suspended_result"].checkpoint_id
-        )
+        ), "Expected values to match"
 
     @pytest.mark.asyncio
     async def test_resume_generation_orchestration_finishes_from_checkpoint(
@@ -245,12 +249,12 @@ class TestGenerationOrchestrationGraph:
             command=command,
         )
 
-        assert result.total_usage.total_tokens == 38
-        assert result.action_results == (_action_result(),)
-        assert resume_port.calls == [command]
+        assert result.total_usage.total_tokens == 38, "Expected values to match"
+        assert result.action_results == (_action_result(),), "Expected values to match"
+        assert resume_port.calls == [command], "Expected values to match"
         checkpoint = await checkpoint_store.get(command.checkpoint_id)
-        assert checkpoint is not None
-        assert checkpoint.status == "resumed"
+        assert checkpoint is not None, "Expected value to be present"
+        assert checkpoint.status == "resumed", "Expected values to match"
 
     @pytest.mark.asyncio
     async def test_resume_generation_orchestration_rejects_multi_step_checkpoint(
@@ -366,7 +370,9 @@ class TestGenerationOrchestrationGraph:
             checkpoint_store.save_or_reuse(duplicate),
         )
 
-        assert stored_second.checkpoint_id == stored_first.checkpoint_id
+        assert stored_second.checkpoint_id == stored_first.checkpoint_id, (
+            "Expected values to match"
+        )
 
     @pytest.mark.asyncio
     async def test_in_memory_checkpoint_store_mark_resumed_raises_for_unknown_id(

@@ -29,8 +29,8 @@ def test_resolve_hello_prefers_rust_extension(
 
     resolved = compat._resolve_hello()
 
-    assert resolved is rust_impl
-    assert resolved() == "rust"
+    assert resolved is rust_impl, "Expected values to match"
+    assert resolved() == "rust", "Expected values to match"
 
 
 def test_resolve_hello_falls_back_to_python(
@@ -44,8 +44,8 @@ def test_resolve_hello_falls_back_to_python(
 
     resolved = compat._resolve_hello()
 
-    assert resolved is py_impl
-    assert resolved() == "py"
+    assert resolved is py_impl, "Expected values to match"
+    assert resolved() == "py", "Expected values to match"
 
 
 def test_compat_hello_remains_callable(
@@ -57,4 +57,4 @@ def test_compat_hello_remains_callable(
     monkeypatch.setattr(compat, "_rust_hello", None, raising=False)
     monkeypatch.setattr(compat, "_py_hello", py_impl, raising=False)
 
-    assert compat.hello() == "py"
+    assert compat.hello() == "py", "Expected values to match"

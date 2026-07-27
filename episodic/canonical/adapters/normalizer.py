@@ -69,6 +69,11 @@ def _build_tei_xml(title: str) -> str:
     containing only the title.  Raw source content is **not** embedded in
     the fragment; a production normalizer should parse or transform the
     content into TEI body elements.
+
+    Returns
+    -------
+    str
+        Result produced by the operation.
     """
     document = _tei.Document(title)
     return _tei.emit_xml(document)

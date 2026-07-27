@@ -11,8 +11,6 @@ entry_id = await recorder.record_provider_call(record)
 ```
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -79,7 +77,7 @@ class CostRecorder:
     pricing_catalogue: PricingCataloguePort
     pricing_engine: PricingEngine
 
-    async def _resolve_pricing_snapshot(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def _resolve_pricing_snapshot(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         provider_name: str,
         model: str,
@@ -103,11 +101,6 @@ class CostRecorder:
         -------
         PricingSnapshot
             Immutable snapshot that should be pinned for the run.
-
-        Raises
-        ------
-        LookupError
-            Propagated if the catalogue cannot resolve a snapshot.
         """
         return await self.pricing_catalogue.resolve(
             provider_name,
@@ -182,6 +175,11 @@ class CostRecorder:
 
         Prefers a pinned snapshot for the run; falls back to catalogue resolution
         when no pin exists.
+
+        Returns
+        -------
+        PricingSnapshot
+            Result produced by the operation.
         """
         key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,
@@ -215,13 +213,6 @@ class CostRecorder:
         -------
         CostLedgerEntryId
             Identifier returned by the ledger port.
-
-        Raises
-        ------
-        LookupError
-            Propagated if pricing snapshot resolution fails.
-        CostAccountingError
-            Propagated if pricing validation fails.
         """
         snapshot = await self._resolve_snapshot_for_record(record)
         priced_call = self.pricing_engine.price(

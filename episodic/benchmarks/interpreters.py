@@ -1,7 +1,5 @@
 """Benchmark inline vs interpreter-pool execution for CPU-heavy tasks."""
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import dataclasses as dc

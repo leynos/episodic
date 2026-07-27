@@ -1,7 +1,5 @@
 """Data shapes used by source-intake application services."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 

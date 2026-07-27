@@ -102,15 +102,23 @@ async def test_source_intake_upload_job_and_attach_flow(
             f"/v1/ingestion-jobs/{job_response.json()['id']}"
         )
 
-    assert replay_response.status_code == 201
-    assert replay_response.json() == upload_response.json()
-    assert upload_response.json()["content_hash"].startswith("sha256:")
-    assert job_response.status_code == 201
-    assert job_response.json()["intake_state"] == "awaiting_sources"
-    assert source_response.status_code == 201
-    assert source_response.json()["upload_id"] == upload_response.json()["id"]
-    assert status_response.status_code == 200
-    assert status_response.json()["intake_state"] == "ready_for_generation"
+    assert replay_response.status_code == 201, "Expected values to match"
+    assert replay_response.json() == upload_response.json(), "Expected values to match"
+    assert upload_response.json()["content_hash"].startswith("sha256:"), (
+        "Expected value to have the required prefix"
+    )
+    assert job_response.status_code == 201, "Expected values to match"
+    assert job_response.json()["intake_state"] == "awaiting_sources", (
+        "Expected values to match"
+    )
+    assert source_response.status_code == 201, "Expected values to match"
+    assert source_response.json()["upload_id"] == upload_response.json()["id"], (
+        "Expected values to match"
+    )
+    assert status_response.status_code == 200, "Expected values to match"
+    assert status_response.json()["intake_state"] == "ready_for_generation", (
+        "Expected values to match"
+    )
 
 
 @pytest.mark.asyncio
@@ -130,8 +138,8 @@ async def test_source_intake_idempotency_conflict(
         second = await _post_text_upload(client, key="conflict-key", payload=b"bye\n")
 
     assert first.status_code == 201, first.text
-    assert second.status_code == 409
-    assert second.json()["code"] == "idempotency_conflict"
+    assert second.status_code == 409, "Expected values to match"
+    assert second.json()["code"] == "idempotency_conflict", "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -173,8 +181,8 @@ async def test_source_intake_idempotency_is_scoped_by_authorized_principal(
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
     assert replay.status_code == 201, replay.text
-    assert first.json()["id"] != second.json()["id"]
-    assert replay.json()["id"] == first.json()["id"]
+    assert first.json()["id"] != second.json()["id"], "Expected values to differ"
+    assert replay.json()["id"] == first.json()["id"], "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -221,12 +229,13 @@ async def test_source_intake_response_envelope_snapshot(
     assert job_response.status_code == 201, job_response.text
     assert source_response.status_code == 201, source_response.text
     assert status_response.status_code == 200, status_response.text
-    assert {
+    response_envelopes = {
         "upload": _stable_upload_fields(upload_response.json()),
         "job": _stable_job_fields(job_response.json()),
         "source": _stable_source_fields(source_response.json()),
         "status": _stable_job_fields(status_response.json()),
-    } == snapshot
+    }
+    assert response_envelopes == snapshot, "actual output must match snapshot"
 
 
 async def _acquire_and_run_failing_work(
@@ -237,12 +246,17 @@ async def _acquire_and_run_failing_work(
 
     Asserts that the acquire returns ``Acquired`` and ``_idempotent_response``
     propagates the ``RuntimeError("boom")`` raised by work.
+
+    Returns
+    -------
+    Acquired
+        Result produced by the operation.
     """
     request = _idempotency_request(idempotency_key)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         outcome = await uow.idempotency.acquire(request=request)
         await uow.commit()
-    assert isinstance(outcome, Acquired)
+    assert isinstance(outcome, Acquired), "Expected value to have the required type"
 
     async def failing_work() -> IdempotentResponse:
         await asyncio.sleep(0)
@@ -269,7 +283,7 @@ async def test_idempotent_response_deletes_in_flight_on_work_failure(
     async with session_factory() as session:
         record = await session.get(IdempotencyRecordModel, outcome.record_id)
 
-    assert record is None
+    assert record is None, "Expected value to be absent"
 
 
 @pytest.mark.asyncio
@@ -285,7 +299,9 @@ async def test_idempotent_response_allows_retry_after_work_failure(
         )
         await uow.commit()
 
-    assert isinstance(retry_outcome, Acquired)
+    assert isinstance(retry_outcome, Acquired), (
+        "Expected value to have the required type"
+    )
 
 
 def test_idempotency_outcome_encoding_rejects_large_payloads() -> None:

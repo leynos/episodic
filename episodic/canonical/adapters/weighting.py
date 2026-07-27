@@ -56,6 +56,11 @@ def _extract_coefficients(
     The configuration may contain a ``"weighting"`` dictionary with
     ``"quality_coefficient"``, ``"freshness_coefficient"``, and
     ``"reliability_coefficient"`` keys. Missing keys fall back to defaults.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        Result produced by the operation.
     """
     weighting = series_configuration.get("weighting")
     if not isinstance(weighting, dict):

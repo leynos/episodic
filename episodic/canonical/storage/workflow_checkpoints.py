@@ -65,10 +65,6 @@ class SqlAlchemyWorkflowCheckpointStore:
         self._metrics = metrics or NoopMetrics()
         self._clock = clock or PerfCounterClock()
 
-    def _record_counter(self, name: str, *, labels: dict[str, str]) -> None:
-        """Record a bounded-cardinality counter through the injected metrics port."""
-        self._metrics.increment_counter(name, labels=labels)
-
     def _record_latency(
         self,
         name: str,
@@ -83,13 +79,13 @@ class SqlAlchemyWorkflowCheckpointStore:
     def _record_save_outcome(self, started_at: float, outcome: str) -> None:
         """Record save-or-reuse metrics."""
         labels = {"outcome": outcome}
-        self._record_counter(_METRIC_SAVE_OPERATIONS, labels=labels)
+        self._metrics.increment_counter(_METRIC_SAVE_OPERATIONS, labels=labels)
         self._record_latency(_METRIC_SAVE_LATENCY_MS, started_at, labels=labels)
 
     def _record_resume_outcome(self, started_at: float, outcome: str) -> None:
         """Record mark-resumed metrics."""
         labels = {"outcome": outcome}
-        self._record_counter(_METRIC_RESUME_OPERATIONS, labels=labels)
+        self._metrics.increment_counter(_METRIC_RESUME_OPERATIONS, labels=labels)
         self._record_latency(_METRIC_RESUME_LATENCY_MS, started_at, labels=labels)
 
     async def get(self, checkpoint_id: str) -> WorkflowCheckpoint | None:
@@ -141,6 +137,16 @@ class SqlAlchemyWorkflowCheckpointStore:
         the checkpoint durable on its own. If convergence cannot recover the
         existing checkpoint for a conflicting key, the storage failure is
         propagated so the caller can retry or fail the suspend attempt.
+
+        Returns
+        -------
+        WorkflowCheckpoint
+            Result produced by the operation.
+
+        Raises
+        ------
+        IntegrityError
+            If the operation cannot be completed.
         """
         started_at = self._clock.monotonic_seconds()
         record = WorkflowCheckpointRecord(
@@ -171,7 +177,7 @@ class SqlAlchemyWorkflowCheckpointStore:
                 "sql_checkpoint_store.save_or_reuse.idempotency_conflict",
                 idempotency_key=checkpoint.idempotency_key,
             )
-            self._record_counter(
+            self._metrics.increment_counter(
                 _METRIC_SAVE_CONFLICTS,
                 labels={"outcome": "conflict"},
             )
@@ -184,7 +190,7 @@ class SqlAlchemyWorkflowCheckpointStore:
                 "sql_checkpoint_store.save_or_reuse.conflict_missing_checkpoint",
                 idempotency_key=checkpoint.idempotency_key,
             )
-            self._record_counter(
+            self._metrics.increment_counter(
                 _METRIC_RECOVERY_FAILURES,
                 labels={
                     "operation": "save_or_reuse",
@@ -206,6 +212,16 @@ class SqlAlchemyWorkflowCheckpointStore:
         Raises
         ------
             ValueError: If ``checkpoint_id`` does not identify a checkpoint.
+
+        Returns
+        -------
+        WorkflowCheckpoint
+            Result produced by the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
         """
         started_at = self._clock.monotonic_seconds()
         record = await self._session.get(

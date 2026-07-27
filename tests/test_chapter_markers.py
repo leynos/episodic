@@ -100,18 +100,8 @@ def test_enrich_tei_with_chapter_markers(
     assert enriched_xml.count('type="chapters"') == 1, (
         "expected exactly one chapters div in enriched TEI"
     )
-    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_xml, (
-        "expected intro chapter item with segment locator"
-    )
-    assert '<item n="PT5M30S" corresp="#seg-main">' in enriched_xml, (
-        "expected main chapter item with segment locator"
-    )
-    assert "<label>Introduction</label>" in enriched_xml, (
-        "expected introduction label in enriched TEI"
-    )
-    assert "The hosts begin the main topic." in enriched_xml, (
-        "expected main chapter summary in enriched TEI"
-    )
+    assert enriched_xml == snapshot, "actual output must match snapshot"
+
     assert enriched_xml == snapshot, "expected enriched TEI to match snapshot"
 
 
@@ -136,11 +126,13 @@ def test_enrich_tei_canonicalizes_bare_internal_locator(
         ),
     )
 
-    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_xml
+    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_xml, (
+        "Expected collection to contain the value"
+    )
     assert (
         '<item n="PT1S" corresp="https://example.test/episode.xml#seg-main">'
         in enriched_xml
-    )
+    ), "Expected collection to contain the value"
 
 
 def test_enrich_tei_replaces_existing_chapters_div(
@@ -156,10 +148,12 @@ def test_enrich_tei_replaces_existing_chapters_div(
         ),
     )
 
-    assert enriched_xml.count('type="chapters"') == 1
-    assert "Old summary" not in enriched_xml
-    assert "<label>New</label>" in enriched_xml
-    assert enriched_xml == snapshot
+    assert enriched_xml.count('type="chapters"') == 1, "Expected values to match"
+    assert "Old summary" not in enriched_xml, "Expected collection to exclude the value"
+    assert "<label>New</label>" in enriched_xml, (
+        "Expected collection to contain the value"
+    )
+    assert enriched_xml == snapshot, "Expected values to match"
 
 
 def test_enrich_tei_with_empty_result_returns_original(
@@ -173,8 +167,8 @@ def test_enrich_tei_with_empty_result_returns_original(
         chapter_markers_result(),
     )
 
-    assert enriched_xml == original_xml
-    assert "<div" not in enriched_xml
+    assert enriched_xml == original_xml, "Expected values to match"
+    assert "<div" not in enriched_xml, "Expected collection to exclude the value"
 
 
 def test_enrich_tei_with_empty_result_removes_existing_chapters(
@@ -190,9 +184,11 @@ def test_enrich_tei_with_empty_result_removes_existing_chapters(
 
     document = tei.parse_xml(enriched_xml)
     document.validate()
-    assert 'type="chapters"' not in enriched_xml
-    assert "Old summary" not in enriched_xml
-    assert enriched_xml == snapshot
+    assert 'type="chapters"' not in enriched_xml, (
+        "Expected collection to exclude the value"
+    )
+    assert "Old summary" not in enriched_xml, "Expected collection to exclude the value"
+    assert enriched_xml == snapshot, "Expected values to match"
 
 
 def test_enrich_tei_escapes_xml_unsafe_characters(
@@ -213,8 +209,12 @@ def test_enrich_tei_escapes_xml_unsafe_characters(
 
     document = tei.parse_xml(enriched_xml)
     document.validate()
-    assert "Summary with &lt;tags&gt; &amp; ampersands." in enriched_xml
-    assert "Summary with <tags> & ampersands." not in enriched_xml
+    assert "Summary with &lt;tags&gt; &amp; ampersands." in enriched_xml, (
+        "Expected collection to contain the value"
+    )
+    assert "Summary with <tags> & ampersands." not in enriched_xml, (
+        "Expected collection to exclude the value"
+    )
 
 
 def test_enrich_tei_omits_content_when_summary_is_blank(
@@ -229,8 +229,12 @@ def test_enrich_tei_omits_content_when_summary_is_blank(
 
     document = tei.parse_xml(enriched_xml)
     document.validate()
-    assert "<label>Introduction</label>Introduction" not in enriched_xml
-    assert '<item n="PT0S"><label>Introduction</label></item>' in enriched_xml
+    assert "<label>Introduction</label>Introduction" not in enriched_xml, (
+        "Expected collection to exclude the value"
+    )
+    assert '<item n="PT0S"><label>Introduction</label></item>' in enriched_xml, (
+        "Expected collection to contain the value"
+    )
 
 
 def test_enrich_tei_is_idempotent_for_same_result(
@@ -245,8 +249,8 @@ def test_enrich_tei_is_idempotent_for_same_result(
     once = enrich_tei_with_chapter_markers(minimal_tei, result)
     twice = enrich_tei_with_chapter_markers(once, result)
 
-    assert twice == once
-    assert twice.count('type="chapters"') == 1
+    assert twice == once, "Expected values to match"
+    assert twice.count('type="chapters"') == 1, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -265,7 +269,7 @@ async def test_enrich_tei_is_idempotent_across_concurrent_calls(
         asyncio.to_thread(enrich_tei_with_chapter_markers, base_xml, result),
     )
 
-    assert enriched_documents == [base_xml, base_xml]
+    assert enriched_documents == [base_xml, base_xml], "Expected values to match"
 
 
 def test_enrich_tei_with_missing_body_raises_value_error(
@@ -360,4 +364,6 @@ def test_arbitrary_summary_text_produces_valid_tei(
 
     document = tei.parse_xml(enriched_xml)
     document.validate()
-    assert xml_utils.escape(summary.strip()) in enriched_xml
+    assert xml_utils.escape(summary.strip()) in enriched_xml, (
+        "Expected collection to contain the value"
+    )

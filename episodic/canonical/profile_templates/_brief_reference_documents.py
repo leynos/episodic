@@ -67,6 +67,11 @@ async def _load_episode_aware_reference_documents(
     Validates the episode, resolves series-level bindings via
     ``effective_from_episode_id`` precedence, then appends any template-scoped
     bindings without episode filtering.
+
+    Returns
+    -------
+    list[JsonMapping]
+        Result produced by the operation.
     """
     await _validate_episode_for_brief(uow, episode_id=episode_id, profile_id=profile_id)
     resolved_bindings = await resolve_bindings(
@@ -144,6 +149,11 @@ async def _load_legacy_reference_documents(
 
     Aggregates all SERIES_PROFILE bindings plus EPISODE_TEMPLATE bindings for
     every template in ``template_items``, then serialises the full set.
+
+    Returns
+    -------
+    list[JsonMapping]
+        Result produced by the operation.
     """
     all_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
