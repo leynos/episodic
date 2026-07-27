@@ -1,6 +1,6 @@
 """Refresh and render shared en-GB-oxendict ``typos`` configuration."""
 
-
+import collections.abc as cabc
 import dataclasses as dc
 import email.utils
 import json
@@ -23,9 +23,6 @@ from typos_rollout_cache import (
 from typos_rollout_cache import (
     atomic_write as _atomic_write,
 )
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
 
 SCHEMA_VERSION = 1
 HTTP_NOT_MODIFIED = 304
