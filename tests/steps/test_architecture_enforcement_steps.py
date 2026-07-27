@@ -9,6 +9,8 @@ keeps the fixture infrastructure connected to the behaviour-driven acceptance
 contract.
 """
 
+from __future__ import annotations
+
 import dataclasses as dc
 import subprocess  # noqa: S404, TC003  # pytest-bdd evaluates step annotations.
 from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.

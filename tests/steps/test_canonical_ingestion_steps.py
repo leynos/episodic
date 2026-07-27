@@ -7,6 +7,8 @@ Run the canonical ingestion BDD scenario:
 >>> pytest tests/steps/test_canonical_ingestion_steps.py -k ingestion
 """
 
+from __future__ import annotations
+
 import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import collections.abc as cabc  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import datetime as dt

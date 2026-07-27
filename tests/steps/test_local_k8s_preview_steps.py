@@ -1,5 +1,7 @@
 """Behavioural coverage for the local Kubernetes preview CLI surface."""
 
+from __future__ import annotations
+
 import dataclasses as dc
 import subprocess  # noqa: S404 - behavioural test invokes the local CLI.
 import sys

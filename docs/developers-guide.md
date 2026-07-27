@@ -66,6 +66,49 @@ targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
 the wrapper and skipped, which keeps parse incompatibilities visible without
 hiding other diagnostics from files that PyPy can analyse.
 
+The lint target therefore runs the df12 Pylint plug-in separately under CPython
+3.14. This pass uses the project's actual syntax and Astroid runtime, while the
+PyPy pass retains its compatibility shim for the built-in Pylint checks. The
+equivalent df12 command is:
+
+```shell
+uv run --python 3.14 pylint --disable=all \
+  --load-plugins=df12_python_lints \
+  --enable=R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111 \
+  alembic episodic openai_test_types.py tests
+```
+
+The df12 pass covers the same `PYLINT_TARGETS` scope as the PyPy pass:
+application and migration code, the OpenAI test types, and the complete test
+suite. Keep new df12 checks in the `DF12_PYLINT_MESSAGES` allow-list so their
+adoption remains explicit. The C9112 future-annotations check runs separately
+over the same scope:
+
+```shell
+uv run --python 3.14 pylint --disable=all \
+  --load-plugins=df12_python_lints --enable=C9112 \
+  --ignore-patterns='test_.*_steps.py' \
+  alembic episodic openai_test_types.py tests
+```
+
+Existing pytest-bdd step modules match `test_*_steps.py` and retain postponed
+annotations because pytest-bdd evaluates step annotations at runtime. The
+separate C9112 pass exempts only those modules; every other df12 check still
+covers them.
+
+`ambrleaks` checks Syrupy snapshot files under `tests` for values that should
+have been redacted. Run the standalone command when investigating a snapshot
+finding:
+
+```shell
+uv tool run --python 3.14 \
+  --from 'git+https://github.com/leynos/df12-python-lints.git@v0.1.0' \
+  ambrleaks tests
+```
+
+The `DF12_PYTHON_LINTS_REF` and `DF12_PYTHON` variables in the `Makefile`
+control the shared lint package and interpreter used by both commands.
+
 ## Spelling policy
 
 `make all` and `make markdownlint` enforce en-GB-oxendict spelling using the

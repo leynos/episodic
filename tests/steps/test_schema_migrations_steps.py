@@ -7,6 +7,8 @@ Run the schema migration BDD scenarios:
 >>> pytest tests/steps/test_schema_migrations_steps.py -k schema
 """
 
+from __future__ import annotations
+
 import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import typing as typ
 

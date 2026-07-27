@@ -1,5 +1,7 @@
 """Behavioural tests for the Pedante evaluator."""
 
+from __future__ import annotations
+
 import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json

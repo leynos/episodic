@@ -1,5 +1,7 @@
 """Behavioural tests for the Falcon-on-Granian HTTP service scaffold."""
 
+from __future__ import annotations
+
 import dataclasses as dc
 import os
 import shutil

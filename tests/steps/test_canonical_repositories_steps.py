@@ -7,6 +7,8 @@ Run the canonical repository BDD scenarios:
 >>> pytest tests/steps/test_canonical_repositories_steps.py
 """
 
+from __future__ import annotations
+
 import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import collections.abc as cabc  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import datetime as dt
