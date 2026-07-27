@@ -45,6 +45,7 @@ class LaneScore:
     false_positives: int
     false_negatives: int
     true_negatives: int
+    unmatched_findings: int
 
 
 def _mapping(value: object, *, context: str) -> cabc.Mapping[str, object]:
@@ -82,11 +83,15 @@ def _positive_line(value: object, *, context: str) -> int:
 
 
 def _relative_source_path(raw_path: object, corpus_root: Path) -> str:
-    path = Path(_string(raw_path, context="finding path")).resolve()
+    root = corpus_root.resolve()
+    path = Path(_string(raw_path, context="finding path"))
+    if not path.is_absolute():
+        path = root / path
+    path = path.resolve()
     try:
-        return path.relative_to(corpus_root.resolve()).as_posix()
+        return path.relative_to(root).as_posix()
     except ValueError as error:
-        msg = f"finding path {path} is outside corpus root {corpus_root.resolve()}"
+        msg = f"finding path {path} is outside corpus root {root}"
         raise ValueError(msg) from error
 
 
@@ -201,7 +206,9 @@ def score_findings(
             raise ValueError(msg)
         expectations_by_location[location] = expectation
 
-    counts = {lane: {"tp": 0, "fp": 0, "fn": 0, "tn": 0} for lane in Lane}
+    counts = {
+        lane: {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "unmatched": 0} for lane in Lane
+    }
     matched_expectations: set[str] = set()
     seen_finding_locations: set[tuple[str, int]] = set()
 
@@ -212,7 +219,7 @@ def score_findings(
         seen_finding_locations.add(location)
         expectation = expectations_by_location.get(location)
         if expectation is None:
-            counts[finding.lane]["fp"] += 1
+            counts[finding.lane]["unmatched"] += 1
             continue
 
         matched_expectations.add(expectation.identifier)
@@ -231,6 +238,7 @@ def score_findings(
             false_positives=values["fp"],
             false_negatives=values["fn"],
             true_negatives=values["tn"],
+            unmatched_findings=values["unmatched"],
         )
         for lane, values in counts.items()
     }
