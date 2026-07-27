@@ -23,7 +23,7 @@ PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
 PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
 PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
 PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
-SKYLOS = $(UV_ENV) $(UV) run skylos
+SKYLOS = $(UV_ENV) $(UV) run skylos --config-file pyproject.toml
 SKYLOS_TARGETS ?= $(PYLINT_TARGETS)
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
