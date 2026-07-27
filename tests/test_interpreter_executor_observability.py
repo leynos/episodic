@@ -1,6 +1,7 @@
 """Observability tests for interpreter CPU task executors."""
 
 import concurrent.futures as cf
+import contextlib
 import dataclasses as dc
 import typing as typ
 
@@ -200,12 +201,11 @@ async def test_builder_passes_metrics_to_interpreter_executor(
         "Expected value to have the required type"
     )
 
-    try:
+    with contextlib.ExitStack() as lifecycle:
+        lifecycle.callback(executor.shutdown)
         assert await executor.map_ordered(_square, (2,)) == [4], (
             "Expected values to match"
         )
-    finally:
-        executor.shutdown()
 
     assert (
         "interpreter_pool.map.items",

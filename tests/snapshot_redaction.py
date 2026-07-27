@@ -17,6 +17,12 @@ _UUID_PATTERN = re.compile(
 def redact_snapshot_uuids(value: object) -> object:
     """Replace UUID values recursively while preserving snapshot structure.
 
+    Parameters
+    ----------
+    value : object
+        UUID, string, dictionary, list, or tuple to traverse recursively.
+        Values of other types pass through unchanged.
+
     Examples
     --------
     ``redact_snapshot_uuids({"id": UUID(int=0)})`` returns

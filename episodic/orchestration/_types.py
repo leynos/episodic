@@ -57,6 +57,10 @@ class ToolExecutionError(RuntimeError):
     """Raised when a planned action fails during tool execution."""
 
 
+class ShowNotesGeneratorNotInitializedError(ToolExecutionError):
+    """Raised when the show-notes executor has no initialized generator."""
+
+
 class ShowNotesFormatError(ToolExecutionError):
     """Raised when the show-notes generator returns malformed structured JSON."""
 

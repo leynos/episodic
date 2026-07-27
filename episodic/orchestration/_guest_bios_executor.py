@@ -155,7 +155,7 @@ class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments  # The parame
         """Return the pre-built guest-bios generator."""
         if self.generator is None:
             msg = "Guest-bios generator was not initialized"
-            raise RuntimeError(msg)
+            raise ToolExecutionError(msg)
         return self.generator
 
     @staticmethod

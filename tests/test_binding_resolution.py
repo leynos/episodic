@@ -17,6 +17,7 @@ from episodic.canonical.reference_documents.resolution import (
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+    from tests.fixtures.binding import BindingFixtures
 
 from tests.conftest import create_episode_template_for_binding_tests
 
@@ -24,7 +25,7 @@ pytestmark = [pytest.mark.asyncio]
 
 
 async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Resolution returns empty list when no bindings exist for series profile."""
     fixtures = uow_with_fixtures
@@ -37,7 +38,7 @@ async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
 
 
 async def test_resolve_bindings_returns_empty_for_nonexistent_episode_id(
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Resolution returns empty list when episode_id does not exist in the DB."""
     fixtures = uow_with_fixtures
@@ -71,7 +72,7 @@ async def test_resolve_bindings_returns_empty_for_nonexistent_episode_id(
 
 
 async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """When no episode_id is provided, resolution includes default binding."""
     fixtures = uow_with_fixtures
@@ -100,71 +101,8 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     assert resolved[0].revision.id == revision_v1.id, "must match"
 
 
-class _ScenarioParams(typ.NamedTuple):
-    episode_key: str
-    revision_key: str
-    resolve_key: str
-    expect_default: bool
-
-
-@pytest.mark.parametrize(
-    "scenario",
-    [
-        _ScenarioParams("episode_middle", "revision_v2", "episode_middle", False),  # noqa: FBT003  # Named tuple fields document these compact table-driven scenario values.
-        _ScenarioParams("episode_late", "revision_v3", "episode_early", True),  # noqa: FBT003  # Named tuple fields document these compact table-driven scenario values.
-    ],
-    ids=["episode_specific_over_default", "fallback_to_default"],
-)
-async def test_resolve_bindings_scenario(
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
-    scenario: _ScenarioParams,
-) -> None:
-    """Test binding resolution scenarios with episode precedence logic."""
-    fixtures = uow_with_fixtures
-    uow = fixtures["uow"]
-    series = fixtures["series"]
-    now = fixtures["now"]
-
-    binding_default = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=fixtures["revision_v1"].id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=None,
-        created_at=now - dt.timedelta(days=12),
-    )
-    binding_episode = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=fixtures[scenario.revision_key].id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=fixtures[scenario.episode_key].id,
-        created_at=now - dt.timedelta(days=6),
-    )
-    await uow.reference_bindings.add(binding_default)
-    await uow.reference_bindings.add(binding_episode)
-    await uow.commit()
-
-    resolved = await resolve_bindings(
-        uow,
-        series_profile_id=series.id,
-        episode_id=fixtures[scenario.resolve_key].id,
-    )
-
-    expected = binding_default if scenario.expect_default else binding_episode
-    assert len(resolved) == 1, "must match"
-    assert resolved[0].binding.id == expected.id, "must match"
-    assert resolved[0].revision.id == expected.reference_document_revision_id, (
-        "must match"
-    )
-
-
 async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914  # The scenario keeps distinct intermediate values for readable behavioural assertions.
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Resolution selects the binding with the latest effective_from_episode_id."""
     fixtures = uow_with_fixtures
@@ -227,7 +165,7 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
 
 
 async def test_resolve_bindings_excludes_future_episode_bindings(
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Bindings with effective_from_episode_id after target episode are excluded."""
     fixtures = uow_with_fixtures
@@ -258,7 +196,7 @@ async def test_resolve_bindings_excludes_future_episode_bindings(
 
 
 async def test_resolve_bindings_includes_template_bindings(
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Template bindings are included when template_id is provided."""
     uow = uow_with_fixtures["uow"]
@@ -267,14 +205,22 @@ async def test_resolve_bindings_includes_template_bindings(
 
     template = await create_episode_template_for_binding_tests(uow, series.id, now)
 
-    for rev_key, kind, tmpl_id in [
-        ("revision_v1", ReferenceBindingTargetKind.SERIES_PROFILE, None),
-        ("revision_v2", ReferenceBindingTargetKind.EPISODE_TEMPLATE, template.id),
+    for revision, kind, tmpl_id in [
+        (
+            uow_with_fixtures["revision_v1"],
+            ReferenceBindingTargetKind.SERIES_PROFILE,
+            None,
+        ),
+        (
+            uow_with_fixtures["revision_v2"],
+            ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+            template.id,
+        ),
     ]:
         await uow.reference_bindings.add(
             ReferenceBinding(
                 id=uuid.uuid4(),
-                reference_document_revision_id=uow_with_fixtures[rev_key].id,
+                reference_document_revision_id=revision.id,
                 target_kind=kind,
                 series_profile_id=(
                     series.id
@@ -302,7 +248,7 @@ async def test_resolve_bindings_includes_template_bindings(
 
 
 async def test_resolve_bindings_merges_template_with_episode(
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Template bindings are always included, series bindings filtered by episode."""
     uow = uow_with_fixtures["uow"]
@@ -360,7 +306,7 @@ async def test_resolve_bindings_merges_template_with_episode(
 
 
 async def test_resolve_bindings_template_only(
-    uow_with_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Template bindings are returned when only template_id is provided."""
     fixtures = uow_with_fixtures

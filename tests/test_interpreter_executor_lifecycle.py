@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures as cf
+import threading
 from unittest import mock
 
 import pytest
@@ -57,10 +58,20 @@ def test_interpreter_executor_shutdown_race_preserves_state(
                 )
                 executor.shutdown()
             else:
+                shutdown_entered = threading.Event()
+
+                def shutdown_executor() -> None:
+                    shutdown_entered.set()
+                    executor.shutdown()
+
                 shutdown_task = asyncio.create_task(
-                    asyncio.to_thread(executor.shutdown),
+                    asyncio.to_thread(shutdown_executor),
                 )
-                await asyncio.sleep(0)
+                shutdown_started = await asyncio.to_thread(
+                    shutdown_entered.wait,
+                    5,
+                )
+                assert shutdown_started, "Expected executor shutdown to begin."
                 assert not blocking_executor.shutdown_called.is_set(), (
                     "Expected condition to be false"
                 )

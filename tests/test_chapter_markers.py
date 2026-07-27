@@ -100,8 +100,6 @@ def test_enrich_tei_with_chapter_markers(
     assert enriched_xml.count('type="chapters"') == 1, (
         "expected exactly one chapters div in enriched TEI"
     )
-    assert enriched_xml == snapshot, "actual output must match snapshot"
-
     assert enriched_xml == snapshot, "expected enriched TEI to match snapshot"
 
 

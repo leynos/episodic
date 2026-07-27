@@ -26,6 +26,7 @@ from ._types import (
     ActionKind,
     ModelTier,
     ShowNotesFormatError,
+    ShowNotesGeneratorNotInitializedError,
     ToolExecutionError,
     UnsupportedActionError,
     _log_event,
@@ -151,7 +152,7 @@ class ShowNotesToolExecutor:
         """Return the pre-built show-notes generator."""
         if self.generator is None:
             msg = "Show-notes generator was not initialized"
-            raise RuntimeError(msg)
+            raise ShowNotesGeneratorNotInitializedError(msg)
         return self.generator
 
     @staticmethod
@@ -237,7 +238,19 @@ class ShowNotesToolExecutor:
         -------
         ActionExecutionResult
             Normalised tool outcome wrapping model output and summaries.
-        """
+
+        Raises
+        ------
+        UnsupportedActionError
+            If the action kind or model tier is unsupported.
+        ShowNotesFormatError
+            If the provider returns malformed structured show-notes output.
+        LLMError
+            If the provider or generator reports an LLM failure.
+        ToolExecutionError
+            If a tool-domain failure propagates or another generator failure
+            is translated at the tool boundary.
+        """  # noqa: DOC502  # Generator failures are translated by a helper.
         action_kind = str(action.action_kind)
         _log_event(
             "debug",

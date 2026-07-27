@@ -237,5 +237,5 @@ async def test_show_notes_executor_propagates_llm_provider_errors(
 
     assert exc_info.value is error, "Expected values to match"
     assert not isinstance(exc_info.value, ToolExecutionError), (
-        "Expected value to have the required type"
+        "Provider errors must not be wrapped in ToolExecutionError"
     )

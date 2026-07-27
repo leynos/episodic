@@ -46,7 +46,7 @@ def _configure_database_url() -> None:
     current = config.get_main_option("sqlalchemy.url")
     if not current:
         msg = "DATABASE_URL is not set and sqlalchemy.url is empty."
-        raise RuntimeError(msg)
+        raise ValueError(msg)
 
 
 def run_migrations_offline() -> None:

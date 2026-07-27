@@ -194,20 +194,21 @@ async def resume_generation_orchestration(
     concrete `TaskResumePort` adapter treating duplicate resume commands
     idempotently.
 
-    Raises
-    ------
-        ValueError: If the command references an unknown checkpoint.
-
     Returns
     -------
     dto.GenerationOrchestrationResult
-        Result produced by the operation.
+        The completed generation result reconstructed from the checkpoint and
+        resumed action.
 
     Raises
     ------
+    TypeError
+        If the checkpoint payload is missing required planner data or contains
+        malformed planner data.
     ValueError
-        If the operation cannot be completed.
-    """
+        If the checkpoint does not exist or its plan does not contain exactly
+        one step.
+    """  # noqa: DOC502  # Payload validation is delegated to the restore helper.
     _log_event(
         "debug",
         "generation_graph.resume.start",

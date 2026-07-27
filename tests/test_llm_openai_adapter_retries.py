@@ -41,17 +41,7 @@ def _make_fail_once_handler(
     first_call: cabc.Callable[[httpx.Request], httpx.Response],
     second_call: cabc.Callable[[httpx.Request], httpx.Response],
 ) -> tuple[cabc.Callable[[httpx.Request], httpx.Response], list[int]]:
-    """Return a (handler, counter) pair routing the first call to *first_call*.
-
-    Routes the first call to *first_call* and every subsequent call to
-    *second_call*. The counter list holds the cumulative attempt count so
-    callers can assert it without ``nonlocal``.
-
-    Returns
-    -------
-    tuple[cabc.Callable[[httpx.Request], httpx.Response], list[int]]
-        Result produced by the operation.
-    """
+    """Return a handler and counter that route the first call separately."""
     counter: list[int] = [0]
 
     def handler(request: httpx.Request) -> httpx.Response:

@@ -96,18 +96,7 @@ def _find_free_port() -> int:
 
 
 def _build_assistant_content_literal() -> str:
-    """Build the double-encoded assistant content JSON literal.
-
-    The OpenAI chat-completion schema requires ``message.content`` to be a JSON
-    string, not a raw object. The inner ``json.dumps`` produces the show-notes
-    result object; the outer ``json.dumps`` wraps it in a JSON string literal so
-    that the Jinja template emits a valid ``"content": "<escaped-json>"`` field.
-
-    Returns
-    -------
-    str
-        Result produced by the operation.
-    """
+    """Build the double-encoded assistant content JSON literal."""
     assistant_content = json.dumps({
         "entries": [
             {

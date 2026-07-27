@@ -25,12 +25,37 @@ def assert_validation_workflow_result(
     artifact_dir: Path,
     artifact_name: str,
 ) -> None:
-    """Assert that an act workflow emitted a successful validation artifact."""
+    """Assert that an act workflow emitted a successful validation artifact.
+
+    Parameters
+    ----------
+    exit_code : int
+        Exit status returned by the act process.
+    logs : str
+        Captured workflow logs used to diagnose failures.
+    artifact_dir : Path
+        Directory containing the workflow artifact archive.
+    artifact_name : str
+        JSON artifact filename to inspect.
+
+    Raises
+    ------
+    AssertionError
+        If act failed, the artifact is missing or malformed, or its status and
+        execution mode do not describe a successful validation run.
+
+    Examples
+    --------
+    ``assert_validation_workflow_result(0, "", artifact_dir, "result.json")``
+    returns normally when the artifact reports ``ok`` and ``validate``.
+    """  # noqa: DOC502  # Assertions and artifact parsing enforce this test contract.
     # Strict equality is part of the process exit-code contract.
     assert exit_code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
     data = read_artifact_json(artifact_dir, artifact_name, logs)
-    assert data["status"] == "ok", "Workflow artifact must report success."
-    assert data["execution_mode"] == "validate", (
+    status = data.get("status")
+    execution_mode = data.get("execution_mode")
+    assert status == "ok", "Workflow artifact must report success."
+    assert execution_mode == "validate", (
         "Workflow artifact must report validation mode."
     )
 
