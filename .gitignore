@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 .ruff_cache/
+.skylos/
 .uv-cache/
 .uv-tools/
 .typos-oxendict-base.json

@@ -26,7 +26,6 @@ if typ.TYPE_CHECKING:
         EpisodeTemplate,
         JsonMapping,
         ReferenceBinding,
-        ReferenceBindingTargetKind,
         ReferenceDocument,
         ReferenceDocumentRevision,
     )
@@ -116,37 +115,6 @@ def _serialize_bindings_for_owner(
             )
         )
     return serialized
-
-
-async def _load_reference_documents_for_target(
-    uow: CanonicalUnitOfWork,
-    *,
-    target_kind: ReferenceBindingTargetKind,
-    target_id: uuid.UUID,
-    owner_series_profile_id: uuid.UUID,
-) -> list[JsonMapping]:
-    """Load serialized reference documents for one binding target."""
-    bindings = await uow.reference_bindings.list_for_target(
-        target_kind=target_kind,
-        target_id=target_id,
-    )
-    if not bindings:
-        return []
-
-    revisions_by_id = await _load_revisions_by_id(
-        uow=uow,
-        bindings=bindings,
-    )
-    documents_by_id = await _load_documents_by_id(
-        uow=uow,
-        revisions=revisions_by_id.values(),
-    )
-    return _serialize_bindings_for_owner(
-        bindings=bindings,
-        revisions_by_id=revisions_by_id,
-        documents_by_id=documents_by_id,
-        owner_series_profile_id=owner_series_profile_id,
-    )
 
 
 async def _load_template_items_for_brief(

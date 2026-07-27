@@ -61,7 +61,8 @@ The target runs this repository-wide pipeline, in order:
 3. the focused built-in Pylint 4 rules under managed PyPy;
 4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
    separate future-annotations pass; and
-5. `ambrleaks` over Syrupy snapshots under `tests`.
+5. `ambrleaks` over Syrupy snapshots under `tests`; and
+6. a blocking Skylos dead-code scan.
 
 The built-in Pylint pass is invoked through `uv tool run --python pypy` with
 the pinned `pylint-pypy-shim` wrapper from
@@ -131,6 +132,31 @@ Pylint pass, while `DF12_PYTHON_LINTS_REF` controls the separately provisioned
 `ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for both commands.
 Maintainers must update both package pins together and validate the complete
 `make lint` pipeline.
+
+Skylos runs locally with concise, non-interactive output. The lint command
+disables uploads and provenance collection, selects only dead-code analysis,
+and fails when an unexplained finding remains. It does not invoke cloud or
+Large Language Model (LLM) analysis and never modifies source files.
+
+Treat every new finding as dead code until its runtime caller is verified.
+Remove genuine dead code. For framework callbacks, protocol implementations,
+or compatibility re-exports that static analysis cannot see, prefer a precise
+entry-point rule in `[tool.skylos.dead_code]`. A named exception must be narrow
+and include who or what calls the symbol and how that was verified. Add one
+with:
+
+```shell
+make skylos-allow NAME=registered_handler \
+  REASON="Loaded by the plugin registry; verified in the registry contract test"
+```
+
+The target refuses empty `NAME` and `REASON` values and stores the explanation
+under `[tool.skylos.whitelist.documented]`. Do not generate baselines, scrape
+reports into configuration, or add bulk unexplained exceptions. Use inline
+suppression only when neither an entry-point rule nor a named exception can
+describe the boundary, and keep its reason beside the suppression. Temporary
+exceptions must name an owner, tracking reference, and expiry condition.
+Remove exception entries when the dynamic boundary disappears.
 
 ## Spelling policy
 

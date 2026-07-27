@@ -99,6 +99,8 @@ or delivery planning.
   - import-boundary enforcement model.
 - [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
   - source-intake upload storage and idempotency port decisions.
+- [ADR 016: Adopt Skylos dead-code detection](adr/adr-016-adopt-skylos-dead-code-detection.md)
+  - blocking static dead-code detection and exception policy.
 
 ## Execution plans
 

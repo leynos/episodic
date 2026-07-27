@@ -35,6 +35,8 @@ DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
 	--ignore-paths='^tests/steps/test_.*_steps[.]py$$'
 AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
+SKYLOS = $(UV_ENV) $(UV) run skylos
+SKYLOS_TARGETS ?= $(PYLINT_TARGETS)
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie spelling spelling-helper-test test typecheck \
@@ -102,6 +104,18 @@ lint: check-architecture ## Run linters
 	$(DF12_PYLINT) $(PYLINT_TARGETS)
 	$(DF12_FUTURE_ANNOTATIONS) $(PYLINT_TARGETS)
 	$(AMBRLEAKS) tests
+	$(SKYLOS) $(SKYLOS_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance
+
+skylos-allow: ## Document one intentional Skylos finding
+	@test -n "$(strip $(NAME))" || { \
+	  printf "Error: NAME is required\\n" >&2; \
+	  exit 2; \
+	}
+	@test -n "$(strip $(REASON))" || { \
+	  printf "Error: REASON is required\\n" >&2; \
+	  exit 2; \
+	}
+	$(SKYLOS) whitelist "$(NAME)" --reason "$(REASON)"
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run hecate check
