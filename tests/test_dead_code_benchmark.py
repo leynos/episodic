@@ -1,6 +1,9 @@
 """Unit tests for dead-code benchmark result normalization."""
 
+import re
 from pathlib import Path
+
+import pytest
 
 from benchmarks.dead_code.score import (
     Expectation,
@@ -78,8 +81,8 @@ def test_parse_skylos_findings_uses_unused_symbol_categories() -> None:
     )
 
 
-def test_score_findings_separates_unmatched_reports_from_false_positives() -> None:
-    """Preserve false negatives and unlabelled findings without conflation."""
+def test_score_findings_deduplicates_locations_across_lanes_and_categories() -> None:
+    """Score only the first report for each source location."""
     expectations = (
         Expectation(
             identifier="dead-unused",
@@ -87,27 +90,6 @@ def test_score_findings_separates_unmatched_reports_from_false_positives() -> No
             line=2,
             lane=Lane.UNUSED_SYMBOL,
             is_dead=True,
-        ),
-        Expectation(
-            identifier="live-unused",
-            path="symbols.py",
-            line=5,
-            lane=Lane.UNUSED_SYMBOL,
-            is_dead=False,
-        ),
-        Expectation(
-            identifier="missed-unreachable",
-            path="flow.py",
-            line=7,
-            lane=Lane.UNREACHABLE_STATEMENT,
-            is_dead=True,
-        ),
-        Expectation(
-            identifier="live-flow",
-            path="flow.py",
-            line=12,
-            lane=Lane.UNREACHABLE_STATEMENT,
-            is_dead=False,
         ),
     )
     findings = (
@@ -119,27 +101,117 @@ def test_score_findings_separates_unmatched_reports_from_false_positives() -> No
         ),
         Finding(
             path="symbols.py",
-            line=5,
-            lane=Lane.UNUSED_SYMBOL,
-            category="unused_variables",
-        ),
-        Finding(
-            path="other.py",
-            line=20,
-            lane=Lane.UNUSED_SYMBOL,
-            category="unused_classes",
+            line=2,
+            lane=Lane.UNREACHABLE_STATEMENT,
+            category="unreachable_after_return",
         ),
     )
 
     scores = score_findings(expectations, findings)
 
     assert scores[Lane.UNUSED_SYMBOL].true_positives == 1
-    assert scores[Lane.UNUSED_SYMBOL].false_positives == 1
-    assert scores[Lane.UNUSED_SYMBOL].false_negatives == 0
-    assert scores[Lane.UNUSED_SYMBOL].true_negatives == 0
-    assert scores[Lane.UNUSED_SYMBOL].unmatched_findings == 1
-    assert scores[Lane.UNREACHABLE_STATEMENT].true_positives == 0
-    assert scores[Lane.UNREACHABLE_STATEMENT].false_positives == 0
-    assert scores[Lane.UNREACHABLE_STATEMENT].false_negatives == 1
-    assert scores[Lane.UNREACHABLE_STATEMENT].true_negatives == 1
     assert scores[Lane.UNREACHABLE_STATEMENT].unmatched_findings == 0
+
+
+def test_score_findings_counts_unmatched_findings_in_the_finding_lane() -> None:
+    """Keep unlabelled reports separate from expectation outcomes."""
+    finding = Finding(
+        path="flow.py",
+        line=7,
+        lane=Lane.UNREACHABLE_STATEMENT,
+        category="unreachable_after_return",
+    )
+
+    scores = score_findings((), (finding,))
+
+    assert scores[Lane.UNREACHABLE_STATEMENT].unmatched_findings == 1
+    assert scores[Lane.UNUSED_SYMBOL].unmatched_findings == 0
+
+
+def test_score_findings_classifies_dead_and_live_matched_expectations() -> None:
+    """Use expectation labels and lanes for matched reports."""
+    expectations = (
+        Expectation(
+            identifier="dead-flow",
+            path="flow.py",
+            line=7,
+            lane=Lane.UNREACHABLE_STATEMENT,
+            is_dead=True,
+        ),
+        Expectation(
+            identifier="live-symbol",
+            path="symbols.py",
+            line=2,
+            lane=Lane.UNUSED_SYMBOL,
+            is_dead=False,
+        ),
+    )
+    findings = (
+        Finding(
+            path="flow.py",
+            line=7,
+            lane=Lane.UNUSED_SYMBOL,
+            category="unused_variables",
+        ),
+        Finding(
+            path="symbols.py",
+            line=2,
+            lane=Lane.UNREACHABLE_STATEMENT,
+            category="unreachable_after_return",
+        ),
+    )
+
+    scores = score_findings(expectations, findings)
+
+    assert scores[Lane.UNREACHABLE_STATEMENT].true_positives == 1
+    assert scores[Lane.UNUSED_SYMBOL].false_positives == 1
+
+
+def test_score_findings_classifies_dead_and_live_unmatched_expectations() -> None:
+    """Use expectation labels and lanes when no report is present."""
+    expectations = (
+        Expectation(
+            identifier="dead-flow",
+            path="flow.py",
+            line=7,
+            lane=Lane.UNREACHABLE_STATEMENT,
+            is_dead=True,
+        ),
+        Expectation(
+            identifier="live-symbol",
+            path="symbols.py",
+            line=2,
+            lane=Lane.UNUSED_SYMBOL,
+            is_dead=False,
+        ),
+    )
+
+    scores = score_findings(expectations, ())
+
+    assert scores[Lane.UNREACHABLE_STATEMENT].false_negatives == 1
+    assert scores[Lane.UNUSED_SYMBOL].true_negatives == 1
+
+
+def test_score_findings_rejects_duplicate_expectation_locations() -> None:
+    """Reject labels that would make source-location scoring ambiguous."""
+    expectations = (
+        Expectation(
+            identifier="first",
+            path="symbols.py",
+            line=2,
+            lane=Lane.UNUSED_SYMBOL,
+            is_dead=True,
+        ),
+        Expectation(
+            identifier="second",
+            path="symbols.py",
+            line=2,
+            lane=Lane.UNREACHABLE_STATEMENT,
+            is_dead=False,
+        ),
+    )
+
+    with pytest.raises(
+        ValueError, match=re.escape("duplicate expectation location: symbols.py:2")
+    ):
+        score_findings(expectations, ())

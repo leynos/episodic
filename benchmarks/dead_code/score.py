@@ -104,51 +104,69 @@ def parse_pyscn_findings(
     root = _mapping(payload, context="pyscn payload")
     dead_code = _mapping(root.get("dead_code"), context="pyscn dead_code")
     files = _sequence(dead_code.get("files"), context="pyscn dead_code.files")
-    findings: list[Finding] = []
+    return tuple(
+        _parse_pyscn_finding(
+            raw_finding,
+            finding_index=finding_index,
+            corpus_root=corpus_root,
+        )
+        for finding_index, raw_finding in _iter_pyscn_findings_from_files(files)
+    )
 
+
+def _iter_pyscn_findings_from_files(
+    files: cabc.Sequence[object],
+) -> cabc.Iterator[tuple[int, object]]:
+    """Yield raw pyscn findings in report order after validating traversal nodes."""
     for file_index, raw_file in enumerate(files):
         file_payload = _mapping(raw_file, context=f"pyscn files[{file_index}]")
         functions = _sequence(
             file_payload.get("functions"),
             context=f"pyscn files[{file_index}].functions",
         )
-        for function_index, raw_function in enumerate(functions):
-            function = _mapping(
-                raw_function,
-                context=f"pyscn functions[{function_index}]",
-            )
-            raw_findings = _sequence(
-                function.get("findings"),
-                context=f"pyscn functions[{function_index}].findings",
-            )
-            for finding_index, raw_finding in enumerate(raw_findings):
-                finding = _mapping(
-                    raw_finding,
-                    context=f"pyscn findings[{finding_index}]",
-                )
-                location = _mapping(
-                    finding.get("location"),
-                    context=f"pyscn findings[{finding_index}].location",
-                )
-                findings.append(
-                    Finding(
-                        path=_relative_source_path(
-                            location.get("file_path"),
-                            corpus_root,
-                        ),
-                        line=_positive_line(
-                            location.get("start_line"),
-                            context="pyscn finding start_line",
-                        ),
-                        lane=Lane.UNREACHABLE_STATEMENT,
-                        category=_string(
-                            finding.get("reason"),
-                            context="pyscn finding reason",
-                        ),
-                    )
-                )
+        yield from _iter_pyscn_findings_from_functions(functions)
 
-    return tuple(findings)
+
+def _iter_pyscn_findings_from_functions(
+    functions: cabc.Sequence[object],
+) -> cabc.Iterator[tuple[int, object]]:
+    """Yield findings from each validated pyscn function payload."""
+    for function_index, raw_function in enumerate(functions):
+        function = _mapping(
+            raw_function,
+            context=f"pyscn functions[{function_index}]",
+        )
+        raw_findings = _sequence(
+            function.get("findings"),
+            context=f"pyscn functions[{function_index}].findings",
+        )
+        yield from enumerate(raw_findings)
+
+
+def _parse_pyscn_finding(
+    raw_finding: object,
+    *,
+    finding_index: int,
+    corpus_root: Path,
+) -> Finding:
+    """Normalize one validated pyscn finding while retaining its error context."""
+    finding = _mapping(raw_finding, context=f"pyscn findings[{finding_index}]")
+    location = _mapping(
+        finding.get("location"),
+        context=f"pyscn findings[{finding_index}].location",
+    )
+    return Finding(
+        path=_relative_source_path(location.get("file_path"), corpus_root),
+        line=_positive_line(
+            location.get("start_line"),
+            context="pyscn finding start_line",
+        ),
+        lane=Lane.UNREACHABLE_STATEMENT,
+        category=_string(
+            finding.get("reason"),
+            context="pyscn finding reason",
+        ),
+    )
 
 
 _SKYLOS_UNUSED_CATEGORIES = (
@@ -158,6 +176,11 @@ _SKYLOS_UNUSED_CATEGORIES = (
     "unused_variables",
     "unused_parameters",
 )
+
+
+type Location = tuple[str, int]
+type MutableLaneCounts = dict[str, int]
+type LaneCounts = dict[Lane, MutableLaneCounts]
 
 
 def parse_skylos_findings(
@@ -196,7 +219,26 @@ def score_findings(
     findings: cabc.Sequence[Finding],
 ) -> cabc.Mapping[Lane, LaneScore]:
     """Score unique finding locations without discarding unmatched reports."""
-    expectations_by_location: dict[tuple[str, int], Expectation] = {}
+    expectations_by_location = _build_expectation_location_index(expectations)
+    counts = _empty_lane_counts()
+    matched_expectation_identifiers = _process_unique_finding_locations(
+        findings,
+        expectations_by_location=expectations_by_location,
+        counts=counts,
+    )
+    _account_for_unmatched_expectations(
+        expectations,
+        matched_expectation_identifiers=matched_expectation_identifiers,
+        counts=counts,
+    )
+    return _lane_scores_from_counts(counts)
+
+
+def _build_expectation_location_index(
+    expectations: cabc.Sequence[Expectation],
+) -> dict[Location, Expectation]:
+    """Index labels by location and reject ambiguous benchmark expectations."""
+    expectations_by_location: dict[Location, Expectation] = {}
     for expectation in expectations:
         location = (expectation.path, expectation.line)
         if location in expectations_by_location:
@@ -205,33 +247,79 @@ def score_findings(
             )
             raise ValueError(msg)
         expectations_by_location[location] = expectation
+    return expectations_by_location
 
-    counts = {
-        lane: {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "unmatched": 0} for lane in Lane
-    }
-    matched_expectations: set[str] = set()
-    seen_finding_locations: set[tuple[str, int]] = set()
 
+def _empty_lane_counts() -> LaneCounts:
+    """Create mutable counters for every scored dead-code lane."""
+    return {lane: {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "unmatched": 0} for lane in Lane}
+
+
+def _process_unique_finding_locations(
+    findings: cabc.Sequence[Finding],
+    *,
+    expectations_by_location: cabc.Mapping[Location, Expectation],
+    counts: LaneCounts,
+) -> set[str]:
+    """Account for one report per location and return matched label identifiers."""
+    matched_expectation_identifiers: set[str] = set()
+    for finding in _unique_findings_by_location(findings):
+        identifier = _account_for_finding(
+            finding,
+            expectations_by_location=expectations_by_location,
+            counts=counts,
+        )
+        if identifier is not None:
+            matched_expectation_identifiers.add(identifier)
+    return matched_expectation_identifiers
+
+
+def _unique_findings_by_location(
+    findings: cabc.Sequence[Finding],
+) -> cabc.Iterator[Finding]:
+    """Yield the first detector report for each source location."""
+    seen_locations: set[Location] = set()
     for finding in findings:
         location = (finding.path, finding.line)
-        if location in seen_finding_locations:
+        if location in seen_locations:
             continue
-        seen_finding_locations.add(location)
-        expectation = expectations_by_location.get(location)
-        if expectation is None:
-            counts[finding.lane]["unmatched"] += 1
-            continue
+        seen_locations.add(location)
+        yield finding
 
-        matched_expectations.add(expectation.identifier)
-        key = "tp" if expectation.is_dead else "fp"
-        counts[expectation.lane][key] += 1
 
+def _account_for_finding(
+    finding: Finding,
+    *,
+    expectations_by_location: cabc.Mapping[Location, Expectation],
+    counts: LaneCounts,
+) -> str | None:
+    """Record one unique report and return its matched label identifier."""
+    expectation = expectations_by_location.get((finding.path, finding.line))
+    if expectation is None:
+        counts[finding.lane]["unmatched"] += 1
+        return None
+
+    count_key = "tp" if expectation.is_dead else "fp"
+    counts[expectation.lane][count_key] += 1
+    return expectation.identifier
+
+
+def _account_for_unmatched_expectations(
+    expectations: cabc.Sequence[Expectation],
+    *,
+    matched_expectation_identifiers: cabc.Set[str],
+    counts: LaneCounts,
+) -> None:
+    """Record false negatives and true negatives for labels without a report."""
     for expectation in expectations:
-        if expectation.identifier in matched_expectations:
+        if expectation.identifier in matched_expectation_identifiers:
             continue
-        key = "fn" if expectation.is_dead else "tn"
-        counts[expectation.lane][key] += 1
+        count_key = "fn" if expectation.is_dead else "tn"
+        counts[expectation.lane][count_key] += 1
 
+
+def _lane_scores_from_counts(counts: LaneCounts) -> cabc.Mapping[Lane, LaneScore]:
+    """Freeze mutable counters into the public score value objects."""
     return {
         lane: LaneScore(
             true_positives=values["tp"],
