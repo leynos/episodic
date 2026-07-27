@@ -21,7 +21,7 @@ if typ.TYPE_CHECKING:
 
 
 def _assert_serialized_fields(
-    actual: dict[str, typ.Any],
+    actual: dict[str, object],
     expected: dict[str, object],
     *,
     required_keys: tuple[str, ...] = (),

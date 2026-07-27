@@ -209,19 +209,15 @@ class SqlAlchemyWorkflowCheckpointStore:
         work leaves the checkpoint ``suspended`` and available for a later
         retry.
 
-        Raises
-        ------
-            ValueError: If ``checkpoint_id`` does not identify a checkpoint.
-
         Returns
         -------
         WorkflowCheckpoint
-            Result produced by the operation.
+            The checkpoint after its status changes to ``resumed``.
 
         Raises
         ------
         ValueError
-            If the operation cannot be completed.
+            If ``checkpoint_id`` does not identify a checkpoint.
         """
         started_at = self._clock.monotonic_seconds()
         record = await self._session.get(

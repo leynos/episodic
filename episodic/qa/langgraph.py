@@ -54,12 +54,24 @@ def route_after_pedante(state: PedanteGraphState) -> typ.Literal["pass", "refine
     Returns
     -------
     typ.Literal['pass', 'refine']
-        Result produced by the operation.
+        ``"refine"`` when the Pedante result requires revision; otherwise
+        ``"pass"``.
 
     Raises
     ------
     KeyError
-        If the operation cannot be completed.
+        If ``state.pedante_result`` is missing.
+
+    Examples
+    --------
+    >>> from episodic.llm import LLMUsage
+    >>> result = PedanteEvaluationResult(
+    ...     summary="No blocking findings.",
+    ...     findings=(),
+    ...     usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
+    ... )
+    >>> route_after_pedante(PedanteGraphState(pedante_result=result))
+    'pass'
     """
     if state.pedante_result is None:
         msg = "pedante_result"

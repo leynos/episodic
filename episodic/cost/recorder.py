@@ -115,7 +115,15 @@ class CostRecorder:
         providers: tuple[CostProviderOperation, ...],
         billing_period_key: BillingPeriodKey,
     ) -> None:
-        """Resolve and persist pricing pins for one workflow run."""
+        """Resolve and persist pricing pins for one workflow run.
+
+        Raises
+        ------
+        LookupError
+            If the catalogue cannot resolve a pricing snapshot.
+        CostAccountingError
+            If pricing or ledger validation fails.
+        """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
         pinned_at = dt.datetime.now(dt.UTC).isoformat()
         for provider in providers:
             key = RunPricingKey(
@@ -213,7 +221,14 @@ class CostRecorder:
         -------
         CostLedgerEntryId
             Identifier returned by the ledger port.
-        """
+
+        Raises
+        ------
+        LookupError
+            If the catalogue cannot resolve a pricing snapshot.
+        CostAccountingError
+            If pricing or ledger validation fails.
+        """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
         snapshot = await self._resolve_snapshot_for_record(record)
         priced_call = self.pricing_engine.price(
             snapshot,

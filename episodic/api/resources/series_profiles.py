@@ -270,9 +270,12 @@ class SeriesProfileBriefResource:
 
         Raises
         ------
-        HTTPNotFound
-            If the operation cannot be completed.
-        """
+        falcon.HTTPBadRequest
+            If ``profile_id``, ``template_id``, or ``episode_id`` is not a
+            valid UUID.
+        falcon.HTTPNotFound
+            If a requested profile, template, or episode does not exist.
+        """  # noqa: DOC502  # UUID validation is delegated to parse_uuid.
         parsed_profile_id = parse_uuid(profile_id, "profile_id")
         raw_template_id = req.get_param("template_id")
         raw_episode_id = req.get_param("episode_id")

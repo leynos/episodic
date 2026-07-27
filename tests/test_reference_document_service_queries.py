@@ -88,15 +88,7 @@ async def _create_two_series_profile_bindings(
     session_factory: cabc.Callable[[], AsyncSession],
     service_fixture: ServiceFixture,
 ) -> tuple[ReferenceBinding, ReferenceBinding]:
-    """Create two series-profile bindings in one unit of work.
-
-    Return (first, second).
-
-    Returns
-    -------
-    tuple[ReferenceBinding, ReferenceBinding]
-        Result produced by the operation.
-    """
+    """Create two series-profile bindings in one unit of work."""
     _doc1_id, rev1_id = await _create_document_and_revision(
         session_factory, service_fixture
     )

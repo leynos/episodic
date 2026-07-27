@@ -46,9 +46,11 @@ async def get_reference_binding(
 
     Raises
     ------
+    ReferenceValidationError
+        If ``binding_id`` is not a valid UUID.
     ReferenceEntityNotFoundError
-        If the operation cannot be completed.
-    """
+        If no reference binding exists for ``binding_id``.
+    """  # noqa: DOC502  # UUID validation is delegated to the parser helper.
     parsed_binding_id = _parse_uuid(binding_id, "binding_id")
     binding = await uow.reference_bindings.get(parsed_binding_id)
     if binding is None:
@@ -75,7 +77,13 @@ async def list_reference_bindings(
     -------
     list[ReferenceBinding]
         Bindings matching the requested target context and pagination window.
-    """
+
+    Raises
+    ------
+    ReferenceValidationError
+        If the target identifier or kind is invalid, or if the pagination
+        values are outside their supported ranges.
+    """  # noqa: DOC502  # UUID and pagination validation use shared parsers.
     _validate_pagination(request.limit, request.offset)
     parsed_target_kind = _parse_target_kind(request.target_kind)
     parsed_target_id = _parse_uuid(request.target_id, "target_id")

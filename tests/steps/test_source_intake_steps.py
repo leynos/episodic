@@ -220,4 +220,5 @@ def assert_source_list(context: SourceIntakeContext) -> None:
     assert context.source_list is not None, "Expected value to be present"
     assert context.source_list["total"] == 1, "Expected values to match"
     items = typ.cast("list[dict[str, object]]", context.source_list["items"])
+    assert len(items) == 1, "Expected collection to contain one source"
     assert items[0]["upload_id"] == context.upload["id"], "Expected values to match"

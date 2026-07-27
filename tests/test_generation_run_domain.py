@@ -34,7 +34,6 @@ from episodic.canonical.generation_run_errors import (
     RunNotFound,
 )
 from episodic.canonical.generation_run_ports import event_seq
-from tests.snapshot_redaction import redact_snapshot_uuids
 
 if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
@@ -288,8 +287,7 @@ def test_generation_run_and_checkpoint_repr_snapshot(
         "generation_run": repr(run),
         "checkpoint": repr(checkpoint),
     }
-    stable_representations = redact_snapshot_uuids(representations)
-    assert stable_representations == snapshot, "Expected values to match"
+    assert representations == snapshot, "Expected values to match"
 
 
 def test_generation_run_error_messages_snapshot(
@@ -304,8 +302,7 @@ def test_generation_run_error_messages_snapshot(
         "run_already_terminal": str(RunAlreadyTerminal(FIXED_RUN_ID)),
         "run_not_found": str(RunNotFound(FIXED_RUN_ID)),
     }
-    stable_messages = redact_snapshot_uuids(messages)
-    assert stable_messages == snapshot, "actual output must match snapshot"
+    assert messages == snapshot, "actual output must match snapshot"
 
 
 def test_terminal_checkpoint_rejects_second_response(checkpoint: Checkpoint) -> None:

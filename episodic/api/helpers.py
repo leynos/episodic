@@ -65,9 +65,10 @@ def parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
 
     Raises
     ------
-    validation_error
-        If the operation cannot be completed.
-    """
+    falcon.HTTPBadRequest
+        If ``raw_value`` cannot be parsed as a UUID; the exception carries the
+        validation error envelope for ``field_name``.
+    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
     try:
         return uuid.UUID(raw_value)
     except (TypeError, ValueError, AttributeError) as exc:
@@ -90,9 +91,10 @@ def require_payload_dict(payload: object) -> JsonPayload:
 
     Raises
     ------
-    validation_error
-        If the operation cannot be completed.
-    """
+    falcon.HTTPBadRequest
+        If request media is not a JSON object; the exception carries the
+        validation error envelope.
+    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
     if not isinstance(payload, dict):
         msg = "JSON object payload is required."
         raise validation_error(msg, constraint="object")
@@ -176,9 +178,10 @@ def _parse_int_query_param(
 
     Raises
     ------
-    validation_error
-        If the operation cannot be completed.
-    """
+    falcon.HTTPBadRequest
+        If a supplied value is not an integer; the exception carries the
+        validation error envelope for ``name``.
+    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
     if raw_value is None:
         return default
     try:
@@ -222,9 +225,10 @@ def parse_expected_revision(payload: JsonPayload) -> int:
 
     Raises
     ------
-    validation_error
-        If the operation cannot be completed.
-    """
+    falcon.HTTPBadRequest
+        If ``expected_revision`` is missing, not an integer, or not strictly
+        positive; the exception carries the validation error envelope.
+    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
     raw = _require_field(payload, "expected_revision")
     parsed = _coerce_strict_positive_int(raw)
     if parsed is not None:

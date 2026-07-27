@@ -177,9 +177,11 @@ def _raise_mapped_update_error(
 
     Raises
     ------
-    map_profile_template_error
-        If the operation cannot be completed.
-    """
+    falcon.HTTPNotFound
+        If the target entity does not exist.
+    falcon.HTTPConflict
+        If the expected revision does not match the persisted revision.
+    """  # noqa: DOC501, DOC502  # The mapper returns these concrete Falcon exceptions.
     raise map_profile_template_error(
         exc,
         entity_id=entity_id,
@@ -230,7 +232,16 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
     -------
     tuple[JsonPayload, str]
         Serialized response payload and HTTP status code.
-    """
+
+    Raises
+    ------
+    falcon.HTTPBadRequest
+        If the identifier, required fields, or update payload are invalid.
+    falcon.HTTPNotFound
+        If the target entity does not exist.
+    falcon.HTTPConflict
+        If the expected revision does not match the persisted revision.
+    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     _require_payload_fields(payload, required_fields)
     update_request = request_builder(parsed_entity_id, payload)
@@ -279,13 +290,11 @@ async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev)
 
     Raises
     ------
-    map_profile_template_error
-        If the operation cannot be completed.
-    validation_error
-        If the operation cannot be completed.
-    HTTPNotFound
-        If the operation cannot be completed.
-    """
+    falcon.HTTPBadRequest
+        If a required field is missing or the create payload is invalid.
+    falcon.HTTPNotFound
+        If a referenced entity required for creation does not exist.
+    """  # noqa: DOC501, DOC502  # Indirect exceptions form part of this public contract.
     for field_name in required_fields:
         if field_name not in payload:
             msg = f"Missing required field: {field_name}"

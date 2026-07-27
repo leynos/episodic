@@ -60,7 +60,12 @@ def _extract_coefficients(
     Returns
     -------
     tuple[float, float, float]
-        Result produced by the operation.
+        Quality, freshness, and reliability coefficients, in that order.
+
+    Examples
+    --------
+    >>> _extract_coefficients({"weighting": {"quality_coefficient": 0.5}})
+    (0.5, 0.3, 0.2)
     """
     weighting = series_configuration.get("weighting")
     if not isinstance(weighting, dict):

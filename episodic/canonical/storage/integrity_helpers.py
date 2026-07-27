@@ -103,9 +103,13 @@ async def insert_with_conflict_translation(
 
     Raises
     ------
+    BaseException
+        The domain exception returned by ``translate`` for a recognised
+        conflict; the callback determines its concrete type.
     IntegrityError
-        If the operation cannot be completed.
-    """
+        If ``translate`` returns ``None`` for an unrecognised integrity
+        failure.
+    """  # noqa: DOC502  # The translation callback selects the domain exception.
     try:
         async with session.begin_nested():
             session.add(record)

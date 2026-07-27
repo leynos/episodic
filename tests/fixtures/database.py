@@ -161,8 +161,8 @@ def temporary_drift_table() -> cabc.Iterator[sa.Table]:
 
     Yields
     ------
-    cabc.Iterator[sa.Table]
-        Values produced by the iterator.
+    sa.Table
+        Temporary SQLAlchemy table attached to ``Base.metadata``.
     """
     table = sa.Table(
         "_test_drift_table",
@@ -187,8 +187,8 @@ async def pglite_sqlalchemy_manager(
 
     Yields
     ------
-    cabc.AsyncIterator[SQLAlchemyAsyncPGliteManager]
-        Values produced by the iterator.
+    SQLAlchemyAsyncPGliteManager
+        Running manager shared by the SQLAlchemy-backed test session.
     """
     if not _should_use_pglite():
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")

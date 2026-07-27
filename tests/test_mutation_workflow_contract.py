@@ -38,16 +38,7 @@ EXPECTED_CRON = "5 7 * * *"
 
 
 def _load() -> dict[typ.Any, typ.Any]:
-    """Parse the workflow file.
-
-    The key type is ``Any`` because PyYAML 1.1 parses the bare ``on:``
-    key as the boolean ``True``, not the string ``"on"``.
-
-    Returns
-    -------
-    dict[typ.Any, typ.Any]
-        Result produced by the operation.
-    """
+    """Parse the workflow file using PyYAML 1.1 key semantics."""
     return yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
 
 

@@ -21,15 +21,7 @@ def _create_series_profile_binding(
     profile_id: str,
     episode_id: str,
 ) -> str:
-    """Create a style-guide document, one revision, and a series-profile binding.
-
-    Returns the revision ID.
-
-    Returns
-    -------
-    str
-        Result produced by the operation.
-    """
+    """Create a style-guide revision and series-profile binding."""
     _, revision_id = binding_support.create_document_with_revision(
         client,
         profile_id,
@@ -54,15 +46,7 @@ def _create_episode_template_binding(
     profile_id: str,
     template_id: str,
 ) -> str:
-    """Create a guest-profile document, one revision, and an episode-template binding.
-
-    Returns the revision ID.
-
-    Returns
-    -------
-    str
-        Result produced by the operation.
-    """
+    """Create a guest-profile revision and episode-template binding."""
     _, revision_id = binding_support.create_document_with_revision(
         client,
         profile_id,

@@ -73,12 +73,13 @@ class PricingEngine:
         Raises
         ------
         OperationMismatchError
-            If the snapshot operation does not match `operation`.
+            If the snapshot operation does not match ``request.operation``.
         BillingPeriodMismatchError
             If the snapshot billing period does not match
-            `billing_period_key`.
+            ``request.billing_period_key``.
         UnknownPricedMetricError
-            If `usage` contains a metric absent from the snapshot rates.
+            If ``request.usage`` contains a metric absent from the snapshot
+            rates.
 
         Notes
         -----
