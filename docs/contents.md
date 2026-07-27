@@ -100,6 +100,8 @@ or delivery planning.
 
 ## Execution plans
 
+- [Benchmark pyscn and Skylos dead-code detection](execplans/benchmark-pyscn-skylos-dead-code.md)
+  - comparative evaluation plan for the two Python dead-code scanners.
 - [Reference binding resolution](execplans/1-4-3-reference-binding-resolution.md)
   - implementation plan for roadmap task 1.4.3.
 - [Scaffold Falcon HTTP services on Granian](execplans/1-5-1-scaffold-falcon-http-services-on-granian.md)
