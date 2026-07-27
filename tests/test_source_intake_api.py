@@ -59,28 +59,18 @@ async def test_source_intake_upload_job_and_attach_flow(
     ) as client:
         profile_id = await _create_series_profile(client)
         payload = b"hello\n"
-        upload_response = await client.post(
-            "/v1/uploads",
-            headers={"Idempotency-Key": "upload-key"},
-            files={
-                "file": ("source.txt", payload, "text/plain"),
-                "content_type": (None, "text/plain"),
-                "declared_size": (None, str(len(payload))),
-                "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-                "metadata": (None, '{"language":"en"}', "application/json"),
-            },
+        upload_response = await _post_text_upload(
+            client,
+            key="upload-key",
+            payload=payload,
+            metadata='{"language":"en"}',
         )
         assert upload_response.status_code == 201, upload_response.text
-        replay_response = await client.post(
-            "/v1/uploads",
-            headers={"Idempotency-Key": "upload-key"},
-            files={
-                "file": ("source.txt", payload, "text/plain"),
-                "content_type": (None, "text/plain"),
-                "declared_size": (None, str(len(payload))),
-                "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-                "metadata": (None, '{"language":"en"}', "application/json"),
-            },
+        replay_response = await _post_text_upload(
+            client,
+            key="upload-key",
+            payload=payload,
+            metadata='{"language":"en"}',
         )
         job_response = await client.post(
             "/v1/ingestion-jobs",
@@ -376,24 +366,33 @@ def _idempotency_request(idempotency_key: str) -> IdempotencyAcquireRequest:
     )
 
 
+# Each multipart request option remains explicit at this private test boundary.
+# pylint: disable-next=too-many-arguments
 async def _post_text_upload(
     client: httpx.AsyncClient,
     *,
     key: str,
     payload: bytes,
     authorization: str | None = None,
+    metadata: str | None = None,
 ) -> httpx.Response:
     """Post a text upload with a deterministic multipart shape."""
     headers = {"Idempotency-Key": key}
     if authorization is not None:
         headers["Authorization"] = authorization
+    files: dict[
+        str,
+        tuple[str, bytes, str] | tuple[None, str] | tuple[None, str, str],
+    ] = {
+        "file": ("source.txt", payload, "text/plain"),
+        "content_type": (None, "text/plain"),
+        "declared_size": (None, str(len(payload))),
+        "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
+    }
+    if metadata is not None:
+        files["metadata"] = (None, metadata, "application/json")
     return await client.post(
         "/v1/uploads",
         headers=headers,
-        files={
-            "file": ("source.txt", payload, "text/plain"),
-            "content_type": (None, "text/plain"),
-            "declared_size": (None, str(len(payload))),
-            "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-        },
+        files=files,
     )
