@@ -91,6 +91,25 @@ def _validate_suspend_preconditions(
     return request, planner_result, planner_result.plan.steps[0]
 
 
+def _restore_resume_planner_result(
+    payload: dict[str, object],
+) -> dto.PlannerResult:
+    """Restore and validate the planner result stored for workflow resume."""
+    try:
+        planner_result_payload = payload["planner_result"]
+    except KeyError as exc:
+        msg = "checkpoint payload missing required field: planner_result"
+        raise TypeError(msg) from exc
+    planner_result = _planner_result_from_payload(planner_result_payload)
+    if len(planner_result.plan.steps) != 1:
+        msg = (
+            "resume_generation_orchestration currently supports exactly one "
+            "planned step per suspended checkpoint."
+        )
+        raise ValueError(msg)
+    return planner_result
+
+
 async def _suspend_execute_node(
     state: GenerationGraphState,
     *,
@@ -178,8 +197,6 @@ async def resume_generation_orchestration(
     Raises
     ------
         ValueError: If the command references an unknown checkpoint.
-        TypeError: If the stored checkpoint payload cannot be deserialized into
-            the expected planner-result shape.
 
     Returns
     -------
@@ -188,8 +205,6 @@ async def resume_generation_orchestration(
 
     Raises
     ------
-    TypeError
-        If the operation cannot be completed.
     ValueError
         If the operation cannot be completed.
     """
@@ -207,19 +222,7 @@ async def resume_generation_orchestration(
         )
         msg = f"unknown checkpoint: {command.checkpoint_id}"
         raise ValueError(msg)
-    payload = checkpoint.payload
-    try:
-        planner_result_payload = payload["planner_result"]
-    except KeyError as exc:
-        msg = "checkpoint payload missing required field: planner_result"
-        raise TypeError(msg) from exc
-    planner_result = _planner_result_from_payload(planner_result_payload)
-    if len(planner_result.plan.steps) != 1:
-        msg = (
-            "resume_generation_orchestration currently supports exactly one "
-            "planned step per suspended checkpoint."
-        )
-        raise ValueError(msg)
+    planner_result = _restore_resume_planner_result(checkpoint.payload)
     action_result = await resume_port.resume(command)
     result = build_generation_result(planner_result, (action_result,))
     resumed_checkpoint = await checkpoint_port.mark_resumed(checkpoint.checkpoint_id)
