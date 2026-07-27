@@ -24,7 +24,7 @@ statements after `return`, `raise`, `continue`, and `break`.
 
 The [Skylos repository](https://github.com/duriantaco/skylos) and
 [dead-code detection documentation](https://docs.skylos.dev/dead-code-detection)
-describe a symbol-liveness analyzer for unused imports, functions, classes,
+describe a symbol-liveness analyser for unused imports, functions, classes,
 variables, and parameters. Skylos also advertises confidence scoring and
 special handling for frameworks and dynamic Python.
 
