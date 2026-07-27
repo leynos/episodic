@@ -1,11 +1,10 @@
 # Benchmark pyscn and Skylos dead-code detection
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -59,30 +58,24 @@ documented claims from measured behaviour.
 ## Risks
 
 - Risk: the tools report at different granularities and categories.
-  Severity: high.
-  Likelihood: high.
-  Mitigation: define a small normalization contract keyed by labelled source
-  location and keep lane-specific scores alongside raw finding counts.
+  Severity: high. Likelihood: high. Mitigation: define a small normalization
+  contract keyed by labelled source location and keep lane-specific scores
+  alongside raw finding counts.
 - Risk: dynamic Python features make static liveness uncertain.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: include explicit dynamic and framework cases, document their
-  runtime reachability, and use the review-required category where necessary.
+  Severity: high. Likelihood: medium. Mitigation: include explicit dynamic and
+  framework cases, document their runtime reachability, and use the
+  review-required category where necessary.
 - Risk: latest releases or command interfaces may change during the study.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: record versions, full commands, UTC date, and raw outputs.
+  Severity: medium. Likelihood: medium. Mitigation: record versions, full
+  commands, UTC date, and raw outputs.
 - Risk: a benchmark designed after reading both tools could favour their known
-  strengths.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: use language-level categories derived from Python semantics,
-  include both positive and negative controls, and disclose corpus selection.
+  strengths. Severity: medium. Likelihood: medium. Mitigation: use
+  language-level categories derived from Python semantics, include both
+  positive and negative controls, and disclose corpus selection.
 - Risk: a small synthetic corpus may not predict large-project usefulness.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: pair scored fixtures with an unscored but manually adjudicated
-  scan of `episodic/` and state the limits of generalization.
+  Severity: medium. Likelihood: high. Mitigation: pair scored fixtures with an
+  unscored but manually adjudicated scan of `episodic/` and state the limits of
+  generalization.
 
 ## Progress
 
@@ -95,48 +88,47 @@ documented claims from measured behaviour.
 - [x] (2026-07-27 00:21Z) Resolve released versions pyscn 1.28.0 and
   Skylos 4.30.0, capture their command interfaces, and complete the bounded
   smoke comparison.
-- [ ] Add a labelled, tool-neutral Python corpus and normalization manifest.
-- [ ] Run both tools on the corpus and retain raw machine-readable output.
-- [ ] Normalize and score the corpus results, checking every mismatch against
-  the source and tool output.
-- [ ] Scan `episodic/` with both tools and manually adjudicate actionable,
-  false-positive, and review-required findings.
-- [ ] Write and index the final head-to-head report, including methodology,
-  results, limitations, commands, and recommendation by use case.
-- [ ] Run all documentation and any code gates required by the final artefacts,
-  then leave the branch clean with atomic commits.
+- [x] (2026-07-27 00:37Z) Add a 19-case labelled, tool-neutral Python corpus
+  and normalization manifest.
+- [x] (2026-07-27 00:44Z) Run both tools on the corpus and retain raw
+  machine-readable output and elapsed-time metadata.
+- [x] (2026-07-27 00:49Z) Normalize and score the corpus results, checking
+  every mismatch against the source and tool output.
+- [x] (2026-07-27 01:02Z) Scan `episodic/` with both tools and manually
+  adjudicate actionable, false-positive, and review-required findings.
+- [x] (2026-07-27 01:02Z) Write and index the final head-to-head report,
+  including methodology, results, limitations, commands, and recommendation by
+  use case.
+- [x] (2026-07-27 01:09Z) Run all documentation and code gates required by the
+  final artefacts, validate the Makefile, and prepare the final atomic commit.
 
 ## Surprises & discoveries
 
 - Observation: pyscn's configuration reference emphasizes control-flow
   unreachability such as code after `return`, `break`, `continue`, or `raise`,
   while its analysis page also describes unreachable functions, classes, and
-  modules.
-  Evidence: Firecrawl extraction from
+  modules. Evidence: Firecrawl extraction from
   `https://docs.codescan.dev/cli/analyze` and
-  `https://docs.codescan.dev/configuration/reference` on 2026-07-27.
-  Impact: released behaviour must be measured rather than inferred from a
-  single documentation page.
+  `https://docs.codescan.dev/configuration/reference` on 2026-07-27. Impact:
+  released behaviour must be measured rather than inferred from a single
+  documentation page.
 - Observation: Skylos explicitly advertises unused imports, functions,
   classes, variables, and parameters, with confidence filtering and
-  framework-aware or dynamic-code handling.
-  Evidence: Firecrawl extraction from
-  `https://docs.skylos.dev/dead-code-detection` on 2026-07-27.
-  Impact: the benchmark must include precision controls for dynamic access and
-  framework entry points as well as straightforward unused symbols.
+  framework-aware or dynamic-code handling. Evidence: Firecrawl extraction from
+  `https://docs.skylos.dev/dead-code-detection` on 2026-07-27. Impact: the
+  benchmark must include precision controls for dynamic access and framework
+  entry points as well as straightforward unused symbols.
 - Observation: Leta could not register this checkout because its global
   workspace registry is mounted read-only, and direct daemon startup also
-  failed.
-  Evidence: `leta workspace add` returned `Read-only file system`, and
-  `leta files` returned `Failed to start daemon`.
-  Impact: repository navigation will use read-only repository-native tools
-  where Leta remains unavailable; this does not affect scanner execution.
+  failed. Evidence: `leta workspace add` returned `Read-only file system`, and
+  `leta files` returned `Failed to start daemon`. Impact: repository navigation
+  will use read-only repository-native tools where Leta remains unavailable;
+  this does not affect scanner execution.
 - Observation: an unmarked fixture directory under `/tmp` caused Skylos to
-  promote `/tmp` to the analysis root because the sandbox exposes
-  `/tmp/.git`; auxiliary MDX and browser-reference discovery then traversed
-  unrelated scratch directories.
-  Evidence: three interrupted Skylos 4.30.0 runs remained in
-  `collect_mdx_ts_imports` or `collect_browser_event_handler_refs`; adding a
+  promote `/tmp` to the analysis root because the sandbox exposes `/tmp/.git`;
+  auxiliary MDX and browser-reference discovery then traversed unrelated
+  scratch directories. Evidence: three interrupted Skylos 4.30.0 runs remained
+  in `collect_mdx_ts_imports` or `collect_browser_event_handler_refs`; adding a
   minimal fixture `pyproject.toml` reduced the same scan to about 0.1 seconds.
   Impact: every retained corpus must include its own project marker, and the
   report must warn that ad hoc targets can inherit a broader ancestor project
@@ -144,46 +136,78 @@ documented claims from measured behaviour.
 - Observation: on the two-signal smoke file, pyscn reported the assignment
   after `return` as `unreachable_after_return` and did not report the unused
   function. Skylos reported the unused function and also reported the
-  unreachable assignment as an unused variable.
-  Evidence: pyscn 1.28.0 and Skylos 4.30.0 JSON output captured on
-  2026-07-27.
-  Impact: source-location normalization can reveal useful overlap while the
-  report preserves the tools' different explanations.
+  unreachable assignment as an unused variable. Evidence: pyscn 1.28.0 and
+  Skylos 4.30.0 JSON output captured on 2026-07-27. Impact: source-location
+  normalization can reveal useful overlap while the report preserves the tools'
+  different explanations.
+- Observation: pyscn found four of five labelled unreachable statements and no
+  unused symbols; Skylos found all five labelled unused symbols and the same
+  four unreachable locations as unused assignments. Both missed `if False`.
+  Evidence: retained pyscn 1.28.0 and Skylos 4.30.0 corpus JSON plus
+  `results/scores.json`. Impact: Skylos wins the unused-symbol lane, while
+  pyscn provides the stronger control-flow explanation despite equal location
+  recall in the second lane.
+- Observation: the zero-threshold Episodic scan produced no pyscn findings and
+  143 Skylos findings. Manual review classified two as actionable, 139 as false
+  positives, and two as review-required contract placeholders. Evidence:
+  compressed production reports and `results/production-adjudication.json`.
+  Impact: Skylos is useful as a broad advisory inventory in this codebase, but
+  needs project-specific tuning before use as a blocking gate.
 
 ## Decision log
 
 - Decision: use two scored lanes plus a real-project review instead of one
-  aggregate dead-code score.
-  Rationale: an aggregate would reward or penalize tools for analyses they do
-  not claim to perform and obscure whether a detector finds unused symbols or
-  unreachable statements.
-  Date/Author: 2026-07-27 00:05Z / Codex.
+  aggregate dead-code score. Rationale: an aggregate would reward or penalize
+  tools for analyses they do not claim to perform and obscure whether a
+  detector finds unused symbols or unreachable statements. Date/Author:
+  2026-07-27 00:05Z / Codex.
 - Decision: use released tools in ephemeral `uvx` environments and do not add
-  project dependencies.
-  Rationale: this matches a prospective adopter's experience while keeping the
-  Episodic dependency graph unchanged.
+  project dependencies. Rationale: this matches a prospective adopter's
+  experience while keeping the Episodic dependency graph unchanged.
   Date/Author: 2026-07-27 00:05Z / Codex.
 - Decision: retain raw outputs and a normalization manifest in the repository.
   Rationale: normalized scores alone are not auditable when tool schemas and
-  finding categories differ.
-  Date/Author: 2026-07-27 00:05Z / Codex.
+  finding categories differ. Date/Author: 2026-07-27 00:05Z / Codex.
 - Decision: give the synthetic corpus a minimal `pyproject.toml` at its scan
-  root.
-  Rationale: this bounds Skylos project-root discovery and represents a normal
-  Python project without configuring either detector's findings.
+  root. Rationale: this bounds Skylos project-root discovery and represents a
+  normal Python project without configuring either detector's findings.
   Date/Author: 2026-07-27 00:21Z / Codex.
+- Decision: exclude unmatched findings from the labelled confusion matrix and
+  report them separately. Rationale: the 11 unmatched Skylos findings were
+  genuine unused fixture result variables, but expanding the oracle after
+  seeing output would make the score post hoc and less defensible. Date/Author:
+  2026-07-27 00:49Z / Codex.
+- Decision: retain the large production reports with deterministic gzip
+  metadata and replace Skylos' absolute checkout prefix with `./`. Rationale:
+  compression preserves audit evidence without a multi-megabyte textual diff,
+  while path normalization avoids committing a workstation-specific checkout
+  identifier. Date/Author: 2026-07-27 01:02Z / Codex.
 
 ## Outcomes & retrospective
 
-The study is in progress. The initial documentation review established that
-“dead code” is not a single shared capability across these tools, so the final
-outcome will report differentiated capabilities rather than name a universal
-winner from a blended score.
+The study delivered a reproducible 19-label corpus, raw and normalized scanner
+results, a manually adjudicated Episodic scan, and an indexed head-to-head
+report. Skylos won the unused-symbol lane with 100% recall and precision on the
+labelled cases. pyscn provided the more direct control-flow diagnostics; both
+tools located four of five unreachable cases, but Skylos described those
+locations as unused assignments.
+
+The practical scan justified keeping the two capabilities separate. pyscn
+returned no Episodic findings, while Skylos returned a broad inventory whose
+143 displayed findings yielded two actionable private helpers, two contract
+questions, and 139 false positives after repository-aware review. Confidence
+filtering reduced subclass-hook noise but did not solve implicit dataclass,
+framework, export, and interface semantics.
+
+All Python, formatting, lint, typing, test, Markdown, Mermaid, and Makefile
+validation passed. The default merman Mermaid backend timed out on an unchanged
+large TUI design diagram; the supported `mmdc` backend validated the full
+documentation set successfully. No production code was changed or removed.
 
 ## Context and orientation
 
-Episodic is a Python application whose production package lives in
-`episodic/`. Repository documentation lives in `docs/`, and this plan lives in
+Episodic is a Python application whose production package lives in `episodic/`.
+Repository documentation lives in `docs/`, and this plan lives in
 `docs/execplans/`. The comparison will add a bounded benchmark area outside the
 production package for labelled fixtures and raw scanner results, then add a
 report under `docs/` and link it from `docs/contents.md`. If a new top-level
@@ -193,8 +217,8 @@ responsibility.
 A “labelled expectation” is one source location that the benchmark declares to
 be dead, live, or review-required before considering scanner output. Precision
 is the proportion of reported labelled findings that are truly dead. Recall is
-the proportion of truly dead labelled expectations reported by the tool. A
-true negative is deliberately live code that a tool correctly leaves alone.
+the proportion of truly dead labelled expectations reported by the tool. A true
+negative is deliberately live code that a tool correctly leaves alone.
 
 The synthetic corpus will cover ordinary unused symbols, direct and exported
 uses, unreachability after terminating statements, constant branches, dynamic
@@ -209,8 +233,8 @@ bounded study; reported findings will instead be manually classified.
 
 Resolve each latest released version through `uvx`, capture `--version` and
 relevant help, and run a one-file smoke test. Compare those interfaces with the
-Firecrawl research and update this plan when observed behaviour contradicts
-the docs. This stage is a go only when both tools can scan a local Python file
+Firecrawl research and update this plan when observed behaviour contradicts the
+docs. This stage is a go only when both tools can scan a local Python file
 without external services.
 
 ### Stage B: create the benchmark oracle
@@ -234,8 +258,8 @@ be traced back to raw output and source.
 
 Run both tools against `episodic/` with equivalent exclusions and static-only
 settings. Review every reported dead-code finding using source references and
-tests, classifying it as actionable, false-positive, or review-required. Do
-not delete production code as part of this comparison.
+tests, classifying it as actionable, false-positive, or review-required. Do not
+delete production code as part of this comparison.
 
 ### Stage E: report and clean up
 

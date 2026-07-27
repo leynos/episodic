@@ -14,6 +14,7 @@ The following tree is an orientation sketch, not a complete file listing.
 ├── .github/
 ├── .rules/
 ├── alembic/
+├── benchmarks/
 ├── docs/
 │   ├── adr/
 │   └── execplans/
@@ -49,6 +50,7 @@ _Figure 1: Simplified repository tree for contributor orientation._
 | `.github/`       | Continuous Integration (CI), release, dependency, and infrastructure workflow definitions. |
 | `.rules/`        | Python-specific local coding rules referenced by `AGENTS.md`.                              |
 | `alembic/`       | Database migration environment and versioned schema migrations.                            |
+| `benchmarks/`    | Labelled, reproducible development corpora and retained analysis evidence.                 |
 | `docs/`          | Long-lived project documentation, design material, guides, plans, and decision records.    |
 | `episodic/`      | Python package source for the Episodic application and domain logic.                       |
 | `infra/`         | Infrastructure-as-code modules, cluster configuration, and GitOps templates.               |

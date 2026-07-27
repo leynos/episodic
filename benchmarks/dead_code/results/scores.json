@@ -1,0 +1,48 @@
+{
+  "date": "2026-07-27",
+  "oracle_expectations": 19,
+  "tools": {
+    "pyscn": {
+      "version": "1.28.0",
+      "elapsed_ms": 326,
+      "raw_findings": 4,
+      "lanes": {
+        "unused-symbol": {
+          "true_positives": 0,
+          "false_positives": 0,
+          "false_negatives": 5,
+          "true_negatives": 8,
+          "unmatched_findings": 0
+        },
+        "unreachable-statement": {
+          "true_positives": 4,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "true_negatives": 1,
+          "unmatched_findings": 0
+        }
+      }
+    },
+    "skylos": {
+      "version": "4.30.0",
+      "elapsed_ms": 415,
+      "raw_findings": 20,
+      "lanes": {
+        "unused-symbol": {
+          "true_positives": 5,
+          "false_positives": 0,
+          "false_negatives": 0,
+          "true_negatives": 8,
+          "unmatched_findings": 11
+        },
+        "unreachable-statement": {
+          "true_positives": 4,
+          "false_positives": 0,
+          "false_negatives": 1,
+          "true_negatives": 1,
+          "unmatched_findings": 0
+        }
+      }
+    }
+  }
+}
