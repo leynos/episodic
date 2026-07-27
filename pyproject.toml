@@ -44,6 +44,7 @@ dev = [
     "pytest-xdist",
     "py-pglite[async]>=0.5.3,<0.6.0",
     "ruff",
+    "skylos>=4.30.0,<5",
     "pyright",
     "syrupy>=5.5.3,<6",
     "ty",
@@ -474,6 +475,79 @@ also_copy = [
 
 [tool.uv]
 package = true
+
+[tool.skylos.gate]
+strict = true
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.api.app._ShutdownHooksMiddleware.process_shutdown.scope",
+    "episodic.api.app._ShutdownHooksMiddleware.process_shutdown.event",
+    "episodic.api.errors.serialize_http_error.req",
+    "episodic.api.resources.health.HealthLiveResource.on_get.req",
+    "episodic.api.resources.health.HealthReadyResource.on_get.req",
+    "episodic.api.resources.reference_bindings.ReferenceBindingResource.on_get.req",
+    "episodic.api.resources.reference_documents.ReferenceDocumentResource.on_get.req",
+    "episodic.api.resources.source_intake.UploadResource.on_get.req",
+    "episodic.api.resources.source_intake.IngestionJobResource.on_get.req",
+]
+reason = "Falcon supplies these callback parameters through its ASGI and resource protocols."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = ["episodic.api.authorization.PermitAll.decide.context"]
+reason = "PermitAll preserves the authorization policy signature used by interchangeable implementations."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.canonical.storage.source_intake_repositories.SqlAlchemyUploadRepository.mark_failed.reason",
+]
+reason = "The repository method implements UploadRepository.mark_failed; other adapters consume the reason."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.metrics_ports.NoopBoundedMetrics.increment_counter.name",
+    "episodic.metrics_ports.NoopBoundedMetrics.increment_counter.labels",
+    "episodic.metrics_ports.NoopBoundedMetrics.observe_latency_ms.name",
+    "episodic.metrics_ports.NoopBoundedMetrics.observe_latency_ms.value",
+    "episodic.metrics_ports.NoopBoundedMetrics.observe_latency_ms.labels",
+    "episodic.metrics_ports.NoopBoundedValueMetrics.observe_value.name",
+    "episodic.metrics_ports.NoopBoundedValueMetrics.observe_value.value",
+    "episodic.metrics_ports.NoopBoundedValueMetrics.observe_value.labels",
+    "episodic.observability.NoopMetrics.increment_counter.name",
+    "episodic.observability.NoopMetrics.increment_counter.labels",
+    "episodic.observability.NoopMetrics.observe_latency_ms.name",
+    "episodic.observability.NoopMetrics.observe_latency_ms.value",
+    "episodic.observability.NoopMetrics.observe_latency_ms.labels",
+]
+reason = "No-op metrics adapters intentionally retain the production metrics protocol signatures."
+
+[tool.skylos.whitelist]
+names = []
+
+[tool.skylos.whitelist.documented]
+"enum" = "Used by PEP 695 generic bounds; Ruff still rejects genuinely unused imports."
+"_VersionedEntity" = "Used as the PEP 695 bound for versioned profile and template helpers."
+"create_reference_binding" = "Public compatibility re-export listed in the reference-document facade __all__."
+"get_reference_binding" = "Public compatibility re-export listed in the reference-document facade __all__."
+"list_reference_bindings" = "Public compatibility re-export listed in the reference-document facade __all__."
+"list_reference_bindings_paged" = "Public compatibility re-export listed in the binding facade __all__."
+"create_reference_document" = "Public compatibility re-export listed in the service facade __all__."
+"get_reference_document" = "Public compatibility re-export listed in the service facade __all__."
+"list_reference_documents" = "Public compatibility re-export listed in the service facade __all__."
+"update_reference_document" = "Public compatibility re-export listed in the service facade __all__."
+"ResolvedBinding" = "Public compatibility re-export listed in the service facade __all__."
+"resolve_bindings" = "Public compatibility re-export listed in the service facade __all__."
+"create_reference_document_revision" = "Public compatibility re-export listed in the service facade __all__."
+"get_reference_document_revision" = "Public compatibility re-export listed in the service facade __all__."
+"list_reference_document_revisions" = "Public compatibility re-export listed in the service facade __all__."
+"SnapshotContext" = "Public compatibility re-export listed in the service facade __all__."
+"snapshot_resolved_bindings" = "Public compatibility re-export listed in the service facade __all__."
+"StaleEventSequence" = "Reserved generation-run port error required by the accepted lifecycle contract."
+"UploadInitRequest" = "Reserved source-intake request DTO required by the accepted upload contract."
 
 [tool.hecate]
 root_packages = ["episodic"]

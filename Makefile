@@ -23,10 +23,12 @@ PYLINT_TARGETS ?= alembic episodic openai_test_types.py tests
 PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
 PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
 PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
+SKYLOS = $(UV_ENV) $(UV) run skylos
+SKYLOS_TARGETS ?= $(PYLINT_TARGETS)
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie spelling spelling-helper-test test typecheck \
-        crosshair check-migrations \
+        crosshair check-migrations skylos-allow \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
         $(TOOLS) $(VENV_TOOLS)
 
@@ -87,6 +89,18 @@ check-fmt: build ## Verify formatting
 lint: check-architecture ## Run linters
 	$(UV_ENV) $(UV) run ruff check
 	$(PYLINT) $(PYLINT_TARGETS)
+	$(SKYLOS) $(SKYLOS_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance
+
+skylos-allow: ## Document one intentional Skylos finding
+	@test -n "$(strip $(NAME))" || { \
+	  printf "Error: NAME is required\n" >&2; \
+	  exit 2; \
+	}
+	@test -n "$(strip $(REASON))" || { \
+	  printf "Error: REASON is required\n" >&2; \
+	  exit 2; \
+	}
+	$(SKYLOS) whitelist "$(NAME)" --reason "$(REASON)"
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run hecate check
