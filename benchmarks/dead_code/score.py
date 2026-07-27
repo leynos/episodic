@@ -219,24 +219,35 @@ def score_findings(
     findings: cabc.Sequence[Finding],
 ) -> cabc.Mapping[Lane, LaneScore]:
     """Score unique finding locations without discarding unmatched reports."""
-    expectations_by_location = _build_expectation_location_index(expectations)
-    counts = _empty_lane_counts()
-    matched_expectation_identifiers = _process_unique_finding_locations(
+    expectations_by_location = _index_expectations(expectations)
+    counts: LaneCounts = {
+        lane: {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "unmatched": 0} for lane in Lane
+    }
+    matched_expectation_identifiers = _score_unique_findings(
         findings,
         expectations_by_location=expectations_by_location,
         counts=counts,
     )
-    _account_for_unmatched_expectations(
+    _score_unmatched_expectations(
         expectations,
         matched_expectation_identifiers=matched_expectation_identifiers,
         counts=counts,
     )
-    return _lane_scores_from_counts(counts)
+    return {
+        lane: LaneScore(
+            true_positives=values["tp"],
+            false_positives=values["fp"],
+            false_negatives=values["fn"],
+            true_negatives=values["tn"],
+            unmatched_findings=values["unmatched"],
+        )
+        for lane, values in counts.items()
+    }
 
 
-def _build_expectation_location_index(
+def _index_expectations(
     expectations: cabc.Sequence[Expectation],
-) -> dict[Location, Expectation]:
+) -> dict[tuple[str, int], Expectation]:
     """Index labels by location and reject ambiguous benchmark expectations."""
     expectations_by_location: dict[Location, Expectation] = {}
     for expectation in expectations:
@@ -250,12 +261,7 @@ def _build_expectation_location_index(
     return expectations_by_location
 
 
-def _empty_lane_counts() -> LaneCounts:
-    """Create mutable counters for every scored dead-code lane."""
-    return {lane: {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "unmatched": 0} for lane in Lane}
-
-
-def _process_unique_finding_locations(
+def _score_unique_findings(
     findings: cabc.Sequence[Finding],
     *,
     expectations_by_location: cabc.Mapping[Location, Expectation],
@@ -263,48 +269,23 @@ def _process_unique_finding_locations(
 ) -> set[str]:
     """Account for one report per location and return matched label identifiers."""
     matched_expectation_identifiers: set[str] = set()
-    for finding in _unique_findings_by_location(findings):
-        identifier = _account_for_finding(
-            finding,
-            expectations_by_location=expectations_by_location,
-            counts=counts,
-        )
-        if identifier is not None:
-            matched_expectation_identifiers.add(identifier)
-    return matched_expectation_identifiers
-
-
-def _unique_findings_by_location(
-    findings: cabc.Sequence[Finding],
-) -> cabc.Iterator[Finding]:
-    """Yield the first detector report for each source location."""
     seen_locations: set[Location] = set()
     for finding in findings:
         location = (finding.path, finding.line)
         if location in seen_locations:
             continue
         seen_locations.add(location)
-        yield finding
+        expectation = expectations_by_location.get(location)
+        if expectation is None:
+            counts[finding.lane]["unmatched"] += 1
+            continue
+        count_key = "tp" if expectation.is_dead else "fp"
+        counts[expectation.lane][count_key] += 1
+        matched_expectation_identifiers.add(expectation.identifier)
+    return matched_expectation_identifiers
 
 
-def _account_for_finding(
-    finding: Finding,
-    *,
-    expectations_by_location: cabc.Mapping[Location, Expectation],
-    counts: LaneCounts,
-) -> str | None:
-    """Record one unique report and return its matched label identifier."""
-    expectation = expectations_by_location.get((finding.path, finding.line))
-    if expectation is None:
-        counts[finding.lane]["unmatched"] += 1
-        return None
-
-    count_key = "tp" if expectation.is_dead else "fp"
-    counts[expectation.lane][count_key] += 1
-    return expectation.identifier
-
-
-def _account_for_unmatched_expectations(
+def _score_unmatched_expectations(
     expectations: cabc.Sequence[Expectation],
     *,
     matched_expectation_identifiers: cabc.Set[str],
@@ -316,17 +297,3 @@ def _account_for_unmatched_expectations(
             continue
         count_key = "fn" if expectation.is_dead else "tn"
         counts[expectation.lane][count_key] += 1
-
-
-def _lane_scores_from_counts(counts: LaneCounts) -> cabc.Mapping[Lane, LaneScore]:
-    """Freeze mutable counters into the public score value objects."""
-    return {
-        lane: LaneScore(
-            true_positives=values["tp"],
-            false_positives=values["fp"],
-            false_negatives=values["fn"],
-            true_negatives=values["tn"],
-            unmatched_findings=values["unmatched"],
-        )
-        for lane, values in counts.items()
-    }
