@@ -22,6 +22,17 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
+def _assert_error_response(response: httpx.Response, expected_code: str) -> None:
+    """Assert the standard not-found response contract."""
+    assert response.status_code == 404, (
+        f"Expected 404 for {expected_code!r}, got {response.status_code}: "
+        f"{response.text}"
+    )
+    assert response.json()["code"] == expected_code, (
+        f"Expected error code {expected_code!r}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_source_upload_rejects_unsupported_content_type(
     session_factory: async_sessionmaker[AsyncSession],
@@ -101,10 +112,7 @@ async def test_attach_source_reports_missing_ingestion_job(
             payload=_source_uri_payload(),
         )
 
-    assert response.status_code == 404, "Expected values to match"
-    assert response.json()["code"] == "ingestion_job_not_found", (
-        "Expected values to match"
-    )
+    _assert_error_response(response, "ingestion_job_not_found")
 
 
 @pytest.mark.asyncio
@@ -122,8 +130,7 @@ async def test_attach_upload_reports_missing_upload(
             payload=_upload_payload(str(uuid.uuid4())),
         )
 
-    assert response.status_code == 404, "Expected values to match"
-    assert response.json()["code"] == "upload_not_found", "Expected values to match"
+    _assert_error_response(response, "upload_not_found")
 
 
 @pytest.mark.asyncio
@@ -195,8 +202,7 @@ async def test_upload_get_endpoint_reports_missing_upload(
     async with _source_intake_client(session_factory, tmp_path) as client:
         response = await client.get(f"/v1/uploads/{uuid.uuid4()}")
 
-    assert response.status_code == 404, "Expected values to match"
-    assert response.json()["code"] == "upload_not_found", "Expected values to match"
+    _assert_error_response(response, "upload_not_found")
 
 
 @pytest.mark.asyncio
@@ -233,10 +239,7 @@ async def test_ingestion_job_sources_get_reports_missing_job(
     async with _source_intake_client(session_factory, tmp_path) as client:
         response = await client.get(f"/v1/ingestion-jobs/{uuid.uuid4()}/sources")
 
-    assert response.status_code == 404, "Expected values to match"
-    assert response.json()["code"] == "ingestion_job_not_found", (
-        "Expected values to match"
-    )
+    _assert_error_response(response, "ingestion_job_not_found")
 
 
 @contextlib.asynccontextmanager

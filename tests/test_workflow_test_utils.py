@@ -1,6 +1,6 @@
 """Tests for workflow integration test helpers."""
 
-from tests.workflow_test_utils import artifact_server_addr, artifact_server_port
+from tests.test_workflow_utils import artifact_server_addr, artifact_server_port
 
 
 def test_artifact_server_binds_for_rootless_podman_job_containers() -> None:
