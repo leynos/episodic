@@ -1,6 +1,7 @@
 """Integration tests for the source-intake REST workflow."""
 
 import asyncio
+import dataclasses
 import datetime as dt
 import hashlib
 import typing as typ
@@ -58,19 +59,22 @@ async def test_source_intake_upload_job_and_attach_flow(
         base_url="http://testserver",
     ) as client:
         profile_id = await _create_series_profile(client)
-        payload = b"hello\n"
         upload_response = await _post_text_upload(
             client,
-            key="upload-key",
-            payload=payload,
-            metadata='{"language":"en"}',
+            _TextUploadRequest(
+                key="upload-key",
+                payload=b"hello\n",
+                metadata='{"language":"en"}',
+            ),
         )
         assert upload_response.status_code == 201, upload_response.text
         replay_response = await _post_text_upload(
             client,
-            key="upload-key",
-            payload=payload,
-            metadata='{"language":"en"}',
+            _TextUploadRequest(
+                key="upload-key",
+                payload=b"hello\n",
+                metadata='{"language":"en"}',
+            ),
         )
         job_response = await client.post(
             "/v1/ingestion-jobs",
@@ -124,8 +128,10 @@ async def test_source_intake_idempotency_conflict(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        first = await _post_text_upload(client, key="conflict-key", payload=b"hello\n")
-        second = await _post_text_upload(client, key="conflict-key", payload=b"bye\n")
+        first_request = _TextUploadRequest(key="conflict-key", payload=b"hello\n")
+        second_request = _TextUploadRequest(key="conflict-key", payload=b"bye\n")
+        first = await _post_text_upload(client, first_request)
+        second = await _post_text_upload(client, second_request)
 
     assert first.status_code == 201, first.text
     assert second.status_code == 409, "Expected values to match"
@@ -149,24 +155,19 @@ async def test_source_intake_idempotency_is_scoped_by_authorized_principal(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        first = await _post_text_upload(
-            client,
+        principal_a_request = _TextUploadRequest(
             key="principal-key",
             payload=b"same\n",
             authorization="principal-a",
         )
-        second = await _post_text_upload(
-            client,
+        principal_b_request = _TextUploadRequest(
             key="principal-key",
             payload=b"same\n",
             authorization="principal-b",
         )
-        replay = await _post_text_upload(
-            client,
-            key="principal-key",
-            payload=b"same\n",
-            authorization="principal-a",
-        )
+        first = await _post_text_upload(client, principal_a_request)
+        second = await _post_text_upload(client, principal_b_request)
+        replay = await _post_text_upload(client, principal_a_request)
 
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
@@ -192,8 +193,7 @@ async def test_source_intake_response_envelope_snapshot(
         profile_id = await _create_series_profile(client)
         upload_response = await _post_text_upload(
             client,
-            key="snapshot-upload-key",
-            payload=b"snapshot\n",
+            _TextUploadRequest(key="snapshot-upload-key", payload=b"snapshot\n"),
         )
         job_response = await client.post(
             "/v1/ingestion-jobs",
@@ -366,33 +366,33 @@ def _idempotency_request(idempotency_key: str) -> IdempotencyAcquireRequest:
     )
 
 
-# Each multipart request option remains explicit at this private test boundary.
-# pylint: disable-next=too-many-arguments
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class _TextUploadRequest:
+    """Describe a deterministic text-upload multipart request."""
+
+    key: str
+    payload: bytes
+    authorization: str | None = None
+    metadata: str | None = None
+
+
 async def _post_text_upload(
     client: httpx.AsyncClient,
-    *,
-    key: str,
-    payload: bytes,
-    authorization: str | None = None,
-    metadata: str | None = None,
+    request: _TextUploadRequest,
 ) -> httpx.Response:
     """Post a text upload with a deterministic multipart shape."""
-    headers = {"Idempotency-Key": key}
-    if authorization is not None:
-        headers["Authorization"] = authorization
+    headers = {"Idempotency-Key": request.key}
+    if request.authorization is not None:
+        headers["Authorization"] = request.authorization
     files: dict[
         str,
         tuple[str, bytes, str] | tuple[None, str] | tuple[None, str, str],
     ] = {
-        "file": ("source.txt", payload, "text/plain"),
+        "file": ("source.txt", request.payload, "text/plain"),
         "content_type": (None, "text/plain"),
-        "declared_size": (None, str(len(payload))),
-        "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
+        "declared_size": (None, str(len(request.payload))),
+        "declared_sha256": (None, hashlib.sha256(request.payload).hexdigest()),
     }
-    if metadata is not None:
-        files["metadata"] = (None, metadata, "application/json")
-    return await client.post(
-        "/v1/uploads",
-        headers=headers,
-        files=files,
-    )
+    if request.metadata is not None:
+        files["metadata"] = (None, request.metadata, "application/json")
+    return await client.post("/v1/uploads", headers=headers, files=files)
