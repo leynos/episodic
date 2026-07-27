@@ -1,0 +1,17 @@
+# serializer version: 1
+# name: test_task_routes_include_exchange_metadata_for_each_task
+  dict({
+    'exchange': 'episodic.tasks',
+    'exchange_type': 'topic',
+    'queue': 'episodic.io',
+    'routing_key': 'episodic.io.diagnostic',
+  })
+# ---
+# name: test_task_routes_include_exchange_metadata_for_each_task.1
+  dict({
+    'exchange': 'episodic.tasks',
+    'exchange_type': 'topic',
+    'queue': 'episodic.cpu',
+    'routing_key': 'episodic.cpu.diagnostic',
+  })
+# ---

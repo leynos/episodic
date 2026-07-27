@@ -181,6 +181,11 @@ def _estimate_token_count(chars_per_token: float, *parts: str | None) -> int:
     language, and vocabulary, so this remains a heuristic-only implementation.
     If other tokenizers need support later, this function is the extension
     point for injecting a tokenizer.
+
+    Returns
+    -------
+    int
+        Result produced by the operation.
     """
     combined = "".join(part for part in parts if part is not None)
     if not combined:
@@ -435,6 +440,11 @@ def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
 
     Emits ``openai_adapter.config_rejected`` with bounded configuration
     diagnostics before raising ``ValueError`` for the first rejected field.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
     base_url: object = config.base_url
     api_key: object = config.api_key

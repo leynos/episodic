@@ -30,6 +30,7 @@ graph execution, while this module owns the estimator contracts and local
 runtime policy.
 """
 
+import asyncio
 import dataclasses as dc
 import logging
 import re
@@ -195,6 +196,11 @@ def _compute_estimated_seconds(spoken_word_count: int, words_per_minute: int) ->
     post: __return__ >= 0
     post: (spoken_word_count == 0) == (__return__ == 0)
     post: spoken_word_count==0 or __return__==-(-spoken_word_count*60//words_per_minute)
+
+    Returns
+    -------
+    int
+        Result produced by the operation.
     """
     if spoken_word_count == 0:
         return 0
@@ -232,6 +238,7 @@ class ChronoRuntimeEstimator:
 
     async def evaluate(self, request: ChronoEvaluationRequest) -> ChronoRuntimeEstimate:
         """Async adapter method for orchestration code."""
+        await asyncio.sleep(0)
         return self.estimate(request)
 
     def _elapsed_ms_since(self, started: float) -> float:

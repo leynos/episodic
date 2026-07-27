@@ -1,7 +1,5 @@
 """Unit tests for source-intake SQLAlchemy repositories."""
 
-from __future__ import annotations
-
 import asyncio
 import dataclasses as dc
 import datetime as dt
@@ -85,12 +83,12 @@ async def test_source_intake_repositories_round_trip(
         upload_id=result.upload.id,
     )
 
-    assert result.transitioned is True
-    assert result.ready_upload.state is UploadState.READY
-    assert fetched.upload.content_hash == "sha256:abc123"
-    assert fetched.sources[0].upload_id == result.upload.id
-    assert fetched.job_ids == [job.id]
-    assert fetched.total == 1
+    assert result.transitioned is True, "Expected values to match"
+    assert result.ready_upload.state is UploadState.READY, "Expected values to match"
+    assert fetched.upload.content_hash == "sha256:abc123", "Expected values to match"
+    assert fetched.sources[0].upload_id == result.upload.id, "Expected values to match"
+    assert fetched.job_ids == [job.id], "Expected values to match"
+    assert fetched.total == 1, "Expected values to match"
 
 
 async def _persist_round_trip_fixture(
@@ -219,7 +217,9 @@ async def test_sqlalchemy_idempotency_store_replays_and_conflicts(
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         acquired = await uow.idempotency.acquire(request=request)
-        assert not isinstance(acquired, Replay | Conflict | InFlight)
+        assert not isinstance(acquired, Replay | Conflict | InFlight), (
+            "Expected value to have the required type"
+        )
         await uow.idempotency.complete(
             record_id=acquired.record_id,
             serialised_outcome=b'{"ok":true}',
@@ -238,9 +238,9 @@ async def test_sqlalchemy_idempotency_store_replays_and_conflicts(
             )
         )
 
-    assert isinstance(replay, Replay)
-    assert replay.serialised_outcome == b'{"ok":true}'
-    assert isinstance(conflict, Conflict)
+    assert isinstance(replay, Replay), "Expected value to have the required type"
+    assert replay.serialised_outcome == b'{"ok":true}', "Expected values to match"
+    assert isinstance(conflict, Conflict), "Expected value to have the required type"
 
 
 @pytest.mark.asyncio
@@ -275,11 +275,11 @@ async def test_sqlalchemy_idempotency_store_uses_injected_time_and_ids(
     async with factory() as session:
         record = await session.get(IdempotencyRecordModel, fixed_record_id)
 
-    assert isinstance(acquired, Acquired)
-    assert acquired.record_id == fixed_record_id
+    assert isinstance(acquired, Acquired), "Expected value to have the required type"
+    assert acquired.record_id == fixed_record_id, "Expected values to match"
     assert record is not None, "expected deterministic record to persist"
-    assert record.created_at == fixed_now
-    assert record.updated_at == fixed_now
+    assert record.created_at == fixed_now, "Expected values to match"
+    assert record.updated_at == fixed_now, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -312,9 +312,13 @@ async def test_sqlalchemy_idempotency_store_concurrent_acquire_is_first_writer_w
             .where(IdempotencyRecordModel.idempotency_key == request.idempotency_key)
         )
 
-    assert sum(isinstance(outcome, Acquired) for outcome in (first, second)) == 1
-    assert sum(isinstance(outcome, InFlight) for outcome in (first, second)) == 1
-    assert persisted_count == 1
+    assert sum(isinstance(outcome, Acquired) for outcome in (first, second)) == 1, (
+        "Expected value to have the required type"
+    )
+    assert sum(isinstance(outcome, InFlight) for outcome in (first, second)) == 1, (
+        "Expected value to have the required type"
+    )
+    assert persisted_count == 1, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -371,8 +375,10 @@ async def test_sqlalchemy_idempotency_store_reacquires_expired_in_flight_record(
             replacement_record_id,
         )
 
-    assert isinstance(outcome, Acquired)
-    assert outcome.record_id == replacement_record_id
-    assert expired_record is None
-    assert replacement_record is not None
-    assert replacement_record.expires_at == request.expires_at
+    assert isinstance(outcome, Acquired), "Expected value to have the required type"
+    assert outcome.record_id == replacement_record_id, "Expected values to match"
+    assert expired_record is None, "Expected value to be absent"
+    assert replacement_record is not None, "Expected value to be present"
+    assert replacement_record.expires_at == request.expires_at, (
+        "Expected values to match"
+    )

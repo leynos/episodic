@@ -1,0 +1,12 @@
+# serializer version: 1
+# name: test_guest_bios_tool_executor_resolves_bindings_and_returns_result
+  list([
+    dict({
+      'episode_id': '<uuid>',
+      'series_profile_id': '<uuid>',
+      'template_id': '<uuid>',
+      'uow': object(
+      ),
+    }),
+  ])
+# ---

@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 import test_reference_document_service_support as support
+from test_reference_document_service_support import service_fixture
 
 from episodic.canonical.domain import (
     ApprovalState,
@@ -25,14 +26,13 @@ from episodic.canonical.reference_documents import (
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
+__all__ = ["service_fixture"]
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from sqlalchemy.ext.asyncio import AsyncSession
-
-
-service_fixture = support.service_fixture
-ServiceFixture = support.ServiceFixture
+    from test_reference_document_service_support import ServiceFixture
 
 
 async def _create_draft_episode(

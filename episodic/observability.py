@@ -20,8 +20,6 @@ satisfies :class:`BoundedMetricsPort` for callers that build their label
 dicts as concrete ``dict`` instances.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import time
 import typing as typ
@@ -84,8 +82,4 @@ class NoopMetrics:
 class PerfCounterClock:
     """Monotonic clock backed by Python's perf counter."""
 
-    read_seconds: cabc.Callable[[], float] = time.perf_counter
-
-    def monotonic_seconds(self) -> float:
-        """Return the current monotonic timestamp in seconds."""
-        return self.read_seconds()
+    monotonic_seconds: cabc.Callable[[], float] = time.perf_counter

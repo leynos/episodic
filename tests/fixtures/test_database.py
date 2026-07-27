@@ -64,7 +64,7 @@ async def test_reset_public_schema_serializes_concurrent_calls(
             )
         )
 
-    assert result.scalar_one() == 1
-    assert counting_lock.enter_count == 2
-    assert counting_lock.exit_count == 2
-    assert counting_lock.max_active_count == 1
+    assert result.scalar_one() == 1, "Expected values to match"
+    assert counting_lock.enter_count == 2, "Expected values to match"
+    assert counting_lock.exit_count == 2, "Expected values to match"
+    assert counting_lock.max_active_count == 1, "Expected values to match"

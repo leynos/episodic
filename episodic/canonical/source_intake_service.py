@@ -1,7 +1,5 @@
 """Application services for source-intake REST workflows."""
 
-from __future__ import annotations
-
 import asyncio
 import dataclasses as dc
 import hashlib
@@ -38,7 +36,7 @@ if typ.TYPE_CHECKING:
     from .pagination import Pagination
     from .unit_of_work_protocols import CanonicalUnitOfWork
 
-    UowFactory = cabc.Callable[[], CanonicalUnitOfWork]
+    type UowFactory = cabc.Callable[[], CanonicalUnitOfWork]
 
 
 _UPLOAD_STORAGE_PREFIX = "uploads"
@@ -56,7 +54,7 @@ async def register_upload(
     """Persist upload bytes after committing a recoverable pending row."""
     payload_sha256 = hashlib.sha256(request.payload).hexdigest()
     _validate_declared_upload(request, payload_sha256)
-    providers = _source_intake_runtime(runtime)
+    providers = source_intake_runtime(runtime)
     started_at = providers.monotonic_clock.monotonic_seconds()
     upload_id = providers.uuid_factory()
     storage_key = f"{_UPLOAD_STORAGE_PREFIX}/{upload_id}"
@@ -231,7 +229,7 @@ async def create_ingestion_job(
     profile = await uow.series_profiles.get(request.series_profile_id)
     if profile is None:
         raise SeriesProfileNotFoundError(str(request.series_profile_id))
-    providers = _source_intake_runtime(runtime)
+    providers = source_intake_runtime(runtime)
     now = providers.clock()
     job = IngestionJob(
         id=providers.uuid_factory(),
@@ -267,7 +265,7 @@ async def attach_source_to_ingestion_job(
     else:
         source_uri = request.source_uri
 
-    providers = _source_intake_runtime(runtime)
+    providers = source_intake_runtime(runtime)
     source = IngestionJobSource(
         id=providers.uuid_factory(),
         ingestion_job_id=request.ingestion_job_id,
@@ -372,13 +370,6 @@ def _validate_declared_upload(
     actual_hash = payload_sha256 or hashlib.sha256(request.payload).hexdigest()
     if request.declared_sha256 != actual_hash:
         raise UploadHashMismatchError(request.declared_sha256)
-
-
-def _source_intake_runtime(
-    runtime: SourceIntakeRuntime | None,
-) -> SourceIntakeRuntime:
-    """Return source-intake runtime providers with production defaults."""
-    return source_intake_runtime(runtime)
 
 
 async def _single_chunk_stream(payload: bytes) -> cabc.AsyncIterator[bytes]:

@@ -22,5 +22,5 @@ def test_provision_doks_workflow(tmp_path: Path) -> None:
     assert code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
 
     data = read_artifact_json(artifact_dir, "provision-result.json", logs)
-    assert data["status"] == "ok"
-    assert data["execution_mode"] == "validate"
+    assert data["status"] == "ok", "Expected values to match"
+    assert data["execution_mode"] == "validate", "Expected values to match"

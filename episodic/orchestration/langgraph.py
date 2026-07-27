@@ -270,7 +270,7 @@ def _invoke_finish_callback(
             "generation_graph.finish_node.callback.finish",
             correlation_id=correlation_id,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001  # This adapter boundary must translate arbitrary third-party failures.
         _log_event(
             "error",
             "generation_graph.finish_node.callback.error",
@@ -372,6 +372,11 @@ def _build_execute_node(
     When *checkpoint_port* is ``None``, returns the direct execute node
     targeting ``"finish"``. Otherwise returns the suspend-before-execute node
     targeting ``END``.
+
+    Returns
+    -------
+    tuple[ExecuteNodeFn, str]
+        Result produced by the operation.
     """
     if checkpoint_port is None:
 
@@ -419,6 +424,11 @@ def build_generation_orchestration_graph(
             actions.
         extensions: Optional persistence, callback, and cost-recording
             collaborators for graph execution.
+
+    Returns
+    -------
+    CompiledStateGraph
+        Result produced by the operation.
     """
     graph_extensions = extensions or GenerationGraphExtensions()
     graph = StateGraph(GenerationGraphState)

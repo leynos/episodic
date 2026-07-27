@@ -1,13 +1,12 @@
 """Behavioural tests for the Falcon-on-Granian HTTP service scaffold."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import os
 import shutil
 import subprocess  # noqa: S404 - required to start a local Granian server
 import time
 import typing as typ
+from pathlib import Path  # noqa: TC003  # pytest inspects fixture annotations.
 
 import httpx
 import pytest
@@ -15,7 +14,6 @@ from pytest_bdd import given, scenario, then, when
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    from pathlib import Path
 
 
 @dc.dataclass(slots=True)
@@ -123,7 +121,7 @@ def _read_granian_listening_ports(
     lsof_path: str,
 ) -> list[int]:
     """Inspect a Granian process and return any listening TCP ports."""
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
         [
             lsof_path,
             "-Pan",
@@ -212,7 +210,7 @@ def given_granian_service_running(
     }
     from episodic.api import runtime
 
-    http_service_scaffold_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
+    http_service_scaffold_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
         [
             granian_path,
             runtime.GRANIAN_FACTORY_TARGET,

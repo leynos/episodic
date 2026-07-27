@@ -9,8 +9,6 @@ The broader architecture behaviour remains covered in
 import subprocess  # noqa: S404  # Tests validate Hecate subprocess wrapping.
 import tomllib
 import typing as typ
-from collections.abc import Callable  # noqa: ICN003, TC003
-from pathlib import Path
 
 import pytest
 from architecture_hecate_config import (
@@ -23,9 +21,17 @@ from architecture_hecate_config import (
     write_fixture_config,
 )
 
+if typ.TYPE_CHECKING:
+    from pathlib import Path
+
+    from syrupy.assertion import SnapshotAssertion
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 
 class _ErrorCase(typ.NamedTuple):
-    exception_factory: Callable[[list[str]], Exception]
+    exception_factory: cabc.Callable[[list[str]], Exception]
     expected_match: str
     expected_cause_type: type[BaseException]
 
@@ -39,7 +45,9 @@ def test_fixture_config_normal_fixture_excludes_package_barrel(
 
     config = _read_fixture_config(tmp_path, package_name)
 
-    assert _group_prefixes(config, "outbound_adapter") == [f"{package}.storage"]
+    assert _group_prefixes(config, "outbound_adapter") == [f"{package}.storage"], (
+        "Expected values to match"
+    )
 
 
 def test_fixture_config_barrel_fixture_includes_package_barrel(
@@ -53,7 +61,7 @@ def test_fixture_config_barrel_fixture_includes_package_barrel(
     assert _group_prefixes(config, "outbound_adapter") == [
         f"{package}.storage",
         package,
-    ]
+    ], "Expected values to match"
 
 
 def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
@@ -64,28 +72,32 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
     config = _read_fixture_config(tmp_path, package_name)
 
     hecate_config = _hecate_config(config)
-    assert hecate_config["root_packages"] == [package]
-    assert hecate_config["default_rule_id"] == "ARCH001"
-    assert _group_prefixes(config, "composition_root") == [f"{package}.runtime"]
+    assert hecate_config["root_packages"] == [package], "Expected values to match"
+    assert hecate_config["default_rule_id"] == "ARCH001", "Expected values to match"
+    assert _group_prefixes(config, "composition_root") == [f"{package}.runtime"], (
+        "Expected values to match"
+    )
     assert _group_allowed(config, "composition_root") == [
         "application",
         "composition_root",
         "domain",
         "inbound_adapter",
         "outbound_adapter",
-    ]
-    assert _group_allowed(config, "domain") == ["domain"]
-    assert _group_allowed(config, "application") == ["application", "domain"]
+    ], "Expected values to match"
+    assert _group_allowed(config, "domain") == ["domain"], "Expected values to match"
+    assert _group_allowed(config, "application") == ["application", "domain"], (
+        "Expected values to match"
+    )
     assert _group_allowed(config, "inbound_adapter") == [
         "inbound_adapter",
         "application",
         "domain",
-    ]
+    ], "Expected values to match"
     assert _group_allowed(config, "outbound_adapter") == [
         "outbound_adapter",
         "application",
         "domain",
-    ]
+    ], "Expected values to match"
 
 
 @pytest.mark.parametrize(
@@ -136,7 +148,9 @@ def test_fixture_check_wraps_subprocess_errors(
     ) as exc_info:
         run_hecate_fixture_check("allowed_case", config_path)
 
-    assert isinstance(exc_info.value.__cause__, error_case.expected_cause_type)
+    assert isinstance(exc_info.value.__cause__, error_case.expected_cause_type), (
+        "Expected value to have the required type"
+    )
 
 
 @pytest.mark.parametrize(
@@ -183,12 +197,15 @@ def test_production_check_wraps_subprocess_errors(
     ) as exc_info:
         run_hecate_production_check()
 
-    assert isinstance(exc_info.value.__cause__, error_case.expected_cause_type)
+    assert isinstance(exc_info.value.__cause__, error_case.expected_cause_type), (
+        "Expected value to have the required type"
+    )
 
 
 def test_fixture_check_uses_injected_python_and_explicit_arguments(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Fixture checks construct an isolated Hecate command."""
     config_path = write_fixture_config(tmp_path, "allowed_case")
@@ -205,7 +222,7 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
             "text": True,
             "timeout": HECATE_TIMEOUT_SECONDS,
             "cwd": REPO_ROOT,
-        }
+        }, "Expected values to match"
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", capture_run)
@@ -216,23 +233,13 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
         python_executable="/custom/python",
     )
 
-    assert captured_command == [
-        "/custom/python",
-        "-m",
-        "hecate",
-        "check",
-        "--config",
-        str(config_path),
-        "--package",
-        "tests.fixtures.architecture.allowed_case",
-        "--root",
-        str(
-            Path(__file__).resolve().parent
-            / "fixtures"
-            / "architecture"
-            / "allowed_case",
-        ),
-    ]
+    fixture_root = REPO_ROOT / "tests/fixtures/architecture/allowed_case"
+    assert captured_command[5] == str(config_path), "config path must match"
+    assert captured_command[9] == str(fixture_root), "fixture root must match"
+    stable_command = [*captured_command]
+    stable_command[5] = "<generated-config>"
+    stable_command[9] = "<fixture-root>"
+    assert stable_command == snapshot, "actual output must match snapshot"
 
 
 def test_production_check_uses_injected_python(
@@ -252,14 +259,16 @@ def test_production_check_uses_injected_python(
             "text": True,
             "timeout": HECATE_TIMEOUT_SECONDS,
             "cwd": REPO_ROOT,
-        }
+        }, "Expected values to match"
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", capture_run)
 
     run_hecate_production_check(python_executable="/custom/python")
 
-    assert captured_command == ["/custom/python", "-m", "hecate", "check"]
+    assert captured_command == ["/custom/python", "-m", "hecate", "check"], (
+        "Expected values to match"
+    )
 
 
 def _read_fixture_config(tmp_path: Path, package_name: str) -> dict[str, object]:

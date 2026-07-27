@@ -81,6 +81,11 @@ async def snapshot_resolved_bindings(
     This function only snapshots the already-resolved bindings it is given.
     Entity existence and foreign-key integrity are enforced by the repository
     and database layers when the unit of work is flushed or committed.
+
+    Returns
+    -------
+    list[SourceDocument]
+        Result produced by the operation.
     """
     if not resolved:
         return []

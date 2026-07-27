@@ -65,8 +65,8 @@ def parse_uuid(raw_value: str, field_name: str) -> uuid.UUID:
 
     Raises
     ------
-    falcon.HTTPBadRequest
-        Raised when ``raw_value`` cannot be parsed as a UUID.
+    validation_error
+        If the operation cannot be completed.
     """
     try:
         return uuid.UUID(raw_value)
@@ -90,8 +90,8 @@ def require_payload_dict(payload: object) -> JsonPayload:
 
     Raises
     ------
-    falcon.HTTPBadRequest
-        Raised when request media is not a JSON object.
+    validation_error
+        If the operation cannot be completed.
     """
     if not isinstance(payload, dict):
         msg = "JSON object payload is required."
@@ -168,6 +168,16 @@ def _parse_int_query_param(
     Returns ``default`` when the caller omitted the parameter. Otherwise
     attempts ``int(raw_value)`` and raises a typed envelope error with the
     field name and ``constraint="type"`` when parsing fails.
+
+    Returns
+    -------
+    int
+        Result produced by the operation.
+
+    Raises
+    ------
+    validation_error
+        If the operation cannot be completed.
     """
     if raw_value is None:
         return default
@@ -212,9 +222,8 @@ def parse_expected_revision(payload: JsonPayload) -> int:
 
     Raises
     ------
-    falcon.HTTPBadRequest
-        Raised when ``expected_revision`` is missing, not an integer, or not
-        strictly positive.
+    validation_error
+        If the operation cannot be completed.
     """
     raw = _require_field(payload, "expected_revision")
     parsed = _coerce_strict_positive_int(raw)
@@ -238,17 +247,19 @@ def _require_field(payload: JsonPayload, field_name: str) -> object:
 
 def _coerce_strict_positive_int(value: object) -> int | None:
     """Return ``value`` as a strict positive integer or ``None``."""
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value if value > 0 else None
-    if isinstance(value, str):
-        stripped_value = value.strip()
-        if _INT_RE.fullmatch(stripped_value) is None:
+    match value:
+        case bool():
             return None
-        parsed = int(stripped_value)
-        return parsed if parsed > 0 else None
-    return None
+        case int():
+            return value if value > 0 else None
+        case str():
+            stripped_value = value.strip()
+            if _INT_RE.fullmatch(stripped_value) is None:
+                return None
+            parsed = int(stripped_value)
+            return parsed if parsed > 0 else None
+        case _:
+            return None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -366,11 +377,6 @@ def build_profile_create_kwargs(payload: JsonPayload) -> dict[str, object]:
     -------
     dict[str, object]
         Keyword arguments for ``create_series_profile``.
-
-    Raises
-    ------
-    falcon.HTTPBadRequest
-        Raised when required profile fields are missing.
     """
     slug = _require_field(payload, "slug")
     title = _require_field(payload, "title")
@@ -401,11 +407,6 @@ def build_template_create_kwargs(payload: JsonPayload) -> dict[str, object]:
     -------
     dict[str, object]
         Keyword arguments for ``create_episode_template``.
-
-    Raises
-    ------
-    falcon.HTTPBadRequest
-        Raised when required template fields are missing or invalid.
     """
     raw_series_profile_id = _require_field(payload, "series_profile_id")
     slug = _require_field(payload, "slug")
@@ -448,11 +449,6 @@ def build_profile_update_request(
     -------
     UpdateSeriesProfileRequest
         Typed service request value for ``update_series_profile``.
-
-    Raises
-    ------
-    falcon.HTTPBadRequest
-        Raised when required revision or profile fields are missing/invalid.
     """
     return _build_typed_update_request(
         entity_id,
@@ -485,11 +481,6 @@ def build_template_update_request(
     -------
     UpdateEpisodeTemplateRequest
         Typed service request value for ``update_episode_template``.
-
-    Raises
-    ------
-    falcon.HTTPBadRequest
-        Raised when required revision or template fields are missing/invalid.
     """
     return _build_typed_update_request(
         entity_id,

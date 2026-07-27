@@ -87,6 +87,11 @@ def _enrich_source_metadata(
     Each source's ``metadata`` dictionary is augmented with a
     ``"conflict_resolution"`` key containing the audit summary produced
     by the conflict resolver.
+
+    Returns
+    -------
+    list[SourceDocumentInput]
+        Result produced by the operation.
     """
     return [
         dc.replace(

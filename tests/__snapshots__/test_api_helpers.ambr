@@ -1,0 +1,9 @@
+# serializer version: 1
+# name: TestTypedUpdateRequest.test_build_typed_update_request_passes_payload_and_uses_data_builder
+  dict({
+    'audit': AuditMetadata(actor='editor@example.com', note='update'),
+    'entity_id': '<uuid>',
+    'expected_revision': 3,
+    'fields': 'payload-fields',
+  })
+# ---

@@ -6,7 +6,7 @@ import typing as typ
 import uuid
 
 import pytest
-import test_reference_document_service_support as support
+from test_reference_document_service_support import service_fixture
 
 from episodic.canonical.domain import (
     ApprovalState,
@@ -32,16 +32,15 @@ from episodic.canonical.reference_documents import (
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
+__all__ = ["service_fixture"]
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from test_reference_document_service_support import ServiceFixture
 
     from episodic.canonical.domain import ReferenceBinding
-
-
-service_fixture = support.service_fixture
-ServiceFixture = support.ServiceFixture
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -92,6 +91,11 @@ async def _create_two_series_profile_bindings(
     """Create two series-profile bindings in one unit of work.
 
     Return (first, second).
+
+    Returns
+    -------
+    tuple[ReferenceBinding, ReferenceBinding]
+        Result produced by the operation.
     """
     _doc1_id, rev1_id = await _create_document_and_revision(
         session_factory, service_fixture
@@ -152,8 +156,10 @@ async def test_get_reference_binding_returns_persisted_binding(
             binding_id=str(created.id),
         )
 
-    assert fetched.id == created.id
-    assert fetched.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE
+    assert fetched.id == created.id, "Expected values to match"
+    assert fetched.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE, (
+        "Expected values to match"
+    )
 
 
 @pytest.mark.asyncio
@@ -205,11 +211,11 @@ async def test_list_reference_bindings_for_target(
             results = await list_reference_bindings(uow, request=request)
             total = None
 
-    assert len(results) == case.expected_count
+    assert len(results) == case.expected_count, "Expected values to match"
     if case.expected_first_id == "second":
-        assert results[0].id == second.id
+        assert results[0].id == second.id, "Expected values to match"
     if case.list_mode == "paged":
-        assert total == 2
+        assert total == 2, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -233,11 +239,15 @@ async def test_create_reference_binding_with_series_profile_target(
             ),
         )
 
-    assert binding.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE
-    assert binding.series_profile_id == uuid.UUID(service_fixture["primary_profile_id"])
-    assert binding.episode_template_id is None
-    assert binding.ingestion_job_id is None
-    assert binding.effective_from_episode_id is None
+    assert binding.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE, (
+        "Expected values to match"
+    )
+    assert binding.series_profile_id == uuid.UUID(
+        service_fixture["primary_profile_id"]
+    ), "Expected values to match"
+    assert binding.episode_template_id is None, "Expected value to be absent"
+    assert binding.ingestion_job_id is None, "Expected value to be absent"
+    assert binding.effective_from_episode_id is None, "Expected value to be absent"
 
 
 @pytest.mark.asyncio
@@ -261,8 +271,12 @@ async def test_create_reference_binding_with_episode_template_target(
             ),
         )
 
-    assert binding.target_kind == ReferenceBindingTargetKind.EPISODE_TEMPLATE
-    assert binding.episode_template_id == uuid.UUID(service_fixture["template_id"])
+    assert binding.target_kind == ReferenceBindingTargetKind.EPISODE_TEMPLATE, (
+        "Expected values to match"
+    )
+    assert binding.episode_template_id == uuid.UUID(service_fixture["template_id"]), (
+        "Expected values to match"
+    )
 
 
 @pytest.mark.asyncio
@@ -307,8 +321,10 @@ async def test_create_reference_binding_with_ingestion_job_target(
             ),
         )
 
-    assert binding.target_kind == ReferenceBindingTargetKind.INGESTION_JOB
-    assert binding.ingestion_job_id == job_id
+    assert binding.target_kind == ReferenceBindingTargetKind.INGESTION_JOB, (
+        "Expected values to match"
+    )
+    assert binding.ingestion_job_id == job_id, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -363,5 +379,7 @@ async def test_create_reference_binding_with_effective_from_episode_id(
             ),
         )
 
-    assert binding.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE
-    assert binding.effective_from_episode_id == episode_id
+    assert binding.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE, (
+        "Expected values to match"
+    )
+    assert binding.effective_from_episode_id == episode_id, "Expected values to match"

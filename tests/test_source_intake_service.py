@@ -1,7 +1,5 @@
 """Unit tests for source-intake application services."""
 
-from __future__ import annotations
-
 import hashlib
 import typing as typ
 
@@ -111,7 +109,9 @@ async def test_register_upload_stores_computed_payload_hash(
         ),
     )
 
-    assert upload.content_hash == f"sha256:{hashlib.sha256(payload).hexdigest()}"
+    assert upload.content_hash == f"sha256:{hashlib.sha256(payload).hexdigest()}", (
+        "Expected values to match"
+    )
 
 
 def test_validate_declared_upload_uses_precomputed_hash() -> None:

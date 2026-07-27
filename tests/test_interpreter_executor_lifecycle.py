@@ -28,7 +28,7 @@ def _raise_on_negative(value: int) -> int:
 )
 def test_interpreter_executor_shutdown_race_preserves_state(
     item_count: int,
-    release_before_shutdown: bool,  # noqa: FBT001
+    release_before_shutdown: bool,  # noqa: FBT001  # Pytest parametrization makes the boolean dimension explicit at each call site.
 ) -> None:
     """Generated map/shutdown races leave the executor terminal after shutdown."""
 
@@ -52,19 +52,27 @@ def test_interpreter_executor_shutdown_race_preserves_state(
 
             if release_before_shutdown:
                 blocking_executor.release_map.set()
-                assert await map_task == [_square(item) for item in items]
+                assert await map_task == [_square(item) for item in items], (
+                    "Expected collection to contain the value"
+                )
                 executor.shutdown()
             else:
                 shutdown_task = asyncio.create_task(
                     asyncio.to_thread(executor.shutdown),
                 )
                 await asyncio.sleep(0)
-                assert not blocking_executor.shutdown_called.is_set()
+                assert not blocking_executor.shutdown_called.is_set(), (
+                    "Expected condition to be false"
+                )
                 blocking_executor.release_map.set()
-                assert await map_task == [_square(item) for item in items]
+                assert await map_task == [_square(item) for item in items], (
+                    "Expected collection to contain the value"
+                )
                 await shutdown_task
 
-            assert blocking_executor.shutdown_called.is_set()
+            assert blocking_executor.shutdown_called.is_set(), (
+                "Expected condition to hold"
+            )
             with pytest.raises(RuntimeError, match="has been shut down"):
                 await executor.map_ordered(_square, items)
 
@@ -115,12 +123,14 @@ def test_interpreter_executor_lifecycle_state_sequences(
                 continue
 
             results = asyncio.run(executor.map_ordered(_square, items))
-            assert results == [_square(item) for item in items]
+            assert results == [_square(item) for item in items], (
+                "Expected collection to contain the value"
+            )
             if items and expected_created_pools == 0:
                 expected_created_pools = 1
 
         executor.shutdown()
-    assert created_pools == expected_created_pools
+    assert created_pools == expected_created_pools, "Expected values to match"
 
 
 @settings(max_examples=20, deadline=None)
@@ -164,8 +174,12 @@ def test_interpreter_executor_concurrent_maps_then_shutdown_are_terminal(
                     second_task,
                 )
 
-            assert first_result == [_square(item) for item in first_items]
-            assert second_result == [_square(item) for item in second_items]
+            assert first_result == [_square(item) for item in first_items], (
+                "Expected collection to contain the value"
+            )
+            assert second_result == [_square(item) for item in second_items], (
+                "Expected collection to contain the value"
+            )
 
             executor.shutdown()
             with pytest.raises(RuntimeError, match="has been shut down"):
@@ -213,7 +227,7 @@ def test_interpreter_executor_failure_sequences_remain_terminal(
                 assert asyncio.run(executor.map_ordered(_raise_on_negative, items)) == [
                     1,
                     2,
-                ]
+                ], "Expected values to match"
 
         executor.shutdown()
         with pytest.raises(RuntimeError, match="has been shut down"):

@@ -16,11 +16,11 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.reference_documents.resolution import resolve_bindings
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio]
 
 
 async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
-    uow_with_binding_fixtures,  # noqa: ANN001
+    uow_with_binding_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
 ) -> None:
     """Resolution returns empty list when episode belongs to a different series."""
     fixtures = uow_with_binding_fixtures
@@ -86,11 +86,11 @@ async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
         episode_id=other_episode.id,
     )
 
-    assert resolved == []
+    assert resolved == [], "Expected values to match"
 
 
 async def test_resolve_bindings_skips_template_from_wrong_series(
-    uow_with_binding_fixtures,  # noqa: ANN001
+    uow_with_binding_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
 ) -> None:
     """Resolution skips template bindings when template belongs to different series."""
     fixtures = uow_with_binding_fixtures
@@ -160,5 +160,5 @@ async def test_resolve_bindings_skips_template_from_wrong_series(
         template_id=other_template.id,
     )
 
-    assert len(resolved) == 1
-    assert resolved[0].revision.id == revision_v1.id
+    assert len(resolved) == 1, "Expected values to match"
+    assert resolved[0].revision.id == revision_v1.id, "Expected values to match"

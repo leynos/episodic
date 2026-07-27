@@ -9,8 +9,6 @@ unchanged. The repositories share the savepoint translation through
 repositories pins the wiring for each parent identifier field.
 """
 
-from __future__ import annotations
-
 import typing as typ
 import uuid
 

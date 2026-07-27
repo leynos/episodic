@@ -180,6 +180,18 @@ async def resume_generation_orchestration(
         ValueError: If the command references an unknown checkpoint.
         TypeError: If the stored checkpoint payload cannot be deserialized into
             the expected planner-result shape.
+
+    Returns
+    -------
+    dto.GenerationOrchestrationResult
+        Result produced by the operation.
+
+    Raises
+    ------
+    TypeError
+        If the operation cannot be completed.
+    ValueError
+        If the operation cannot be completed.
     """
     _log_event(
         "debug",

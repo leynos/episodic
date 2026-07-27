@@ -12,8 +12,6 @@ Apply the migration with Alembic:
 >>> alembic upgrade head
 """
 
-from __future__ import annotations
-
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -73,6 +71,11 @@ def _timestamp_columns() -> list[sa.Column]:
 
     Note: updated_at is managed by application updates; direct SQL writes should
     set it explicitly if they bypass ORM onupdate hooks.
+
+    Returns
+    -------
+    list[sa.Column]
+        Result produced by the operation.
     """
     return [
         sa.Column(

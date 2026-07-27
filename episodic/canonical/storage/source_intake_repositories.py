@@ -1,7 +1,5 @@
 """SQLAlchemy repositories for source-intake entities."""
-# pylint: disable=too-many-lines
-
-from __future__ import annotations
+# pylint: disable=too-many-lines  # The cohesive repository module centralizes one persistence boundary.
 
 import collections.abc as cabc
 import dataclasses as dc
@@ -58,8 +56,8 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.uploads import Upload
 
 
-Clock = cabc.Callable[[], dt.datetime]
-UuidFactory = cabc.Callable[[], uuid.UUID]
+type Clock = cabc.Callable[[], dt.datetime]
+type UuidFactory = cabc.Callable[[], uuid.UUID]
 logger = get_logger(__name__)
 
 
@@ -78,7 +76,7 @@ class SqlAlchemyUploadRepository(_RepositoryBase, UploadRepository):
 
     async def add(self, upload: Upload) -> None:
         """Persist an upload metadata record."""
-        await self._add_record(_upload_to_record(upload))
+        self._session.add(_upload_to_record(upload))
 
     async def get(self, upload_id: uuid.UUID) -> Upload | None:
         """Fetch an upload by identifier."""
@@ -139,7 +137,7 @@ class SqlAlchemyIngestionJobSourceRepository(
 
     async def add(self, source: IngestionJobSource) -> None:
         """Persist a source attachment."""
-        await self._add_record(_ingestion_job_source_to_record(source))
+        self._session.add(_ingestion_job_source_to_record(source))
 
     async def get(self, source_id: uuid.UUID) -> IngestionJobSource | None:
         """Fetch a source attachment by identifier."""
@@ -367,13 +365,15 @@ def _idempotency_outcome_for_record(
 
 def _outcome_metric_label(outcome: IdempotencyOutcome) -> str:
     """Return a bounded label for idempotency acquire outcomes."""
-    if isinstance(outcome, Replay):
-        return "replay"
-    if isinstance(outcome, Conflict):
-        return "conflict"
-    if isinstance(outcome, InFlight):
-        return "in_flight"
-    return "acquired"
+    match outcome:
+        case Replay():
+            return "replay"
+        case Conflict():
+            return "conflict"
+        case InFlight():
+            return "in_flight"
+        case _:
+            return "acquired"
 
 
 def _utc_now() -> dt.datetime:

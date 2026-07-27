@@ -42,6 +42,11 @@ def _load() -> dict[typ.Any, typ.Any]:
 
     The key type is ``Any`` because PyYAML 1.1 parses the bare ``on:``
     key as the boolean ``True``, not the string ``"on"``.
+
+    Returns
+    -------
+    dict[typ.Any, typ.Any]
+        Result produced by the operation.
     """
     return yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
 

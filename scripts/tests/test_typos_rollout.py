@@ -1,6 +1,5 @@
 """Tests for the repository spelling-policy scripts."""
 
-from __future__ import annotations
 
 import ast
 import email.message

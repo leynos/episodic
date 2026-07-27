@@ -70,6 +70,11 @@ def build_history_entry(
 
     ``parent_field`` is the keyword argument name that holds the parent entity
     identifier (for example ``"series_profile_id"``).
+
+    Returns
+    -------
+    typ.Any
+        Result produced by the operation.
     """
     return entry_cls(
         id=uuid.uuid4(),

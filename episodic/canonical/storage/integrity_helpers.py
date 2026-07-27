@@ -25,6 +25,11 @@ def constraint_name(exc: BaseException) -> str | None:
     Inspects the SQLAlchemy ``IntegrityError`` and its wrapped DB-API ``orig``
     exception, including each candidate's ``diag.constraint_name``. Returns
     ``None`` when no candidate reports a constraint name.
+
+    Returns
+    -------
+    str | None
+        Result produced by the operation.
     """
 
     def _from_candidate(candidate: object | None) -> str | None:
@@ -55,6 +60,11 @@ def is_revision_conflict_integrity_error(
     drivers that do not surface a constraint name. ``entity_id_field`` names the
     parent column (e.g. ``"series_profile_id"``) used to disambiguate generic
     error messages.
+
+    Returns
+    -------
+    bool
+        Result produced by the operation.
     """
     name = constraint_name(exc)
     if name in REVISION_CONSTRAINT_NAMES:
@@ -90,6 +100,11 @@ async def insert_with_conflict_translation(
     Centralising the savepoint/flush/translate dance keeps every repository's
     conflict handling consistent and avoids repeating the boilerplate per
     ``add`` method.
+
+    Raises
+    ------
+    IntegrityError
+        If the operation cannot be completed.
     """
     try:
         async with session.begin_nested():

@@ -70,10 +70,8 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
 
     Raises
     ------
-    falcon.HTTPBadRequest
-        Raised when ``entity_id`` is not a valid UUID.
-    falcon.HTTPNotFound
-        Raised when the requested entity does not exist.
+    map_profile_template_error
+        If the operation cannot be completed.
     """
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     try:
@@ -124,10 +122,8 @@ async def handle_get_history[EntityT](
 
     Raises
     ------
-    falcon.HTTPBadRequest
-        Raised when ``request.entity_id`` is not a valid UUID.
-    falcon.HTTPNotFound
-        Raised when the parent entity is not found.
+    map_profile_template_error
+        If the operation cannot be completed.
     """
     parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
     try:
@@ -172,6 +168,11 @@ def _raise_mapped_update_error(
     callers should pass the parsed integer from the typed update request so
     the envelope ``details`` stays type-stable (no raw payload values leak
     into the response).
+
+    Raises
+    ------
+    map_profile_template_error
+        If the operation cannot be completed.
     """
     raise map_profile_template_error(
         exc,
@@ -223,15 +224,6 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
     -------
     tuple[JsonPayload, str]
         Serialized response payload and HTTP status code.
-
-    Raises
-    ------
-    falcon.HTTPBadRequest
-        Raised when required fields are missing or the identifier is invalid.
-    falcon.HTTPNotFound
-        Raised when the target entity does not exist.
-    falcon.HTTPConflict
-        Raised when optimistic-lock revision preconditions fail.
     """
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     _require_payload_fields(payload, required_fields)
@@ -281,10 +273,12 @@ async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev)
 
     Raises
     ------
-    falcon.HTTPBadRequest
-        Raised when required fields are missing.
-    falcon.HTTPNotFound
-        Raised when create preconditions reference unknown entities.
+    map_profile_template_error
+        If the operation cannot be completed.
+    validation_error
+        If the operation cannot be completed.
+    HTTPNotFound
+        If the operation cannot be completed.
     """
     for field_name in required_fields:
         if field_name not in payload:

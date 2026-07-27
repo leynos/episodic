@@ -1,14 +1,19 @@
 """Behavioural tests for reference-binding resolution workflows."""
 
-from __future__ import annotations
-
+import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
+import collections.abc as cabc  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import datetime as dt
 import typing as typ
 import uuid
 
 import pytest
 import sqlalchemy as sa
+from falcon import testing  # noqa: TC002  # pytest-bdd evaluates step annotations.
 from pytest_bdd import given, scenario, then, when
+from sqlalchemy.ext.asyncio import (  # noqa: TC002  # pytest-bdd evaluates step annotations.
+    AsyncSession,
+    async_sessionmaker,
+)
 
 import tests.test_reference_document_api_support as reference_support
 from episodic.canonical.adapters.normalizer import InMemorySourceNormalizer
@@ -24,13 +29,6 @@ from episodic.canonical.domain import (
 from episodic.canonical.ingestion import MultiSourceRequest, RawSourceInput
 from episodic.canonical.ingestion_service import IngestionPipeline, ingest_multi_source
 from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
-
-if typ.TYPE_CHECKING:
-    import asyncio
-    import collections.abc as cabc
-
-    from falcon import testing
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 def _run_async_step(
@@ -178,7 +176,7 @@ def create_binding_resolution_bindings(
                 "effective_from_episode_id": effective_from_episode_id,
             },
         )
-        assert response.status_code == 201
+        assert response.status_code == 201, "Expected values to match"
 
     template_document_id = reference_support.create_reference_document(
         canonical_api_client,
@@ -211,7 +209,7 @@ def _simulate_get_ok(
 ) -> dict[str, object]:
     """Make a GET request, assert HTTP 200, and return the parsed JSON payload."""
     response = client.simulate_get(path, params=params)
-    assert response.status_code == 200
+    assert response.status_code == 200, "Expected values to match"
     return typ.cast("dict[str, object]", response.json)
 
 
@@ -289,7 +287,9 @@ def run_ingestion_with_reference_bindings(
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             profile = await uow.series_profiles.get(uuid.UUID(context["profile_id"]))
-            assert isinstance(profile, SeriesProfile)
+            assert isinstance(profile, SeriesProfile), (
+                "Expected value to have the required type"
+            )
             episode = await ingest_multi_source(
                 uow,
                 profile,
@@ -297,7 +297,7 @@ def run_ingestion_with_reference_bindings(
                 pipeline,
             )
             session = uow._session
-            assert session is not None
+            assert session is not None, "Expected value to be present"
             result = await session.execute(
                 sa.select(IngestionJobRecord).where(
                     IngestionJobRecord.target_episode_id == episode.id
@@ -315,7 +315,7 @@ def assert_early_brief_revision(context: BindingResolutionContext) -> None:
     assert context["early_brief_revision_ids"] == [
         context["early_revision_id"],
         context["template_revision_id"],
-    ]
+    ], "Expected values to match"
 
 
 @then(
@@ -327,7 +327,7 @@ def assert_late_resolution(context: BindingResolutionContext) -> None:
     assert context["late_resolved_revision_ids"] == [
         context["late_revision_id"],
         context["template_revision_id"],
-    ]
+    ], "Expected values to match"
 
 
 @then("ingestion snapshots the resolved reference documents as source documents")
@@ -349,13 +349,13 @@ def assert_ingestion_snapshots(
             for document in documents
             if document.source_type == "reference_document"
         ]
-        assert len(reference_snapshots) == 2
+        assert len(reference_snapshots) == 2, "Expected values to match"
         assert {
             str(document.reference_document_revision_id)
             for document in reference_snapshots
         } == {
             context["late_revision_id"],
             context["template_revision_id"],
-        }
+        }, "Expected collection to contain the value"
 
     _run_async_step(_function_scoped_runner, _assert_snapshots)

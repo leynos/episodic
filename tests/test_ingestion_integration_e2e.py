@@ -12,6 +12,9 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from tests.test_uuid_assertions import assert_uuid7
 
 if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
+
+if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -164,6 +167,7 @@ async def test_ingest_multi_source_records_conflict_metadata(
     session_factory: cabc.Callable[[], AsyncSession],
     series_profile_for_ingestion: SeriesProfile,
     ingestion_pipeline: IngestionPipeline,
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Conflict-resolution metadata is recorded in source document metadata."""
     profile = series_profile_for_ingestion
@@ -214,15 +218,7 @@ async def test_ingest_multi_source_records_conflict_metadata(
             "Expected conflict-resolution metadata to be attached to each source."
         )
         cr = typ.cast("dict[str, object]", doc.metadata["conflict_resolution"])
-        assert "preferred_sources" in cr, (
-            "Expected conflict metadata to include preferred sources."
-        )
-        assert "rejected_sources" in cr, (
-            "Expected conflict metadata to include rejected sources."
-        )
-        assert "resolution_notes" in cr, (
-            "Expected conflict metadata to include resolver notes."
-        )
+        assert cr == snapshot, "actual output must match snapshot"
 
     provenance = ingestion_support.require_provenance_payload(header.payload)
     priorities = provenance["source_priorities"]

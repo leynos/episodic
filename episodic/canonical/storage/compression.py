@@ -22,8 +22,6 @@ True
 True
 """
 
-from __future__ import annotations
-
 from compression import zstd
 
 _MINIMUM_COMPRESS_BYTES = 1024

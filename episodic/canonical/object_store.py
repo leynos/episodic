@@ -52,7 +52,7 @@ def _has_unsafe_object_key_parts(key: str, path: pathlib.PurePosixPath) -> bool:
 class ObjectStorePort(typ.Protocol):
     """Driven port for storing and retrieving opaque byte streams."""
 
-    # pylint: disable-next=too-many-arguments
+    # pylint: disable-next=too-many-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
     async def put(
         self,
         key: str,

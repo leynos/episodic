@@ -28,23 +28,27 @@ def test_enrich_tei_with_guest_bios_appends_canonical_div() -> None:
     blocks = _body_blocks(enriched_xml)
     guest_bios = typ.cast("dict[str, object]", blocks[-1])
 
-    assert guest_bios["type"] == "div"
-    assert guest_bios["div_type"] == "guest-bios"
+    assert guest_bios["type"] == "div", "Expected values to match"
+    assert guest_bios["div_type"] == "guest-bios", "Expected values to match"
     content = typ.cast("list[object]", guest_bios["content"])
     guest_list = typ.cast("dict[str, object]", content[0])
     item = typ.cast(
         "dict[str, object]", typ.cast("list[object]", guest_list["items"])[0]
     )
 
-    assert item["corresp"] == ["urn:episodic:reference-document-revision:rev-ada"]
-    assert item["n"] == "Mathematician"
-    assert item["label"] == {"content": [{"type": "text", "value": "Ada Lovelace"}]}
+    assert item["corresp"] == ["urn:episodic:reference-document-revision:rev-ada"], (
+        "Expected values to match"
+    )
+    assert item["n"] == "Mathematician", "Expected values to match"
+    assert item["label"] == {"content": [{"type": "text", "value": "Ada Lovelace"}]}, (
+        "Expected values to match"
+    )
     assert item["content"] == [
         {
             "type": "text",
             "value": "Ada Lovelace writes about analytical engines.",
         }
-    ]
+    ], "Expected values to match"
 
 
 def test_enrich_tei_with_guest_bios_replaces_existing_guest_bios_div() -> None:
@@ -79,13 +83,17 @@ def test_enrich_tei_with_guest_bios_replaces_existing_guest_bios_div() -> None:
             if block_payload.get("div_type") == "guest-bios":
                 guest_bio_blocks.append(block_payload)
 
-    assert len(guest_bio_blocks) == 1
-    assert "Old biography." not in twice
-    assert "Grace Hopper advanced compiler design." in twice
+    assert len(guest_bio_blocks) == 1, "Expected values to match"
+    assert "Old biography." not in twice, "Expected collection to exclude the value"
+    assert "Grace Hopper advanced compiler design." in twice, (
+        "Expected collection to contain the value"
+    )
 
 
 def test_enrich_tei_with_empty_guest_bios_result_returns_original() -> None:
     """Return the input TEI unchanged when there are no guest bios."""
     result = GuestBiosResult(entries=(), usage=_usage())
 
-    assert enrich_tei_with_guest_bios(SCRIPT_TEI, result) == SCRIPT_TEI
+    assert enrich_tei_with_guest_bios(SCRIPT_TEI, result) == SCRIPT_TEI, (
+        "Expected values to match"
+    )

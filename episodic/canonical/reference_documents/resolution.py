@@ -102,6 +102,11 @@ def _select_best_binding_for_document(
     Selection is deterministic: for applicable episode bindings, ties on episode
     timestamp are broken by binding.created_at, then by binding.id; for default
     bindings, the latest by created_at is chosen, with binding.id as tiebreaker.
+
+    Returns
+    -------
+    ReferenceBinding | None
+        Result produced by the operation.
     """
     if applicable_episode_bindings:
         # Select max by episode timestamp, then by binding created_at, then by id
@@ -143,6 +148,11 @@ async def _build_applicable_episodes_map(
 
     Returns a mapping of episode id → episode for use in per-document
     binding selection.
+
+    Returns
+    -------
+    dict[uuid.UUID, CanonicalEpisode]
+        Result produced by the operation.
     """
     episode_ids = {
         b.effective_from_episode_id
@@ -166,6 +176,11 @@ def _resolve_single_document(
     """Resolve the best binding for a single document with episode context.
 
     Returns the resolved binding if one exists, else None.
+
+    Returns
+    -------
+    ResolvedBinding | None
+        Result produced by the operation.
     """
     revision_map, document_map = maps
     if doc_id not in document_map:
@@ -266,6 +281,11 @@ async def _dispatch_resolution(
     precedence. When target_episode is provided, series-profile bindings are
     resolved with episode-aware precedence and template bindings are merged
     without filtering.
+
+    Returns
+    -------
+    list[ResolvedBinding]
+        Result produced by the operation.
     """
     all_bindings = series_bindings + template_bindings
     if not all_bindings:

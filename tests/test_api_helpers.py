@@ -25,6 +25,10 @@ import pytest
 
 from episodic.api import helpers
 from episodic.canonical.profile_templates import AuditMetadata
+from tests.snapshot_redaction import redact_snapshot_uuids
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -146,10 +150,11 @@ class TestTypedUpdateRequest:
     @staticmethod
     def test_build_typed_update_request_passes_payload_and_uses_data_builder(
         monkeypatch: pytest.MonkeyPatch,
+        snapshot: SnapshotAssertion,
     ) -> None:
         """Pass payload through and use parsed components from data_builder."""
         captured: dict[str, object] = {}
-        entity_id = uuid.uuid4()
+        entity_id = uuid.UUID("018fdcf0-0000-7000-8000-000000000001")
 
         def sentinel_data_builder(payload: dict[str, object]) -> str:
             return typ.cast("str", payload["title"])
@@ -192,12 +197,8 @@ class TestTypedUpdateRequest:
             "Expected _build_typed_update_request to forward the same "
             "data_builder callable to _build_update_kwargs."
         )
-        assert request == {
-            "entity_id": entity_id,
-            "expected_revision": 3,
-            "fields": "payload-fields",
-            "audit": AuditMetadata(actor="editor@example.com", note="update"),
-        }, "Expected request builder output to use parsed update components."
+        stable_request = redact_snapshot_uuids(request)
+        assert stable_request == snapshot, "actual output must match snapshot"
 
 
 class TestGuardrailValidation:

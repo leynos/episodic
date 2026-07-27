@@ -1,0 +1,33 @@
+# serializer version: 1
+# name: test_kind_cluster_create_command_uses_rootless_podman_scope
+  list([
+    'systemd-run',
+    '--scope',
+    '--user',
+    '-p',
+    'Delegate=yes',
+    'env',
+    'KIND_EXPERIMENTAL_PROVIDER=podman',
+    'kind',
+    'create',
+    'cluster',
+    '--name',
+    'demo',
+    '--config',
+    '-',
+    '--wait',
+    '180s',
+  ])
+# ---
+# name: test_podman_build_save_and_kind_image_load_commands
+  list([
+    'env',
+    'KIND_EXPERIMENTAL_PROVIDER=podman',
+    'kind',
+    'load',
+    'image-archive',
+    '/tmp/demo-image.tar',
+    '--name',
+    'demo',
+  ])
+# ---

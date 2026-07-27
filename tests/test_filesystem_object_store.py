@@ -42,13 +42,15 @@ async def test_filesystem_object_store_round_trips_chunks(
         max_bytes=6,
     )
 
-    assert stored.key == "uploads/example.bin"
-    assert stored.size == 6
+    assert stored.key == "uploads/example.bin", "Expected values to match"
+    assert stored.size == 6, "Expected values to match"
     assert stored.sha256 == (
         "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
-    )
+    ), "Expected values to match"
     async with store.open(stored.key) as chunks:
-        assert b"".join([chunk async for chunk in chunks]) == b"hello\n"
+        assert b"".join([chunk async for chunk in chunks]) == b"hello\n", (
+            "Expected collection to contain the value"
+        )
 
 
 @pytest.mark.asyncio
@@ -72,11 +74,13 @@ async def test_filesystem_object_store_uses_precomputed_sha256(
         precomputed_sha256=supplied_digest,
     )
 
-    assert stored.key == "uploads/precomputed.bin"
-    assert stored.size == 6
-    assert stored.sha256 == supplied_digest
+    assert stored.key == "uploads/precomputed.bin", "Expected values to match"
+    assert stored.size == 6, "Expected values to match"
+    assert stored.sha256 == supplied_digest, "Expected values to match"
     async with store.open(stored.key) as chunks:
-        assert b"".join([chunk async for chunk in chunks]) == b"hello\n"
+        assert b"".join([chunk async for chunk in chunks]) == b"hello\n", (
+            "Expected collection to contain the value"
+        )
 
 
 @pytest.mark.asyncio
@@ -100,4 +104,6 @@ async def test_filesystem_object_store_rejects_oversized_payload(
     with pytest.raises(PayloadTooLargeError):
         await store.put("uploads/too-large.bin", _byte_stream(b"abcdef"), max_bytes=5)
 
-    assert not (tmp_path / "uploads" / "too-large.bin").exists()
+    assert not (tmp_path / "uploads" / "too-large.bin").exists(), (
+        "Expected condition to be false"
+    )

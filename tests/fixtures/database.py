@@ -1,7 +1,5 @@
 """Database infrastructure fixtures (py-pglite, SQLAlchemy)."""
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import os
@@ -19,13 +17,16 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     from pathlib import Path
 
-    from py_pglite.sqlalchemy.manager_async import (  # type: ignore[import-untyped]
+    from py_pglite.sqlalchemy.manager_async import (  # type: ignore[import-untyped]  # py-pglite does not publish type information for this optional test dependency.
         SQLAlchemyAsyncPGliteManager,
     )
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 try:
-    from py_pglite import PGliteConfig, PGliteManager  # type: ignore[import-untyped]
+    from py_pglite import (  # type: ignore[import-untyped]  # py-pglite does not publish type information for this optional test dependency.
+        PGliteConfig,
+        PGliteManager,
+    )
 
     _PGLITE_AVAILABLE = True
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
@@ -53,6 +54,16 @@ def _should_use_pglite() -> bool:
 
     If a non-SQLite backend is requested but py-pglite is unavailable,
     fail fast with a clear error instead of silently skipping tests.
+
+    Returns
+    -------
+    bool
+        Result produced by the operation.
+
+    Raises
+    ------
+    RuntimeError
+        If the operation cannot be completed.
     """
     allowed_values = {"sqlite", "pglite"}
     target = os.getenv("EPISODIC_TEST_DB", "pglite").lower()
@@ -147,6 +158,11 @@ def temporary_drift_table() -> cabc.Iterator[sa.Table]:
 
     This helper is shared between the unit tests and BDD steps that
     verify schema drift detection against an unmigrated table.
+
+    Yields
+    ------
+    cabc.Iterator[sa.Table]
+        Values produced by the iterator.
     """
     table = sa.Table(
         "_test_drift_table",
@@ -168,6 +184,11 @@ async def pglite_sqlalchemy_manager(
     This is the shared py-pglite entry point for SQLAlchemy-backed tests in
     this repository. Prefer `session_factory`, `pglite_session`, or
     `migrated_engine` in tests unless you need lower-level manager access.
+
+    Yields
+    ------
+    cabc.AsyncIterator[SQLAlchemyAsyncPGliteManager]
+        Values produced by the iterator.
     """
     if not _should_use_pglite():
         pytest.skip("EPISODIC_TEST_DB=sqlite disables py-pglite-backed fixtures.")

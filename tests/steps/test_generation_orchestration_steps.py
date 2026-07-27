@@ -1,7 +1,5 @@
 """Behavioural tests for structured generation orchestration."""
 
-from __future__ import annotations
-
 import asyncio  # noqa: TC003  # pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
@@ -87,7 +85,9 @@ class _BDDResumePort:
         command: ResumeWorkflowCommand,
     ) -> ActionExecutionResult:
         """Return the externally supplied action result."""
-        return command.result
+        match command:
+            case ResumeWorkflowCommand(result=result):
+                return result
 
 
 @dc.dataclass(slots=True)
@@ -250,7 +250,7 @@ def run_suspend_resume_orchestration(
 ) -> None:
     """Call the checkpointing LangGraph flow with a live LLM adapter."""
 
-    async def _orchestrate() -> None:  # noqa: PLR0914
+    async def _orchestrate() -> None:  # noqa: PLR0914  # The scenario keeps distinct intermediate values for readable behavioural assertions.
         request = orchestration_context.request
         if request is None:
             msg = "generation request was not prepared"
@@ -309,11 +309,17 @@ def assert_result(orchestration_context: OrchestrationBDDContext) -> None:
     """Verify the orchestration result exposes the plan and action output."""
     result = orchestration_context.result
     assert result is not None, "Expected orchestration result, got None."
-    assert result.plan.plan_version == "1.0"
-    assert result.plan.steps[0].action_kind is ActionKind.GENERATE_SHOW_NOTES
-    assert result.action_results[0].show_notes_result is not None
-    assert result.action_results[0].show_notes_result.entries[0].topic == "Introduction"
-    assert result.total_usage.total_tokens == 81
+    assert result.plan.plan_version == "1.0", "Expected values to match"
+    assert result.plan.steps[0].action_kind is ActionKind.GENERATE_SHOW_NOTES, (
+        "Expected values to match"
+    )
+    assert result.action_results[0].show_notes_result is not None, (
+        "Expected value to be present"
+    )
+    assert (
+        result.action_results[0].show_notes_result.entries[0].topic == "Introduction"
+    ), "Expected values to match"
+    assert result.total_usage.total_tokens == 81, "Expected values to match"
 
 
 @then("the orchestration requests use planning and execution models in order")
@@ -323,9 +329,15 @@ def assert_requests(orchestration_context: OrchestrationBDDContext) -> None:
     expected_models = ["gpt-4.1", "gpt-4o-mini"]
     if orchestration_context.suspended_result is not None:
         expected_models = ["gpt-4.1", "gpt-4.1", "gpt-4o-mini"]
-    assert [request.model for request in requests] == expected_models
-    assert "enabled_action_kinds" in requests[0].prompt
-    assert "script_tei_xml" in requests[-1].prompt
+    assert [request.model for request in requests] == expected_models, (
+        "Expected collection to contain the value"
+    )
+    assert "enabled_action_kinds" in requests[0].prompt, (
+        "Expected collection to contain the value"
+    )
+    assert "script_tei_xml" in requests[-1].prompt, (
+        "Expected collection to contain the value"
+    )
 
 
 @then(
@@ -340,27 +352,31 @@ def assert_cost_ledger(orchestration_context: OrchestrationBDDContext) -> None:
     assert result is not None, "Expected orchestration result, got None."
     assert request is not None, "Expected orchestration request, got None."
     assert recorder is not None, "Expected injected cost recorder, got None."
-    assert recorder.pinned_billing_period_key is not None
+    assert recorder.pinned_billing_period_key is not None, (
+        "Expected value to be present"
+    )
     assert [provider.model for provider in recorder.pinned_providers] == [
         "gpt-4.1",
         "gpt-4o-mini",
-    ]
+    ], "Expected collection to contain the value"
     assert [record.workflow_node for record in recorder.provider_calls] == [
         "planner",
         "generate_show_notes",
-    ]
+    ], "Expected collection to contain the value"
     assert [record.model for record in recorder.provider_calls] == [
         "gpt-4.1",
         "gpt-4o-mini",
-    ]
+    ], "Expected collection to contain the value"
     assert [record.usage for record in recorder.provider_calls] == [
         {"input_tokens": 41, "output_tokens": 13},
         {"input_tokens": 19, "output_tokens": 8},
-    ]
+    ], "Expected collection to contain the value"
     assert sum(sum(record.usage.values()) for record in recorder.provider_calls) == (
         result.total_usage.total_tokens
+    ), "Expected collection to contain the value"
+    assert recorder.finalized_workflow_run_id == request.correlation_id, (
+        "Expected values to match"
     )
-    assert recorder.finalized_workflow_run_id == request.correlation_id
 
 
 @then("the orchestration checkpoint is reused for the repeated workflow step")
@@ -368,7 +384,7 @@ def assert_checkpoint_reused(orchestration_context: OrchestrationBDDContext) -> 
     """Verify repeated suspend calls return the original checkpoint."""
     first = orchestration_context.suspended_result
     second = orchestration_context.repeated_suspended_result
-    assert first is not None
-    assert second is not None
-    assert second.checkpoint_id == first.checkpoint_id
-    assert second.idempotency_key == first.idempotency_key
+    assert first is not None, "Expected value to be present"
+    assert second is not None, "Expected value to be present"
+    assert second.checkpoint_id == first.checkpoint_id, "Expected values to match"
+    assert second.idempotency_key == first.idempotency_key, "Expected values to match"

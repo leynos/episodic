@@ -6,7 +6,7 @@ exchanges, and route metadata consumed by
 :func:`episodic.worker.runtime.create_celery_app`.
 """
 
-import collections.abc as cabc  # noqa: TC003
+import collections.abc as cabc  # noqa: TC003  # This type remains available at runtime for annotation introspection.
 import dataclasses as dc
 import enum
 import types
@@ -149,6 +149,16 @@ def _validate_unique_workload_mappings(
     """Raise ValueError if any two queues share the same workload class.
 
     Return the mapping.
+
+    Returns
+    -------
+    dict[WorkloadClass, WorkerQueueSpec]
+        Result produced by the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
     queue_map = {queue.workload: queue for queue in queues}
     if len(queue_map) != len(queues):

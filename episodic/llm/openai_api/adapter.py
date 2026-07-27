@@ -97,9 +97,7 @@ class OpenAICompatibleLLMConfig:
     timeout_seconds: float = 30.0
     chars_per_token: float = 4.0
 
-    def __post_init__(self) -> None:
-        """Validate adapter configuration eagerly."""
-        _validate_llm_config(self)
+    __post_init__ = _validate_llm_config
 
 
 class OpenAICompatibleLLMAdapter(LLMPort):
@@ -167,11 +165,6 @@ class OpenAICompatibleLLMAdapter(LLMPort):
 
         The method is a no-op for caller-supplied clients because
         ``_owns_client`` is ``False`` in that case.
-
-        Returns
-        -------
-        None
-            The method completes after any owned client has closed.
         """
         if self._owns_client:
             await self._client.aclose()
@@ -191,22 +184,6 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         -------
         LLMResponse
             Normalized provider text and concrete usage counts.
-
-        Raises
-        ------
-        LLMTokenBudgetExceededError
-            Raised before the HTTP request when estimated input or projected
-            total tokens exceed the request budget, or after the response when
-            provider-reported usage exceeds the same budget.
-        LLMProviderResponseError
-            Raised for unsupported operations, non-retryable HTTP statuses,
-            malformed or invalid JSON payloads, missing concrete usage counts
-            for budgeted requests, and other provider response contract
-            failures.
-        LLMTransientProviderError
-            Raised after retryable HTTP statuses or transport errors exhaust
-            ``max_attempts``. Retry waits use exponential jitter with
-            ``retry_delay_seconds`` as the multiplier.
         """
         token_budget = request.token_budget
         if token_budget is not None:

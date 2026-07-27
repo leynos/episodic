@@ -1,8 +1,9 @@
 """Guest biography binding and source projection tests."""
 
 import asyncio
+import dataclasses as dc
 import typing as typ
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -12,7 +13,6 @@ from episodic.generation.guest_bios import (
     GuestBiosEnrichmentRequest,
     GuestBiosGenerator,
     GuestBiosGeneratorConfig,
-    GuestBioSource,
     generate_guest_bios_from_reference_bindings,
     project_guest_bio_sources,
 )
@@ -24,17 +24,23 @@ from tests._guest_bios_helpers import (
     _reference_revision,
     _response,
 )
+from tests.snapshot_redaction import redact_snapshot_uuids
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 
-def test_project_guest_bio_sources_filters_guest_profiles() -> None:
+def test_project_guest_bio_sources_filters_guest_profiles(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Project only guest-profile resolved bindings into generator sources."""
-    guest_document_id = uuid4()
-    guest_revision_id = uuid4()
-    style_document_id = uuid4()
-    style_revision_id = uuid4()
+    guest_document_id = UUID("018fdcf0-0000-7000-8000-000000000001")
+    guest_revision_id = UUID("018fdcf0-0000-7000-8000-000000000002")
+    style_document_id = UUID("018fdcf0-0000-7000-8000-000000000003")
+    style_revision_id = UUID("018fdcf0-0000-7000-8000-000000000004")
     resolved = [
         ResolvedBinding(
             binding=_reference_binding(guest_revision_id),
@@ -68,25 +74,22 @@ def test_project_guest_bio_sources_filters_guest_profiles() -> None:
 
     sources = project_guest_bio_sources(resolved)
 
-    assert sources == (
-        GuestBioSource(
-            display_name="Ada Lovelace",
-            role="Mathematician",
-            reference_document_id=str(guest_document_id),
-            reference_document_revision_id=str(guest_revision_id),
-            source_content="Ada wrote notes on the Analytical Engine.",
-        ),
+    stable_sources = redact_snapshot_uuids(
+        tuple(dc.asdict(source) for source in sources)
     )
+    assert stable_sources == snapshot, "actual output must match snapshot"
 
 
 @pytest.mark.asyncio
-async def test_generate_from_reference_bindings_resolves_and_enriches_tei() -> None:
+async def test_generate_from_reference_bindings_resolves_and_enriches_tei(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Resolve guest-profile bindings and enrich TEI with generated bios."""
-    guest_document_id = uuid4()
-    guest_revision_id = uuid4()
-    series_profile_id = uuid4()
-    episode_id = uuid4()
-    template_id = uuid4()
+    guest_document_id = UUID("018fdcf0-0000-7000-8000-000000000011")
+    guest_revision_id = UUID("018fdcf0-0000-7000-8000-000000000012")
+    series_profile_id = UUID("018fdcf0-0000-7000-8000-000000000013")
+    episode_id = UUID("018fdcf0-0000-7000-8000-000000000014")
+    template_id = UUID("018fdcf0-0000-7000-8000-000000000015")
     calls: list[dict[str, object]] = []
 
     async def binding_resolver(
@@ -143,18 +146,19 @@ async def test_generate_from_reference_bindings_resolves_and_enriches_tei() -> N
         binding_resolver=binding_resolver,
     )
 
-    assert calls == [
-        {
-            "uow": uow,
-            "series_profile_id": series_profile_id,
-            "episode_id": episode_id,
-            "template_id": template_id,
-        }
-    ]
-    assert result.sources[0].reference_document_revision_id == str(guest_revision_id)
-    assert result.generation_result.entries[0].display_name == "Ada Lovelace"
-    assert 'type="guest-bios"' in result.tei_xml
-    assert "Ada Lovelace wrote about analytical engines." in result.tei_xml
+    assert redact_snapshot_uuids(calls) == snapshot, "actual output must match snapshot"
+    assert result.sources[0].reference_document_revision_id == str(guest_revision_id), (
+        "Expected values to match"
+    )
+    assert result.generation_result.entries[0].display_name == "Ada Lovelace", (
+        "Expected values to match"
+    )
+    assert 'type="guest-bios"' in result.tei_xml, (
+        "Expected collection to contain the value"
+    )
+    assert "Ada Lovelace wrote about analytical engines." in result.tei_xml, (
+        "Expected collection to contain the value"
+    )
 
 
 @pytest.mark.asyncio
@@ -189,7 +193,7 @@ async def test_generate_from_reference_bindings_skips_llm_without_guest_profiles
         binding_resolver=binding_resolver,
     )
 
-    assert result.tei_xml == SCRIPT_TEI
-    assert result.sources == ()
-    assert result.generation_result.entries == ()
-    assert not llm.requests
+    assert result.tei_xml == SCRIPT_TEI, "Expected values to match"
+    assert result.sources == (), "Expected values to match"
+    assert result.generation_result.entries == (), "Expected values to match"
+    assert not llm.requests, "Expected condition to be false"

@@ -26,7 +26,17 @@ from episodic.canonical.profile_templates import (
     update_episode_template,
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from tests.fixtures import profile_template_fixtures
+from tests.fixtures.profile_template_fixtures import (
+    base_profile,
+    base_profile_with_template,
+    seed_cross_series_resolved_binding_brief_scenario,
+)
+
+__all__ = [
+    "base_profile",
+    "base_profile_with_template",
+    "seed_cross_series_resolved_binding_brief_scenario",
+]
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -34,16 +44,9 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import EpisodeTemplateHistoryEntry
-
-
-base_profile = profile_template_fixtures.base_profile
-base_profile_with_template = profile_template_fixtures.base_profile_with_template
-BaseProfileWithTemplateFixture = (
-    profile_template_fixtures.BaseProfileWithTemplateFixture
-)
-seed_cross_series_resolved_binding_brief_scenario = (
-    profile_template_fixtures.seed_cross_series_resolved_binding_brief_scenario
-)
+    from tests.fixtures.profile_template_fixtures import (
+        BaseProfileWithTemplateFixture,
+    )
 
 
 class TestEpisodeTemplateService:

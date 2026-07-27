@@ -1,6 +1,5 @@
 """Provide cache support types and atomic writes for the spelling helper."""
 
-from __future__ import annotations
 
 import dataclasses as dc
 import pathlib

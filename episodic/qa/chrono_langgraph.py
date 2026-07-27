@@ -33,10 +33,6 @@ if typ.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
     from .chrono import ChronoEvaluationRequest, ChronoRuntimeEstimate
-else:
-    CompiledStateGraph = typ.Any
-    ChronoEvaluationRequest = typ.Any
-    ChronoRuntimeEstimate = typ.Any
 
 
 class ChronoEvaluatorPort(typ.Protocol):
@@ -53,8 +49,11 @@ class ChronoEvaluatorPort(typ.Protocol):
 class ChronoGraphState:
     """Minimal Chrono graph state used by the QA layer."""
 
-    chrono_request: ChronoEvaluationRequest | None = None
-    chrono_result: ChronoRuntimeEstimate | None = None
+    # LangGraph evaluates these annotations at runtime. The evaluator port
+    # retains the precise static contract while graph state remains an opaque
+    # transport envelope.
+    chrono_request: typ.Any = None
+    chrono_result: typ.Any = None
 
 
 def build_chrono_graph(
@@ -65,7 +64,7 @@ def build_chrono_graph(
 
     async def chrono_node(
         state: ChronoGraphState,
-    ) -> dict[str, ChronoRuntimeEstimate]:
+    ) -> dict[str, typ.Any]:
         if state.chrono_request is None:
             _log.error(
                 "Chrono graph node missing required request; has_chrono_result=%s",

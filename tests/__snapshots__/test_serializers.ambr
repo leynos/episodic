@@ -1,0 +1,38 @@
+# serializer version: 1
+# name: test_serialize_resolved_binding_structure
+  dict({
+    'binding': dict({
+      'created_at': '2026-01-01T00:00:00+00:00',
+      'effective_from_episode_id': None,
+      'episode_template_id': None,
+      'id': '<uuid>',
+      'ingestion_job_id': None,
+      'reference_document_revision_id': '<uuid>',
+      'series_profile_id': '<uuid>',
+      'target_kind': 'series_profile',
+    }),
+    'document': dict({
+      'created_at': '2026-01-01T00:00:00+00:00',
+      'id': '<uuid>',
+      'kind': 'style_guide',
+      'lifecycle_state': 'active',
+      'lock_version': 1,
+      'metadata': dict({
+        'name': 'Test Document',
+      }),
+      'owner_series_profile_id': '<uuid>',
+      'updated_at': '2026-01-01T00:00:00+00:00',
+    }),
+    'revision': dict({
+      'author': 'test@example.com',
+      'change_note': 'Test change',
+      'content': dict({
+        'summary': 'Test content',
+      }),
+      'content_hash': 'abc123hash',
+      'created_at': '2026-01-01T00:00:00+00:00',
+      'id': '<uuid>',
+      'reference_document_id': '<uuid>',
+    }),
+  })
+# ---

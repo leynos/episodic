@@ -1,14 +1,14 @@
 """LangGraph seam for the Pedante evaluator."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.state import CompiledStateGraph  # noqa: TC002
+from langgraph.graph.state import (
+    CompiledStateGraph,  # noqa: TC002  # This type remains available at runtime for annotation introspection.
+)
 
-from .pedante import (  # noqa: TC001
+from .pedante import (  # noqa: TC001  # SQLAlchemy evaluates these mapped model annotations at runtime.
     PedanteEvaluationRequest,
     PedanteEvaluationResult,
 )
@@ -50,6 +50,16 @@ def route_after_pedante(state: PedanteGraphState) -> typ.Literal["pass", "refine
 
     The routing decision is derived solely from ``pedante_result.requires_revision``
     to keep routing logic centralised and avoid divergence with other state.
+
+    Returns
+    -------
+    typ.Literal['pass', 'refine']
+        Result produced by the operation.
+
+    Raises
+    ------
+    KeyError
+        If the operation cannot be completed.
     """
     if state.pedante_result is None:
         msg = "pedante_result"

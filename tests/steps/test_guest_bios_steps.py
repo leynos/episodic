@@ -12,8 +12,6 @@ also recording generated `GuestBiosResult` and enriched TEI artefacts for the
 Then steps.
 """
 
-from __future__ import annotations
-
 import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
 import json
@@ -22,6 +20,7 @@ import socket
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
 import time
 import typing as typ
+from pathlib import Path  # noqa: TC003 - pytest-bdd inspects step annotations.
 
 import pytest
 import yaml
@@ -42,7 +41,6 @@ from episodic.llm.openai_adapter import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    from pathlib import Path
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
 
@@ -188,6 +186,11 @@ def _handle_connection_timeout(
     """Terminate the process and raise RuntimeError.
 
     Raise only if the polling deadline has passed.
+
+    Raises
+    ------
+    RuntimeError
+        If the operation cannot be completed.
     """
     if time.monotonic() < deadline:
         return
@@ -358,12 +361,12 @@ def assert_guest_bios_result_structure(
     """Verify the result contains a structured biography tied to its source."""
     result = guest_bios_context.result
     assert result is not None, "Expected a GuestBiosResult, got None."
-    assert len(result.entries) == 1
+    assert len(result.entries) == 1, "Expected values to match"
     entry = result.entries[0]
-    assert entry.display_name == "Ada Lovelace"
-    assert "analytical engines" in entry.bio
-    assert entry.reference_document_revision_id == "rev-ada"
-    assert result.usage.total_tokens == 62
+    assert entry.display_name == "Ada Lovelace", "Expected values to match"
+    assert "analytical engines" in entry.bio, "Expected collection to contain the value"
+    assert entry.reference_document_revision_id == "rev-ada", "Expected values to match"
+    assert result.usage.total_tokens == 62, "Expected values to match"
 
 
 @then("the guest-bios prompt includes the pinned guest profile content")
@@ -373,8 +376,10 @@ def assert_prompt_contains_guest_profile(
     """Verify the actual outbound request includes the pinned source content."""
     request = guest_bios_context.request_payload
     assert request is not None, "Expected the adapter request to be captured."
-    assert "Ada wrote notes on the Analytical Engine" in request.prompt
-    assert "rev-ada" in request.prompt
+    assert "Ada wrote notes on the Analytical Engine" in request.prompt, (
+        "Expected collection to contain the value"
+    )
+    assert "rev-ada" in request.prompt, "Expected collection to contain the value"
 
 
 @then("the enriched TEI contains a guest-bios body block")
@@ -382,11 +387,13 @@ def assert_enriched_tei_contains_guest_bios(
     guest_bios_context: GuestBiosBDDContext,
 ) -> None:
     """Verify generated biographies are formatted in the canonical TEI body."""
-    assert 'type="guest-bios"' in guest_bios_context.enriched_tei_xml
+    assert 'type="guest-bios"' in guest_bios_context.enriched_tei_xml, (
+        "Expected collection to contain the value"
+    )
     assert (
         'corresp="urn:episodic:reference-document-revision:rev-ada"'
         in guest_bios_context.enriched_tei_xml
-    )
+    ), "Expected collection to contain the value"
     assert "Ada Lovelace wrote about analytical engines." in (
         guest_bios_context.enriched_tei_xml
-    )
+    ), "Expected collection to contain the value"

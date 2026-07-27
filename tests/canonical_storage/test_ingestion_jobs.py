@@ -7,8 +7,6 @@ Run the ingestion job repository tests:
 >>> pytest tests/canonical_storage/test_ingestion_jobs.py
 """
 
-from __future__ import annotations
-
 import typing as typ
 
 import pytest

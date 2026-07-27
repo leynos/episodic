@@ -2,21 +2,34 @@
 
 import typing as typ
 
-from tests import api_fixtures
+from tests.api_fixtures import (
+    ApiFixture,
+    RevisionRequest,
+    assert_reference_document_list,
+    assert_reference_revision_history,
+    build_api_fixture,
+    create_reference_binding,
+    create_reference_document,
+    create_reference_document_revision,
+    post_and_return_id,
+    profile_body,
+)
+
+__all__ = [
+    "ApiFixture",
+    "RevisionRequest",
+    "assert_reference_document_list",
+    "assert_reference_revision_history",
+    "build_api_fixture",
+    "create_reference_binding",
+    "create_reference_document",
+    "create_reference_document_revision",
+    "post_and_return_id",
+    "profile_body",
+]
 
 if typ.TYPE_CHECKING:
     from falcon import testing
-
-ApiFixture = api_fixtures.ApiFixture
-RevisionRequest = api_fixtures.RevisionRequest
-post_and_return_id = api_fixtures.post_and_return_id
-profile_body = api_fixtures.profile_body
-build_api_fixture = api_fixtures.build_api_fixture
-create_reference_document = api_fixtures.create_reference_document
-assert_reference_document_list = api_fixtures.assert_reference_document_list
-create_reference_document_revision = api_fixtures.create_reference_document_revision
-assert_reference_revision_history = api_fixtures.assert_reference_revision_history
-create_reference_binding = api_fixtures.create_reference_binding
 
 
 def _assert_document_get_and_optimistic_lock(

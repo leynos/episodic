@@ -47,7 +47,7 @@ def test_sum_usage_logs_component_and_aggregate_total_mismatches(
         "orchestration.usage_sum.component_total_mismatch",
         "orchestration.usage_sum.component_total_mismatch",
         "orchestration.usage_sum.aggregate_total_mismatch",
-    ]
+    ], "Expected collection to contain the value"
     assert all(event[0] == "warning" for event in logged_events), (
         f"expected all logged events to be warnings, got: {logged_events!r}"
     )

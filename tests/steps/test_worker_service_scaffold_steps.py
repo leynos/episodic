@@ -1,7 +1,5 @@
 """Behavioural tests for the Celery worker scaffold."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
@@ -149,8 +147,12 @@ def _assert_task_contract(
     assertion: _TaskContractAssertion,
 ) -> None:
     """Assert that a task's route and execution result match the documented contract."""
-    assert routes[assertion.task_name] == assertion.expected_route
-    assert assertion.actual_result == assertion.expected_result
+    assert routes[assertion.task_name] == assertion.expected_route, (
+        "Expected values to match"
+    )
+    assert assertion.actual_result == assertion.expected_result, (
+        "Expected values to match"
+    )
 
 
 @then("the I/O-bound task targets the I/O exchange and queue and succeeds")
@@ -219,10 +221,10 @@ def then_worker_launch_profiles_are_distinct(
     io_profile = worker_service_scaffold_context.profiles[WorkloadClass.IO_BOUND]
     cpu_profile = worker_service_scaffold_context.profiles[WorkloadClass.CPU_BOUND]
 
-    assert io_profile.pool is WorkerPool.GEVENT
-    assert io_profile.concurrency == 64
-    assert cpu_profile.pool is WorkerPool.PREFORK
-    assert cpu_profile.concurrency == 4
+    assert io_profile.pool is WorkerPool.GEVENT, "Expected values to match"
+    assert io_profile.concurrency == 64, "Expected values to match"
+    assert cpu_profile.pool is WorkerPool.PREFORK, "Expected values to match"
+    assert cpu_profile.concurrency == 4, "Expected values to match"
 
 
 @then("the worker app creation fails")
@@ -230,8 +232,10 @@ def then_worker_app_creation_fails(
     worker_service_scaffold_context: WorkerServiceScaffoldContext,
 ) -> None:
     """Assert that worker app creation reported a runtime configuration error."""
-    assert worker_service_scaffold_context.creation_error is not None
-    assert worker_service_scaffold_context.app is None
+    assert worker_service_scaffold_context.creation_error is not None, (
+        "Expected value to be present"
+    )
+    assert worker_service_scaffold_context.app is None, "Expected value to be absent"
 
 
 @then("the failure explains that EPISODIC_CELERY_BROKER_URL must be set")
@@ -239,7 +243,9 @@ def then_failure_explains_broker_requirement(
     worker_service_scaffold_context: WorkerServiceScaffoldContext,
 ) -> None:
     """Assert that the failure message points operators at the missing broker URL."""
-    assert worker_service_scaffold_context.creation_error is not None
+    assert worker_service_scaffold_context.creation_error is not None, (
+        "Expected value to be present"
+    )
     assert "EPISODIC_CELERY_BROKER_URL must be set" in str(
         worker_service_scaffold_context.creation_error
-    )
+    ), "Expected collection to contain the value"

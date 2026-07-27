@@ -1,0 +1,23 @@
+# serializer version: 1
+# name: test_generate_from_reference_bindings_resolves_and_enriches_tei
+  list([
+    dict({
+      'episode_id': '<uuid>',
+      'series_profile_id': '<uuid>',
+      'template_id': '<uuid>',
+      'uow': object(
+      ),
+    }),
+  ])
+# ---
+# name: test_project_guest_bio_sources_filters_guest_profiles
+  tuple(
+    dict({
+      'display_name': 'Ada Lovelace',
+      'reference_document_id': '<uuid>',
+      'reference_document_revision_id': '<uuid>',
+      'role': 'Mathematician',
+      'source_content': 'Ada wrote notes on the Analytical Engine.',
+    }),
+  )
+# ---

@@ -9,18 +9,13 @@ keeps the fixture infrastructure connected to the behaviour-driven acceptance
 contract.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
-import typing as typ
+import subprocess  # noqa: S404, TC003  # pytest-bdd evaluates step annotations.
+from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
 import pytest
 from architecture_hecate_config import run_hecate_fixture_check, write_fixture_config
 from pytest_bdd import given, parsers, scenario, then, when
-
-if typ.TYPE_CHECKING:
-    import subprocess  # noqa: S404  # Type-only CompletedProcess reference.
-    from pathlib import Path
 
 
 @dc.dataclass(slots=True)

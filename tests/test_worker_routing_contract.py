@@ -5,6 +5,9 @@ import typing as typ
 
 import pytest
 
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
+
 
 @dc.dataclass(slots=True)
 class _FakeWorkerLogger:
@@ -14,10 +17,10 @@ class _FakeWorkerLogger:
     exceptions: list[str]
 
     def info(self, message: str) -> None:
-        self.infos.append(message)
+        self.infos += [message]
 
     def exception(self, message: str) -> None:
-        self.exceptions.append(message)
+        self.exceptions += [message]
 
 
 def _runtime_environ() -> dict[str, str]:
@@ -40,7 +43,9 @@ def test_scaffold_task_workload_mapping_matches_registered_task_names() -> None:
     )
 
 
-def test_task_routes_include_exchange_metadata_for_each_task() -> None:
+def test_task_routes_include_exchange_metadata_for_each_task(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Expose complete Celery route metadata for each classified task."""
     from episodic.worker import (
         CPU_DIAGNOSTIC_TASK_NAME,
@@ -51,18 +56,12 @@ def test_task_routes_include_exchange_metadata_for_each_task() -> None:
 
     routes = DEFAULT_WORKER_TOPOLOGY.task_routes(SCAFFOLD_TASK_WORKLOADS)
 
-    assert routes[IO_DIAGNOSTIC_TASK_NAME] == {
-        "queue": "episodic.io",
-        "exchange": "episodic.tasks",
-        "exchange_type": "topic",
-        "routing_key": "episodic.io.diagnostic",
-    }, f"I/O task routing contract failed for {IO_DIAGNOSTIC_TASK_NAME}: {routes!r}"
-    assert routes[CPU_DIAGNOSTIC_TASK_NAME] == {
-        "queue": "episodic.cpu",
-        "exchange": "episodic.tasks",
-        "exchange_type": "topic",
-        "routing_key": "episodic.cpu.diagnostic",
-    }, f"CPU task routing contract failed for {CPU_DIAGNOSTIC_TASK_NAME}: {routes!r}"
+    assert routes[IO_DIAGNOSTIC_TASK_NAME] == snapshot, (
+        "actual output must match snapshot"
+    )
+    assert routes[CPU_DIAGNOSTIC_TASK_NAME] == snapshot, (
+        "actual output must match snapshot"
+    )
 
 
 def test_task_routes_reject_malformed_task_names_and_workloads() -> None:
@@ -122,8 +121,8 @@ def test_create_celery_app_logs_task_route_materialisation(
     assert logger.infos == [
         "Building Celery worker task routes for 2 tasks.",
         "Built Celery worker task routes for 2 tasks.",
-    ]
-    assert not logger.exceptions
+    ], "Expected values to match"
+    assert not logger.exceptions, "Expected condition to be false"
 
 
 def test_create_celery_app_logs_task_route_validation_failures(
@@ -145,8 +144,16 @@ def test_create_celery_app_logs_task_route_validation_failures(
             {typ.cast("str", 42): WorkloadClass.IO_BOUND},
         )
 
-    assert logger.infos == ["Building Celery worker task routes for 1 tasks."]
-    assert len(logger.exceptions) == 1
-    assert "tasks=(42,)" in logger.exceptions[0]
-    assert "workloads=(<WorkloadClass.IO_BOUND: 'io_bound'>,)" in logger.exceptions[0]
-    assert "Worker task names must be non-empty dotted names." in logger.exceptions[0]
+    assert logger.infos == ["Building Celery worker task routes for 1 tasks."], (
+        "Expected values to match"
+    )
+    assert len(logger.exceptions) == 1, "Expected values to match"
+    assert "tasks=(42,)" in logger.exceptions[0], (
+        "Expected collection to contain the value"
+    )
+    assert (
+        "workloads=(<WorkloadClass.IO_BOUND: 'io_bound'>,)" in logger.exceptions[0]
+    ), "Expected collection to contain the value"
+    assert (
+        "Worker task names must be non-empty dotted names." in logger.exceptions[0]
+    ), "Expected collection to contain the value"

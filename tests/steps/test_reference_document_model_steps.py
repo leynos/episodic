@@ -1,14 +1,18 @@
 """Behavioural tests for the reusable reference-document model."""
 
-from __future__ import annotations
-
+import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
 
 import pytest
+from falcon import testing  # noqa: TC002  # pytest-bdd evaluates step annotations.
 from pytest_bdd import given, scenario, then, when
+from sqlalchemy.ext.asyncio import (  # noqa: TC002  # pytest-bdd evaluates step annotations.
+    AsyncSession,
+    async_sessionmaker,
+)
 
 from episodic.canonical.domain import (
     ReferenceBinding,
@@ -21,11 +25,7 @@ from episodic.canonical.domain import (
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
 if typ.TYPE_CHECKING:
-    import asyncio
     import collections.abc as cabc
-
-    from falcon import testing
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 def _run_async_step(
@@ -75,7 +75,7 @@ def create_profile_and_template(
             "note": "Create profile",
         },
     )
-    assert profile_response.status_code == 201
+    assert profile_response.status_code == 201, "Expected values to match"
     profile_id = typ.cast("str", profile_response.json["id"])
 
     template_response = canonical_api_client.simulate_post(
@@ -90,7 +90,7 @@ def create_profile_and_template(
             "note": "Create template",
         },
     )
-    assert template_response.status_code == 201
+    assert template_response.status_code == 201, "Expected values to match"
 
     context["profile_id"] = profile_id
     context["template_id"] = typ.cast("str", template_response.json["id"])
@@ -220,7 +220,7 @@ def retrieve_brief(
         f"/v1/series-profiles/{context['profile_id']}/brief",
         params={"template_id": context["template_id"]},
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, "Expected values to match"
     context["brief_payload"] = typ.cast("dict[str, object]", response.json)
 
 
@@ -237,5 +237,7 @@ def assert_reference_documents(context: ReferenceDocumentContext) -> None:
     )
     kinds = {typ.cast("str", item["kind"]) for item in documents}
     target_kinds = {typ.cast("str", item["target_kind"]) for item in documents}
-    assert kinds == {"host_profile", "guest_profile"}
-    assert target_kinds == {"series_profile", "episode_template"}
+    assert kinds == {"host_profile", "guest_profile"}, "Expected values to match"
+    assert target_kinds == {"series_profile", "episode_template"}, (
+        "Expected values to match"
+    )

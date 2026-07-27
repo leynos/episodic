@@ -29,7 +29,7 @@ from episodic.canonical.generation_run_errors import (
 from episodic.canonical.generation_run_ports import EventSeq, event_seq
 from episodic.orchestration._types import _log_event
 
-TimeProvider = cabc.Callable[[], dt.datetime]
+type TimeProvider = cabc.Callable[[], dt.datetime]
 
 
 def _now_utc() -> dt.datetime:
@@ -100,9 +100,10 @@ class InMemoryGenerationRunStore:
     ) -> GenerationRun:
         """Create a run, preserving first-write-wins idempotency.
 
-        When ``idempotency_key`` already exists, the originally stored run is
-        returned and the supplied ``run`` is ignored. Retried requests therefore
-        cannot overwrite the first write.
+        Returns
+        -------
+        GenerationRun
+            Result produced by the operation.
         """
         async with self._lock:
             if idempotency_key is not None:

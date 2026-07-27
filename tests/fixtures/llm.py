@@ -44,7 +44,7 @@ class _OpenAIAdapterLogSpy:
 
     def error(self, message: str) -> None:
         """Record one ERROR-level log message."""
-        self.messages.append(message)
+        self.messages += [message]
 
 
 @pytest.fixture
@@ -53,6 +53,11 @@ def openai_log_spy() -> cabc.Generator[_OpenAILogSpy]:
 
     Uses ``_log_override`` to redirect log output within the current Python
     context only. No xdist grouping or serialisation is required.
+
+    Yields
+    ------
+    cabc.Generator[_OpenAILogSpy]
+        Values produced by the iterator.
     """
     from episodic.llm.openai_api import utils as openai_utils
 

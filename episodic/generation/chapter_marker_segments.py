@@ -107,13 +107,15 @@ def _segment_transitions_from_value(
             f"_segment_transitions_from_value traversal depth exhausted: depth={depth}."
         )
         raise ChapterMarkersResponseFormatError(msg)
-    if isinstance(value, dict):
-        mapping = typ.cast("dict[str, object]", value)
-        return _transitions_from_dict(mapping, depth=depth)
-    if isinstance(value, list):
-        items = typ.cast("cabc.Sequence[object]", value)
-        return _transitions_from_sequence(items, depth=depth)
-    return ()
+    match value:
+        case dict():
+            mapping = typ.cast("dict[str, object]", value)
+            return _transitions_from_dict(mapping, depth=depth)
+        case list():
+            items = typ.cast("cabc.Sequence[object]", value)
+            return _transitions_from_sequence(items, depth=depth)
+        case _:
+            return ()
 
 
 def _validate_segment_transition_starts(

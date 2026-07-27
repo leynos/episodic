@@ -1,7 +1,5 @@
 """Support helpers for source-intake Falcon resources."""
 
-from __future__ import annotations
-
 import dataclasses
 import hashlib
 import inspect
