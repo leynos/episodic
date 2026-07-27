@@ -23,7 +23,7 @@ def test_parse_pyscn_findings_uses_control_flow_locations() -> None:
                             "findings": [
                                 {
                                     "location": {
-                                        "file_path": "/corpus/flow.py",
+                                        "file_path": "flow.py",
                                         "start_line": 7,
                                     },
                                     "reason": "unreachable_after_return",
@@ -78,8 +78,8 @@ def test_parse_skylos_findings_uses_unused_symbol_categories() -> None:
     )
 
 
-def test_score_findings_counts_misses_and_unmatched_reports_by_lane() -> None:
-    """Preserve false negatives and unmatched false positives in scores."""
+def test_score_findings_separates_unmatched_reports_from_false_positives() -> None:
+    """Preserve false negatives and unlabelled findings without conflation."""
     expectations = (
         Expectation(
             identifier="dead-unused",
@@ -134,10 +134,12 @@ def test_score_findings_counts_misses_and_unmatched_reports_by_lane() -> None:
     scores = score_findings(expectations, findings)
 
     assert scores[Lane.UNUSED_SYMBOL].true_positives == 1
-    assert scores[Lane.UNUSED_SYMBOL].false_positives == 2
+    assert scores[Lane.UNUSED_SYMBOL].false_positives == 1
     assert scores[Lane.UNUSED_SYMBOL].false_negatives == 0
     assert scores[Lane.UNUSED_SYMBOL].true_negatives == 0
+    assert scores[Lane.UNUSED_SYMBOL].unmatched_findings == 1
     assert scores[Lane.UNREACHABLE_STATEMENT].true_positives == 0
     assert scores[Lane.UNREACHABLE_STATEMENT].false_positives == 0
     assert scores[Lane.UNREACHABLE_STATEMENT].false_negatives == 1
     assert scores[Lane.UNREACHABLE_STATEMENT].true_negatives == 1
+    assert scores[Lane.UNREACHABLE_STATEMENT].unmatched_findings == 0

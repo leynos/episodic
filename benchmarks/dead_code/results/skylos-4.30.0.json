@@ -1,0 +1,4323 @@
+{
+  "definitions": {
+    "episodic-dead-code-corpus-20260727.dynamic.RegisteredFunction": {
+      "name": "episodic-dead-code-corpus-20260727.dynamic.RegisteredFunction",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 7,
+      "type": "class",
+      "loc": 4,
+      "complexity": 1,
+      "calls": [],
+      "called_by": [
+        "episodic-dead-code-corpus-20260727.dynamic.register"
+      ],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "reachable_from_root",
+          "role": "supports_live",
+          "reason": "reachable from inferred root",
+          "source": "reachability",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "uncertainty",
+          "role": "uncertainty",
+          "reason": "Protocol class",
+          "source": "suppression",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import; Reachable from root",
+        "reason_tags": [
+          "top_level_execution",
+          "reachable_from_root"
+        ],
+        "live_evidence_count": 2,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 1,
+        "confidence": 0,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import; Reachable from root",
+      "dead_code_reason_tags": [
+        "top_level_execution",
+        "reachable_from_root"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.dynamic.RegisteredFunction.__call__": {
+      "name": "episodic-dead-code-corpus-20260727.dynamic.RegisteredFunction.__call__",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 10,
+      "type": "method",
+      "loc": 1,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.dynamic.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "uncertain",
+      "dead_code_evidence": [
+        {
+          "kind": "uncertainty",
+          "role": "uncertainty",
+          "reason": "protocol/ABC override",
+          "source": "suppression",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "uncertain",
+        "primary_reason": "Uncertainty evidence present; Not exported",
+        "reason_tags": [
+          "uncertainty",
+          "not_exported"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 1,
+        "confidence": 0,
+        "threshold": 0
+      },
+      "dead_code_reason": "Uncertainty evidence present; Not exported",
+      "dead_code_reason_tags": [
+        "uncertainty",
+        "not_exported"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.dynamic.register": {
+      "name": "episodic-dead-code-corpus-20260727.dynamic.register",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 16,
+      "type": "function",
+      "loc": 3,
+      "complexity": 1,
+      "calls": [
+        "RegisteredFunction.__name__",
+        "episodic-dead-code-corpus-20260727.dynamic.REGISTRY",
+        "episodic-dead-code-corpus-20260727.dynamic.RegisteredFunction",
+        "episodic-dead-code-corpus-20260727.dynamic.function.__name__",
+        "episodic-dead-code-corpus-20260727.dynamic.register.function"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.dynamic.registered_plugin": {
+      "name": "episodic-dead-code-corpus-20260727.dynamic.registered_plugin",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 22,
+      "type": "function",
+      "loc": 2,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.dynamic.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "static_reference",
+          "role": "supports_live",
+          "reason": "referenced by static analysis",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 1
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Static references found",
+        "reason_tags": [
+          "static_reference"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Static references found",
+      "dead_code_reason_tags": [
+        "static_reference"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.dynamic.DynamicHandler": {
+      "name": "episodic-dead-code-corpus-20260727.dynamic.DynamicHandler",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 26,
+      "type": "class",
+      "loc": 3,
+      "complexity": 1,
+      "calls": [],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.dynamic.DynamicHandler.invoked_by_name": {
+      "name": "episodic-dead-code-corpus-20260727.dynamic.DynamicHandler.invoked_by_name",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 27,
+      "type": "method",
+      "loc": 2,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.dynamic.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "static_reference",
+          "role": "supports_live",
+          "reason": "referenced by static analysis",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 1
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Static references found",
+        "reason_tags": [
+          "static_reference"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Static references found",
+      "dead_code_reason_tags": [
+        "static_reference"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.dynamic.CallableHandler": {
+      "name": "episodic-dead-code-corpus-20260727.dynamic.CallableHandler",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 31,
+      "type": "class",
+      "loc": 3,
+      "complexity": 1,
+      "calls": [],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.dynamic.CallableHandler.__call__": {
+      "name": "episodic-dead-code-corpus-20260727.dynamic.CallableHandler.__call__",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 32,
+      "type": "method",
+      "loc": 2,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.dynamic.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "static_reference",
+          "role": "supports_live",
+          "reason": "referenced by static analysis",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 1
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Static references found",
+        "reason_tags": [
+          "static_reference"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 0,
+        "threshold": 0
+      },
+      "dead_code_reason": "Static references found",
+      "dead_code_reason_tags": [
+        "static_reference"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.flow.after_return": {
+      "name": "episodic-dead-code-corpus-20260727.flow.after_return",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "line": 5,
+      "type": "function",
+      "loc": 3,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.flow.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.flow.after_raise": {
+      "name": "episodic-dead-code-corpus-20260727.flow.after_raise",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "line": 10,
+      "type": "function",
+      "loc": 3,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.flow.RuntimeError"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.flow.after_continue": {
+      "name": "episodic-dead-code-corpus-20260727.flow.after_continue",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "line": 15,
+      "type": "function",
+      "loc": 5,
+      "complexity": 2,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.flow.after_continue.value",
+        "episodic-dead-code-corpus-20260727.flow.after_continue.values",
+        "episodic-dead-code-corpus-20260727.flow.int",
+        "episodic-dead-code-corpus-20260727.flow.len",
+        "episodic-dead-code-corpus-20260727.flow.tuple"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.flow.after_break": {
+      "name": "episodic-dead-code-corpus-20260727.flow.after_break",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "line": 22,
+      "type": "function",
+      "loc": 5,
+      "complexity": 2,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.flow.after_break.value",
+        "episodic-dead-code-corpus-20260727.flow.after_break.values",
+        "episodic-dead-code-corpus-20260727.flow.int",
+        "episodic-dead-code-corpus-20260727.flow.len",
+        "episodic-dead-code-corpus-20260727.flow.tuple"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.flow.constant_false_branch": {
+      "name": "episodic-dead-code-corpus-20260727.flow.constant_false_branch",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "line": 29,
+      "type": "function",
+      "loc": 4,
+      "complexity": 2,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.flow.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.flow.conditional_return": {
+      "name": "episodic-dead-code-corpus-20260727.flow.conditional_return",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "line": 35,
+      "type": "function",
+      "loc": 5,
+      "complexity": 2,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.flow.bool",
+        "episodic-dead-code-corpus-20260727.flow.conditional_return.flag",
+        "episodic-dead-code-corpus-20260727.flow.conditional_return.reachable_after_conditional",
+        "episodic-dead-code-corpus-20260727.flow.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.symbols._unused_function": {
+      "name": "episodic-dead-code-corpus-20260727.symbols._unused_function",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "line": 8,
+      "type": "function",
+      "loc": 2,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.symbols.int"
+      ],
+      "called_by": [],
+      "dead": true,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.8,
+          "details": {
+            "confidence": 80,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 80,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.symbols._UnusedClass": {
+      "name": "episodic-dead-code-corpus-20260727.symbols._UnusedClass",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "line": 12,
+      "type": "class",
+      "loc": 2,
+      "complexity": 1,
+      "calls": [],
+      "called_by": [],
+      "dead": true,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.8,
+          "details": {
+            "confidence": 80,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 80,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.symbols._used_function": {
+      "name": "episodic-dead-code-corpus-20260727.symbols._used_function",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "line": 16,
+      "type": "function",
+      "loc": 3,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.symbols._used_function.value",
+        "episodic-dead-code-corpus-20260727.symbols.float",
+        "episodic-dead-code-corpus-20260727.symbols.int",
+        "statistics",
+        "statistics.mean"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 80,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.symbols._function_with_unused_parameter": {
+      "name": "episodic-dead-code-corpus-20260727.symbols._function_with_unused_parameter",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "line": 21,
+      "type": "function",
+      "loc": 5,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.symbols._function_with_unused_parameter.value",
+        "episodic-dead-code-corpus-20260727.symbols.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 80,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.symbols.UsedClass": {
+      "name": "episodic-dead-code-corpus-20260727.symbols.UsedClass",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "line": 28,
+      "type": "class",
+      "loc": 3,
+      "complexity": 1,
+      "calls": [],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "top_level_execution",
+          "role": "supports_live",
+          "reason": "called during module top-level execution",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Called during module import",
+        "reason_tags": [
+          "top_level_execution"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Called during module import",
+      "dead_code_reason_tags": [
+        "top_level_execution"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.symbols.UsedClass.value": {
+      "name": "episodic-dead-code-corpus-20260727.symbols.UsedClass.value",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "line": 29,
+      "type": "method",
+      "loc": 2,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.symbols.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "dynamic_pattern",
+          "role": "supports_live",
+          "reason": "same_pkg_attr",
+          "source": "attribute_reference",
+          "confidence": 0.3,
+          "details": {}
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Dynamic reference matched",
+        "reason_tags": [
+          "dynamic_pattern"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Dynamic reference matched",
+      "dead_code_reason_tags": [
+        "dynamic_pattern"
+      ]
+    },
+    "episodic-dead-code-corpus-20260727.symbols.exported_function": {
+      "name": "episodic-dead-code-corpus-20260727.symbols.exported_function",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "line": 33,
+      "type": "function",
+      "loc": 2,
+      "complexity": 1,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.symbols.int"
+      ],
+      "called_by": [],
+      "dead": false,
+      "dead_code_classification": "alive",
+      "dead_code_evidence": [
+        {
+          "kind": "framework_root",
+          "role": "supports_live",
+          "reason": "public export",
+          "source": "python_ast",
+          "confidence": 1.0,
+          "details": {
+            "root_kind": "public_export"
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "alive",
+        "primary_reason": "Framework entrypoint",
+        "reason_tags": [
+          "framework_root"
+        ],
+        "live_evidence_count": 1,
+        "dead_evidence_count": 0,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "Framework entrypoint",
+      "dead_code_reason_tags": [
+        "framework_root"
+      ]
+    }
+  },
+  "unused_functions": [
+    {
+      "name": "_unused_function",
+      "full_name": "episodic-dead-code-corpus-20260727.symbols._unused_function",
+      "simple_name": "_unused_function",
+      "type": "function",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "basename": "symbols.py",
+      "line": 8,
+      "confidence": 80,
+      "references": 0,
+      "calls": [
+        "episodic-dead-code-corpus-20260727.symbols.int"
+      ],
+      "return_type": "int",
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.8,
+          "details": {
+            "confidence": 80,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 80,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    }
+  ],
+  "unused_imports": [
+    {
+      "name": "math",
+      "full_name": "math",
+      "simple_name": "math",
+      "type": "import",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "basename": "symbols.py",
+      "line": 4,
+      "confidence": 100,
+      "references": 0
+    }
+  ],
+  "unused_classes": [
+    {
+      "name": "_UnusedClass",
+      "full_name": "episodic-dead-code-corpus-20260727.symbols._UnusedClass",
+      "simple_name": "_UnusedClass",
+      "type": "class",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "basename": "symbols.py",
+      "line": 12,
+      "confidence": 80,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.8,
+          "details": {
+            "confidence": 80,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 80,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    }
+  ],
+  "unused_variables": [
+    {
+      "name": "DYNAMIC_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.dynamic.DYNAMIC_RESULT",
+      "simple_name": "DYNAMIC_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "basename": "dynamic.py",
+      "line": 36,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "REGISTERED_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.dynamic.REGISTERED_RESULT",
+      "simple_name": "REGISTERED_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "basename": "dynamic.py",
+      "line": 37,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "CALLABLE_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.dynamic.CALLABLE_RESULT",
+      "simple_name": "CALLABLE_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "basename": "dynamic.py",
+      "line": 38,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "unreachable_after_return",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.after_return.unreachable_after_return",
+      "simple_name": "unreachable_after_return",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 7,
+      "confidence": 90,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.9,
+          "details": {
+            "confidence": 90,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "unreachable_after_raise",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.after_raise.unreachable_after_raise",
+      "simple_name": "unreachable_after_raise",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 12,
+      "confidence": 90,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.9,
+          "details": {
+            "confidence": 90,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "unreachable_after_continue",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.after_continue.unreachable_after_continue",
+      "simple_name": "unreachable_after_continue",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 18,
+      "confidence": 90,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.9,
+          "details": {
+            "confidence": 90,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "unreachable_after_break",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.after_break.unreachable_after_break",
+      "simple_name": "unreachable_after_break",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 25,
+      "confidence": 90,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.9,
+          "details": {
+            "confidence": 90,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "RETURN_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.RETURN_RESULT",
+      "simple_name": "RETURN_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 42,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "CONTINUE_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.CONTINUE_RESULT",
+      "simple_name": "CONTINUE_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 47,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "BREAK_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.BREAK_RESULT",
+      "simple_name": "BREAK_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 48,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "FALSE_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.FALSE_RESULT",
+      "simple_name": "FALSE_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 49,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "CONDITIONAL_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.flow.CONDITIONAL_RESULT",
+      "simple_name": "CONDITIONAL_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
+      "basename": "flow.py",
+      "line": 50,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "unused_local",
+      "full_name": "episodic-dead-code-corpus-20260727.symbols._used_function.unused_local",
+      "simple_name": "unused_local",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "basename": "symbols.py",
+      "line": 17,
+      "confidence": 90,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.9,
+          "details": {
+            "confidence": 90,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 90,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "USED_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.symbols.USED_RESULT",
+      "simple_name": "USED_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "basename": "symbols.py",
+      "line": 37,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "PARAMETER_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.symbols.PARAMETER_RESULT",
+      "simple_name": "PARAMETER_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "basename": "symbols.py",
+      "line": 38,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    },
+    {
+      "name": "CLASS_RESULT",
+      "full_name": "episodic-dead-code-corpus-20260727.symbols.CLASS_RESULT",
+      "simple_name": "CLASS_RESULT",
+      "type": "variable",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "basename": "symbols.py",
+      "line": 39,
+      "confidence": 60,
+      "references": 0,
+      "dead_code_classification": "likely_dead",
+      "dead_code_evidence": [
+        {
+          "kind": "no_static_references",
+          "role": "supports_dead",
+          "reason": "no static references were found",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {
+            "references": 0
+          }
+        },
+        {
+          "kind": "not_exported",
+          "role": "supports_dead",
+          "reason": "symbol is not exported as public API",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "no_entrypoint",
+          "role": "supports_dead",
+          "reason": "no package, framework, test, or root entrypoint evidence",
+          "source": "analyzer",
+          "confidence": 1.0,
+          "details": {}
+        },
+        {
+          "kind": "confidence_gate",
+          "role": "supports_dead",
+          "reason": "confidence meets the configured reporting threshold",
+          "source": "confidence",
+          "confidence": 0.6,
+          "details": {
+            "confidence": 60,
+            "threshold": 0
+          }
+        }
+      ],
+      "dead_code_decision": {
+        "classification": "likely_dead",
+        "primary_reason": "No static references; Not exported; No entrypoint evidence",
+        "reason_tags": [
+          "no_refs",
+          "not_exported",
+          "no_entrypoint",
+          "confidence_ge_threshold"
+        ],
+        "live_evidence_count": 0,
+        "dead_evidence_count": 4,
+        "uncertainty_count": 0,
+        "confidence": 60,
+        "threshold": 0
+      },
+      "dead_code_reason": "No static references; Not exported; No entrypoint evidence",
+      "dead_code_reason_tags": [
+        "no_refs",
+        "not_exported",
+        "no_entrypoint",
+        "confidence_ge_threshold"
+      ]
+    }
+  ],
+  "unused_parameters": [
+    {
+      "name": "unused_parameter",
+      "full_name": "episodic-dead-code-corpus-20260727.symbols._function_with_unused_parameter.unused_parameter",
+      "simple_name": "unused_parameter",
+      "type": "parameter",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/symbols.py",
+      "basename": "symbols.py",
+      "line": 23,
+      "confidence": 90,
+      "references": 0
+    }
+  ],
+  "unused_files": [],
+  "whitelisted": [
+    {
+      "name": "RegisteredFunction",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 7,
+      "reason": "Protocol class",
+      "category": "dead_code",
+      "suppression_code": null,
+      "folder_role": null
+    },
+    {
+      "name": "__call__",
+      "file": "/tmp/episodic-dead-code-corpus-20260727/dynamic.py",
+      "line": 10,
+      "reason": "protocol/ABC override",
+      "category": "dead_code",
+      "suppression_code": "protocol_override",
+      "folder_role": null
+    }
+  ],
+  "suppressed": [],
+  "dead_code_evidence": {
+    "classification_policy": "dead-code-evidence-v2",
+    "symbols": [
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.CALLABLE_RESULT",
+        "kind": "variable",
+        "line": 38,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.CallableHandler",
+        "kind": "class",
+        "line": 31,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.CallableHandler.__call__",
+        "kind": "method",
+        "line": 32,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Static references found",
+          "reason_tags": [
+            "static_reference"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 0,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "static_reference",
+            "role": "supports_live",
+            "reason": "referenced by static analysis",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 1
+            }
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.DYNAMIC_RESULT",
+        "kind": "variable",
+        "line": 36,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.DynamicHandler",
+        "kind": "class",
+        "line": 26,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.DynamicHandler.invoked_by_name",
+        "kind": "method",
+        "line": 27,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Static references found",
+          "reason_tags": [
+            "static_reference"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "static_reference",
+            "role": "supports_live",
+            "reason": "referenced by static analysis",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 1
+            }
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.REGISTERED_RESULT",
+        "kind": "variable",
+        "line": 37,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.REGISTRY",
+        "kind": "variable",
+        "line": 13,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import; Reachable from root",
+          "reason_tags": [
+            "top_level_execution",
+            "reachable_from_root"
+          ],
+          "live_evidence_count": 2,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "reachable_from_root",
+            "role": "supports_live",
+            "reason": "reachable from inferred root",
+            "source": "reachability",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.RegisteredFunction",
+        "kind": "class",
+        "line": 7,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import; Reachable from root",
+          "reason_tags": [
+            "top_level_execution",
+            "reachable_from_root"
+          ],
+          "live_evidence_count": 2,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 1,
+          "confidence": 0,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "reachable_from_root",
+            "role": "supports_live",
+            "reason": "reachable from inferred root",
+            "source": "reachability",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "uncertainty",
+            "role": "uncertainty",
+            "reason": "Protocol class",
+            "source": "suppression",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.RegisteredFunction.__call__",
+        "kind": "method",
+        "line": 10,
+        "classification": "uncertain",
+        "decision": {
+          "classification": "uncertain",
+          "primary_reason": "Uncertainty evidence present; Not exported",
+          "reason_tags": [
+            "uncertainty",
+            "not_exported"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 1,
+          "confidence": 0,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "uncertainty",
+            "role": "uncertainty",
+            "reason": "protocol/ABC override",
+            "source": "suppression",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.RegisteredFunction.__name__",
+        "kind": "variable",
+        "line": 8,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Dynamic reference matched",
+          "reason_tags": [
+            "dynamic_pattern"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 0,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "dynamic_pattern",
+            "role": "supports_live",
+            "reason": "same_pkg_attr",
+            "source": "attribute_reference",
+            "confidence": 0.3,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.register",
+        "kind": "function",
+        "line": 16,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "dynamic.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.dynamic.registered_plugin",
+        "kind": "function",
+        "line": 22,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Static references found",
+          "reason_tags": [
+            "static_reference"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "static_reference",
+            "role": "supports_live",
+            "reason": "referenced by static analysis",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 1
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.BREAK_RESULT",
+        "kind": "variable",
+        "line": 48,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.CONDITIONAL_RESULT",
+        "kind": "variable",
+        "line": 50,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.CONTINUE_RESULT",
+        "kind": "variable",
+        "line": 47,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.FALSE_RESULT",
+        "kind": "variable",
+        "line": 49,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.RETURN_RESULT",
+        "kind": "variable",
+        "line": 42,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_break",
+        "kind": "function",
+        "line": 22,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_break.unreachable_after_break",
+        "kind": "variable",
+        "line": 25,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.9,
+            "details": {
+              "confidence": 90,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_break.value",
+        "kind": "variable",
+        "line": 23,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Dynamic reference matched; Reachable from root",
+          "reason_tags": [
+            "dynamic_pattern",
+            "reachable_from_root"
+          ],
+          "live_evidence_count": 2,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 0,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "dynamic_pattern",
+            "role": "supports_live",
+            "reason": "same_pkg_attr",
+            "source": "attribute_reference",
+            "confidence": 0.3,
+            "details": {}
+          },
+          {
+            "kind": "reachable_from_root",
+            "role": "supports_live",
+            "reason": "reachable from inferred root",
+            "source": "reachability",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_continue",
+        "kind": "function",
+        "line": 15,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_continue.unreachable_after_continue",
+        "kind": "variable",
+        "line": 18,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.9,
+            "details": {
+              "confidence": 90,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_continue.value",
+        "kind": "variable",
+        "line": 16,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Dynamic reference matched; Reachable from root",
+          "reason_tags": [
+            "dynamic_pattern",
+            "reachable_from_root"
+          ],
+          "live_evidence_count": 2,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 0,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "dynamic_pattern",
+            "role": "supports_live",
+            "reason": "same_pkg_attr",
+            "source": "attribute_reference",
+            "confidence": 0.3,
+            "details": {}
+          },
+          {
+            "kind": "reachable_from_root",
+            "role": "supports_live",
+            "reason": "reachable from inferred root",
+            "source": "reachability",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_raise",
+        "kind": "function",
+        "line": 10,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_raise.unreachable_after_raise",
+        "kind": "variable",
+        "line": 12,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.9,
+            "details": {
+              "confidence": 90,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_return",
+        "kind": "function",
+        "line": 5,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_return.unreachable_after_return",
+        "kind": "variable",
+        "line": 7,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.9,
+            "details": {
+              "confidence": 90,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.conditional_return",
+        "kind": "function",
+        "line": 35,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.conditional_return.reachable_after_conditional",
+        "kind": "variable",
+        "line": 38,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Reachable from root",
+          "reason_tags": [
+            "reachable_from_root"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 0,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "reachable_from_root",
+            "role": "supports_live",
+            "reason": "reachable from inferred root",
+            "source": "reachability",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "flow.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.flow.constant_false_branch",
+        "kind": "function",
+        "line": 29,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols.CLASS_RESULT",
+        "kind": "variable",
+        "line": 39,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols.PARAMETER_RESULT",
+        "kind": "variable",
+        "line": 38,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols.USED_RESULT",
+        "kind": "variable",
+        "line": 37,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 60,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.6,
+            "details": {
+              "confidence": 60,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols.UsedClass",
+        "kind": "class",
+        "line": 28,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols.UsedClass.value",
+        "kind": "method",
+        "line": 29,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Dynamic reference matched",
+          "reason_tags": [
+            "dynamic_pattern"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "dynamic_pattern",
+            "role": "supports_live",
+            "reason": "same_pkg_attr",
+            "source": "attribute_reference",
+            "confidence": 0.3,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols._UnusedClass",
+        "kind": "class",
+        "line": 12,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 80,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.8,
+            "details": {
+              "confidence": 80,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols._UnusedClass.value",
+        "kind": "variable",
+        "line": 13,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Dynamic reference matched",
+          "reason_tags": [
+            "dynamic_pattern"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 0,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "dynamic_pattern",
+            "role": "supports_live",
+            "reason": "same_pkg_attr",
+            "source": "attribute_reference",
+            "confidence": 0.3,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols._function_with_unused_parameter",
+        "kind": "function",
+        "line": 21,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 80,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols._unused_function",
+        "kind": "function",
+        "line": 8,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 80,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.8,
+            "details": {
+              "confidence": 80,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols._used_function",
+        "kind": "function",
+        "line": 16,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Called during module import",
+          "reason_tags": [
+            "top_level_execution"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 80,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "top_level_execution",
+            "role": "supports_live",
+            "reason": "called during module top-level execution",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {}
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols._used_function.unused_local",
+        "kind": "variable",
+        "line": 17,
+        "classification": "likely_dead",
+        "decision": {
+          "classification": "likely_dead",
+          "primary_reason": "No static references; Not exported; No entrypoint evidence",
+          "reason_tags": [
+            "no_refs",
+            "not_exported",
+            "no_entrypoint",
+            "confidence_ge_threshold"
+          ],
+          "live_evidence_count": 0,
+          "dead_evidence_count": 4,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "no_static_references",
+            "role": "supports_dead",
+            "reason": "no static references were found",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {
+              "references": 0
+            }
+          },
+          {
+            "kind": "not_exported",
+            "role": "supports_dead",
+            "reason": "symbol is not exported as public API",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "no_entrypoint",
+            "role": "supports_dead",
+            "reason": "no package, framework, test, or root entrypoint evidence",
+            "source": "analyzer",
+            "confidence": 1.0,
+            "details": {}
+          },
+          {
+            "kind": "confidence_gate",
+            "role": "supports_dead",
+            "reason": "confidence meets the configured reporting threshold",
+            "source": "confidence",
+            "confidence": 0.9,
+            "details": {
+              "confidence": 90,
+              "threshold": 0
+            }
+          }
+        ]
+      },
+      {
+        "file": "symbols.py",
+        "qualified_name": "episodic-dead-code-corpus-20260727.symbols.exported_function",
+        "kind": "function",
+        "line": 33,
+        "classification": "alive",
+        "decision": {
+          "classification": "alive",
+          "primary_reason": "Framework entrypoint",
+          "reason_tags": [
+            "framework_root"
+          ],
+          "live_evidence_count": 1,
+          "dead_evidence_count": 0,
+          "uncertainty_count": 0,
+          "confidence": 90,
+          "threshold": 0
+        },
+        "evidence": [
+          {
+            "kind": "framework_root",
+            "role": "supports_live",
+            "reason": "public export",
+            "source": "python_ast",
+            "confidence": 1.0,
+            "details": {
+              "root_kind": "public_export"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "analysis_summary": {
+    "total_files": 4,
+    "excluded_folders": [
+      ".mypy_cache",
+      ".coverage",
+      "vendor",
+      ".git",
+      "build",
+      ".turbo",
+      ".nuxt",
+      ".hg",
+      "node_modules",
+      "htmlcov",
+      "venv",
+      "__pycache__",
+      ".idea",
+      ".tox",
+      ".svn",
+      "*.egg-info",
+      "dist",
+      ".pytest_cache",
+      ".next",
+      ".vscode",
+      ".venv"
+    ],
+    "languages": {
+      "Python": 4
+    },
+    "dead_code_evidence": {
+      "symbol_count": 43,
+      "classification_policy": "dead-code-evidence-v2",
+      "classifications": {
+        "alive": 24,
+        "uncertain": 1,
+        "likely_dead": 18
+      }
+    },
+    "dead_code_liveness": {
+      "rescued_count": 0,
+      "rescued": []
+    },
+    "grep_verify": {
+      "enabled": false,
+      "rescued_count": 0
+    },
+    "monorepo_detected": false,
+    "workspace_count": 0,
+    "workspace_total_packages": 0,
+    "workspace_diagnostic_count": 0,
+    "total_loc": 82,
+    "grade_categories": [
+      "dead_code"
+    ],
+    "by_directory": [
+      {
+        "path": ".",
+        "total": 20,
+        "files": 3,
+        "dead_code": 20,
+        "rules": {
+          "unused-classes": 1,
+          "unused-functions": 1,
+          "unused-imports": 1,
+          "unused-parameters": 1,
+          "unused-variables": 16
+        },
+        "severities": {
+          "LOW": 20
+        }
+      }
+    ]
+  },
+  "workspaces": {
+    "is_monorepo": false,
+    "root_package": null,
+    "packages": [],
+    "diagnostics": [],
+    "declared_patterns": [],
+    "tsconfig_references": [],
+    "package_count": 0,
+    "total_packages": 0,
+    "diagnostic_count": 0
+  },
+  "circular_dependencies": [
+    {
+      "rule_id": "SKY-CIRC",
+      "kind": "circular_dependency",
+      "category": "ARCHITECTURE",
+      "severity": "LOW",
+      "message": "Circular dependency: episodic-dead-code-corpus-20260727 \u2192 episodic-dead-code-corpus-20260727",
+      "cycle": [
+        "episodic-dead-code-corpus-20260727"
+      ],
+      "cycle_length": 1,
+      "suggested_break": "episodic-dead-code-corpus-20260727"
+    }
+  ],
+  "grade": {
+    "overall": {
+      "score": 0,
+      "letter": "F"
+    },
+    "categories": {
+      "dead_code": {
+        "score": 0,
+        "letter": "F",
+        "weight": 1.0,
+        "base_weight": 0.15,
+        "key_issue": "20 dead symbols (243.9/1K LOC)"
+      }
+    },
+    "scanned_categories": [
+      "dead_code"
+    ],
+    "total_loc": 82
+  }
+}
