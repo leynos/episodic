@@ -50,6 +50,8 @@ or delivery planning.
 
 ## Architecture and engineering references
 
+- [pyscn and Skylos dead-code detection head-to-head](pyscn-skylos-dead-code-head-to-head.md)
+  - measured comparison of unused-symbol and unreachable-statement detection.
 - [Agentic systems with LangGraph and Celery](agentic-systems-with-langgraph-and-celery.md)
   - background reference for agentic workflow orchestration.
 - [Cost management in LangGraph agentic systems](cost-management-in-langgraph-agentic-systems.md)
