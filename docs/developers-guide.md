@@ -98,15 +98,15 @@ spelling gate deliberately ignores code spans and fenced code blocks.
 
 ## Workflow pins and Dependabot
 
-Dependabot owns the upgrade of GitHub Actions and reusable workflows,
-including calls into `leynos/shared-actions`. Contract tests that assert a
-caller's exact commit SHA create a lockstep dependency: every time Dependabot
-opens a bump PR, the test fails until a human edits the pinned constant to
-match. That defeats the purpose of automated dependency updates and turns a
-routine bump into a manual chore.
+Dependabot owns the upgrade of GitHub Actions and reusable workflows, including
+calls into `leynos/shared-actions`. Contract tests that assert a caller's exact
+commit SHA create a lockstep dependency: every time Dependabot opens a bump PR,
+the test fails until a human edits the pinned constant to match. That defeats
+the purpose of automated dependency updates and turns a routine bump into a
+manual chore.
 
-Contract tests may still verify the *shape* of a reusable-workflow caller.
-They must not verify the specific SHA value.
+Contract tests may still verify the *shape* of a reusable-workflow caller. They
+must not verify the specific SHA value.
 
 - Do assert the workflow references the correct reusable workflow path.
 - Do assert the ref is pinned to a full 40-character commit SHA, not a
@@ -859,7 +859,7 @@ The following error codes are reserved for the source-intake implementation:
 | `ingestion_job_not_found`  | 404         | Referenced ingestion job does not exist.                      |
 | `series_profile_not_found` | 404         | Referenced series profile does not exist.                     |
 
-_Table 4: Reserved source-intake API error codes._
+*Table 4: Reserved source-intake API error codes.*
 
 Source-intake observability follows
 [ADR 015](adr/adr-015-upload-and-idempotency-ports.md). Implement the metrics
