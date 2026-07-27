@@ -165,6 +165,8 @@ def test_score_findings_classifies_dead_and_live_matched_expectations() -> None:
 
     assert scores[Lane.UNREACHABLE_STATEMENT].true_positives == 1
     assert scores[Lane.UNUSED_SYMBOL].false_positives == 1
+    assert scores[Lane.UNUSED_SYMBOL].true_positives == 0
+    assert scores[Lane.UNREACHABLE_STATEMENT].false_positives == 0
 
 
 def test_score_findings_classifies_dead_and_live_unmatched_expectations() -> None:
