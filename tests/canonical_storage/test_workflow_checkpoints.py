@@ -34,8 +34,26 @@ if typ.TYPE_CHECKING:
 
     from episodic.orchestration import WorkflowCheckpoint
 
-
 _short_delays = st.sampled_from((0.0, 0.001, 0.005))
+
+
+class _CheckpointWithStatus(typ.Protocol):
+    """Structural view needed by resume-outcome assertions."""
+
+    status: str
+
+
+def _assert_resume_outcome(
+    resumed: _CheckpointWithStatus,
+    fetched: _CheckpointWithStatus | None,
+    expected_persisted_status: str,
+) -> None:
+    """Assert the in-memory and persisted sides of a resume attempt."""
+    assert resumed.status == "resumed", "Resume must update the returned checkpoint."
+    assert fetched is not None, "Checkpoint must remain available after resume."
+    assert fetched.status == expected_persisted_status, (
+        "Persisted checkpoint status must reflect commit or rollback."
+    )
 
 
 @pytest.mark.asyncio
@@ -248,9 +266,7 @@ async def test_checkpoint_store_mark_resumed_status(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.workflow_checkpoints.get(stored.checkpoint_id)
 
-    assert resumed.status == "resumed", "Expected values to match"
-    assert fetched is not None, "Expected value to be present"
-    assert fetched.status == expected_fetched_status, "Expected values to match"
+    _assert_resume_outcome(resumed, fetched, expected_fetched_status)
 
 
 @pytest.mark.asyncio
@@ -335,9 +351,7 @@ async def test_checkpoint_store_resume_atomicity_property(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.workflow_checkpoints.get(stored.checkpoint_id)
 
-    assert resumed.status == "resumed", "Expected values to match"
-    assert fetched is not None, "Expected value to be present"
-    assert fetched.status == expected_status, "Expected values to match"
+    _assert_resume_outcome(resumed, fetched, expected_status)
 
 
 @pytest.mark.asyncio

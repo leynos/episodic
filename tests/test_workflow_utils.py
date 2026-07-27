@@ -19,6 +19,22 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
 
+def assert_validation_workflow_result(
+    exit_code: int,
+    logs: str,
+    artifact_dir: Path,
+    artifact_name: str,
+) -> None:
+    """Assert that an act workflow emitted a successful validation artifact."""
+    # Strict equality is part of the process exit-code contract.
+    assert exit_code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
+    data = read_artifact_json(artifact_dir, artifact_name, logs)
+    assert data["status"] == "ok", "Workflow artifact must report success."
+    assert data["execution_mode"] == "validate", (
+        "Workflow artifact must report validation mode."
+    )
+
+
 def artifact_server_port() -> str:
     """Return a currently free host port for act's artifact server."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:

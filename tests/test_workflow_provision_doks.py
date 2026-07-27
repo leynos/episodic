@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.workflow_test_utils import read_artifact_json, run_act
+from tests.test_workflow_utils import assert_validation_workflow_result, run_act
 
 EVENT = Path("tests/fixtures/provision_doks.event.json")
 
@@ -18,9 +18,9 @@ def test_provision_doks_workflow(tmp_path: Path) -> None:
         artifact_dir=artifact_dir,
         event_path=EVENT,
     )
-    # Strict equality required: exit code contract demands explicit zero.
-    assert code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
-
-    data = read_artifact_json(artifact_dir, "provision-result.json", logs)
-    assert data["status"] == "ok", "Expected values to match"
-    assert data["execution_mode"] == "validate", "Expected values to match"
+    assert_validation_workflow_result(
+        code,
+        logs,
+        artifact_dir,
+        "provision-result.json",
+    )

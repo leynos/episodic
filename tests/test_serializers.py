@@ -20,6 +20,21 @@ if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
 
 
+def _assert_serialized_fields(
+    actual: dict[str, typ.Any],
+    expected: dict[str, object],
+    *,
+    required_keys: tuple[str, ...] = (),
+) -> None:
+    """Assert expected serializer fields and required generated keys."""
+    for field, expected_value in expected.items():
+        assert actual[field] == expected_value, (
+            f"Serialized field {field!r} must match its domain value."
+        )
+    for field in required_keys:
+        assert field in actual, f"Serialized output must contain {field!r}."
+
+
 def _make_reference_document(**overrides: object) -> ReferenceDocument:
     """Create a ReferenceDocument with default test values."""
     defaults: dict[str, typ.Any] = {
@@ -109,20 +124,19 @@ def test_serialize_resolved_binding_binding_content() -> None:
     result = serialize_resolved_binding(resolved)
     binding_result = typ.cast("dict[str, typ.Any]", result["binding"])
 
-    assert binding_result["id"] == str(binding.id), "Expected values to match"
-    assert binding_result["reference_document_revision_id"] == str(revision.id), (
-        "Expected values to match"
+    _assert_serialized_fields(
+        binding_result,
+        {
+            "id": str(binding.id),
+            "reference_document_revision_id": str(revision.id),
+            "target_kind": "series_profile",
+            "series_profile_id": str(binding.series_profile_id),
+            "episode_template_id": None,
+            "ingestion_job_id": None,
+            "effective_from_episode_id": None,
+        },
+        required_keys=("created_at",),
     )
-    assert binding_result["target_kind"] == "series_profile", "Expected values to match"
-    assert binding_result["series_profile_id"] == str(binding.series_profile_id), (
-        "Expected values to match"
-    )
-    assert binding_result["episode_template_id"] is None, "Expected value to be absent"
-    assert binding_result["ingestion_job_id"] is None, "Expected value to be absent"
-    assert binding_result["effective_from_episode_id"] is None, (
-        "Expected value to be absent"
-    )
-    assert "created_at" in binding_result, "Expected collection to contain the value"
 
 
 def test_serialize_resolved_binding_revision_content() -> None:
@@ -147,21 +161,18 @@ def test_serialize_resolved_binding_revision_content() -> None:
     result = serialize_resolved_binding(resolved)
     revision_result = typ.cast("dict[str, typ.Any]", result["revision"])
 
-    assert revision_result["id"] == str(revision.id), "Expected values to match"
-    assert revision_result["reference_document_id"] == str(document.id), (
-        "Expected values to match"
+    _assert_serialized_fields(
+        revision_result,
+        {
+            "id": str(revision.id),
+            "reference_document_id": str(document.id),
+            "content": {"summary": "Custom summary"},
+            "content_hash": "customhash456",
+            "author": "author@example.com",
+            "change_note": "Important change",
+        },
+        required_keys=("created_at",),
     )
-    assert revision_result["content"] == {"summary": "Custom summary"}, (
-        "Expected values to match"
-    )
-    assert revision_result["content_hash"] == "customhash456", (
-        "Expected values to match"
-    )
-    assert revision_result["author"] == "author@example.com", "Expected values to match"
-    assert revision_result["change_note"] == "Important change", (
-        "Expected values to match"
-    )
-    assert "created_at" in revision_result, "Expected collection to contain the value"
 
 
 def test_serialize_resolved_binding_document_content() -> None:
@@ -187,18 +198,18 @@ def test_serialize_resolved_binding_document_content() -> None:
     result = serialize_resolved_binding(resolved)
     document_result = typ.cast("dict[str, typ.Any]", result["document"])
 
-    assert document_result["id"] == str(document.id), "Expected values to match"
-    assert document_result["owner_series_profile_id"] == str(
-        document.owner_series_profile_id
-    ), "Expected values to match"
-    assert document_result["kind"] == "guest_profile", "Expected values to match"
-    assert document_result["lifecycle_state"] == "archived", "Expected values to match"
-    assert document_result["metadata"] == {"name": "Guest Document"}, (
-        "Expected values to match"
+    _assert_serialized_fields(
+        document_result,
+        {
+            "id": str(document.id),
+            "owner_series_profile_id": str(document.owner_series_profile_id),
+            "kind": "guest_profile",
+            "lifecycle_state": "archived",
+            "metadata": {"name": "Guest Document"},
+            "lock_version": 3,
+        },
+        required_keys=("created_at", "updated_at"),
     )
-    assert document_result["lock_version"] == 3, "Expected values to match"
-    assert "created_at" in document_result, "Expected collection to contain the value"
-    assert "updated_at" in document_result, "Expected collection to contain the value"
 
 
 def test_serialize_resolved_binding_with_template_target() -> None:
