@@ -92,7 +92,9 @@ documented claims from measured behaviour.
   and their dead-code or analysis documentation.
 - [x] (2026-07-27 00:05Z) Identify the need for separate unused-symbol and
   unreachable-statement benchmark lanes.
-- [ ] Resolve and record exact released tool versions and command interfaces.
+- [x] (2026-07-27 00:21Z) Resolve released versions pyscn 1.28.0 and
+  Skylos 4.30.0, capture their command interfaces, and complete the bounded
+  smoke comparison.
 - [ ] Add a labelled, tool-neutral Python corpus and normalization manifest.
 - [ ] Run both tools on the corpus and retain raw machine-readable output.
 - [ ] Normalize and score the corpus results, checking every mismatch against
@@ -129,6 +131,24 @@ documented claims from measured behaviour.
   `leta files` returned `Failed to start daemon`.
   Impact: repository navigation will use read-only repository-native tools
   where Leta remains unavailable; this does not affect scanner execution.
+- Observation: an unmarked fixture directory under `/tmp` caused Skylos to
+  promote `/tmp` to the analysis root because the sandbox exposes
+  `/tmp/.git`; auxiliary MDX and browser-reference discovery then traversed
+  unrelated scratch directories.
+  Evidence: three interrupted Skylos 4.30.0 runs remained in
+  `collect_mdx_ts_imports` or `collect_browser_event_handler_refs`; adding a
+  minimal fixture `pyproject.toml` reduced the same scan to about 0.1 seconds.
+  Impact: every retained corpus must include its own project marker, and the
+  report must warn that ad hoc targets can inherit a broader ancestor project
+  root.
+- Observation: on the two-signal smoke file, pyscn reported the assignment
+  after `return` as `unreachable_after_return` and did not report the unused
+  function. Skylos reported the unused function and also reported the
+  unreachable assignment as an unused variable.
+  Evidence: pyscn 1.28.0 and Skylos 4.30.0 JSON output captured on
+  2026-07-27.
+  Impact: source-location normalization can reveal useful overlap while the
+  report preserves the tools' different explanations.
 
 ## Decision log
 
@@ -147,6 +167,11 @@ documented claims from measured behaviour.
   Rationale: normalized scores alone are not auditable when tool schemas and
   finding categories differ.
   Date/Author: 2026-07-27 00:05Z / Codex.
+- Decision: give the synthetic corpus a minimal `pyproject.toml` at its scan
+  root.
+  Rationale: this bounds Skylos project-root discovery and represents a normal
+  Python project without configuring either detector's findings.
+  Date/Author: 2026-07-27 00:21Z / Codex.
 
 ## Outcomes & retrospective
 
@@ -235,7 +260,19 @@ Run all commands from the repository root.
    ```
 
    Record exact resolved versions. A successful transcript names both versions
-   and exits zero.
+   and exits zero. Observed versions are pyscn 1.28.0 and Skylos 4.30.0.
+
+   The successful bounded smoke invocations are:
+
+   ```bash
+   uvx pyscn@latest analyze --select deadcode --min-severity info --json \
+     /tmp/dead-code-smoke
+   uvx skylos /tmp/dead-code-smoke --no-upload --no-provenance \
+     --confidence 0 --no-grep-verify --format json
+   ```
+
+   `/tmp/dead-code-smoke/pyproject.toml` is required to keep Skylos discovery
+   inside that directory.
 
 2. Create and validate the labelled corpus and normalization tests using the
    focused test command documented alongside the benchmark implementation.
@@ -328,3 +365,8 @@ Revision note (2026-07-27 00:05Z): created the approved initial plan after the
 primary-source documentation review. The remaining work begins with released
 CLI verification and may refine exact commands or normalization interfaces as
 observed schemas become known.
+
+Revision note (2026-07-27 00:21Z): record Stage A versions, successful smoke
+results, and the Skylos ancestor-root discovery caveat. Stage B must place a
+project marker at the retained corpus root before implementing labels and the
+normalizer.
