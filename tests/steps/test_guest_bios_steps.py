@@ -12,6 +12,8 @@ also recording generated `GuestBiosResult` and enriched TEI artefacts for the
 Then steps.
 """
 
+from __future__ import annotations
+
 import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
 import json
@@ -339,7 +341,6 @@ def run_guest_bios_generation(
                 guest_bios_context.script_tei_xml,
                 guest_bios_context.sources,
             )
-
             guest_bios_context.result = result
             guest_bios_context.enriched_tei_xml = enrich_tei_with_guest_bios(
                 guest_bios_context.script_tei_xml,

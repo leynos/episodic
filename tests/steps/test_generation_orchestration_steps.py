@@ -1,5 +1,7 @@
 """Behavioural tests for structured generation orchestration."""
 
+from __future__ import annotations
+
 import asyncio  # noqa: TC003  # pytest-bdd inspects step annotations at runtime.
 import dataclasses as dc
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server

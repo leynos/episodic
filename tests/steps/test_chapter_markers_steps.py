@@ -11,6 +11,8 @@ helper. The local server is process-scoped to the fixture and cleaned up
 through the same termination helper used when startup retries fail.
 """
 
+from __future__ import annotations
+
 import asyncio
 import dataclasses as dc
 import json
@@ -387,7 +389,6 @@ def assert_chapter_markers_enrich_tei_idempotently(
         result,
     )
     enriched_twice = enrich_tei_with_chapter_markers(enriched_once, result)
-
     assert enriched_twice == enriched_once, "Expected values to match"
     assert enriched_once.count('type="chapters"') == 1, "Expected values to match"
     assert '<item n="PT0S" corresp="#seg-intro">' in enriched_once, (

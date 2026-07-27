@@ -1,5 +1,7 @@
 """Behavioural steps for generation-run checkpoint lifecycles."""
 
+from __future__ import annotations
+
 import asyncio
 import dataclasses as dc
 import datetime as dt

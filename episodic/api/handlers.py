@@ -70,9 +70,11 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
 
     Raises
     ------
-    map_profile_template_error
-        If the operation cannot be completed.
-    """
+    falcon.HTTPBadRequest
+        If ``entity_id`` is not a valid UUID.
+    falcon.HTTPNotFound
+        If the requested entity does not exist.
+    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     try:
         async with uow_factory() as uow:
@@ -81,7 +83,8 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
                 entity_id=parsed_entity_id,
             )
     except EntityNotFoundError as exc:
-        raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
+        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)
+        raise not_found from exc
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 
@@ -122,9 +125,11 @@ async def handle_get_history[EntityT](
 
     Raises
     ------
-    map_profile_template_error
-        If the operation cannot be completed.
-    """
+    falcon.HTTPBadRequest
+        If the parent entity identifier is not a valid UUID.
+    falcon.HTTPNotFound
+        If the requested parent entity does not exist.
+    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
     try:
         async with uow_factory() as uow:
@@ -134,7 +139,8 @@ async def handle_get_history[EntityT](
                 page=request.page,
             )
     except EntityNotFoundError as exc:
-        raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
+        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)
+        raise not_found from exc
     return (
         {
             "items": [request.serializer_fn(item) for item in items],

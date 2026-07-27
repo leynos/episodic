@@ -27,9 +27,12 @@ DF12_PYTHON_LINTS = git+https://github.com/leynos/df12-python-lints.git@$(DF12_P
 DF12_PYTHON ?= 3.14
 PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) \
 	--from '$(PYLINT_PYPY_SHIM)' pylint-pypy --load-plugins=
-DF12_PYLINT_MESSAGES = R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111,C9112
-DF12_PYLINT = $(UV_ENV) $(UV) run --python $(DF12_PYTHON) pylint --disable=all \
-	--load-plugins=df12_python_lints --enable=$(DF12_PYLINT_MESSAGES)
+DF12_PYLINT_MESSAGES = R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111
+DF12_PYLINT_BASE = $(UV_ENV) $(UV) run --python $(DF12_PYTHON) pylint \
+	--disable=all --load-plugins=df12_python_lints
+DF12_PYLINT = $(DF12_PYLINT_BASE) --enable=$(DF12_PYLINT_MESSAGES)
+DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
+	--ignore-patterns='test_.*_steps.py'
 AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
 
@@ -97,6 +100,7 @@ lint: check-architecture ## Run linters
 	$(UV_ENV) $(UV) run ruff check
 	$(PYLINT) $(PYLINT_TARGETS)
 	$(DF12_PYLINT) $(PYLINT_TARGETS)
+	$(DF12_FUTURE_ANNOTATIONS) $(PYLINT_TARGETS)
 	$(AMBRLEAKS) tests
 
 check-architecture: build ## Check hexagonal architecture import boundaries

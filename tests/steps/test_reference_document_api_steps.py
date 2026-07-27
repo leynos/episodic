@@ -1,5 +1,7 @@
 """Behavioural tests for reusable reference-document API workflows."""
 
+from __future__ import annotations
+
 import typing as typ
 
 from falcon import testing  # noqa: TC002  # pytest-bdd evaluates step annotations.
