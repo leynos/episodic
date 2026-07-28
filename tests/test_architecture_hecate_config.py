@@ -73,6 +73,15 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
 
     config = _read_fixture_config(tmp_path, package_name)
 
+    _assert_expected_base_groups(config, package)
+    _assert_expected_orchestration_groups(config, package)
+
+
+def _assert_expected_base_groups(
+    config: dict[str, object],
+    package: str,
+) -> None:
+    """Assert the generated base Hecate groups."""
     hecate_config = _hecate_config(config)
     assert hecate_config["root_packages"] == [package], (
         "Hecate root_packages must contain the fixture package"
@@ -110,6 +119,28 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
     assert _group_allowed(config, "domain") == ["domain"], (
         "domain group must allow only domain imports"
     )
+    assert _group_allowed(config, "application") == ["application", "domain"]
+    assert _group_prefixes(config, "inbound_adapter") == [
+        f"{package}.api",
+        f"{package}.worker.topology",
+    ]
+    assert _group_allowed(config, "inbound_adapter") == [
+        "inbound_adapter",
+        "application",
+        "domain",
+    ]
+    assert _group_allowed(config, "outbound_adapter") == [
+        "outbound_adapter",
+        "application",
+        "domain",
+    ]
+
+
+def _assert_expected_orchestration_groups(
+    config: dict[str, object],
+    package: str,
+) -> None:
+    """Assert the generated orchestration Hecate groups."""
     assert _group_prefixes(config, "orchestration_checkpoint") == [
         f"{package}.orchestration._checkpoint_payload",
         f"{package}.orchestration._checkpoint_dto",
@@ -144,23 +175,6 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
         "domain",
         "orchestration_checkpoint",
     ]
-    assert _group_allowed(config, "application") == ["application", "domain"], (
-        "application group must allow application and domain imports"
-    )
-    assert _group_prefixes(config, "inbound_adapter") == [
-        f"{package}.api",
-        f"{package}.worker.topology",
-    ]
-    assert _group_allowed(config, "inbound_adapter") == [
-        "inbound_adapter",
-        "application",
-        "domain",
-    ], "inbound_adapter group must allow inbound, application, and domain imports"
-    assert _group_allowed(config, "outbound_adapter") == [
-        "outbound_adapter",
-        "application",
-        "domain",
-    ], "outbound_adapter group must allow outbound, application, and domain imports"
 
 
 @pytest.mark.parametrize(
