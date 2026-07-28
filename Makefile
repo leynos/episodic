@@ -91,13 +91,13 @@ lint: check-architecture ## Run linters
 	$(PYLINT) $(PYLINT_TARGETS)
 	$(SKYLOS) $(SKYLOS_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance
 
-skylos-allow: ## Document one intentional Skylos finding
+skylos-allow: ## Document one named Skylos exception, not an entry point
 	@test -n "$(strip $(NAME))" || { \
-	  printf "Error: NAME is required\n" >&2; \
+	  printf "Error: NAME is required for a named whitelist exception\n" >&2; \
 	  exit 2; \
 	}
 	@test -n "$(strip $(REASON))" || { \
-	  printf "Error: REASON is required\n" >&2; \
+	  printf "Error: REASON is required for a named whitelist exception\n" >&2; \
 	  exit 2; \
 	}
 	$(SKYLOS) whitelist "$(NAME)" --reason "$(REASON)"

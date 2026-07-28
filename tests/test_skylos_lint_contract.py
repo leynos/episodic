@@ -89,12 +89,17 @@ def test_make_lint_runs_local_blocking_dead_code_scan() -> None:
 
 
 def test_skylos_allow_requires_name_and_reason() -> None:
-    """Guard the only supported command for adding a named exception."""
+    """Guard the command that adds a named, non-entry-point exception."""
     makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
 
-    assert "skylos-allow: ##" in makefile
+    assert (
+        "skylos-allow: ## Document one named Skylos exception, not an entry point"
+        in makefile
+    )
     assert 'test -n "$(strip $(NAME))"' in makefile
     assert 'test -n "$(strip $(REASON))"' in makefile
+    assert "NAME is required for a named whitelist exception" in makefile
+    assert "REASON is required for a named whitelist exception" in makefile
     command = '$(SKYLOS) whitelist "$(NAME)" --reason "$(REASON)"'
     assert makefile.count(command) == 1
 
