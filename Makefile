@@ -40,7 +40,7 @@ SKYLOS_TARGETS ?= $(PYLINT_TARGETS)
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie spelling spelling-helper-test test typecheck \
-        crosshair check-migrations \
+        crosshair check-migrations skylos-allow \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
         $(TOOLS) $(VENV_TOOLS)
 
@@ -106,13 +106,13 @@ lint: check-architecture ## Run linters
 	$(AMBRLEAKS) tests
 	$(SKYLOS) $(SKYLOS_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance
 
-skylos-allow: ## Document one intentional Skylos finding
+skylos-allow: ## Document one named Skylos exception, not an entry point
 	@test -n "$(strip $(NAME))" || { \
-	  printf "Error: NAME is required\\n" >&2; \
+	  printf "Error: NAME is required for a named whitelist exception\\n" >&2; \
 	  exit 2; \
 	}
 	@test -n "$(strip $(REASON))" || { \
-	  printf "Error: REASON is required\\n" >&2; \
+	  printf "Error: REASON is required for a named whitelist exception\\n" >&2; \
 	  exit 2; \
 	}
 	$(SKYLOS) whitelist "$(NAME)" --reason "$(REASON)"
