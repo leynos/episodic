@@ -86,10 +86,15 @@
   - Formatting is correct and validated.
 - **For Python files:**
   - **Testing:** Passes all relevant unit and behavioural tests (`make test`).
-  - **Linting:** Passes lint checks (`make lint`).
+  - **Linting:** Passes the complete `make lint` pipeline: Hecate, Ruff, the
+    built-in Pylint rules under managed PyPy, `df12-python-lints` under CPython
+    3.14, and `ambrleaks` snapshot scanning.
   - **Formatting:** Adheres to formatting standards (`make check-fmt`; use
     `make fmt` to apply fixes).
   - **Typechecking:** Passes type checking (`make typecheck`).
+  - **df12 interpreter:** Keep `DF12_PYTHON` on CPython 3.14. Astroid must parse
+    the project's Python 3.14 syntax directly; do not run the df12 plug-in or
+    `ambrleaks` under PyPy.
 - **For Markdown files (`.md` only):**
   - **Linting:** Passes markdown lint checks (`make markdownlint`).
   - **Mermaid diagrams:** Passes validation using nixie (`make nixie`).
