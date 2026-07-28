@@ -541,8 +541,6 @@ reason = "Alembic invokes these downgrade helpers when an operator rolls migrati
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
-    "episodic.api.app._ShutdownHooksMiddleware.process_shutdown",
-    "episodic.api.authorization.AuthorizationMiddleware.process_request",
     "episodic.api.authorization._authorization_result",
     "episodic.api.dependencies._validate_async_callable",
     "episodic.api.dependencies._validate_readiness_probe",
@@ -551,13 +549,16 @@ full_name = [
 reason = "Falcon lifecycle middleware and API dependency construction invoke these callbacks and validators."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.api.app._ShutdownHooksMiddleware.process_shutdown",
+    "episodic.api.authorization.AuthorizationMiddleware.process_request",
+]
+reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI request and shutdown protocols."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "function"
 full_name = [
-    "episodic.canonical.domain.Checkpoint._validate_options",
-    "episodic.canonical.domain.Checkpoint._validate_responded_fields",
-    "episodic.canonical.domain.ReferenceBinding._validate_single_target",
-    "episodic.canonical.domain.ReferenceBinding._validate_target_kind_matches",
-    "episodic.canonical.domain.ReferenceBinding._validate_effective_from_constraint",
     "episodic.canonical.idempotency._validate_completed_state",
     "episodic.canonical.ingestion_sources._validate_exclusive_attachment",
     "episodic.canonical.ingestion_sources._validate_upload_kind",
@@ -570,7 +571,18 @@ full_name = [
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
 
 [[tool.skylos.dead_code.entrypoints]]
-type = "function"
+type = "method"
+full_name = [
+    "episodic.canonical.domain.Checkpoint._validate_options",
+    "episodic.canonical.domain.Checkpoint._validate_responded_fields",
+    "episodic.canonical.domain.ReferenceBinding._validate_single_target",
+    "episodic.canonical.domain.ReferenceBinding._validate_target_kind_matches",
+    "episodic.canonical.domain.ReferenceBinding._validate_effective_from_constraint",
+]
+reason = "Canonical value objects call these validation methods from dataclass post-initialization hooks."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
 full_name = [
     "episodic.concurrent_interpreters._PerfCounterCpuTaskExecutorClock.monotonic_seconds",
     "episodic.observability.NoopMetrics.increment_counter",

@@ -46,6 +46,33 @@ def test_skylos_configuration_documents_every_exception() -> None:
     assert gate["strict"] is True
 
 
+def test_skylos_entrypoint_rules_distinguish_methods_from_functions() -> None:
+    """Keep framework methods from being configured as module functions."""
+    config = _pyproject()
+    tool_config = typ.cast("dict[str, object]", config["tool"])
+    skylos = typ.cast("dict[str, object]", tool_config["skylos"])
+    dead_code = typ.cast("dict[str, object]", skylos["dead_code"])
+    entrypoints = typ.cast("list[dict[str, object]]", dead_code["entrypoints"])
+    entrypoint_types = {
+        full_name: entrypoint["type"]
+        for entrypoint in entrypoints
+        for full_name in typ.cast("list[str]", entrypoint["full_name"])
+    }
+
+    assert (
+        entrypoint_types["episodic.api.app._ShutdownHooksMiddleware.process_shutdown"]
+        == "method"
+    )
+    assert (
+        entrypoint_types["episodic.canonical.domain.Checkpoint._validate_options"]
+        == "method"
+    )
+    assert (
+        entrypoint_types["episodic.observability.NoopMetrics.increment_counter"]
+        == "method"
+    )
+
+
 def test_make_lint_runs_local_blocking_dead_code_scan() -> None:
     """Keep the Skylos invocation deterministic and non-interactive."""
     makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
