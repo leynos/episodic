@@ -64,9 +64,7 @@ _JSON_VALUE_STRATEGY: st.SearchStrategy[object] = st.recursive(
     ),
     max_leaves=12,
 )
-_UNION_ORIGINS: frozenset[object] = frozenset({typ.Union, types.UnionType})
-_SEQUENCE_ORIGINS: frozenset[object] = frozenset({list, cabc.Sequence})
-_MAPPING_ORIGINS: frozenset[object] = frozenset({dict, cabc.Mapping})
+type _OriginValidator = cabc.Callable[[tuple[object, ...]], bool]
 
 
 def test_checkpoint_payload_dtos_use_provider_neutral_field_types() -> None:
@@ -122,6 +120,46 @@ def test_workflow_checkpoint_payload_round_trips_through_json(payload: object) -
     assert json.loads(encoded) == checkpoint.payload
 
 
+@pytest.mark.parametrize(
+    ("origin", "arguments", "expected"),
+    [
+        pytest.param(typ.Union, (str, int), True, id="typing-union-valid"),
+        pytest.param(
+            types.UnionType,
+            (str, object),
+            False,
+            id="union-type-invalid",
+        ),
+        pytest.param(
+            typ.Literal,
+            ("execute", 1, None),
+            True,
+            id="literal",
+        ),
+        pytest.param(tuple, (str, int), True, id="fixed-tuple"),
+        pytest.param(tuple, (str, Ellipsis), True, id="variadic-tuple"),
+        pytest.param(list, (str,), True, id="list"),
+        pytest.param(cabc.Sequence, (str,), True, id="sequence"),
+        pytest.param(dict, (str, int), True, id="dict"),
+        pytest.param(
+            cabc.Mapping,
+            (int, str),
+            False,
+            id="mapping-non-string-key",
+        ),
+        pytest.param(set, (str,), False, id="unsupported-generic-origin"),
+    ],
+)
+def test_provider_neutral_origin_dispatch(
+    origin: object,
+    arguments: tuple[object, ...],
+    *,
+    expected: bool,
+) -> None:
+    """Generic annotation origins dispatch to the expected validator."""
+    assert _is_provider_neutral_origin(origin, arguments) is expected
+
+
 def _is_provider_neutral_type(field_type: object) -> bool:
     """Return whether a DTO field type can cross the checkpoint boundary."""
     if field_type is None or field_type is types.NoneType:
@@ -142,23 +180,15 @@ def _is_provider_neutral_leaf_type(field_type: type[object]) -> bool:
     )
 
 
-def _is_provider_neutral_origin(
-    origin: object,
-    arguments: tuple[object, ...],
-) -> bool:
-    """Return whether a generic annotation origin is checkpoint-neutral."""
-    if origin in _UNION_ORIGINS:
-        return all(_is_provider_neutral_type(argument) for argument in arguments)
-    if origin is typ.Literal:
-        return all(_is_provider_neutral_literal(argument) for argument in arguments)
-    if origin is tuple:
-        return _is_provider_neutral_tuple(arguments)
-    if origin in _SEQUENCE_ORIGINS:
-        return all(_is_provider_neutral_type(argument) for argument in arguments)
-    if origin in _MAPPING_ORIGINS:
-        key_type, value_type = arguments
-        return key_type is str and _is_provider_neutral_type(value_type)
-    return False
+def _are_provider_neutral_types(arguments: tuple[object, ...]) -> bool:
+    """Return whether all annotation arguments are checkpoint-neutral."""
+    return all(_is_provider_neutral_type(argument) for argument in arguments)
+
+
+def _is_provider_neutral_mapping(arguments: tuple[object, ...]) -> bool:
+    """Return whether mapping arguments have string keys and neutral values."""
+    key_type, value_type = arguments
+    return key_type is str and _is_provider_neutral_type(value_type)
 
 
 def _is_provider_neutral_tuple(arguments: tuple[object, ...]) -> bool:
@@ -171,3 +201,34 @@ def _is_provider_neutral_tuple(arguments: tuple[object, ...]) -> bool:
 def _is_provider_neutral_literal(value: object) -> bool:
     """Return whether a literal annotation value is provider-neutral."""
     return value is None or isinstance(value, (str, int, float, bool, enum.Enum))
+
+
+def _are_provider_neutral_literals(arguments: tuple[object, ...]) -> bool:
+    """Return whether all literal arguments are provider-neutral."""
+    return all(_is_provider_neutral_literal(argument) for argument in arguments)
+
+
+def _reject_unsupported_origin(_arguments: tuple[object, ...]) -> bool:
+    """Reject a generic annotation origin without a supported validator."""
+    return False
+
+
+_ORIGIN_VALIDATORS: dict[object, _OriginValidator] = {
+    typ.Union: _are_provider_neutral_types,
+    types.UnionType: _are_provider_neutral_types,
+    typ.Literal: _are_provider_neutral_literals,
+    tuple: _is_provider_neutral_tuple,
+    list: _are_provider_neutral_types,
+    cabc.Sequence: _are_provider_neutral_types,
+    dict: _is_provider_neutral_mapping,
+    cabc.Mapping: _is_provider_neutral_mapping,
+}
+
+
+def _is_provider_neutral_origin(
+    origin: object,
+    arguments: tuple[object, ...],
+) -> bool:
+    """Return whether a generic annotation origin is checkpoint-neutral."""
+    validator = _ORIGIN_VALIDATORS.get(origin, _reject_unsupported_origin)
+    return validator(arguments)
