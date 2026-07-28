@@ -47,9 +47,17 @@ Run the full lint gate with:
 make lint
 ```
 
-The target runs the Hecate architecture import-boundary checker, Ruff, and a
-focused Pylint 4 pass. The Pylint pass is invoked through
-`uv tool run --python pypy` with the pinned `pylint-pypy-shim` wrapper from
+The target runs this repository-wide pipeline, in order:
+
+1. Hecate architecture import-boundary checks;
+2. Ruff formatting-independent lint checks;
+3. the focused built-in Pylint 4 rules under managed PyPy;
+4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
+   separate future-annotations pass; and
+5. `ambrleaks` over Syrupy snapshots under `tests`.
+
+The built-in Pylint pass is invoked through `uv tool run --python pypy` with
+the pinned `pylint-pypy-shim` wrapper from
 [github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
 That wrapper installs the PyPy-specific Astroid compatibility patch before
 delegating to Pylint.
@@ -66,10 +74,12 @@ targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
 the wrapper and skipped, which keeps parse incompatibilities visible without
 hiding other diagnostics from files that PyPy can analyse.
 
-The lint target therefore runs the df12 Pylint plug-in separately under CPython
-3.14. This pass uses the project's actual syntax and Astroid runtime, while the
-PyPy pass retains its compatibility shim for the built-in Pylint checks. The
-equivalent df12 command is:
+The lint target therefore runs the `df12-python-lints` Pylint plug-in
+separately under CPython 3.14. This pass uses the project's actual syntax and
+Astroid runtime, while the PyPy pass retains its compatibility shim for the
+built-in Pylint checks. The package is pinned by `DF12_PYTHON_LINTS_REF`;
+update that pin deliberately and validate the complete `make lint` pipeline.
+The equivalent df12 command is:
 
 ```shell
 uv run --python 3.14 pylint --disable=all \
@@ -96,9 +106,11 @@ annotations because pytest-bdd evaluates step annotations at runtime. The
 separate C9112 pass exempts only those modules; every other df12 check still
 covers them.
 
-`ambrleaks` checks Syrupy snapshot files under `tests` for values that should
-have been redacted. Run the standalone command when investigating a snapshot
-finding:
+`ambrleaks`, provided by the same `df12-python-lints` package and run under the
+same CPython 3.14 interpreter, checks Syrupy snapshot files under `tests` for
+values that should have been redacted. Keep deterministic public test values in
+`ambrleaks.toml` rather than weakening snapshot scanning. Run the standalone
+command when investigating a snapshot finding:
 
 ```shell
 uv tool run --python 3.14 \
