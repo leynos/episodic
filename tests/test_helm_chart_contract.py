@@ -53,17 +53,7 @@ def _render_local_chart() -> str:
 
 
 def _redact_helm_checksums(manifest: str) -> str:
-    """Replace generated config checksums while preserving manifest structure.
-
-    Examples
-    --------
-    ``checksum/config: abc123`` becomes ``checksum/config: <checksum>``.
-
-    Returns
-    -------
-    str
-        Manifest text with generated checksum values replaced.
-    """
+    """Replace generated config checksums while preserving manifest structure."""
     redacted_manifest = re.sub(
         r"(?m)(^\s*checksum/config:\s*)[0-9a-f]{64}$",
         r"\1<checksum>",

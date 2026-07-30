@@ -32,6 +32,8 @@ from episodic.canonical.ingestion import MultiSourceRequest, RawSourceInput
 from episodic.canonical.ingestion_service import IngestionPipeline, ingest_multi_source
 from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 
+_EXPECTED_SERIES_PROFILE_MESSAGE = "Expected value to have the required type"
+
 
 def _run_async_step(
     runner: asyncio.Runner,
@@ -289,9 +291,11 @@ def run_ingestion_with_reference_bindings(
 
         async with SqlAlchemyUnitOfWork(session_factory) as uow:
             profile = await uow.series_profiles.get(uuid.UUID(context["profile_id"]))
-            assert isinstance(profile, SeriesProfile), (
-                "Expected value to have the required type"
-            )
+            match profile:
+                case SeriesProfile():
+                    pass
+                case _:
+                    raise AssertionError(_EXPECTED_SERIES_PROFILE_MESSAGE)
             episode = await ingest_multi_source(
                 uow,
                 profile,

@@ -85,7 +85,8 @@ async def snapshot_resolved_bindings(
     Returns
     -------
     list[SourceDocument]
-        Result produced by the operation.
+        Source documents created as provenance snapshots of the resolved
+        bindings.
     """
     if not resolved:
         return []

@@ -67,8 +67,24 @@ def test_dockerfile_runs_granian_factory_as_non_root(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Keep the container command aligned with the runtime composition root."""
-    command = json.loads(_dockerfile_instruction("CMD"))
+    from episodic.api import runtime
 
+    command = json.loads(_dockerfile_instruction("CMD"))
+    expected_command = [
+        "granian",
+        runtime.GRANIAN_FACTORY_TARGET,
+        "--interface",
+        runtime.GRANIAN_INTERFACE,
+        "--factory",
+        "--host",
+        CONTAINER_BIND_HOST,
+        "--port",
+        str(runtime.HTTP_BIND_PORT),
+    ]
+
+    assert command == expected_command, (
+        "Dockerfile CMD must match the runtime composition constants."
+    )
     assert command == snapshot, "actual output must match snapshot"
     assert "USER 10001:10001" in _dockerfile_text(), (
         "runtime container must drop root before starting Granian."
@@ -96,7 +112,7 @@ def test_dockerignore_excludes_local_and_test_artifacts(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Keep local caches, tests, and operator scratch files out of the image."""
-    ignored_paths = set(
+    ignored_paths = tuple(
         (REPOSITORY_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     )
 

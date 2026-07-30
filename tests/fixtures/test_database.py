@@ -64,7 +64,7 @@ async def test_reset_public_schema_serializes_concurrent_calls(
             )
         )
 
-    assert result.scalar_one() == 1, "Expected values to match"
-    assert counting_lock.enter_count == 2, "Expected values to match"
-    assert counting_lock.exit_count == 2, "Expected values to match"
-    assert counting_lock.max_active_count == 1, "Expected values to match"
+    assert result.scalar_one() == 1, "exactly one public schema must survive resets"
+    assert counting_lock.enter_count == 2, "both resets must acquire the schema lock"
+    assert counting_lock.exit_count == 2, "both resets must release the schema lock"
+    assert counting_lock.max_active_count == 1, "schema resets must not overlap"

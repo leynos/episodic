@@ -46,7 +46,7 @@ def _reference_document_lifecycle_state_enum() -> postgresql.ENUM:
 
 def _reference_binding_target_kind_enum() -> postgresql.ENUM:
     return postgresql.ENUM(
-        *REFERENCE_BINDING_TARGET_KIND_VALUES,
+        *REFERENCE_BINDING_TARGET_KIND_VALUES.values(),
         name="reference_binding_target_kind",
         create_type=False,
     )

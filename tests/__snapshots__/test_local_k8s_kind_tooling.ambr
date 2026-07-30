@@ -26,7 +26,7 @@
     'kind',
     'load',
     'image-archive',
-    '/tmp/demo-image.tar',
+    '<tempdir>/demo-image.tar',
     '--name',
     'demo',
   ])

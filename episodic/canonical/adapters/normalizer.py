@@ -63,18 +63,7 @@ def _infer_title(raw_source: RawSourceInput) -> str:
 
 
 def _build_tei_xml(title: str) -> str:
-    """Build minimal valid TEI XML from a title.
-
-    This is a placeholder implementation that constructs a TEI document
-    containing only the title.  Raw source content is **not** embedded in
-    the fragment; a production normalizer should parse or transform the
-    content into TEI body elements.
-
-    Returns
-    -------
-    str
-        Result produced by the operation.
-    """
+    """Build placeholder TEI XML containing only the supplied title."""
     document = _tei.Document(title)
     return _tei.emit_xml(document)
 
