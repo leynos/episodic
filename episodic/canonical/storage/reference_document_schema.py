@@ -10,12 +10,7 @@ REFERENCE_DOCUMENT_KIND_VALUES = tuple(member.value for member in ReferenceDocum
 REFERENCE_DOCUMENT_LIFECYCLE_STATE_VALUES = tuple(
     member.value for member in ReferenceDocumentLifecycleState
 )
-REFERENCE_BINDING_TARGET_KIND_VALUES = tuple(
-    member.value for member in ReferenceBindingTargetKind
-)
-
-
-_TARGET_KIND_VALUES = {
+REFERENCE_BINDING_TARGET_KIND_VALUES = {
     kind: kind.value
     for kind in (
         ReferenceBindingTargetKind.SERIES_PROFILE,
@@ -23,13 +18,13 @@ _TARGET_KIND_VALUES = {
         ReferenceBindingTargetKind.INGESTION_JOB,
     )
 }
-TARGET_KIND_SERIES_PROFILE = _TARGET_KIND_VALUES[
+TARGET_KIND_SERIES_PROFILE = REFERENCE_BINDING_TARGET_KIND_VALUES[
     ReferenceBindingTargetKind.SERIES_PROFILE
 ]
-TARGET_KIND_EPISODE_TEMPLATE = _TARGET_KIND_VALUES[
+TARGET_KIND_EPISODE_TEMPLATE = REFERENCE_BINDING_TARGET_KIND_VALUES[
     ReferenceBindingTargetKind.EPISODE_TEMPLATE
 ]
-TARGET_KIND_INGESTION_JOB = _TARGET_KIND_VALUES[
+TARGET_KIND_INGESTION_JOB = REFERENCE_BINDING_TARGET_KIND_VALUES[
     ReferenceBindingTargetKind.INGESTION_JOB
 ]
 

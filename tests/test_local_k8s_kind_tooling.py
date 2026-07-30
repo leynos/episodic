@@ -123,9 +123,12 @@ def test_podman_build_save_and_kind_image_load_commands(
         str(image_archive_path),
         "episodic:local",
     ], "Expected values to match"
-    assert commands.image_load_command(config) == snapshot, (
-        "actual output must match snapshot"
-    )
+    load_command = commands.image_load_command(config)
+    normalized_load_command = [
+        "<tempdir>/demo-image.tar" if argument == str(image_archive_path) else argument
+        for argument in load_command
+    ]
+    assert normalized_load_command == snapshot, "actual output must match snapshot"
 
 
 def test_kind_helm_upgrade_command_uses_kind_context() -> None:

@@ -1,5 +1,6 @@
 """Validation tests for reference binding resolution algorithm."""
 
+import typing as typ
 import uuid
 
 import pytest
@@ -16,11 +17,14 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.reference_documents.resolution import resolve_bindings
 
+if typ.TYPE_CHECKING:
+    from tests.fixtures.binding import BindingFixtures
+
 pytestmark = [pytest.mark.asyncio]
 
 
 async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
-    uow_with_binding_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_binding_fixtures: BindingFixtures,
 ) -> None:
     """Resolution returns empty list when episode belongs to a different series."""
     fixtures = uow_with_binding_fixtures
@@ -90,7 +94,7 @@ async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
 
 
 async def test_resolve_bindings_skips_template_from_wrong_series(
-    uow_with_binding_fixtures,  # noqa: ANN001  # Pytest injects this fixture dynamically, so no stable local type is available.
+    uow_with_binding_fixtures: BindingFixtures,
 ) -> None:
     """Resolution skips template bindings when template belongs to different series."""
     fixtures = uow_with_binding_fixtures

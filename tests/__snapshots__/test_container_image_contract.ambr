@@ -59,12 +59,7 @@
   ])
 # ---
 # name: test_dockerignore_excludes_local_and_test_artifacts
-  set({
-    '',
-    '*.egg-info',
-    '*.log',
-    '*.out',
-    '*.py[cod]',
+  tuple(
     '.git',
     '.github',
     '.hypothesis',
@@ -77,14 +72,19 @@
     '.uv-tools',
     '.venv',
     '__pycache__',
+    '*.egg-info',
+    '*.py[cod]',
     'build',
     'coverage.*',
     'dist',
-    'docs/execplans',
     'htmlcov',
-    'infra',
     'lcov.info',
-    'tests',
     'tmp',
-  })
+    '*.out',
+    '*.log',
+    '',
+    'docs/execplans',
+    'infra',
+    'tests',
+  )
 # ---

@@ -318,6 +318,9 @@ def assert_result(orchestration_context: OrchestrationBDDContext) -> None:
     assert result.action_results[0].show_notes_result is not None, (
         "Expected value to be present"
     )
+    assert result.action_results[0].show_notes_result.entries, (
+        "Expected show-notes entries to be present"
+    )
     assert (
         result.action_results[0].show_notes_result.entries[0].topic == "Introduction"
     ), "Expected values to match"

@@ -39,7 +39,7 @@ async def create_reference_document_revision(
     Returns
     -------
     ReferenceDocumentRevision
-        Result produced by the operation.
+        The newly persisted immutable reference-document revision.
     """
     parsed_document_id = _parse_uuid(document_id, "document_id")
     parsed_owner_id = _parse_uuid(owner_series_profile_id, "owner_series_profile_id")

@@ -44,6 +44,8 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
 _REVISION_CONFLICT_CONSTRAINTS = frozenset({
     "uq_reference_document_revisions_document_hash"
 })
@@ -62,8 +64,8 @@ _BINDING_CONFLICT_MESSAGE = (
 
 
 async def _add_with_conflict_translation(
-    session: typ.Any,  # noqa: ANN401  # SQLAlchemy row values are dynamically shaped at this repository boundary.
-    record: typ.Any,  # noqa: ANN401  # SQLAlchemy row values are dynamically shaped at this repository boundary.
+    session: AsyncSession,
+    record: object,
     *,
     constraints: frozenset[str],
     conflict_message: str,

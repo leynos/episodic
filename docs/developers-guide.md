@@ -77,9 +77,8 @@ hiding other diagnostics from files that PyPy can analyse.
 The lint target therefore runs the `df12-python-lints` Pylint plug-in
 separately under CPython 3.14. This pass uses the project's actual syntax and
 Astroid runtime, while the PyPy pass retains its compatibility shim for the
-built-in Pylint checks. The package is pinned by `DF12_PYTHON_LINTS_REF`;
-update that pin deliberately and validate the complete `make lint` pipeline.
-The equivalent df12 command is:
+built-in Pylint checks. The project environment hard-pins the plug-in version
+in `pyproject.toml`. The equivalent df12 command is:
 
 ```shell
 uv run --python 3.14 pylint --disable=all \
@@ -118,8 +117,12 @@ uv tool run --python 3.14 \
   ambrleaks tests
 ```
 
-The `DF12_PYTHON_LINTS_REF` and `DF12_PYTHON` variables in the `Makefile`
-control the shared lint package and interpreter used by both commands.
+The two commands intentionally provision the package differently:
+`pyproject.toml` pins `df12-python-lints` at `v0.1.0` for the project-environment
+Pylint pass, while `DF12_PYTHON_LINTS_REF` controls the separately provisioned
+`ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for both commands.
+Maintainers must update both package pins together and validate the complete
+`make lint` pipeline.
 
 ## Spelling policy
 

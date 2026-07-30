@@ -146,7 +146,16 @@ async def test_generate_from_reference_bindings_resolves_and_enriches_tei(
         binding_resolver=binding_resolver,
     )
 
-    assert redact_snapshot_uuids(calls) == snapshot, "actual output must match snapshot"
+    assert (
+        redact_snapshot_uuids([
+            {key: value for key, value in call.items() if key != "uow"}
+            for call in calls
+        ])
+        == snapshot
+    ), "actual output must match snapshot"
+    assert [call["uow"] for call in calls] == [uow], (
+        "binding resolution must receive the caller's unit of work"
+    )
     assert result.sources[0].reference_document_revision_id == str(guest_revision_id), (
         "Expected values to match"
     )
