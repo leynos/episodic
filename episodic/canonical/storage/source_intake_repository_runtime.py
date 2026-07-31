@@ -30,7 +30,19 @@ type UuidFactory = cabc.Callable[[], uuid.UUID]
 
 @dc.dataclass(frozen=True, slots=True)
 class SourceIntakeStorageRuntime:
-    """Runtime providers used by source-intake SQLAlchemy adapters."""
+    """Runtime providers used by source-intake SQLAlchemy adapters.
+
+    Attributes
+    ----------
+    clock
+        UTC timestamp provider.
+    uuid_factory
+        UUID provider.
+    metrics
+        Metrics implementation.
+    monotonic_clock
+        Monotonic time provider.
+    """
 
     clock: Clock
     uuid_factory: UuidFactory
@@ -54,7 +66,23 @@ def source_intake_storage_runtime(
     metrics: MetricsPort | None = None,
     monotonic_clock: MonotonicClockPort | None = None,
 ) -> SourceIntakeStorageRuntime:
-    """Return SQLAlchemy source-intake providers with production defaults."""
+    """Return SQLAlchemy source-intake providers with production defaults.
+
+    Parameters
+    ----------
+    runtime
+        Provider bundle to return unchanged when supplied.
+    metrics
+        Optional metrics implementation. Defaults to ``NoopMetrics``.
+    monotonic_clock
+        Optional monotonic time provider. Defaults to ``PerfCounterClock``.
+
+    Returns
+    -------
+    SourceIntakeStorageRuntime
+        The supplied provider bundle or one constructed with production
+        defaults.
+    """
     if runtime is not None:
         return runtime
     return SourceIntakeStorageRuntime(
