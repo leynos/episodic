@@ -17,13 +17,12 @@ import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
 import uuid
+from typing import TYPE_CHECKING  # noqa: ICN003  # Review requires this import form.
 
-from episodic.observability import (
-    MetricsPort,
-    MonotonicClockPort,
-    NoopMetrics,
-    PerfCounterClock,
-)
+from episodic.observability import NoopMetrics, PerfCounterClock
+
+if TYPE_CHECKING:
+    from episodic.observability import MetricsPort, MonotonicClockPort
 
 type Clock = cabc.Callable[[], dt.datetime]
 type UuidFactory = cabc.Callable[[], uuid.UUID]
