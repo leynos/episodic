@@ -366,7 +366,7 @@ def _idempotency_request(idempotency_key: str) -> IdempotencyAcquireRequest:
     )
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class _TextUploadRequest:
     """Describe a deterministic text-upload multipart request."""
 
