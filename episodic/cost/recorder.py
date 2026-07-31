@@ -187,7 +187,7 @@ class CostRecorder:
         Returns
         -------
         PricingSnapshot
-            Result produced by the operation.
+            Pricing snapshot selected for the provider-call record.
         """
         key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,

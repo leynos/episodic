@@ -96,9 +96,12 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
     resolved = await resolve_bindings(uow, series_profile_id=series.id)
 
     assert len(resolved) == 1, "must match"
-    assert isinstance(resolved[0], ResolvedBinding), "must have required type"
-    assert resolved[0].binding.id == binding.id, "must match"
-    assert resolved[0].revision.id == revision_v1.id, "must match"
+    match resolved:
+        case [ResolvedBinding(binding=resolved_binding, revision=resolved_revision)]:
+            assert resolved_binding.id == binding.id, "must match"
+            assert resolved_revision.id == revision_v1.id, "must match"
+        case _:
+            pytest.fail("resolved result must contain one ResolvedBinding")
 
 
 async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914  # The scenario keeps distinct intermediate values for readable behavioural assertions.

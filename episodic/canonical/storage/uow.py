@@ -188,7 +188,13 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         await getattr(session, action)()
 
     async def commit(self) -> None:
-        """Commit the current unit-of-work transaction."""
+        """Commit the current unit-of-work transaction.
+
+        Raises
+        ------
+        RuntimeError
+            If no unit-of-work session is active.
+        """  # noqa: DOC502  # Documents an exception propagated by the helper.
         await self._apply_session_action("commit")
         logger.info("Committed canonical unit of work.")
 

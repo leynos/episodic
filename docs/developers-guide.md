@@ -32,7 +32,7 @@ Accepted design decisions relevant to current implementation work:
   repository logic.
 - The Makefile exports `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` so the
   `tei-rapporteur` bindings build against Python 3.14.
-- The build backend is `uv_build` (`>=0.11.7,<0.12.0`), declared in the
+- The build backend is `uv_build` (`>=0.11.31,<0.12.0`), declared in the
   `[build-system]` table of `pyproject.toml`.
 
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`

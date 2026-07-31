@@ -1,4 +1,17 @@
-"""Runtime providers for source-intake SQLAlchemy repositories."""
+"""Provide injectable runtime dependencies for source-intake repositories.
+
+The provider bundle supplies clocks, identifier generation, and metrics to
+SQLAlchemy adapters while retaining production defaults for ordinary callers.
+Tests can pass a deterministic ``SourceIntakeStorageRuntime`` instead.
+
+Examples
+--------
+Resolve the production provider bundle:
+
+>>> runtime = source_intake_storage_runtime(None)
+>>> callable(runtime.clock)
+True
+"""
 
 import collections.abc as cabc
 import dataclasses as dc

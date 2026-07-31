@@ -185,15 +185,7 @@ def _handle_connection_timeout(
     process: subprocess.Popen[str],
     deadline: float,
 ) -> None:
-    """Terminate the process and raise RuntimeError.
-
-    Raise only if the polling deadline has passed.
-
-    Raises
-    ------
-    RuntimeError
-        If the operation cannot be completed.
-    """
+    """Terminate the process after the polling deadline and raise RuntimeError."""
     if time.monotonic() < deadline:
         return
     if process.poll() is None:

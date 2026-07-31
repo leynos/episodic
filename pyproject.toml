@@ -200,8 +200,8 @@ typing = "typ"
 convention = "numpy"
 
 [tool.ruff.lint.pydoclint]
-# Concise one-line summaries are complete documentation for simple helpers;
-# require explicit return, yield, and raise contracts for substantive docstrings.
+# Concise one-line private helpers do not require structured sections; public
+# entrypoints use multiline docstrings so their contracts remain checked.
 ignore-one-line-docstrings = true
 
 [tool.ruff.lint.mccabe]

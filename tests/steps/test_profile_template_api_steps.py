@@ -65,7 +65,9 @@ def _make_request_and_assert_status(
             msg = f"Unsupported HTTP method: {request.method}"
             raise ValueError(msg)
 
-    assert response.status_code == expected_status, "Expected values to match"
+    assert response.status_code == expected_status, (
+        f"response.status_code must equal expected_status ({expected_status})"
+    )
     return typ.cast("dict[str, typ.Any]", response.json)
 
 
@@ -96,7 +98,9 @@ def _update_entity_and_assert_revision(
         HttpRequest(method="PATCH", path=path, json=payload),
         200,
     )
-    assert response_payload["revision"] == expected_revision, "Expected values to match"
+    assert response_payload["revision"] == expected_revision, (
+        f"returned revision must equal expected_revision ({expected_revision})"
+    )
 
 
 @scenario(
