@@ -54,12 +54,11 @@ def _render_local_chart() -> str:
 
 def _redact_helm_checksums(manifest: str) -> str:
     """Replace generated config checksums while preserving manifest structure."""
-    redacted_manifest = re.sub(
+    return re.sub(
         r"(?m)(^\s*checksum/config:\s*)[0-9a-f]{64}$",
         r"\1<checksum>",
         manifest,
-    )
-    return redacted_manifest.rstrip()
+    ).rstrip()
 
 
 def test_helm_chart_lints() -> None:
