@@ -71,7 +71,7 @@ def _handle_generator_error(
     context: GenerationOrchestrationRequest,
     action: PlannedAction,
 ) -> typing.Never:
-    """Dispatch a generator exception to the appropriate tool-layer error and raise it."""  # noqa: E501  # Keeping the summary on one line preserves its required docstring form.
+    """Dispatch and raise a generator exception as a tool-layer error."""
     match exc:
         case ToolExecutionError():
             _log_event(
@@ -211,7 +211,7 @@ class ShowNotesToolExecutor:
         context: GenerationOrchestrationRequest,
         action: PlannedAction,
     ) -> ShowNotesResult:
-        """Return ``ShowNotesResult`` from ``generator.generate``; route errors via ``_handle_generator_error``."""  # noqa: E501  # Keeping the summary on one line preserves its required docstring form.
+        """Invoke the show-notes generator and route errors."""
         try:
             return await generator.generate(
                 context.script_tei_xml,
