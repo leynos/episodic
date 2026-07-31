@@ -56,8 +56,8 @@ def openai_log_spy() -> cabc.Generator[_OpenAILogSpy]:
 
     Yields
     ------
-    cabc.Generator[_OpenAILogSpy]
-        Values produced by the iterator.
+    _OpenAILogSpy
+        Structured OpenAI adapter error log spy.
     """
     from episodic.llm.openai_api import utils as openai_utils
 
