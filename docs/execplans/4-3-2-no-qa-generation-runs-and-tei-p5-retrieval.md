@@ -404,7 +404,17 @@ when any of the following is breached.
   CodeRabbit was attempted twice with
   `--base origin/configure-df12-lints`; both attempts stopped externally at
   `preparing_sandbox` with no findings, diagnostic, or rate-limit indication,
-  so no `vsleep` was warranted. Push/PR/stack actions remain pending.
+  so no `vsleep` was warranted. A third attempt from clean committed head
+  `27477971b2153a5ba5f86f85d4ad991cea128cb6` stopped externally at
+  `connecting_to_review_service` after ~6.4s, with no findings or rate-limit
+  indication. An explicit lease-protected force push
+  replaced remote `74b8bd1` with `2747797`; PR #141 was retargeted to
+  `configure-df12-lints`; and `gh stack link --base main 220 141` created
+  remote stack #240. Verification showed PR #220 with base `main` and head
+  `de457b7`, and PR #141 with base `configure-df12-lints` and head `2747797`.
+  `gh stack view` has no local tracking by design after linking, so PR metadata
+  and the successful link output are the verification evidence. Push/PR/stack
+  actions are complete.
 
 ## Surprises & discoveries
 
@@ -596,7 +606,19 @@ when any of the following is breached.
 - Observation: two CodeRabbit attempts with
   `--base origin/configure-df12-lints` both stopped externally at
   `preparing_sandbox`, with no findings, diagnostic, or rate-limit indication.
-  Impact: no `vsleep` was warranted; push/PR/stack actions remain pending.
+  Impact: no `vsleep` was warranted.
+- Observation: a third CodeRabbit attempt from clean committed head
+  `27477971b2153a5ba5f86f85d4ad991cea128cb6` stopped externally at
+  `connecting_to_review_service` after ~6.4s, with no findings or rate-limit
+  indication. Impact: CodeRabbit did not produce a completed review.
+- Observation: an explicit lease-protected force push replaced remote
+  `74b8bd1` with `2747797`; PR #141 was retargeted to
+  `configure-df12-lints`; and `gh stack link --base main 220 141` created
+  remote stack #240. Verification showed PR #220 with base `main` and head
+  `de457b7`, and PR #141 with base `configure-df12-lints` and head `2747797`.
+  `gh stack view` has no local tracking by design after linking, so PR metadata
+  and successful link output are verification. Impact: push/PR/stack actions
+  are complete.
 
 ## Decision log
 
@@ -760,10 +782,20 @@ when any of the following is breached.
   `make test`, `make typecheck`, `make lint`, `make check-migrations`, the
   corrected `make markdownlint`, `make nixie`, `mbake validate Makefile`, and
   `git diff --check` all passed. Date/Author: 2026-07-31, implementation agent.
-- Decision: do not apply a `vsleep` after either CodeRabbit attempt stopped at
-  `preparing_sandbox`. Rationale: neither external stop returned findings, a
-  diagnostic, or a rate-limit indication. Push/PR/stack actions remain
-  pending. Date/Author: 2026-07-31, implementation agent.
+- Decision: do not apply a `vsleep` after the CodeRabbit attempts stopped
+  externally. Rationale: the first two `preparing_sandbox` stops and the third
+  `connecting_to_review_service` stop returned no rate-limit indication; the
+  third attempt also returned no findings after ~6.4s.
+  Date/Author: 2026-07-31, implementation agent.
+- Decision: publish the clean committed head with an explicit lease-protected
+  force push, retarget PR #141 to `configure-df12-lints`, and link PRs #220 and
+  #141 with `gh stack link --base main 220 141`. Rationale: the push replaced
+  remote `74b8bd1` with `2747797`, the link created remote stack #240, and PR
+  metadata verifies #220 as base `main`/head `de457b7` and #141 as base
+  `configure-df12-lints`/head `2747797`. `gh stack view` has no local tracking
+  by design after linking, so the successful link output and PR metadata are
+  the verification evidence. Push/PR/stack actions are complete. Date/Author:
+  2026-07-31, implementation agent.
 
 ## Context and orientation
 
@@ -1743,7 +1775,16 @@ with 3 unused-ignore warnings. `make lint`, `make check-migrations`, corrected
 `git diff --check` also passed. Two CodeRabbit attempts using
 `--base origin/configure-df12-lints` stopped externally at `preparing_sandbox`
 with no findings, diagnostic, or rate-limit indication, so no `vsleep` was
-warranted. Push/PR/stack actions remain pending.
+warranted. A third attempt from clean committed head
+`27477971b2153a5ba5f86f85d4ad991cea128cb6` stopped externally at
+`connecting_to_review_service` after ~6.4s, with no findings or rate-limit
+indication. An explicit lease-protected force push
+replaced remote `74b8bd1` with `2747797`; PR #141 was retargeted to
+`configure-df12-lints`; and `gh stack link --base main 220 141` created remote
+stack #240. PR metadata verifies #220 as base `main`/head `de457b7` and #141 as
+base `configure-df12-lints`/head `2747797`. Because `gh stack view` has no local
+tracking by design after linking, the successful link output and PR metadata
+are the verification evidence. Push/PR/stack actions are complete.
 
 ## Revision note
 
@@ -1827,4 +1868,13 @@ were corrected to `artefact`; and `make nixie`, `mbake validate Makefile`, and
 `git diff --check` passed. CodeRabbit was attempted twice with
 `--base origin/configure-df12-lints`; both attempts stopped externally at
 `preparing_sandbox` with no findings, diagnostic, or rate-limit indication, so
-no `vsleep` was warranted. Push/PR/stack actions remain pending.
+no `vsleep` was warranted. A third attempt from clean committed head
+`27477971b2153a5ba5f86f85d4ad991cea128cb6` stopped externally at
+`connecting_to_review_service` after ~6.4s, with no findings or rate-limit
+indication. An explicit lease-protected force push
+replaced remote `74b8bd1` with `2747797`; PR #141 was retargeted to
+`configure-df12-lints`; and `gh stack link --base main 220 141` created remote
+stack #240. Verification showed #220 with base `main` and head `de457b7`, and
+PR #141 with base `configure-df12-lints` and head `2747797`. `gh stack view`
+has no local tracking by design after linking, so PR metadata and successful
+link output are verification. Push/PR/stack actions are complete.
