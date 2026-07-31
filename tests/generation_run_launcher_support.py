@@ -1,7 +1,5 @@
 """Support fixtures for generation-run launcher tests."""
 
-from __future__ import annotations
-
 import asyncio
 import dataclasses as dc
 import datetime as dt

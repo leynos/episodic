@@ -101,7 +101,10 @@ def _event_from_record(record: GenerationEventRecord) -> GenerationEvent:
 class SqlAlchemyGenerationRunStore:
     """Durable generation-run repository and event-log adapter."""
 
-    def __init__(self, session: "AsyncSession") -> None:  # noqa: UP037
+    def __init__(
+        self,
+        session: "AsyncSession",  # noqa: UP037  # Imported only during type checking.
+    ) -> None:
         self._session = session
 
     async def _get_record(self, run_id: uuid.UUID) -> GenerationRunRecord | None:

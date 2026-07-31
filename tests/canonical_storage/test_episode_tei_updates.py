@@ -167,22 +167,46 @@ async def test_episode_update_tei_records_revision_and_generation_metadata(
         )
         await uow.commit()
 
-    assert updated.tei_xml == updated_xml
-    assert updated.tei_revision == 2
-    assert updated.tei_content_hash == _tei_hash(updated_xml)
-    assert updated.qa_status is QaStatus.SKIPPED
-    assert updated.last_generation_run_id == run.id
-    assert updated.updated_at == updated_at
+    assert updated.tei_xml == updated_xml, (
+        f"expected updated TEI {updated_xml!r}, got {updated.tei_xml!r}"
+    )
+    assert updated.tei_revision == 2, (
+        f"expected TEI revision 2, got {updated.tei_revision}"
+    )
+    assert updated.tei_content_hash == _tei_hash(updated_xml), (
+        f"expected TEI hash {_tei_hash(updated_xml)!r}, "
+        f"got {updated.tei_content_hash!r}"
+    )
+    assert updated.qa_status is QaStatus.SKIPPED, (
+        f"expected skipped QA status, got {updated.qa_status!r}"
+    )
+    assert updated.last_generation_run_id == run.id, (
+        f"expected generation run {run.id}, got {updated.last_generation_run_id}"
+    )
+    assert updated.updated_at == updated_at, (
+        f"expected update time {updated_at!r}, got {updated.updated_at!r}"
+    )
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.episodes.get(episode.id)
 
-    assert fetched is not None
-    assert fetched.tei_xml == updated_xml
-    assert fetched.tei_revision == 2
-    assert fetched.tei_content_hash == _tei_hash(updated_xml)
-    assert fetched.qa_status is QaStatus.SKIPPED
-    assert fetched.last_generation_run_id == run.id
+    assert fetched is not None, f"expected episode {episode.id}, got {fetched!r}"
+    assert fetched.tei_xml == updated_xml, (
+        f"expected persisted TEI {updated_xml!r}, got {fetched.tei_xml!r}"
+    )
+    assert fetched.tei_revision == 2, (
+        f"expected persisted revision 2, got {fetched.tei_revision}"
+    )
+    assert fetched.tei_content_hash == _tei_hash(updated_xml), (
+        f"expected persisted hash {_tei_hash(updated_xml)!r}, "
+        f"got {fetched.tei_content_hash!r}"
+    )
+    assert fetched.qa_status is QaStatus.SKIPPED, (
+        f"expected persisted skipped QA status, got {fetched.qa_status!r}"
+    )
+    assert fetched.last_generation_run_id == run.id, (
+        f"expected persisted run {run.id}, got {fetched.last_generation_run_id}"
+    )
 
 
 @pytest.mark.asyncio
@@ -223,18 +247,34 @@ async def test_episode_update_tei_keeps_compressed_storage_in_sync(
         )
         record = result.scalar_one()
 
-    assert record.tei_xml == "__zstd__"
-    assert record.tei_xml_zstd is not None
-    assert record.tei_revision == 2
-    assert record.tei_content_hash == _tei_hash(updated_xml)
-    assert record.qa_status is QaStatus.SKIPPED
-    assert record.last_generation_run_id == run.id
+    assert record.tei_xml == "__zstd__", (
+        f"expected compressed-storage marker, got {record.tei_xml!r}"
+    )
+    assert record.tei_xml_zstd is not None, (
+        f"expected compressed TEI bytes, got {record.tei_xml_zstd!r}"
+    )
+    assert record.tei_revision == 2, (
+        f"expected compressed TEI revision 2, got {record.tei_revision}"
+    )
+    assert record.tei_content_hash == _tei_hash(updated_xml), (
+        f"expected compressed TEI hash {_tei_hash(updated_xml)!r}, "
+        f"got {record.tei_content_hash!r}"
+    )
+    assert record.qa_status is QaStatus.SKIPPED, (
+        f"expected compressed record QA status skipped, got {record.qa_status!r}"
+    )
+    assert record.last_generation_run_id == run.id, (
+        f"expected compressed record run {run.id}, got {record.last_generation_run_id}"
+    )
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.episodes.get(episode.id)
 
-    assert fetched is not None
-    assert fetched.tei_xml == updated_xml
+    assert fetched is not None, f"expected episode {episode.id}, got {fetched!r}"
+    assert fetched.tei_xml == updated_xml, (
+        "expected decompressed TEI length "
+        f"{len(updated_xml)}, got {len(fetched.tei_xml)}"
+    )
 
 
 @pytest.mark.asyncio

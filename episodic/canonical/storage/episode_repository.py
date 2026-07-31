@@ -43,7 +43,7 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
             Canonical episode domain entity to persist.
 
         """
-        await self._add_record(_episode_to_record(episode))
+        self._session.add(_episode_to_record(episode))
 
     async def get(self, episode_id: uuid.UUID) -> CanonicalEpisode | None:
         """Fetch a canonical episode by identifier."""

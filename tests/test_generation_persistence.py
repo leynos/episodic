@@ -214,19 +214,29 @@ async def test_materialise_episode_from_ingestion_creates_placeholder_episode(
         )
         await uow.commit()
 
-    assert episode.id == episode_id
-    assert episode.title == "Bridgewater Futures"
-    assert episode.tei_revision == 1
-    assert "Draft generation pending." in episode.tei_xml
+    assert episode.id == episode_id, f"episode id: {episode.id}"
+    assert episode.title == "Bridgewater Futures", f"title: {episode.title!r}"
+    assert episode.tei_revision == 1, f"TEI revision: {episode.tei_revision}"
+    assert "Draft generation pending." in episode.tei_xml, (
+        f"pending TEI: {episode.tei_xml!r}"
+    )
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.episodes.get(episode_id)
         documents = await uow.source_documents.list_for_job(job.id)
 
-    assert fetched is not None
-    assert fetched.tei_header_id == episode.tei_header_id
-    assert [document.canonical_episode_id for document in documents] == [episode_id]
-    assert documents[0].content_hash == "sha256:source"
+    assert fetched is not None, f"expected persisted episode {episode_id}, got None"
+    assert fetched.tei_header_id == episode.tei_header_id, (
+        f"expected TEI header {episode.tei_header_id}, got {fetched.tei_header_id}"
+    )
+    document_episode_ids = [document.canonical_episode_id for document in documents]
+    assert document_episode_ids == [episode_id], (
+        f"source episodes: {document_episode_ids}"
+    )
+    assert documents[0].content_hash == "sha256:source", (
+        "expected source content hash 'sha256:source', "
+        f"got {documents[0].content_hash!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -262,11 +272,18 @@ async def test_materialise_episode_from_ingestion_reuses_persisted_episode(
         persisted_job = await uow.ingestion_jobs.get(job.id)
         documents = await uow.source_documents.list_for_job(job.id)
 
-    assert second.id == first.id
-    assert second.title == "Bridgewater Futures"
-    assert persisted_job is not None
-    assert persisted_job.target_episode_id == first.id
-    assert len(documents) == 1
+    assert second.id == first.id, f"replayed episode id: {second.id}"
+    assert second.title == "Bridgewater Futures", (
+        f"expected original title 'Bridgewater Futures', got {second.title!r}"
+    )
+    assert persisted_job is not None, f"missing ingestion job {job.id}"
+    assert persisted_job.target_episode_id == first.id, (
+        f"expected target episode {first.id}, got {persisted_job.target_episode_id}"
+    )
+    assert len(documents) == 1, (
+        "expected one source document after replay, "
+        f"got {len(documents)}: {documents!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -306,12 +323,20 @@ async def test_persist_draft_script_records_no_qa_revision_metadata(
         )
         await uow.commit()
 
-    assert updated.tei_xml == draft_xml
-    assert updated.tei_revision == 2
-    assert updated.tei_content_hash == _draft_result(draft_xml).content_hash
-    assert updated.qa_status is QaStatus.SKIPPED
-    assert updated.last_generation_run_id == run.id
-    assert updated.updated_at == NOW
+    assert updated.tei_xml == draft_xml, (
+        f"expected persisted draft XML {draft_xml!r}, got {updated.tei_xml!r}"
+    )
+    assert updated.tei_revision == 2, f"TEI revision: {updated.tei_revision}"
+    expected_content_hash = _draft_result(draft_xml).content_hash
+    assert updated.tei_content_hash == expected_content_hash, (
+        f"expected content hash {expected_content_hash!r}, "
+        f"got {updated.tei_content_hash!r}"
+    )
+    assert updated.qa_status is QaStatus.SKIPPED, f"QA status: {updated.qa_status}"
+    assert updated.last_generation_run_id == run.id, (
+        f"expected generation run id {run.id}, got {updated.last_generation_run_id}"
+    )
+    assert updated.updated_at == NOW, f"updated_at: {updated.updated_at!r}"
 
 
 @pytest.mark.asyncio

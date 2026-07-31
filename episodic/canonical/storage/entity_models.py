@@ -13,7 +13,9 @@ from episodic.canonical.domain import (  # SQLAlchemy evaluates annotations at r
     IngestionStatus,
     IntakeState,
 )
-from episodic.canonical.generation_quality import QaStatus  # noqa: TC001
+from episodic.canonical.generation_quality import (  # noqa: TC001  # SQLAlchemy evaluates annotations at runtime.
+    QaStatus,
+)
 
 from .models_base import (
     APPROVAL_STATE,

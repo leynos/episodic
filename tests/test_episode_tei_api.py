@@ -60,10 +60,14 @@ async def test_episode_tei_json_and_xml_retrieval(
             headers={"Accept": "text/plain"},
         )
 
-    assert before_draft.status_code == 404
-    assert unacceptable.status_code == 406
+    assert before_draft.status_code == 404, (
+        f"expected missing draft status 404, got {before_draft.status_code}"
+    )
+    assert unacceptable.status_code == 406, (
+        f"expected unacceptable media status 406, got {unacceptable.status_code}"
+    )
     assert json_response.status_code == 200, json_response.text
-    assert json_response.json() == {
+    expected_payload = {
         "episode_id": str(episode_id),
         "tei_header_id": json_response.json()["tei_header_id"],
         "tei_xml": tei_xml,
@@ -74,13 +78,27 @@ async def test_episode_tei_json_and_xml_retrieval(
         "qa_status": "skipped",
         "updated_at": "2026-07-22T12:00:00+00:00",
     }
-    assert xml_response.status_code == 200
-    assert xml_response.text == tei_xml
-    assert xml_response.headers["Content-Type"].startswith("application/tei+xml")
+    assert json_response.json() == expected_payload, (
+        f"expected TEI metadata {expected_payload!r}, got {json_response.json()!r}"
+    )
+    assert xml_response.status_code == 200, (
+        f"expected TEI response status 200, got {xml_response.status_code}"
+    )
+    assert xml_response.text == tei_xml, (
+        f"expected TEI body {tei_xml!r}, got {xml_response.text!r}"
+    )
+    assert xml_response.headers["Content-Type"].startswith("application/tei+xml"), (
+        f"expected TEI content type, got {xml_response.headers['Content-Type']!r}"
+    )
     assert xml_response.headers["Content-Disposition"] == (
         f'attachment; filename="episode-{episode_id}.xml"'
+    ), (
+        "expected episode attachment Content-Disposition, got "
+        f"{xml_response.headers['Content-Disposition']!r}"
     )
-    assert xml_response.headers["ETag"] == f'"{_tei_hash(tei_xml)}"'
+    assert xml_response.headers["ETag"] == f'"{_tei_hash(tei_xml)}"', (
+        f"expected ETag for generated TEI, got {xml_response.headers['ETag']!r}"
+    )
 
 
 async def _create_generation_run(client: httpx.AsyncClient) -> uuid.UUID:

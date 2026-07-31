@@ -166,6 +166,8 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
             TeiHeaderRecord.id == header_id,
             _tei_header_from_record,
         )
+
+
 class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
     """Persist ingestion jobs using SQLAlchemy."""
 

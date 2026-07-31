@@ -29,8 +29,8 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.uploads import Upload
     from episodic.generation.draft_script import DraftScriptResult
 
-Clock = cabc.Callable[[], dt.datetime]
-UuidFactory = cabc.Callable[[], uuid.UUID]
+type Clock = cabc.Callable[[], dt.datetime]
+type UuidFactory = cabc.Callable[[], uuid.UUID]
 
 
 def _utc_now() -> dt.datetime:

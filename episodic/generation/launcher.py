@@ -52,7 +52,7 @@ if typ.TYPE_CHECKING:
         DraftScriptResult,
     )
 
-TaskSet = set[asyncio.Task[None]]
+type TaskSet = set[asyncio.Task[None]]
 
 _DEFAULT_MAX_CONCURRENCY = 4
 _DEFAULT_LEASE_SECONDS = 900

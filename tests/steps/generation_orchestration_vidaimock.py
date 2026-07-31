@@ -173,6 +173,7 @@ def start_vidaimock_process(
 
     _await_port_ready(orchestration_context.process, "127.0.0.1", port)
 
+
 class VidaiMockProcessContext(typ.Protocol):
     """Minimal mutable state required by the Vidai Mock process helper."""
 

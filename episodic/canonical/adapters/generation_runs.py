@@ -25,35 +25,13 @@ from episodic.canonical.generation_run_errors import (
 )
 from episodic.canonical.generation_run_ports import (
     EventSeq,
-    event_seq,
     GenerationRunStatusUpdate,
+    event_seq,
 )
 from episodic.orchestration._types import _log_event
 
-type TimeProvider = cabc.Callable[[], dt.datetime]
-
-
 from .generation_checkpoints import InMemoryGenerationCheckpointMixin
 
-"""In-memory generation-run port adapter.
-This module provides a reference implementation of the generation-run port
-protocols for tests and local development. It is ephemeral, single-process
-storage and is not a production persistence layer.
-"""
-type TimeProvider = cabc.Callable[[], dt.datetime]
-
-
-"""In-memory generation-run port adapter.
-This module provides a reference implementation of the generation-run port
-protocols for tests and local development. It is ephemeral, single-process
-storage and is not a production persistence layer.
-"""
-type TimeProvider = cabc.Callable[[], dt.datetime]
-"""In-memory generation-run port adapter.
-This module provides a reference implementation of the generation-run port
-protocols for tests and local development. It is ephemeral, single-process
-storage and is not a production persistence layer.
-"""
 type TimeProvider = cabc.Callable[[], dt.datetime]
 
 
@@ -65,6 +43,8 @@ def _now_utc() -> dt.datetime:
 def _default_time_provider() -> TimeProvider:
     """Return the default in-memory timestamp provider."""
     return _now_utc
+
+
 @dc.dataclass(slots=True)
 class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
     """In-memory reference adapter for the composite generation-run port."""

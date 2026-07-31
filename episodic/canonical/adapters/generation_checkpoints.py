@@ -230,7 +230,7 @@ class InMemoryGenerationCheckpointMixin:
         >>> # await store.respond_to_checkpoint(checkpoint_id, response=response)
         >>> # returns the checkpoint after applying the response
         True
-        """
+        """  # noqa: DOC502  # The shared transition helper raises these domain exceptions.
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.respond(response),
@@ -273,7 +273,7 @@ class InMemoryGenerationCheckpointMixin:
         >>> # await store.time_out_checkpoint(checkpoint_id, at=moment)
         >>> # returns the checkpoint after applying the timeout
         True
-        """
+        """  # noqa: DOC502  # The shared transition helper raises these domain exceptions.
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.time_out(at),
@@ -315,7 +315,7 @@ class InMemoryGenerationCheckpointMixin:
         >>> # await store.cancel_checkpoint(checkpoint_id, at=moment)
         >>> # returns the checkpoint after applying the cancellation
         True
-        """
+        """  # noqa: DOC502  # The shared transition helper raises these domain exceptions.
         return await self._apply_checkpoint_transition(
             checkpoint_id,
             lambda cp: cp.cancel(at),
