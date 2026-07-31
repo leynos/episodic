@@ -137,17 +137,29 @@ async def test_draft_script_generator_emits_valid_stable_tei(
 
     result = await generator.generate(_request())
 
-    assert parse_tei_header(result.tei_xml).title == "Bridgewater Futures"
-    assert '<u xml:id="u-1" who="Host">Welcome' in result.tei_xml
-    assert '<u xml:id="u-2" who="Guest">Thanks' in result.tei_xml
-    assert '<p xml:id="p-1">The conversation' in result.tei_xml
+    parsed_title = parse_tei_header(result.tei_xml).title
+    assert parsed_title == "Bridgewater Futures", (
+        f"expected generated TEI title 'Bridgewater Futures', got {parsed_title!r}"
+    )
     expected_hash = hashlib.sha256(result.tei_xml.encode()).hexdigest()
-    assert result.content_hash == f"sha256:{expected_hash}"
-    assert result.usage.total_tokens == 150
-    assert result.provider_response_id == "resp-draft-1"
-    assert fake_llm.requests[0].model == "vidai-mock"
-    assert fake_llm.requests[0].system_prompt is not None
-    assert result.tei_xml == snapshot
+    assert result.content_hash == f"sha256:{expected_hash}", (
+        f"expected generated TEI hash sha256:{expected_hash}, "
+        f"got {result.content_hash!r}"
+    )
+    assert result.usage.total_tokens == 150, (
+        f"expected 150 total tokens, got {result.usage.total_tokens}"
+    )
+    assert result.provider_response_id == "resp-draft-1", (
+        "expected provider response 'resp-draft-1', "
+        f"got {result.provider_response_id!r}"
+    )
+    assert fake_llm.requests[0].model == "vidai-mock", (
+        f"expected model 'vidai-mock', got {fake_llm.requests[0].model!r}"
+    )
+    assert fake_llm.requests[0].system_prompt is not None, (
+        "expected a system prompt, got None"
+    )
+    assert result.tei_xml == snapshot, "generated TEI must match the approved snapshot"
 
 
 @pytest.mark.parametrize(

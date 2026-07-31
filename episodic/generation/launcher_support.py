@@ -42,8 +42,8 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.reference_documents.resolution import ResolvedBinding
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
-Clock = cabc.Callable[[], dt.datetime]
-DraftIdFactoryFactory = cabc.Callable[[], cabc.Callable[[str], str]]
+type Clock = cabc.Callable[[], dt.datetime]
+type DraftIdFactoryFactory = cabc.Callable[[], cabc.Callable[[str], str]]
 
 
 class CostRecorderPort(typ.Protocol):

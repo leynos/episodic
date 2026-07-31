@@ -207,6 +207,7 @@ def serialize_ingestion_job_source(
         "created_at": source.created_at.isoformat(),
     }
 
+
 def serialize_generation_run(run: GenerationRun) -> dict[str, typ.Any]:
     """Serialize a generation-run polling resource."""
     return {
@@ -229,6 +230,7 @@ def serialize_generation_run(run: GenerationRun) -> dict[str, typ.Any]:
         "updated_at": run.updated_at.isoformat(),
     }
 
+
 def serialize_generation_event(event: GenerationEvent) -> dict[str, typ.Any]:
     """Serialize one append-only generation event."""
     return {
@@ -240,6 +242,7 @@ def serialize_generation_event(event: GenerationEvent) -> dict[str, typ.Any]:
         "occurred_at": event.occurred_at.isoformat(),
         "created_at": event.created_at.isoformat(),
     }
+
 
 def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
     """Serialize generated TEI metadata using the public field names."""

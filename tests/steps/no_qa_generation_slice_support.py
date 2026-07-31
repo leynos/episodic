@@ -1,7 +1,5 @@
 """Support for the no-QA source-to-script behavioural slice."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import json
 import subprocess  # noqa: S404 - terminates a controlled local test process.
@@ -34,9 +32,6 @@ if typ.TYPE_CHECKING:
 
     from episodic.api.dependencies import ApiDependencies
 
-
-RunResult = typ.TypeVar("RunResult")
-
 _VALID_DRAFT = json.dumps({
     "title": "A deterministic no-QA draft",
     "turns": [
@@ -64,10 +59,6 @@ class NoQaGenerationSliceContext:
     run_response: httpx.Response | None = None
     events_response: httpx.Response | None = None
     tei_response: httpx.Response | None = None
-
-    def run(self, operation: cabc.Awaitable[RunResult]) -> RunResult:
-        """Run an asynchronous scenario operation on the shared event loop."""
-        return self.runner.run(operation)
 
     async def request(
         self,
@@ -98,7 +89,7 @@ class NoQaGenerationSliceContext:
 
     def tear_down(self) -> None:
         """Release asynchronous resources and stop the Vidai Mock process."""
-        self.run(self.close())
+        self.runner.run(self.close())
         if self.process is None:
             return
         self.process.terminate()
@@ -116,6 +107,37 @@ def require[RequiredValue](
     """Return initialized scenario state or fail with a useful assertion."""
     assert value is not None, f"Expected {label} to be initialized."
     return value
+
+
+def assert_response_status(response: httpx.Response, expected: int) -> None:
+    """Assert an HTTP response status with its body as failure context."""
+    assert response.status_code == expected, (
+        f"expected HTTP {expected}, got {response.status_code}: {response.text}"
+    )
+
+
+def assert_tei_response(
+    response: httpx.Response,
+    run_response: httpx.Response,
+    qa_status: str,
+) -> None:
+    """Assert TEI attachment metadata and its QA provenance."""
+    assert_response_status(response, 200)
+    content_type = response.headers["content-type"]
+    assert content_type.startswith("application/tei+xml"), (
+        f"content type: {content_type}"
+    )
+    disposition = response.headers["content-disposition"]
+    assert "attachment" in disposition, f"disposition: {disposition}"
+    observed_qa_status = run_response.json()["qa_status"]
+    assert observed_qa_status == qa_status, f"QA status: {observed_qa_status!r}"
+
+
+def assert_replay_headers(first: httpx.Response, second: httpx.Response) -> None:
+    """Assert an idempotent replay retains polling metadata."""
+    first_headers = (first.headers["Location"], first.headers["Retry-After"])
+    second_headers = (second.headers["Location"], second.headers["Retry-After"])
+    assert first_headers == second_headers, f"replay headers: {second_headers!r}"
 
 
 def configure_vidaimock(context: NoQaGenerationSliceContext, tmp_path: Path) -> None:

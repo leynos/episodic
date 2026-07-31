@@ -335,10 +335,13 @@ class TestGenerationRunRepository:
         )
         claimed = next(result for result in results if result is not None)
 
-        assert sum(result is not None for result in results) == 1
-        assert claimed.status is GenerationRunStatus.RUNNING
-        assert claimed.current_node == "draft"
-        assert claimed.started_at == NOW
+        claim_count = sum(result is not None for result in results)
+        assert claim_count == 1, f"expected one successful claim, got {claim_count}"
+        assert claimed.status is GenerationRunStatus.RUNNING, (
+            f"status: {claimed.status}"
+        )
+        assert claimed.current_node == "draft", f"node: {claimed.current_node!r}"
+        assert claimed.started_at == NOW, f"started_at: {claimed.started_at!r}"
 
 
 class TestGenerationEventLog:

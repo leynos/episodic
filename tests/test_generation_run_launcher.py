@@ -47,7 +47,7 @@ async def _uploaded_chunks() -> cabc.AsyncIterator[bytes]:
 async def _launch_and_load_run(
     factory: async_sessionmaker[AsyncSession],
     run_id: uuid.UUID,
-    run_launcher: "InProcessGenerationRunLauncher",  # noqa: UP037
+    run_launcher: "InProcessGenerationRunLauncher",  # noqa: UP037 - type-only import.
 ) -> tuple[GenerationRun, tuple[GenerationEvent, ...]]:
     """Launch a run and return its persisted terminal state and events."""
     await run_launcher.launch(run_id)

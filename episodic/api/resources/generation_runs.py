@@ -1,7 +1,5 @@
 """Falcon resources for no-QA generation-run creation and polling."""
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 import uuid

@@ -7,8 +7,11 @@ import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
-from episodic.canonical.domain import GenerationRunStatus, JsonMapping  # noqa: TC001
-from episodic.canonical.generation_quality import (  # noqa: TC001
+from episodic.canonical.domain import (  # noqa: TC001  # SQLAlchemy evaluates annotations at runtime.
+    GenerationRunStatus,
+    JsonMapping,
+)
+from episodic.canonical.generation_quality import (  # noqa: TC001  # SQLAlchemy evaluates annotations at runtime.
     QaStatus,
     QualityMode,
 )

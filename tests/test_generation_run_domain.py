@@ -100,10 +100,16 @@ def test_generation_run_status_terminal_states_are_explicit() -> None:
     assert GenerationRunStatus.FAILED.is_terminal(), "FAILED must be terminal."
     assert GenerationRunStatus.CANCELLED.is_terminal(), "CANCELLED must be terminal."
 
+
 def test_quality_enums_pin_no_qa_slice_values() -> None:
     """Quality metadata uses stable wire values for the no-QA slice."""
-    assert QualityMode.DRAFT_WITHOUT_QA == "draft_without_qa"
-    assert QaStatus.SKIPPED == "skipped"
+    assert QualityMode.DRAFT_WITHOUT_QA == "draft_without_qa", (
+        f"expected draft_without_qa wire value, got {QualityMode.DRAFT_WITHOUT_QA!r}"
+    )
+    assert QaStatus.SKIPPED == "skipped", (
+        f"expected skipped wire value, got {QaStatus.SKIPPED!r}"
+    )
+
 
 def test_generation_run_records_no_qa_quality_metadata(
     generation_run: GenerationRun,
@@ -116,9 +122,16 @@ def test_generation_run_records_no_qa_quality_metadata(
         skip_qa_rationale="Initial vertical-slice draft.",
     )
 
-    assert run.quality_mode is QualityMode.DRAFT_WITHOUT_QA
-    assert run.qa_status is QaStatus.SKIPPED
-    assert run.skip_qa_rationale == "Initial vertical-slice draft."
+    assert run.quality_mode is QualityMode.DRAFT_WITHOUT_QA, (
+        f"expected draft-without-QA mode, got {run.quality_mode!r}"
+    )
+    assert run.qa_status is QaStatus.SKIPPED, (
+        f"expected skipped QA status, got {run.qa_status!r}"
+    )
+    assert run.skip_qa_rationale == "Initial vertical-slice draft.", (
+        f"expected no-QA rationale, got {run.skip_qa_rationale!r}"
+    )
+
 
 @pytest.mark.parametrize(
     ("changes", "match"),
@@ -147,6 +160,8 @@ def test_generation_run_rejects_incomplete_no_qa_metadata(
             quality_mode=QualityMode.DRAFT_WITHOUT_QA,
             **changes,
         )
+
+
 def test_checkpoint_status_terminal_states_are_explicit() -> None:
     """Only checkpoint end states should be terminal."""
     assert not CheckpointStatus.CREATED.is_terminal(), "CREATED must not be terminal."

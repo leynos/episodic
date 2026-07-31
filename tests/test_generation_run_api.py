@@ -3,6 +3,7 @@
 import dataclasses as dc
 import datetime as dt
 import typing as typ
+from unittest import mock
 
 import httpx
 import pytest
@@ -22,10 +23,11 @@ class RecordingLauncher:
     """Record generation runs scheduled by the HTTP adapter."""
 
     run_ids: list[uuid.UUID] = dc.field(default_factory=list)
+    launch: mock.AsyncMock = dc.field(init=False)
 
-    async def launch(self, run_id: uuid.UUID) -> None:
-        """Record one scheduled run."""
-        self.run_ids.append(run_id)
+    def __post_init__(self) -> None:
+        """Bind the asynchronous launch surface to the run recorder."""
+        self.launch = mock.AsyncMock(side_effect=self.run_ids.append)
 
 
 @pytest.mark.asyncio
@@ -73,19 +75,38 @@ async def test_generation_run_create_replay_and_poll(
 
     assert first.status_code == 202, first.text
     assert replay.status_code == 202, replay.text
-    assert replay.json() == first.json()
-    assert replay.headers["Location"] == first.headers["Location"]
-    assert replay.headers["Retry-After"] == first.headers["Retry-After"]
-    assert len(launcher.run_ids) == 1
+    assert replay.json() == first.json(), (
+        f"expected replay payload {first.json()!r}, got {replay.json()!r}"
+    )
+    assert replay.headers["Location"] == first.headers["Location"], (
+        f"expected replay location {first.headers['Location']!r}, "
+        f"got {replay.headers['Location']!r}"
+    )
+    assert replay.headers["Retry-After"] == first.headers["Retry-After"], (
+        f"expected retry delay {first.headers['Retry-After']!r}, "
+        f"got {replay.headers['Retry-After']!r}"
+    )
+    assert len(launcher.run_ids) == 1, (
+        f"expected one launched run, got {launcher.run_ids!r}"
+    )
     assert run_response.status_code == 200, run_response.text
-    assert run_response.json()["qa_status"] == "skipped"
-    assert run_response.json()["skip_qa_rationale"] == payload["skip_qa_rationale"]
-    assert run_response.headers["Retry-After"] == "1"
+    assert run_response.json()["qa_status"] == "skipped", (
+        f"expected skipped QA status, got {run_response.json()['qa_status']!r}"
+    )
+    assert run_response.json()["skip_qa_rationale"] == payload["skip_qa_rationale"], (
+        f"expected rationale {payload['skip_qa_rationale']!r}, "
+        f"got {run_response.json()['skip_qa_rationale']!r}"
+    )
+    assert run_response.headers["Retry-After"] == "1", (
+        f"expected retry delay '1', got {run_response.headers['Retry-After']!r}"
+    )
     assert events_response.status_code == 200, events_response.text
     assert [event["kind"] for event in events_response.json()["items"]] == [
         "draft.generated"
-    ]
-    assert events_response.json()["after_seq"] == 1
+    ], f"expected one draft.generated event, got {events_response.json()['items']!r}"
+    assert events_response.json()["after_seq"] == 1, (
+        f"expected after_seq 1, got {events_response.json()['after_seq']!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -126,10 +147,18 @@ async def test_generation_run_validation_and_idempotency_conflict(
         )
 
     assert accepted.status_code == 202, accepted.text
-    assert changed.status_code == 409
-    assert changed.json()["code"] == "idempotency_conflict"
-    assert missing_rationale.status_code == 400
-    assert unsupported_mode.status_code == 422
+    assert changed.status_code == 409, (
+        f"expected conflict status 409, got {changed.status_code}"
+    )
+    assert changed.json()["code"] == "idempotency_conflict", (
+        f"expected idempotency_conflict, got {changed.json()['code']!r}"
+    )
+    assert missing_rationale.status_code == 400, (
+        f"expected missing-rationale status 400, got {missing_rationale.status_code}"
+    )
+    assert unsupported_mode.status_code == 422, (
+        f"expected unsupported-mode status 422, got {unsupported_mode.status_code}"
+    )
 
 
 async def _create_ready_ingestion_job(client: httpx.AsyncClient) -> str:

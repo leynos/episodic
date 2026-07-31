@@ -103,12 +103,21 @@ async def test_build_generation_launcher_wires_cost_recorder(
         _UnusedLLMPort(),
     )
 
-    assert isinstance(launcher, InProcessGenerationRunLauncher)
-    assert launcher.cost_recorder_factory is not None
+    assert isinstance(launcher, InProcessGenerationRunLauncher), (
+        f"expected in-process launcher, got {type(launcher).__name__}"
+    )
+    assert launcher.cost_recorder_factory is not None, (
+        "expected a cost recorder factory, got None"
+    )
     async with SqlAlchemyUnitOfWork(factory) as uow:
         recorder = launcher.cost_recorder_factory(uow)
-        assert isinstance(recorder, CostRecorder)
-        assert recorder.ledger is uow.cost_ledger
+        assert isinstance(recorder, CostRecorder), (
+            f"expected CostRecorder, got {type(recorder).__name__}"
+        )
+        assert recorder.ledger is uow.cost_ledger, (
+            f"expected unit-of-work ledger {uow.cost_ledger!r}, got {recorder.ledger!r}"
+        )
+
 
 @pytest.mark.asyncio
 async def test_create_app_from_env_wires_configured_llm_launcher(
@@ -158,12 +167,20 @@ async def test_create_app_from_env_wires_configured_llm_launcher(
     ):
         runtime_module.create_app_from_env()
 
-    assert captured_dependencies is not None
+    assert captured_dependencies is not None, "expected captured dependencies, got None"
     dependencies = typ.cast("typ.Any", captured_dependencies)
-    assert isinstance(dependencies.llm_port, OpenAICompatibleLLMAdapter)
-    assert isinstance(dependencies.launcher, InProcessGenerationRunLauncher)
-    assert len(dependencies.shutdown_hooks) == 2
+    assert isinstance(dependencies.llm_port, OpenAICompatibleLLMAdapter), (
+        f"expected OpenAI adapter, got {type(dependencies.llm_port).__name__}"
+    )
+    assert isinstance(dependencies.launcher, InProcessGenerationRunLauncher), (
+        f"expected in-process launcher, got {type(dependencies.launcher).__name__}"
+    )
+    assert len(dependencies.shutdown_hooks) == 2, (
+        f"expected two shutdown hooks, got {len(dependencies.shutdown_hooks)}"
+    )
     await dependencies.shutdown_hooks[1]()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "strip_driver",
@@ -353,8 +370,8 @@ class _UnusedLLMPort:
 
     async def generate(
         self,
-        request: "LLMRequest",  # noqa: UP037
-    ) -> "LLMResponse":  # noqa: UP037
+        request: "LLMRequest",  # noqa: UP037 - imported only during type checking
+    ) -> "LLMResponse":  # noqa: UP037 - imported only during type checking
         """Fail if runtime wiring accidentally invokes the fake."""
         _ = request
         raise AssertionError

@@ -67,13 +67,13 @@ def make_generation_run(
 
 def _factory(
     session_factory: object,
-) -> "async_sessionmaker[AsyncSession]":  # noqa: UP037
+) -> "async_sessionmaker[AsyncSession]":  # noqa: UP037  # Imported only during type checking.
     """Return the typed async session factory fixture."""
     return typ.cast("async_sessionmaker[AsyncSession]", session_factory)
 
 
 async def _count_records(
-    factory: "async_sessionmaker[AsyncSession]",  # noqa: UP037
+    factory: "async_sessionmaker[AsyncSession]",  # noqa: UP037  # Imported only during type checking.
     record_type: type[object],
 ) -> int:
     """Count persisted records of one SQLAlchemy model type."""
@@ -94,8 +94,8 @@ async def test_generation_run_store_satisfies_run_and_event_ports(
     async with factory() as session:
         store = SqlAlchemyGenerationRunStore(session)
 
-    assert isinstance(store, GenerationRunRepository)
-    assert isinstance(store, GenerationEventLog)
+    assert isinstance(store, GenerationRunRepository), f"store type: {type(store)}"
+    assert isinstance(store, GenerationEventLog), f"store type: {type(store)}"
 
 
 @pytest.mark.asyncio
@@ -123,13 +123,17 @@ async def test_generation_run_store_persists_across_unit_of_work(
         fetched = await uow.generation_runs.get_run(run.id)
         events = await uow.generation_runs.list_events(run.id)
 
-    assert fetched == stored
-    assert fetched is not None
-    assert fetched.quality_mode is QualityMode.DRAFT_WITHOUT_QA
-    assert fetched.qa_status is QaStatus.SKIPPED
-    assert fetched.skip_qa_rationale == "No-QA vertical-slice draft."
-    assert events == (first_event,)
-    assert events[0].seq == 1
+    assert fetched == stored, f"expected stored run {stored!r}, got {fetched!r}"
+    assert fetched is not None, f"expected run {run.id} to persist, got {fetched!r}"
+    assert fetched.quality_mode is QualityMode.DRAFT_WITHOUT_QA, (
+        f"expected draft-without-QA quality mode, got {fetched.quality_mode!r}"
+    )
+    assert fetched.qa_status is QaStatus.SKIPPED, f"QA status: {fetched.qa_status}"
+    assert fetched.skip_qa_rationale == "No-QA vertical-slice draft.", (
+        f"unexpected skip-QA rationale: {fetched.skip_qa_rationale!r}"
+    )
+    assert events == (first_event,), f"stored events: {events!r}"
+    assert events[0].seq == 1, f"expected first event sequence 1, got {events[0].seq}"
 
 
 @pytest.mark.asyncio
@@ -155,8 +159,9 @@ async def test_generation_run_store_reuses_idempotency_key(
         )
         await uow.commit()
 
-    assert stored_duplicate == stored_first
-    assert await _count_records(factory, GenerationRunRecord) == 1
+    assert stored_duplicate == stored_first, f"duplicate run: {stored_duplicate.id}"
+    record_count = await _count_records(factory, GenerationRunRecord)
+    assert record_count == 1, f"expected one generation run, got {record_count}"
 
 
 @pytest.mark.asyncio
@@ -196,12 +201,23 @@ async def test_generation_events_allocate_gap_free_sequences_per_run(
             after_seq=event_seq(1),
         )
 
-    assert [event.seq for event in first_events] == [event_seq(1), event_seq(2)]
-    assert [event.seq for event in second_events] == [event_seq(1)]
-    assert after_first == (second_event,)
-    assert first_events == (first_event, second_event)
-    assert second_events == (other_run_event,)
-    assert await _count_records(factory, GenerationEventRecord) == 3
+    assert [event.seq for event in first_events] == [event_seq(1), event_seq(2)], (
+        f"expected first-run sequences [1, 2], got {first_events!r}"
+    )
+    assert [event.seq for event in second_events] == [event_seq(1)], (
+        f"expected second-run sequence [1], got {second_events!r}"
+    )
+    assert after_first == (second_event,), (
+        f"expected event after sequence 1 to be {second_event!r}, got {after_first!r}"
+    )
+    assert first_events == (first_event, second_event), (
+        f"unexpected first-run events: {first_events!r}"
+    )
+    assert second_events == (other_run_event,), (
+        f"unexpected second-run events: {second_events!r}"
+    )
+    event_count = await _count_records(factory, GenerationEventRecord)
+    assert event_count == 3, f"expected three generation events, got {event_count}"
 
 
 @pytest.mark.asyncio
@@ -232,10 +248,18 @@ async def test_generation_run_store_updates_status_and_rejects_terminal_mutation
         )
         await uow.commit()
 
-    assert running.status is GenerationRunStatus.RUNNING
-    assert running.current_node == "draft"
-    assert succeeded.status is GenerationRunStatus.SUCCEEDED
-    assert succeeded.ended_at == NOW
+    assert running.status is GenerationRunStatus.RUNNING, (
+        f"expected running status, got {running.status!r}"
+    )
+    assert running.current_node == "draft", (
+        f"expected current node 'draft', got {running.current_node!r}"
+    )
+    assert succeeded.status is GenerationRunStatus.SUCCEEDED, (
+        f"expected succeeded status, got {succeeded.status!r}"
+    )
+    assert succeeded.ended_at == NOW, (
+        f"expected end time {NOW!r}, got {succeeded.ended_at!r}"
+    )
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         with pytest.raises(RunAlreadyTerminal, match="generation run is already"):
@@ -285,11 +309,17 @@ async def test_generation_run_store_claims_pending_run_once(
             lease_expires_at=lease_expires_at,
         )
 
-    assert claimed is not None
-    assert claimed.status is GenerationRunStatus.RUNNING
-    assert claimed.current_node == "draft"
-    assert claimed.started_at == NOW
-    assert lost is None
+    assert claimed is not None, f"expected run {run.id} to be claimed, got {claimed!r}"
+    assert claimed.status is GenerationRunStatus.RUNNING, (
+        f"expected claimed run to be running, got {claimed.status!r}"
+    )
+    assert claimed.current_node == "draft", (
+        f"expected claimed node 'draft', got {claimed.current_node!r}"
+    )
+    assert claimed.started_at == NOW, (
+        f"expected claim start {NOW!r}, got {claimed.started_at!r}"
+    )
+    assert lost is None, f"expected second claim to lose, got {lost!r}"
 
 
 @pytest.mark.asyncio
@@ -322,8 +352,10 @@ async def test_generation_run_store_lists_runs_by_episode_status_and_page(
             status=GenerationRunStatus.RUNNING,
         )
 
-    assert page == (running,)
-    assert running_only == (running,)
+    assert page == (running,), f"expected second paged run {running.id}, got {page!r}"
+    assert running_only == (running,), (
+        f"expected only running run {running.id}, got {running_only!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -365,4 +397,4 @@ async def test_generation_run_store_rolls_back_uncommitted_run(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.generation_runs.get_run(run.id)
 
-    assert fetched is None
+    assert fetched is None, f"expected rolled-back run to be absent, got {fetched!r}"

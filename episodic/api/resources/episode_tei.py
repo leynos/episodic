@@ -1,7 +1,5 @@
 """Falcon resource and content negotiation for generated episode TEI."""
 
-from __future__ import annotations
-
 import typing as typ
 
 import falcon

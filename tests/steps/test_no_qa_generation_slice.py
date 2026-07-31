@@ -10,6 +10,9 @@ from pytest_bdd import given, parsers, scenario, then, when
 from episodic.canonical.tei import parse_tei_header
 from tests.steps.no_qa_generation_slice_support import (
     NoQaGenerationSliceContext,
+    assert_replay_headers,
+    assert_response_status,
+    assert_tei_response,
     configure_vidaimock,
     enable_provider_failure,
     generation_payload,
@@ -101,7 +104,7 @@ def vidai_mock_server_running(
 @given("a series profile exists")
 def series_profile_exists(context: NoQaGenerationSliceContext) -> None:
     """Create the series profile used by the ingestion job."""
-    response = context.run(
+    response = context.runner.run(
         context.request(
             "POST",
             "/v1/series-profiles",
@@ -123,7 +126,7 @@ def presenter_profiles_are_bound(context: NoQaGenerationSliceContext) -> None:
     """Create and bind host and guest profile revisions to the series."""
     profile_id = require(context.profile_id, "series profile")
     for kind, name in (("host_profile", "BDD Host"), ("guest_profile", "BDD Guest")):
-        document = context.run(
+        document = context.runner.run(
             context.request(
                 "POST",
                 f"/v1/series-profiles/{profile_id}/reference-documents",
@@ -136,7 +139,7 @@ def presenter_profiles_are_bound(context: NoQaGenerationSliceContext) -> None:
         )
         assert document.status_code == 201, document.text
         document_id = document.json()["id"]
-        revision = context.run(
+        revision = context.runner.run(
             context.request(
                 "POST",
                 f"/v1/series-profiles/{profile_id}/reference-documents/"
@@ -150,7 +153,7 @@ def presenter_profiles_are_bound(context: NoQaGenerationSliceContext) -> None:
             )
         )
         assert revision.status_code == 201, revision.text
-        binding = context.run(
+        binding = context.runner.run(
             context.request(
                 "POST",
                 "/v1/reference-bindings",
@@ -168,7 +171,7 @@ def presenter_profiles_are_bound(context: NoQaGenerationSliceContext) -> None:
 def ingestion_job_has_source(context: NoQaGenerationSliceContext) -> None:
     """Create a ready ingestion job with deterministic source content."""
     profile_id = require(context.profile_id, "series profile")
-    job = context.run(
+    job = context.runner.run(
         context.request(
             "POST",
             "/v1/ingestion-jobs",
@@ -178,7 +181,7 @@ def ingestion_job_has_source(context: NoQaGenerationSliceContext) -> None:
     )
     assert job.status_code == 201, job.text
     context.ingestion_job_id = job.json()["id"]
-    source = context.run(
+    source = context.runner.run(
         context.request(
             "POST",
             f"/v1/ingestion-jobs/{context.ingestion_job_id}/sources",
@@ -213,7 +216,7 @@ def _create(
     key: str = "no-qa-run",
 ) -> httpx.Response:
     job_id = require(context.ingestion_job_id, "ingestion job")
-    response = context.run(
+    response = context.runner.run(
         context.request(
             "POST",
             f"/v1/episodes/{job_id}/generation-runs",
@@ -269,11 +272,11 @@ def create_generation_run_with_quality_mode(
 def poll_generation_run_until_terminal(context: NoQaGenerationSliceContext) -> None:
     """Drain the in-process launcher and fetch terminal run and event state."""
     launcher = require(context.launcher, "generation launcher")
-    context.run(launcher.drain())
+    context.runner.run(launcher.drain())
     location = context.responses[0].headers["Location"]
-    context.run_response = context.run(context.request("GET", location))
+    context.run_response = context.runner.run(context.request("GET", location))
     run_id = context.run_response.json()["id"]
-    context.events_response = context.run(
+    context.events_response = context.runner.run(
         context.request("GET", f"/v1/generation-runs/{run_id}/events")
     )
 
@@ -282,7 +285,7 @@ def poll_generation_run_until_terminal(context: NoQaGenerationSliceContext) -> N
 def fetch_episode_tei_as_xml(context: NoQaGenerationSliceContext) -> None:
     """Fetch the generated episode as a TEI attachment."""
     episode_id = context.responses[0].json()["episode_id"]
-    context.tei_response = context.run(
+    context.tei_response = context.runner.run(
         context.request(
             "GET",
             f"/v1/episodes/{episode_id}/tei",
@@ -295,14 +298,16 @@ def fetch_episode_tei_as_xml(context: NoQaGenerationSliceContext) -> None:
 def run_creation_returns_accepted(context: NoQaGenerationSliceContext) -> None:
     """Verify the asynchronous operation response metadata."""
     response = context.responses[0]
-    assert response.status_code == 202
-    assert response.headers.get("Location")
+    assert_response_status(response, 202)
+    location = response.headers.get("Location")
+    assert location, f"expected a non-empty Location header, got {location!r}"
 
 
 @then("the response carries a Retry-After header")
 def response_carries_retry_after(context: NoQaGenerationSliceContext) -> None:
     """Verify the server supplies a polling interval."""
-    assert context.responses[0].headers["Retry-After"] == "1"
+    retry_after = context.responses[0].headers["Retry-After"]
+    assert retry_after == "1", f"expected Retry-After '1', got {retry_after!r}"
 
 
 @then(
@@ -313,21 +318,25 @@ def response_carries_retry_after(context: NoQaGenerationSliceContext) -> None:
 def run_records_qa_status(context: NoQaGenerationSliceContext, qa_status: str) -> None:
     """Verify QA bypass provenance is represented on creation."""
     body = context.responses[0].json()
-    assert body["qa_status"] == qa_status
-    assert body["skip_qa_rationale"] == generation_payload()["skip_qa_rationale"]
+    assert body["qa_status"] == qa_status, f"QA status: {body['qa_status']!r}"
+    assert body["skip_qa_rationale"] == generation_payload()["skip_qa_rationale"], (
+        f"rationale: {body['skip_qa_rationale']!r}"
+    )
 
 
 @then(parsers.parse('the run status is "{status}"'))
 def run_status_is(context: NoQaGenerationSliceContext, status: str) -> None:
     """Verify the polled run reached the expected terminal state."""
-    assert require(context.run_response, "run response").json()["status"] == status
+    observed_status = require(context.run_response, "run response").json()["status"]
+    assert observed_status == status, f"run status: {observed_status!r}"
 
 
 @then(parsers.parse('the event log contains a "{event_kind}" event'))
 def event_log_contains(context: NoQaGenerationSliceContext, event_kind: str) -> None:
     """Verify the durable event stream contains the named event."""
     items = require(context.events_response, "event response").json()["items"]
-    assert event_kind in {item["kind"] for item in items}
+    observed_kinds = {item["kind"] for item in items}
+    assert event_kind in observed_kinds, f"event kinds: {observed_kinds!r}"
 
 
 @then(parsers.parse('the response is a TEI-P5 attachment with qa_status "{qa_status}"'))
@@ -335,64 +344,57 @@ def response_is_tei_attachment(
     context: NoQaGenerationSliceContext, qa_status: str
 ) -> None:
     """Verify raw TEI download metadata and QA provenance."""
-    response = require(context.tei_response, "TEI response")
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("application/tei+xml")
-    assert "attachment" in response.headers["content-disposition"]
-    assert (
-        require(context.run_response, "run response").json()["qa_status"] == qa_status
+    assert_tei_response(
+        require(context.tei_response, "TEI response"),
+        require(context.run_response, "run response"),
+        qa_status,
     )
 
 
 @then("the TEI validates against the Episodic TEI-P5 profile")
 def tei_validates(context: NoQaGenerationSliceContext) -> None:
     """Validate the downloaded document through the canonical TEI parser."""
-    assert (
-        parse_tei_header(require(context.tei_response, "TEI response").text).title
-        == "A deterministic no-QA draft"
-    )
+    observed_title = parse_tei_header(
+        require(context.tei_response, "TEI response").text
+    ).title
+    assert observed_title == "A deterministic no-QA draft", f"title: {observed_title}"
 
 
 @then("both responses describe the same run id")
 def responses_describe_same_run(context: NoQaGenerationSliceContext) -> None:
     """Verify an identical replay resolves to the original run."""
-    assert context.responses[0].json()["id"] == context.responses[1].json()["id"]
+    first_run_id = context.responses[0].json()["id"]
+    second_run_id = context.responses[1].json()["id"]
+    assert first_run_id == second_run_id, f"replay run id: {second_run_id!r}"
 
 
 @then("the replayed response carries the same Location and Retry-After")
 def replay_preserves_polling_headers(context: NoQaGenerationSliceContext) -> None:
     """Verify replay retains long-running operation headers."""
-    assert (
-        context.responses[0].headers["Location"]
-        == context.responses[1].headers["Location"]
-    )
-    assert (
-        context.responses[0].headers["Retry-After"]
-        == context.responses[1].headers["Retry-After"]
-    )
+    assert_replay_headers(context.responses[0], context.responses[1])
 
 
 @then("the second response is 409 Conflict")
 def second_response_is_conflict(context: NoQaGenerationSliceContext) -> None:
     """Verify changed input is rejected under the reused key."""
-    assert context.responses[1].status_code == 409
+    assert_response_status(context.responses[1], 409)
 
 
 @then("the response is 400 Bad Request")
 def response_is_bad_request(context: NoQaGenerationSliceContext) -> None:
     """Verify malformed quality metadata is a bad request."""
-    assert context.responses[0].status_code == 400
+    assert_response_status(context.responses[0], 400)
 
 
 @then("the response is 422 Unprocessable Entity")
 def response_is_unprocessable(context: NoQaGenerationSliceContext) -> None:
     """Verify a recognized unsupported mode is unprocessable."""
-    assert context.responses[0].status_code == 422
+    assert_response_status(context.responses[0], 422)
 
 
 @then("the run records an error message and an error category")
 def run_records_error(context: NoQaGenerationSliceContext) -> None:
     """Verify terminal failures expose stable diagnostic fields."""
     body = require(context.run_response, "run response").json()
-    assert body["error_message"]
-    assert body["error_category"]
+    assert body["error_message"], f"error message: {body['error_message']!r}"
+    assert body["error_category"], f"error category: {body['error_category']!r}"
