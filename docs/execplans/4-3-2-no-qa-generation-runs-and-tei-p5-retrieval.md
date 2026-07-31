@@ -385,6 +385,27 @@ when any of the following is breached.
   findings and no rate-limit retry. The earlier 177.037s pre-advance review
   remains historical evidence.
 
+- [x] (completed, 2026-07-31) Latest rebase replay and structural validation:
+  the target was force-rewritten to `origin/configure-df12-lints` at
+  `de457b7ba3d6a13df8600410a0bc7aea25658ff8`. Obsolete base-owned commits
+  `f9a4afa` (lint adoption) and `4ed178a` (architecture/lock repair) were
+  carefully inspected and skipped because rewritten equivalents already exist
+  in the target. All 39 feature commits replayed. Weave auto-resolved three
+  entity pairs at very-high confidence; `sem diff` confirmed cohesive feature
+  extraction. Target `slots=True` in `_TextUploadRequest` survived, as did the
+  feature workflow artefact fallback. The target lockfile was restored, then
+  `uv lock` produced byte-identical output. The target is an ancestor and the
+  tree is marker-free. Final gates passed: `make check-fmt` passed 467 files;
+  `make test` passed 1,091, skipped 1, with 54 snapshots (26 warnings);
+  `make typecheck` passed with 3 unused-ignore warnings; and `make lint` and
+  `make check-migrations` passed. `make markdownlint` initially found the
+  three new `artifact` spellings; after correction to `artefact`, it passed.
+  `make nixie`, `mbake validate Makefile`, and `git diff --check` passed.
+  CodeRabbit was attempted twice with
+  `--base origin/configure-df12-lints`; both attempts stopped externally at
+  `preparing_sandbox` with no findings, diagnostic, or rate-limit indication,
+  so no `vsleep` was warranted. Push/PR/stack actions remain pending.
+
 ## Surprises & discoveries
 
 - Observation: the existing generation-orchestration graph
@@ -559,6 +580,23 @@ when any of the following is breached.
   suppression-rationale, wrapper, future-annotations, and module-size
   findings. Impact: the fixes preserved behaviour and did not weaken lint
   configuration.
+- Observation: the force-rewritten target at
+  `de457b7ba3d6a13df8600410a0bc7aea25658ff8` already contains rewritten
+  equivalents of base-owned commits `f9a4afa` (lint adoption) and `4ed178a`
+  (architecture/lock repair). Impact: those commits were carefully inspected
+  and skipped, while all 39 feature commits were replayed.
+- Observation: Weave auto-resolved three entity pairs at very-high confidence,
+  and `sem diff` confirmed cohesive feature extraction. Target `slots=True` in
+  `_TextUploadRequest` and the feature workflow artefact fallback survived;
+  the restored target lockfile remained byte-identical after `uv lock`. The
+  target is an ancestor and the tree is marker-free. Impact: structural
+  validation and all final deterministic gates passed. `make markdownlint`
+  initially found the three new `artifact` spellings; correcting them to
+  `artefact` made the gate pass.
+- Observation: two CodeRabbit attempts with
+  `--base origin/configure-df12-lints` both stopped externally at
+  `preparing_sandbox`, with no findings, diagnostic, or rate-limit indication.
+  Impact: no `vsleep` was warranted; push/PR/stack actions remain pending.
 
 ## Decision log
 
@@ -706,6 +744,26 @@ when any of the following is breached.
   and 54 snapshots; `make typecheck` exited successfully, with three
   unused-ignore warnings confined to target-only `tests/test_serializers.py`.
   Date/Author: 2026-07-31, implementation agent.
+- Decision: replay all 39 feature commits onto the force-rewritten target
+  `origin/configure-df12-lints` at
+  `de457b7ba3d6a13df8600410a0bc7aea25658ff8`, skipping base-owned commits
+  `f9a4afa` (lint adoption) and `4ed178a` (architecture/lock repair) because
+  rewritten equivalents already exist in the target. Rationale: preserve the
+  complete feature extraction while avoiding obsolete base history. Date/
+  Author: 2026-07-31, implementation agent.
+- Decision: restore the target lockfile before running `uv lock` and retain the
+  result because the output is byte-identical. Rationale: avoid unrelated
+  dependency churn. Date/Author: 2026-07-31, implementation agent.
+- Decision: treat the Weave, `sem diff`, surviving-target-feature,
+  ancestor, and marker-free-tree checks as structural validation, and accept
+  the final deterministic gates as complete. Rationale: `make check-fmt`,
+  `make test`, `make typecheck`, `make lint`, `make check-migrations`, the
+  corrected `make markdownlint`, `make nixie`, `mbake validate Makefile`, and
+  `git diff --check` all passed. Date/Author: 2026-07-31, implementation agent.
+- Decision: do not apply a `vsleep` after either CodeRabbit attempt stopped at
+  `preparing_sandbox`. Rationale: neither external stop returned findings, a
+  diagnostic, or a rate-limit indication. Push/PR/stack actions remain
+  pending. Date/Author: 2026-07-31, implementation agent.
 
 ## Context and orientation
 
@@ -1675,6 +1733,18 @@ user guides record the operational limits and successor work. Automated
 stuck-run recovery, the broader checkpoint REST surface, and the full
 QA-bypass generation graph remain assigned to 2.6.2, 2.6.3, and 4.4.1.
 
+Latest rebase qualifier: the structural replay onto the force-rewritten
+`de457b7ba3d6a13df8600410a0bc7aea25658ff8` target is recorded above, including
+the ancestor and marker-free-tree checks and byte-identical lockfile result.
+Final validation passed: `make check-fmt` passed 467 files; `make test` passed
+1,091, skipped 1, with 54 snapshots (26 warnings); and `make typecheck` passed
+with 3 unused-ignore warnings. `make lint`, `make check-migrations`, corrected
+`make markdownlint`, `make nixie`, and `mbake validate Makefile` passed.
+`git diff --check` also passed. Two CodeRabbit attempts using
+`--base origin/configure-df12-lints` stopped externally at `preparing_sandbox`
+with no findings, diagnostic, or rate-limit indication, so no `vsleep` was
+warranted. Push/PR/stack actions remain pending.
+
 ## Revision note
 
 Revised 2026-06-15 after a Logisphere community-of-experts design review.
@@ -1740,3 +1810,21 @@ target `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`, using `coderabbit review
 --agent --base origin/configure-df12-lints`, completed in 98.255s with zero
 findings and no rate-limit retry. The earlier 177.037s pre-advance review
 remains historical evidence.
+
+Revised 2026-07-31 after the latest force-rewritten-target rebase. Recorded the
+`de457b7ba3d6a13df8600410a0bc7aea25658ff8` target, the carefully inspected and
+skipped obsolete base-owned commits `f9a4afa` (lint adoption) and `4ed178a`
+(architecture/lock repair), all 39 replayed feature commits, Weave's three
+very-high-confidence entity-pair resolutions, and the cohesive feature
+extraction confirmed by `sem diff`. Also recorded that target `slots=True` in
+`_TextUploadRequest`, the feature workflow artefact fallback, the ancestor and
+marker-free tree, and the byte-identical target lockfile after `uv lock`
+survived. Final gates passed: `make check-fmt` passed 467 files; `make test`
+passed 1,091, skipped 1, with 54 snapshots (26 warnings); and `make typecheck`
+passed with 3 unused-ignore warnings. `make lint` and `make check-migrations`
+passed; `make markdownlint` passed after the three new `artifact` spellings
+were corrected to `artefact`; and `make nixie`, `mbake validate Makefile`, and
+`git diff --check` passed. CodeRabbit was attempted twice with
+`--base origin/configure-df12-lints`; both attempts stopped externally at
+`preparing_sandbox` with no findings, diagnostic, or rate-limit indication, so
+no `vsleep` was warranted. Push/PR/stack actions remain pending.
