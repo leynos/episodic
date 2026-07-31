@@ -146,29 +146,7 @@ def _validate_unique_queue_names(queues: tuple[WorkerQueueSpec, ...]) -> None:
 def _validate_unique_workload_mappings(
     queues: tuple[WorkerQueueSpec, ...],
 ) -> dict[WorkloadClass, WorkerQueueSpec]:
-    """Map each configured workload class to its queue.
-
-    Returns
-    -------
-    dict[WorkloadClass, WorkerQueueSpec]
-        A lookup from each workload class to its configured queue.
-
-    Raises
-    ------
-    ValueError
-        If more than one queue is configured for the same workload class.
-
-    Examples
-    --------
-    >>> queue = WorkerQueueSpec(
-    ...     name="io",
-    ...     workload=WorkloadClass.IO_BOUND,
-    ...     routing_key="episodic.io.#",
-    ...     diagnostic_routing_key="episodic.io.diagnostic",
-    ... )
-    >>> _validate_unique_workload_mappings((queue,))[WorkloadClass.IO_BOUND].name
-    'io'
-    """
+    """Map each configured workload class to its queue."""
     queue_map = {queue.workload: queue for queue in queues}
     if len(queue_map) != len(queues):
         msg = "WorkerTopology.queues must contain unique workload mappings."
