@@ -368,9 +368,22 @@ when any of the following is breached.
   with 1091 passed, 1 skipped, and 54 snapshots; `make typecheck`, `make lint`,
   `make check-migrations`, `make markdownlint` (0 issues in 112 files),
   `make nixie`, `mbake validate Makefile`, and `git diff --check` all passed.
+  Before publication, `origin/configure-df12-lints` advanced through 14
+  unrelated lint follow-up commits to final target
+  `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`. Weave predicted no overlap; the
+  second 38-commit replay was conflict-free, the final target is an ancestor,
+  and `uv.lock` remains byte-identical. The complete nine-gate suite passed
+  again on the final base with the same 1091 passed, 1 skipped, and 54
+  snapshots. `make typecheck` exited successfully with three unused-ignore
+  warnings confined to target-only `tests/test_serializers.py`.
   Final review evidence: `coderabbit review --agent --base
   origin/configure-df12-lints` completed in 177.037s with zero findings and no
   rate-limit retry.
+  Superseding final-base review after the conflict-free replay onto final
+  target `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`: `coderabbit review
+  --agent --base origin/configure-df12-lints` completed in 98.255s with zero
+  findings and no rate-limit retry. The earlier 177.037s pre-advance review
+  remains historical evidence.
 
 ## Surprises & discoveries
 
@@ -535,6 +548,13 @@ when any of the following is breached.
   these were repaired using target-branch conventions while preserving the
   extracted `SqlAlchemyEpisodeRepository` with TEI updates and the target
   branch's unrelated repositories.
+- Observation: before publication, the target advanced through 14 unrelated
+  lint follow-up commits to final target
+  `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`. Weave predicted no overlap, and
+  the second 38-commit replay was conflict-free; the final target is an
+  ancestor and `uv.lock` remains byte-identical. Impact: the initial explicit
+  `1d49da4` conflict history remains recorded, while publication used the
+  conflict-free replay.
 - Observation: the DF12 lint base exposed assertion-message, alias,
   suppression-rationale, wrapper, future-annotations, and module-size
   findings. Impact: the fixes preserved behaviour and did not weaken lint
@@ -674,6 +694,18 @@ when any of the following is breached.
   the artefacts were structurally valid enough to evade conflict markers but
   were semantically stale; the lint findings required behaviour-preserving
   source corrections. Date/Author: 2026-07-31, implementation agent.
+- Decision: use final target
+  `5fd1f97d375f5703b90c5cb366f6a45a2d229e37` after the target advanced through
+  14 unrelated lint follow-up commits. Rationale: Weave predicted no overlap,
+  the second 38-commit replay was conflict-free, the final target is an
+  ancestor, and `uv.lock` remains byte-identical; the initial `1d49da4`
+  conflict history remains the record of the first rebase. Date/Author:
+  2026-07-31, implementation agent.
+- Decision: accept the final-base validation as complete. Rationale: the
+  complete nine-gate suite passed again with the same 1091 passed, 1 skipped,
+  and 54 snapshots; `make typecheck` exited successfully, with three
+  unused-ignore warnings confined to target-only `tests/test_serializers.py`.
+  Date/Author: 2026-07-31, implementation agent.
 
 ## Context and orientation
 
@@ -1692,3 +1724,19 @@ issues in 112 files.
 The final review, `coderabbit review --agent --base
 origin/configure-df12-lints`, completed in 177.037s with zero findings and no
 rate-limit retry.
+
+The target then advanced through 14 unrelated lint follow-up commits before
+publication, reaching final target
+`5fd1f97d375f5703b90c5cb366f6a45a2d229e37`. Weave predicted no overlap; the
+second 38-commit replay was conflict-free, the final target is an ancestor,
+and `uv.lock` remains byte-identical. The complete nine-gate suite passed
+again on that final base with the same 1091 passed, 1 skipped, and 54
+snapshots. `make typecheck` exited successfully with three unused-ignore
+warnings confined to target-only `tests/test_serializers.py`. The initial
+`1d49da4` conflict history and prior CodeRabbit evidence remain unchanged.
+
+The superseding final-base review after the conflict-free replay onto final
+target `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`, using `coderabbit review
+--agent --base origin/configure-df12-lints`, completed in 98.255s with zero
+findings and no rate-limit retry. The earlier 177.037s pre-advance review
+remains historical evidence.
