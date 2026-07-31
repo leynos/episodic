@@ -376,7 +376,9 @@ def _build_execute_node(
     Returns
     -------
     tuple[ExecuteNodeFn, str]
-        Result produced by the operation.
+        The execute-node callable and its graph target. The target is
+        ``"finish"`` for direct execution or ``END`` for checkpoint
+        suspension.
     """
     if checkpoint_port is None:
 
@@ -428,7 +430,8 @@ def build_generation_orchestration_graph(
     Returns
     -------
     CompiledStateGraph
-        Result produced by the operation.
+        The compiled orchestration graph containing the ``plan``, ``execute``,
+        and ``finish`` nodes.
     """
     graph_extensions = extensions or GenerationGraphExtensions()
     graph = StateGraph(GenerationGraphState)
