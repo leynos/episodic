@@ -360,6 +360,18 @@ when any of the following is breached.
   returned terminal `review_completed` with zero findings, and did not require
   a rate-limit retry.
 
+- [x] (completed, 2026-07-31) Rebase and final validation: rebased onto
+  `origin/configure-df12-lints` at
+  `1d49da451abd6f7d276e91693d945ce5e5b7945a`; repaired the replay artefacts
+  and DF12 lint-base findings without weakening lint configuration. The exact
+  final evidence is: `make check-fmt` passed for 467 files; `make test` passed
+  with 1091 passed, 1 skipped, and 54 snapshots; `make typecheck`, `make lint`,
+  `make check-migrations`, `make markdownlint` (0 issues in 112 files),
+  `make nixie`, `mbake validate Makefile`, and `git diff --check` all passed.
+  Final review evidence: `coderabbit review --agent --base
+  origin/configure-df12-lints` completed in 177.037s with zero findings and no
+  rate-limit retry.
+
 ## Surprises & discoveries
 
 - Observation: the existing generation-orchestration graph
@@ -514,6 +526,20 @@ when any of the following is breached.
   satisfy the behavioural contract instead of silently dropping the stable
   failure category.
 
+- Observation: rebasing onto `origin/configure-df12-lints` required one
+  explicit conflict in `episodic/canonical/storage/repositories.py`. The
+  post-rebase sem/Weave audit also found replay artefacts without conflict
+  markers: duplicated `generation_runs` module prose/type aliases, a stale
+  `tests.workflow_test_utils` import after the target moved helpers, and an
+  extracted episode repository call to target-removed `_add_record`. Impact:
+  these were repaired using target-branch conventions while preserving the
+  extracted `SqlAlchemyEpisodeRepository` with TEI updates and the target
+  branch's unrelated repositories.
+- Observation: the DF12 lint base exposed assertion-message, alias,
+  suppression-rationale, wrapper, future-annotations, and module-size
+  findings. Impact: the fixes preserved behaviour and did not weaken lint
+  configuration.
+
 ## Decision log
 
 - Decision: execution model is in-process async behind a `GenerationRunLauncher`
@@ -631,6 +657,23 @@ when any of the following is breached.
   existing mutable-run guard and preserves the established domain exception
   without introducing a second transition API. Date/Author: 2026-07-22,
   implementation agent.
+
+- Decision: rebase onto `origin/configure-df12-lints` at
+  `1d49da451abd6f7d276e91693d945ce5e5b7945a`, resolving the single explicit
+  repository conflict by preserving the extracted
+  `SqlAlchemyEpisodeRepository` with TEI updates and retaining the target
+  branch's unrelated repositories. Rationale: preserve both branches'
+  intended changes while adopting the target branch's current structure.
+  Date/Author: 2026-07-31, implementation agent.
+- Decision: use the target branch's `uv.lock` as the rebase baseline and run
+  `uv lock`; retain the result because it remained byte-identical to the
+  target lockfile. Rationale: avoid unrelated dependency churn. Date/Author:
+  2026-07-31, implementation agent.
+- Decision: repair all sem/Weave replay artefacts and DF12 lint-base findings
+  using target conventions, without weakening lint configuration. Rationale:
+  the artefacts were structurally valid enough to evade conflict markers but
+  were semantically stale; the lint findings required behaviour-preserving
+  source corrections. Date/Author: 2026-07-31, implementation agent.
 
 ## Context and orientation
 
@@ -1635,3 +1678,17 @@ row-locked terminal status mutation. Final test evidence is
 findings. Final review evidence: `coderabbit review --agent` ran against commit
 `f8609b4` on 2026-07-23 and returned terminal `review_completed` with zero
 findings.
+
+Revised 2026-07-31 after the rebase and final validation pass. The branch was
+rebased onto `origin/configure-df12-lints` at
+`1d49da451abd6f7d276e91693d945ce5e5b7945a`; one explicit repository conflict
+and the marker-free sem/Weave replay artefacts were repaired using target
+conventions. The target `uv.lock` remained byte-identical after `uv lock`, and
+DF12 lint-base fixes preserved behaviour without weakening configuration. The
+new final evidence is recorded in Progress: all named formatting, test,
+typing, lint, migration, Markdown, Mermaid, Makefile, and diff checks passed,
+including 1091 passed tests, 1 skipped test, 54 snapshots, and zero Markdown
+issues in 112 files.
+The final review, `coderabbit review --agent --base
+origin/configure-df12-lints`, completed in 177.037s with zero findings and no
+rate-limit retry.

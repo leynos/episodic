@@ -1497,7 +1497,6 @@ review checkpoint attached to a generation run. It is not the same as
 suspend/resume state through `CheckpointPort`. Do not convert between the two
 implicitly; bridge logic belongs in the later orchestration and REST work.
 
-
 ### No-QA launcher and TEI retrieval
 
 `GenerationRunLauncher` is the scheduling seam used by the generation-run HTTP
