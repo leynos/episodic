@@ -113,30 +113,30 @@ async def test_interpreter_executor_records_lifecycle_observability(
     finally:
         executor.shutdown()
 
-    assert results == [4, 9], "Expected values to match"
+    assert results == [4, 9], "map_ordered results must preserve input order"
     assert (
         "interpreter_pool.map.calls",
         {"outcome": "success"},
-    ) in metrics.counters, "Expected collection to contain the value"
+    ) in metrics.counters, "map call metric must record a successful outcome"
     assert (
         "interpreter_pool.map.items",
         2.0,
         {"outcome": "success"},
-    ) in metrics.observations, "Expected collection to contain the value"
+    ) in metrics.observations, "map item metric must record two successful items"
     assert (
         "interpreter_pool.creations",
         {"outcome": "success"},
-    ) in metrics.counters, "Expected collection to contain the value"
+    ) in metrics.counters, "creation metric must record a successful executor start"
     assert (
         "interpreter_pool.shutdown.latency_ms",
         pytest.approx(25.0),
         {"outcome": "success"},
-    ) in metrics.observations, "Expected collection to contain the value"
+    ) in metrics.observations, "shutdown latency metric must record 25 ms"
     assert "Created interpreter-pool executor" in logger.messages, (
-        "Expected collection to contain the value"
+        "creation log must identify the interpreter-pool executor"
     )
     assert "Shut down interpreter-pool executor" in logger.messages, (
-        "Expected collection to contain the value"
+        "shutdown log must identify the interpreter-pool executor"
     )
 
 
@@ -161,21 +161,21 @@ def test_builder_records_executor_selection_metrics(
         _capability_check=lambda: True,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
-        "Expected value to have the required type"
+        "enabled supported selection must build InterpreterPoolCpuTaskExecutor"
     )
 
     assert (
         "cpu_task_executor.selections",
         {"executor": "inline", "reason": "feature_flag_disabled"},
-    ) in metrics.counters, "Expected collection to contain the value"
+    ) in metrics.counters, "disabled feature flag must select inline execution"
     assert (
         "cpu_task_executor.selections",
         {"executor": "inline", "reason": "interpreter_pool_unavailable"},
-    ) in metrics.counters, "Expected collection to contain the value"
+    ) in metrics.counters, "unavailable interpreter pool must select inline execution"
     assert (
         "cpu_task_executor.selections",
         {"executor": "interpreter_pool", "reason": "enabled"},
-    ) in metrics.counters, "Expected collection to contain the value"
+    ) in metrics.counters, "enabled interpreter support must select the pool executor"
     _shutdown_if_supported(disabled_executor)
     _shutdown_if_supported(unsupported_executor)
     executor.shutdown()
@@ -198,17 +198,17 @@ async def test_builder_passes_metrics_to_interpreter_executor(
         _capability_check=lambda: True,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
-        "Expected value to have the required type"
+        "supported builder path must return InterpreterPoolCpuTaskExecutor"
     )
 
     with contextlib.ExitStack() as lifecycle:
         lifecycle.callback(executor.shutdown)
         assert await executor.map_ordered(_square, (2,)) == [4], (
-            "Expected values to match"
+            "interpreter executor map result must contain the squared input"
         )
 
     assert (
         "interpreter_pool.map.items",
         1.0,
         {"outcome": "success"},
-    ) in metrics.observations, "Expected collection to contain the value"
+    ) in metrics.observations, "map item metric must record one successful item"

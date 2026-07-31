@@ -382,7 +382,16 @@ class ShowNotesGenerator:
         -------
         ShowNotesResult
             Structured show-notes entries with LLM usage metadata.
-        """
+
+        Raises
+        ------
+        ShowNotesResponseFormatError
+            If the provider response cannot be parsed into the expected format.
+        LLMProviderResponseError
+            If the provider returns a non-retryable error response.
+        LLMTransientProviderError
+            If transient provider failures exhaust all retry attempts.
+        """  # noqa: DOC502  # Documents exceptions propagated by collaborators.
         prompt = self.build_prompt(
             script_tei_xml, template_structure=template_structure
         )

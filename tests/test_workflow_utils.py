@@ -48,15 +48,34 @@ def assert_validation_workflow_result(
     --------
     ``assert_validation_workflow_result(0, "", artifact_dir, "result.json")``
     returns normally when the artifact reports ``ok`` and ``validate``.
-    """  # noqa: DOC502  # Assertions and artifact parsing enforce this test contract.
+    """
     # Strict equality is part of the process exit-code contract.
     assert exit_code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
-    data = read_artifact_json(artifact_dir, artifact_name, logs)
+    try:
+        data = read_artifact_json(artifact_dir, artifact_name, logs)
+    except json.JSONDecodeError as exc:
+        msg = f"workflow artifact contains malformed JSON: {artifact_name}"
+        raise AssertionError(msg) from exc
     status = data.get("status")
     execution_mode = data.get("execution_mode")
     assert status == "ok", "Workflow artifact must report success."
     assert execution_mode == "validate", (
         "Workflow artifact must report validation mode."
+    )
+
+
+def test_validation_workflow_result_maps_malformed_json_to_assertion(
+    tmp_path: Path,
+) -> None:
+    """Malformed workflow artifact JSON should fail the assertion contract."""
+    artifact_name = "result.json"
+    (tmp_path / artifact_name).write_text("{", encoding="utf-8")
+
+    with pytest.raises(AssertionError) as exc_info:
+        assert_validation_workflow_result(0, "", tmp_path, artifact_name)
+
+    assert isinstance(exc_info.value.__cause__, json.JSONDecodeError), (
+        "malformed artifact assertion must retain JSONDecodeError as its cause"
     )
 
 

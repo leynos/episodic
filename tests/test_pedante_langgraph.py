@@ -102,12 +102,16 @@ async def test_pedante_graph_propagates_result(
     pedante_result = typ.cast("PedanteEvaluationResult", state["pedante_result"])
 
     assert pedante_result.requires_revision is expected_requires_revision, (
-        "Expected values to match"
+        "pedante_result.requires_revision must propagate the evaluator result"
     )
-    assert pedante_result.usage == canned.usage, "Expected values to match"
-    assert pedante_result.model == canned.model, "Expected values to match"
+    assert pedante_result.usage == canned.usage, (
+        "pedante_result.usage must propagate the evaluator usage"
+    )
+    assert pedante_result.model == canned.model, (
+        "pedante_result.model must propagate the evaluator model"
+    )
     assert pedante_result.provider_response_id == canned.provider_response_id, (
-        "Expected values to match"
+        "pedante_result.provider_response_id must propagate the evaluator response ID"
     )
 
 
@@ -120,13 +124,17 @@ def test_route_after_pedante_requires_result() -> None:
 def test_route_after_pedante_pass_for_non_blocking() -> None:
     """Non-blocking result should route to pass."""
     state = PedanteGraphState(pedante_result=_result(blocking=False))
-    assert route_after_pedante(state) == "pass", "Expected values to match"
+    assert route_after_pedante(state) == "pass", (
+        "a non-blocking Pedante result must take the pass route"
+    )
 
 
 def test_route_after_pedante_refine_for_blocking() -> None:
     """Blocking result should route to refine."""
     state = PedanteGraphState(pedante_result=_result(blocking=True))
-    assert route_after_pedante(state) == "refine", "Expected values to match"
+    assert route_after_pedante(state) == "refine", (
+        "a blocking Pedante result must take the refine route"
+    )
 
 
 @pytest.mark.asyncio

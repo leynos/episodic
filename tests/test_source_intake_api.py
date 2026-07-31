@@ -81,6 +81,7 @@ async def test_source_intake_upload_job_and_attach_flow(
             headers={"Idempotency-Key": "job-key"},
             json={"series_profile_id": profile_id, "target_episode_id": None},
         )
+        assert job_response.status_code == 201, "Expected values to match"
         source_response = await client.post(
             f"/v1/ingestion-jobs/{job_response.json()['id']}/sources",
             headers={"Idempotency-Key": "source-key"},
@@ -101,7 +102,6 @@ async def test_source_intake_upload_job_and_attach_flow(
     assert upload_response.json()["content_hash"].startswith("sha256:"), (
         "Expected value to have the required prefix"
     )
-    assert job_response.status_code == 201, "Expected values to match"
     assert job_response.json()["intake_state"] == "awaiting_sources", (
         "Expected values to match"
     )

@@ -101,8 +101,13 @@ async def test_guest_bios_tool_executor_resolves_bindings_and_returns_result(
 
     result = await executor.execute(_guest_bios_action(), request)
 
-    stable_calls = redact_snapshot_uuids(calls)
+    stable_calls = redact_snapshot_uuids([
+        {key: value for key, value in call.items() if key != "uow"} for call in calls
+    ])
     assert stable_calls == snapshot, "actual output must match snapshot"
+    assert all(call["uow"] is uow for call in calls), (
+        "binding resolver calls must receive the executor's unit of work"
+    )
     assert result.action_kind is ActionKind.GENERATE_GUEST_BIOS, (
         "Expected values to match"
     )

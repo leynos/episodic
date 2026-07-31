@@ -39,7 +39,10 @@ def redact_snapshot_uuids(value: object) -> object:
         case str():
             return _UUID_PATTERN.sub("<uuid>", value)
         case dict():
-            return {key: redact_snapshot_uuids(item) for key, item in value.items()}
+            return {
+                redact_snapshot_uuids(key): redact_snapshot_uuids(item)
+                for key, item in value.items()
+            }
         case list():
             return [redact_snapshot_uuids(item) for item in value]
         case tuple():

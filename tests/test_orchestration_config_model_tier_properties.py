@@ -42,10 +42,10 @@ def test_config_normalises_arbitrary_string_and_enum_mixes(
         enabled_action_kinds=tuple(kinds),
     )
     assert all(isinstance(kind, ActionKind) for kind in cfg.enabled_action_kinds), (
-        "Expected value to have the required type"
+        "every cfg.enabled_action_kinds item must be an ActionKind"
     )
     assert cfg.enabled_action_kinds == tuple(ActionKind(str(kind)) for kind in kinds), (
-        "Expected collection to contain the value"
+        "cfg.enabled_action_kinds must equal the normalized input sequence"
     )
 
 
@@ -108,7 +108,9 @@ async def test_planned_action_execution_model_tier_is_accepted() -> None:
 
     result = await tool_executor.execute(action, _request())
 
-    assert result.model_tier is ModelTier.EXECUTION, "Expected values to match"
+    assert result.model_tier is ModelTier.EXECUTION, (
+        "result.model_tier must retain the execution tier"
+    )
     assert result.summary == "Generated 0 show-notes entries.", (
-        "Expected values to match"
+        "result.summary must describe the empty show-notes result"
     )
