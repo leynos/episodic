@@ -270,7 +270,7 @@ def _invoke_finish_callback(
             "generation_graph.finish_node.callback.finish",
             correlation_id=correlation_id,
         )
-    except Exception as exc:  # noqa: BLE001  # This adapter boundary must translate arbitrary third-party failures.
+    except Exception as exc:  # noqa: BLE001  # Deliberately swallow callback failures to preserve the computed graph result.
         _log_event(
             "error",
             "generation_graph.finish_node.callback.error",
