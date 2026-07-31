@@ -217,7 +217,7 @@ async def test_sqlalchemy_idempotency_store_replays_and_conflicts(
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         acquired = await uow.idempotency.acquire(request=request)
-        assert not isinstance(acquired, Replay | Conflict | InFlight), (
+        assert isinstance(acquired, Acquired), (
             "Expected value to have the required type"
         )
         await uow.idempotency.complete(
