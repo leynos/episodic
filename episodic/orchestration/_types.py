@@ -58,7 +58,7 @@ class ToolExecutionError(RuntimeError):
 
 
 class ShowNotesGeneratorNotInitializedError(ToolExecutionError):
-    """Raised when the show-notes executor has no initialized generator."""
+    """Raised when the show-notes executor has no initialised generator."""
 
 
 class ShowNotesFormatError(ToolExecutionError):

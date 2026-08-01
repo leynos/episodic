@@ -32,6 +32,11 @@ def redact_snapshot_uuids(value: object) -> object:
     -------
     object
         A structure with UUID objects and UUID substrings replaced.
+
+    Raises
+    ------
+    ValueError
+        If distinct dictionary keys collide after UUID redaction.
     """
     match value:
         case uuid.UUID():
@@ -39,10 +44,14 @@ def redact_snapshot_uuids(value: object) -> object:
         case str():
             return _UUID_PATTERN.sub("<uuid>", value)
         case dict():
-            return {
-                redact_snapshot_uuids(key): redact_snapshot_uuids(item)
-                for key, item in value.items()
-            }
+            redacted: dict[object, object] = {}
+            for key, item in value.items():
+                redacted_key = redact_snapshot_uuids(key)
+                if redacted_key in redacted:
+                    msg = "distinct dictionary keys collide after UUID redaction"
+                    raise ValueError(msg)
+                redacted[redacted_key] = redact_snapshot_uuids(item)
+            return redacted
         case list():
             return [redact_snapshot_uuids(item) for item in value]
         case tuple():

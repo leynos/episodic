@@ -125,9 +125,9 @@ def _action_result_from_tokens(tokens: PropTokenInputs) -> ActionExecutionResult
 
 def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
     """Assert non-negative token counts and the expected aggregate total."""
-    assert usage.input_tokens >= 0, "Expected values to satisfy the required ordering"
-    assert usage.output_tokens >= 0, "Expected values to satisfy the required ordering"
-    assert usage.total_tokens >= 0, "Expected values to satisfy the required ordering"
+    assert usage.input_tokens >= 0, "usage.input_tokens count must be non-negative"
+    assert usage.output_tokens >= 0, "usage.output_tokens count must be non-negative"
+    assert usage.total_tokens >= 0, "usage.total_tokens count must be non-negative"
     assert usage.total_tokens == expected_total, "Expected values to match"
 
 

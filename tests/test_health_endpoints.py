@@ -49,8 +49,10 @@ async def test_health_endpoints_without_probes_return_ok(
     ) as client:
         response = await client.get(endpoint)
 
-    assert response.status_code == 200, "Expected values to match"
-    assert response.json() == expected_body, "Expected values to match"
+    assert response.status_code == 200, "health response status must be HTTP 200"
+    assert response.json() == expected_body, (
+        "health response body must match the expected probe payload"
+    )
 
 
 @pytest.mark.asyncio

@@ -103,7 +103,8 @@ class InMemoryGenerationRunStore:
         Returns
         -------
         GenerationRun
-            Result produced by the operation.
+            Existing run for a matching idempotency key, or ``run`` after
+            creation.
         """
         async with self._lock:
             if idempotency_key is not None:

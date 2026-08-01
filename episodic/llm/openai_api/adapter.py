@@ -184,7 +184,19 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         -------
         LLMResponse
             Normalized provider text and concrete usage counts.
-        """
+
+        Raises
+        ------
+        LLMProviderResponseError
+            If the requested operation is unsupported, the provider returns a
+            non-retryable error or malformed response, or response
+            normalization fails.
+        LLMTransientProviderError
+            If transient provider failures exhaust the configured retries.
+        LLMTokenBudgetExceededError
+            If preflight validation or provider-reported usage exceeds the
+            request token budget.
+        """  # noqa: DOC502  # Documents exceptions propagated by collaborators.
         token_budget = request.token_budget
         if token_budget is not None:
             _validate_preflight_budget(request, token_budget, self._chars_per_token)

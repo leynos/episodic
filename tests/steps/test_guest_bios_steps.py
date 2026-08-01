@@ -354,12 +354,20 @@ def assert_guest_bios_result_structure(
     """Verify the result contains a structured biography tied to its source."""
     result = guest_bios_context.result
     assert result is not None, "Expected a GuestBiosResult, got None."
-    assert len(result.entries) == 1, "Expected values to match"
+    assert len(result.entries) == 1, "guest biography entry count must equal one"
     entry = result.entries[0]
-    assert entry.display_name == "Ada Lovelace", "Expected values to match"
-    assert "analytical engines" in entry.bio, "Expected collection to contain the value"
-    assert entry.reference_document_revision_id == "rev-ada", "Expected values to match"
-    assert result.usage.total_tokens == 62, "Expected values to match"
+    assert entry.display_name == "Ada Lovelace", (
+        "guest biography display name must equal Ada Lovelace"
+    )
+    assert "analytical engines" in entry.bio, (
+        "guest biography content must mention analytical engines"
+    )
+    assert entry.reference_document_revision_id == "rev-ada", (
+        "guest biography revision identifier must equal rev-ada"
+    )
+    assert result.usage.total_tokens == 62, (
+        "guest biography usage token count must equal 62"
+    )
 
 
 @then("the guest-bios prompt includes the pinned guest profile content")

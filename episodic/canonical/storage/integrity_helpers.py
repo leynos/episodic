@@ -29,7 +29,8 @@ def constraint_name(exc: BaseException) -> str | None:
     Returns
     -------
     str | None
-        Result produced by the operation.
+        Discovered PostgreSQL constraint name, or ``None`` when no candidate
+        exposes one.
     """
 
     def _from_candidate(candidate: object | None) -> str | None:
@@ -64,7 +65,7 @@ def is_revision_conflict_integrity_error(
     Returns
     -------
     bool
-        Result produced by the operation.
+        ``True`` for a recognized revision conflict; otherwise ``False``.
     """
     name = constraint_name(exc)
     if name in REVISION_CONSTRAINT_NAMES:

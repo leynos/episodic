@@ -73,7 +73,9 @@ def test_helm_chart_lints() -> None:
 def test_helm_local_manifest_snapshot(snapshot: SnapshotAssertion) -> None:
     """Capture the local preview manifest shape."""
     manifest = _redact_helm_checksums(_render_local_chart())
-    assert manifest == snapshot, "Expected values to match"
+    assert manifest == snapshot, (
+        "redacted local Helm manifest must match its recorded snapshot"
+    )
 
 
 def test_helm_local_manifest_includes_nile_valley_contract(

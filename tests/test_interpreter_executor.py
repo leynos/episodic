@@ -162,7 +162,7 @@ async def test_interpreter_executor_shutdown_waits_for_active_map(
     )
 
     blocking_executor.release_map.set()
-    assert await map_task == [4, 16], "Expected values to match"
+    assert await map_task == [4, 16], "map_ordered() result must equal [4, 16]"
     await shutdown_task
     assert blocking_executor.shutdown_called.is_set(), (
         "Expected shutdown() to reach the pool after map_ordered() completes."
@@ -205,7 +205,7 @@ def test_interpreter_executor_shutdown_is_idempotent() -> None:
 
     executor.shutdown()
     executor.shutdown()
-    assert executor._is_shutdown is True, "Expected values to match"
+    assert executor._is_shutdown is True, "executor._is_shutdown must be True"
 
 
 @pytest.mark.asyncio
@@ -334,7 +334,7 @@ async def test_builder_parses_max_workers_from_environment(
         _capability_check=lambda: True,
     )
     assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
-        "Expected value to have the required type"
+        "executor must be an InterpreterPoolCpuTaskExecutor"
     )
 
     try:

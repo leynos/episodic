@@ -90,7 +90,9 @@ async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
         episode_id=other_episode.id,
     )
 
-    assert resolved == [], "Expected values to match"
+    assert resolved == [], (
+        "bindings for an episode in another series must resolve to an empty list"
+    )
 
 
 async def test_resolve_bindings_skips_template_from_wrong_series(
