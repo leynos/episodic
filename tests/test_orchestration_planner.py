@@ -37,10 +37,12 @@ async def test_planner_returns_typed_plan_and_uses_planning_model() -> None:
 
     result = await planner.plan(_request())
 
-    assert result.plan.plan_version == "1.0", "Expected values to match"
-    assert result.plan.selected_planning_model == "gpt-4.1", "Expected values to match"
+    assert result.plan.plan_version == "1.0", "plan_version must equal 1.0"
+    assert result.plan.selected_planning_model == "gpt-4.1", (
+        "selected_planning_model must equal gpt-4.1"
+    )
     assert result.plan.selected_execution_model == "gpt-4o-mini", (
-        "Expected values to match"
+        "selected_execution_model must equal gpt-4o-mini"
     )
     assert result.plan.steps == (
         PlannedAction(
@@ -50,20 +52,20 @@ async def test_planner_returns_typed_plan_and_uses_planning_model() -> None:
             model_tier=ModelTier.EXECUTION,
             required_inputs=("script_tei_xml", "template_structure"),
         ),
-    ), "Expected values to match"
-    assert result.usage is not None, "Expected value to be present"
-    assert result.usage.total_tokens == 52, "Expected values to match"
+    ), "plan steps must equal the expected show-notes action"
+    assert result.usage is not None, "planner usage must be present"
+    assert result.usage.total_tokens == 52, "planner usage total_tokens must equal 52"
 
     request = llm.requests[0]
-    assert request.model == "gpt-4.1", "Expected values to match"
+    assert request.model == "gpt-4.1", "request.model must equal gpt-4.1"
     assert request.provider_operation == LLMProviderOperation.CHAT_COMPLETIONS, (
-        "Expected values to match"
+        "request.provider_operation must be CHAT_COMPLETIONS"
     )
     assert "enabled_action_kinds" in request.prompt, (
-        "Expected collection to contain the value"
+        "request.prompt must include enabled_action_kinds"
     )
     assert "script_tei_xml" in request.prompt, (
-        "Expected collection to contain the value"
+        "request.prompt must include script_tei_xml"
     )
 
 

@@ -46,7 +46,7 @@ def test_fixture_config_normal_fixture_excludes_package_barrel(
     config = _read_fixture_config(tmp_path, package_name)
 
     assert _group_prefixes(config, "outbound_adapter") == [f"{package}.storage"], (
-        "Expected values to match"
+        "outbound-adapter prefix must identify the fixture storage package"
     )
 
 

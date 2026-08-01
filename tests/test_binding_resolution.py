@@ -162,9 +162,16 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
         resolved = await resolve_bindings(
             uow, series_profile_id=series.id, episode_id=episode.id
         )
-        assert len(resolved) == 1, "each context must resolve one binding"
-        assert resolved[0].binding.id == binding.id, "binding must match context"
-        assert resolved[0].revision.id == revision.id, "revision must match context"
+        match resolved:
+            case [ResolvedBinding() as resolved_binding]:
+                assert resolved_binding.binding.id == binding.id, (
+                    "binding must match context"
+                )
+                assert resolved_binding.revision.id == revision.id, (
+                    "revision must match context"
+                )
+            case _:
+                pytest.fail("each context must resolve exactly one binding")
 
 
 async def test_resolve_bindings_excludes_future_episode_bindings(

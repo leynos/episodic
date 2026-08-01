@@ -90,6 +90,9 @@ class _BDDResumePort:
         match command:
             case ResumeWorkflowCommand(result=result):
                 return result
+            case _:
+                msg = f"unsupported resume command: {type(command).__name__}"
+                raise TypeError(msg)
 
 
 @dc.dataclass(slots=True)

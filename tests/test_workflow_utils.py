@@ -50,7 +50,7 @@ def assert_validation_workflow_result(
     returns normally when the artifact reports ``ok`` and ``validate``.
     """
     # Strict equality is part of the process exit-code contract.
-    assert exit_code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero
+    assert exit_code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero  # Process status must equal zero exactly.
     try:
         data = read_artifact_json(artifact_dir, artifact_name, logs)
     except json.JSONDecodeError as exc:
@@ -93,13 +93,22 @@ def artifact_server_addr() -> str:
 
 def _ensure_string_kv(key: object, item: object) -> tuple[str, str]:
     """Assert *key* and *item* are both strings and return them typed."""
-    if not isinstance(key, str):
-        msg = f"Expected a string key, got {type(key).__name__}"
-        raise AssertionError(msg)  # noqa: TRY004  # The polling helper raises AssertionError to report an unmet test expectation.
-    if not isinstance(item, str):
-        msg = f"Expected a string value for key {key!r}, got {type(item).__name__}"
-        raise AssertionError(msg)  # noqa: TRY004  # The polling helper raises AssertionError to report an unmet test expectation.
-    return key, item
+    match key:
+        case str():
+            pass
+        case _:
+            msg = f"Expected a string key, got {type(key).__name__}"
+            raise AssertionError(
+                msg
+            )  # The polling helper reports an unmet test expectation.
+    match item:
+        case str():
+            return key, item
+        case _:
+            msg = f"Expected a string value for key {key!r}, got {type(item).__name__}"
+            raise AssertionError(
+                msg
+            )  # The polling helper reports an unmet test expectation.
 
 
 def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:

@@ -232,16 +232,7 @@ async def _acquire_and_run_failing_work(
     session_factory: async_sessionmaker[AsyncSession],
     idempotency_key: str,
 ) -> Acquired:
-    """Acquire an idempotency record, run failing work, and return the outcome.
-
-    Asserts that the acquire returns ``Acquired`` and ``_idempotent_response``
-    propagates the ``RuntimeError("boom")`` raised by work.
-
-    Returns
-    -------
-    Acquired
-        Result produced by the operation.
-    """
+    """Acquire an idempotency record and exercise failing work."""
     request = _idempotency_request(idempotency_key)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         outcome = await uow.idempotency.acquire(request=request)

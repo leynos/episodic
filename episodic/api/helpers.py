@@ -165,23 +165,7 @@ def _parse_int_query_param(
     name: str,
     default: int,
 ) -> int:
-    """Parse an optional integer query parameter or raise ``validation_error``.
-
-    Returns ``default`` when the caller omitted the parameter. Otherwise
-    attempts ``int(raw_value)`` and raises a typed envelope error with the
-    field name and ``constraint="type"`` when parsing fails.
-
-    Returns
-    -------
-    int
-        Result produced by the operation.
-
-    Raises
-    ------
-    falcon.HTTPBadRequest
-        If a supplied value is not an integer; the exception carries the
-        validation error envelope for ``name``.
-    """  # noqa: DOC501, DOC502  # validation_error returns this concrete Falcon exception.
+    """Parse an optional integer query parameter or raise a validation error."""
     if raw_value is None:
         return default
     try:

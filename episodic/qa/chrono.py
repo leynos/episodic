@@ -200,7 +200,7 @@ def _compute_estimated_seconds(spoken_word_count: int, words_per_minute: int) ->
     Returns
     -------
     int
-        Result produced by the operation.
+        Ceiling of the spoken duration in seconds.
     """
     if spoken_word_count == 0:
         return 0

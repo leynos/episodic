@@ -37,11 +37,11 @@ async def test_create_app_runs_shutdown_hooks_during_asgi_shutdown() -> None:
         ),
     )
 
-    assert hook_calls == ["shutdown"], "Expected values to match"
+    assert hook_calls == ["shutdown"], "hook_calls must contain only shutdown"
     assert sent_events == [
         {"type": "lifespan.startup.complete"},
         {"type": "lifespan.shutdown.complete"},
-    ], "Expected values to match"
+    ], "sent_events must contain completed startup and shutdown events"
 
 
 @pytest.mark.asyncio
@@ -51,7 +51,7 @@ async def test_create_app_keeps_existing_canonical_routes_working(
     """Keep the canonical-content routes available through the new seam."""
     response = await canonical_api_async_client.get("/v1/series-profiles")
 
-    assert response.status_code == 200, "Expected values to match"
+    assert response.status_code == 200, "response status must be HTTP 200"
     assert response.json() == {"items": [], "limit": 20, "offset": 0, "total": 0}, (
-        "Expected values to match"
+        "response payload must match the empty series-profile page"
     )
