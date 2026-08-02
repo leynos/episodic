@@ -5,4 +5,4 @@ from tests.fixtures.architecture.celery_task_imports_domain_service.worker impor
     workloads,
 )
 
-VALUE = (service.VALUE, workloads.VALUE)
+VALUE: tuple[str, str] = (service.VALUE, workloads.VALUE)
