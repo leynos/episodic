@@ -243,6 +243,20 @@ class PlannerResult:
     )
 
 
+class ShowNotesEntryAttachment(typ.Protocol):
+    """Provider-neutral fields consumed from one show-notes entry."""
+
+    @property
+    def topic(self) -> str:
+        """Return the show-note topic."""
+        raise NotImplementedError
+
+    @property
+    def tei_locator(self) -> str | None:
+        """Return the optional source TEI locator."""
+        raise NotImplementedError
+
+
 class ShowNotesResultAttachment(typ.Protocol):
     """Provider-neutral shape for show-notes tool result attachments."""
 
@@ -252,7 +266,7 @@ class ShowNotesResultAttachment(typ.Protocol):
         raise NotImplementedError
 
     @property
-    def entries(self) -> tuple[typ.Any, ...]:
+    def entries(self) -> tuple[ShowNotesEntryAttachment, ...]:
         """Return show-note entries without importing generation DTOs."""
         raise NotImplementedError
 
@@ -266,6 +280,15 @@ class GenerationResultAttachment(typ.Protocol):
         raise NotImplementedError
 
 
+class GuestBioSourceAttachment(typ.Protocol):
+    """Provider-neutral fields consumed from one guest-bio source."""
+
+    @property
+    def reference_document_revision_id(self) -> str:
+        """Return the pinned source revision identifier."""
+        raise NotImplementedError
+
+
 class GuestBiosResultAttachment(typ.Protocol):
     """Provider-neutral shape for guest-bios tool result attachments."""
 
@@ -275,7 +298,7 @@ class GuestBiosResultAttachment(typ.Protocol):
         raise NotImplementedError
 
     @property
-    def sources(self) -> tuple[typ.Any, ...]:
+    def sources(self) -> tuple[GuestBioSourceAttachment, ...]:
         """Return source attachments without importing canonical DTOs."""
         raise NotImplementedError
 
