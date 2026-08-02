@@ -1,7 +1,6 @@
 """Vidai Mock behavioural coverage for the generation LangGraph path."""
 
-from __future__ import annotations
-
+import contextlib
 import dataclasses as dc
 import subprocess  # noqa: S404 - required to manage the local Vidai Mock process
 import typing as typ
@@ -78,13 +77,10 @@ def vidaimock_context(tmp_path: Path) -> cabc.Iterator[_VidaiContext]:
     write_provider_config(provider_dir)
     write_response_template(template_dir)
     context = _VidaiContext()
-    start_vidaimock_process(
-        typ.cast("typ.Any", context), tmp_path, port=find_free_port()
-    )
-    try:
+    with contextlib.ExitStack() as stack:
+        stack.callback(context.stop)
+        start_vidaimock_process(context, tmp_path, port=find_free_port())
         yield context
-    finally:
-        context.stop()
 
 
 @pytest.mark.asyncio
