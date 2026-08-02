@@ -146,10 +146,7 @@ def _validate_unique_queue_names(queues: tuple[WorkerQueueSpec, ...]) -> None:
 def _validate_unique_workload_mappings(
     queues: tuple[WorkerQueueSpec, ...],
 ) -> dict[WorkloadClass, WorkerQueueSpec]:
-    """Raise ValueError if any two queues share the same workload class.
-
-    Return the mapping.
-    """
+    """Map each configured workload class to its unique queue."""
     queue_map = {queue.workload: queue for queue in queues}
     if len(queue_map) != len(queues):
         msg = "WorkerTopology.queues must contain unique workload mappings."

@@ -270,7 +270,7 @@ def _invoke_finish_callback(
             "generation_graph.finish_node.callback.finish",
             correlation_id=correlation_id,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - callback failure must not replace result
         _log_event(
             "error",
             "generation_graph.finish_node.callback.error",
@@ -367,11 +367,16 @@ def _build_execute_node(
     tool_executor: protocols.ToolExecutorPort,
     checkpoint_port: protocols.CheckpointPort | None,
 ) -> tuple[ExecuteNodeFn, str]:
-    """Return *(execute_node_fn, execute_target)* for the graph.
+    """Build the graph's execute node and its target.
 
     When *checkpoint_port* is ``None``, returns the direct execute node
     targeting ``"finish"``. Otherwise returns the suspend-before-execute node
     targeting ``END``.
+
+    Returns
+    -------
+    tuple[ExecuteNodeFn, str]
+        The execute-node callable and its graph target.
     """
     if checkpoint_port is None:
 
@@ -419,6 +424,11 @@ def build_generation_orchestration_graph(
             actions.
         extensions: Optional persistence, callback, and cost-recording
             collaborators for graph execution.
+
+    Returns
+    -------
+    CompiledStateGraph
+        The compiled graph containing the plan, execute, and finish nodes.
     """
     graph_extensions = extensions or GenerationGraphExtensions()
     graph = StateGraph(GenerationGraphState)

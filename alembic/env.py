@@ -38,7 +38,7 @@ def _configure_database_url() -> None:
     """Ensure sqlalchemy.url is set from the environment or existing config."""
     db_url = os.environ.get("DATABASE_URL")
     if db_url:
-        config.set_main_option("sqlalchemy.url", db_url)
+        config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
         return
     current = config.get_main_option("sqlalchemy.url")
     if not current:

@@ -49,8 +49,8 @@ make lint
 
 The target runs the Hecate architecture import-boundary checker, Ruff, a
 focused Pylint 4 pass, and a blocking Skylos dead-code scan. The Pylint pass is
-invoked through
-`uv tool run --python pypy` with the pinned `pylint-pypy-shim` wrapper from
+invoked through `uv tool run --python pypy` with the pinned `pylint-pypy-shim`
+wrapper from
 [github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
 That wrapper installs the PyPy-specific Astroid compatibility patch before
 delegating to Pylint.
@@ -73,8 +73,8 @@ and fails when an unexplained finding remains. It does not invoke cloud or
 Large Language Model (LLM) analysis and never modifies source files.
 
 Treat every new finding as dead code until its runtime caller is verified.
-Remove genuine dead code. For framework callbacks, protocol implementations,
-or dataclass validation hooks that static analysis cannot see, prefer a precise
+Remove genuine dead code. For framework callbacks, protocol implementations, or
+dataclass validation hooks that static analysis cannot see, prefer a precise
 entry-point rule in `[tool.skylos.dead_code]`. Match the symbol's actual kind
 and fully qualified name, and explain the verified runtime caller. In
 particular, use `type = "method"` for instance methods rather than

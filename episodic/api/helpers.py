@@ -163,12 +163,7 @@ def _parse_int_query_param(
     name: str,
     default: int,
 ) -> int:
-    """Parse an optional integer query parameter or raise ``validation_error``.
-
-    Returns ``default`` when the caller omitted the parameter. Otherwise
-    attempts ``int(raw_value)`` and raises a typed envelope error with the
-    field name and ``constraint="type"`` when parsing fails.
-    """
+    """Parse an optional integer query parameter or raise a validation error."""
     if raw_value is None:
         return default
     try:

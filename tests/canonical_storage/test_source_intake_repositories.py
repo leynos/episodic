@@ -219,7 +219,7 @@ async def test_sqlalchemy_idempotency_store_replays_and_conflicts(
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         acquired = await uow.idempotency.acquire(request=request)
-        assert not isinstance(acquired, Replay | Conflict | InFlight)
+        assert isinstance(acquired, Acquired)
         await uow.idempotency.complete(
             record_id=acquired.record_id,
             serialised_outcome=b'{"ok":true}',

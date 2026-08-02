@@ -70,7 +70,7 @@ def _handle_generator_error(
     context: GenerationOrchestrationRequest,
     action: PlannedAction,
 ) -> typing.Never:
-    """Dispatch a generator exception to the appropriate tool-layer error and raise it."""  # noqa: E501
+    """Dispatch and raise a generator error at the tool boundary."""
     if isinstance(exc, ToolExecutionError):
         _log_event(
             "error",
@@ -206,7 +206,7 @@ class ShowNotesToolExecutor:
         context: GenerationOrchestrationRequest,
         action: PlannedAction,
     ) -> ShowNotesResult:
-        """Return ``ShowNotesResult`` from ``generator.generate``; route errors via ``_handle_generator_error``."""  # noqa: E501
+        """Invoke the generator and route errors through the tool boundary."""
         try:
             return await generator.generate(
                 context.script_tei_xml,

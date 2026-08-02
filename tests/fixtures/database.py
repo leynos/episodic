@@ -49,11 +49,7 @@ def pglite_node_environment(
 
 
 def _should_use_pglite() -> bool:
-    """Return True when tests should attempt py-pglite.
-
-    If a non-SQLite backend is requested but py-pglite is unavailable,
-    fail fast with a clear error instead of silently skipping tests.
-    """
+    """Return whether tests should use py-pglite, rejecting invalid setups."""
     allowed_values = {"sqlite", "pglite"}
     target = os.getenv("EPISODIC_TEST_DB", "pglite").lower()
     if target not in allowed_values:

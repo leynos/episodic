@@ -53,6 +53,11 @@ def openai_log_spy() -> cabc.Generator[_OpenAILogSpy]:
 
     Uses ``_log_override`` to redirect log output within the current Python
     context only. No xdist grouping or serialisation is required.
+
+    Yields
+    ------
+    _OpenAILogSpy
+        The log spy produced for the current fixture iteration.
     """
     from episodic.llm.openai_api import utils as openai_utils
 
