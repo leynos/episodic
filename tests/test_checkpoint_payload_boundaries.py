@@ -103,6 +103,31 @@ def test_workflow_checkpoint_rejects_non_json_payload_values() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"value": (1, 2)}, id="tuple-value"),
+        pytest.param({1: "one"}, id="non-string-key"),
+    ],
+)
+def test_workflow_checkpoint_rejects_lossy_json_payloads(
+    payload: dict[object, object],
+) -> None:
+    """WorkflowCheckpoint rejects payloads changed by a JSON round trip."""
+    with pytest.raises(
+        TypeError,
+        match="payload must be JSON-serializable without data loss",
+    ):
+        WorkflowCheckpoint(
+            checkpoint_id="checkpoint-1",
+            workflow_id="workflow-1",
+            workflow_type="generation_orchestration",
+            step_name="execute",
+            idempotency_key="workflow-1:generation_orchestration:execute:action-1:0",
+            payload=typ.cast("dict[str, object]", payload),
+        )
+
+
 @given(payload=_JSON_VALUE_STRATEGY)
 def test_workflow_checkpoint_payload_round_trips_through_json(payload: object) -> None:
     """Any valid checkpoint payload value survives JSON serialisation unchanged."""
