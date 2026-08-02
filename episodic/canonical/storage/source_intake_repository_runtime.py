@@ -34,14 +34,14 @@ class SourceIntakeStorageRuntime:
 
     Attributes
     ----------
-    clock
-        UTC timestamp provider.
-    uuid_factory
-        UUID provider.
-    metrics
-        Metrics implementation.
-    monotonic_clock
-        Monotonic time provider.
+    clock : Clock
+        Provider for the current UTC time.
+    uuid_factory : UuidFactory
+        Provider for new idempotency record identifiers.
+    metrics : MetricsPort
+        Sink for source-intake repository metrics.
+    monotonic_clock : MonotonicClockPort
+        Provider for monotonic timing measurements.
     """
 
     clock: Clock
@@ -66,22 +66,21 @@ def source_intake_storage_runtime(
     metrics: MetricsPort | None = None,
     monotonic_clock: MonotonicClockPort | None = None,
 ) -> SourceIntakeStorageRuntime:
-    """Return SQLAlchemy source-intake providers with production defaults.
+    """Build SQLAlchemy source-intake providers with production defaults.
 
     Parameters
     ----------
-    runtime
-        Provider bundle to return unchanged when supplied.
-    metrics
-        Optional metrics implementation. Defaults to ``NoopMetrics``.
-    monotonic_clock
-        Optional monotonic time provider. Defaults to ``PerfCounterClock``.
+    runtime : SourceIntakeStorageRuntime | None
+        Complete runtime to return unchanged, or ``None`` to build one.
+    metrics : MetricsPort | None, optional
+        Metrics sink, defaulting to ``NoopMetrics``.
+    monotonic_clock : MonotonicClockPort | None, optional
+        Monotonic clock, defaulting to ``PerfCounterClock``.
 
     Returns
     -------
     SourceIntakeStorageRuntime
-        The supplied provider bundle or one constructed with production
-        defaults.
+        The supplied runtime or a runtime populated with production defaults.
     """
     if runtime is not None:
         return runtime

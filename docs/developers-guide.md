@@ -60,7 +60,7 @@ The target runs this repository-wide pipeline, in order:
 2. Ruff formatting-independent lint checks;
 3. the focused built-in Pylint 4 rules under managed PyPy;
 4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
-   separate future-annotations pass; and
+   separate future-annotations pass;
 5. `ambrleaks` over Syrupy snapshots under `tests`; and
 6. a blocking Skylos dead-code scan.
 

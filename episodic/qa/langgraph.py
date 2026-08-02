@@ -8,7 +8,7 @@ from langgraph.graph.state import (
     CompiledStateGraph,  # noqa: TC002  # This type remains available at runtime for annotation introspection.
 )
 
-from .pedante import (  # noqa: TC001  # These types stay available because LangGraph evaluates PedanteGraphState annotations at runtime.
+from .pedante import (  # noqa: TC001 - required for LangGraph state introspection
     PedanteEvaluationRequest,
     PedanteEvaluationResult,
 )
