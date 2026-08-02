@@ -47,18 +47,20 @@ deterministic import-boundary enforcement, accepting a more detailed
 The accepted groups are:
 
 - `orchestration_nodes` for `episodic.orchestration._graph_nodes`, allowed to
-  depend on orchestration DTOs and domain ports only.
+  depend on the `orchestration_checkpoint` DTO group and domain ports only.
 - `orchestration` for graph builders, planning orchestration, and tool
   execution policy, allowed to depend on application services and checkpoint
   DTOs but not adapters.
 - `orchestration_tasks` for `episodic.worker.tasks`, allowed to depend on
-  domain services, domain ports, and `episodic.worker.topology.WorkloadClass`.
+  domain services, domain ports, and
+  `episodic.worker.workloads.WorkloadClass`.
 - `orchestration_checkpoint` for checkpoint DTO and payload serialization
   modules, allowed to depend on itself and domain-port value types only.
 
-`episodic.worker.topology.WorkloadClass` is treated as a domain-port-like
-worker contract so task modules can describe workload routing without importing
-the Celery runtime.
+`episodic.worker.workloads.WorkloadClass` is the canonical domain-port-like
+worker contract, so task modules can describe workload routing without
+importing the Celery runtime. `episodic.worker.topology.WorkloadClass` remains
+an explicit compatibility alias only.
 
 ## Consequences
 
@@ -72,8 +74,9 @@ the Celery runtime.
 
 ### Negative
 
-- Hecate group ordering now matters more. Specific orchestration prefixes must
-  stay before broader orchestration and adapter prefixes.
+- Hecate group ordering now matters more. The dedicated
+  `orchestration_nodes` prefix must stay before the broader `orchestration` and
+  adapter prefixes.
 - New orchestration fixtures must mirror production module prefixes closely or
   they will not exercise the intended group.
 
