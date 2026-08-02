@@ -35,9 +35,19 @@ else:
     protocols = importlib.import_module("episodic.orchestration._protocols")
 
 
-@dc.dataclass
+@dc.dataclass(slots=True)
 class GenerationGraphExtensions:
-    """Optional collaborators for the generation orchestration graph."""
+    """Optional collaborators for the generation orchestration graph.
+
+    Attributes
+    ----------
+    checkpoint_port : CheckpointPort | None
+        Persistence boundary used to suspend and resume graph execution.
+    finish_callback : Callable[[GenerationOrchestrationResult], None] | None
+        Optional callback invoked with the completed orchestration result.
+    cost_recorder : CostRecorderPort | None
+        Optional port used to persist provider-call cost records.
+    """
 
     checkpoint_port: protocols.CheckpointPort | None = None
     finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None] | None = (
@@ -48,7 +58,7 @@ class GenerationGraphExtensions:
 
 def _invoke_finish_callback(
     finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None],
-    result: dict[str, dto.GenerationOrchestrationResult],
+    result: dto.GenerationOrchestrationResult,
     correlation_id: str | None,
 ) -> None:
     """Invoke *finish_callback* with the aggregated domain result.
@@ -60,7 +70,7 @@ def _invoke_finish_callback(
     invocations must provide their own synchronization.
     """
     try:
-        finish_callback(result["orchestration_result"])
+        finish_callback(result)
         _log_event(
             "debug",
             "generation_graph.finish_node.callback.finish",
@@ -238,7 +248,9 @@ def build_generation_orchestration_graph(
                 state.request.correlation_id if state.request is not None else None
             )
             _invoke_finish_callback(
-                graph_extensions.finish_callback, result, correlation_id
+                graph_extensions.finish_callback,
+                result["orchestration_result"],
+                correlation_id,
             )
         return result
 

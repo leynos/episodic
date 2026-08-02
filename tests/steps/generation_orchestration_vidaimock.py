@@ -13,7 +13,12 @@ import pytest
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
-    from tests.steps.test_generation_orchestration_steps import OrchestrationBDDContext
+
+class _VidaiProcessContext(typ.Protocol):
+    """Structural context required to start Vidai Mock."""
+
+    process: subprocess.Popen[str] | None
+    base_url: str
 
 
 def find_free_port() -> int:
@@ -146,7 +151,7 @@ def _await_port_ready(
 
 
 def start_vidaimock_process(
-    orchestration_context: OrchestrationBDDContext,
+    orchestration_context: _VidaiProcessContext,
     config_dir: Path,
     port: int,
 ) -> None:
