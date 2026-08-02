@@ -796,6 +796,7 @@ allowed = [
     "inbound_adapter",
     "orchestration",
     "orchestration_checkpoint",
+    "orchestration_nodes",
     "orchestration_tasks",
     "outbound_adapter",
 ]
@@ -840,13 +841,23 @@ prefixes = [
 allowed = ["orchestration_checkpoint", "domain_ports"]
 
 [[tool.hecate.groups]]
+name = "orchestration_nodes"
+prefixes = ["episodic.orchestration._graph_nodes"]
+allowed = ["orchestration_nodes", "domain_ports", "orchestration_checkpoint"]
+
+[[tool.hecate.groups]]
 name = "orchestration"
 prefixes = [
     "episodic.orchestration._graph_builder",
-    "episodic.orchestration._graph_nodes",
     "episodic.orchestration.langgraph",
 ]
-allowed = ["orchestration", "application", "domain_ports", "orchestration_checkpoint"]
+allowed = [
+    "orchestration",
+    "application",
+    "domain_ports",
+    "orchestration_checkpoint",
+    "orchestration_nodes",
+]
 
 [[tool.hecate.groups]]
 name = "application"

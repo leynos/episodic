@@ -795,7 +795,9 @@ The enforced groups are:
 - `orchestration_checkpoint`: provider-neutral checkpoint payload DTO and
   serialization modules.
 - `orchestration`: LangGraph builders, graph state, planning orchestration, and
-  tool execution policy, excluding the dedicated node group.
+  tool execution policy, excluding the dedicated node group. This group may
+  depend on `orchestration_nodes` because graph builders and the public facade
+  assemble and expose those nodes.
 - `orchestration_tasks`: Celery task entrypoints.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.

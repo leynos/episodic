@@ -279,10 +279,11 @@ def test_production_check_wraps_subprocess_errors(
     )
 
 
+@pytest.mark.parametrize("output_format", ["text", "json"])
 def test_fixture_check_uses_injected_python_and_explicit_arguments(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    snapshot: SnapshotAssertion,
+    output_format: typ.Literal["text", "json"],
 ) -> None:
     """Fixture checks construct an isolated Hecate command."""
     config_path = write_fixture_config(tmp_path, "allowed_case")
@@ -308,15 +309,28 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
         "allowed_case",
         config_path,
         python_executable="/custom/python",
+        output_format=output_format,
     )
 
-    fixture_root = REPO_ROOT / "tests/fixtures/architecture/allowed_case"
-    assert captured_command[5] == str(config_path), "config path must match"
-    assert captured_command[9] == str(fixture_root), "fixture root must match"
-    stable_command = [*captured_command]
-    stable_command[5] = "<generated-config>"
-    stable_command[9] = "<fixture-root>"
-    assert stable_command == snapshot, "fixture Hecate command must match its snapshot"
+    assert captured_command == [
+        "/custom/python",
+        "-m",
+        "hecate",
+        "check",
+        "--config",
+        str(config_path),
+        "--package",
+        "tests.fixtures.architecture.allowed_case",
+        "--root",
+        str(
+            Path(__file__).resolve().parent
+            / "fixtures"
+            / "architecture"
+            / "allowed_case",
+        ),
+        "--format",
+        output_format,
+    ]
 
 
 def test_production_check_uses_injected_python(
