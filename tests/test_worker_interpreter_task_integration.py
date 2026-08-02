@@ -47,7 +47,9 @@ def test_eager_cpu_task_body_uses_environment_executor_pattern(
         "items": [-1, 3, -5],
     })
 
-    assert task_result.get() == {"results": [1, 3, 5]}, "Expected values to match"
+    assert task_result.get() == {"results": [1, 3, 5]}, (
+        "eager Celery result must equal the absolute-value mapping"
+    )
     assert captured_interpreter_pool_workers == [2], (
         "Expected eager Celery task body to honour interpreter-pool env."
     )

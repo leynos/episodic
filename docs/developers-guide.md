@@ -96,12 +96,13 @@ over the same scope:
 ```shell
 uv run --python 3.14 pylint --disable=all \
   --load-plugins=df12_python_lints --enable=C9112 \
-  --ignore-patterns='test_.*_steps.py' \
+  --ignore-paths='^tests/steps/test_.*_steps[.]py$' \
   alembic episodic openai_test_types.py tests
 ```
 
-Existing pytest-bdd step modules match `test_*_steps.py` and retain postponed
-annotations because pytest-bdd evaluates step annotations at runtime. The
+Existing pytest-bdd step modules under `tests/steps/` match
+`test_*_steps.py` and retain postponed annotations because pytest-bdd
+evaluates step annotations at runtime. The anchored path expression in the
 separate C9112 pass exempts only those modules; every other df12 check still
 covers them.
 

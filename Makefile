@@ -32,7 +32,7 @@ DF12_PYLINT_BASE = $(UV_ENV) $(UV) run --python $(DF12_PYTHON) pylint \
 	--disable=all --load-plugins=df12_python_lints
 DF12_PYLINT = $(DF12_PYLINT_BASE) --enable=$(DF12_PYLINT_MESSAGES)
 DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
-	--ignore-patterns='test_.*_steps.py'
+	--ignore-paths='^tests/steps/test_.*_steps[.]py$$'
 AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
 

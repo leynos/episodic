@@ -77,7 +77,9 @@ def create_profile_and_template(
             "note": "Create profile",
         },
     )
-    assert profile_response.status_code == 201, "Expected values to match"
+    assert profile_response.status_code == 201, (
+        "series-profile creation must return HTTP 201"
+    )
     profile_id = typ.cast("str", profile_response.json["id"])
 
     template_response = canonical_api_client.simulate_post(
@@ -92,7 +94,9 @@ def create_profile_and_template(
             "note": "Create template",
         },
     )
-    assert template_response.status_code == 201, "Expected values to match"
+    assert template_response.status_code == 201, (
+        "episode-template creation must return HTTP 201"
+    )
 
     context["profile_id"] = profile_id
     context["template_id"] = typ.cast("str", template_response.json["id"])
@@ -222,7 +226,9 @@ def retrieve_brief(
         f"/v1/series-profiles/{context['profile_id']}/brief",
         params={"template_id": context["template_id"]},
     )
-    assert response.status_code == 200, "Expected values to match"
+    assert response.status_code == 200, (
+        "structured brief retrieval must return HTTP 200"
+    )
     context["brief_payload"] = typ.cast("dict[str, object]", response.json)
 
 
@@ -239,7 +245,9 @@ def assert_reference_documents(context: ReferenceDocumentContext) -> None:
     )
     kinds = {typ.cast("str", item["kind"]) for item in documents}
     target_kinds = {typ.cast("str", item["target_kind"]) for item in documents}
-    assert kinds == {"host_profile", "guest_profile"}, "Expected values to match"
+    assert kinds == {"host_profile", "guest_profile"}, (
+        "brief reference-document kinds must include host and guest profiles"
+    )
     assert target_kinds == {"series_profile", "episode_template"}, (
-        "Expected values to match"
+        "brief target_kinds must include series profile and episode template"
     )

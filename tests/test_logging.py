@@ -106,7 +106,7 @@ class _LogOnlySpyLogger:
         stack_info: bool = False,
     ) -> None:
         """Record a call made through the stdlib-style log() entry point."""
-        assert isinstance(level, int), "Expected value to have the required type"
+        assert isinstance(level, int), "logger level must satisfy the integer contract"
         self.calls.append((level, message, exc_info, stack_info))
 
 
@@ -197,8 +197,10 @@ def test_configure_logging_normalizes_levels(
     assert (effective_level, used_default) == (
         expected_level,
         expected_used_default,
-    ), "Expected values to match"
-    assert recorded_calls == [(expected_level, True)], "Expected values to match"
+    ), "configure_logging must return the normalized level and default flag"
+    assert recorded_calls == [(expected_level, True)], (
+        "configure_logging must delegate the normalized level with force=True"
+    )
 
 
 def test_configure_logging_uses_false_as_default_force_value(
@@ -216,9 +218,9 @@ def test_configure_logging_uses_false_as_default_force_value(
     assert (effective_level, used_default) == (
         episodic_logging.LogLevel.DEBUG,
         False,
-    ), "Expected values to match"
+    ), "configure_logging must return DEBUG with a non-default level marker"
     assert recorded_calls == [(episodic_logging.LogLevel.DEBUG, False)], (
-        "Expected values to match"
+        "configure_logging must delegate force=False when force is omitted"
     )
 
 
@@ -238,7 +240,7 @@ def test_log_wrappers_delegate_through_convenience_methods(
         exc_info=err,
     )
 
-    assert logger.calls == snapshot, "actual output must match snapshot"
+    assert logger.calls == snapshot, "convenience-wrapper calls must match the snapshot"
 
 
 def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
@@ -272,14 +274,16 @@ def test_log_wrappers_fall_back_to_logger_log_when_needed(
         exc_info=err,
     )
 
-    assert logger.calls == snapshot, "actual output must match snapshot"
+    assert logger.calls == snapshot, "fallback logger calls must match the snapshot"
 
 
 def test_femtologging_exposes_stdlib_style_logger_surface() -> None:
     """The upgraded dependency should expose stdlib-like logger helpers."""
     import femtologging
 
-    assert hasattr(femtologging, "getLogger"), "Expected condition to hold"
+    assert hasattr(femtologging, "getLogger"), (
+        "femtologging must expose the required getLogger attribute"
+    )
 
     logger = femtologging.get_logger("tests.logging.surface")
     for method_name in (
@@ -307,7 +311,9 @@ def test_episodic_logging_get_logger_reexport_matches_femtologging_surface() -> 
         "isEnabledFor",
     ):
         assert hasattr(logger, method_name), method_name
-    assert logger.isEnabledFor("INFO") is True, "Expected values to match"
+    assert logger.isEnabledFor("INFO") is True, (
+        "re-exported logger must report INFO as enabled"
+    )
 
 
 def _raise_logged_exception() -> None:
@@ -329,7 +335,9 @@ def test_stdlib_style_logger_methods_emit_to_python_handlers(
     logger.set_propagate(False)
     logger.add_handler(collector)
 
-    assert logger.isEnabledFor("INFO") is True, "Expected values to match"
+    assert logger.isEnabledFor("INFO") is True, (
+        "runtime femtologging logger must report INFO as enabled"
+    )
 
     logger.info("hello from episodic")
     logger.error("failed job")
@@ -340,4 +348,4 @@ def test_stdlib_style_logger_methods_emit_to_python_handlers(
 
     _wait_for_record_count(logger, collector, expected_count=3)
 
-    assert collector.records == snapshot, "actual output must match snapshot"
+    assert collector.records == snapshot, "handler records must match the snapshot"

@@ -113,9 +113,14 @@ def _ensure_string_kv(key: object, item: object) -> tuple[str, str]:
 
 def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:
     """Return a mapping with str keys and str values, or raise with diagnostics."""
-    if not isinstance(value, dict):
-        msg = f"Expected a mapping[str, str], got {type(value).__name__}"
-        raise AssertionError(msg)  # noqa: TRY004  # The polling helper raises AssertionError to report an unmet test expectation.
+    match value:
+        case dict():
+            pass
+        case _:
+            msg = f"Expected a mapping[str, str], got {type(value).__name__}"
+            raise AssertionError(
+                msg
+            )  # The polling helper reports an unmet test expectation.
     result: dict[str, str] = {}
     for key, item in value.items():
         k, v = _ensure_string_kv(key, item)

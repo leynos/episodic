@@ -193,10 +193,10 @@ async def test_upload_get_endpoint_returns_upload_metadata(
         )
         response = await client.get(f"/v1/uploads/{upload_response.json()['id']}")
 
-    assert response.status_code == 200, "Expected values to match"
+    assert response.status_code == 200, "upload metadata GET must return HTTP 200"
     assert response.json()["content_hash"] == (
         f"sha256:{hashlib.sha256(payload).hexdigest()}"
-    ), "Expected values to match"
+    ), "upload content_hash must match the uploaded payload"
 
 
 @pytest.mark.asyncio
@@ -229,10 +229,10 @@ async def test_ingestion_job_sources_get_endpoint_lists_sources(
         response = await client.get(f"/v1/ingestion-jobs/{job_id}/sources")
 
     assert attach.status_code == 201, attach.text
-    assert response.status_code == 200, "Expected values to match"
-    assert response.json()["total"] == 1, "Expected values to match"
+    assert response.status_code == 200, "source-list GET must return HTTP 200"
+    assert response.json()["total"] == 1, "source-list total must equal one"
     assert response.json()["items"][0]["upload_id"] == upload.json()["id"], (
-        "Expected values to match"
+        "listed source upload_id must identify the attached upload"
     )
 
 

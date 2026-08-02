@@ -170,33 +170,37 @@ def list_sources(
 @then("the ingestion job is ready for generation")
 def assert_job_ready(context: SourceIntakeContext) -> None:
     """Verify the source attachment transitioned the intake state."""
-    assert context.upload is not None, "Expected value to be present"
-    assert context.job is not None, "Expected value to be present"
-    assert context.source is not None, "Expected value to be present"
-    assert context.status is not None, "Expected value to be present"
-    assert context.job["intake_state"] == "awaiting_sources", "Expected values to match"
+    assert context.upload is not None, "source-intake flow must create an upload"
+    assert context.job is not None, "source-intake flow must create an ingestion job"
+    assert context.source is not None, "source-intake flow must attach a source"
+    assert context.status is not None, "source-intake flow must return job status"
+    assert context.job["intake_state"] == "awaiting_sources", (
+        "new ingestion job must await sources"
+    )
     assert context.source["upload_id"] == context.upload["id"], (
-        "Expected values to match"
+        "attached source upload_id must identify the created upload"
     )
     assert context.status["intake_state"] == "ready_for_generation", (
-        "Expected values to match"
+        "attached source must transition intake state to ready_for_generation"
     )
 
 
 @then("repeated upload requests replay the stored response")
 def assert_upload_replay(context: SourceIntakeContext) -> None:
     """Verify an identical idempotency key/body pair returns the stored upload."""
-    assert context.upload is not None, "Expected value to be present"
-    assert context.upload_replay == context.upload, "Expected values to match"
+    assert context.upload is not None, "upload replay requires the original upload"
+    assert context.upload_replay == context.upload, (
+        "idempotent replay must return the stored upload response"
+    )
 
 
 @then("changed upload bodies with the same idempotency key conflict")
 def assert_upload_conflict(context: SourceIntakeContext) -> None:
     """Verify a reused idempotency key with a different body returns 409."""
-    assert context.conflict_status == 409, "Expected values to match"
-    assert context.conflict is not None, "Expected value to be present"
+    assert context.conflict_status == 409, "changed idempotent request must return 409"
+    assert context.conflict is not None, "idempotency conflict must return an envelope"
     assert context.conflict["code"] == "idempotency_conflict", (
-        "Expected values to match"
+        "idempotency conflict envelope code must be idempotency_conflict"
     )
 
 
@@ -206,19 +210,21 @@ def assert_source_intake_error(
     error_code: str,
 ) -> None:
     """Verify the source-intake API returned a documented error envelope."""
-    assert context.error_status is not None, "Expected value to be present"
+    assert context.error_status is not None, "error response must include HTTP status"
     assert context.error_status >= 400, (
-        "Expected values to satisfy the required ordering"
+        "source-intake error status must be at least HTTP 400"
     )
-    assert context.error_code == error_code, "Expected values to match"
+    assert context.error_code == error_code, "error envelope code must match the step"
 
 
 @then("the source-intake API returns the attached source material")
 def assert_source_list(context: SourceIntakeContext) -> None:
     """Verify the attached source appears in the source-list endpoint."""
-    assert context.upload is not None, "Expected value to be present"
-    assert context.source_list is not None, "Expected value to be present"
-    assert context.source_list["total"] == 1, "Expected values to match"
+    assert context.upload is not None, "source listing requires the created upload"
+    assert context.source_list is not None, "source-list endpoint must return a page"
+    assert context.source_list["total"] == 1, "source-list total must equal one"
     items = typ.cast("list[dict[str, object]]", context.source_list["items"])
     assert len(items) == 1, "Expected collection to contain one source"
-    assert items[0]["upload_id"] == context.upload["id"], "Expected values to match"
+    assert items[0]["upload_id"] == context.upload["id"], (
+        "listed source upload_id must identify the created upload"
+    )

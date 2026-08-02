@@ -344,6 +344,9 @@ async def test_resolve_bindings_template_only(
         uow, series_profile_id=series.id, template_id=template.id
     )
 
-    assert len(resolved) == 1, "must match"
-    assert resolved[0].revision.id == revision_v2.id, "must match"
-    assert resolved[0].binding.id == template_binding.id, "must match"
+    match resolved:
+        case [ResolvedBinding(binding=binding, revision=revision)]:
+            assert revision is revision_v2, "revision must be revision_v2"
+            assert binding is template_binding, "binding must be template_binding"
+        case _:
+            pytest.fail("resolved must contain exactly one ResolvedBinding")

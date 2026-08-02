@@ -61,7 +61,7 @@ def test_fixture_config_barrel_fixture_includes_package_barrel(
     assert _group_prefixes(config, "outbound_adapter") == [
         f"{package}.storage",
         package,
-    ], "Expected values to match"
+    ], "barrel fixture outbound prefixes must include storage and package roots"
 
 
 def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
@@ -72,10 +72,14 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
     config = _read_fixture_config(tmp_path, package_name)
 
     hecate_config = _hecate_config(config)
-    assert hecate_config["root_packages"] == [package], "Expected values to match"
-    assert hecate_config["default_rule_id"] == "ARCH001", "Expected values to match"
+    assert hecate_config["root_packages"] == [package], (
+        "Hecate root_packages must contain the fixture package"
+    )
+    assert hecate_config["default_rule_id"] == "ARCH001", (
+        "Hecate default_rule_id must be ARCH001"
+    )
     assert _group_prefixes(config, "composition_root") == [f"{package}.runtime"], (
-        "Expected values to match"
+        "composition_root prefix must identify the runtime module"
     )
     assert _group_allowed(config, "composition_root") == [
         "application",
@@ -83,21 +87,23 @@ def test_fixture_config_writes_expected_toml_shape(tmp_path: Path) -> None:
         "domain",
         "inbound_adapter",
         "outbound_adapter",
-    ], "Expected values to match"
-    assert _group_allowed(config, "domain") == ["domain"], "Expected values to match"
+    ], "composition_root must allow every configured architecture group"
+    assert _group_allowed(config, "domain") == ["domain"], (
+        "domain group must allow only domain imports"
+    )
     assert _group_allowed(config, "application") == ["application", "domain"], (
-        "Expected values to match"
+        "application group must allow application and domain imports"
     )
     assert _group_allowed(config, "inbound_adapter") == [
         "inbound_adapter",
         "application",
         "domain",
-    ], "Expected values to match"
+    ], "inbound_adapter group must allow inbound, application, and domain imports"
     assert _group_allowed(config, "outbound_adapter") == [
         "outbound_adapter",
         "application",
         "domain",
-    ], "Expected values to match"
+    ], "outbound_adapter group must allow outbound, application, and domain imports"
 
 
 @pytest.mark.parametrize(
@@ -149,7 +155,7 @@ def test_fixture_check_wraps_subprocess_errors(
         run_hecate_fixture_check("allowed_case", config_path)
 
     assert isinstance(exc_info.value.__cause__, error_case.expected_cause_type), (
-        "Expected value to have the required type"
+        "fixture invocation error cause must preserve the subprocess failure type"
     )
 
 
@@ -198,7 +204,7 @@ def test_production_check_wraps_subprocess_errors(
         run_hecate_production_check()
 
     assert isinstance(exc_info.value.__cause__, error_case.expected_cause_type), (
-        "Expected value to have the required type"
+        "production invocation error cause must preserve the subprocess failure type"
     )
 
 
@@ -222,7 +228,7 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
             "text": True,
             "timeout": HECATE_TIMEOUT_SECONDS,
             "cwd": REPO_ROOT,
-        }, "Expected values to match"
+        }, "fixture subprocess arguments must match the Hecate command contract"
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", capture_run)
@@ -239,7 +245,7 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
     stable_command = [*captured_command]
     stable_command[5] = "<generated-config>"
     stable_command[9] = "<fixture-root>"
-    assert stable_command == snapshot, "actual output must match snapshot"
+    assert stable_command == snapshot, "fixture Hecate command must match its snapshot"
 
 
 def test_production_check_uses_injected_python(
@@ -259,7 +265,7 @@ def test_production_check_uses_injected_python(
             "text": True,
             "timeout": HECATE_TIMEOUT_SECONDS,
             "cwd": REPO_ROOT,
-        }, "Expected values to match"
+        }, "production subprocess arguments must match the Hecate command contract"
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", capture_run)
@@ -267,7 +273,7 @@ def test_production_check_uses_injected_python(
     run_hecate_production_check(python_executable="/custom/python")
 
     assert captured_command == ["/custom/python", "-m", "hecate", "check"], (
-        "Expected values to match"
+        "production Hecate command must use the injected Python executable"
     )
 
 

@@ -1,9 +1,10 @@
 # serializer version: 1
 # name: test_render_series_guardrail_prompt_includes_persisted_guardrails
-  list([
-    'You are generating content for the series "Signal Weekly".',
-    'Apply the following persisted series guardrails JSON exactly: {"banned_phrases": ["game changer", "must-listen"], "instruction": "Avoid hype and keep claims attributable."}',
-    'Apply the persisted episode-template guardrails JSON exactly:',
-    '[{"guardrails": {"instruction": "Always include a recap in the outro.", "required_sections": ["intro", "news", "outro"]}, "slug": "weekly-briefing"}]',
-  ])
+  '''
+  You are generating content for the series "Signal Weekly".
+  Apply the following persisted series guardrails JSON exactly: {"banned_phrases": ["game changer", "must-listen"], "instruction": "Avoid hype and keep claims attributable."}
+  Apply the persisted episode-template guardrails JSON exactly:
+  [{"guardrails": {"instruction": "Always include a recap in the outro.", "required_sections": ["intro", "news", "outro"]}, "slug": "weekly-briefing"}]
+  
+  '''
 # ---

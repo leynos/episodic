@@ -150,10 +150,10 @@ def _assert_task_contract(
 ) -> None:
     """Assert that a task's route and execution result match the documented contract."""
     assert routes[assertion.task_name] == assertion.expected_route, (
-        "Expected values to match"
+        f"task route for {assertion.task_name} must match the expected route"
     )
     assert assertion.actual_result == assertion.expected_result, (
-        "Expected values to match"
+        f"execution result for {assertion.task_name} must match the expected result"
     )
 
 
@@ -223,10 +223,10 @@ def then_worker_launch_profiles_are_distinct(
     io_profile = worker_service_scaffold_context.profiles[WorkloadClass.IO_BOUND]
     cpu_profile = worker_service_scaffold_context.profiles[WorkloadClass.CPU_BOUND]
 
-    assert io_profile.pool is WorkerPool.GEVENT, "Expected values to match"
-    assert io_profile.concurrency == 64, "Expected values to match"
-    assert cpu_profile.pool is WorkerPool.PREFORK, "Expected values to match"
-    assert cpu_profile.concurrency == 4, "Expected values to match"
+    assert io_profile.pool is WorkerPool.GEVENT, "I/O worker pool must be gevent"
+    assert io_profile.concurrency == 64, "I/O worker concurrency must be 64"
+    assert cpu_profile.pool is WorkerPool.PREFORK, "CPU worker pool must be prefork"
+    assert cpu_profile.concurrency == 4, "CPU worker concurrency must be 4"
 
 
 @then("the worker app creation fails")
@@ -235,9 +235,11 @@ def then_worker_app_creation_fails(
 ) -> None:
     """Assert that worker app creation reported a runtime configuration error."""
     assert worker_service_scaffold_context.creation_error is not None, (
-        "Expected value to be present"
+        "worker application creation must report an error"
     )
-    assert worker_service_scaffold_context.app is None, "Expected value to be absent"
+    assert worker_service_scaffold_context.app is None, (
+        "failed worker creation must leave application state absent"
+    )
 
 
 @then("the failure explains that EPISODIC_CELERY_BROKER_URL must be set")
@@ -246,8 +248,8 @@ def then_failure_explains_broker_requirement(
 ) -> None:
     """Assert that the failure message points operators at the missing broker URL."""
     assert worker_service_scaffold_context.creation_error is not None, (
-        "Expected value to be present"
+        "missing broker configuration must report an error"
     )
     assert "EPISODIC_CELERY_BROKER_URL must be set" in str(
         worker_service_scaffold_context.creation_error
-    ), "Expected collection to contain the value"
+    ), "broker error must identify EPISODIC_CELERY_BROKER_URL as required"
