@@ -1,7 +1,7 @@
-# ruff: noqa
+# Benchmark source locations are intentionally stable.
 """Ordinary live and unused Python symbols for detector comparison."""
 
-import math
+import math  # noqa: F401
 import statistics
 
 
@@ -14,7 +14,7 @@ class _UnusedClass:
 
 
 def _used_function(value: int) -> float:
-    unused_local = 17
+    unused_local = 17  # noqa: F841
     return statistics.mean([value, 1])
 
 
@@ -25,12 +25,12 @@ def _function_with_unused_parameter(
     return value * 2
 
 
-class UsedClass:
-    def value(self) -> int:
+class UsedClass:  # noqa: D101
+    def value(self) -> int:  # noqa: D102, PLR6301
         return 19
 
 
-def exported_function() -> int:
+def exported_function() -> int:  # noqa: D103
     return 23
 
 

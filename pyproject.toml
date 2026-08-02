@@ -643,6 +643,55 @@ full_name = [
 ]
 reason = "Worker configuration and task DTO constructors invoke these validation helpers."
 
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.runtime.create_app_from_env",
+    "episodic.asyncio_tasks.create_task_in_group",
+]
+reason = "Granian imports the application factory by string, and create_task_in_group is a documented public concurrency helper."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.runtime._load_runtime_config",
+    "episodic.api.runtime._build_database_probe",
+    "episodic.api.runtime._build_database_probe.check_database",
+    "episodic.api.runtime._build_database_probe.uow_factory",
+    "episodic.api.runtime._normalize_database_urls",
+    "episodic.api.runtime._apply_query_connect_overrides",
+    "episodic.api.runtime._psycopg_connection_kwargs",
+]
+reason = "The Granian application factory and its database readiness composition call this runtime helper chain."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.canonical.health.HealthReport.from_checks",
+    "episodic.canonical.health.ProbeHealthObserver.observe",
+    "episodic.canonical.health.ProbeHealthObserver._observe_one",
+]
+reason = "Health observers invoke these methods through the readiness callback and report-building contracts."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "class"
+full_name = [
+    "episodic.canonical.adapters.generation_runs._CheckpointTransitionSpec",
+    "episodic.canonical.adapters.generation_runs.InMemoryGenerationRunStore",
+    "episodic.cost.recorder.CostRecorder",
+]
+reason = "These documented public adapters are instantiated by application composition and local-development consumers."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "variable"
+full_name = [
+    "episodic.api.runtime.GRANIAN_FACTORY_TARGET",
+    "episodic.api.runtime.GRANIAN_INTERFACE",
+    "episodic.api.runtime.HTTP_BIND_PORT",
+    "episodic.canonical.profile_templates.types.ProfileTemplateError.retryable",
+]
+reason = "Process launchers and structured exception consumers read these documented public contract values."
+
 [tool.skylos.whitelist]
 names = []
 
