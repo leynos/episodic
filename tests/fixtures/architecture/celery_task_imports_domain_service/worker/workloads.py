@@ -1,3 +1,3 @@
 """Domain-port workload contract fixture."""
 
-VALUE = "workload"
+VALUE: str = "workload"

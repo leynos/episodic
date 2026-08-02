@@ -49,11 +49,10 @@ The accepted groups are:
 - `orchestration_nodes` for `episodic.orchestration._graph_nodes`, allowed to
   depend on the `orchestration_checkpoint` DTO group and domain ports only.
 - `orchestration` for graph builders, planning orchestration, and tool
-  execution policy, allowed to depend on application services and checkpoint
-  DTOs but not adapters.
+  execution policy, allowed to depend on application services, checkpoint DTOs,
+  and `orchestration_nodes`, but not adapters.
 - `orchestration_tasks` for `episodic.worker.tasks`, allowed to depend on
-  domain services, domain ports, and
-  `episodic.worker.workloads.WorkloadClass`.
+  domain services, domain ports, and `episodic.worker.workloads.WorkloadClass`.
 - `orchestration_checkpoint` for checkpoint DTO and payload serialization
   modules, allowed to depend on itself and domain-port value types only.
 

@@ -1,3 +1,3 @@
 """Domain-port fixture."""
 
-VALUE = "domain"
+VALUE: str = "domain"

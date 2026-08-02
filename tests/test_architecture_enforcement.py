@@ -200,9 +200,7 @@ def test_checker_diagnostic_output_matches_snapshot(
 
     completed_process = run_hecate_fixture_check(package_name, config_path)
 
-    assert completed_process.returncode == 1, (
-        "Hecate must reject the forbidden architecture fixture"
-    )
+    assert completed_process.returncode == 1, _render_process(completed_process)
     assert _render_process(completed_process) == snapshot, (
         "rendered Hecate diagnostics must match the recorded snapshot"
     )

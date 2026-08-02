@@ -1,3 +1,3 @@
 """Domain fixture for an orchestration dependency."""
 
-VALUE = "domain"
+VALUE: str = "domain"

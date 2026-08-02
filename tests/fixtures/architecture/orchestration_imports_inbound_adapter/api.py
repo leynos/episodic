@@ -1,3 +1,3 @@
 """Inbound-adapter fixture."""
 
-VALUE = "api"
+VALUE: str = "api"

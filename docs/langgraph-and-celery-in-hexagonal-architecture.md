@@ -39,17 +39,18 @@ ports, never directly calling outbound adapters in-line.
 ## Enforced Orchestration Boundaries
 
 Roadmap item `2.4.5` makes those orchestration rules executable through Hecate.
-The production configuration gives LangGraph nodes a dedicated group before
-the broad `orchestration` group and broader adapter prefixes, so the first
-matching group is the strictest useful boundary.
+The production configuration gives LangGraph nodes a dedicated group before the
+broad `orchestration` group and broader adapter prefixes, so the first matching
+group is the strictest useful boundary.
 
 - `orchestration_nodes` covers `episodic.orchestration._graph_nodes`. Node
   functions may import the `orchestration_checkpoint` DTO group and
   `domain_ports`, but not Falcon, Celery, SQLAlchemy, OpenAI adapters, or other
   concrete infrastructure.
 - `orchestration` covers graph builders, planning orchestration, and tool
-  execution policy. This layer may depend on application services and domain
-  ports, but still cannot import inbound or outbound adapters.
+  execution policy. This layer may depend on application services, domain
+  ports, and `orchestration_nodes`, but still cannot import inbound or outbound
+  adapters.
 - `orchestration_tasks` covers `episodic.worker.tasks`. Tasks may import
   `episodic.worker.workloads.WorkloadClass`, domain services, and ports; the
   worker runtime remains the composition root that wires Celery.

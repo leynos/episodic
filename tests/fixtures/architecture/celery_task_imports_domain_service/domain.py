@@ -1,3 +1,3 @@
 """Domain fixture for an allowed task dependency."""
 
-VALUE = "domain"
+VALUE: str = "domain"

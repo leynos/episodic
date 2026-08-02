@@ -528,13 +528,12 @@ Read these documents (signposts):
 
 ## Plan of work
 
-The work proceeded through five milestones. Each followed
-Red-Green-Refactor: add the smallest failing fixture or test first, confirm it
-fails for the intended reason, make the minimal production or configuration
-change, then refactor before re-running the gates. Architecture rules are
-validated through the fixture harness
-(synthetic packages) for both positive and negative cases, and through the
-production `hecate check` for the real code.
+The work proceeded through five milestones. Each followed Red-Green-Refactor:
+add the smallest failing fixture or test first, confirm it fails for the
+intended reason, make the minimal production or configuration change, then
+refactor before re-running the gates. Architecture rules are validated through
+the fixture harness (synthetic packages) for both positive and negative cases,
+and through the production `hecate check` for the real code.
 
 ### M0 Orientation and red harness (no production changes)
 
