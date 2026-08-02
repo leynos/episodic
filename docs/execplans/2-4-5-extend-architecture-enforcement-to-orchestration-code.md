@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -374,9 +374,6 @@ M3 outcome: checkpoint payload modules now belong to
 adapter modules. A structural test audits checkpoint payload DTO field types,
 and a property test verifies JSON-shaped `WorkflowCheckpoint.payload` values
 round-trip unchanged through JSON serialization.
-
-Remaining outcomes to complete: the behavioural, snapshot, documentation, and
-roadmap updates in M4 remain.
 
 ## Context and orientation
 
