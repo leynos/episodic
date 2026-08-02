@@ -788,10 +788,14 @@ The enforced groups are:
 - `outbound_adapter`: SQLAlchemy storage, canonical ingestion adapters, and
   OpenAI-compatible LLM adapters, including `episodic.llm.openai_adapter`, the
   `episodic.llm.openai_api` helper package, and `episodic.llm.openai_client`.
+- `orchestration_nodes`: LangGraph node functions under
+  `episodic.orchestration._graph_nodes`. This group may depend on the
+  `orchestration_checkpoint` DTO group and `domain_ports`, and must be ordered
+  before the broader `orchestration` group.
 - `orchestration_checkpoint`: provider-neutral checkpoint payload DTO and
   serialization modules.
 - `orchestration`: LangGraph builders, graph state, planning orchestration, and
-  tool execution policy.
+  tool execution policy, excluding the dedicated node group.
 - `orchestration_tasks`: Celery task entrypoints.
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
@@ -799,13 +803,14 @@ The enforced groups are:
 When adding a new port or adapter, update `[tool.hecate]` in `pyproject.toml`
 in the same change as the package. Keep specific prefixes before broader
 prefixes because Hecate uses first-match group ordering: `composition_root`
-before adapter prefixes, `orchestration_checkpoint` and `orchestration_nodes`
-before the broad `orchestration` prefix, and `orchestration_tasks` before
-worker adapter prefixes.
+before adapter prefixes, `orchestration_nodes` before the broad `orchestration`
+prefix, and `orchestration_tasks` before worker adapter prefixes.
 
-`episodic.worker.topology.WorkloadClass` is a worker workload contract that
-task modules may import without pulling in the Celery app or runtime wiring.
-Worker runtime modules own concrete Celery configuration.
+`episodic.worker.workloads.WorkloadClass` is the canonical worker workload
+contract that task modules may import without pulling in the Celery app or
+runtime wiring. `episodic.worker.topology.WorkloadClass` remains an explicit
+compatibility alias only. Worker runtime modules own concrete Celery
+configuration.
 
 Add or adjust fixture coverage in `tests/fixtures/architecture/` and run:
 
