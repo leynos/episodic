@@ -98,8 +98,12 @@ async def test_health_ready_route_reflects_probe_result(
     ) as client:
         response = await client.get("/health/ready")
 
-    assert response.status_code == expected_status, "Expected values to match"
-    assert response.json() == expected_body, "Expected values to match"
+    assert response.status_code == expected_status, (
+        "readiness response status must match the probe result"
+    )
+    assert response.json() == expected_body, (
+        "readiness response body must match the expected probe payload"
+    )
 
 
 @pytest.mark.asyncio
@@ -125,11 +129,11 @@ async def test_health_ready_route_treats_probe_exceptions_as_failures() -> None:
     ) as client:
         response = await client.get("/health/ready")
 
-    assert response.status_code == 503, "Expected values to match"
+    assert response.status_code == 503, "probe exception must return HTTP 503"
     assert response.json() == {
         "status": "error",
         "checks": [{"name": "database", "status": "error"}],
-    }, "Expected values to match"
+    }, "probe exception must return the documented readiness error payload"
 
 
 @pytest.mark.asyncio
@@ -158,5 +162,9 @@ async def test_health_ready_route_uses_domain_health_observer(
     ) as client:
         response = await client.get("/health/ready")
 
-    assert response.status_code == 503, "Expected values to match"
-    assert response.json() == snapshot, "actual output must match snapshot"
+    assert response.status_code == 503, (
+        "domain observer error report must return HTTP 503"
+    )
+    assert response.json() == snapshot, (
+        "domain-observer readiness response must match its snapshot"
+    )

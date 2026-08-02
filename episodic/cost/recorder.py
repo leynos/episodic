@@ -179,16 +179,7 @@ class CostRecorder:
     async def _resolve_snapshot_for_record(
         self, record: ProviderCallRecord
     ) -> PricingSnapshot:
-        """Resolve the pricing snapshot for a provider-call record.
-
-        Prefers a pinned snapshot for the run; falls back to catalogue resolution
-        when no pin exists.
-
-        Returns
-        -------
-        PricingSnapshot
-            Pricing snapshot selected for the provider-call record.
-        """
+        """Resolve the pricing snapshot for a provider-call record."""
         key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,
             provider_name=record.provider_name,

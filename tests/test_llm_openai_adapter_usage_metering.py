@@ -71,7 +71,7 @@ async def test_chat_completion_provider_call_usage_includes_cached_tokens(
         "unexpected finish_reason"
     )
     assert response.provider_call_usage.usage_metrics == snapshot, (
-        "actual output must match snapshot"
+        "chat-completions usage metrics must match the recorded snapshot"
     )
 
 
@@ -120,5 +120,5 @@ async def test_responses_provider_call_usage_includes_reasoning_tokens(
         "expected provider_call_usage to be present on response"
     )
     assert response.provider_call_usage.usage_metrics == snapshot, (
-        "actual output must match snapshot"
+        "Responses usage metrics must match the recorded snapshot"
     )

@@ -128,7 +128,9 @@ def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
     assert usage.input_tokens >= 0, "usage.input_tokens count must be non-negative"
     assert usage.output_tokens >= 0, "usage.output_tokens count must be non-negative"
     assert usage.total_tokens >= 0, "usage.total_tokens count must be non-negative"
-    assert usage.total_tokens == expected_total, "Expected values to match"
+    assert usage.total_tokens == expected_total, (
+        "usage.total_tokens must equal the expected aggregate"
+    )
 
 
 @given(
@@ -161,9 +163,11 @@ async def test_langgraph_total_tokens_non_negative(
     expected_tool_total = tokens.action_input + tokens.action_output
     expected_total_tokens = expected_planner_total + expected_tool_total
     _assert_non_negative_usage(orchestration_result.total_usage, expected_total_tokens)
-    assert state["planner_result"] == planner_result, "Expected values to match"
+    assert state["planner_result"] == planner_result, (
+        "state planner_result must preserve the planner output"
+    )
     assert state["action_results"][0].model == "prop-exec-model", (
-        "Expected values to match"
+        "first action result model must be prop-exec-model"
     )
 
 
@@ -238,11 +242,13 @@ async def test_langgraph_respects_plan_execute_finish_order(
     state = await graph.ainvoke(GenerationGraphState(request=request))
 
     assert event_recorder.events == ["plan", "execute", "finish"], (
-        "Expected values to match"
+        "graph events must follow plan, execute, finish order"
     )
-    assert state["planner_result"] is not None, "Expected value to be present"
-    assert state["action_results"], "Expected condition to hold"
-    assert state["orchestration_result"] is not None, "Expected value to be present"
+    assert state["planner_result"] is not None, "state must contain planner_result"
+    assert state["action_results"], "state must contain action_results"
+    assert state["orchestration_result"] is not None, (
+        "state must contain orchestration_result"
+    )
 
 
 async def _invoke_with_callback(
@@ -277,10 +283,10 @@ async def test_finish_callback_is_invoked_in_direct_execute_path() -> None:
     """Direct execution invokes the finish callback with finished state."""
     state, observed_results = await _invoke_with_callback()
 
-    assert len(observed_results) == 1, "Expected values to match"
-    assert observed_results[0] is not None, "Expected value to be present"
+    assert len(observed_results) == 1, "finish callback must run exactly once"
+    assert observed_results[0] is not None, "finish callback must receive a result"
     assert state["orchestration_result"] == observed_results[0], (
-        "Expected values to match"
+        "callback result must equal state orchestration_result"
     )
 
 
@@ -291,11 +297,13 @@ async def test_finish_callback_is_not_invoked_in_suspend_path() -> None:
         checkpoint_port=InMemoryCheckpointStore()
     )
 
-    assert not observed_results, "Expected condition to be false"
+    assert not observed_results, "suspended route must not invoke finish callback"
     assert isinstance(state["suspended_result"], SuspendedWorkflowResult), (
-        "Expected value to have the required type"
+        "suspended route must produce SuspendedWorkflowResult"
     )
-    assert state["orchestration_result"] is None, "Expected value to be absent"
+    assert state["orchestration_result"] is None, (
+        "suspended route must leave orchestration_result absent"
+    )
 
 
 @pytest.mark.asyncio
@@ -318,9 +326,15 @@ async def test_langgraph_finish_callback_errors_do_not_replace_result() -> None:
         GenerationGraphState(request=_request("callback-error"))
     )
 
-    assert state["orchestration_result"] is not None, "Expected value to be present"
-    assert state["planner_result"] == planner_result, "Expected values to match"
-    assert state["action_results"] == (tool_result,), "Expected values to match"
+    assert state["orchestration_result"] is not None, (
+        "callback failure must preserve orchestration_result"
+    )
+    assert state["planner_result"] == planner_result, (
+        "callback failure must preserve planner_result"
+    )
+    assert state["action_results"] == (tool_result,), (
+        "callback failure must preserve action_results"
+    )
 
 
 @pytest.mark.asyncio
@@ -343,12 +357,14 @@ async def test_finish_callback_records_concurrent_direct_results() -> None:
         )
     )
 
-    assert len(observed_results) == expected_invocations, "Expected values to match"
+    assert len(observed_results) == expected_invocations, (
+        "finish callback count must equal concurrent invocation count"
+    )
     assert all(result is not None for result in observed_results), (
-        "Expected value to be present"
+        "every concurrent callback result must be present"
     )
     assert collections.Counter(
         state["orchestration_result"] for state in states
     ) == collections.Counter(observed_results), (
-        "Expected collection to contain the value"
+        "concurrent state results must equal the callback result collection"
     )

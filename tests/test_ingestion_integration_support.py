@@ -231,16 +231,16 @@ def assert_reference_snapshot(
     )
     reference_snapshot = snapshot_documents[0]
     assert reference_snapshot.reference_document_revision_id == reference_revision.id, (
-        "Expected values to match"
+        "snapshot reference_document_revision_id must match the resolved revision"
     )
     assert reference_snapshot.source_uri == (
         f"ref://{reference_document.id}/revisions/{reference_revision.id}"
-    ), "Expected values to match"
+    ), "snapshot source_uri must identify the reference-document revision"
     assert reference_snapshot.metadata["binding_id"] == str(reference_binding.id), (
-        "Expected values to match"
+        "snapshot binding_id metadata must identify the resolved binding"
     )
     assert reference_snapshot.metadata["document_kind"] == "style_guide", (
-        "Expected values to match"
+        "snapshot document_kind metadata must preserve the reference kind"
     )
 
 

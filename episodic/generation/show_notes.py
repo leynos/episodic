@@ -391,6 +391,9 @@ class ShowNotesGenerator:
             If the provider returns a non-retryable error response.
         LLMTransientProviderError
             If transient provider failures exhaust all retry attempts.
+        LLMTokenBudgetExceededError
+            If preflight validation or provider-reported usage exceeds the
+            request token budget.
         """  # noqa: DOC502  # Documents exceptions propagated by collaborators.
         prompt = self.build_prompt(
             script_tei_xml, template_structure=template_structure

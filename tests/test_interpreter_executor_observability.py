@@ -164,9 +164,15 @@ def test_builder_records_executor_selection_metrics(
             _capability_check=lambda: True,
         )
         lifecycle.callback(_shutdown_if_supported, executor)
-        assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
-            "enabled supported selection must build InterpreterPoolCpuTaskExecutor"
-        )
+        match executor:
+            case ci.InterpreterPoolCpuTaskExecutor():
+                pass
+            case _:
+                msg = (
+                    "enabled supported selection must build "
+                    "InterpreterPoolCpuTaskExecutor"
+                )
+                raise AssertionError(msg)
 
         assert (
             "cpu_task_executor.selections",
@@ -204,10 +210,15 @@ async def test_builder_passes_metrics_to_interpreter_executor(
             _capability_check=lambda: True,
         )
         lifecycle.callback(_shutdown_if_supported, executor)
-        assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
-            "supported builder path must return InterpreterPoolCpuTaskExecutor"
-        )
-        assert await executor.map_ordered(_square, (2,)) == [4], (
+        match executor:
+            case ci.InterpreterPoolCpuTaskExecutor() as interpreter_executor:
+                pass
+            case _:
+                msg = (
+                    "supported builder path must return InterpreterPoolCpuTaskExecutor"
+                )
+                raise AssertionError(msg)
+        assert await interpreter_executor.map_ordered(_square, (2,)) == [4], (
             "interpreter executor map result must contain the squared input"
         )
 

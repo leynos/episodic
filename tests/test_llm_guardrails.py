@@ -53,7 +53,7 @@ def test_render_series_guardrail_prompt_includes_persisted_guardrails(
 
     rendered = render_series_guardrail_prompt(brief)
 
-    assert rendered.text.splitlines() == snapshot, "actual output must match snapshot"
+    assert rendered.text == snapshot, "rendered.text must match the recorded prompt"
 
 
 def test_render_series_guardrail_prompt_rejects_missing_guardrails() -> None:
