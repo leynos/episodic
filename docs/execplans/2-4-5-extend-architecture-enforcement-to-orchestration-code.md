@@ -528,10 +528,11 @@ Read these documents (signposts):
 
 ## Plan of work
 
-The work proceeds in five milestones. Each follows Red-Green-Refactor: add the
-smallest failing fixture or test first, confirm it fails for the intended
-reason, make the minimal production or configuration change, then refactor and
-re-run the gates. Architecture rules are validated through the fixture harness
+The work proceeded through five milestones. Each followed
+Red-Green-Refactor: add the smallest failing fixture or test first, confirm it
+fails for the intended reason, make the minimal production or configuration
+change, then refactor before re-running the gates. Architecture rules are
+validated through the fixture harness
 (synthetic packages) for both positive and negative cases, and through the
 production `hecate check` for the real code.
 
@@ -678,56 +679,13 @@ before the decoupling and pass after; the checkpoint-violation fixture (a
 payload module importing storage) fails the fixture check; the production check
 passes.
 
-### M4 Behavioural tests, snapshots, documentation, and roadmap update
+### M4 Behavioural tests, snapshots, documentation, and roadmap update (completed)
 
-Goal: cover externally observable behaviour, lock output format, and document
-the new boundaries.
-
-1. Add a `pytest-bdd` feature that specifies the enforcement workflow from a
-   maintainer's perspective. Embed the feature in this plan (see "BDD feature"
-   below) and place it under the project's feature directory (locate with
-   `leta files tests/` or the existing `*.feature` convention). Steps drive the
-   fixture harness: a clean orchestration fixture passes; a node importing an
-   adapter is rejected with an `ARCH001` violation naming the node module; a
-   Celery task importing an adapter is rejected; a checkpoint payload importing
-   storage is rejected.
-2. Add a `syrupy` snapshot test capturing the `hecate check --format json`
-   output for one representative orchestration-violation fixture, so the
-   violation message shape for node, task, and checkpoint rules is regression
-   protected. Only snapshot fixture output (deterministic), never the
-   production tree.
-3. Add a behavioural test that exercises `build_generation_orchestration_graph`
-   end to end against a simulated inference service using `vidai-mock` (per the
-   `vidai-mock` skill), asserting the graph still plans, executes, and finishes
-   after the node/builder split, with the mock standing in for the `LLMPort`
-   adapter. This proves the refactor preserved observable behaviour.
-4. Documentation:
-   - Update `docs/episodic-podcast-generation-system-design.md` to mark the
-     orchestration enforcement slice as delivered and to describe the three new
-     groups and the checkpoint audit.
-   - Update `docs/developers-guide.md` "Architecture enforcement" with the new
-     groups, the first-match ordering for the new prefixes, the
-     `WorkloadClass` location, and how to add fixtures for orchestration
-     boundaries.
-   - Update `docs/langgraph-and-celery-in-hexagonal-architecture.md` (the
-     orchestration component architecture doc) with the node/builder split, the
-     ports-only node rule, the task rule, and the checkpoint payload rule.
-   - Add ADR-016 (verify the next free number with `ls docs/adr/`; ADR-015 is
-     already used) recording the orchestration-enforcement decisions (the
-     "ports only" interpretation, the node/builder split, and the
-     checkpoint audit mechanism), and cross-reference it from
-     `docs/adr/adr-014-hexagonal-architecture-enforcement.md` and the system
-     design. Follow the documentation style guide and the
-     `arch-decision-records` conventions.
-   - Update `docs/users-guide.md` only if a publicly consumable interface
-     changed. This slice is internal enforcement; if no public API changes, note
-     in the Decision Log that no users-guide change was required.
-   - Add the new ADR and any new component note to `docs/contents.md`.
-5. Mark roadmap item 2.4.5 done in `docs/roadmap.md`.
-
-Validation: `make check-fmt`, `make typecheck`, `make lint`, `make test`,
-`make markdownlint`, and `make nixie` all pass. The BDD scenarios fail before
-their enforcement exists and pass after.
+M4 delivered the behavioural scenarios, the normalized Hecate snapshot, the
+Vidai Mock-backed graph test, the architecture documentation and ADR-016, and
+the roadmap update. The dated entry above records the focused and final gate
+results, including `make check-fmt`, `make typecheck`, `make lint`, `make test`,
+`make markdownlint`, and `make nixie`.
 
 ## Fixtures to add
 
@@ -764,7 +722,7 @@ checkpoint groups for these synthetic packages.
 ## BDD feature
 
 Place under the project's feature directory (confirm the path and step-module
-convention first). Keep the specification synchronized with M4.
+convention first). This specification records the completed M4 scenarios.
 
 ```gherkin
 Feature: Architecture enforcement
@@ -927,3 +885,9 @@ the Decision Log when chosen):
 The orchestration and worker public barrels
 (`episodic/orchestration/__init__.py`, `episodic/worker/__init__.py`) must
 export exactly the same names they export today.
+
+## Revision note
+
+2026-08-03: Set the plan status to `COMPLETE` and converted the remaining M4
+implementation instructions into a completed outcome. Preserved the completed
+milestones and final-gate records; no implementation work remains.
