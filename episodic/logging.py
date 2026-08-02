@@ -12,10 +12,12 @@ Configure logging and emit a message:
 >>> logger.info("Started ingestion")
 """
 
+import datetime as dt
 import enum
 import json
 import logging
 import typing as typ
+import uuid
 import warnings
 
 from femtologging import basicConfig, get_logger, getLogger
@@ -284,12 +286,28 @@ def log_error(
 _event_log = getLogger(__name__)
 
 
+def _serialize_log_field(value: object) -> object:
+    """Return a stable JSON-compatible representation for a log field."""
+    if isinstance(value, enum.Enum):
+        return value.value
+    if isinstance(value, dt.date | dt.time):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID | BaseException):
+        return str(value)
+    return str(value)
+
+
 def log_event(level: str, message: str, **fields: object) -> None:
     """Emit one structured log event with a JSON fallback.
 
     Logger convenience methods only accept ``exc_info`` and ``stack_info``
     beside the message. Structured fields are serialized into one JSON message
     when needed.
+
+    Examples
+    --------
+    >>> log_event("info", "generation.started", workflow_id="workflow-42")
+    # Logger message: {"event": "generation.started", "workflow_id": "workflow-42"}
     """
     log_method = getattr(_event_log, level)
     allowed_kwargs = {
@@ -298,7 +316,10 @@ def log_event(level: str, message: str, **fields: object) -> None:
     extra_fields = {k: v for k, v in fields.items() if k not in allowed_kwargs}
     if extra_fields:
         payload = {"event": message, **extra_fields}
-        log_method(json.dumps(payload, sort_keys=True), **allowed_kwargs)
+        log_method(
+            json.dumps(payload, default=_serialize_log_field, sort_keys=True),
+            **allowed_kwargs,
+        )
         return
     try:
         log_method(message, **allowed_kwargs)

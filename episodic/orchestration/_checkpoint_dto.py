@@ -48,10 +48,13 @@ class WorkflowCheckpoint:
             msg = "payload must be a mapping object."
             raise TypeError(msg)
         try:
-            json.dumps(self.payload, allow_nan=False)
+            encoded_payload = json.dumps(self.payload, allow_nan=False)
         except (TypeError, ValueError) as exc:
             msg = "payload must be JSON-serializable."
             raise TypeError(msg) from exc
+        if json.loads(encoded_payload) != self.payload:
+            msg = "payload must be JSON-serializable without data loss."
+            raise TypeError(msg)
         object.__setattr__(self, "payload", dict(self.payload))
 
 
