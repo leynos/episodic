@@ -202,7 +202,10 @@ framework, export, and interface semantics.
 All Python, formatting, lint, typing, test, Markdown, Mermaid, and Makefile
 validation passed. The default merman Mermaid backend timed out on an unchanged
 large TUI design diagram; the supported `mmdc` backend validated the full
-documentation set successfully. No production code was changed or removed.
+documentation set successfully. The repository scan identified
+`_load_reference_documents_for_target` as having no production caller, and this
+PR removed the helper after confirmation. The benchmark itself did not
+automatically delete production code.
 
 ## Context and orientation
 

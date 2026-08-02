@@ -24,7 +24,7 @@ PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
 PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
 PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
 SKYLOS = $(UV_ENV) $(UV) run skylos --config-file pyproject.toml
-SKYLOS_TARGETS ?= $(PYLINT_TARGETS)
+SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie spelling spelling-helper-test test typecheck \
@@ -89,18 +89,20 @@ check-fmt: build ## Verify formatting
 lint: check-architecture ## Run linters
 	$(UV_ENV) $(UV) run ruff check
 	$(PYLINT) $(PYLINT_TARGETS)
-	$(SKYLOS) $(SKYLOS_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance
+	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
 
+skylos-allow: export SKYLOS_NAME = $(value NAME)
+skylos-allow: export SKYLOS_REASON = $(value REASON)
 skylos-allow: ## Document one named Skylos exception, not an entry point
-	@test -n "$(strip $(NAME))" || { \
+	@test -n "$${SKYLOS_NAME}" || { \
 	  printf "Error: NAME is required for a named whitelist exception\n" >&2; \
 	  exit 2; \
 	}
-	@test -n "$(strip $(REASON))" || { \
+	@test -n "$${SKYLOS_REASON}" || { \
 	  printf "Error: REASON is required for a named whitelist exception\n" >&2; \
 	  exit 2; \
 	}
-	$(SKYLOS) whitelist "$(NAME)" --reason "$(REASON)"
+	$(SKYLOS) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run hecate check

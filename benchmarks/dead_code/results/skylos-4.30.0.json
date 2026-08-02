@@ -394,7 +394,7 @@
       "loc": 3,
       "complexity": 1,
       "calls": [
-        "episodic-dead-code-corpus-20260727.flow.RuntimeError"
+        "episodic-dead-code-corpus-20260727.flow.ValueError"
       ],
       "called_by": [],
       "dead": false,

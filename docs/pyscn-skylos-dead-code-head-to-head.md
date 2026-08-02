@@ -100,7 +100,9 @@ tests, public exports, framework contracts, and design documentation.
 The actionable candidates were `_build_payload_dataclass` in
 `episodic/api/helpers.py`, which is referenced only by its direct tests, and
 `_load_reference_documents_for_target` in the profile-template brief loaders,
-which has no repository references. This study does not delete production code.
+which had no repository references. The repository scan identified the latter
+helper, and this PR removed it after confirming that it had no production
+caller. The benchmark itself does not automatically delete production code.
 
 The two review-required findings were `StaleEventSequence` and
 `UploadInitRequest`. Both are currently unreferenced, but each is named by an
@@ -141,9 +143,14 @@ root rather than an arbitrary unmarked directory.
 - Choose pyscn when the goal is a fast, low-noise control-flow pass. Its
   diagnostics explained why statements were unreachable, but it did not detect
   unused symbols in this comparison.
-- Use both in a cleanup programme: pyscn as a focused control-flow gate and
-  Skylos as an advisory inventory. Do not make zero-threshold Skylos findings a
-  blocking gate without project-specific suppression and framework modelling.
+- Use both in a cleanup programme: pyscn as a focused control-flow check and
+  Skylos as an advisory inventory. The raw, untuned Skylos 4.30.0 findings at
+  the zero threshold require project-specific suppression and framework
+  modelling before they can support a blocking workflow.
+
+Episodic separately uses a tuned, blocking Skylos dead-code gate through
+`make lint`. The gate is configured in `pyproject.toml`, follows ADR-016, and
+fails the contributor workflow when an unsuppressed finding remains.
 
 The corpus is intentionally small and Episodic is only one framework-heavy
 application. The results establish behaviour for these released versions and

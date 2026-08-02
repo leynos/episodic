@@ -1,7 +1,5 @@
 """Normalize and score dead-code detector findings against labelled source."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import enum
 import typing as typ
@@ -18,7 +16,21 @@ class Lane(enum.StrEnum):
 
 @dc.dataclass(frozen=True, slots=True, kw_only=True)
 class Expectation:
-    """A tool-neutral liveness label at one source location."""
+    """A tool-neutral liveness label at one source location.
+
+    Attributes
+    ----------
+    identifier : str
+        Stable identifier for the labelled expectation.
+    path : str
+        Corpus-relative source path containing the expectation.
+    line : int
+        One-based source line for the expectation.
+    lane : Lane
+        Static-analysis lane used to score the expectation.
+    is_dead : bool
+        Whether the labelled source is expected to be dead.
+    """
 
     identifier: str
     path: str
@@ -29,7 +41,19 @@ class Expectation:
 
 @dc.dataclass(frozen=True, slots=True, kw_only=True)
 class Finding:
-    """A normalized detector finding at one source location."""
+    """A normalized detector finding at one source location.
+
+    Attributes
+    ----------
+    path : str
+        Corpus-relative source path reported by the detector.
+    line : int
+        One-based source line reported by the detector.
+    lane : Lane
+        Static-analysis lane represented by the finding.
+    category : str
+        Detector-specific category or reason for the finding.
+    """
 
     path: str
     line: int
@@ -39,7 +63,21 @@ class Finding:
 
 @dc.dataclass(frozen=True, slots=True, kw_only=True)
 class LaneScore:
-    """A confusion matrix for one dead-code analysis lane."""
+    """A confusion matrix for one dead-code analysis lane.
+
+    Attributes
+    ----------
+    true_positives : int
+        Dead expectations correctly reported by the detector.
+    false_positives : int
+        Live expectations incorrectly reported by the detector.
+    false_negatives : int
+        Dead expectations not reported by the detector.
+    true_negatives : int
+        Live expectations not reported by the detector.
+    unmatched_findings : int
+        Unique detector findings without a labelled expectation.
+    """
 
     true_positives: int
     false_positives: int
@@ -49,6 +87,7 @@ class LaneScore:
 
 
 def _mapping(value: object, *, context: str) -> cabc.Mapping[str, object]:
+    """Validate and return a string-keyed mapping."""
     if not isinstance(value, cabc.Mapping):
         msg = f"{context} must be a JSON object"
         raise TypeError(msg)
@@ -59,6 +98,7 @@ def _mapping(value: object, *, context: str) -> cabc.Mapping[str, object]:
 
 
 def _sequence(value: object, *, context: str) -> cabc.Sequence[object]:
+    """Validate and return a non-string sequence."""
     if not isinstance(value, cabc.Sequence) or isinstance(value, (str, bytes)):
         msg = f"{context} must be a JSON array"
         raise TypeError(msg)
@@ -66,6 +106,7 @@ def _sequence(value: object, *, context: str) -> cabc.Sequence[object]:
 
 
 def _string(value: object, *, context: str) -> str:
+    """Validate and return a string value."""
     if not isinstance(value, str):
         msg = f"{context} must be a string"
         raise TypeError(msg)
@@ -73,6 +114,7 @@ def _string(value: object, *, context: str) -> str:
 
 
 def _positive_line(value: object, *, context: str) -> int:
+    """Validate and return a positive, non-boolean line number."""
     if not isinstance(value, int) or isinstance(value, bool):
         msg = f"{context} must be a positive integer"
         raise TypeError(msg)
@@ -83,6 +125,7 @@ def _positive_line(value: object, *, context: str) -> int:
 
 
 def _relative_source_path(raw_path: object, corpus_root: Path) -> str:
+    """Normalize a finding path relative to the corpus root."""
     root = corpus_root.resolve()
     path = Path(_string(raw_path, context="finding path"))
     if not path.is_absolute():
@@ -100,7 +143,20 @@ def parse_pyscn_findings(
     *,
     corpus_root: Path,
 ) -> tuple[Finding, ...]:
-    """Extract pyscn control-flow findings from its unified JSON report."""
+    """Extract pyscn control-flow findings from its unified JSON report.
+
+    Parameters
+    ----------
+    payload : object
+        Parsed pyscn JSON report payload.
+    corpus_root : pathlib.Path
+        Root directory used to normalize reported source paths.
+
+    Returns
+    -------
+    tuple[Finding, ...]
+        Normalized control-flow findings in report order.
+    """
     root = _mapping(payload, context="pyscn payload")
     dead_code = _mapping(root.get("dead_code"), context="pyscn dead_code")
     files = _sequence(dead_code.get("files"), context="pyscn dead_code.files")
@@ -188,7 +244,20 @@ def parse_skylos_findings(
     *,
     corpus_root: Path,
 ) -> tuple[Finding, ...]:
-    """Extract Skylos findings from its unused-symbol result arrays."""
+    """Extract Skylos findings from its unused-symbol result arrays.
+
+    Parameters
+    ----------
+    payload : object
+        Parsed Skylos JSON report payload.
+    corpus_root : pathlib.Path
+        Root directory used to normalize reported source paths.
+
+    Returns
+    -------
+    tuple[Finding, ...]
+        Normalized unused-symbol findings in category and report order.
+    """
     root = _mapping(payload, context="Skylos payload")
     findings: list[Finding] = []
 
@@ -218,7 +287,20 @@ def score_findings(
     expectations: cabc.Sequence[Expectation],
     findings: cabc.Sequence[Finding],
 ) -> cabc.Mapping[Lane, LaneScore]:
-    """Score unique finding locations without discarding unmatched reports."""
+    """Score unique finding locations without discarding unmatched reports.
+
+    Parameters
+    ----------
+    expectations : collections.abc.Sequence[Expectation]
+        Tool-neutral liveness labels used as the scoring reference.
+    findings : collections.abc.Sequence[Finding]
+        Normalized detector reports to compare with the labels.
+
+    Returns
+    -------
+    collections.abc.Mapping[Lane, LaneScore]
+        Confusion-matrix scores and unmatched report counts for every lane.
+    """
     expectations_by_location = _index_expectations(expectations)
     counts: LaneCounts = {
         lane: {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "unmatched": 0} for lane in Lane
