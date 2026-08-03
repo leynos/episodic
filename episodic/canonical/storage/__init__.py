@@ -12,7 +12,9 @@ Use the unit-of-work to fetch a canonical episode:
 ...     episode = await uow.episodes.get(episode_id)
 """
 
+from .episode_repository import SqlAlchemyEpisodeRepository
 from .filesystem_object_store import FilesystemObjectStore
+from .generation_runs import SqlAlchemyGenerationRunStore
 from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
 from .migration_check import detect_schema_drift
 from .models import (
@@ -21,6 +23,8 @@ from .models import (
     EpisodeRecord,
     EpisodeTemplateHistoryRecord,
     EpisodeTemplateRecord,
+    GenerationEventRecord,
+    GenerationRunRecord,
     IdempotencyRecordModel,
     IngestionJobRecord,
     IngestionJobSourceRecord,
@@ -36,7 +40,6 @@ from .models import (
 )
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
-    SqlAlchemyEpisodeRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemyEpisodeTemplateRepository,
     SqlAlchemyReferenceBindingRepository,
@@ -62,6 +65,8 @@ __all__ = (
     "EpisodeTemplateHistoryRecord",
     "EpisodeTemplateRecord",
     "FilesystemObjectStore",
+    "GenerationEventRecord",
+    "GenerationRunRecord",
     "IdempotencyRecordModel",
     "IngestionJobRecord",
     "IngestionJobSourceRecord",
@@ -75,6 +80,7 @@ __all__ = (
     "SqlAlchemyEpisodeRepository",
     "SqlAlchemyEpisodeTemplateHistoryRepository",
     "SqlAlchemyEpisodeTemplateRepository",
+    "SqlAlchemyGenerationRunStore",
     "SqlAlchemyIdempotencyStore",
     "SqlAlchemyIngestionJobRepository",
     "SqlAlchemyIngestionJobSourceRepository",

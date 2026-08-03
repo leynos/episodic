@@ -21,8 +21,12 @@ from hypothesis import given, settings
 
 from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal
-from episodic.canonical.generation_run_ports import event_seq
+from episodic.canonical.generation_run_ports import (
+    GenerationRunStatusUpdate,
+    event_seq,
+)
 
 NOW = dt.datetime(2026, 6, 4, 8, 0, tzinfo=dt.UTC)
 type EventInput = tuple[str, dict[str, object]]
@@ -101,6 +105,9 @@ def make_generation_run(
         started_at=None,
         ended_at=None,
         error_message=None,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="No-QA vertical-slice draft.",
     )
 
 
@@ -218,18 +225,22 @@ async def test_terminal_runs_reject_status_updates_and_events(
 
     terminal = await store.update_run_status(
         run.id,
-        status=terminal_status,
-        current_node=None,
-        ended_at=NOW,
+        update=GenerationRunStatusUpdate(
+            status=terminal_status,
+            current_node=None,
+            ended_at=NOW,
+        ),
     )
 
     assert terminal.status == terminal_status, "Run must enter the terminal state."
     with pytest.raises(RunAlreadyTerminal, match="generation run is already terminal"):
         await store.update_run_status(
             run.id,
-            status=GenerationRunStatus.RUNNING,
-            current_node="planner",
-            ended_at=None,
+            update=GenerationRunStatusUpdate(
+                status=GenerationRunStatus.RUNNING,
+                current_node="planner",
+                ended_at=None,
+            ),
         )
     with pytest.raises(RunAlreadyTerminal, match="generation run is already terminal"):
         await store.append_event(run.id, kind="node_started", payload={})
@@ -328,16 +339,20 @@ async def _apply_adapter_operation(
                 ):
                     await state.store.update_run_status(
                         state.run_id,
-                        status=status,
-                        current_node=None,
-                        ended_at=NOW,
+                        update=GenerationRunStatusUpdate(
+                            status=status,
+                            current_node=None,
+                            ended_at=NOW,
+                        ),
                     )
                 return is_terminal
             await state.store.update_run_status(
                 state.run_id,
-                status=status,
-                current_node=None,
-                ended_at=NOW,
+                update=GenerationRunStatusUpdate(
+                    status=status,
+                    current_node=None,
+                    ended_at=NOW,
+                ),
             )
             return True
         case ("list", None):

@@ -12,6 +12,7 @@ async def use_runs(port: GenerationRunPort) -> None:
 ```
 """
 
+import dataclasses as dc
 import typing as typ
 
 if typ.TYPE_CHECKING:
@@ -28,6 +29,17 @@ if typ.TYPE_CHECKING:
     )
 
 EventSeq = typ.NewType("EventSeq", int)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationRunStatusUpdate:
+    """Lifecycle fields to apply to a generation run."""
+
+    status: GenerationRunStatus
+    current_node: str | None
+    ended_at: dt.datetime | None
+    error_message: str | None = None
+    error_category: str | None = None
 
 
 def event_seq(value: int) -> EventSeq:
@@ -67,16 +79,25 @@ class GenerationRunRepository(typ.Protocol):
         """List runs for an episode, ordered by creation time."""
         raise NotImplementedError
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def update_run_status(
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Update the run lifecycle state and return the stored run."""
+        raise NotImplementedError
+
+    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
+    async def claim_run_for_execution(
+        self,
+        run_id: uuid.UUID,
+        *,
+        current_node: str | None,
+        started_at: dt.datetime,
+        lease_expires_at: dt.datetime | None,
+    ) -> GenerationRun | None:
+        """Atomically move a pending run to running, or return None if lost."""
         raise NotImplementedError
 
 
@@ -110,6 +131,15 @@ class GenerationEventLog(typ.Protocol):
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run."""
         raise NotImplementedError
+
+
+@typ.runtime_checkable
+class GenerationRunEventStore(
+    GenerationRunRepository,
+    GenerationEventLog,
+    typ.Protocol,
+):
+    """Composite port for run persistence plus append-only event logging."""
 
 
 @typ.runtime_checkable
