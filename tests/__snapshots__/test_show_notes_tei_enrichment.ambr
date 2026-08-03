@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_prototype_tei_enrichment_with_show_notes
+  '<TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader><fileDesc><title>Test</title></fileDesc></teiHeader><text><body><p xml:id="p1">Hello world.</p><div type="notes"><list><item n="PT0M30S" corresp="#p1"><label>Introduction</label>Opening remarks about the topic.</item></list></div></body></text></TEI>'
+# ---

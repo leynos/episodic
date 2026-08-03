@@ -1,0 +1,12 @@
+# serializer version: 1
+# name: test_build_prompt_includes_guest_profile_sources
+  list([
+    dict({
+      'display_name': 'Ada Lovelace',
+      'reference_document_id': 'doc-ada',
+      'reference_document_revision_id': 'rev-ada',
+      'role': 'Mathematician',
+      'source_content': 'Ada wrote notes on the Analytical Engine.',
+    }),
+  ])
+# ---

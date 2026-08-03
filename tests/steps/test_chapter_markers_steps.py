@@ -21,6 +21,7 @@ import socket
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
 import time
 import typing as typ
+from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
 import pytest
 from pytest_bdd import given, scenario, then, when
@@ -39,7 +40,6 @@ from episodic.llm.openai_adapter import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    from pathlib import Path
 
     from episodic.llm.ports import LLMPort, LLMRequest, LLMResponse
 
@@ -343,17 +343,17 @@ def assert_chapter_marker_result_structure(
     """Verify the result contains chapter markers with expected fields."""
     result = chapter_markers_context.result
     assert result is not None, "Expected a ChapterMarkersResult, got None."
-    assert len(result.chapters) == 2
-    assert result.chapters[0].title == "Introduction"
-    assert result.chapters[0].start == "PT0S"
-    assert result.chapters[0].tei_locator == "#seg-intro"
-    assert result.chapters[1].title == "Main discussion"
-    assert result.chapters[1].start == "PT5M30S"
-    assert result.usage.input_tokens == 60
-    assert result.usage.output_tokens == 32
-    assert result.usage.total_tokens == 92
-    assert result.model == "gpt-4o-mini"
-    assert result.finish_reason == "stop"
+    assert len(result.chapters) == 2, "Expected values to match"
+    assert result.chapters[0].title == "Introduction", "Expected values to match"
+    assert result.chapters[0].start == "PT0S", "Expected values to match"
+    assert result.chapters[0].tei_locator == "#seg-intro", "Expected values to match"
+    assert result.chapters[1].title == "Main discussion", "Expected values to match"
+    assert result.chapters[1].start == "PT5M30S", "Expected values to match"
+    assert result.usage.input_tokens == 60, "Expected values to match"
+    assert result.usage.output_tokens == 32, "Expected values to match"
+    assert result.usage.total_tokens == 92, "Expected values to match"
+    assert result.model == "gpt-4o-mini", "Expected values to match"
+    assert result.finish_reason == "stop", "Expected values to match"
 
 
 @then("the chapter-marker prompt includes the TEI script and segment metadata")
@@ -363,11 +363,17 @@ def assert_prompt_contains_tei_script_and_segments(
     """Verify the actual outbound request includes TEI and segment metadata."""
     request = chapter_markers_context.request_payload
     assert request is not None, "Expected the adapter request to be captured."
-    assert "Welcome to episode 42" in request.prompt
-    assert "script_tei_xml" in request.prompt
-    assert "segment_structure" in request.prompt
-    assert "seg-intro" in request.prompt
-    assert "PT5M30S" in request.prompt
+    assert "Welcome to episode 42" in request.prompt, (
+        "Expected collection to contain the value"
+    )
+    assert "script_tei_xml" in request.prompt, (
+        "Expected collection to contain the value"
+    )
+    assert "segment_structure" in request.prompt, (
+        "Expected collection to contain the value"
+    )
+    assert "seg-intro" in request.prompt, "Expected collection to contain the value"
+    assert "PT5M30S" in request.prompt, "Expected collection to contain the value"
 
 
 @then("the generated chapter markers enrich the TEI idempotently")
@@ -383,9 +389,12 @@ def assert_chapter_markers_enrich_tei_idempotently(
         result,
     )
     enriched_twice = enrich_tei_with_chapter_markers(enriched_once, result)
-
-    assert enriched_twice == enriched_once
-    assert enriched_once.count('type="chapters"') == 1
-    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_once
-    assert '<item n="PT5M30S" corresp="#seg-main">' in enriched_once
+    assert enriched_twice == enriched_once, "Expected values to match"
+    assert enriched_once.count('type="chapters"') == 1, "Expected values to match"
+    assert '<item n="PT0S" corresp="#seg-intro">' in enriched_once, (
+        "Expected collection to contain the value"
+    )
+    assert '<item n="PT5M30S" corresp="#seg-main">' in enriched_once, (
+        "Expected collection to contain the value"
+    )
     chapter_markers_context.enriched_tei_xml = enriched_once

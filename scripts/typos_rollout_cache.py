@@ -1,14 +1,10 @@
 """Provide cache support types and atomic writes for the spelling helper."""
 
-from __future__ import annotations
-
+import collections.abc as cabc
 import dataclasses as dc
 import pathlib
 import tempfile
 import typing as typ
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
 
 
 @dc.dataclass(frozen=True)

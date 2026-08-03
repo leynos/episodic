@@ -1,7 +1,5 @@
 """Property tests for source-intake storage transitions."""
 
-from __future__ import annotations
-
 import asyncio
 import datetime as dt
 import typing as typ
@@ -58,9 +56,11 @@ async def test_ingestion_job_transition_is_concurrently_at_most_once_property(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.ingestion_jobs.get(job.id)
 
-    assert sum(results) == 1
-    assert fetched is not None
-    assert fetched.intake_state is IntakeState.READY_FOR_GENERATION
+    assert sum(results) == 1, "Expected values to match"
+    assert fetched is not None, "Expected value to be present"
+    assert fetched.intake_state is IntakeState.READY_FOR_GENERATION, (
+        "Expected values to match"
+    )
 
 
 async def _transition(

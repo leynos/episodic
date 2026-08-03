@@ -94,7 +94,7 @@ class _StaticPricingCatalogue:
         """Return a deterministic snapshot for protocol conformance tests."""
         return _make_snapshot(pricing_snapshot_id)
 
-    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         provider_name: str,
         model: str,
@@ -115,7 +115,7 @@ class _StaticPricingCatalogue:
 
 
 class _InMemoryMetering:
-    async def consume(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def consume(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         counter_key: MeteringCounterKey,
         billing_period_key: BillingPeriodKey,
@@ -133,17 +133,33 @@ def test_cost_protocol_fakes_satisfy_public_ports() -> None:
     catalogue = _StaticPricingCatalogue()
     metering = _InMemoryMetering()
 
-    assert isinstance(ledger, CostLedgerPort)
-    assert inspect.iscoroutinefunction(ledger.pin_run_pricing)
-    assert inspect.iscoroutinefunction(ledger.get_run_pricing_pin)
-    assert inspect.iscoroutinefunction(ledger.sum_provider_call_costs)
-    assert inspect.iscoroutinefunction(ledger.record_call)
-    assert inspect.iscoroutinefunction(ledger.record_task_rollup)
-    assert isinstance(catalogue, PricingCataloguePort)
-    assert inspect.iscoroutinefunction(catalogue.get_snapshot)
-    assert inspect.iscoroutinefunction(catalogue.resolve)
-    assert isinstance(metering, MeteringPort)
-    assert inspect.iscoroutinefunction(metering.consume)
+    assert isinstance(ledger, CostLedgerPort), (
+        "Expected value to have the required type"
+    )
+    assert inspect.iscoroutinefunction(ledger.pin_run_pricing), (
+        "Expected condition to hold"
+    )
+    assert inspect.iscoroutinefunction(ledger.get_run_pricing_pin), (
+        "Expected condition to hold"
+    )
+    assert inspect.iscoroutinefunction(ledger.sum_provider_call_costs), (
+        "Expected condition to hold"
+    )
+    assert inspect.iscoroutinefunction(ledger.record_call), "Expected condition to hold"
+    assert inspect.iscoroutinefunction(ledger.record_task_rollup), (
+        "Expected condition to hold"
+    )
+    assert isinstance(catalogue, PricingCataloguePort), (
+        "Expected value to have the required type"
+    )
+    assert inspect.iscoroutinefunction(catalogue.get_snapshot), (
+        "Expected condition to hold"
+    )
+    assert inspect.iscoroutinefunction(catalogue.resolve), "Expected condition to hold"
+    assert isinstance(metering, MeteringPort), (
+        "Expected value to have the required type"
+    )
+    assert inspect.iscoroutinefunction(metering.consume), "Expected condition to hold"
 
 
 def test_pricing_engine_returns_priced_call() -> None:
@@ -159,8 +175,10 @@ def test_pricing_engine_returns_priced_call() -> None:
         ),
     )
 
-    assert isinstance(priced_call, PricedCall)
-    assert priced_call.computed_cost_minor == 3
+    assert isinstance(priced_call, PricedCall), (
+        "Expected value to have the required type"
+    )
+    assert priced_call.computed_cost_minor == 3, "Expected values to match"
 
 
 def test_llm_response_accepts_optional_provider_call_usage() -> None:
@@ -191,5 +209,5 @@ def test_llm_response_accepts_optional_provider_call_usage() -> None:
         usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
     )
 
-    assert response.provider_call_usage == provider_usage
-    assert legacy_response.provider_call_usage is None
+    assert response.provider_call_usage == provider_usage, "Expected values to match"
+    assert legacy_response.provider_call_usage is None, "Expected value to be absent"

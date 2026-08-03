@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json
 import threading
@@ -24,7 +25,6 @@ from episodic.llm.openai_adapter import (
 )
 
 if typ.TYPE_CHECKING:
-    import asyncio
     import collections.abc as cabc
 
 
@@ -102,16 +102,13 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
 class _MockLLMServer(ThreadingHTTPServer):
     """HTTP server carrying mutable test state."""
 
-    # pylint: disable-next=too-many-arguments
     def __init__(
         self,
-        server_address: tuple[str, int],
-        handler_class: type[BaseHTTPRequestHandler],
         *,
         state: MockServerState,
         fail_first: bool = False,
     ) -> None:
-        super().__init__(server_address, handler_class)
+        super().__init__(("127.0.0.1", 0), _MockLLMHandler)
         self.state = state
         self.fail_first = fail_first
 
@@ -129,8 +126,6 @@ class _GenerateOptions:
 def _start_mock_server(context: LLMAdapterContext, *, fail_first: bool) -> None:
     """Start a mock LLM server and populate *context* with connection details."""
     server = _MockLLMServer(
-        ("127.0.0.1", 0),
-        _MockLLMHandler,
         state=context.server_state,
         fail_first=fail_first,
     )

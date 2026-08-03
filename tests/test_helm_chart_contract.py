@@ -52,6 +52,15 @@ def _render_local_chart() -> str:
     ])
 
 
+def _redact_helm_checksums(manifest: str) -> str:
+    """Replace generated config checksums while preserving manifest structure."""
+    return re.sub(
+        r"(?m)(^\s*checksum/config:\s*)[0-9a-f]{64}$",
+        r"\1<checksum>",
+        manifest,
+    ).rstrip()
+
+
 def test_helm_chart_lints() -> None:
     """Keep the chart valid under Helm's built-in checks."""
     output = _run_helm(["lint", str(CHART_PATH)])
@@ -63,58 +72,44 @@ def test_helm_chart_lints() -> None:
 
 def test_helm_local_manifest_snapshot(snapshot: SnapshotAssertion) -> None:
     """Capture the local preview manifest shape."""
-    assert _render_local_chart() == snapshot
+    manifest = _redact_helm_checksums(_render_local_chart())
+    assert manifest == snapshot, (
+        "redacted local Helm manifest must match its recorded snapshot"
+    )
 
 
-def test_helm_local_manifest_includes_nile_valley_contract() -> None:
+def test_helm_local_manifest_includes_nile_valley_contract(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Render the local values expected by Nile Valley preview flows."""
-    manifest = _render_local_chart()
+    manifest = _redact_helm_checksums(_render_local_chart())
 
-    assert "kind: Deployment" in manifest, "local render must include a Deployment."
-    assert "kind: Service" in manifest, "local render must include a Service."
-    assert "kind: ConfigMap" in manifest, "local render must include a ConfigMap."
-    assert "kind: Ingress" in manifest, "local render must include an Ingress."
-    assert 'image: "localhost/episodic:local"' in manifest, (
-        "local image tag must render."
-    )
-    assert "path: /health/live" in manifest, "liveness probe path must render."
-    assert "path: /health/ready" in manifest, "readiness probe path must render."
-    assert "name: episodic-local" in manifest, "existing Secret reference must render."
-    assert "optional: false" in manifest, "local secrets must be required."
-    assert "checksum/config:" in manifest, (
-        "ConfigMap-backed env vars must trigger pod rollout on config changes."
-    )
+    assert manifest == snapshot, "actual output must match snapshot"
 
 
-def test_helm_external_secret_manifest_renders() -> None:
+def test_helm_external_secret_manifest_renders(snapshot: SnapshotAssertion) -> None:
     """Support ExternalSecret-backed deployments without fixed secret stores."""
-    manifest = _run_helm([
-        "template",
-        "episodic",
-        str(CHART_PATH),
-        "--set",
-        "externalSecret.enabled=true",
-        "--set",
-        "externalSecret.secretStoreRef.name=vault",
-        "--set",
-        "externalSecret.creationPolicy=Merge",
-        "--set",
-        "externalSecret.data.database-url.key=episodic/database",
-        "--set",
-        "externalSecret.data.database-url.property=url",
-        "--set",
-        "existingSecretName=",
-    ])
+    manifest = _redact_helm_checksums(
+        _run_helm([
+            "template",
+            "episodic",
+            str(CHART_PATH),
+            "--set",
+            "externalSecret.enabled=true",
+            "--set",
+            "externalSecret.secretStoreRef.name=vault",
+            "--set",
+            "externalSecret.creationPolicy=Merge",
+            "--set",
+            "externalSecret.data.database-url.key=episodic/database",
+            "--set",
+            "externalSecret.data.database-url.property=url",
+            "--set",
+            "existingSecretName=",
+        ])
+    )
 
-    assert "kind: ExternalSecret" in manifest, (
-        "ExternalSecret must render when enabled."
-    )
-    assert "name: vault" in manifest, "secret store reference must render."
-    assert "creationPolicy: Merge" in manifest, (
-        "ExternalSecret creation policy must be configurable."
-    )
-    assert "secretKey: database-url" in manifest, "ExternalSecret data key must render."
-    assert "property: url" in manifest, "remote secret property must render."
+    assert manifest == snapshot, "actual output must match snapshot"
 
 
 def test_helm_explicit_required_secret_overrides_missing_secret_fallback() -> None:

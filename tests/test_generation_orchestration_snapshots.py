@@ -56,7 +56,9 @@ def test_build_prompt_snapshot(snapshot: SnapshotAssertion) -> None:
         script_tei_xml="<TEI><text>test</text></TEI>",
         template_structure=None,
     )
-    assert planner.build_prompt(request) == snapshot
+    assert planner.build_prompt(request) == snapshot, (
+        "planner prompt DTO must match the recorded snapshot"
+    )
 
 
 def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> None:
@@ -76,7 +78,7 @@ def test_execution_plan_serialisation_snapshot(snapshot: SnapshotAssertion) -> N
     )
     # `asdict` is the canonical nested DTO serialisation path under snapshot.
     serialised = dataclasses.asdict(plan)
-    assert serialised == snapshot
+    assert serialised == snapshot, "serialized execution plan must match its snapshot"
 
 
 def test_show_notes_entry_serialisation_snapshot(
@@ -85,7 +87,7 @@ def test_show_notes_entry_serialisation_snapshot(
     """Snapshot the serialised shape of one representative show-note entry."""
     entry = _make_show_notes_entry()
     serialised = dataclasses.asdict(entry)
-    assert serialised == snapshot
+    assert serialised == snapshot, "serialized show-notes entry must match its snapshot"
 
 
 def test_show_notes_result_serialisation_snapshot(
@@ -94,14 +96,16 @@ def test_show_notes_result_serialisation_snapshot(
     """Snapshot nested show-note entries plus deterministic provider metadata."""
     result = _make_show_notes_result()
     serialised = dataclasses.asdict(result)
-    assert serialised == snapshot
+    assert serialised == snapshot, (
+        "serialized show-notes result must match its snapshot"
+    )
 
 
 def test_show_notes_entry_normalises_optional_locator() -> None:
     """Verify optional locator normalisation before snapshot serialisation."""
     entry = _make_show_notes_entry(tei_locator="   ")
 
-    assert entry.tei_locator is None
+    assert entry.tei_locator is None, "blank TEI locator must normalize to None"
 
 
 def test_show_notes_entry_rejects_non_iso8601_timestamp() -> None:
@@ -125,9 +129,11 @@ def test_execution_plan_freezes_and_validates_steps() -> None:
         steps=typ.cast("tuple[PlannedAction, ...]", [planned]),
     )
 
-    assert plan.plan_version == "1"
-    assert plan.steps == (planned,)
-    assert plan.steps[0].action_kind is ActionKind.GENERATE_SHOW_NOTES
+    assert plan.plan_version == "1", "plan_version must normalize to 1"
+    assert plan.steps == (planned,), "plan steps must normalize to an immutable tuple"
+    assert plan.steps[0].action_kind is ActionKind.GENERATE_SHOW_NOTES, (
+        "planned action_kind must normalize to GENERATE_SHOW_NOTES"
+    )
 
     with pytest.raises(TypeError, match="steps\\[0\\]"):
         ExecutionPlan(
@@ -179,7 +185,9 @@ def test_generation_orchestration_result_snapshot(
 ) -> None:
     """Snapshot the aggregate orchestration result without tool-specific data."""
     result = _make_orchestration_result()
-    assert dataclasses.asdict(result) == snapshot
+    assert dataclasses.asdict(result) == snapshot, (
+        "generation orchestration result DTO must match its snapshot"
+    )
 
 
 def test_generation_orchestration_result_with_show_notes_snapshot(
@@ -197,7 +205,9 @@ def test_generation_orchestration_result_with_show_notes_snapshot(
             planner_usage=LLMUsage(input_tokens=12, output_tokens=8, total_tokens=20),
         )
     )
-    assert dataclasses.asdict(result) == snapshot
+    assert dataclasses.asdict(result) == snapshot, (
+        "show-notes orchestration result DTO must match its snapshot"
+    )
 
 
 def test_generation_orchestration_result_freezes_action_results() -> None:
@@ -214,7 +224,7 @@ def test_generation_orchestration_result_freezes_action_results() -> None:
         total_usage=LLMUsage(input_tokens=0, output_tokens=0, total_tokens=0),
     )
 
-    assert not result.action_results
+    assert not result.action_results, "empty action results must remain empty"
 
     with pytest.raises(TypeError, match="action_results\\[0\\]"):
         GenerationOrchestrationResult(
@@ -233,8 +243,8 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
     result = _make_orchestration_result()
     action_usage = result.action_results[0].usage
 
-    assert result.planner_usage is not None
-    assert action_usage is not None
+    assert result.planner_usage is not None, "fixture must provide planner usage"
+    assert action_usage is not None, "fixture must provide action usage"
     expected_input_tokens = (
         result.planner_usage.input_tokens + action_usage.input_tokens
     )
@@ -246,7 +256,9 @@ def test_generation_orchestration_fixture_preserves_usage_totals() -> None:
         output_tokens=expected_output_tokens,
         total_tokens=expected_input_tokens + expected_output_tokens,
     )
-    assert result.total_usage == expected_usage
+    assert result.total_usage == expected_usage, (
+        "total_usage must equal planner and action token totals"
+    )
 
 
 @pytest.mark.parametrize(
@@ -271,7 +283,7 @@ def test_generation_orchestration_fixture_totals_partial_usage_overrides(
         expected_input_tokens,
         expected_output_tokens,
         expected_input_tokens + expected_output_tokens,
-    )
+    ), "total_usage must include each supplied partial usage override"
 
 
 @given(
@@ -294,8 +306,12 @@ def test_generation_orchestration_fixture_total_usage_property(
     )
     expected_input_tokens = planner[0] + action[0]
     expected_output_tokens = planner[1] + action[1]
-    assert result.total_usage.input_tokens == expected_input_tokens
-    assert result.total_usage.output_tokens == expected_output_tokens
+    assert result.total_usage.input_tokens == expected_input_tokens, (
+        "total_usage.input_tokens must equal planner plus action input tokens"
+    )
+    assert result.total_usage.output_tokens == expected_output_tokens, (
+        "total_usage.output_tokens must equal planner plus action output tokens"
+    )
     assert result.total_usage.total_tokens == (
         expected_input_tokens + expected_output_tokens
     ), f"expected total usage derived from summed counts, got {result.total_usage!r}"
@@ -335,12 +351,12 @@ def test_checkpoint_payload_snapshot(snapshot: SnapshotAssertion) -> None:
     assert {
         "planner_result": _planner_result_to_payload(planner_result),
         "action_result": _action_result_to_payload(action_result),
-    } == snapshot
+    } == snapshot, "checkpoint payload DTOs must match the recorded snapshot"
 
 
 def test_planner_format_error_messages_snapshot(snapshot: SnapshotAssertion) -> None:
     """Snapshot representative strict-planner format error messages."""
-    assert {
+    messages = {
         "missing_action_id": _capture_plan_format_error(
             _plan_payload_without_step_field("action_id")
         ),
@@ -364,4 +380,5 @@ def test_planner_format_error_messages_snapshot(snapshot: SnapshotAssertion) -> 
         "unknown_model_tier": _capture_plan_format_error(
             _plan_payload_with_step_field("model_tier", "training")
         ),
-    } == snapshot
+    }
+    assert messages == snapshot, "planner format-error messages must match the snapshot"

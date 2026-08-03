@@ -1,6 +1,7 @@
 """Integration tests for the source-intake REST workflow."""
 
 import asyncio
+import dataclasses
 import datetime as dt
 import hashlib
 import typing as typ
@@ -58,35 +59,29 @@ async def test_source_intake_upload_job_and_attach_flow(
         base_url="http://testserver",
     ) as client:
         profile_id = await _create_series_profile(client)
-        payload = b"hello\n"
-        upload_response = await client.post(
-            "/v1/uploads",
-            headers={"Idempotency-Key": "upload-key"},
-            files={
-                "file": ("source.txt", payload, "text/plain"),
-                "content_type": (None, "text/plain"),
-                "declared_size": (None, str(len(payload))),
-                "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-                "metadata": (None, '{"language":"en"}', "application/json"),
-            },
+        upload_response = await _post_text_upload(
+            client,
+            _TextUploadRequest(
+                key="upload-key",
+                payload=b"hello\n",
+                metadata='{"language":"en"}',
+            ),
         )
         assert upload_response.status_code == 201, upload_response.text
-        replay_response = await client.post(
-            "/v1/uploads",
-            headers={"Idempotency-Key": "upload-key"},
-            files={
-                "file": ("source.txt", payload, "text/plain"),
-                "content_type": (None, "text/plain"),
-                "declared_size": (None, str(len(payload))),
-                "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-                "metadata": (None, '{"language":"en"}', "application/json"),
-            },
+        replay_response = await _post_text_upload(
+            client,
+            _TextUploadRequest(
+                key="upload-key",
+                payload=b"hello\n",
+                metadata='{"language":"en"}',
+            ),
         )
         job_response = await client.post(
             "/v1/ingestion-jobs",
             headers={"Idempotency-Key": "job-key"},
             json={"series_profile_id": profile_id, "target_episode_id": None},
         )
+        assert job_response.status_code == 201, "Expected values to match"
         source_response = await client.post(
             f"/v1/ingestion-jobs/{job_response.json()['id']}/sources",
             headers={"Idempotency-Key": "source-key"},
@@ -102,15 +97,22 @@ async def test_source_intake_upload_job_and_attach_flow(
             f"/v1/ingestion-jobs/{job_response.json()['id']}"
         )
 
-    assert replay_response.status_code == 201
-    assert replay_response.json() == upload_response.json()
-    assert upload_response.json()["content_hash"].startswith("sha256:")
-    assert job_response.status_code == 201
-    assert job_response.json()["intake_state"] == "awaiting_sources"
-    assert source_response.status_code == 201
-    assert source_response.json()["upload_id"] == upload_response.json()["id"]
-    assert status_response.status_code == 200
-    assert status_response.json()["intake_state"] == "ready_for_generation"
+    assert replay_response.status_code == 201, "Expected values to match"
+    assert replay_response.json() == upload_response.json(), "Expected values to match"
+    assert upload_response.json()["content_hash"].startswith("sha256:"), (
+        "Expected value to have the required prefix"
+    )
+    assert job_response.json()["intake_state"] == "awaiting_sources", (
+        "Expected values to match"
+    )
+    assert source_response.status_code == 201, "Expected values to match"
+    assert source_response.json()["upload_id"] == upload_response.json()["id"], (
+        "Expected values to match"
+    )
+    assert status_response.status_code == 200, "Expected values to match"
+    assert status_response.json()["intake_state"] == "ready_for_generation", (
+        "Expected values to match"
+    )
 
 
 @pytest.mark.asyncio
@@ -126,12 +128,14 @@ async def test_source_intake_idempotency_conflict(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        first = await _post_text_upload(client, key="conflict-key", payload=b"hello\n")
-        second = await _post_text_upload(client, key="conflict-key", payload=b"bye\n")
+        first_request = _TextUploadRequest(key="conflict-key", payload=b"hello\n")
+        second_request = _TextUploadRequest(key="conflict-key", payload=b"bye\n")
+        first = await _post_text_upload(client, first_request)
+        second = await _post_text_upload(client, second_request)
 
     assert first.status_code == 201, first.text
-    assert second.status_code == 409
-    assert second.json()["code"] == "idempotency_conflict"
+    assert second.status_code == 409, "Expected values to match"
+    assert second.json()["code"] == "idempotency_conflict", "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -151,30 +155,25 @@ async def test_source_intake_idempotency_is_scoped_by_authorized_principal(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        first = await _post_text_upload(
-            client,
+        principal_a_request = _TextUploadRequest(
             key="principal-key",
             payload=b"same\n",
             authorization="principal-a",
         )
-        second = await _post_text_upload(
-            client,
+        principal_b_request = _TextUploadRequest(
             key="principal-key",
             payload=b"same\n",
             authorization="principal-b",
         )
-        replay = await _post_text_upload(
-            client,
-            key="principal-key",
-            payload=b"same\n",
-            authorization="principal-a",
-        )
+        first = await _post_text_upload(client, principal_a_request)
+        second = await _post_text_upload(client, principal_b_request)
+        replay = await _post_text_upload(client, principal_a_request)
 
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
     assert replay.status_code == 201, replay.text
-    assert first.json()["id"] != second.json()["id"]
-    assert replay.json()["id"] == first.json()["id"]
+    assert first.json()["id"] != second.json()["id"], "Expected values to differ"
+    assert replay.json()["id"] == first.json()["id"], "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -194,8 +193,7 @@ async def test_source_intake_response_envelope_snapshot(
         profile_id = await _create_series_profile(client)
         upload_response = await _post_text_upload(
             client,
-            key="snapshot-upload-key",
-            payload=b"snapshot\n",
+            _TextUploadRequest(key="snapshot-upload-key", payload=b"snapshot\n"),
         )
         job_response = await client.post(
             "/v1/ingestion-jobs",
@@ -221,28 +219,25 @@ async def test_source_intake_response_envelope_snapshot(
     assert job_response.status_code == 201, job_response.text
     assert source_response.status_code == 201, source_response.text
     assert status_response.status_code == 200, status_response.text
-    assert {
+    response_envelopes = {
         "upload": _stable_upload_fields(upload_response.json()),
         "job": _stable_job_fields(job_response.json()),
         "source": _stable_source_fields(source_response.json()),
         "status": _stable_job_fields(status_response.json()),
-    } == snapshot
+    }
+    assert response_envelopes == snapshot, "actual output must match snapshot"
 
 
 async def _acquire_and_run_failing_work(
     session_factory: async_sessionmaker[AsyncSession],
     idempotency_key: str,
 ) -> Acquired:
-    """Acquire an idempotency record, run failing work, and return the outcome.
-
-    Asserts that the acquire returns ``Acquired`` and ``_idempotent_response``
-    propagates the ``RuntimeError("boom")`` raised by work.
-    """
+    """Acquire an idempotency record and exercise failing work."""
     request = _idempotency_request(idempotency_key)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         outcome = await uow.idempotency.acquire(request=request)
         await uow.commit()
-    assert isinstance(outcome, Acquired)
+    assert isinstance(outcome, Acquired), "Expected value to have the required type"
 
     async def failing_work() -> IdempotentResponse:
         await asyncio.sleep(0)
@@ -269,7 +264,7 @@ async def test_idempotent_response_deletes_in_flight_on_work_failure(
     async with session_factory() as session:
         record = await session.get(IdempotencyRecordModel, outcome.record_id)
 
-    assert record is None
+    assert record is None, "Expected value to be absent"
 
 
 @pytest.mark.asyncio
@@ -285,7 +280,9 @@ async def test_idempotent_response_allows_retry_after_work_failure(
         )
         await uow.commit()
 
-    assert isinstance(retry_outcome, Acquired)
+    assert isinstance(retry_outcome, Acquired), (
+        "Expected value to have the required type"
+    )
 
 
 def test_idempotency_outcome_encoding_rejects_large_payloads() -> None:
@@ -360,24 +357,33 @@ def _idempotency_request(idempotency_key: str) -> IdempotencyAcquireRequest:
     )
 
 
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class _TextUploadRequest:
+    """Describe a deterministic text-upload multipart request."""
+
+    key: str
+    payload: bytes
+    authorization: str | None = None
+    metadata: str | None = None
+
+
 async def _post_text_upload(
     client: httpx.AsyncClient,
-    *,
-    key: str,
-    payload: bytes,
-    authorization: str | None = None,
+    request: _TextUploadRequest,
 ) -> httpx.Response:
     """Post a text upload with a deterministic multipart shape."""
-    headers = {"Idempotency-Key": key}
-    if authorization is not None:
-        headers["Authorization"] = authorization
-    return await client.post(
-        "/v1/uploads",
-        headers=headers,
-        files={
-            "file": ("source.txt", payload, "text/plain"),
-            "content_type": (None, "text/plain"),
-            "declared_size": (None, str(len(payload))),
-            "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-        },
-    )
+    headers = {"Idempotency-Key": request.key}
+    if request.authorization is not None:
+        headers["Authorization"] = request.authorization
+    files: dict[
+        str,
+        tuple[str, bytes, str] | tuple[None, str] | tuple[None, str, str],
+    ] = {
+        "file": ("source.txt", request.payload, "text/plain"),
+        "content_type": (None, "text/plain"),
+        "declared_size": (None, str(len(request.payload))),
+        "declared_sha256": (None, hashlib.sha256(request.payload).hexdigest()),
+    }
+    if request.metadata is not None:
+        files["metadata"] = (None, request.metadata, "application/json")
+    return await client.post("/v1/uploads", headers=headers, files=files)

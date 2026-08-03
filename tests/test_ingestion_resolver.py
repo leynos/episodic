@@ -1,9 +1,14 @@
 """Unit tests for conflict resolution adapters."""
 
+import typing as typ
+
 import pytest
 from _ingestion_service_helpers import _make_weighting_result
 
 from episodic.canonical.adapters.resolver import HighestWeightConflictResolver
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 
 @pytest.fixture
@@ -52,7 +57,7 @@ async def test_conflict_resolver_single_source_no_conflict(
     assert outcome.preferred_sources[0].source.title == "Only Source", (
         "Expected only source to be selected as preferred."
     )
-    assert outcome.rejected_sources == [], (  # pylint: disable=use-implicit-booleaness-not-comparison
+    assert outcome.rejected_sources == [], (  # pylint: disable=use-implicit-booleaness-not-comparison  # The explicit empty-list comparison documents the expected collection value.
         "Expected no rejected sources for single-source input."
     )
 
@@ -60,6 +65,7 @@ async def test_conflict_resolver_single_source_no_conflict(
 @pytest.mark.asyncio
 async def test_conflict_resolver_records_resolution_notes(
     resolver: HighestWeightConflictResolver,
+    snapshot: SnapshotAssertion,
 ) -> None:
     """The resolver produces human-readable resolution notes."""
     high = _make_weighting_result(title="Winner", weight=0.9)
@@ -67,15 +73,4 @@ async def test_conflict_resolver_records_resolution_notes(
 
     outcome = await resolver.resolve([high, low])
 
-    assert "Winner" in outcome.resolution_notes, (
-        "Expected resolution notes to mention the winning source."
-    )
-    assert "selected as canonical" in outcome.resolution_notes, (
-        "Expected resolution notes to include canonical-selection language."
-    )
-    assert "Loser" in outcome.resolution_notes, (
-        "Expected resolution notes to mention the rejected source."
-    )
-    assert "rejected" in outcome.resolution_notes, (
-        "Expected resolution notes to describe rejection."
-    )
+    assert outcome.resolution_notes == snapshot, "actual output must match snapshot"

@@ -3,7 +3,7 @@
 import asyncio
 import json
 import typing as typ
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -28,20 +28,26 @@ from tests._orchestration_fakes import (
     _response,
     _usage,
 )
+from tests.snapshot_redaction import redact_snapshot_uuids
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.ports import CanonicalUnitOfWork
 
 
 @pytest.mark.asyncio
-async def test_guest_bios_tool_executor_resolves_bindings_and_returns_result() -> None:
+async def test_guest_bios_tool_executor_resolves_bindings_and_returns_result(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Guest-bios execution should resolve profile bindings and enrich TEI."""
     ids = {
-        "document": uuid4(),
-        "revision": uuid4(),
-        "series_profile": uuid4(),
-        "episode": uuid4(),
-        "template": uuid4(),
+        "document": UUID("018fdcf0-0000-7000-8000-000000000001"),
+        "revision": UUID("018fdcf0-0000-7000-8000-000000000002"),
+        "series_profile": UUID("018fdcf0-0000-7000-8000-000000000003"),
+        "episode": UUID("018fdcf0-0000-7000-8000-000000000004"),
+        "template": UUID("018fdcf0-0000-7000-8000-000000000005"),
     }
     calls: list[dict[str, object]] = []
 
@@ -95,21 +101,26 @@ async def test_guest_bios_tool_executor_resolves_bindings_and_returns_result() -
 
     result = await executor.execute(_guest_bios_action(), request)
 
-    assert calls == [
-        {
-            "uow": uow,
-            "series_profile_id": ids["series_profile"],
-            "episode_id": ids["episode"],
-            "template_id": ids["template"],
-        }
-    ]
-    assert result.action_kind is ActionKind.GENERATE_GUEST_BIOS
-    assert result.usage == _usage(input_tokens=30, output_tokens=12)
-    assert result.guest_bios_result is not None
+    stable_calls = redact_snapshot_uuids([
+        {key: value for key, value in call.items() if key != "uow"} for call in calls
+    ])
+    assert stable_calls == snapshot, "actual output must match snapshot"
+    assert all(call["uow"] is uow for call in calls), (
+        "binding resolver calls must receive the executor's unit of work"
+    )
+    assert result.action_kind is ActionKind.GENERATE_GUEST_BIOS, (
+        "Expected values to match"
+    )
+    assert result.usage == _usage(input_tokens=30, output_tokens=12), (
+        "Expected values to match"
+    )
+    assert result.guest_bios_result is not None, "Expected value to be present"
     assert result.guest_bios_result.sources[0].reference_document_revision_id == str(
         ids["revision"]
+    ), "Expected values to match"
+    assert 'type="guest-bios"' in result.guest_bios_result.tei_xml, (
+        "Expected collection to contain the value"
     )
-    assert 'type="guest-bios"' in result.guest_bios_result.tei_xml
 
 
 @pytest.mark.asyncio
@@ -163,8 +174,10 @@ async def test_guest_bios_tool_executor_uses_guest_bios_prompt_by_default() -> N
     assert (
         outbound_request.system_prompt
         == GuestBiosGeneratorConfig(model="gpt-4o-mini").system_prompt
+    ), "Expected values to match"
+    assert outbound_request.system_prompt != _config().execution_system_prompt, (
+        "Expected values to differ"
     )
-    assert outbound_request.system_prompt != _config().execution_system_prompt
 
 
 @pytest.mark.asyncio
@@ -194,11 +207,19 @@ async def test_guest_bios_tool_executor_allows_no_sources_no_op() -> None:
 
     result = await executor.execute(_guest_bios_action(), request)
 
-    assert result.model == _config().execution_model
-    assert result.summary == "Generated 0 guest biographies."
-    assert result.usage == _usage(input_tokens=0, output_tokens=0)
-    assert result.guest_bios_result is not None
-    assert not result.guest_bios_result.generation_result.model
-    assert result.guest_bios_result.sources == ()
-    assert result.guest_bios_result.tei_xml == request.script_tei_xml
-    assert not llm.requests
+    assert result.model == _config().execution_model, "Expected values to match"
+    assert result.summary == "Generated 0 guest biographies.", (
+        "Expected values to match"
+    )
+    assert result.usage == _usage(input_tokens=0, output_tokens=0), (
+        "Expected values to match"
+    )
+    assert result.guest_bios_result is not None, "Expected value to be present"
+    assert not result.guest_bios_result.generation_result.model, (
+        "Expected condition to be false"
+    )
+    assert result.guest_bios_result.sources == (), "Expected values to match"
+    assert result.guest_bios_result.tei_xml == request.script_tei_xml, (
+        "Expected values to match"
+    )
+    assert not llm.requests, "Expected condition to be false"

@@ -18,8 +18,6 @@ priced_call = PricingEngine.price(snapshot, request)
 ```
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
@@ -63,14 +61,9 @@ class PricingEngine:
         ----------
         snapshot : PricingSnapshot
             Immutable pricing rates selected for the provider operation.
-        usage : Mapping[str, int]
-            Canonical usage metrics reported or estimated for one call.
-        operation : str
-            Provider operation being priced.
-        billing_period_key : BillingPeriodKey
-            Billing period that must match the pricing snapshot.
-        is_estimated : bool, optional
-            Whether the usage came from an estimate rather than the provider.
+        request : PricingRequest
+            Usage, provider operation, billing period, and estimation status for
+            the call being priced.
 
         Returns
         -------
@@ -80,12 +73,13 @@ class PricingEngine:
         Raises
         ------
         OperationMismatchError
-            If the snapshot operation does not match `operation`.
+            If the snapshot operation does not match ``request.operation``.
         BillingPeriodMismatchError
             If the snapshot billing period does not match
-            `billing_period_key`.
+            ``request.billing_period_key``.
         UnknownPricedMetricError
-            If `usage` contains a metric absent from the snapshot rates.
+            If ``request.usage`` contains a metric absent from the snapshot
+            rates.
 
         Notes
         -----

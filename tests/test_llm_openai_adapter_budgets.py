@@ -81,12 +81,16 @@ def test_estimate_token_count_matches_ceiling_ratio(
     """Token estimates should preserve the configured finite positive ratio."""
     estimated_tokens = _estimate_token_count(chars_per_token, text)
 
-    assert estimated_tokens >= 0
+    assert estimated_tokens >= 0, "estimated_tokens must be non-negative"
     if not text:
-        assert estimated_tokens == 0
+        assert estimated_tokens == 0, "empty text must estimate zero tokens"
     else:
-        assert (estimated_tokens - 1) * chars_per_token < len(text)
-        assert estimated_tokens * chars_per_token >= len(text)
+        assert (estimated_tokens - 1) * chars_per_token < len(text), (
+            "the lower ceiling-ratio bound must not cover the full text"
+        )
+        assert estimated_tokens * chars_per_token >= len(text), (
+            "the upper ceiling-ratio bound must cover the full text"
+        )
 
 
 def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
@@ -165,7 +169,9 @@ async def test_generate_preflight_budget_rejection_log_snapshot(
         with pytest.raises(LLMTokenBudgetExceededError, match="input token budget"):
             await adapter.generate(_PREFLIGHT_OVERFLOW_REQUEST)
 
-    assert openai_log_spy.messages == snapshot
+    assert openai_log_spy.messages == snapshot, (
+        "each preflight rejection log payload must match its recorded snapshot"
+    )
 
 
 @pytest.mark.asyncio
@@ -200,7 +206,9 @@ async def test_generate_rejects_response_usage_that_exceeds_total_budget(
         with pytest.raises(LLMTokenBudgetExceededError, match="total token budget"):
             await adapter.generate(_OVER_BUDGET_USAGE_REQUEST)
 
-    assert openai_log_spy.messages == snapshot
+    assert openai_log_spy.messages == snapshot, (
+        "each usage rejection log payload must match its recorded snapshot"
+    )
 
 
 @pytest.mark.asyncio

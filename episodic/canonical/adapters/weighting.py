@@ -51,12 +51,7 @@ def _parse_min_parallel_items(raw_value: str | None) -> int:
 def _extract_coefficients(
     series_configuration: JsonMapping,
 ) -> tuple[float, float, float]:
-    """Extract weighting coefficients from series configuration.
-
-    The configuration may contain a ``"weighting"`` dictionary with
-    ``"quality_coefficient"``, ``"freshness_coefficient"``, and
-    ``"reliability_coefficient"`` keys. Missing keys fall back to defaults.
-    """
+    """Extract quality, freshness, and reliability coefficients with defaults."""
     weighting = series_configuration.get("weighting")
     if not isinstance(weighting, dict):
         return (

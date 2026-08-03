@@ -15,7 +15,7 @@ from episodic.canonical.reference_documents.snapshots import (
 if typ.TYPE_CHECKING:
     from tests.fixtures.binding import _SnapshotTestFixtures
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio]
 
 
 async def _assert_snapshot_persistence(
@@ -40,24 +40,44 @@ async def _assert_snapshot_persistence(
         ),
     )
 
-    assert len(created_documents) == 1
+    assert len(created_documents) == 1, (
+        "snapshotting one resolved binding must create one source document"
+    )
     created = created_documents[0]
-    assert created.source_type == "reference_document"
-    assert created.reference_document_revision_id == fx.revision_v1.id
-    assert created.canonical_episode_id == fx.episode.id
+    assert created.source_type == "reference_document", (
+        "snapshot source type must identify reference-document provenance"
+    )
+    assert created.reference_document_revision_id == fx.revision_v1.id, (
+        "snapshot must retain the resolved reference-document revision"
+    )
+    assert created.canonical_episode_id == fx.episode.id, (
+        "snapshot must retain the canonical episode identifier"
+    )
     assert created.source_uri == (
         f"ref://{fx.document.id}/revisions/{fx.revision_v1.id}"
+    ), "snapshot source URI must identify the resolved document revision"
+    assert created.metadata["binding_id"] == str(fx.reference_binding.id), (
+        "snapshot metadata must retain the reference binding identifier"
     )
-    assert created.metadata["binding_id"] == str(fx.reference_binding.id)
-    assert created.metadata["document_kind"] == fx.document.kind.value
-    assert created.created_at == expected_created_at
+    assert created.metadata["document_kind"] == fx.document.kind.value, (
+        "snapshot metadata must retain the reference document kind"
+    )
+    assert created.created_at == expected_created_at, (
+        "snapshot timestamp must equal the requested or fallback creation time"
+    )
 
     await fx.uow.commit()
 
     persisted = await fx.uow.source_documents.list_for_job(fx.job.id)
-    assert len(persisted) == 1
-    assert persisted[0].reference_document_revision_id == fx.revision_v1.id
-    assert persisted[0].created_at == expected_created_at
+    assert len(persisted) == 1, (
+        "committing one snapshot must persist one source document"
+    )
+    assert persisted[0].reference_document_revision_id == fx.revision_v1.id, (
+        "persisted snapshot must retain the resolved revision identifier"
+    )
+    assert persisted[0].created_at == expected_created_at, (
+        "persisted snapshot must retain the selected creation timestamp"
+    )
 
 
 @pytest.mark.parametrize(
@@ -89,7 +109,7 @@ async def test_snapshot_resolved_bindings_persists_reference_source_documents(
             cls,
             tz: dt.tzinfo | None = None,
         ) -> dt.datetime:
-            assert tz == dt.UTC
+            assert tz == dt.UTC, "datetime.now must receive dt.UTC"
             return expected_created_at
 
     if requested_created_at is None:

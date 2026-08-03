@@ -164,15 +164,6 @@ def log_info(
         Arguments interpolated into the template.
     exc_info : object | None, optional
         Exception info to attach to the log record.
-
-    Returns
-    -------
-    None
-
-    Raises
-    ------
-    TypeError
-        If the template and arguments do not align for percent formatting.
     """
     message = _format_message(template, args)
     try:
@@ -209,15 +200,6 @@ def log_warning(
         Arguments interpolated into the template.
     exc_info : object | None, optional
         Exception info to attach to the log record.
-
-    Returns
-    -------
-    None
-
-    Raises
-    ------
-    TypeError
-        If the template and arguments do not align for percent formatting.
     """
     message = _format_message(template, args)
     try:
@@ -254,15 +236,6 @@ def log_error(
         Arguments interpolated into the template.
     exc_info : object | None, optional
         Exception info to attach to the log record.
-
-    Returns
-    -------
-    None
-
-    Raises
-    ------
-    TypeError
-        If the template and arguments do not align for percent formatting.
     """
     message = _format_message(template, args)
     try:

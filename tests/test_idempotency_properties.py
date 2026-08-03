@@ -114,7 +114,7 @@ async def test_identical_body_for_key_replays_one_completed_resource(
             expires_at=expires_at,
         ),
     )
-    assert isinstance(first, Acquired)
+    assert isinstance(first, Acquired), "Expected value to have the required type"
     await store.complete(record_id=first.record_id, serialised_outcome=replay_payload)
 
     second = await store.acquire(
@@ -127,9 +127,9 @@ async def test_identical_body_for_key_replays_one_completed_resource(
         ),
     )
 
-    assert isinstance(second, Replay)
-    assert second.serialised_outcome == replay_payload
-    assert len(store.records) == 1
+    assert isinstance(second, Replay), "Expected value to have the required type"
+    assert second.serialised_outcome == replay_payload, "Expected values to match"
+    assert len(store.records) == 1, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -157,7 +157,7 @@ async def test_different_body_for_key_conflicts(
             expires_at=expires_at,
         ),
     )
-    assert isinstance(first, Acquired)
+    assert isinstance(first, Acquired), "Expected value to have the required type"
 
     second = await store.acquire(
         request=IdempotencyAcquireRequest(
@@ -169,9 +169,9 @@ async def test_different_body_for_key_conflicts(
         ),
     )
 
-    assert isinstance(second, Conflict)
-    assert second.record_id == first.record_id
-    assert len(store.records) == 1
+    assert isinstance(second, Conflict), "Expected value to have the required type"
+    assert second.record_id == first.record_id, "Expected values to match"
+    assert len(store.records) == 1, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -211,7 +211,7 @@ async def test_same_key_is_scoped_by_authenticated_principal(
         ),
     )
 
-    assert isinstance(first, Acquired)
-    assert isinstance(second, Acquired)
-    assert first.record_id != second.record_id
-    assert len(store.records) == 2
+    assert isinstance(first, Acquired), "Expected value to have the required type"
+    assert isinstance(second, Acquired), "Expected value to have the required type"
+    assert first.record_id != second.record_id, "Expected values to differ"
+    assert len(store.records) == 2, "Expected values to match"

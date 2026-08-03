@@ -200,7 +200,7 @@ class _CountingReferenceBindingRepository:
         self.multi_target_calls = 0
         self.last_target_ids: set[uuid.UUID] = set()
 
-    async def list_for_target(  # pylint: disable=too-many-arguments
+    async def list_for_target(  # pylint: disable=too-many-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         *,
         target_kind: ReferenceBindingTargetKind,

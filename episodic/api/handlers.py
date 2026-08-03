@@ -71,10 +71,10 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
     Raises
     ------
     falcon.HTTPBadRequest
-        Raised when ``entity_id`` is not a valid UUID.
+        If ``entity_id`` is not a valid UUID.
     falcon.HTTPNotFound
-        Raised when the requested entity does not exist.
-    """
+        If the requested entity does not exist.
+    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     try:
         async with uow_factory() as uow:
@@ -83,7 +83,8 @@ async def handle_get_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@episodi
                 entity_id=parsed_entity_id,
             )
     except EntityNotFoundError as exc:
-        raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
+        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)
+        raise not_found from exc
     return serializer_fn(entity, revision), falcon.HTTP_200
 
 
@@ -125,10 +126,10 @@ async def handle_get_history[EntityT](
     Raises
     ------
     falcon.HTTPBadRequest
-        Raised when ``request.entity_id`` is not a valid UUID.
+        If the parent entity identifier is not a valid UUID.
     falcon.HTTPNotFound
-        Raised when the parent entity is not found.
-    """
+        If the requested parent entity does not exist.
+    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(request.entity_id, request.id_field_name)
     try:
         async with uow_factory() as uow:
@@ -138,7 +139,8 @@ async def handle_get_history[EntityT](
                 page=request.page,
             )
     except EntityNotFoundError as exc:
-        raise map_profile_template_error(exc, entity_id=parsed_entity_id) from exc
+        not_found = map_profile_template_error(exc, entity_id=parsed_entity_id)
+        raise not_found from exc
     return (
         {
             "items": [request.serializer_fn(item) for item in items],
@@ -172,7 +174,14 @@ def _raise_mapped_update_error(
     callers should pass the parsed integer from the typed update request so
     the envelope ``details`` stays type-stable (no raw payload values leak
     into the response).
-    """
+
+    Raises
+    ------
+    falcon.HTTPNotFound
+        If the target entity does not exist.
+    falcon.HTTPConflict
+        If the expected revision does not match the persisted revision.
+    """  # noqa: DOC501, DOC502  # The mapper returns these concrete Falcon exceptions.
     raise map_profile_template_error(
         exc,
         entity_id=entity_id,
@@ -227,12 +236,12 @@ async def handle_update_entity[EntityT](  # noqa: PLR0913, PLR0917  # TODO(@epis
     Raises
     ------
     falcon.HTTPBadRequest
-        Raised when required fields are missing or the identifier is invalid.
+        If the identifier, required fields, or update payload are invalid.
     falcon.HTTPNotFound
-        Raised when the target entity does not exist.
+        If the target entity does not exist.
     falcon.HTTPConflict
-        Raised when optimistic-lock revision preconditions fail.
-    """
+        If the expected revision does not match the persisted revision.
+    """  # noqa: DOC502  # Indirect exceptions form part of this public contract.
     parsed_entity_id = parse_uuid(entity_id, id_field_name)
     _require_payload_fields(payload, required_fields)
     update_request = request_builder(parsed_entity_id, payload)
@@ -282,10 +291,10 @@ async def handle_create_entity[EntityT](  # noqa: PLR0913  # TODO(@episodic-dev)
     Raises
     ------
     falcon.HTTPBadRequest
-        Raised when required fields are missing.
+        If a required field is missing or the create payload is invalid.
     falcon.HTTPNotFound
-        Raised when create preconditions reference unknown entities.
-    """
+        If a referenced entity required for creation does not exist.
+    """  # noqa: DOC501, DOC502  # Indirect exceptions form part of this public contract.
     for field_name in required_fields:
         if field_name not in payload:
             msg = f"Missing required field: {field_name}"

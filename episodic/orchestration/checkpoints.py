@@ -20,7 +20,7 @@ import datetime as dt
 from episodic.orchestration._dto import WorkflowCheckpoint
 from episodic.orchestration._types import _log_event
 
-TimeProvider = cabc.Callable[[], dt.datetime]
+type TimeProvider = cabc.Callable[[], dt.datetime]
 
 
 @dc.dataclass(slots=True)
@@ -34,7 +34,10 @@ class InMemoryCheckpointStore:
 
     async def get(self, checkpoint_id: str) -> WorkflowCheckpoint | None:
         """Return a checkpoint by identifier."""
-        return self._by_id.get(checkpoint_id)
+        try:
+            return self._by_id[checkpoint_id]
+        except KeyError:
+            return None
 
     async def get_by_idempotency_key(
         self,

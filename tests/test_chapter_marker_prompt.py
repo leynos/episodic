@@ -24,7 +24,7 @@ def test_build_prompt_includes_tei_and_segment_structure() -> None:
     assert payload == {
         "script_tei_xml": minimal_tei(),
         "segment_structure": segment_structure,
-    }
+    }, "Expected values to match"
 
 
 def test_build_prompt_omits_segment_structure_when_not_provided() -> None:
@@ -37,7 +37,9 @@ def test_build_prompt_omits_segment_structure_when_not_provided() -> None:
         segment_structure=None,
     )
 
-    assert prompt_without_segment_structure == prompt_with_none_segment_structure
+    assert prompt_without_segment_structure == prompt_with_none_segment_structure, (
+        "Expected values to match"
+    )
     assert json.loads(prompt_without_segment_structure) == {
         "script_tei_xml": minimal_tei()
-    }
+    }, "Expected values to match"

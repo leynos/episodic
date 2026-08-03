@@ -1,5 +1,7 @@
 """Show-notes TEI enrichment tests."""
 
+import typing as typ
+
 import pytest
 import tei_rapporteur as tei
 
@@ -10,8 +12,11 @@ from episodic.generation.show_notes import (
 )
 from episodic.llm import LLMUsage
 
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
-def test_prototype_tei_enrichment_with_show_notes() -> None:
+
+def test_prototype_tei_enrichment_with_show_notes(snapshot: SnapshotAssertion) -> None:
     """Prototype test: TEI body can be enriched with a div containing show notes."""
     minimal_tei_xml = (
         '<TEI xmlns="http://www.tei-c.org/ns/1.0">'
@@ -40,14 +45,7 @@ def test_prototype_tei_enrichment_with_show_notes() -> None:
     document = tei.parse_xml(enriched_xml)
     document.validate()
 
-    assert "<div" in enriched_xml
-    assert 'type="notes"' in enriched_xml
-    assert "<list>" in enriched_xml
-    assert "<item" in enriched_xml
-    assert 'n="PT0M30S"' in enriched_xml
-    assert 'corresp="#p1"' in enriched_xml
-    assert "<label>Introduction</label>" in enriched_xml
-    assert "Opening remarks about the topic." in enriched_xml
+    assert enriched_xml == snapshot, "actual output must match snapshot"
 
 
 def test_enrich_tei_with_empty_result_returns_original() -> None:
@@ -66,7 +64,7 @@ def test_enrich_tei_with_empty_result_returns_original() -> None:
 
     enriched_xml = enrich_tei_with_show_notes(minimal_tei_xml, empty_result)
 
-    assert enriched_xml == minimal_tei_xml
+    assert enriched_xml == minimal_tei_xml, "empty show notes must leave XML unchanged"
 
 
 def test_enrich_tei_with_missing_body_raises_value_error() -> None:
@@ -111,9 +109,9 @@ def test_enrich_tei_escapes_xml_unsafe_characters() -> None:
     document = tei.parse_xml(enriched_xml)
     document.validate()
 
-    assert "&amp;" in enriched_xml
-    assert "&lt;tags&gt;" in enriched_xml
-    assert "<tags>" not in enriched_xml
+    assert "&amp;" in enriched_xml, "ampersands must be escaped in enriched XML"
+    assert "&lt;tags&gt;" in enriched_xml, "angle brackets must be escaped in XML"
+    assert "<tags>" not in enriched_xml, "raw unsafe tags must not remain in XML"
 
 
 def test_enrich_tei_replaces_existing_notes_div() -> None:
@@ -142,8 +140,12 @@ def test_enrich_tei_replaces_existing_notes_div() -> None:
 
     enriched_xml = enrich_tei_with_show_notes(tei_with_existing_notes, result)
 
-    assert enriched_xml.count('type="notes"') == 1
-    assert "Old topic" not in enriched_xml
-    assert "Old summary" not in enriched_xml
-    assert "<label>New topic</label>" in enriched_xml
-    assert "Fresh summary" in enriched_xml
+    assert enriched_xml.count('type="notes"') == 1, (
+        "replacement must leave exactly one notes div"
+    )
+    assert "Old topic" not in enriched_xml, "replacement must remove the old topic"
+    assert "Old summary" not in enriched_xml, "replacement must remove the old summary"
+    assert "<label>New topic</label>" in enriched_xml, (
+        "replacement must include the new topic"
+    )
+    assert "Fresh summary" in enriched_xml, "replacement must include new content"

@@ -1,7 +1,7 @@
 """ShowNotesToolExecutor: tool adapter for the show-notes enrichment path."""
 
 import dataclasses as dc
-import typing  # noqa: ICN001
+import typing  # noqa: ICN001  # Qualified typing names distinguish the module's dense protocol annotations.
 
 from episodic.generation import (
     ShowNotesGenerator,
@@ -26,6 +26,7 @@ from ._types import (
     ActionKind,
     ModelTier,
     ShowNotesFormatError,
+    ShowNotesGeneratorNotInitializedError,
     ToolExecutionError,
     UnsupportedActionError,
     _log_event,
@@ -70,36 +71,38 @@ def _handle_generator_error(
     context: GenerationOrchestrationRequest,
     action: PlannedAction,
 ) -> typing.Never:
-    """Dispatch a generator exception to the appropriate tool-layer error and raise it."""  # noqa: E501
-    if isinstance(exc, ToolExecutionError):
-        _log_event(
-            "error",
-            f"{_EVENT_PREFIX}.tool_error",
-            correlation_id=context.correlation_id,
-            action_id=action.action_id,
-        )
-        raise exc
-    if isinstance(exc, ShowNotesResponseFormatError):
-        _log_event(
-            "error",
-            f"{_EVENT_PREFIX}.format_error",
-            correlation_id=context.correlation_id,
-            action_id=action.action_id,
-        )
-        msg = "show-notes tool returned malformed structured JSON"
-        raise ShowNotesFormatError(msg) from exc
-    if isinstance(exc, LLMError):
-        _log_provider_error(exc, context, action)
-        raise exc
-    _log_event(
-        "error",
-        f"{_EVENT_PREFIX}.unexpected_error",
-        correlation_id=context.correlation_id,
-        action_id=action.action_id,
-        error_type=type(exc).__name__,
-    )
-    msg = "show-notes tool execution failed"
-    raise ToolExecutionError(msg) from exc
+    """Dispatch and raise a generator exception as a tool-layer error."""
+    match exc:
+        case ToolExecutionError():
+            _log_event(
+                "error",
+                f"{_EVENT_PREFIX}.tool_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+            )
+            raise exc
+        case ShowNotesResponseFormatError():
+            _log_event(
+                "error",
+                f"{_EVENT_PREFIX}.format_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+            )
+            msg = "show-notes tool returned malformed structured JSON"
+            raise ShowNotesFormatError(msg) from exc
+        case LLMError():
+            _log_provider_error(exc, context, action)
+            raise exc
+        case _:
+            _log_event(
+                "error",
+                f"{_EVENT_PREFIX}.unexpected_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+                error_type=type(exc).__name__,
+            )
+            msg = "show-notes tool execution failed"
+            raise ToolExecutionError(msg) from exc
 
 
 @dc.dataclass(slots=True, frozen=True)
@@ -147,7 +150,9 @@ class ShowNotesToolExecutor:
 
     def _build_generator(self) -> _ShowNotesGeneratorPort:
         """Return the pre-built show-notes generator."""
-        assert self.generator is not None  # noqa: S101  # guaranteed by __post_init__
+        if self.generator is None:
+            msg = "Show-notes generator was not initialized"
+            raise ShowNotesGeneratorNotInitializedError(msg)
         return self.generator
 
     @staticmethod
@@ -206,13 +211,13 @@ class ShowNotesToolExecutor:
         context: GenerationOrchestrationRequest,
         action: PlannedAction,
     ) -> ShowNotesResult:
-        """Return ``ShowNotesResult`` from ``generator.generate``; route errors via ``_handle_generator_error``."""  # noqa: E501
+        """Invoke the show-notes generator and route errors."""
         try:
             return await generator.generate(
                 context.script_tei_xml,
                 template_structure=context.template_structure,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # This adapter boundary must translate arbitrary third-party failures.
             _handle_generator_error(exc, context, action)
 
     async def execute(
@@ -237,13 +242,15 @@ class ShowNotesToolExecutor:
         Raises
         ------
         UnsupportedActionError
-            When the planner step targets another ``ActionKind`` or model tier.
-        ToolExecutionError
-            When downstream tool-layer execution fails after logging.
-            Includes ``ShowNotesFormatError`` for malformed structured output.
+            If the action kind or model tier is unsupported.
+        ShowNotesFormatError
+            If the provider returns malformed structured show-notes output.
         LLMError
-            Forwarded unchanged from generator or provider faults after logging.
-        """
+            If the provider or generator reports an LLM failure.
+        ToolExecutionError
+            If a tool-domain failure propagates or another generator failure
+            is translated at the tool boundary.
+        """  # noqa: DOC502  # Generator failures are translated by a helper.
         action_kind = str(action.action_kind)
         _log_event(
             "debug",

@@ -59,7 +59,9 @@ def test_openai_adapter_config_rejection_log_snapshot(
     with pytest.raises(ValueError, match="chars_per_token"):
         _ = openai_invalid_config_builder({"chars_per_token": 0})
 
-    assert openai_log_spy.messages == snapshot
+    assert openai_log_spy.messages == snapshot, (
+        "rejected-config diagnostics must match the recorded snapshot"
+    )
 
 
 def test_openai_adapter_config_type_rejection_logs_stable_event(

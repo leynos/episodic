@@ -4,8 +4,6 @@ This module defines provider-agnostic data transfer objects and the outbound
 LLM protocol used by orchestration code.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import enum
 import typing as typ

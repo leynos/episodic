@@ -6,8 +6,6 @@ returning both rendered text and interpolation metadata. Use
 generator prompts from structured brief payloads.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import json
 import typing as typ
@@ -298,12 +296,6 @@ def render_series_brief_prompt(
     -------
     RenderedPrompt
         Rendered prompt text with interpolation metadata.
-
-    Raises
-    ------
-    TypeError
-        If ``brief`` contains invalid field types or missing required
-        structures.
     """
     return render_template(
         build_series_brief_template(brief),

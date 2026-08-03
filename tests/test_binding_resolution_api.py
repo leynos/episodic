@@ -21,10 +21,7 @@ def _create_series_profile_binding(
     profile_id: str,
     episode_id: str,
 ) -> str:
-    """Create a style-guide document, one revision, and a series-profile binding.
-
-    Returns the revision ID.
-    """
+    """Create a style-guide revision and series-profile binding."""
     _, revision_id = binding_support.create_document_with_revision(
         client,
         profile_id,
@@ -49,10 +46,7 @@ def _create_episode_template_binding(
     profile_id: str,
     template_id: str,
 ) -> str:
-    """Create a guest-profile document, one revision, and an episode-template binding.
-
-    Returns the revision ID.
-    """
+    """Create a guest-profile revision and episode-template binding."""
     _, revision_id = binding_support.create_document_with_revision(
         client,
         profile_id,
@@ -106,7 +100,7 @@ def _assert_resolved_bindings_payload(
 
 def test_resolved_bindings_endpoint_returns_resolved_payloads(
     canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019  # Requesting the runner fixture preserves the test's event-loop lifetime.
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Resolved-bindings endpoint should return document, revision, and binding data."""
@@ -201,7 +195,7 @@ def test_resolved_bindings_endpoint_returns_404_for_unknown_profile(
 )
 def test_endpoint_returns_404_for_episode_not_in_profile(
     canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019  # Requesting the runner fixture preserves the test's event-loop lifetime.
     session_factory: async_sessionmaker[AsyncSession],
     endpoint: str,
 ) -> None:
@@ -231,7 +225,7 @@ def test_endpoint_returns_404_for_episode_not_in_profile(
 )
 def test_resolved_bindings_endpoint_returns_404_for_invalid_template(
     canonical_api_client: testing.TestClient,
-    _function_scoped_runner: asyncio.Runner,  # noqa: PT019
+    _function_scoped_runner: asyncio.Runner,  # noqa: PT019  # Requesting the runner fixture preserves the test's event-loop lifetime.
     session_factory: async_sessionmaker[AsyncSession],
     use_secondary_template: object,
 ) -> None:

@@ -35,6 +35,7 @@ stilyagi = "stilyagi.stilyagi:main"
 dev = [
     "crosshair-tool>=0.0.109,<0.1",
     "cyclopts>=4.22.1,<5",
+    "df12-python-lints @ git+https://github.com/leynos/df12-python-lints.git@v0.1.0",
     "hecate @ git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12",
     "hypothesis[asyncio]>=6.161.5,<7",
     "mypy>=2.3.0,<3",
@@ -93,7 +94,9 @@ select = [
     "RSE",
     "PERF",
     "TRY",
+    "ASYNC",
     "D",
+    "DOC",
     "ANN",
     "C90",
     "PLR",
@@ -196,6 +199,11 @@ typing = "typ"
 # Enforce NumPy docstring style
 convention = "numpy"
 
+[tool.ruff.lint.pydoclint]
+# Concise one-line private helpers do not require structured sections; public
+# entrypoints use multiline docstrings so their contracts remain checked.
+ignore-one-line-docstrings = true
+
 [tool.ruff.lint.mccabe]
 max-complexity = 8
 
@@ -205,6 +213,8 @@ max-bool-expr = 2
 max-locals = 10
 
 [tool.pylint.main]
+# Activate rules whose behaviour depends on the project's Python baseline.
+py-version = "3.14"
 # Expand directory targets like alembic and tests even when they are not packages.
 recursive = true
 # Match the project file-size ceiling enforced during review.

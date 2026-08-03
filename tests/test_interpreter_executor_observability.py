@@ -1,6 +1,7 @@
 """Observability tests for interpreter CPU task executors."""
 
 import concurrent.futures as cf
+import contextlib
 import dataclasses as dc
 import typing as typ
 
@@ -112,27 +113,31 @@ async def test_interpreter_executor_records_lifecycle_observability(
     finally:
         executor.shutdown()
 
-    assert results == [4, 9]
+    assert results == [4, 9], "map_ordered results must preserve input order"
     assert (
         "interpreter_pool.map.calls",
         {"outcome": "success"},
-    ) in metrics.counters
+    ) in metrics.counters, "map call metric must record a successful outcome"
     assert (
         "interpreter_pool.map.items",
         2.0,
         {"outcome": "success"},
-    ) in metrics.observations
+    ) in metrics.observations, "map item metric must record two successful items"
     assert (
         "interpreter_pool.creations",
         {"outcome": "success"},
-    ) in metrics.counters
+    ) in metrics.counters, "creation metric must record a successful executor start"
     assert (
         "interpreter_pool.shutdown.latency_ms",
         pytest.approx(25.0),
         {"outcome": "success"},
-    ) in metrics.observations
-    assert "Created interpreter-pool executor" in logger.messages
-    assert "Shut down interpreter-pool executor" in logger.messages
+    ) in metrics.observations, "shutdown latency metric must record 25 ms"
+    assert "Created interpreter-pool executor" in logger.messages, (
+        "creation log must identify the interpreter-pool executor"
+    )
+    assert "Shut down interpreter-pool executor" in logger.messages, (
+        "shutdown log must identify the interpreter-pool executor"
+    )
 
 
 def test_builder_records_executor_selection_metrics(
@@ -141,37 +146,50 @@ def test_builder_records_executor_selection_metrics(
     """Builder fallback and pool selections increment bounded counters."""
     metrics = _FakeCpuTaskExecutorMetrics()
 
-    disabled_executor = ci.build_cpu_task_executor_from_environment(
-        {},
-        metrics=metrics,
-    )
-    unsupported_executor = ci._build_cpu_task_executor_from_environment(
-        {"EPISODIC_USE_INTERPRETER_POOL": "1"},
-        metrics=metrics,
-        _capability_check=lambda: False,
-    )
-    executor = ci._build_cpu_task_executor_from_environment(
-        {"EPISODIC_USE_INTERPRETER_POOL": "1"},
-        metrics=metrics,
-        _capability_check=lambda: True,
-    )
-    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
+    with contextlib.ExitStack() as lifecycle:
+        disabled_executor = ci.build_cpu_task_executor_from_environment(
+            {},
+            metrics=metrics,
+        )
+        lifecycle.callback(_shutdown_if_supported, disabled_executor)
+        unsupported_executor = ci._build_cpu_task_executor_from_environment(
+            {"EPISODIC_USE_INTERPRETER_POOL": "1"},
+            metrics=metrics,
+            _capability_check=lambda: False,
+        )
+        lifecycle.callback(_shutdown_if_supported, unsupported_executor)
+        executor = ci._build_cpu_task_executor_from_environment(
+            {"EPISODIC_USE_INTERPRETER_POOL": "1"},
+            metrics=metrics,
+            _capability_check=lambda: True,
+        )
+        lifecycle.callback(_shutdown_if_supported, executor)
+        match executor:
+            case ci.InterpreterPoolCpuTaskExecutor():
+                pass
+            case _:
+                msg = (
+                    "enabled supported selection must build "
+                    "InterpreterPoolCpuTaskExecutor"
+                )
+                raise AssertionError(msg)
 
-    assert (
-        "cpu_task_executor.selections",
-        {"executor": "inline", "reason": "feature_flag_disabled"},
-    ) in metrics.counters
-    assert (
-        "cpu_task_executor.selections",
-        {"executor": "inline", "reason": "interpreter_pool_unavailable"},
-    ) in metrics.counters
-    assert (
-        "cpu_task_executor.selections",
-        {"executor": "interpreter_pool", "reason": "enabled"},
-    ) in metrics.counters
-    _shutdown_if_supported(disabled_executor)
-    _shutdown_if_supported(unsupported_executor)
-    executor.shutdown()
+        assert (
+            "cpu_task_executor.selections",
+            {"executor": "inline", "reason": "feature_flag_disabled"},
+        ) in metrics.counters, "disabled feature flag must select inline execution"
+        assert (
+            "cpu_task_executor.selections",
+            {"executor": "inline", "reason": "interpreter_pool_unavailable"},
+        ) in metrics.counters, (
+            "unavailable interpreter pool must select inline execution"
+        )
+        assert (
+            "cpu_task_executor.selections",
+            {"executor": "interpreter_pool", "reason": "enabled"},
+        ) in metrics.counters, (
+            "enabled interpreter support must select the pool executor"
+        )
 
 
 @pytest.mark.asyncio
@@ -185,20 +203,27 @@ async def test_builder_passes_metrics_to_interpreter_executor(
         "_create_interpreter_pool_executor",
         lambda max_workers: cf.ThreadPoolExecutor(max_workers=max_workers),
     )
-    executor = ci._build_cpu_task_executor_from_environment(
-        {"EPISODIC_USE_INTERPRETER_POOL": "1"},
-        metrics=metrics,
-        _capability_check=lambda: True,
-    )
-    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
-
-    try:
-        assert await executor.map_ordered(_square, (2,)) == [4]
-    finally:
-        executor.shutdown()
+    with contextlib.ExitStack() as lifecycle:
+        executor = ci._build_cpu_task_executor_from_environment(
+            {"EPISODIC_USE_INTERPRETER_POOL": "1"},
+            metrics=metrics,
+            _capability_check=lambda: True,
+        )
+        lifecycle.callback(_shutdown_if_supported, executor)
+        match executor:
+            case ci.InterpreterPoolCpuTaskExecutor() as interpreter_executor:
+                pass
+            case _:
+                msg = (
+                    "supported builder path must return InterpreterPoolCpuTaskExecutor"
+                )
+                raise AssertionError(msg)
+        assert await interpreter_executor.map_ordered(_square, (2,)) == [4], (
+            "interpreter executor map result must contain the squared input"
+        )
 
     assert (
         "interpreter_pool.map.items",
         1.0,
         {"outcome": "success"},
-    ) in metrics.observations
+    ) in metrics.observations, "map item metric must record one successful item"

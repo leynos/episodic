@@ -34,8 +34,26 @@ if typ.TYPE_CHECKING:
 
     from episodic.orchestration import WorkflowCheckpoint
 
-
 _short_delays = st.sampled_from((0.0, 0.001, 0.005))
+
+
+class _CheckpointWithStatus(typ.Protocol):
+    """Structural view needed by resume-outcome assertions."""
+
+    status: str
+
+
+def _assert_resume_outcome(
+    resumed: _CheckpointWithStatus,
+    fetched: _CheckpointWithStatus | None,
+    expected_persisted_status: str,
+) -> None:
+    """Assert the in-memory and persisted sides of a resume attempt."""
+    assert resumed.status == "resumed", "Resume must update the returned checkpoint."
+    assert fetched is not None, "Checkpoint must remain available after resume."
+    assert fetched.status == expected_persisted_status, (
+        "Persisted checkpoint status must reflect commit or rollback."
+    )
 
 
 @pytest.mark.asyncio
@@ -53,9 +71,13 @@ async def test_checkpoint_store_persists_across_unit_of_work(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.workflow_checkpoints.get(stored.checkpoint_id)
 
-    assert fetched is not None
-    assert fetched.idempotency_key == checkpoint.idempotency_key
-    assert fetched.payload["request"] == {"correlation_id": "corr-storage"}
+    assert fetched is not None, "Expected value to be present"
+    assert fetched.idempotency_key == checkpoint.idempotency_key, (
+        "Expected values to match"
+    )
+    assert fetched.payload["request"] == {"correlation_id": "corr-storage"}, (
+        "Expected values to match"
+    )
 
 
 @pytest.mark.asyncio
@@ -68,7 +90,7 @@ async def test_checkpoint_store_get_returns_none_for_missing_checkpoint(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         result = await uow.workflow_checkpoints.get(str(uuid.uuid4()))
 
-    assert result is None
+    assert result is None, "Expected value to be absent"
 
 
 @pytest.mark.asyncio
@@ -83,7 +105,7 @@ async def test_checkpoint_store_get_by_idempotency_key_returns_none_for_missing_
             "non-existent-idempotency-key"
         )
 
-    assert result is None
+    assert result is None, "Expected value to be absent"
 
 
 @pytest.mark.asyncio
@@ -100,7 +122,7 @@ async def test_checkpoint_store_reuses_idempotency_key(
         second = await uow.workflow_checkpoints.save_or_reuse(duplicate)
         await uow.commit()
 
-    assert second.checkpoint_id == first.checkpoint_id
+    assert second.checkpoint_id == first.checkpoint_id, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -140,8 +162,8 @@ async def test_checkpoint_store_records_checkpoint_metrics(
             await store.mark_resumed(str(uuid.uuid4()))
         await session.rollback()
 
-    assert second.checkpoint_id == first.checkpoint_id
-    assert metrics.as_snapshot() == snapshot
+    assert second.checkpoint_id == first.checkpoint_id, "Expected values to match"
+    assert metrics.as_snapshot() == snapshot, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -166,7 +188,7 @@ async def test_checkpoint_store_records_recovery_failure_metrics(
 
     conflict.session.execute.assert_awaited_once()
     conflict.empty_result.scalar_one_or_none.assert_called_once_with()
-    assert metrics.as_snapshot() == snapshot
+    assert metrics.as_snapshot() == snapshot, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -201,10 +223,14 @@ async def test_checkpoint_store_reuses_concurrent_idempotency_key(
             .where(WorkflowCheckpointRecord.idempotency_key == key)
         )
 
-    assert stored_second.checkpoint_id == stored_first.checkpoint_id
-    assert persisted is not None
-    assert persisted.checkpoint_id == stored_first.checkpoint_id
-    assert persisted_count == 1
+    assert stored_second.checkpoint_id == stored_first.checkpoint_id, (
+        "Expected values to match"
+    )
+    assert persisted is not None, "Expected value to be present"
+    assert persisted.checkpoint_id == stored_first.checkpoint_id, (
+        "Expected values to match"
+    )
+    assert persisted_count == 1, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -240,9 +266,7 @@ async def test_checkpoint_store_mark_resumed_status(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.workflow_checkpoints.get(stored.checkpoint_id)
 
-    assert resumed.status == "resumed"
-    assert fetched is not None
-    assert fetched.status == expected_fetched_status
+    _assert_resume_outcome(resumed, fetched, expected_fetched_status)
 
 
 @pytest.mark.asyncio
@@ -289,8 +313,10 @@ async def test_checkpoint_store_concurrent_idempotency_property(
             .where(WorkflowCheckpointRecord.idempotency_key == key)
         )
 
-    assert stored_second.checkpoint_id == stored_first.checkpoint_id
-    assert persisted_count == 1
+    assert stored_second.checkpoint_id == stored_first.checkpoint_id, (
+        "Expected values to match"
+    )
+    assert persisted_count == 1, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -325,9 +351,7 @@ async def test_checkpoint_store_resume_atomicity_property(
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.workflow_checkpoints.get(stored.checkpoint_id)
 
-    assert resumed.status == "resumed"
-    assert fetched is not None
-    assert fetched.status == expected_status
+    _assert_resume_outcome(resumed, fetched, expected_status)
 
 
 @pytest.mark.asyncio

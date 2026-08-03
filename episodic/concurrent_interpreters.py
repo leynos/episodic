@@ -55,11 +55,7 @@ class _NoopCpuTaskExecutorMetrics(NoopBoundedValueMetrics):
 class _PerfCounterCpuTaskExecutorClock:
     """Production executor clock backed by Python's monotonic perf counter."""
 
-    read_seconds: cabc.Callable[[], float] = time.perf_counter
-
-    def monotonic_seconds(self) -> float:
-        """Return the current monotonic timestamp in seconds."""
-        return self.read_seconds()
+    monotonic_seconds: cabc.Callable[[], float] = time.perf_counter
 
 
 _CPU_TASK_EXECUTOR_METRICS = _NoopCpuTaskExecutorMetrics()
@@ -82,6 +78,19 @@ def _parse_optional_positive_int(value: str | None) -> int | None:
 
     Invalid values return ``None`` so callers can safely fall back to
     runtime defaults.
+
+    Returns
+    -------
+    int | None
+        The parsed integer when ``value`` represents a positive integer;
+        otherwise ``None``.
+
+    Examples
+    --------
+    >>> _parse_optional_positive_int("4")
+    4
+    >>> _parse_optional_positive_int("0") is None
+    True
     """
     if value is None:
         return None
@@ -333,6 +342,19 @@ def build_cpu_task_executor_from_environment(
     task-level owner after the fan-out work completes, commonly with
     ``try/finally`` and ``getattr(executor, "shutdown", None)`` so the same
     code works for both adapters.
+
+    Returns
+    -------
+    CpuTaskExecutor
+        An interpreter-pool executor when the feature is enabled and supported;
+        otherwise an inline executor. The caller owns the returned executor and
+        must shut down interpreter-pool instances after use.
+
+    Examples
+    --------
+    >>> executor = build_cpu_task_executor_from_environment({})
+    >>> isinstance(executor, InlineCpuTaskExecutor)
+    True
     """
     environ_ = os.environ if environ is None else environ
     metrics_ = metrics if metrics is not None else _CPU_TASK_EXECUTOR_METRICS

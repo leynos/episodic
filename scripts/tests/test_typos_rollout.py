@@ -1,22 +1,18 @@
 """Tests for the repository spelling-policy scripts."""
 
-from __future__ import annotations
-
 import ast
 import email.message
 import importlib
 import json
 import os
 import tomllib
+import types
 import typing as typ
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 import pytest
-
-if typ.TYPE_CHECKING:
-    import types
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parents[1]
 
@@ -239,7 +235,7 @@ def test_http_refresh_uses_validators_and_preserves_newer_cache(
             """Return a valid shared dictionary."""
             return _dictionary_text().encode()
 
-        def __enter__(self) -> Response:
+        def __enter__(self) -> typ.Self:
             """Enter the fake response context."""
             return self
 
@@ -315,7 +311,7 @@ def test_remote_refresh_rejects_insecure_and_invalid_content(
             """Return malformed bytes."""
             return b"not = [valid"
 
-        def __enter__(self) -> InvalidResponse:
+        def __enter__(self) -> typ.Self:
             """Enter the fake response context."""
             return self
 

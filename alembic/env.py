@@ -10,25 +10,28 @@ Run migrations with Alembic:
 >>> alembic upgrade head
 """
 
-from __future__ import annotations
-
 import asyncio
 import os
 import typing as typ
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from alembic.context import config
+from sqlalchemy import MetaData, pool
 from sqlalchemy.ext.asyncio import AsyncConnection, async_engine_from_config
 
 from alembic import context
 from episodic.canonical.storage import Base
 
-config = context.config
-
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+
+def _migration_metadata() -> MetaData:
+    """Return the canonical SQLAlchemy metadata used by migrations."""
+    return Base.metadata
+
+
+target_metadata = _migration_metadata()
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -43,21 +46,17 @@ def _configure_database_url() -> None:
     current = config.get_main_option("sqlalchemy.url")
     if not current:
         msg = "DATABASE_URL is not set and sqlalchemy.url is empty."
-        raise RuntimeError(msg)
+        raise ValueError(msg)
 
 
 def run_migrations_offline() -> None:
     """Run migrations in offline mode.
 
-    Returns
-    -------
-    None
-
     Raises
     ------
-    RuntimeError
+    ValueError
         If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
-    """
+    """  # noqa: DOC502  # Documents an exception propagated by configuration.
     _configure_database_url()
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -86,15 +85,11 @@ def _do_run_migrations(connection: Connection) -> None:
 async def run_migrations_online_async() -> None:
     """Run migrations in online mode.
 
-    Returns
-    -------
-    None
-
     Raises
     ------
-    RuntimeError
+    ValueError
         If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
-    """
+    """  # noqa: DOC502  # Documents an exception propagated by configuration.
     connectable = config.attributes.get("connection")
     match connectable:
         case AsyncConnection():
@@ -123,15 +118,11 @@ async def run_migrations_online_async() -> None:
 def run_migrations_online() -> None:
     """Entrypoint for online migrations.
 
-    Returns
-    -------
-    None
-
     Raises
     ------
-    RuntimeError
+    ValueError
         If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
-    """
+    """  # noqa: DOC502  # Documents an exception propagated by configuration.
     connectable = config.attributes.get("connection")
     match connectable:
         case AsyncConnection():

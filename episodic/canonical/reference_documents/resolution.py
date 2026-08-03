@@ -97,12 +97,7 @@ def _select_best_binding_for_document(
     doc_bindings: list[ReferenceBinding],
     applicable_episode_bindings: list[tuple[ReferenceBinding, dt.datetime]],
 ) -> ReferenceBinding | None:
-    """Select the best binding: latest applicable episode binding or default.
-
-    Selection is deterministic: for applicable episode bindings, ties on episode
-    timestamp are broken by binding.created_at, then by binding.id; for default
-    bindings, the latest by created_at is chosen, with binding.id as tiebreaker.
-    """
+    """Select the latest applicable episode binding or default binding."""
     if applicable_episode_bindings:
         # Select max by episode timestamp, then by binding created_at, then by id
         return max(
@@ -139,11 +134,7 @@ async def _build_applicable_episodes_map(
     bindings_by_document: dict[uuid.UUID, list[ReferenceBinding]],
     target_created_at: dt.datetime,
 ) -> dict[uuid.UUID, CanonicalEpisode]:
-    """Fetch episodes whose created_at is on or before the target timestamp.
-
-    Returns a mapping of episode id → episode for use in per-document
-    binding selection.
-    """
+    """Map episodes created on or before the target timestamp by identifier."""
     episode_ids = {
         b.effective_from_episode_id
         for bindings in bindings_by_document.values()
@@ -163,10 +154,7 @@ def _resolve_single_document(
         dict[uuid.UUID, ReferenceDocument],
     ],
 ) -> ResolvedBinding | None:
-    """Resolve the best binding for a single document with episode context.
-
-    Returns the resolved binding if one exists, else None.
-    """
+    """Resolve the best binding for one document with episode context."""
     revision_map, document_map = maps
     if doc_id not in document_map:
         return None
@@ -260,13 +248,7 @@ async def _dispatch_resolution(
     template_bindings: list[ReferenceBinding],
     target_episode: CanonicalEpisode | None,
 ) -> list[ResolvedBinding]:
-    """Build revision/document maps and dispatch to the appropriate resolver.
-
-    When target_episode is None, all bindings are resolved without episode
-    precedence. When target_episode is provided, series-profile bindings are
-    resolved with episode-aware precedence and template bindings are merged
-    without filtering.
-    """
+    """Build lookup maps and dispatch to the context-appropriate resolver."""
     all_bindings = series_bindings + template_bindings
     if not all_bindings:
         return []

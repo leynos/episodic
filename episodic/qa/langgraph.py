@@ -1,14 +1,14 @@
 """LangGraph seam for the Pedante evaluator."""
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.state import CompiledStateGraph  # noqa: TC002
+from langgraph.graph.state import (
+    CompiledStateGraph,  # noqa: TC002  # This type remains available at runtime for annotation introspection.
+)
 
-from .pedante import (  # noqa: TC001
+from .pedante import (  # noqa: TC001  # These types stay available because LangGraph evaluates PedanteGraphState annotations at runtime.
     PedanteEvaluationRequest,
     PedanteEvaluationResult,
 )
@@ -50,6 +50,28 @@ def route_after_pedante(state: PedanteGraphState) -> typ.Literal["pass", "refine
 
     The routing decision is derived solely from ``pedante_result.requires_revision``
     to keep routing logic centralised and avoid divergence with other state.
+
+    Returns
+    -------
+    typ.Literal['pass', 'refine']
+        ``"refine"`` when the Pedante result requires revision; otherwise
+        ``"pass"``.
+
+    Raises
+    ------
+    KeyError
+        If ``state.pedante_result`` is missing.
+
+    Examples
+    --------
+    >>> from episodic.llm import LLMUsage
+    >>> result = PedanteEvaluationResult(
+    ...     summary="No blocking findings.",
+    ...     findings=(),
+    ...     usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
+    ... )
+    >>> route_after_pedante(PedanteGraphState(pedante_result=result))
+    'pass'
     """
     if state.pedante_result is None:
         msg = "pedante_result"

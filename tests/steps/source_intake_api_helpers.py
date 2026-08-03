@@ -1,7 +1,5 @@
 """Low-level API helpers for source-intake BDD scenarios."""
 
-from __future__ import annotations
-
 import datetime as dt
 import hashlib
 import typing as typ

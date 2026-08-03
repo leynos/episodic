@@ -7,8 +7,6 @@ Run the approval event repository tests:
 >>> pytest tests/canonical_storage/test_approval_events.py
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 import uuid

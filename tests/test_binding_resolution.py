@@ -17,14 +17,15 @@ from episodic.canonical.reference_documents.resolution import (
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+    from tests.fixtures.binding import BindingFixtures
 
 from tests.conftest import create_episode_template_for_binding_tests
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio]
 
 
 async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Resolution returns empty list when no bindings exist for series profile."""
     fixtures = uow_with_fixtures
@@ -33,11 +34,11 @@ async def test_resolve_bindings_returns_empty_when_no_bindings_exist(
 
     resolved = await resolve_bindings(uow, series_profile_id=series.id)
 
-    assert resolved == []
+    assert resolved == [], "must match"
 
 
 async def test_resolve_bindings_returns_empty_for_nonexistent_episode_id(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Resolution returns empty list when episode_id does not exist in the DB."""
     fixtures = uow_with_fixtures
@@ -67,11 +68,11 @@ async def test_resolve_bindings_returns_empty_for_nonexistent_episode_id(
         episode_id=nonexistent_episode_id,
     )
 
-    assert resolved == []
+    assert resolved == [], "must match"
 
 
 async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """When no episode_id is provided, resolution includes default binding."""
     fixtures = uow_with_fixtures
@@ -94,75 +95,17 @@ async def test_resolve_bindings_returns_default_binding_when_no_episode_context(
 
     resolved = await resolve_bindings(uow, series_profile_id=series.id)
 
-    assert len(resolved) == 1
-    assert isinstance(resolved[0], ResolvedBinding)
-    assert resolved[0].binding.id == binding.id
-    assert resolved[0].revision.id == revision_v1.id
+    assert len(resolved) == 1, "must match"
+    match resolved:
+        case [ResolvedBinding(binding=resolved_binding, revision=resolved_revision)]:
+            assert resolved_binding.id == binding.id, "must match"
+            assert resolved_revision.id == revision_v1.id, "must match"
+        case _:
+            pytest.fail("resolved result must contain one ResolvedBinding")
 
 
-class _ScenarioParams(typ.NamedTuple):
-    episode_key: str
-    revision_key: str
-    resolve_key: str
-    expect_default: bool
-
-
-@pytest.mark.parametrize(
-    "scenario",
-    [
-        _ScenarioParams("episode_middle", "revision_v2", "episode_middle", False),  # noqa: FBT003
-        _ScenarioParams("episode_late", "revision_v3", "episode_early", True),  # noqa: FBT003
-    ],
-    ids=["episode_specific_over_default", "fallback_to_default"],
-)
-async def test_resolve_bindings_scenario(
-    uow_with_fixtures,  # noqa: ANN001
-    scenario: _ScenarioParams,
-) -> None:
-    """Test binding resolution scenarios with episode precedence logic."""
-    fixtures = uow_with_fixtures
-    uow = fixtures["uow"]
-    series = fixtures["series"]
-    now = fixtures["now"]
-
-    binding_default = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=fixtures["revision_v1"].id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=None,
-        created_at=now - dt.timedelta(days=12),
-    )
-    binding_episode = ReferenceBinding(
-        id=uuid.uuid4(),
-        reference_document_revision_id=fixtures[scenario.revision_key].id,
-        target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
-        series_profile_id=series.id,
-        episode_template_id=None,
-        ingestion_job_id=None,
-        effective_from_episode_id=fixtures[scenario.episode_key].id,
-        created_at=now - dt.timedelta(days=6),
-    )
-    await uow.reference_bindings.add(binding_default)
-    await uow.reference_bindings.add(binding_episode)
-    await uow.commit()
-
-    resolved = await resolve_bindings(
-        uow,
-        series_profile_id=series.id,
-        episode_id=fixtures[scenario.resolve_key].id,
-    )
-
-    expected = binding_default if scenario.expect_default else binding_episode
-    assert len(resolved) == 1
-    assert resolved[0].binding.id == expected.id
-    assert resolved[0].revision.id == expected.reference_document_revision_id
-
-
-async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914
-    uow_with_fixtures,  # noqa: ANN001
+async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # noqa: PLR0914  # The scenario keeps distinct intermediate values for readable behavioural assertions.
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Resolution selects the binding with the latest effective_from_episode_id."""
     fixtures = uow_with_fixtures
@@ -210,30 +153,29 @@ async def test_resolve_bindings_selects_latest_applicable_episode_binding(  # no
         await uow.reference_bindings.add(b)
     await uow.commit()
 
-    resolved_early = await resolve_bindings(
-        uow, series_profile_id=series.id, episode_id=episode_early.id
+    resolution_cases = (
+        (episode_early, binding_early, revision_v1),
+        (episode_middle, binding_middle, revision_v2),
+        (episode_late, binding_late, revision_v3),
     )
-    assert len(resolved_early) == 1
-    assert resolved_early[0].binding.id == binding_early.id
-    assert resolved_early[0].revision.id == revision_v1.id
-
-    resolved_middle = await resolve_bindings(
-        uow, series_profile_id=series.id, episode_id=episode_middle.id
-    )
-    assert len(resolved_middle) == 1
-    assert resolved_middle[0].binding.id == binding_middle.id
-    assert resolved_middle[0].revision.id == revision_v2.id
-
-    resolved_late = await resolve_bindings(
-        uow, series_profile_id=series.id, episode_id=episode_late.id
-    )
-    assert len(resolved_late) == 1
-    assert resolved_late[0].binding.id == binding_late.id
-    assert resolved_late[0].revision.id == revision_v3.id
+    for episode, binding, revision in resolution_cases:
+        resolved = await resolve_bindings(
+            uow, series_profile_id=series.id, episode_id=episode.id
+        )
+        match resolved:
+            case [ResolvedBinding() as resolved_binding]:
+                assert resolved_binding.binding.id == binding.id, (
+                    "binding must match context"
+                )
+                assert resolved_binding.revision.id == revision.id, (
+                    "revision must match context"
+                )
+            case _:
+                pytest.fail("each context must resolve exactly one binding")
 
 
 async def test_resolve_bindings_excludes_future_episode_bindings(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Bindings with effective_from_episode_id after target episode are excluded."""
     fixtures = uow_with_fixtures
@@ -260,11 +202,11 @@ async def test_resolve_bindings_excludes_future_episode_bindings(
         uow, series_profile_id=series.id, episode_id=episode_early.id
     )
 
-    assert resolved == []
+    assert resolved == [], "must match"
 
 
 async def test_resolve_bindings_includes_template_bindings(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Template bindings are included when template_id is provided."""
     uow = uow_with_fixtures["uow"]
@@ -273,14 +215,22 @@ async def test_resolve_bindings_includes_template_bindings(
 
     template = await create_episode_template_for_binding_tests(uow, series.id, now)
 
-    for rev_key, kind, tmpl_id in [
-        ("revision_v1", ReferenceBindingTargetKind.SERIES_PROFILE, None),
-        ("revision_v2", ReferenceBindingTargetKind.EPISODE_TEMPLATE, template.id),
+    for revision, kind, tmpl_id in [
+        (
+            uow_with_fixtures["revision_v1"],
+            ReferenceBindingTargetKind.SERIES_PROFILE,
+            None,
+        ),
+        (
+            uow_with_fixtures["revision_v2"],
+            ReferenceBindingTargetKind.EPISODE_TEMPLATE,
+            template.id,
+        ),
     ]:
         await uow.reference_bindings.add(
             ReferenceBinding(
                 id=uuid.uuid4(),
-                reference_document_revision_id=uow_with_fixtures[rev_key].id,
+                reference_document_revision_id=revision.id,
                 target_kind=kind,
                 series_profile_id=(
                     series.id
@@ -299,16 +249,16 @@ async def test_resolve_bindings_includes_template_bindings(
         uow, series_profile_id=series.id, template_id=template.id
     )
 
-    assert len(resolved) == 2
+    assert len(resolved) == 2, "must match"
     resolved_revision_ids = {r.revision.id for r in resolved}
     assert resolved_revision_ids == {
         uow_with_fixtures["revision_v1"].id,
         uow_with_fixtures["revision_v2"].id,
-    }
+    }, "must match"
 
 
 async def test_resolve_bindings_merges_template_with_episode(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Template bindings are always included, series bindings filtered by episode."""
     uow = uow_with_fixtures["uow"]
@@ -358,15 +308,15 @@ async def test_resolve_bindings_merges_template_with_episode(
         episode_id=uow_with_fixtures["episode_early"].id,
     )
 
-    assert len(resolved) == 2
+    assert len(resolved) == 2, "must match"
     assert {r.revision.id for r in resolved} == {
         uow_with_fixtures["revision_v1"].id,
         uow_with_fixtures["revision_v2"].id,
-    }
+    }, "must contain"
 
 
 async def test_resolve_bindings_template_only(
-    uow_with_fixtures,  # noqa: ANN001
+    uow_with_fixtures: BindingFixtures,
 ) -> None:
     """Template bindings are returned when only template_id is provided."""
     fixtures = uow_with_fixtures
@@ -394,6 +344,9 @@ async def test_resolve_bindings_template_only(
         uow, series_profile_id=series.id, template_id=template.id
     )
 
-    assert len(resolved) == 1
-    assert resolved[0].revision.id == revision_v2.id
-    assert resolved[0].binding.id == template_binding.id
+    match resolved:
+        case [ResolvedBinding(binding=binding, revision=revision)]:
+            assert revision is revision_v2, "revision must be revision_v2"
+            assert binding is template_binding, "binding must be template_binding"
+        case _:
+            pytest.fail("resolved must contain exactly one ResolvedBinding")

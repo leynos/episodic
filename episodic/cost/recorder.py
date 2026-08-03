@@ -11,8 +11,6 @@ entry_id = await recorder.record_provider_call(record)
 ```
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -79,7 +77,7 @@ class CostRecorder:
     pricing_catalogue: PricingCataloguePort
     pricing_engine: PricingEngine
 
-    async def _resolve_pricing_snapshot(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def _resolve_pricing_snapshot(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         provider_name: str,
         model: str,
@@ -103,11 +101,6 @@ class CostRecorder:
         -------
         PricingSnapshot
             Immutable snapshot that should be pinned for the run.
-
-        Raises
-        ------
-        LookupError
-            Propagated if the catalogue cannot resolve a snapshot.
         """
         return await self.pricing_catalogue.resolve(
             provider_name,
@@ -122,7 +115,15 @@ class CostRecorder:
         providers: tuple[CostProviderOperation, ...],
         billing_period_key: BillingPeriodKey,
     ) -> None:
-        """Resolve and persist pricing pins for one workflow run."""
+        """Resolve and persist pricing pins for one workflow run.
+
+        Raises
+        ------
+        LookupError
+            If the catalogue cannot resolve a pricing snapshot.
+        CostAccountingError
+            If pricing or ledger validation fails.
+        """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
         pinned_at = dt.datetime.now(dt.UTC).isoformat()
         for provider in providers:
             key = RunPricingKey(
@@ -178,11 +179,7 @@ class CostRecorder:
     async def _resolve_snapshot_for_record(
         self, record: ProviderCallRecord
     ) -> PricingSnapshot:
-        """Resolve the pricing snapshot for a provider-call record.
-
-        Prefers a pinned snapshot for the run; falls back to catalogue resolution
-        when no pin exists.
-        """
+        """Resolve the pricing snapshot for a provider-call record."""
         key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,
             provider_name=record.provider_name,
@@ -219,10 +216,10 @@ class CostRecorder:
         Raises
         ------
         LookupError
-            Propagated if pricing snapshot resolution fails.
+            If the catalogue cannot resolve a pricing snapshot.
         CostAccountingError
-            Propagated if pricing validation fails.
-        """
+            If pricing or ledger validation fails.
+        """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
         snapshot = await self._resolve_snapshot_for_record(record)
         priced_call = self.pricing_engine.price(
             snapshot,

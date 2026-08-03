@@ -38,6 +38,11 @@ def prepare_request() -> ChronoBDDContext:
 
     Vidai Mock is intentionally not launched here because Chrono has no
     inference-service boundary in roadmap item 2.2.6.
+
+    Returns
+    -------
+    ChronoBDDContext
+        Result produced by the operation.
     """
     return ChronoBDDContext(
         request=ChronoEvaluationRequest(
