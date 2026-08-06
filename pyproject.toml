@@ -44,6 +44,7 @@ dev = [
     "pytest-xdist",
     "py-pglite[async]>=0.5.3,<0.6.0",
     "ruff",
+    "skylos>=4.30.0,<5",
     "pyright",
     "syrupy>=5.5.3,<6",
     "ty",
@@ -474,6 +475,236 @@ also_copy = [
 
 [tool.uv]
 package = true
+
+[tool.skylos.gate]
+strict = true
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.api.app._ShutdownHooksMiddleware.process_shutdown.scope",
+    "episodic.api.app._ShutdownHooksMiddleware.process_shutdown.event",
+    "episodic.api.errors.serialize_http_error.req",
+    "episodic.api.resources.health.HealthLiveResource.on_get.req",
+    "episodic.api.resources.health.HealthReadyResource.on_get.req",
+    "episodic.api.resources.reference_bindings.ReferenceBindingResource.on_get.req",
+    "episodic.api.resources.reference_documents.ReferenceDocumentResource.on_get.req",
+    "episodic.api.resources.source_intake.UploadResource.on_get.req",
+    "episodic.api.resources.source_intake.IngestionJobResource.on_get.req",
+]
+reason = "Falcon supplies these callback parameters through its ASGI and resource protocols."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = ["episodic.api.authorization.PermitAll.decide.context"]
+reason = "PermitAll preserves the authorization policy signature used by interchangeable implementations."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.canonical.storage.source_intake_repositories.SqlAlchemyUploadRepository.mark_failed.reason",
+]
+reason = "The repository method implements UploadRepository.mark_failed; other adapters consume the reason."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.metrics_ports.NoopBoundedMetrics.increment_counter.name",
+    "episodic.metrics_ports.NoopBoundedMetrics.increment_counter.labels",
+    "episodic.metrics_ports.NoopBoundedMetrics.observe_latency_ms.name",
+    "episodic.metrics_ports.NoopBoundedMetrics.observe_latency_ms.value",
+    "episodic.metrics_ports.NoopBoundedMetrics.observe_latency_ms.labels",
+    "episodic.metrics_ports.NoopBoundedValueMetrics.observe_value.name",
+    "episodic.metrics_ports.NoopBoundedValueMetrics.observe_value.value",
+    "episodic.metrics_ports.NoopBoundedValueMetrics.observe_value.labels",
+    "episodic.observability.NoopMetrics.increment_counter.name",
+    "episodic.observability.NoopMetrics.increment_counter.labels",
+    "episodic.observability.NoopMetrics.observe_latency_ms.name",
+    "episodic.observability.NoopMetrics.observe_latency_ms.value",
+    "episodic.observability.NoopMetrics.observe_latency_ms.labels",
+]
+reason = "No-op metrics adapters intentionally retain the production metrics protocol signatures."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "alembic.versions.20260220_000002_add_profile_template_history_schema._drop_history_tables",
+    "alembic.versions.20260220_000002_add_profile_template_history_schema._drop_episode_templates_table",
+    "alembic.versions.20260610_000009_add_source_intake_tables._drop_enums",
+    "alembic.versions.20260610_000009_add_source_intake_tables._downgrade_ingestion_jobs",
+    "alembic.versions.20260610_000009_add_source_intake_tables._drop_uploads_table",
+    "alembic.versions.20260610_000009_add_source_intake_tables._drop_ingestion_job_sources_table",
+    "alembic.versions.20260610_000009_add_source_intake_tables._drop_idempotency_records_table",
+]
+reason = "Alembic invokes these downgrade helpers when an operator rolls migration revisions back."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.authorization._authorization_result",
+    "episodic.api.dependencies._validate_async_callable",
+    "episodic.api.dependencies._validate_readiness_probe",
+    "episodic.api.dependencies._validate_authorization_port",
+]
+reason = "Falcon lifecycle middleware and API dependency construction invoke these callbacks and validators."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.api.app._ShutdownHooksMiddleware.process_shutdown",
+    "episodic.api.authorization.AuthorizationMiddleware.process_request",
+]
+reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI request and shutdown protocols."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.canonical.idempotency._validate_completed_state",
+    "episodic.canonical.ingestion_sources._validate_exclusive_attachment",
+    "episodic.canonical.ingestion_sources._validate_upload_kind",
+    "episodic.canonical.ingestion_sources._validate_source_uri_kind",
+    "episodic.canonical.ingestion_sources._validate_source_type",
+    "episodic.canonical.ingestion_sources._validate_weight",
+    "episodic.canonical.uploads._require_non_negative",
+    "episodic.canonical.uploads._require_non_negative_if_present",
+]
+reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.canonical.domain.Checkpoint._validate_options",
+    "episodic.canonical.domain.Checkpoint._validate_responded_fields",
+    "episodic.canonical.domain.ReferenceBinding._validate_single_target",
+    "episodic.canonical.domain.ReferenceBinding._validate_target_kind_matches",
+    "episodic.canonical.domain.ReferenceBinding._validate_effective_from_constraint",
+]
+reason = "Canonical value objects call these validation methods from dataclass post-initialization hooks."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.concurrent_interpreters._PerfCounterCpuTaskExecutorClock.monotonic_seconds",
+    "episodic.observability.NoopMetrics.increment_counter",
+    "episodic.observability.NoopMetrics.observe_latency_ms",
+    "episodic.observability.PerfCounterClock.monotonic_seconds",
+]
+reason = "Clock and no-op metrics implementations satisfy runtime-selected protocol interfaces."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.cost.ports._validate_currency_code",
+    "episodic.cost.ports._validate_usage_metrics",
+    "episodic.generation.guest_bios._ensure_non_empty_fields",
+    "episodic.generation.show_notes._ensure_non_empty_fields",
+    "episodic.generation.show_notes._ensure_optional_iso8601_duration",
+    "episodic.generation.show_notes._normalize_optional_tei_locator",
+    "episodic.orchestration._dto._coerce_single_model_tier",
+    "episodic.orchestration._dto._normalize_required_inputs",
+]
+reason = "Domain DTO constructors and response parsers invoke these validation and normalization helpers."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.qa.pedante.types._ensure_non_empty_fields",
+    "episodic.qa.pedante.types._require_non_empty_string_field",
+    "episodic.qa.pedante.types._require_non_empty_tuple_field",
+    "episodic.qa.pedante.types._require_source_packet_items",
+    "episodic.qa.pedante.types._coerce_findings_tuple",
+    "episodic.qa.pedante.types._require_usage",
+]
+reason = "Pedante value objects invoke these validation helpers during dataclass post-initialization."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.worker.runtime._validate_amqp_scheme",
+    "episodic.worker.runtime._validate_result_backend",
+    "episodic.worker.tasks._require_int_type",
+    "episodic.worker.tasks._require_int_range",
+    "episodic.worker.tasks._require_positive_int",
+    "episodic.worker.topology._validate_queue_spec_strings",
+    "episodic.worker.topology._validate_routing_key_pair",
+    "episodic.worker.topology._validate_unique_queue_names",
+    "episodic.worker.topology._validate_unique_workload_mappings",
+    "episodic.worker.topology._validate_queue_contract",
+]
+reason = "Worker configuration and task DTO constructors invoke these validation helpers."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.runtime.create_app_from_env",
+    "episodic.asyncio_tasks.create_task_in_group",
+]
+reason = "Granian imports the application factory by string, and create_task_in_group is a documented public concurrency helper."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.runtime._load_runtime_config",
+    "episodic.api.runtime._build_database_probe",
+    "episodic.api.runtime._build_database_probe.check_database",
+    "episodic.api.runtime._build_database_probe.uow_factory",
+    "episodic.api.runtime._normalize_database_urls",
+    "episodic.api.runtime._apply_query_connect_overrides",
+    "episodic.api.runtime._psycopg_connection_kwargs",
+]
+reason = "The Granian application factory and its database readiness composition call this runtime helper chain."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.canonical.health.HealthReport.from_checks",
+    "episodic.canonical.health.ProbeHealthObserver.observe",
+    "episodic.canonical.health.ProbeHealthObserver._observe_one",
+]
+reason = "Health observers invoke these methods through the readiness callback and report-building contracts."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "class"
+full_name = [
+    "episodic.canonical.adapters.generation_runs._CheckpointTransitionSpec",
+    "episodic.canonical.adapters.generation_runs.InMemoryGenerationRunStore",
+    "episodic.cost.recorder.CostRecorder",
+]
+reason = "These documented public adapters are instantiated by application composition and local-development consumers."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "variable"
+full_name = [
+    "episodic.api.runtime.GRANIAN_FACTORY_TARGET",
+    "episodic.api.runtime.GRANIAN_INTERFACE",
+    "episodic.api.runtime.HTTP_BIND_PORT",
+    "episodic.canonical.profile_templates.types.ProfileTemplateError.retryable",
+]
+reason = "Process launchers and structured exception consumers read these documented public contract values."
+
+[tool.skylos.whitelist]
+names = []
+
+[tool.skylos.whitelist.documented]
+"enum" = "Used by PEP 695 generic bounds; Ruff still rejects genuinely unused imports."
+"_VersionedEntity" = "Used as the PEP 695 bound for versioned profile and template helpers."
+"create_reference_binding" = "Public compatibility re-export listed in the reference-document facade __all__."
+"get_reference_binding" = "Public compatibility re-export listed in the reference-document facade __all__."
+"list_reference_bindings" = "Public compatibility re-export listed in the reference-document facade __all__."
+"list_reference_bindings_paged" = "Public compatibility re-export listed in the binding facade __all__."
+"create_reference_document" = "Public compatibility re-export listed in the service facade __all__."
+"get_reference_document" = "Public compatibility re-export listed in the service facade __all__."
+"list_reference_documents" = "Public compatibility re-export listed in the service facade __all__."
+"update_reference_document" = "Public compatibility re-export listed in the service facade __all__."
+"ResolvedBinding" = "Public compatibility re-export listed in the service facade __all__."
+"resolve_bindings" = "Public compatibility re-export listed in the service facade __all__."
+"create_reference_document_revision" = "Public compatibility re-export listed in the service facade __all__."
+"get_reference_document_revision" = "Public compatibility re-export listed in the service facade __all__."
+"list_reference_document_revisions" = "Public compatibility re-export listed in the service facade __all__."
+"SnapshotContext" = "Public compatibility re-export listed in the service facade __all__."
+"snapshot_resolved_bindings" = "Public compatibility re-export listed in the service facade __all__."
+"StaleEventSequence" = "Reserved generation-run port error required by the accepted lifecycle contract."
+"UploadInitRequest" = "Reserved source-intake request DTO required by the accepted upload contract."
 
 [tool.hecate]
 root_packages = ["episodic"]

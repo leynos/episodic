@@ -102,18 +102,8 @@ class _MockLLMHandler(BaseHTTPRequestHandler):
 class _MockLLMServer(ThreadingHTTPServer):
     """HTTP server carrying mutable test state."""
 
-    # pylint: disable-next=too-many-arguments
-    def __init__(
-        self,
-        server_address: tuple[str, int],
-        handler_class: type[BaseHTTPRequestHandler],
-        *,
-        state: MockServerState,
-        fail_first: bool = False,
-    ) -> None:
-        super().__init__(server_address, handler_class)
-        self.state = state
-        self.fail_first = fail_first
+    state: MockServerState
+    fail_first: bool
 
 
 @dc.dataclass(frozen=True, slots=True, kw_only=True)
@@ -131,9 +121,9 @@ def _start_mock_server(context: LLMAdapterContext, *, fail_first: bool) -> None:
     server = _MockLLMServer(
         ("127.0.0.1", 0),
         _MockLLMHandler,
-        state=context.server_state,
-        fail_first=fail_first,
     )
+    server.state = context.server_state
+    server.fail_first = fail_first
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
     context.server = server

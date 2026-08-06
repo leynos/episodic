@@ -163,12 +163,7 @@ def _parse_int_query_param(
     name: str,
     default: int,
 ) -> int:
-    """Parse an optional integer query parameter or raise ``validation_error``.
-
-    Returns ``default`` when the caller omitted the parameter. Otherwise
-    attempts ``int(raw_value)`` and raises a typed envelope error with the
-    field name and ``constraint="type"`` when parsing fails.
-    """
+    """Parse an optional integer query parameter or raise a validation error."""
     if raw_value is None:
         return default
     try:
@@ -271,24 +266,6 @@ def _build_update_kwargs[DataT](
         data=data_builder(payload),
         audit=build_audit_metadata(payload),
     )
-
-
-def _build_payload_dataclass[DataT](
-    payload: JsonPayload,
-    *,
-    dc_type: type[DataT],
-    field_map: dict[str, tuple[str, bool]],
-) -> DataT:
-    """Construct a dataclass from mapped payload fields."""
-    values: dict[str, object] = {}
-    for field_name, (payload_key, is_optional) in field_map.items():
-        raw = (
-            payload.get(payload_key)
-            if is_optional
-            else _require_field(payload, payload_key)
-        )
-        values[field_name] = raw
-    return dc_type(**values)
 
 
 def _optional_json_object_field(

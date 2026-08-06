@@ -20,7 +20,7 @@ if typ.TYPE_CHECKING:
 
 
 def constraint_name(exc: BaseException) -> str | None:
-    """Return the Postgres constraint name when the exception exposes one.
+    """Return the discovered PostgreSQL constraint name or ``None``.
 
     Inspects the SQLAlchemy ``IntegrityError`` and its wrapped DB-API ``orig``
     exception, including each candidate's ``diag.constraint_name``. Returns
@@ -48,7 +48,7 @@ def is_revision_conflict_integrity_error(
     exc: IntegrityError,
     entity_id_field: str,
 ) -> bool:
-    """Return ``True`` when ``exc`` indicates a history revision collision.
+    """Return whether ``exc`` represents a history revision conflict.
 
     Checks the extracted constraint name against the known revision-uniqueness
     constraints, and falls back to substring matching on the driver message for

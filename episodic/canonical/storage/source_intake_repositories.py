@@ -29,8 +29,6 @@ from episodic.canonical.upload_protocols import (
 from episodic.canonical.uploads import UploadState
 from episodic.logging import get_logger, log_info, log_warning
 from episodic.observability import (
-    MetricsPort,
-    MonotonicClockPort,
     NoopMetrics,
     PerfCounterClock,
 )
@@ -56,6 +54,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.idempotency import IdempotencyRecord
     from episodic.canonical.ingestion_sources import IngestionJobSource
     from episodic.canonical.uploads import Upload
+    from episodic.observability import MetricsPort, MonotonicClockPort
 
 
 Clock = cabc.Callable[[], dt.datetime]
@@ -65,7 +64,19 @@ logger = get_logger(__name__)
 
 @dc.dataclass(frozen=True, slots=True)
 class SourceIntakeStorageRuntime:
-    """Runtime providers used by source-intake SQLAlchemy adapters."""
+    """Runtime providers used by source-intake SQLAlchemy adapters.
+
+    Attributes
+    ----------
+    clock : Clock
+        Provider for the current UTC time.
+    uuid_factory : UuidFactory
+        Provider for new idempotency record identifiers.
+    metrics : MetricsPort
+        Sink for source-intake repository metrics.
+    monotonic_clock : MonotonicClockPort
+        Provider for monotonic timing measurements.
+    """
 
     clock: Clock
     uuid_factory: UuidFactory
@@ -392,7 +403,22 @@ def source_intake_storage_runtime(
     metrics: MetricsPort | None = None,
     monotonic_clock: MonotonicClockPort | None = None,
 ) -> SourceIntakeStorageRuntime:
-    """Return SQLAlchemy source-intake providers with production defaults."""
+    """Build SQLAlchemy source-intake providers with production defaults.
+
+    Parameters
+    ----------
+    runtime : SourceIntakeStorageRuntime | None
+        Complete runtime to return unchanged, or ``None`` to build one.
+    metrics : MetricsPort | None, optional
+        Metrics sink, defaulting to ``NoopMetrics``.
+    monotonic_clock : MonotonicClockPort | None, optional
+        Monotonic clock, defaulting to ``PerfCounterClock``.
+
+    Returns
+    -------
+    SourceIntakeStorageRuntime
+        The supplied runtime or a runtime populated with production defaults.
+    """
     if runtime is not None:
         return runtime
     return SourceIntakeStorageRuntime(

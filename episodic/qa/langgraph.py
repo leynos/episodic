@@ -8,7 +8,7 @@ import typing as typ
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph  # noqa: TC002
 
-from .pedante import (  # noqa: TC001
+from .pedante import (  # noqa: TC001 - required for LangGraph state introspection
     PedanteEvaluationRequest,
     PedanteEvaluationResult,
 )

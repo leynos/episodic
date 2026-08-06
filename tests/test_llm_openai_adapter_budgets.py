@@ -81,7 +81,7 @@ def test_estimate_token_count_matches_ceiling_ratio(
     """Token estimates should preserve the configured finite positive ratio."""
     estimated_tokens = _estimate_token_count(chars_per_token, text)
 
-    assert estimated_tokens >= 0
+    assert estimated_tokens >= 0, "estimated_tokens must be non-negative"
     if not text:
         assert estimated_tokens == 0
     else:

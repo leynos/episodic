@@ -1,0 +1,100 @@
+{
+  "date": "2026-07-27",
+  "scan_root": "episodic/",
+  "pyscn": {
+    "version": "1.28.0",
+    "elapsed_ms": 292,
+    "displayed_findings": 0,
+    "raw_report": "pyscn-1.28.0-episodic.json.gz",
+    "sha256": "bf4b969ed08691b1e9878fb0def660b9619e29e1e32461a98c750a34ce1d227f"
+  },
+  "skylos": {
+    "version": "4.30.0",
+    "elapsed_ms": 13747,
+    "confidence_threshold": 0,
+    "displayed_findings": 143,
+    "raw_report": "skylos-4.30.0-episodic.json.gz",
+    "sha256": "8b04f7b8d0424f8b9a33caa2471fb326cb00acbde5a2f2d87351934b30f31d0b",
+    "categories": {
+      "unused_functions": 88,
+      "unused_imports": 22,
+      "unused_classes": 5,
+      "unused_variables": 4,
+      "unused_parameters": 24
+    },
+    "adjudication": {
+      "actionable": 2,
+      "false_positive": 139,
+      "review_required": 2
+    },
+    "actionable": [
+      {
+        "path": "episodic/api/helpers.py",
+        "line": 276,
+        "name": "_build_payload_dataclass",
+        "reason": "private helper referenced only by its direct unit tests"
+      },
+      {
+        "path": "episodic/canonical/profile_templates/_brief_loaders.py",
+        "line": 121,
+        "name": "_load_reference_documents_for_target",
+        "reason": "private helper with no repository references"
+      }
+    ],
+    "review_required": [
+      {
+        "path": "episodic/canonical/generation_run_errors.py",
+        "line": 26,
+        "name": "StaleEventSequence",
+        "reason": "unreferenced implementation but retained by an execution-plan contract"
+      },
+      {
+        "path": "episodic/canonical/uploads.py",
+        "line": 67,
+        "name": "UploadInitRequest",
+        "reason": "unreferenced implementation but retained by an execution-plan contract"
+      }
+    ],
+    "false_positive_families": [
+      {
+        "count": 41,
+        "family": "framework callbacks, subclass hooks, nested callbacks, and string entry points"
+      },
+      {
+        "count": 40,
+        "family": "dataclass post-init validation and normalization helpers"
+      },
+      {
+        "count": 5,
+        "family": "documented public or test-support functions"
+      },
+      {
+        "count": 4,
+        "family": "imports used by annotations or generic bounds"
+      },
+      {
+        "count": 18,
+        "family": "declared compatibility and facade re-exports"
+      },
+      {
+        "count": 3,
+        "family": "referenced, documented, or test-support classes"
+      },
+      {
+        "count": 4,
+        "family": "external process constants and serialized fields"
+      },
+      {
+        "count": 24,
+        "family": "intentionally ignored framework, protocol, and no-op adapter parameters"
+      }
+    ],
+    "default_threshold_sensitivity": {
+      "confidence_threshold": 60,
+      "displayed_findings": 111,
+      "actionable": 2,
+      "false_positive": 107,
+      "review_required": 2
+    }
+  }
+}

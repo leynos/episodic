@@ -28,7 +28,7 @@ def _make_reference_document(**overrides: object) -> ReferenceDocument:
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
         "updated_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # type: ignore[arg-type]
+    defaults.update(overrides)  # ty: ignore[invalid-argument-type]
     return ReferenceDocument(**defaults)
 
 
@@ -45,7 +45,7 @@ def _make_reference_document_revision(
         "change_note": "Test change",
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # type: ignore[arg-type]
+    defaults.update(overrides)  # ty: ignore[invalid-argument-type]
     return ReferenceDocumentRevision(**defaults)
 
 
@@ -61,7 +61,7 @@ def _make_reference_binding(**overrides: object) -> ReferenceBinding:
         "effective_from_episode_id": None,
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # type: ignore[arg-type]
+    defaults.update(overrides)  # ty: ignore[invalid-argument-type]
     return ReferenceBinding(**defaults)
 
 

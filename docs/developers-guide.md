@@ -47,9 +47,10 @@ Run the full lint gate with:
 make lint
 ```
 
-The target runs the Hecate architecture import-boundary checker, Ruff, and a
-focused Pylint 4 pass. The Pylint pass is invoked through
-`uv tool run --python pypy` with the pinned `pylint-pypy-shim` wrapper from
+The target runs the Hecate architecture import-boundary checker, Ruff, a
+focused Pylint 4 pass, and a blocking Skylos dead-code scan. The Pylint pass is
+invoked through `uv tool run --python pypy` with the pinned `pylint-pypy-shim`
+wrapper from
 [github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
 That wrapper installs the PyPy-specific Astroid compatibility patch before
 delegating to Pylint.
@@ -65,6 +66,44 @@ managed PyPy runtime currently parses Python 3.11 syntax while the project
 targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
 the wrapper and skipped, which keeps parse incompatibilities visible without
 hiding other diagnostics from files that PyPy can analyse.
+
+Skylos runs locally with concise, non-interactive output. The lint command
+disables uploads and provenance collection, selects only dead-code analysis,
+and fails when an unexplained finding remains. It does not invoke cloud or
+Large Language Model (LLM) analysis and never modifies source files.
+
+Treat every new finding as dead code until its runtime caller is verified.
+Remove genuine dead code. For framework callbacks, protocol implementations, or
+dataclass validation hooks that static analysis cannot see, prefer a precise
+entry-point rule in `[tool.skylos.dead_code]`. Match the symbol's actual kind
+and fully qualified name, and explain the verified runtime caller. In
+particular, use `type = "method"` for instance methods rather than
+`type = "function"`.
+
+```toml
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = ["episodic.api.app._ShutdownHooksMiddleware.process_shutdown"]
+reason = "Falcon invokes this middleware lifecycle callback through its ASGI protocol."
+```
+
+Use `make skylos-allow` only for a narrow named exception when an entry-point
+rule cannot describe the boundary. Its reason must include who or what calls
+the symbol and how that was verified. Add one with:
+
+```shell
+make skylos-allow NAME=registered_handler \
+  REASON="Loaded by the plugin registry; verified in the registry contract test"
+```
+
+The target refuses empty `NAME` and `REASON` values and stores the explanation
+under `[tool.skylos.whitelist.documented]`; it does not create entry-point
+rules. Do not generate baselines, scrape reports into configuration, or add
+bulk unexplained exceptions. Use inline suppression only when neither an
+entry-point rule nor a named exception can describe the boundary, and keep its
+reason beside the suppression. Temporary exceptions must name an owner,
+tracking reference, and expiry condition. Remove exception entries when the
+dynamic boundary disappears.
 
 ## Spelling policy
 

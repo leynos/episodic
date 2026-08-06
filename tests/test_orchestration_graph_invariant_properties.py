@@ -235,11 +235,7 @@ async def _invoke_with_callback(
     *,
     checkpoint_port: InMemoryCheckpointStore | None = None,
 ) -> tuple[dict[str, object], list[GenerationOrchestrationResult]]:
-    """Build a graph with a recording finish_callback and invoke it once.
-
-    Returns the final graph state and the list of domain results the
-    callback received, in invocation order.
-    """
+    """Invoke a graph once with a recording finish callback."""
     observed_results: list[GenerationOrchestrationResult] = []
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=_planner_result()),

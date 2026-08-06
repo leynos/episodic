@@ -58,11 +58,7 @@ def _usage_maps(draw: st.DrawFn) -> dict[str, int]:
 
 @st.composite
 def _exact_rates(draw: st.DrawFn) -> dict[str, int]:
-    """Generate rates that price whole minor units per token.
-
-    The engine accepts rates per million units. Multiples of one million let
-    the additivity property avoid independent rounding artefacts.
-    """
+    """Generate per-metric rates that price whole minor units per token."""
     return draw(
         st.fixed_dictionaries(
             {

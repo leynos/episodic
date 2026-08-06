@@ -236,9 +236,17 @@ def _require_non_empty_string(value: object, field_name: str) -> str:
 
 
 def _require_optional_string(value: object, field_name: str) -> str | None:
-    """Return *value* typed as ``str | None``.
+    """Validate an optional string response field.
 
-    Raise if it is a non-null non-string.
+    Returns
+    -------
+    str | None
+        The input string unchanged, or ``None``.
+
+    Raises
+    ------
+    ShowNotesResponseFormatError
+        If ``value`` is neither a string nor ``None``.
     """
     if value is not None and not isinstance(value, str):
         msg = f"{field_name} must be a string or null."
