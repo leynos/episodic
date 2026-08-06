@@ -1,16 +1,14 @@
 """Checkpoint DTOs for resumable generation orchestration."""
 
 import dataclasses as dc
-import typing as typ
+import datetime as dt  # noqa: TC003 - runtime annotation inspection needs this name.
+import json
 
-from ._dto import (
+from ._payload_dto import (
     ActionExecutionResult,
     _normalize_non_empty_text,
     _normalize_string_fields,
 )
-
-if typ.TYPE_CHECKING:
-    import datetime as dt
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -48,6 +46,14 @@ class WorkflowCheckpoint:
         )
         if not isinstance(self.payload, dict):
             msg = "payload must be a mapping object."
+            raise TypeError(msg)
+        try:
+            encoded_payload = json.dumps(self.payload, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            msg = "payload must be JSON-serializable."
+            raise TypeError(msg) from exc
+        if json.loads(encoded_payload) != self.payload:
+            msg = "payload must be JSON-serializable without data loss."
             raise TypeError(msg)
         object.__setattr__(self, "payload", dict(self.payload))
 

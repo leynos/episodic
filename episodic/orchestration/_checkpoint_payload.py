@@ -17,15 +17,13 @@ import enum
 import typing as typ
 
 from episodic.llm import LLMUsage
-
-if typ.TYPE_CHECKING:
-    import importlib
-
-    from episodic.orchestration import _dto as dto
-else:
-    import importlib
-
-    dto = importlib.import_module("episodic.orchestration._dto")
+from episodic.orchestration._payload_dto import (
+    ActionExecutionResult,
+    ExecutionPlan,
+    PlannedAction,
+    PlannerResult,
+)
+from episodic.orchestration._types import ActionKind, ModelTier
 
 
 def _usage_to_payload(usage: LLMUsage | None) -> dict[str, int] | None:
@@ -132,7 +130,7 @@ def _usage_from_payload(payload: object) -> LLMUsage:
     )
 
 
-def _plan_to_payload(plan: dto.ExecutionPlan) -> dict[str, object]:
+def _plan_to_payload(plan: ExecutionPlan) -> dict[str, object]:
     """Return a JSON-compatible execution-plan checkpoint payload."""
     return {
         "plan_version": plan.plan_version,
@@ -151,22 +149,22 @@ def _plan_to_payload(plan: dto.ExecutionPlan) -> dict[str, object]:
     }
 
 
-def _planned_action_from_payload(payload: object) -> dto.PlannedAction:
+def _planned_action_from_payload(payload: object) -> PlannedAction:
     """Return one PlannedAction from a checkpoint plan-step payload."""
     step = _as_object_payload(payload, "plan step")
-    return dto.PlannedAction(
+    return PlannedAction(
         action_id=_required_string(step, "action_id", context="plan step"),
         action_kind=_required_enum(
             step,
             "action_kind",
-            dto.ActionKind,
+            ActionKind,
             context="plan step",
         ),
         rationale=_required_string(step, "rationale", context="plan step"),
         model_tier=_required_enum(
             step,
             "model_tier",
-            dto.ModelTier,
+            ModelTier,
             context="plan step",
         ),
         required_inputs=_required_string_list(
@@ -177,14 +175,14 @@ def _planned_action_from_payload(payload: object) -> dto.PlannedAction:
     )
 
 
-def _plan_from_payload(payload: object) -> dto.ExecutionPlan:
+def _plan_from_payload(payload: object) -> ExecutionPlan:
     """Return an ExecutionPlan from a checkpoint payload."""
     plan_payload = _as_object_payload(payload, "plan")
     steps = plan_payload.get("steps")
     if not isinstance(steps, list):
         msg = "checkpoint plan steps must be a list."
         raise TypeError(msg)
-    return dto.ExecutionPlan(
+    return ExecutionPlan(
         plan_version=_required_string(
             plan_payload,
             "plan_version",
@@ -204,7 +202,7 @@ def _plan_from_payload(payload: object) -> dto.ExecutionPlan:
     )
 
 
-def _planner_result_to_payload(result: dto.PlannerResult) -> dict[str, object]:
+def _planner_result_to_payload(result: PlannerResult) -> dict[str, object]:
     """Return a JSON-compatible planner-result checkpoint payload."""
     return {
         "plan": _plan_to_payload(result.plan),
@@ -215,7 +213,7 @@ def _planner_result_to_payload(result: dto.PlannerResult) -> dict[str, object]:
     }
 
 
-def _planner_result_from_payload(payload: object) -> dto.PlannerResult:
+def _planner_result_from_payload(payload: object) -> PlannerResult:
     """Return a PlannerResult from a checkpoint payload."""
     planner_payload = _as_object_payload(payload, "planner_result")
     try:
@@ -223,7 +221,7 @@ def _planner_result_from_payload(payload: object) -> dto.PlannerResult:
     except KeyError as exc:
         msg = "checkpoint planner_result missing required field: plan"
         raise TypeError(msg) from exc
-    return dto.PlannerResult(
+    return PlannerResult(
         plan=_plan_from_payload(plan_payload),
         usage=(
             None
@@ -248,7 +246,7 @@ def _planner_result_from_payload(payload: object) -> dto.PlannerResult:
     )
 
 
-def _action_result_to_payload(result: dto.ActionExecutionResult) -> dict[str, object]:
+def _action_result_to_payload(result: ActionExecutionResult) -> dict[str, object]:
     """Return a JSON-compatible action-result checkpoint payload."""
     return {
         "action_id": result.action_id,
@@ -260,23 +258,23 @@ def _action_result_to_payload(result: dto.ActionExecutionResult) -> dict[str, ob
     }
 
 
-def _action_result_from_payload(payload: object) -> dto.ActionExecutionResult:
+def _action_result_from_payload(payload: object) -> ActionExecutionResult:
     """Return an ActionExecutionResult from a checkpoint payload."""
     action_payload = _as_object_payload(payload, "action_result")
-    return dto.ActionExecutionResult(
+    return ActionExecutionResult(
         action_id=_required_string(
             action_payload, "action_id", context="action_result"
         ),
         action_kind=_required_enum(
             action_payload,
             "action_kind",
-            dto.ActionKind,
+            ActionKind,
             context="action_result",
         ),
         model_tier=_required_enum(
             action_payload,
             "model_tier",
-            dto.ModelTier,
+            ModelTier,
             context="action_result",
         ),
         model=_required_string(action_payload, "model", context="action_result"),
