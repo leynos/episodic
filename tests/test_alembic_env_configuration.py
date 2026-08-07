@@ -16,6 +16,9 @@ from episodic.canonical.storage.alembic_helpers import (
 
 _ENVIRONMENT_URL = "postgresql+asyncpg://env-user@env-host/env-db"
 _CONFIGURED_URL = "postgresql+asyncpg://cfg-user@cfg-host/cfg-db"
+# A percent-encoded "@" in the password, which ConfigParser would otherwise
+# read as interpolation syntax.
+_PERCENT_ENCODED_URL = "postgresql+asyncpg://env-user:p%40ss@env-host/env-db"
 
 
 def test_configure_database_url_prefers_the_environment(
@@ -29,6 +32,21 @@ def test_configure_database_url_prefers_the_environment(
 
     assert cfg.get_main_option("sqlalchemy.url") == _ENVIRONMENT_URL, (
         "DATABASE_URL must take precedence over the configured sqlalchemy.url"
+    )
+
+
+def test_configure_database_url_preserves_percent_encoded_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Percent-encoded credentials must survive ConfigParser interpolation."""
+    monkeypatch.setenv("DATABASE_URL", _PERCENT_ENCODED_URL)
+    cfg = alembic_config(_CONFIGURED_URL)
+
+    configure_database_url(cfg)
+
+    assert cfg.get_main_option("sqlalchemy.url") == _PERCENT_ENCODED_URL, (
+        "an unescaped percent sign would either raise on write or corrupt the "
+        "password when Alembic reads sqlalchemy.url back"
     )
 
 
