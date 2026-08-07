@@ -31,8 +31,13 @@ extend-exclude = [
 locale = "en-gb"
 extend-ignore-re = [
     "(?s)```.*?```",
+    "--artifact-server-path\\b",
+    "<artifact-name>",
+    "\\bact-artifacts\\b",
     "\\brust-analyzer\\b",
-    "`[^`\\n]+`",
+    "\\bserialised_outcome\\b",
+    "\\bspeech_render_artifacts\\b",
+    "`color`",
 ]
 
 [default.extend-words]

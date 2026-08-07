@@ -12,7 +12,23 @@ accepted = ["ANALYZE", "Astroid", "Center", "Hashi", "RTO"]
 [words.corrections]
 
 [patterns]
-ignore = []
+# Identifiers that documentation must quote verbatim. The shared base no longer
+# exempts inline code spans wholesale, so each name is listed explicitly rather
+# than re-widening the estate-wide policy.
+ignore = [
+    # Shipped column, protocol parameter and dataclass field name; see
+    # alembic/versions/20260610_000009_add_source_intake_tables.py.
+    "\\bserialised_outcome\\b",
+    # Planned table name in the system design document.
+    "\\bspeech_render_artifacts\\b",
+    # Flags, placeholders and paths belonging to the `act` command line.
+    "--artifact-server-path\\b",
+    "\\bact-artifacts\\b",
+    "<artifact-name>",
+    # The documentation style guide cites this API field as its own example of
+    # keeping United States spelling inside code.
+    "`color`",
+]
 
 [files]
 exclude = []
