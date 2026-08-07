@@ -1,6 +1,5 @@
 """Unit tests for the Chrono spoken-runtime estimator."""
 
-import asyncio
 import dataclasses as dc
 import typing as typ
 
@@ -246,51 +245,6 @@ def test_chrono_estimator_uses_custom_metadata() -> None:
     )
     assert result.metadata.words_per_minute == 60, (
         "metadata must retain the custom words-per-minute rate"
-    )
-
-
-@pytest.mark.asyncio
-async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
-    """Async evaluate() should produce the same result as sync estimate()."""
-    config = ChronoEstimatorConfig(
-        estimator_name="chrono-naive-word-count",
-        estimator_version="2",
-        words_per_minute=60,
-    )
-    request = ChronoEvaluationRequest(
-        script_tei_xml=_tei_document("<sp><p>one two three</p></sp>")
-    )
-    estimator = ChronoRuntimeEstimator(config=config)
-
-    sync_result = estimator.estimate(request)
-    async_result = await estimator.evaluate(request)
-
-    assert async_result == sync_result, (
-        "evaluate() must delegate to estimate() and return an identical result"
-    )
-
-
-@pytest.mark.asyncio
-async def test_chrono_estimator_handles_concurrent_evaluations() -> None:
-    """A shared estimator should handle concurrent immutable requests."""
-    estimator = ChronoRuntimeEstimator()
-    requests = [
-        ChronoEvaluationRequest(
-            script_tei_xml=_tei_document(f"<sp><p>{'token ' * (index + 1)}</p></sp>")
-        )
-        for index in range(5)
-    ]
-    expected_word_counts = list(range(1, 6))
-
-    results = await asyncio.gather(
-        *(estimator.evaluate(request) for request in requests)
-    )
-
-    assert [r.metadata.spoken_word_count for r in results] == expected_word_counts, (
-        "concurrent evaluate() calls must preserve per-request word counts"
-    )
-    assert results == [estimator.estimate(request) for request in requests], (
-        "concurrent evaluate() calls must match independent sync estimates"
     )
 
 

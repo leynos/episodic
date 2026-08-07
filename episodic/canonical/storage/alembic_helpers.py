@@ -12,6 +12,7 @@ Apply all migrations to an async engine:
 >>> await apply_migrations(engine)
 """
 
+import os
 import pathlib
 import typing as typ
 
@@ -45,6 +46,32 @@ def alembic_config(database_url: str) -> Config:
     safe_url = database_url.replace("%", "%%")
     cfg.set_main_option("sqlalchemy.url", safe_url)
     return cfg
+
+
+def configure_database_url(cfg: Config) -> None:
+    """Ensure ``sqlalchemy.url`` is set on *cfg* from the environment or config.
+
+    ``alembic/env.py`` delegates to this helper so the resolution rule can be
+    exercised without importing the migration environment, which dispatches a
+    migration run on import.
+
+    Parameters
+    ----------
+    cfg : Config
+        Alembic configuration mutated in place when ``DATABASE_URL`` is set.
+
+    Raises
+    ------
+    ValueError
+        If ``DATABASE_URL`` is not set and ``sqlalchemy.url`` is empty.
+    """
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        cfg.set_main_option("sqlalchemy.url", db_url)
+        return
+    if not cfg.get_main_option("sqlalchemy.url"):
+        msg = "DATABASE_URL is not set and sqlalchemy.url is empty."
+        raise ValueError(msg)
 
 
 def _run_migrations(connection: Connection, cfg: Config) -> None:

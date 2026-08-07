@@ -11,7 +11,6 @@ Run migrations with Alembic:
 """
 
 import asyncio
-import os
 import typing as typ
 from logging.config import fileConfig
 
@@ -21,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, async_engine_from_config
 
 from alembic import context
 from episodic.canonical.storage import Base
+from episodic.canonical.storage.alembic_helpers import configure_database_url
 
 if config.config_file_name:
     fileConfig(config.config_file_name)
@@ -39,14 +39,7 @@ if typ.TYPE_CHECKING:
 
 def _configure_database_url() -> None:
     """Ensure sqlalchemy.url is set from the environment or existing config."""
-    db_url = os.environ.get("DATABASE_URL")
-    if db_url:
-        config.set_main_option("sqlalchemy.url", db_url)
-        return
-    current = config.get_main_option("sqlalchemy.url")
-    if not current:
-        msg = "DATABASE_URL is not set and sqlalchemy.url is empty."
-        raise ValueError(msg)
+    configure_database_url(config)
 
 
 def run_migrations_offline() -> None:

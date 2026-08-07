@@ -972,6 +972,33 @@ identify blobs that can be deleted through the configured object-store adapter.
 Expired idempotency rows can be purged with a bounded SQL delete against
 `idempotency_records.expires_at`.
 
+### Source-intake storage runtime
+
+The SQLAlchemy source-intake adapters take their ambient dependencies from an
+injectable provider bundle rather than reaching for module-level globals. The
+bundle is the frozen dataclass `SourceIntakeStorageRuntime` in
+`episodic.canonical.storage.source_intake_repository_runtime`, and it carries
+four providers:
+
+- `clock` returns the current timestamp used for idempotency records.
+- `uuid_factory` returns identifiers for newly created rows.
+- `metrics` is the `MetricsPort` implementation the adapters report through.
+- `monotonic_clock` is the `MonotonicClockPort` used for latency measurement.
+
+Callers resolve the bundle through `source_intake_storage_runtime(runtime)`. A
+supplied runtime is returned unchanged, so an explicit bundle always wins. When
+`runtime` is `None`, the function constructs one from production defaults: UTC
+time via `datetime.now(datetime.UTC)`, identifiers via `uuid.uuid4()`,
+`NoopMetrics`, and `PerfCounterClock`. The optional `metrics` and
+`monotonic_clock` keyword arguments override those two defaults individually,
+which is how the unit of work threads its configured observability ports
+through to the repositories.
+
+Tests inject deterministic providers instead of patching module state. The
+source-intake repository tests build a `SourceIntakeStorageRuntime` with a
+fixed `clock`, a fixed `uuid_factory`, and test doubles for the observability
+ports, then assert on the exact persisted timestamps and identifiers.
+
 ### Prompt scaffolding for generators
 
 Use the canonical prompt helpers to build deterministic generation scaffolds
