@@ -41,10 +41,6 @@ class _RepositoryBase:
         result = await self._session.execute(sa.select(record_type).where(where_clause))
         return [mapper(row) for row in result.scalars()]
 
-    async def _add_record[RecordT](self, record: RecordT) -> None:
-        """Add a record to the current SQLAlchemy session."""
-        self._session.add(record)
-
     async def _list_where[RecordT, DomainT](
         self,
         record_type: type[RecordT],

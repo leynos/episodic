@@ -1,7 +1,5 @@
 """Unit tests for storage compression helpers."""
 
-from __future__ import annotations
-
 from compression import zstd
 
 import pytest

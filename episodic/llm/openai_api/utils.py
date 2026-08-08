@@ -173,15 +173,7 @@ def _llm_config_checks(
 
 
 def _estimate_token_count(chars_per_token: float, *parts: str | None) -> int:
-    """Estimate prompt tokens using a configurable chars/token heuristic.
-
-    This heuristic approximates OpenAI/tiktoken GPT-4-era tokenization by
-    returning ``ceil(len(text) / chars_per_token)`` for the combined
-    non-``None`` prompt parts. Actual token counts vary by text shape,
-    language, and vocabulary, so this remains a heuristic-only implementation.
-    If other tokenizers need support later, this function is the extension
-    point for injecting a tokenizer.
-    """
+    """Estimate prompt tokens using a configurable characters-per-token ratio."""
     combined = "".join(part for part in parts if part is not None)
     if not combined:
         return 0
@@ -431,11 +423,7 @@ def _is_valid_chars_per_token(value: object) -> bool:
 
 
 def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
-    """Validate OpenAICompatibleLLMConfig field values.
-
-    Emits ``openai_adapter.config_rejected`` with bounded configuration
-    diagnostics before raising ``ValueError`` for the first rejected field.
-    """
+    """Validate OpenAI-compatible LLM configuration field values."""
     base_url: object = config.base_url
     api_key: object = config.api_key
     chars_per_token: object = config.chars_per_token

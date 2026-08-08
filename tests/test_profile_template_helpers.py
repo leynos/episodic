@@ -9,8 +9,6 @@ roll the unit of work back so the orphaned entity update can never be
 committed.
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import datetime as dt
 import typing as typ
@@ -54,11 +52,12 @@ class _RecordingEntityRepository:
 
     async def get(self, entity_id: uuid.UUID, /) -> SeriesProfile | None:
         """Return the preconfigured entity regardless of identifier."""
+        del entity_id
         return self._entity
 
     async def update(self, entity: SeriesProfile, /) -> None:
         """Record that the entity update ran in the outer transaction."""
-        self.updated.append(entity)
+        self.updated += [entity]
 
 
 class _ConflictingHistoryRepository:

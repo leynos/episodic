@@ -3,6 +3,7 @@
   '''
   stdout:
   ARCH001: tests.fixtures.architecture.domain_imports_storage.domain:3 imports forbidden module tests.fixtures.architecture.domain_imports_storage.storage (domain -> outbound_adapter)
+  ARCH001: tests.fixtures.architecture.domain_imports_storage.domain:3 imports forbidden module tests.fixtures.architecture.domain_imports_storage.storage.VALUE (domain -> outbound_adapter)
   
   stderr:
   

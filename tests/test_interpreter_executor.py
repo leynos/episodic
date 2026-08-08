@@ -1,7 +1,5 @@
 """Unit tests for interpreter-backed CPU task execution adapters."""
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures as cf
 import operator
@@ -164,7 +162,7 @@ async def test_interpreter_executor_shutdown_waits_for_active_map(
     )
 
     blocking_executor.release_map.set()
-    assert await map_task == [4, 16]
+    assert await map_task == [4, 16], "map_ordered() result must equal [4, 16]"
     await shutdown_task
     assert blocking_executor.shutdown_called.is_set(), (
         "Expected shutdown() to reach the pool after map_ordered() completes."
@@ -207,7 +205,7 @@ def test_interpreter_executor_shutdown_is_idempotent() -> None:
 
     executor.shutdown()
     executor.shutdown()
-    assert executor._is_shutdown is True
+    assert executor._is_shutdown is True, "executor._is_shutdown must be True"
 
 
 @pytest.mark.asyncio
@@ -276,7 +274,7 @@ async def test_interpreter_executor_handles_empty_input(
 )
 def test_builder_selects_executor_based_on_environment(
     env_flag: str,
-    mock_support: bool | None,  # noqa: FBT001
+    mock_support: bool | None,  # noqa: FBT001  # Pytest parametrization makes the boolean dimension explicit at each call site.
     expected_type: type[object],
 ) -> None:
     """Builder picks the expected executor for each environment combination."""
@@ -335,7 +333,9 @@ async def test_builder_parses_max_workers_from_environment(
         metrics=ci._CPU_TASK_EXECUTOR_METRICS,
         _capability_check=lambda: True,
     )
-    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor)
+    assert isinstance(executor, ci.InterpreterPoolCpuTaskExecutor), (
+        "executor must be an InterpreterPoolCpuTaskExecutor"
+    )
 
     try:
         results = await executor.map_ordered(_square, (1,))

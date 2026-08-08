@@ -7,13 +7,15 @@ import sqlalchemy as sa
 from sqlalchemy import orm
 from sqlalchemy.dialects import postgresql
 
-from episodic.canonical.idempotency import (  # noqa: TC001
+from episodic.canonical.idempotency import (  # noqa: TC001  # SQLAlchemy evaluates these mapped model annotations at runtime.
     IdempotencyState,
 )
-from episodic.canonical.ingestion_sources import (  # noqa: TC001
+from episodic.canonical.ingestion_sources import (  # noqa: TC001  # SQLAlchemy evaluates these mapped model annotations at runtime.
     AttachmentKind,
 )
-from episodic.canonical.uploads import UploadState  # noqa: TC001
+from episodic.canonical.uploads import (
+    UploadState,  # noqa: TC001  # SQLAlchemy evaluates these mapped model annotations at runtime.
+)
 
 from .models_base import (
     ATTACHMENT_KIND,

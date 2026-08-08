@@ -1,5 +1,6 @@
 """Validation tests for reference binding resolution algorithm."""
 
+import typing as typ
 import uuid
 
 import pytest
@@ -16,11 +17,14 @@ from episodic.canonical.domain import (
 )
 from episodic.canonical.reference_documents.resolution import resolve_bindings
 
-pytestmark = pytest.mark.asyncio
+if typ.TYPE_CHECKING:
+    from tests.fixtures.binding import BindingFixtures
+
+pytestmark = [pytest.mark.asyncio]
 
 
 async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
-    uow_with_binding_fixtures,  # noqa: ANN001
+    uow_with_binding_fixtures: BindingFixtures,
 ) -> None:
     """Resolution returns empty list when episode belongs to a different series."""
     fixtures = uow_with_binding_fixtures
@@ -86,11 +90,13 @@ async def test_resolve_bindings_returns_empty_for_episode_from_wrong_series(
         episode_id=other_episode.id,
     )
 
-    assert resolved == []
+    assert resolved == [], (
+        "bindings for an episode in another series must resolve to an empty list"
+    )
 
 
 async def test_resolve_bindings_skips_template_from_wrong_series(
-    uow_with_binding_fixtures,  # noqa: ANN001
+    uow_with_binding_fixtures: BindingFixtures,
 ) -> None:
     """Resolution skips template bindings when template belongs to different series."""
     fixtures = uow_with_binding_fixtures
@@ -160,5 +166,5 @@ async def test_resolve_bindings_skips_template_from_wrong_series(
         template_id=other_template.id,
     )
 
-    assert len(resolved) == 1
-    assert resolved[0].revision.id == revision_v1.id
+    assert len(resolved) == 1, "Expected values to match"
+    assert resolved[0].revision.id == revision_v1.id, "Expected values to match"

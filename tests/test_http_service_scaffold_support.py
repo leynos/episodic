@@ -1,30 +1,19 @@
 """Shared test doubles for HTTP service scaffold tests."""
 
 import asyncio
+import collections.abc as cabc
 import typing as typ
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
-    type ASGIReceive = cabc.Callable[
-        [], cabc.Awaitable[cabc.MutableMapping[str, typ.Any]]
-    ]
-    type ASGISend = cabc.Callable[
-        [cabc.MutableMapping[str, typ.Any]], cabc.Awaitable[None]
-    ]
-    type ASGIApp = cabc.Callable[
-        [
-            cabc.MutableMapping[str, typ.Any],
-            ASGIReceive,
-            ASGISend,
-        ],
-        cabc.Awaitable[None],
-    ]
-
-else:
-    ASGIApp = typ.Any
+type ASGIMessage = cabc.MutableMapping[str, object]
+type ASGIReceive = cabc.Callable[[], cabc.Awaitable[ASGIMessage]]
+type ASGISend = cabc.Callable[[ASGIMessage], cabc.Awaitable[None]]
+type ASGIApp = cabc.Callable[
+    [ASGIMessage, ASGIReceive, ASGISend],
+    cabc.Awaitable[None],
+]
 
 
 class LifespanEvent(typ.TypedDict):

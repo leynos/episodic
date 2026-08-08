@@ -13,8 +13,8 @@ def test_canonical_json_bytes_are_sorted_and_compact() -> None:
     first = canonical_json_bytes({"b": 2, "a": 1})
     second = canonical_json_bytes({"a": 1, "b": 2})
 
-    assert first == b'{"a":1,"b":2}'
-    assert first == second
+    assert first == b'{"a":1,"b":2}', "Expected values to match"
+    assert first == second, "Expected values to match"
 
 
 def test_multipart_request_hash_matches_adr_015_worked_vector() -> None:
@@ -34,5 +34,7 @@ def test_multipart_request_hash_matches_adr_015_worked_vector() -> None:
 
     assert body_sha256 == (
         "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
-    )
-    assert result == "b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12"
+    ), "Expected values to match"
+    assert (
+        result == "b80f8d35a5298a757877270595160d69334f21e902f94ad2775bda2e8c9d6d12"
+    ), "Expected values to match"

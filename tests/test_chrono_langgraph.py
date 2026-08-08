@@ -113,7 +113,7 @@ async def test_chrono_node_logs_missing_request(
             (False,),
             {"extra": {"has_chrono_result": False}},
         )
-    ]
+    ], "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -126,8 +126,8 @@ async def test_chrono_node_calls_evaluator_and_stores_result() -> None:
 
     state = await graph.ainvoke(ChronoGraphState(chrono_request=request))
 
-    assert evaluator.requests == [request]
-    assert state["chrono_result"] == result
+    assert evaluator.requests == [request], "Expected values to match"
+    assert state["chrono_result"] == result, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -139,10 +139,12 @@ async def test_chrono_graph_propagates_result_and_metadata() -> None:
     state = await graph.ainvoke(ChronoGraphState(chrono_request=_request()))
     chrono_result = typ.cast("ChronoRuntimeEstimate", state["chrono_result"])
 
-    assert chrono_result.estimated_seconds == 2
-    assert chrono_result.metadata.estimator_name == "chrono-naive-word-count"
-    assert chrono_result.metadata.spoken_word_count == 3
-    assert not hasattr(chrono_result, "usage")
+    assert chrono_result.estimated_seconds == 2, "Expected values to match"
+    assert chrono_result.metadata.estimator_name == "chrono-naive-word-count", (
+        "Expected values to match"
+    )
+    assert chrono_result.metadata.spoken_word_count == 3, "Expected values to match"
+    assert not hasattr(chrono_result, "usage"), "Expected condition to be false"
 
 
 @pytest.mark.asyncio
@@ -174,7 +176,7 @@ async def test_chrono_node_logs_evaluation_failure(
             (len(request.script_tei_xml),),
             {"extra": {"input_character_count": len(request.script_tei_xml)}},
         )
-    ]
+    ], "Expected values to match"
 
 
 @pytest.mark.asyncio

@@ -66,16 +66,6 @@ class EpisodeTemplatesResource(_CreateResourceBase[object]):
             Incoming request, optionally including ``series_profile_id``.
         resp : falcon.Response
             Outgoing response object populated by this handler.
-
-        Returns
-        -------
-        None
-            Response media is set to an ``items`` list and status ``200``.
-
-        Raises
-        ------
-        falcon.HTTPBadRequest
-            Raised when ``series_profile_id`` is provided but invalid.
         """
         page = parse_pagination(req)
         series_profile_id = parse_optional_uuid_param(req, "series_profile_id")

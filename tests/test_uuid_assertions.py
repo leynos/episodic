@@ -1,7 +1,5 @@
 """Shared UUID assertion helpers for test modules."""
 
-from __future__ import annotations
-
 import uuid
 
 UUID7_VERSION = 7

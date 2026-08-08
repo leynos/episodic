@@ -1,0 +1,19 @@
+# serializer version: 1
+# name: test_chat_completion_provider_call_usage_includes_cached_tokens
+  dict({
+    'audio_input_tokens': 3,
+    'audio_output_tokens': 5,
+    'cached_input_tokens': 11,
+    'input_tokens': 42,
+    'output_tokens': 18,
+    'reasoning_tokens': 7,
+  })
+# ---
+# name: test_responses_provider_call_usage_includes_reasoning_tokens
+  dict({
+    'cached_input_tokens': 4,
+    'input_tokens': 15,
+    'output_tokens': 12,
+    'reasoning_tokens': 6,
+  })
+# ---

@@ -190,16 +190,6 @@ def parse_tei_header(xml: str) -> TeiHeaderPayload:
     -------
     TeiHeaderPayload
         Parsed TEI header payload and derived metadata.
-
-    Raises
-    ------
-    TypeError
-        If the TEI header is missing from the parsed payload.
-    ValueError
-        If the TEI header title is missing or empty.
-    ValueError
-        If the TEI parser raises a validation error that does not map to a
-        missing header or title.
     """
     document = _parse_and_validate_tei(xml)
     payload = _to_payload(document)

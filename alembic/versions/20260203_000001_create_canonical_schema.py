@@ -12,8 +12,6 @@ Apply the migration with Alembic:
 >>> alembic upgrade head
 """
 
-from __future__ import annotations
-
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
@@ -69,11 +67,7 @@ def _ingestion_status_enum() -> postgresql.ENUM:
 
 
 def _timestamp_columns() -> list[sa.Column]:
-    """Create shared created_at and updated_at columns.
-
-    Note: updated_at is managed by application updates; direct SQL writes should
-    set it explicitly if they bypass ORM onupdate hooks.
-    """
+    """Create shared created_at and updated_at columns."""
     return [
         sa.Column(
             "created_at",

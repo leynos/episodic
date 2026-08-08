@@ -122,13 +122,6 @@ async def update_series_profile(
     -------
     tuple[SeriesProfile, int]
         Updated profile and the next revision number.
-
-    Raises
-    ------
-    EntityNotFoundError
-        Raised when the profile does not exist.
-    RevisionConflictError
-        Raised when expected and latest revisions do not match.
     """
     return await _update_versioned_entity(
         uow,
@@ -239,13 +232,6 @@ async def update_episode_template(
     -------
     tuple[EpisodeTemplate, int]
         Updated template and the next revision number.
-
-    Raises
-    ------
-    EntityNotFoundError
-        Raised when the template does not exist.
-    RevisionConflictError
-        Raised when expected and latest revisions do not match.
     """
     return await _update_versioned_entity(
         uow,

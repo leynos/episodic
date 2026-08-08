@@ -20,13 +20,7 @@ def _build_reference_binding(
     target_kind: ReferenceBindingTargetKind,
     **kwargs: uuid.UUID | None,
 ) -> ReferenceBinding:
-    """Build a reference binding for tests.
-
-    Args:
-        target_kind: The kind of binding target.
-        **kwargs: Optional target identifiers (series_profile_id,
-            episode_template_id, ingestion_job_id, effective_from_episode_id).
-    """
+    """Build a reference binding for tests."""
     now = dt.datetime.now(dt.UTC)
     return ReferenceBinding(
         id=uuid.uuid4(),

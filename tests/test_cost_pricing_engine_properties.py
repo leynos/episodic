@@ -58,11 +58,7 @@ def _usage_maps(draw: st.DrawFn) -> dict[str, int]:
 
 @st.composite
 def _exact_rates(draw: st.DrawFn) -> dict[str, int]:
-    """Generate rates that price whole minor units per token.
-
-    The engine accepts rates per million units. Multiples of one million let
-    the additivity property avoid independent rounding artefacts.
-    """
+    """Generate per-million rates that avoid independent rounding artefacts."""
     return draw(
         st.fixed_dictionaries(
             {
@@ -113,7 +109,7 @@ def test_pricing_is_additive_for_exact_minor_unit_rates(
 
     assert combined.computed_cost_minor == (
         left.computed_cost_minor + right.computed_cost_minor
-    )
+    ), "Expected values to match"
 
 
 @given(rates=_exact_rates(), usage_a=_usage_maps(), increments=_usage_maps())
@@ -135,7 +131,7 @@ def test_pricing_is_monotone_in_each_metric(
             snapshot,
             usage_a,
         ).computed_cost_minor
-    )
+    ), "Expected values to satisfy the required ordering"
 
 
 @given(rates=_exact_rates())
@@ -148,7 +144,7 @@ def test_zero_usage_produces_zero_cost(rates: dict[str, int]) -> None:
         dict.fromkeys(_METRICS, 0),
     )
 
-    assert priced_call.computed_cost_minor == 0
+    assert priced_call.computed_cost_minor == 0, "Expected values to match"
 
 
 def test_unknown_usage_metric_raises() -> None:

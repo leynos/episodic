@@ -53,11 +53,6 @@ def require_mapping(
     -------
     dict[str, object]
         The validated mapping value.
-
-    Raises
-    ------
-    Exception
-        Instance of ``error_cls`` when ``value`` is not an object.
     """
     if not isinstance(value, dict):
         raise error_cls(_format_type_error_message(field_name, "object", prefix))
@@ -88,11 +83,6 @@ def require_sequence(
     -------
     list[object]
         The validated list value.
-
-    Raises
-    ------
-    Exception
-        Instance of ``error_cls`` when ``value`` is not a list.
     """
     if not isinstance(value, list):
         raise error_cls(_format_type_error_message(field_name, "list", prefix))
@@ -123,11 +113,6 @@ def require_non_empty_str_value(
     -------
     str
         The validated string value.
-
-    Raises
-    ------
-    Exception
-        Instance of ``error_cls`` when ``value`` is not a non-empty string.
     """
     if not isinstance(value, str) or not value.strip():
         msg = f"{field_name} {message}"
@@ -149,11 +134,6 @@ def require_payload_object(value: object, field_name: str) -> dict[str, object]:
     -------
     dict[str, object]
         The validated TEI payload mapping.
-
-    Raises
-    ------
-    ValueError
-        If ``value`` is not an object.
     """
     return require_mapping(
         value,
@@ -177,11 +157,6 @@ def require_payload_list(value: object, field_name: str) -> list[object]:
     -------
     list[object]
         The validated TEI payload list.
-
-    Raises
-    ------
-    ValueError
-        If ``value`` is not a list.
     """
     return require_sequence(
         value,
@@ -204,12 +179,6 @@ def body_blocks_payload(document_payload: dict[str, object]) -> list[object]:
     list[object]
         Mutable reference to the document's body blocks list; callers may
         mutate this list to update the emitted TEI body.
-
-    Raises
-    ------
-    ValueError
-        If ``text``, ``text.body``, or ``text.body.blocks`` has the wrong
-        payload shape.
     """
     text_payload = require_payload_object(document_payload.get("text"), "text")
     body_payload = require_payload_object(text_payload.get("body"), "text.body")
@@ -230,11 +199,6 @@ def is_div_payload(value: object, div_type: str) -> bool:
     -------
     bool
         ``True`` when ``value`` is a div payload with the requested type.
-
-    Raises
-    ------
-    None
-        This helper does not raise for malformed payloads.
     """
     if not isinstance(value, dict):
         return False
@@ -254,10 +218,5 @@ def build_text_inline(text: str) -> list[dict[str, str]]:
     -------
     list[dict[str, str]]
         Inline payload containing one text node.
-
-    Raises
-    ------
-    None
-        This helper performs no validation and does not raise.
     """
     return [{"type": "text", "value": text}]

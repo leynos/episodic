@@ -102,17 +102,6 @@ async def create_reference_binding(
     -------
     ReferenceBinding
         The newly created reusable reference binding.
-
-    Raises
-    ------
-    ReferenceValidationError
-        If any identifier is malformed or the binding payload violates domain
-        validation rules.
-    ReferenceEntityNotFoundError
-        If the referenced revision, document, target entity, or effective-from
-        episode does not exist.
-    ReferenceConflictError
-        If an equivalent revision/target binding already exists.
     """
     ids = _parse_binding_ids(data)
     revision = await _require_reference_revision(uow, ids.revision_id)

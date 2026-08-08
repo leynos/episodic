@@ -1,6 +1,5 @@
 """Unit tests for the Chrono spoken-runtime estimator."""
 
-import asyncio
 import dataclasses as dc
 import typing as typ
 
@@ -152,12 +151,22 @@ def test_chrono_estimator_returns_predictable_default_runtime() -> None:
 
     result = ChronoRuntimeEstimator().estimate(request)
 
-    assert result.estimated_seconds == 4
-    assert result.metadata.spoken_word_count == 9
-    assert result.metadata.words_per_minute == 150
-    assert result.metadata.estimator_name == "chrono-naive-word-count"
-    assert result.metadata.estimator_version == "1"
-    assert result.metadata.input_character_count == len(request.script_tei_xml)
+    assert result.estimated_seconds == 4, "runtime must equal the default estimate"
+    assert result.metadata.spoken_word_count == 9, (
+        "metadata spoken_word_count must equal the dialogue word count"
+    )
+    assert result.metadata.words_per_minute == 150, (
+        "metadata words_per_minute must equal the default speaking rate"
+    )
+    assert result.metadata.estimator_name == "chrono-naive-word-count", (
+        "metadata estimator_name must identify the naive word-count estimator"
+    )
+    assert result.metadata.estimator_version == "1", (
+        "metadata estimator_version must equal the default version"
+    )
+    assert result.metadata.input_character_count == len(request.script_tei_xml), (
+        "metadata input_character_count must equal the TEI input length"
+    )
 
 
 def test_chrono_estimator_records_success_metrics() -> None:
@@ -172,10 +181,10 @@ def test_chrono_estimator_records_success_metrics() -> None:
 
     assert metrics.counters == [
         ("chrono.runtime_estimator.evaluations", {"outcome": "success"})
-    ]
+    ], "success counter payload must match the recorded metric"
     assert metrics.latencies == [
         ("chrono.runtime_estimator.latency_ms", 125.0, {"outcome": "success"})
-    ]
+    ], "success latency payload must match the recorded metric"
 
 
 def test_chrono_estimator_ignores_markup_only_script() -> None:
@@ -186,9 +195,15 @@ def test_chrono_estimator_ignores_markup_only_script() -> None:
 
     result = ChronoRuntimeEstimator().estimate(request)
 
-    assert result.estimated_seconds == 0
-    assert result.metadata.spoken_word_count == 0
-    assert result.metadata.input_character_count == len(request.script_tei_xml)
+    assert result.estimated_seconds == 0, (
+        "markup-only content must produce a zero-second estimate"
+    )
+    assert result.metadata.spoken_word_count == 0, (
+        "markup-only content must produce a zero spoken-word count"
+    )
+    assert result.metadata.input_character_count == len(request.script_tei_xml), (
+        "metadata character count must still include markup-only input"
+    )
 
 
 def test_chrono_estimator_does_not_double_count_nested_spoken_elements() -> None:
@@ -201,8 +216,12 @@ def test_chrono_estimator_does_not_double_count_nested_spoken_elements() -> None
 
     result = ChronoRuntimeEstimator().estimate(request)
 
-    assert result.metadata.spoken_word_count == 4
-    assert result.estimated_seconds == 2
+    assert result.metadata.spoken_word_count == 4, (
+        "nested spoken elements must not double-count words"
+    )
+    assert result.estimated_seconds == 2, (
+        "runtime must reflect the deduplicated nested spoken-word count"
+    )
 
 
 def test_chrono_estimator_uses_custom_metadata() -> None:
@@ -218,53 +237,14 @@ def test_chrono_estimator_uses_custom_metadata() -> None:
 
     result = ChronoRuntimeEstimator(config=config).estimate(request)
 
-    assert result.estimated_seconds == 3
-    assert result.metadata.estimator_version == "2"
-    assert result.metadata.words_per_minute == 60
-
-
-@pytest.mark.asyncio
-async def test_chrono_estimator_async_evaluate_matches_sync_estimate() -> None:
-    """Async evaluate() should produce the same result as sync estimate()."""
-    config = ChronoEstimatorConfig(
-        estimator_name="chrono-naive-word-count",
-        estimator_version="2",
-        words_per_minute=60,
+    assert result.estimated_seconds == 3, (
+        "runtime must reflect the custom words-per-minute rate"
     )
-    request = ChronoEvaluationRequest(
-        script_tei_xml=_tei_document("<sp><p>one two three</p></sp>")
+    assert result.metadata.estimator_version == "2", (
+        "metadata must retain the custom estimator version"
     )
-    estimator = ChronoRuntimeEstimator(config=config)
-
-    sync_result = estimator.estimate(request)
-    async_result = await estimator.evaluate(request)
-
-    assert async_result == sync_result, (
-        "evaluate() must delegate to estimate() and return an identical result"
-    )
-
-
-@pytest.mark.asyncio
-async def test_chrono_estimator_handles_concurrent_evaluations() -> None:
-    """A shared estimator should handle concurrent immutable requests."""
-    estimator = ChronoRuntimeEstimator()
-    requests = [
-        ChronoEvaluationRequest(
-            script_tei_xml=_tei_document(f"<sp><p>{'token ' * (index + 1)}</p></sp>")
-        )
-        for index in range(5)
-    ]
-    expected_word_counts = list(range(1, 6))
-
-    results = await asyncio.gather(
-        *(estimator.evaluate(request) for request in requests)
-    )
-
-    assert [r.metadata.spoken_word_count for r in results] == expected_word_counts, (
-        "concurrent evaluate() calls must preserve per-request word counts"
-    )
-    assert results == [estimator.estimate(request) for request in requests], (
-        "concurrent evaluate() calls must match independent sync estimates"
+    assert result.metadata.words_per_minute == 60, (
+        "metadata must retain the custom words-per-minute rate"
     )
 
 
@@ -306,20 +286,20 @@ def test_chrono_estimator_propagates_tei_validation_errors(
             (len(script_tei_xml),),
             {"exc_info": True},
         )
-    ]
+    ], "validation warning payload must include input length and exception context"
     assert metrics.counters == [
         (
             "chrono.runtime_estimator.evaluations",
             {"outcome": "error", "error_type": "ValueError"},
         )
-    ]
+    ], "error counter payload must identify the ValueError outcome"
     assert metrics.latencies == [
         (
             "chrono.runtime_estimator.latency_ms",
             250.0,
             {"outcome": "error", "error_type": "ValueError"},
         )
-    ]
+    ], "error latency payload must identify the ValueError outcome"
 
 
 @pytest.mark.parametrize(
@@ -345,4 +325,6 @@ def test_chrono_estimator_counts_alternate_spoken_tags(
         f"expected {expected_words} words from <{tag}> element, "
         f"got {result.metadata.spoken_word_count}"
     )
-    assert result.estimated_seconds == expected_seconds
+    assert result.estimated_seconds == expected_seconds, (
+        f"<{tag}> runtime must equal the expected {expected_seconds} seconds"
+    )

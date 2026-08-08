@@ -1,7 +1,5 @@
 """SQLAlchemy repository for intake-aware ingestion jobs."""
 
-from __future__ import annotations
-
 import typing as typ
 
 import sqlalchemy as sa
@@ -28,7 +26,7 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
 
     async def add(self, job: IngestionJob) -> None:
         """Add an ingestion job record."""
-        await self._add_record(_ingestion_job_to_record(job))
+        self._session.add(_ingestion_job_to_record(job))
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
         """Fetch an ingestion job by identifier."""

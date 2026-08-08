@@ -82,12 +82,7 @@ def _enrich_source_metadata(
     weighted_sources: list[WeightingResult],
     conflict_metadata: dict[str, object],
 ) -> list[SourceDocumentInput]:
-    """Replace placeholder weights and inject conflict-resolution metadata.
-
-    Each source's ``metadata`` dictionary is augmented with a
-    ``"conflict_resolution"`` key containing the audit summary produced
-    by the conflict resolver.
-    """
+    """Apply computed weights and inject conflict-resolution audit metadata."""
     return [
         dc.replace(
             wr.source.source_input,

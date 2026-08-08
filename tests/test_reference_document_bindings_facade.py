@@ -4,7 +4,7 @@ import typing as typ
 import uuid
 
 import pytest
-import test_reference_document_service_support as support
+from test_reference_document_service_support import service_fixture
 
 from episodic.canonical.domain import (
     ReferenceBinding,
@@ -21,14 +21,13 @@ from episodic.canonical.reference_documents import (
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 
+__all__ = ["service_fixture"]
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from sqlalchemy.ext.asyncio import AsyncSession
-
-
-service_fixture = support.service_fixture
-ServiceFixture = support.ServiceFixture
+    from test_reference_document_service_support import ServiceFixture
 
 
 async def _create_revision(
@@ -98,7 +97,7 @@ def test_bindings_facade_exports_public_entry_points() -> None:
         "get_reference_binding",
         "list_reference_bindings",
         "list_reference_bindings_paged",
-    }
+    }, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -109,9 +108,15 @@ async def test_create_reference_binding_returns_created_binding(
     """Create and return a series-profile binding through the facade."""
     binding = await _create_series_binding(session_factory, service_fixture)
 
-    assert isinstance(binding, ReferenceBinding)
-    assert binding.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE
-    assert binding.series_profile_id == uuid.UUID(service_fixture["primary_profile_id"])
+    assert isinstance(binding, ReferenceBinding), (
+        "Expected value to have the required type"
+    )
+    assert binding.target_kind == ReferenceBindingTargetKind.SERIES_PROFILE, (
+        "Expected values to match"
+    )
+    assert binding.series_profile_id == uuid.UUID(
+        service_fixture["primary_profile_id"]
+    ), "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -128,11 +133,13 @@ async def test_get_reference_binding_returns_matching_binding(
             binding_id=str(created.id),
         )
 
-    assert isinstance(fetched, ReferenceBinding)
-    assert fetched.id == created.id
+    assert isinstance(fetched, ReferenceBinding), (
+        "Expected value to have the required type"
+    )
+    assert fetched.id == created.id, "Expected values to match"
     assert (
         fetched.reference_document_revision_id == created.reference_document_revision_id
-    )
+    ), "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -154,9 +161,13 @@ async def test_list_reference_bindings_returns_target_page(
             ),
         )
 
-    assert isinstance(results, list)
-    assert [binding.id for binding in results] == [created.id]
-    assert results[0].series_profile_id == created.series_profile_id
+    assert isinstance(results, list), "Expected value to have the required type"
+    assert [binding.id for binding in results] == [created.id], (
+        "Expected collection to contain the value"
+    )
+    assert results[0].series_profile_id == created.series_profile_id, (
+        "Expected values to match"
+    )
 
 
 @pytest.mark.asyncio
@@ -187,7 +198,9 @@ async def test_list_reference_bindings_paged_returns_page_and_total(
             ),
         )
 
-    assert isinstance(results, list)
-    assert total == 2
-    assert [binding.id for binding in results] == [second.id]
-    assert first.id != second.id
+    assert isinstance(results, list), "Expected value to have the required type"
+    assert total == 2, "Expected values to match"
+    assert [binding.id for binding in results] == [second.id], (
+        "Expected collection to contain the value"
+    )
+    assert first.id != second.id, "Expected values to differ"

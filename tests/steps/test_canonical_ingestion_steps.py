@@ -9,6 +9,8 @@ Run the canonical ingestion BDD scenario:
 
 from __future__ import annotations
 
+import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
+import collections.abc as cabc  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import datetime as dt
 import typing as typ
 import uuid
@@ -17,6 +19,9 @@ import pytest
 import sqlalchemy as sa
 import tei_rapporteur as _tei
 from pytest_bdd import given, scenario, then, when
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,  # noqa: TC002  # pytest-bdd evaluates step annotations.
+)
 
 from episodic.canonical.domain import (
     ApprovalState,
@@ -28,12 +33,6 @@ from episodic.canonical.domain import (
 from episodic.canonical.services import ingest_sources
 from episodic.canonical.storage import IngestionJobRecord, SqlAlchemyUnitOfWork
 from tests.test_uuid_assertions import assert_uuid7
-
-if typ.TYPE_CHECKING:
-    import asyncio
-    import collections.abc as cabc
-
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _run_async_step(

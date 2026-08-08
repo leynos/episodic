@@ -33,7 +33,7 @@ from episodic.concurrent_interpreters import CpuTaskExecutor
 from episodic.llm.ports import LLMPort
 from episodic.qa.langgraph import PedanteEvaluatorPort
 
-_AsyncMethod = cabc.Callable[..., cabc.Awaitable[object]]
+type _AsyncMethod = cabc.Callable[..., cabc.Awaitable[object]]
 
 
 def _concrete_protocol_instance(protocol_class: type[object]) -> object:

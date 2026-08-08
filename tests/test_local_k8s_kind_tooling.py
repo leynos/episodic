@@ -2,6 +2,7 @@
 
 import subprocess
 import tempfile
+import typing as typ
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,9 @@ from scripts.local_k8s import commands
 from scripts.local_k8s.config import PreviewConfig
 from scripts.local_k8s.orchestration import cluster_exists, down, up
 from scripts.local_k8s.validation import LocalK8sValidationError
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 
 class RecordingRunner:
@@ -26,11 +30,6 @@ class RecordingRunner:
         results
             Completed process results returned in order before the runner falls
             back to a default successful result.
-
-        Returns
-        -------
-        None
-            Initialisation records command and input history containers.
         """
         self.commands: list[list[str]] = []
         self.input_texts: list[str | None] = []
@@ -73,7 +72,9 @@ class RecordingRunner:
         )
 
 
-def test_kind_cluster_create_command_uses_rootless_podman_scope() -> None:
+def test_kind_cluster_create_command_uses_rootless_podman_scope(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Build the kind command validated for rootless Podman previews."""
     config = PreviewConfig(
         cluster_name="demo",
@@ -84,35 +85,20 @@ def test_kind_cluster_create_command_uses_rootless_podman_scope() -> None:
 
     command = commands.cluster_create_command(config)
 
-    assert command == [
-        "systemd-run",
-        "--scope",
-        "--user",
-        "-p",
-        "Delegate=yes",
-        "env",
-        "KIND_EXPERIMENTAL_PROVIDER=podman",
-        "kind",
-        "create",
-        "cluster",
-        "--name",
-        "demo",
-        "--config",
-        "-",
-        "--wait",
-        "180s",
-    ]
+    assert command == snapshot, "actual output must match snapshot"
     cluster_config = commands.cluster_create_input(config)
 
-    assert cluster_config is not None
-    assert "kind: Cluster" in cluster_config
+    assert cluster_config is not None, "Expected value to be present"
+    assert "kind: Cluster" in cluster_config, "Expected collection to contain the value"
     assert "extraPortMappings" not in cluster_config, (
         "kind previews must use kubectl port-forward rather than host-port "
         "mappings that would occupy the operator-facing preview port."
     )
 
 
-def test_podman_build_save_and_kind_image_load_commands() -> None:
+def test_podman_build_save_and_kind_image_load_commands(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Use Podman archives to bridge the local image into kind."""
     image_archive_path = Path(tempfile.gettempdir()) / "demo-image.tar"
     config = PreviewConfig(
@@ -129,36 +115,32 @@ def test_podman_build_save_and_kind_image_load_commands() -> None:
         "--tag",
         "episodic:local",
         ".",
-    ]
+    ], "Expected values to match"
     assert commands.image_save_command(config) == [
         "podman",
         "save",
         "--output",
         str(image_archive_path),
         "episodic:local",
+    ], "Expected values to match"
+    load_command = commands.image_load_command(config)
+    normalized_load_command = [
+        "<tempdir>/demo-image.tar" if argument == str(image_archive_path) else argument
+        for argument in load_command
     ]
-    assert commands.image_load_command(config) == [
-        "env",
-        "KIND_EXPERIMENTAL_PROVIDER=podman",
-        "kind",
-        "load",
-        "image-archive",
-        str(image_archive_path),
-        "--name",
-        "demo",
-    ]
+    assert normalized_load_command == snapshot, "actual output must match snapshot"
 
 
 def test_kind_helm_upgrade_command_uses_kind_context() -> None:
     """Use the kind-created kube context for Helm and kubectl commands."""
     config = PreviewConfig(cluster_name="demo", cluster_provider="kind")
 
-    assert config.kube_context() == "kind-demo"
+    assert config.kube_context() == "kind-demo", "Expected values to match"
     assert commands.helm_upgrade_command(config)[:3] == [
         "helm",
         "--kube-context",
         "kind-demo",
-    ]
+    ], "Expected values to match"
 
 
 def test_kind_cluster_exists_checks_cluster_names() -> None:
@@ -246,25 +228,31 @@ def _assert_kind_up_command_sequence(runner: RecordingRunner) -> None:
         "kind",
         "get",
         "clusters",
-    ]
+    ], "Expected values to match"
     assert runner.commands[1][0:5] == [
         "systemd-run",
         "--scope",
         "--user",
         "-p",
         "Delegate=yes",
-    ]
-    assert "KIND_EXPERIMENTAL_PROVIDER=podman" in runner.commands[1]
-    assert runner.input_texts[1] is not None
-    assert "kind: Cluster" in runner.input_texts[1]
-    assert runner.commands[2][0] == "podman"
-    assert runner.commands[3][0:3] == ["podman", "save", "--output"]
+    ], "Expected values to match"
+    assert "KIND_EXPERIMENTAL_PROVIDER=podman" in runner.commands[1], (
+        "Expected collection to contain the value"
+    )
+    assert runner.input_texts[1] is not None, "Expected value to be present"
+    assert "kind: Cluster" in runner.input_texts[1], (
+        "Expected collection to contain the value"
+    )
+    assert runner.commands[2][0] == "podman", "Expected values to match"
+    assert runner.commands[3][0:3] == ["podman", "save", "--output"], (
+        "Expected values to match"
+    )
     assert runner.commands[4][0:4] == [
         "env",
         "KIND_EXPERIMENTAL_PROVIDER=podman",
         "kind",
         "load",
-    ]
+    ], "Expected values to match"
 
 
 def test_kind_up_uses_podman_and_bootstraps_postgres(
@@ -291,10 +279,14 @@ def test_kind_up_uses_podman_and_bootstraps_postgres(
         input_text and "kind: StatefulSet" in input_text
         for input_text in runner.input_texts
     ), "kind up must apply the local Postgres dependency."
-    assert runner.commands[-1][0:3] == ["helm", "--kube-context", "kind-demo"]
+    assert runner.commands[-1][0:3] == ["helm", "--kube-context", "kind-demo"], (
+        "Expected values to match"
+    )
     banner = capsys.readouterr().out
-    assert "Preview URL: http://127.0.0.1:9090" in banner
-    assert "Port forward:" in banner
+    assert "Preview URL: http://127.0.0.1:9090" in banner, (
+        "Expected collection to contain the value"
+    )
+    assert "Port forward:" in banner, "Expected collection to contain the value"
     assert not config.image_archive_path.exists(), (
         "stale temporary image archives must be removed before Podman saves a "
         "fresh archive."

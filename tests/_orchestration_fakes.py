@@ -72,10 +72,10 @@ def _assert_generate_context(
     template_structure: dict[str, object] | None,
 ) -> None:
     """Assert that the generator received the expected invocation context."""
-    assert script_tei_xml.startswith("<TEI>"), (  # noqa: S101
+    assert script_tei_xml.startswith("<TEI>"), (  # noqa: S101  # These assertions enforce invariants inside shared test fakes.
         "expected TEI root in generated script_tei_xml"
     )
-    assert template_structure == {"sections": ["intro", "analysis"]}, (  # noqa: S101
+    assert template_structure == {"sections": ["intro", "analysis"]}, (  # noqa: S101  # These assertions enforce invariants inside shared test fakes.
         "template_structure does not match expected sections"
     )
 

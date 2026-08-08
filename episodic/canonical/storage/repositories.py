@@ -90,7 +90,7 @@ class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository
             Series profile domain entity to persist.
 
         """
-        await self._add_record(_series_profile_to_record(profile))
+        self._session.add(_series_profile_to_record(profile))
 
     async def get(self, profile_id: uuid.UUID) -> SeriesProfile | None:
         """Fetch a series profile by identifier."""
@@ -162,7 +162,7 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
             Parsed TEI header to persist.
 
         """
-        await self._add_record(_tei_header_to_record(header))
+        self._session.add(_tei_header_to_record(header))
 
     async def get(self, header_id: uuid.UUID) -> TeiHeader | None:
         """Fetch a TEI header by identifier."""
@@ -185,7 +185,7 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
             Canonical episode domain entity to persist.
 
         """
-        await self._add_record(_episode_to_record(episode))
+        self._session.add(_episode_to_record(episode))
 
     async def get(self, episode_id: uuid.UUID) -> CanonicalEpisode | None:
         """Fetch a canonical episode by identifier."""
@@ -221,7 +221,7 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
             Ingestion job domain entity to persist.
 
         """
-        await self._add_record(_ingestion_job_to_record(job))
+        self._session.add(_ingestion_job_to_record(job))
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
         """Fetch an ingestion job by identifier."""
@@ -244,7 +244,7 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
             Source document domain entity to persist.
 
         """
-        await self._add_record(_source_document_to_record(document))
+        self._session.add(_source_document_to_record(document))
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:
         """List source documents for an ingestion job.
@@ -279,7 +279,7 @@ class SqlAlchemyApprovalEventRepository(_RepositoryBase, ApprovalEventRepository
             Approval event domain entity to persist.
 
         """
-        await self._add_record(_approval_event_to_record(event))
+        self._session.add(_approval_event_to_record(event))
 
     async def list_for_episode(
         self,
@@ -310,7 +310,7 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
 
     async def add(self, template: EpisodeTemplate) -> None:
         """Add an episode template record."""
-        await self._add_record(_episode_template_to_record(template))
+        self._session.add(_episode_template_to_record(template))
 
     async def get(self, template_id: uuid.UUID) -> EpisodeTemplate | None:
         """Fetch an episode template by identifier."""

@@ -20,8 +20,6 @@ class FakeLedger:
 ```
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import enum
 import typing as typ
@@ -308,7 +306,7 @@ class PricingCataloguePort(typ.Protocol):
         """
         raise NotImplementedError
 
-    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         provider_name: str,
         model: str,
@@ -350,7 +348,7 @@ class PricingCataloguePort(typ.Protocol):
 class MeteringPort(typ.Protocol):
     """Port for atomic usage-counter consumption."""
 
-    async def consume(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def consume(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         counter_key: MeteringCounterKey,
         billing_period_key: BillingPeriodKey,

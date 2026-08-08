@@ -1,7 +1,5 @@
 """Runtime provider configuration for source-intake services."""
 
-from __future__ import annotations
-
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
@@ -13,8 +11,8 @@ from episodic.observability import NoopMetrics, PerfCounterClock
 if typ.TYPE_CHECKING:
     from episodic.observability import MetricsPort, MonotonicClockPort
 
-Clock = cabc.Callable[[], dt.datetime]
-UuidFactory = cabc.Callable[[], uuid.UUID]
+type Clock = cabc.Callable[[], dt.datetime]
+type UuidFactory = cabc.Callable[[], uuid.UUID]
 
 
 @dc.dataclass(frozen=True, slots=True)

@@ -7,8 +7,6 @@ Run the TEI header repository tests:
 >>> pytest tests/canonical_storage/test_tei_headers.py
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 import uuid

@@ -41,6 +41,10 @@ from tests._orchestration_fakes import (
 if typ.TYPE_CHECKING:
     from episodic.cost.recorder import ProviderCallRecord
 
+_CONTAINS = "collection should contain value"
+_MATCH = "values should match"
+_PRESENT = "value should be present"
+
 
 class _RecordingCostRecorder:
     """Capture cost-recorder calls made by the orchestrator."""
@@ -85,6 +89,7 @@ class _FakePlanner:
 
     async def plan(self, request: object) -> PlannerResult:
         """Return the canned planner result."""
+        del request
         return self.result
 
 
@@ -135,12 +140,12 @@ async def test_orchestrator_dispatches_through_tool_port() -> None:
 
     result = await orchestrator.orchestrate(_request())
 
-    assert len(tool_executor.calls) == 1
+    assert len(tool_executor.calls) == 1, _MATCH
     planned_action, context = tool_executor.calls[0]
-    assert planned_action.action_kind is ActionKind.GENERATE_SHOW_NOTES
-    assert context.correlation_id == "corr-123"
-    assert result.action_results == (tool_result,)
-    assert result.total_usage == _usage(input_tokens=32, output_tokens=18)
+    assert planned_action.action_kind is ActionKind.GENERATE_SHOW_NOTES, _MATCH
+    assert context.correlation_id == "corr-123", _MATCH
+    assert result.action_results == (tool_result,), _MATCH
+    assert result.total_usage == _usage(input_tokens=32, output_tokens=18), _MATCH
 
 
 @pytest.mark.asyncio
@@ -195,17 +200,19 @@ async def test_orchestrator_records_cost_entries_when_recorder_is_present() -> N
 
     result = await orchestrator.orchestrate(_request())
 
-    assert result.total_usage == _usage(input_tokens=32, output_tokens=18)
-    assert len(cost_recorder.pinned_runs) == 1
-    assert cost_recorder.pinned_runs[0][0] == "corr-123"
-    assert len(cost_recorder.provider_calls) == 2
-    assert cost_recorder.finalized_runs == [("corr-123", None)]
-    assert cost_recorder.provider_calls[0].workflow_node == "planner"
-    assert cost_recorder.provider_calls[0].model == "gpt-4.1"
-    assert cost_recorder.provider_calls[0].usage == planner_usage.usage_metrics
-    assert cost_recorder.provider_calls[1].workflow_node == "generate_show_notes"
-    assert cost_recorder.provider_calls[1].model == "gpt-4o-mini"
-    assert cost_recorder.provider_calls[1].usage == tool_usage.usage_metrics
+    assert result.total_usage == _usage(input_tokens=32, output_tokens=18), _MATCH
+    assert len(cost_recorder.pinned_runs) == 1, _MATCH
+    assert cost_recorder.pinned_runs[0][0] == "corr-123", _MATCH
+    assert len(cost_recorder.provider_calls) == 2, _MATCH
+    assert cost_recorder.finalized_runs == [("corr-123", None)], _MATCH
+    assert cost_recorder.provider_calls[0].workflow_node == "planner", _MATCH
+    assert cost_recorder.provider_calls[0].model == "gpt-4.1", _MATCH
+    assert cost_recorder.provider_calls[0].usage == planner_usage.usage_metrics, _MATCH
+    assert cost_recorder.provider_calls[1].workflow_node == "generate_show_notes", (
+        _MATCH
+    )
+    assert cost_recorder.provider_calls[1].model == "gpt-4o-mini", _MATCH
+    assert cost_recorder.provider_calls[1].usage == tool_usage.usage_metrics, _MATCH
 
 
 @pytest.mark.asyncio
@@ -243,23 +250,23 @@ async def test_orchestrator_aggregates_show_notes_tool_output() -> None:
 
     result = await orchestrator.orchestrate(_request())
 
-    assert result.plan.plan_version == "1.0"
-    assert result.planner_usage == _usage(input_tokens=20, output_tokens=10)
-    assert result.total_usage == _usage(input_tokens=38, output_tokens=17)
-    assert len(result.action_results) == 1
+    assert result.plan.plan_version == "1.0", _MATCH
+    assert result.planner_usage == _usage(input_tokens=20, output_tokens=10), _MATCH
+    assert result.total_usage == _usage(input_tokens=38, output_tokens=17), _MATCH
+    assert len(result.action_results) == 1, _MATCH
 
     action_result = result.action_results[0]
-    assert action_result.action_kind is ActionKind.GENERATE_SHOW_NOTES
-    assert action_result.show_notes_result is not None
+    assert action_result.action_kind is ActionKind.GENERATE_SHOW_NOTES, _MATCH
+    assert action_result.show_notes_result is not None, _PRESENT
     assert action_result.show_notes_result.usage == _usage(
         input_tokens=18,
         output_tokens=7,
-    )
+    ), _MATCH
     assert action_result.show_notes_result.entries[0].tei_locator == (
         "#structured-planning"
-    )
-    assert show_notes_llm.requests[0].model == "gpt-4o-mini"
-    assert "template_structure" in show_notes_llm.requests[0].prompt
+    ), _MATCH
+    assert show_notes_llm.requests[0].model == "gpt-4o-mini", _MATCH
+    assert "template_structure" in show_notes_llm.requests[0].prompt, _CONTAINS
 
 
 @pytest.mark.asyncio
@@ -292,9 +299,9 @@ async def test_orchestrator_propagates_show_notes_format_errors() -> None:
     ) as exc_info:
         await orchestrator.orchestrate(_request())
 
-    assert exc_info.value.__cause__ is not None
-    assert "summary" in str(exc_info.value.__cause__)
-    assert len(show_notes_llm.requests) == 1
+    assert exc_info.value.__cause__ is not None, _PRESENT
+    assert "summary" in str(exc_info.value.__cause__), _CONTAINS
+    assert len(show_notes_llm.requests) == 1, _MATCH
 
 
 @pytest.mark.asyncio
@@ -362,12 +369,12 @@ async def test_routing_tool_executor_dispatches_by_action_kind() -> None:
 
     assert (
         await routing_executor.execute(show_notes_action, request) == show_notes_result
-    )
+    ), "show-notes action should route to the show-notes executor"
     assert (
         await routing_executor.execute(guest_bios_action, request) == guest_bios_result
-    )
-    assert show_notes_executor.calls == [(show_notes_action, request)]
-    assert guest_bios_executor.calls == [(guest_bios_action, request)]
+    ), "guest-bios action should route to the guest-bios executor"
+    assert show_notes_executor.calls == [(show_notes_action, request)], _MATCH
+    assert guest_bios_executor.calls == [(guest_bios_action, request)], _MATCH
 
 
 def test_routing_tool_executor_rejects_normalized_action_kind_collisions() -> None:

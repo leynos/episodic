@@ -97,9 +97,7 @@ class OpenAICompatibleLLMConfig:
     timeout_seconds: float = 30.0
     chars_per_token: float = 4.0
 
-    def __post_init__(self) -> None:
-        """Validate adapter configuration eagerly."""
-        _validate_llm_config(self)
+    __post_init__ = _validate_llm_config
 
 
 class OpenAICompatibleLLMAdapter(LLMPort):
@@ -167,11 +165,6 @@ class OpenAICompatibleLLMAdapter(LLMPort):
 
         The method is a no-op for caller-supplied clients because
         ``_owns_client`` is ``False`` in that case.
-
-        Returns
-        -------
-        None
-            The method completes after any owned client has closed.
         """
         if self._owns_client:
             await self._client.aclose()
@@ -194,20 +187,16 @@ class OpenAICompatibleLLMAdapter(LLMPort):
 
         Raises
         ------
-        LLMTokenBudgetExceededError
-            Raised before the HTTP request when estimated input or projected
-            total tokens exceed the request budget, or after the response when
-            provider-reported usage exceeds the same budget.
         LLMProviderResponseError
-            Raised for unsupported operations, non-retryable HTTP statuses,
-            malformed or invalid JSON payloads, missing concrete usage counts
-            for budgeted requests, and other provider response contract
-            failures.
+            If the requested operation is unsupported, the provider returns a
+            non-retryable error or malformed response, or response
+            normalization fails.
         LLMTransientProviderError
-            Raised after retryable HTTP statuses or transport errors exhaust
-            ``max_attempts``. Retry waits use exponential jitter with
-            ``retry_delay_seconds`` as the multiplier.
-        """
+            If transient provider failures exhaust the configured retries.
+        LLMTokenBudgetExceededError
+            If preflight validation or provider-reported usage exceeds the
+            request token budget.
+        """  # noqa: DOC502  # Documents exceptions propagated by collaborators.
         token_budget = request.token_budget
         if token_budget is not None:
             _validate_preflight_budget(request, token_budget, self._chars_per_token)

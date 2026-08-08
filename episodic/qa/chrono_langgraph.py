@@ -27,16 +27,15 @@ import typing as typ
 
 from langgraph.graph import END, START, StateGraph
 
+from .chrono import (  # noqa: TC001  # LangGraph evaluates state annotations at runtime.
+    ChronoEvaluationRequest,
+    ChronoRuntimeEstimate,
+)
+
 _log = logging.getLogger(__name__)
 
 if typ.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
-
-    from .chrono import ChronoEvaluationRequest, ChronoRuntimeEstimate
-else:
-    CompiledStateGraph = typ.Any
-    ChronoEvaluationRequest = typ.Any
-    ChronoRuntimeEstimate = typ.Any
 
 
 class ChronoEvaluatorPort(typ.Protocol):

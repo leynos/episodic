@@ -1,0 +1,23 @@
+# serializer version: 1
+# name: test_ingest_multi_source_records_conflict_metadata
+  dict({
+    'preferred_sources': list([
+      's3://bucket/winner.txt',
+    ]),
+    'rejected_sources': list([
+      's3://bucket/loser.txt',
+    ]),
+    'resolution_notes': "Source 'Winner' selected as canonical (weight 0.870). Source 'Loser' rejected (weight 0.700).",
+  })
+# ---
+# name: test_ingest_multi_source_records_conflict_metadata.1
+  dict({
+    'preferred_sources': list([
+      's3://bucket/winner.txt',
+    ]),
+    'rejected_sources': list([
+      's3://bucket/loser.txt',
+    ]),
+    'resolution_notes': "Source 'Winner' selected as canonical (weight 0.870). Source 'Loser' rejected (weight 0.700).",
+  })
+# ---

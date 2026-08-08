@@ -9,6 +9,8 @@ Run the canonical repository BDD scenarios:
 
 from __future__ import annotations
 
+import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
+import collections.abc as cabc  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import datetime as dt
 import typing as typ
 import uuid
@@ -16,6 +18,9 @@ import uuid
 import pytest
 from pytest_bdd import given, scenario, then, when
 from sqlalchemy import exc as sa_exc
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,  # noqa: TC002  # pytest-bdd evaluates step annotations.
+)
 
 from episodic.canonical.domain import (
     ApprovalState,
@@ -28,12 +33,6 @@ from episodic.canonical.domain import (
     TeiHeader,
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-
-if typ.TYPE_CHECKING:
-    import asyncio
-    import collections.abc as cabc
-
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _run_async_step(

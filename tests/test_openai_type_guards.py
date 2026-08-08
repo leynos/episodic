@@ -4,8 +4,6 @@ These tests verify adapter boundary validation for provider payloads and
 normalization into internal LLM response DTOs.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from episodic.llm.openai_client import (

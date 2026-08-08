@@ -7,8 +7,6 @@ This migration introduces:
 - episode_template_history
 """
 
-from __future__ import annotations
-
 import typing as typ
 
 import sqlalchemy as sa

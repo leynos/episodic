@@ -71,8 +71,10 @@ def test_step_idempotency_keys_are_deterministic(
         step,
         attempt=attempt,
     )
-    assert second == first
-    assert first.endswith(f":{attempt}")
+    assert second == first, "workflow step idempotency key must be deterministic"
+    assert first.endswith(f":{attempt}"), (
+        "workflow step idempotency key must end with the attempt suffix"
+    )
 
 
 @given(plan=execution_plan_strategy)
@@ -81,7 +83,9 @@ def test_execution_plan_checkpoint_payload_round_trips(
     plan: ExecutionPlan,
 ) -> None:
     """Property test: checkpoint plan payloads preserve execution plans."""
-    assert _plan_from_payload(_plan_to_payload(plan)) == plan
+    assert _plan_from_payload(_plan_to_payload(plan)) == plan, (
+        "execution-plan checkpoint payload must round-trip to the original plan"
+    )
 
 
 @given(result=planner_result_strategy)
@@ -90,7 +94,9 @@ def test_planner_result_checkpoint_payload_round_trips(
     result: PlannerResult,
 ) -> None:
     """Property test: checkpoint planner payloads preserve planner results."""
-    assert _planner_result_from_payload(_planner_result_to_payload(result)) == result
+    assert _planner_result_from_payload(_planner_result_to_payload(result)) == result, (
+        "planner-result checkpoint payload must round-trip to the original result"
+    )
 
 
 @given(result=action_result_strategy)
@@ -99,4 +105,6 @@ def test_action_result_checkpoint_payload_round_trips(
     result: ActionExecutionResult,
 ) -> None:
     """Property test: checkpoint action payloads preserve action results."""
-    assert _action_result_from_payload(_action_result_to_payload(result)) == result
+    assert _action_result_from_payload(_action_result_to_payload(result)) == result, (
+        "action-result checkpoint payload must round-trip to the original result"
+    )

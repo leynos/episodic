@@ -108,10 +108,12 @@ class _DriftingCatalogue:
         pricing_snapshot_id: PricingSnapshotId,
     ) -> PricingSnapshot:
         """Return the exact pinned snapshot by identifier."""
-        assert pricing_snapshot_id == self.pinned_snapshot.pricing_snapshot_id
+        assert pricing_snapshot_id == self.pinned_snapshot.pricing_snapshot_id, (
+            "Expected values to match"
+        )
         return self.pinned_snapshot
 
-    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    async def resolve(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         provider_name: str,
         model: str,
@@ -158,7 +160,7 @@ async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None
         ),
     )
 
-    assert ledger.recorded_call is not None
+    assert ledger.recorded_call is not None, "Expected value to be present"
     assert ledger.recorded_call.pricing_snapshot_id == PricingSnapshotId(
         "snapshot:old",
     ), "recorder must use the pinned snapshot identifier"

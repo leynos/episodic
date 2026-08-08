@@ -75,7 +75,7 @@ async def test_guest_bios_executor_wraps_format_error_distinctly() -> None:
     ) as exc_info:
         await executor.execute(_guest_bios_action(), request)
 
-    assert exc_info.value.__cause__ is generator_error
+    assert exc_info.value.__cause__ is generator_error, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -123,12 +123,12 @@ async def test_guest_bios_executor_propagates_llm_provider_errors(
     with pytest.raises(type(error)) as exc_info:
         await executor.execute(_guest_bios_action(), request)
 
-    assert exc_info.value is error
+    assert exc_info.value is error, "Expected values to match"
     assert any(
         message.startswith("guest_bios_tool_executor.execute")
         and fields.get("error_type") == type(error).__name__
         for _, message, fields in events
-    )
+    ), "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -191,7 +191,7 @@ async def test_guest_bios_executor_logs_unknown_llm_subclass(
         message == "guest_bios_tool_executor.execute.llm_error"
         and fields.get("error_type") == "_CustomLLMError"
         for _, message, fields in events
-    )
+    ), "Expected values to match"
 
 
 @pytest.mark.asyncio

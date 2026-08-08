@@ -1,7 +1,5 @@
 """Falcon resources for source-intake uploads and ingestion jobs."""
 
-from __future__ import annotations
-
 import typing as typ
 
 import falcon

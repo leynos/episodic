@@ -166,10 +166,6 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             Exception instance raised within the context, if any.
         traceback : TracebackType | None
             Traceback for the raised exception, if any.
-
-        Returns
-        -------
-        None
         """
         if self._session is None:
             return
@@ -194,15 +190,11 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
     async def commit(self) -> None:
         """Commit the current unit-of-work transaction.
 
-        Returns
-        -------
-        None
-
         Raises
         ------
         RuntimeError
-            If no session has been initialized for the unit of work.
-        """
+            If no unit-of-work session is active.
+        """  # noqa: DOC502  # Documents an exception propagated by the helper.
         await self._apply_session_action("commit")
         logger.info("Committed canonical unit of work.")
 

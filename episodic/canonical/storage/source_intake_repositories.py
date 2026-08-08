@@ -1,13 +1,6 @@
 """SQLAlchemy repositories for source-intake entities."""
-# pylint: disable=too-many-lines
 
-from __future__ import annotations
-
-import collections.abc as cabc
-import dataclasses as dc
-import datetime as dt
 import typing as typ
-import uuid
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
@@ -28,12 +21,6 @@ from episodic.canonical.upload_protocols import (
 )
 from episodic.canonical.uploads import UploadState
 from episodic.logging import get_logger, log_info, log_warning
-from episodic.observability import (
-    MetricsPort,
-    MonotonicClockPort,
-    NoopMetrics,
-    PerfCounterClock,
-)
 
 from .repository_base import _RepositoryBase
 from .source_intake_mappers import (
@@ -49,8 +36,16 @@ from .source_intake_models import (
     IngestionJobSourceRecord,
     UploadRecord,
 )
+from .source_intake_repository_runtime import (
+    SourceIntakeStorageRuntime,
+    source_intake_storage_runtime,
+)
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    import datetime as dt
+    import uuid
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.idempotency import IdempotencyRecord
@@ -58,19 +53,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.uploads import Upload
 
 
-Clock = cabc.Callable[[], dt.datetime]
-UuidFactory = cabc.Callable[[], uuid.UUID]
 logger = get_logger(__name__)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class SourceIntakeStorageRuntime:
-    """Runtime providers used by source-intake SQLAlchemy adapters."""
-
-    clock: Clock
-    uuid_factory: UuidFactory
-    metrics: MetricsPort
-    monotonic_clock: MonotonicClockPort
 
 
 class SqlAlchemyUploadRepository(_RepositoryBase, UploadRepository):
@@ -78,7 +61,7 @@ class SqlAlchemyUploadRepository(_RepositoryBase, UploadRepository):
 
     async def add(self, upload: Upload) -> None:
         """Persist an upload metadata record."""
-        await self._add_record(_upload_to_record(upload))
+        self._session.add(_upload_to_record(upload))
 
     async def get(self, upload_id: uuid.UUID) -> Upload | None:
         """Fetch an upload by identifier."""
@@ -139,7 +122,7 @@ class SqlAlchemyIngestionJobSourceRepository(
 
     async def add(self, source: IngestionJobSource) -> None:
         """Persist a source attachment."""
-        await self._add_record(_ingestion_job_source_to_record(source))
+        self._session.add(_ingestion_job_source_to_record(source))
 
     async def get(self, source_id: uuid.UUID) -> IngestionJobSource | None:
         """Fetch a source attachment by identifier."""
@@ -367,39 +350,12 @@ def _idempotency_outcome_for_record(
 
 def _outcome_metric_label(outcome: IdempotencyOutcome) -> str:
     """Return a bounded label for idempotency acquire outcomes."""
-    if isinstance(outcome, Replay):
-        return "replay"
-    if isinstance(outcome, Conflict):
-        return "conflict"
-    if isinstance(outcome, InFlight):
-        return "in_flight"
-    return "acquired"
-
-
-def _utc_now() -> dt.datetime:
-    """Return the current UTC timestamp for idempotency records."""
-    return dt.datetime.now(dt.UTC)
-
-
-def _new_uuid() -> uuid.UUID:
-    """Return a new idempotency record identifier."""
-    return uuid.uuid4()
-
-
-def source_intake_storage_runtime(
-    runtime: SourceIntakeStorageRuntime | None,
-    *,
-    metrics: MetricsPort | None = None,
-    monotonic_clock: MonotonicClockPort | None = None,
-) -> SourceIntakeStorageRuntime:
-    """Return SQLAlchemy source-intake providers with production defaults."""
-    if runtime is not None:
-        return runtime
-    return SourceIntakeStorageRuntime(
-        clock=_utc_now,
-        uuid_factory=_new_uuid,
-        metrics=NoopMetrics() if metrics is None else metrics,
-        monotonic_clock=PerfCounterClock()
-        if monotonic_clock is None
-        else monotonic_clock,
-    )
+    match outcome:
+        case Replay():
+            return "replay"
+        case Conflict():
+            return "conflict"
+        case InFlight():
+            return "in_flight"
+        case _:
+            return "acquired"

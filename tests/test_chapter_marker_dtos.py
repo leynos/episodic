@@ -84,10 +84,10 @@ def test_chapter_marker_normalizes_blank_optional_fields() -> None:
         tei_locator="   ",
     )
 
-    assert marker.summary is None
-    assert marker.end is None
-    assert marker.duration is None
-    assert marker.tei_locator is None
+    assert marker.summary is None, "Expected value to be absent"
+    assert marker.end is None, "Expected value to be absent"
+    assert marker.duration is None, "Expected value to be absent"
+    assert marker.tei_locator is None, "Expected value to be absent"
 
 
 @pytest.mark.parametrize("field_name", ["summary", "end", "duration", "tei_locator"])
@@ -133,7 +133,7 @@ def test_duration_formatter_round_trips_through_chapter_marker(seconds: int) -> 
     """Property test: generated duration strings remain valid public DTO values."""
     marker = ChapterMarker(title="Chapter", start=_iso_duration(seconds))
 
-    assert marker.start == _iso_duration(seconds)
+    assert marker.start == _iso_duration(seconds), "Expected values to match"
 
 
 @given(title=st.text(alphabet=" \t\n\r", max_size=20))
@@ -150,7 +150,7 @@ def test_blank_locators_normalize_to_none(locator: str) -> None:
     """Property test: blank locator strings cannot leak into TEI `@corresp`."""
     marker = ChapterMarker(title="Chapter", start="PT0S", tei_locator=locator)
 
-    assert marker.tei_locator is None
+    assert marker.tei_locator is None, "Expected value to be absent"
 
 
 @given(

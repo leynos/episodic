@@ -6,10 +6,8 @@ import dataclasses as dc
 import typing as typ
 
 import pytest
+from falcon import testing  # noqa: TC002  # pytest-bdd evaluates step annotations.
 from pytest_bdd import given, scenario, then, when
-
-if typ.TYPE_CHECKING:
-    from falcon import testing
 
 
 class ProfileTemplateApiContext(typ.TypedDict, total=False):
@@ -48,25 +46,28 @@ def _make_request_and_assert_status(
 ) -> dict[str, typ.Any]:
     """Send a request, assert status, and return the JSON payload."""
     method_upper = request.method.upper()
-    if method_upper == "POST":
-        response = client.simulate_post(
-            request.path,
-            json=request.json,
-            params=request.params,
-        )
-    elif method_upper == "PATCH":
-        response = client.simulate_patch(
-            request.path,
-            json=request.json,
-            params=request.params,
-        )
-    elif method_upper == "GET":
-        response = client.simulate_get(request.path, params=request.params)
-    else:
-        msg = f"Unsupported HTTP method: {request.method}"
-        raise ValueError(msg)
+    match method_upper:
+        case "POST":
+            response = client.simulate_post(
+                request.path,
+                json=request.json,
+                params=request.params,
+            )
+        case "PATCH":
+            response = client.simulate_patch(
+                request.path,
+                json=request.json,
+                params=request.params,
+            )
+        case "GET":
+            response = client.simulate_get(request.path, params=request.params)
+        case _:
+            msg = f"Unsupported HTTP method: {request.method}"
+            raise ValueError(msg)
 
-    assert response.status_code == expected_status
+    assert response.status_code == expected_status, (
+        f"response.status_code must equal expected_status ({expected_status})"
+    )
     return typ.cast("dict[str, typ.Any]", response.json)
 
 
@@ -97,7 +98,9 @@ def _update_entity_and_assert_revision(
         HttpRequest(method="PATCH", path=path, json=payload),
         200,
     )
-    assert response_payload["revision"] == expected_revision
+    assert response_payload["revision"] == expected_revision, (
+        f"returned revision must equal expected_revision ({expected_revision})"
+    )
 
 
 @scenario(

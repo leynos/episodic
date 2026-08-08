@@ -25,6 +25,12 @@ def constraint_name(exc: BaseException) -> str | None:
     Inspects the SQLAlchemy ``IntegrityError`` and its wrapped DB-API ``orig``
     exception, including each candidate's ``diag.constraint_name``. Returns
     ``None`` when no candidate reports a constraint name.
+
+    Returns
+    -------
+    str | None
+        Discovered PostgreSQL constraint name, or ``None`` when no candidate
+        exposes one.
     """
 
     def _from_candidate(candidate: object | None) -> str | None:
@@ -55,6 +61,11 @@ def is_revision_conflict_integrity_error(
     drivers that do not surface a constraint name. ``entity_id_field`` names the
     parent column (e.g. ``"series_profile_id"``) used to disambiguate generic
     error messages.
+
+    Returns
+    -------
+    bool
+        ``True`` for a recognized revision conflict; otherwise ``False``.
     """
     name = constraint_name(exc)
     if name in REVISION_CONSTRAINT_NAMES:
@@ -90,7 +101,16 @@ async def insert_with_conflict_translation(
     Centralising the savepoint/flush/translate dance keeps every repository's
     conflict handling consistent and avoids repeating the boilerplate per
     ``add`` method.
-    """
+
+    Raises
+    ------
+    BaseException
+        The domain exception returned by ``translate`` for a recognised
+        conflict; the callback determines its concrete type.
+    IntegrityError
+        If ``translate`` returns ``None`` for an unrecognised integrity
+        failure.
+    """  # noqa: DOC502  # The translation callback selects the domain exception.
     try:
         async with session.begin_nested():
             session.add(record)

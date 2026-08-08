@@ -1,7 +1,5 @@
 """Shared fixtures for canonical storage tests."""
 
-from __future__ import annotations
-
 import base64
 import datetime as dt
 import uuid

@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import typing as typ
 
+from falcon import testing  # noqa: TC002  # pytest-bdd evaluates step annotations.
 from pytest_bdd import given, scenario, then, when
-
-if typ.TYPE_CHECKING:
-    from falcon import testing
 
 
 class ReferenceDocumentApiContext(typ.TypedDict, total=False):
@@ -43,7 +41,7 @@ def _create_profile(client: testing.TestClient, slug: str) -> str:
             "note": "Create profile",
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, "Expected values to match"
     return typ.cast("str", typ.cast("dict[str, object]", response.json)["id"])
 
 
@@ -69,7 +67,7 @@ def reference_fixtures(
             "note": "Create template",
         },
     )
-    assert template_response.status_code == 201
+    assert template_response.status_code == 201, "Expected values to match"
     template_id = typ.cast(
         "str", typ.cast("dict[str, object]", template_response.json)["id"]
     )
@@ -94,7 +92,7 @@ def create_host_document(
             "metadata": {"name": "BDD Host"},
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, "Expected values to match"
     context["document_id"] = typ.cast(
         "str", typ.cast("dict[str, object]", response.json)["id"]
     )
@@ -115,8 +113,10 @@ def update_host_document(
             "metadata": {"name": "BDD Host Updated"},
         },
     )
-    assert response.status_code == 200
-    assert typ.cast("dict[str, object]", response.json)["lock_version"] == 2
+    assert response.status_code == 200, "Expected values to match"
+    assert typ.cast("dict[str, object]", response.json)["lock_version"] == 2, (
+        "Expected values to match"
+    )
 
 
 @when("two revisions are added for the host reference document")
@@ -137,7 +137,7 @@ def add_revisions(
             "change_note": "First",
         },
     )
-    assert first.status_code == 201
+    assert first.status_code == 201, "Expected values to match"
     context["first_revision_id"] = typ.cast(
         "str", typ.cast("dict[str, object]", first.json)["id"]
     )
@@ -154,7 +154,7 @@ def add_revisions(
             "change_note": "Second",
         },
     )
-    assert second.status_code == 201
+    assert second.status_code == 201, "Expected values to match"
     context["second_revision_id"] = typ.cast(
         "str", typ.cast("dict[str, object]", second.json)["id"]
     )
@@ -174,7 +174,7 @@ def bind_revision(
             "episode_template_id": context["template_id"],
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 201, "Expected values to match"
     context["binding_id"] = typ.cast(
         "str", typ.cast("dict[str, object]", response.json)["id"]
     )
@@ -193,13 +193,13 @@ def assert_history(
         ),
         params={"limit": "10", "offset": "0"},
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, "Expected values to match"
     payload = typ.cast("dict[str, object]", response.json)
     items = typ.cast("list[dict[str, object]]", payload["items"])
     assert [item["id"] for item in items] == [
         context["first_revision_id"],
         context["second_revision_id"],
-    ]
+    ], "Expected collection to contain the value"
 
 
 @then("stale reference document updates are rejected")
@@ -219,7 +219,7 @@ def assert_stale_rejected(
             "metadata": {"name": "stale"},
         },
     )
-    assert response.status_code == 409
+    assert response.status_code == 409, "Expected values to match"
 
 
 @then("host and guest documents are accessed through series-aligned paths")
@@ -236,32 +236,32 @@ def assert_series_alignment(
             "metadata": {"name": "BDD Guest"},
         },
     )
-    assert guest_document_response.status_code == 201
+    assert guest_document_response.status_code == 201, "Expected values to match"
 
     host_list = canonical_api_client.simulate_get(
         f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents",
         params={"kind": "host_profile", "limit": "10", "offset": "0"},
     )
-    assert host_list.status_code == 200
+    assert host_list.status_code == 200, "Expected values to match"
     host_items = typ.cast(
         "list[dict[str, object]]",
         typ.cast("dict[str, object]", host_list.json)["items"],
     )
-    assert len(host_items) == 1
+    assert len(host_items) == 1, "Expected values to match"
 
     guest_list = canonical_api_client.simulate_get(
         f"/v1/series-profiles/{context['primary_profile_id']}/reference-documents",
         params={"kind": "guest_profile", "limit": "10", "offset": "0"},
     )
-    assert guest_list.status_code == 200
+    assert guest_list.status_code == 200, "Expected values to match"
     guest_items = typ.cast(
         "list[dict[str, object]]",
         typ.cast("dict[str, object]", guest_list.json)["items"],
     )
-    assert len(guest_items) == 1
+    assert len(guest_items) == 1, "Expected values to match"
 
     cross_series = canonical_api_client.simulate_get(
         f"/v1/series-profiles/{context['secondary_profile_id']}/reference-documents/"
         f"{context['document_id']}"
     )
-    assert cross_series.status_code == 404
+    assert cross_series.status_code == 404, "Expected values to match"

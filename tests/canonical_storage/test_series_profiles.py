@@ -7,8 +7,6 @@ Run the series profile repository tests:
 >>> pytest tests/canonical_storage/test_series_profiles.py
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 import uuid

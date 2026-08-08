@@ -80,9 +80,13 @@ class TestChronoContracts:
             config=ChronoEstimatorConfig(words_per_minute=words_per_minute)
         ).estimate(request)
 
-        assert result.estimated_seconds == expected_seconds
-        assert result.metadata.spoken_word_count == word_count
-        assert result.metadata.words_per_minute == words_per_minute
+        assert result.estimated_seconds == expected_seconds, "Expected values to match"
+        assert result.metadata.spoken_word_count == word_count, (
+            "Expected values to match"
+        )
+        assert result.metadata.words_per_minute == words_per_minute, (
+            "Expected values to match"
+        )
 
     @pytest.mark.crosshair
     def test_chrono_crosshair_contracts_pass(self) -> None:
@@ -129,11 +133,19 @@ class TestChronoContracts:
 
         assert estimated_seconds == (
             _integer_ceiling_seconds(spoken_word_count, words_per_minute)
+        ), "Expected values to match"
+        assert result.metadata.spoken_word_count == spoken_word_count, (
+            "Expected values to match"
         )
-        assert result.metadata.spoken_word_count == spoken_word_count
-        assert result.metadata.words_per_minute == words_per_minute
-        assert estimated_seconds >= 0
-        assert (spoken_word_count == 0) == (estimated_seconds == 0)
+        assert result.metadata.words_per_minute == words_per_minute, (
+            "Expected values to match"
+        )
+        assert estimated_seconds >= 0, (
+            "Expected values to satisfy the required ordering"
+        )
+        assert (spoken_word_count == 0) == (estimated_seconds == 0), (
+            "Expected values to match"
+        )
         assert spoken_word_count == 0 or estimated_seconds == _integer_ceiling_seconds(
             spoken_word_count, words_per_minute
-        )
+        ), "Expected values to match"

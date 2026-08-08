@@ -230,12 +230,18 @@ def assert_reference_snapshot(
         "Expected at least two raw sources plus one reference snapshot document."
     )
     reference_snapshot = snapshot_documents[0]
-    assert reference_snapshot.reference_document_revision_id == reference_revision.id
+    assert reference_snapshot.reference_document_revision_id == reference_revision.id, (
+        "snapshot reference_document_revision_id must match the resolved revision"
+    )
     assert reference_snapshot.source_uri == (
         f"ref://{reference_document.id}/revisions/{reference_revision.id}"
+    ), "snapshot source_uri must identify the reference-document revision"
+    assert reference_snapshot.metadata["binding_id"] == str(reference_binding.id), (
+        "snapshot binding_id metadata must identify the resolved binding"
     )
-    assert reference_snapshot.metadata["binding_id"] == str(reference_binding.id)
-    assert reference_snapshot.metadata["document_kind"] == "style_guide"
+    assert reference_snapshot.metadata["document_kind"] == "style_guide", (
+        "snapshot document_kind metadata must preserve the reference kind"
+    )
 
 
 async def get_job_record_for_episode(
