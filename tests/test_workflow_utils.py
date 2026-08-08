@@ -98,17 +98,15 @@ def _ensure_string_kv(key: object, item: object) -> tuple[str, str]:
             pass
         case _:
             msg = f"Expected a string key, got {type(key).__name__}"
-            raise AssertionError(
-                msg
-            )  # The polling helper reports an unmet test expectation.
+            # The polling helper reports an unmet test expectation.
+            raise AssertionError(msg)
     match item:
         case str():
             return key, item
         case _:
             msg = f"Expected a string value for key {key!r}, got {type(item).__name__}"
-            raise AssertionError(
-                msg
-            )  # The polling helper reports an unmet test expectation.
+            # The polling helper reports an unmet test expectation.
+            raise AssertionError(msg)
 
 
 def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:
@@ -118,9 +116,8 @@ def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:
             pass
         case _:
             msg = f"Expected a mapping[str, str], got {type(value).__name__}"
-            raise AssertionError(
-                msg
-            )  # The polling helper reports an unmet test expectation.
+            # The polling helper reports an unmet test expectation.
+            raise AssertionError(msg)
     result: dict[str, str] = {}
     for key, item in value.items():
         k, v = _ensure_string_kv(key, item)
