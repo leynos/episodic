@@ -56,12 +56,13 @@ def assert_validation_workflow_result(
     except json.JSONDecodeError as exc:
         msg = f"workflow artifact contains malformed JSON: {artifact_name}"
         raise AssertionError(msg) from exc
-    status = data.get("status")
-    execution_mode = data.get("execution_mode")
-    assert status == "ok", "Workflow artifact must report success."
-    assert execution_mode == "validate", (
-        "Workflow artifact must report validation mode."
-    )
+    else:
+        status = data.get("status")
+        execution_mode = data.get("execution_mode")
+        assert status == "ok", "Workflow artifact must report success."
+        assert execution_mode == "validate", (
+            "Workflow artifact must report validation mode."
+        )
 
 
 def test_validation_workflow_result_maps_malformed_json_to_assertion(
