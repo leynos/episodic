@@ -17,6 +17,8 @@ if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.api.types import UowFactory
+
 
 @dc.dataclass(slots=True)
 class RecordingLauncher:
@@ -28,6 +30,22 @@ class RecordingLauncher:
     def __post_init__(self) -> None:
         """Bind the asynchronous launch surface to the run recorder."""
         self.launch = mock.AsyncMock(side_effect=self.run_ids.append)
+
+
+async def _append_generation_events(
+    uow_factory: UowFactory,
+    run_id: uuid.UUID,
+) -> None:
+    """Persist events needed to verify event pagination."""
+    async with uow_factory() as uow:
+        for kind in ("run.started", "draft.generated"):
+            await uow.generation_runs.append_event(
+                run_id,
+                kind=kind,
+                payload={"kind": kind},
+                occurred_at=dt.datetime(2026, 7, 22, tzinfo=dt.UTC),
+            )
+        await uow.commit()
 
 
 @pytest.mark.asyncio
@@ -58,15 +76,7 @@ async def test_generation_run_create_replay_and_poll(
             json=payload,
         )
         run_id = launcher.run_ids[0]
-        async with dependencies.uow_factory() as uow:
-            for kind in ("run.started", "draft.generated"):
-                await uow.generation_runs.append_event(
-                    run_id,
-                    kind=kind,
-                    payload={"kind": kind},
-                    occurred_at=dt.datetime(2026, 7, 22, tzinfo=dt.UTC),
-                )
-            await uow.commit()
+        await _append_generation_events(dependencies.uow_factory, run_id)
         run_response = await client.get(first.headers.get("Location", "/missing"))
         events_response = await client.get(
             f"/v1/generation-runs/{run_id}/events",
