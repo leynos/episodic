@@ -66,38 +66,68 @@ async def test_episode_tei_json_and_xml_retrieval(
     assert unacceptable.status_code == 406, (
         f"expected unacceptable media status 406, got {unacceptable.status_code}"
     )
-    assert json_response.status_code == 200, json_response.text
+    _assert_tei_json_response(
+        json_response,
+        episode_id=episode_id,
+        generation_run_id=launcher.run_ids[0],
+        tei_xml=tei_xml,
+    )
+    _assert_tei_xml_response(
+        xml_response,
+        episode_id=episode_id,
+        tei_xml=tei_xml,
+    )
+
+
+def _assert_tei_json_response(
+    response: httpx.Response,
+    *,
+    episode_id: uuid.UUID,
+    generation_run_id: uuid.UUID,
+    tei_xml: str,
+) -> None:
+    """Assert the TEI metadata response preserves generation provenance."""
+    assert response.status_code == 200, response.text
     expected_payload = {
         "episode_id": str(episode_id),
-        "tei_header_id": json_response.json()["tei_header_id"],
+        "tei_header_id": response.json()["tei_header_id"],
         "tei_xml": tei_xml,
         "content_hash": _tei_hash(tei_xml),
         "version": 2,
-        "last_generation_run_id": str(launcher.run_ids[0]),
+        "last_generation_run_id": str(generation_run_id),
         "quality_mode": "draft_without_qa",
         "qa_status": "skipped",
         "updated_at": "2026-07-22T12:00:00+00:00",
     }
-    assert json_response.json() == expected_payload, (
-        f"expected TEI metadata {expected_payload!r}, got {json_response.json()!r}"
+    assert response.json() == expected_payload, (
+        f"expected TEI metadata {expected_payload!r}, got {response.json()!r}"
     )
-    assert xml_response.status_code == 200, (
-        f"expected TEI response status 200, got {xml_response.status_code}"
+
+
+def _assert_tei_xml_response(
+    response: httpx.Response,
+    *,
+    episode_id: uuid.UUID,
+    tei_xml: str,
+) -> None:
+    """Assert the TEI attachment response preserves its download contract."""
+    assert response.status_code == 200, (
+        f"expected TEI response status 200, got {response.status_code}"
     )
-    assert xml_response.text == tei_xml, (
-        f"expected TEI body {tei_xml!r}, got {xml_response.text!r}"
+    assert response.text == tei_xml, (
+        f"expected TEI body {tei_xml!r}, got {response.text!r}"
     )
-    assert xml_response.headers["Content-Type"].startswith("application/tei+xml"), (
-        f"expected TEI content type, got {xml_response.headers['Content-Type']!r}"
+    assert response.headers["Content-Type"].startswith("application/tei+xml"), (
+        f"expected TEI content type, got {response.headers['Content-Type']!r}"
     )
-    assert xml_response.headers["Content-Disposition"] == (
+    assert response.headers["Content-Disposition"] == (
         f'attachment; filename="episode-{episode_id}.xml"'
     ), (
         "expected episode attachment Content-Disposition, got "
-        f"{xml_response.headers['Content-Disposition']!r}"
+        f"{response.headers['Content-Disposition']!r}"
     )
-    assert xml_response.headers["ETag"] == f'"{_tei_hash(tei_xml)}"', (
-        f"expected ETag for generated TEI, got {xml_response.headers['ETag']!r}"
+    assert response.headers["ETag"] == f'"{_tei_hash(tei_xml)}"', (
+        f"expected ETag for generated TEI, got {response.headers['ETag']!r}"
     )
 
 
