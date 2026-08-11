@@ -102,14 +102,14 @@ def _ensure_string_kv(key: object, item: object) -> tuple[str, str]:
         case _:
             msg = f"Expected a string key, got {type(key).__name__}"
             # The polling helper reports an unmet test expectation.
-            raise AssertionError(msg)  # noqa: TRY004
+            raise AssertionError(msg)
     match item:
         case str():
             return key, item
         case _:
             msg = f"Expected a string value for key {key!r}, got {type(item).__name__}"
             # The polling helper reports an unmet test expectation.
-            raise AssertionError(msg)  # noqa: TRY004
+            raise AssertionError(msg)
 
 
 def _ensure_string_dict(value: object, _filename: str) -> dict[str, str]:

@@ -129,7 +129,6 @@ def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
     assert usage.total_tokens == expected_total, (
         "usage.total_tokens must equal the expected aggregate"
     )
-    return
 
 
 @given(
@@ -168,7 +167,6 @@ async def test_langgraph_total_tokens_non_negative(
     assert state["action_results"][0].model == "prop-exec-model", (
         "first action result model must be prop-exec-model"
     )
-    return
 
 
 @given(
