@@ -18,6 +18,126 @@ CHART_PATH = REPOSITORY_ROOT / "charts" / "episodic"
 LOCAL_VALUES_PATH = CHART_PATH / "values.local.yaml"
 
 
+class _Metadata(typ.TypedDict):
+    name: str
+
+
+class _ConfigMap(typ.TypedDict):
+    metadata: _Metadata
+    data: dict[str, str]
+
+
+class _SecretKeyRef(typ.TypedDict):
+    name: str
+    key: str
+    optional: bool
+
+
+class _ContainerValueFrom(typ.TypedDict):
+    secretKeyRef: _SecretKeyRef
+
+
+class _ContainerEnvironment(typ.TypedDict):
+    name: str
+    valueFrom: _ContainerValueFrom
+
+
+class _ContainerEnvironmentFrom(typ.TypedDict):
+    configMapRef: _Metadata
+
+
+class _ContainerSecurityContext(typ.TypedDict):
+    readOnlyRootFilesystem: bool
+    allowPrivilegeEscalation: bool
+
+
+class _ApplicationContainer(typ.TypedDict):
+    name: str
+    image: str
+    imagePullPolicy: str
+    envFrom: list[_ContainerEnvironmentFrom]
+    env: list[_ContainerEnvironment]
+    securityContext: _ContainerSecurityContext
+
+
+class _PodSecurityContext(typ.TypedDict):
+    runAsNonRoot: bool
+
+
+class _PodSpec(typ.TypedDict):
+    containers: list[_ApplicationContainer]
+    securityContext: _PodSecurityContext
+
+
+class _PodTemplate(typ.TypedDict):
+    spec: _PodSpec
+
+
+class _DeploymentSpec(typ.TypedDict):
+    replicas: int
+    template: _PodTemplate
+
+
+class _Deployment(typ.TypedDict):
+    spec: _DeploymentSpec
+
+
+class _IngressServicePort(typ.TypedDict):
+    name: str
+
+
+class _IngressService(typ.TypedDict):
+    name: str
+    port: _IngressServicePort
+
+
+class _IngressBackend(typ.TypedDict):
+    service: _IngressService
+
+
+class _IngressPath(typ.TypedDict):
+    path: str
+    pathType: str
+    backend: _IngressBackend
+
+
+class _IngressHttp(typ.TypedDict):
+    paths: list[_IngressPath]
+
+
+class _IngressRule(typ.TypedDict):
+    host: str
+    http: _IngressHttp
+
+
+class _IngressSpec(typ.TypedDict):
+    ingressClassName: str
+    rules: list[_IngressRule]
+
+
+class _Ingress(typ.TypedDict):
+    spec: _IngressSpec
+
+
+class _LocalResources(typ.TypedDict):
+    ConfigMap: _ConfigMap
+    Deployment: _Deployment
+    Ingress: _Ingress
+
+
+def _string_key_mapping(value: object, description: str) -> dict[str, object]:
+    """Return a string-keyed mapping or fail with a chart-contract diagnostic."""
+    match value:
+        case dict() as mapping if all(isinstance(key, str) for key in mapping):
+            return {
+                key: typ.cast("object", item)
+                for key, item in mapping.items()
+                if isinstance(key, str)
+            }
+        case _:
+            pytest.fail(f"{description} must be a string-keyed mapping: {value!r}")
+
+
 def _helm_path() -> str:
     """Return the Helm executable path or skip when it is unavailable."""
     helm_path = shutil.which("helm")
@@ -79,30 +199,61 @@ def test_helm_local_manifest_snapshot(snapshot: SnapshotAssertion) -> None:
     )
 
 
-def _local_resources() -> dict[str, typ.Any]:
+def _local_resources() -> _LocalResources:
     """Return the rendered local manifest indexed by resource kind."""
     documents = [
-        document
+        _string_key_mapping(typ.cast("object", document), "rendered Helm document")
         for document in yaml.safe_load_all(_render_local_chart())
         if document is not None
     ]
-    resources = {document["kind"]: document for document in documents}
+    resources: dict[str, dict[str, object]] = {}
+    for document in documents:
+        kind = document.get("kind")
+        assert isinstance(kind, str), f"rendered Helm document lacks a kind: {document}"
+        resources[kind] = document
 
     assert len(resources) == len(documents), (
         "the local manifest must render at most one resource of each kind; "
         f"got kinds {[document['kind'] for document in documents]}"
     )
-    return resources
+    match resources:
+        case {
+            "ConfigMap": config_map,
+            "Deployment": deployment,
+            "Ingress": ingress,
+        }:
+            return {
+                "ConfigMap": typ.cast("_ConfigMap", config_map),
+                "Deployment": typ.cast("_Deployment", deployment),
+                "Ingress": typ.cast("_Ingress", ingress),
+            }
+        case _:
+            pytest.fail(
+                "local manifest must contain ConfigMap, Deployment, and Ingress "
+                f"resources: {resources}"
+            )
 
 
-def _container(deployment: dict[str, typ.Any]) -> dict[str, typ.Any]:
+def _container(deployment: _Deployment) -> _ApplicationContainer:
     """Return the sole application container of the rendered Deployment."""
-    containers = deployment["spec"]["template"]["spec"]["containers"]
-
-    assert [container["name"] for container in containers] == ["episodic"], (
-        f"the Deployment must render exactly one episodic container; got {containers}"
+    pod_spec = _string_key_mapping(
+        typ.cast("object", deployment["spec"]["template"]["spec"]),
+        "Deployment pod spec",
     )
-    return containers[0]
+    containers = pod_spec.get("containers")
+    assert isinstance(containers, list), (
+        f"the Deployment pod spec must contain a container list; got {pod_spec}"
+    )
+    typed_containers = [
+        typ.cast("_ApplicationContainer", _string_key_mapping(container, "container"))
+        for container in containers
+    ]
+
+    assert [container["name"] for container in typed_containers] == ["episodic"], (
+        "the Deployment must render exactly one episodic container; "
+        f"got {typed_containers}"
+    )
+    return typed_containers[0]
 
 
 def test_helm_local_configmap_carries_the_preview_environment() -> None:

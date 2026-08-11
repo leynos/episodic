@@ -177,7 +177,12 @@ def _estimate_token_count(chars_per_token: float, *parts: str | None) -> int:
     combined = "".join(part for part in parts if part is not None)
     if not combined:
         return 0
-    return math.ceil(len(combined) / chars_per_token)
+    token_count = math.ceil(len(combined) / chars_per_token)
+    while token_count * chars_per_token < len(combined):
+        token_count += 1
+    while token_count > 0 and (token_count - 1) * chars_per_token >= len(combined):
+        token_count -= 1
+    return token_count
 
 
 def _check_token_limit(actual: int, limit: int, label: str) -> None:

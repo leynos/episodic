@@ -108,10 +108,9 @@ async def test_interpreter_executor_records_lifecycle_observability(
         clock=clock,
     )
 
-    try:
+    with contextlib.ExitStack() as lifecycle:
+        lifecycle.callback(_shutdown_if_supported, executor)
         results = await executor.map_ordered(_square, (2, 3))
-    finally:
-        executor.shutdown()
 
     assert results == [4, 9], "map_ordered results must preserve input order"
     assert (

@@ -91,9 +91,11 @@ def test_render_series_guardrail_prompt_handles_optional_template_guardrails() -
     rendered = render_series_guardrail_prompt(brief)
 
     assert '"guardrails": null' not in rendered.text, (
-        "Expected collection to exclude the value"
+        "null template guardrails must be excluded from the rendered prompt"
     )
-    assert rendered.text.count('"guardrails": {}') == 2, "Expected values to match"
+    assert rendered.text.count('"guardrails": {}') == 2, (
+        "missing and null template guardrails must normalize to empty mappings"
+    )
 
 
 def test_render_series_guardrail_prompt_is_deterministic_for_guardrail_key_order() -> (
@@ -113,7 +115,9 @@ def test_render_series_guardrail_prompt_is_deterministic_for_guardrail_key_order
     rendered_a = render_series_guardrail_prompt(brief_a)
     rendered_b = render_series_guardrail_prompt(brief_b)
 
-    assert rendered_a.text == rendered_b.text, "Expected values to match"
+    assert rendered_a.text == rendered_b.text, (
+        "guardrail rendering must preserve deterministic key ordering"
+    )
 
 
 def test_render_series_guardrail_prompt_can_target_one_episode_template() -> None:
@@ -136,8 +140,8 @@ def test_render_series_guardrail_prompt_can_target_one_episode_template() -> Non
     )
 
     assert "Close with a sources note." in rendered.text, (
-        "Expected collection to contain the value"
+        "the selected template's guardrails must be included in the rendered prompt"
     )
     assert "Always include a recap in the outro." not in rendered.text, (
-        "Expected collection to exclude the value"
+        "non-selected template guardrails must be excluded from the rendered prompt"
     )
