@@ -1683,3 +1683,68 @@ payload.
 Accepted keys are those defined in `TaskCreateKwargs`: `name`, `context`,
 `eager_start`, and `metadata` (see `TaskMetadata` for the metadata field
 schema). Passing an unrecognized key raises `TypeError`.
+
+## Mutation-testing workflow contract tests
+
+This repository runs scheduled, informational mutation testing through a thin
+caller workflow,
+[`.github/workflows/mutation-testing.yml`](../.github/workflows/mutation-testing.yml),
+which delegates to the shared reusable workflow
+`leynos/shared-actions/.github/workflows/mutation-mutmut.yml`. The heavy
+lifting — running `mutmut` and summarizing survivors — lives in
+`shared-actions`; this repository carries only declarative configuration. The
+run is **informational only**: it never gates a pull request. Survivors are
+reported through the job summary and downloadable artefacts so they can be
+triaged into tests, not enforced as a blocking check. The mutation targets and
+test selection themselves are configured in `[tool.mutmut]` in
+`pyproject.toml` (`source_paths`, `pytest_add_cli_args_test_selection`,
+`do_not_mutate`).
+
+The workflow runs in two modes: a daily schedule (`5 7 * * *`) and a manual
+`workflow_dispatch` with no inputs; selecting a branch in the Actions
+"Run workflow" control exercises a feature branch.
+
+The caller passes three configuration inputs, each carrying intent:
+
+- `paths` — `episodic/`, the flat package layout the mutable source lives
+  under (there is no `src/` prefix to strip).
+- `module-prefix-strip` — set to the empty string because of the flat layout
+  above; the shared workflow's default assumes a `src/` prefix that does not
+  apply here.
+- `python-version` — pinned to `3.14` because the project declares
+  `requires-python >= 3.14`, and the shared workflow's default (3.13) cannot
+  satisfy it.
+
+The `uses:` reference pins the shared workflow to a full 40-character commit
+SHA rather than a branch or tag, so a force-push upstream cannot silently
+change what runs here. The contract test asserts only that the pin is a full
+commit SHA, not a particular value, so Dependabot bumps it automatically
+without any accompanying test edit.
+
+Because the caller is configuration rather than code,
+`tests/test_mutation_workflow_contract.py` pins the shape it must uphold,
+failing the pull request when the caller drifts — repointing the pin at a
+branch, widening the token scope, or dropping a configuration input — rather
+than letting the breakage surface only in a scheduled run. Run it locally
+with:
+
+```shell
+uv run pytest tests/test_mutation_workflow_contract.py
+```
+
+The test module carries no `skipif` guard, so it always executes and reads
+`.github/workflows/mutation-testing.yml` directly from the checkout. It
+validates:
+
+- `test_uses_reference_is_pinned_to_a_commit_sha` — the `uses:` reference
+  targets `mutation-mutmut.yml` pinned to a full commit SHA.
+- `test_job_permissions_are_exactly_least_privilege` — job permissions are
+  exactly `contents: read` and `id-token: write`.
+- `test_workflow_default_permissions_are_empty` — the workflow-level default
+  token scope is empty.
+- `test_concurrency_serializes_per_ref_without_cancelling` — `concurrency`
+  serializes runs per ref without cancelling one in progress.
+- `test_triggers_keep_schedule_and_plain_dispatch` — the triggers keep the
+  daily schedule and a plain `workflow_dispatch` with no inputs.
+- `test_with_block_carries_the_flat_layout_configuration` — the `with:`
+  block carries exactly the three inputs listed above.
