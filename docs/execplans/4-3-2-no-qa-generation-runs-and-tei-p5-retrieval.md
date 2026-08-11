@@ -399,7 +399,7 @@ when any of the following is breached.
   `make test` passed 1,091, skipped 1, with 54 snapshots (26 warnings);
   `make typecheck` passed with 3 unused-ignore warnings; and `make lint` and
   `make check-migrations` passed. `make markdownlint` initially found the
-  three new `artifact` spellings; after correction to `artefact`, it passed.
+  three new `artefact` spellings; after correction to `artefact`, it passed.
   `make nixie`, `mbake validate Makefile`, and `git diff --check` passed.
   CodeRabbit was attempted twice with
   `--base origin/configure-df12-lints`; both attempts stopped externally at
@@ -415,6 +415,19 @@ when any of the following is breached.
   `gh stack view` has no local tracking by design after linking, so PR metadata
   and the successful link output are the verification evidence. Push/PR/stack
   actions are complete.
+
+- [x] (completed, 2026-08-11) Rebase and sequential validation: rebased onto
+  `origin/configure-df12-lints` at
+  `db01ed84e917b5f8411ea7ab75f55c5505d3c972`. Commit `ddc1c17` was safely
+  skipped because target `698e2fa` is the rewritten equivalent. Commit
+  `f7adc07` was resolved by taking the target `uv.lock`, running `uv lock`, and
+  confirming that it matches the target. Forty-one feature commits replayed;
+  formatter-only commit
+  `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b` follows. Sequential gate
+  evidence: `make check-fmt` passed; `make test` 1,099 passed/3 skipped/53
+  snapshots passed; `make typecheck` 0 errors/3 warnings; `make lint`
+  passed/Pylint 10/10. PR retarget, stack link, and force-with-lease remain
+  pending until confirmed.
 
 ## Surprises & discoveries
 
@@ -601,7 +614,7 @@ when any of the following is breached.
   the restored target lockfile remained byte-identical after `uv lock`. The
   target is an ancestor and the tree is marker-free. Impact: structural
   validation and all final deterministic gates passed. `make markdownlint`
-  initially found the three new `artifact` spellings; correcting them to
+  initially found the three new `artefact` spellings; correcting them to
   `artefact` made the gate pass.
 - Observation: two CodeRabbit attempts with
   `--base origin/configure-df12-lints` both stopped externally at
@@ -619,6 +632,11 @@ when any of the following is breached.
   `gh stack view` has no local tracking by design after linking, so PR metadata
   and successful link output are verification. Impact: push/PR/stack actions
   are complete.
+- Observation: the 2026-08-11 replay encountered rewritten target history rather
+  than requiring the earlier base-owned work to be replayed again. Evidence:
+  `ddc1c17` matched target `698e2fa`, and the `f7adc07` lockfile resolution
+  matched the target after `uv lock`. Impact: the rebase retained the 41 feature
+  commits and the formatter-only commit without introducing dependency churn.
 
 ## Decision log
 
@@ -796,6 +814,18 @@ when any of the following is breached.
   by design after linking, so the successful link output and PR metadata are
   the verification evidence. Push/PR/stack actions are complete. Date/Author:
   2026-07-31, implementation agent.
+- Decision: for the 2026-08-11 rebase, use target
+  `origin/configure-df12-lints` at
+  `db01ed84e917b5f8411ea7ab75f55c5505d3c972`; safely skip `ddc1c17` because
+  target `698e2fa` is its rewritten equivalent; and resolve `f7adc07` with the
+  target `uv.lock` followed by `uv lock`, retaining the matching result.
+  Rationale: preserve target-owned history and avoid dependency churn while
+  replaying the 41 feature commits. Retain formatter-only commit
+  `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b`. The sequential gate evidence is
+  `make check-fmt` passed, `make test` 1,099 passed/3 skipped/53 snapshots
+  passed, `make typecheck` 0 errors/3 warnings, and `make lint`
+  passed/Pylint 10/10. PR retarget, stack link, and force-with-lease remain
+  pending until confirmed. Date/Author: 2026-08-11, implementation agent.
 
 ## Context and orientation
 
@@ -1067,7 +1097,7 @@ class DraftScriptGenerator(typing.Protocol):
 
 In `episodic/canonical/generation_persistence.py` (new, `application` group):
 
-- `materialise_episode_from_ingestion(...)` creates the episode from the
+- `materialize_episode_from_ingestion(...)` creates the episode from the
   ingestion job's attached sources with a minimal placeholder TEI header
   (reusing `_create_canonical_episode`/`TeiHeader` construction), returning the
   episode id; called before the run is launched.
@@ -1309,7 +1339,7 @@ clock, and the deterministic id factory. Assert the generator emits TEI-P5 that
 `<p>` turns, and reports a stable content hash; add a syrupy snapshot of the
 emitted TEI XML (clock frozen, ids pinned). Add tests for each `LLMError`
 subclass mapping to a typed failure. Add tests for
-`materialise_episode_from_ingestion` (creates episode + placeholder TEI from an
+`materialize_episode_from_ingestion` (creates episode + placeholder TEI from an
 ingestion job) and `persist_draft_script` (episode TEI, revision, hash,
 `qa_status`, `last_generation_run_id`; invalid TEI raises the typed error).
 
@@ -1786,6 +1816,18 @@ base `configure-df12-lints`/head `2747797`. Because `gh stack view` has no local
 tracking by design after linking, the successful link output and PR metadata
 are the verification evidence. Push/PR/stack actions are complete.
 
+2026-08-11 rebase outcome: the branch was rebased onto
+`origin/configure-df12-lints` at
+`db01ed84e917b5f8411ea7ab75f55c5505d3c972`; `ddc1c17` was safely skipped as the
+rewritten equivalent of target `698e2fa`; and `f7adc07` was resolved with the
+target `uv.lock`, `uv lock`, and confirmation that the lockfile matches the
+target. Forty-one feature commits replayed, followed by formatter-only commit
+`e168e39560cc73ea2b8726ac0e09ddb272cd1e6b`. Sequential gate evidence is
+`make check-fmt` passed; `make test` 1,099 passed/3 skipped/53 snapshots
+passed; `make typecheck` 0 errors/3 warnings; and `make lint` passed/Pylint
+10/10. PR retarget, stack link, and force-with-lease remain pending until
+confirmed.
+
 ## Revision note
 
 Revised 2026-06-15 after a Logisphere community-of-experts design review.
@@ -1863,7 +1905,7 @@ marker-free tree, and the byte-identical target lockfile after `uv lock`
 survived. Final gates passed: `make check-fmt` passed 467 files; `make test`
 passed 1,091, skipped 1, with 54 snapshots (26 warnings); and `make typecheck`
 passed with 3 unused-ignore warnings. `make lint` and `make check-migrations`
-passed; `make markdownlint` passed after the three new `artifact` spellings
+passed; `make markdownlint` passed after the three new `artefact` spellings
 were corrected to `artefact`; and `make nixie`, `mbake validate Makefile`, and
 `git diff --check` passed. CodeRabbit was attempted twice with
 `--base origin/configure-df12-lints`; both attempts stopped externally at
@@ -1878,3 +1920,15 @@ stack #240. Verification showed #220 with base `main` and head `de457b7`, and
 PR #141 with base `configure-df12-lints` and head `2747797`. `gh stack view`
 has no local tracking by design after linking, so PR metadata and successful
 link output are verification. Push/PR/stack actions are complete.
+
+Revised 2026-08-11 after the rebase onto
+`origin/configure-df12-lints` at
+`db01ed84e917b5f8411ea7ab75f55c5505d3c972`. Recorded that `ddc1c17` was safely
+skipped because target `698e2fa` is the rewritten equivalent; `f7adc07` was
+resolved by taking the target `uv.lock`, running `uv lock`, and confirming it
+matches the target; 41 feature commits replayed; and formatter-only commit
+`e168e39560cc73ea2b8726ac0e09ddb272cd1e6b` follows. Sequential gate evidence
+is `make check-fmt` passed, `make test` 1,099 passed/3 skipped/53 snapshots
+passed, `make typecheck` 0 errors/3 warnings, and `make lint` passed/Pylint
+10/10. PR retarget, stack link, and force-with-lease remain pending until
+confirmed.

@@ -33,7 +33,7 @@ implementation. Roadmap item `4.4.1` may replace its one-pass policy with the
 full duration-aware and QA-gated graph without changing the run or launcher
 ports.
 
-Before a run is created, `materialise_episode_from_ingestion` creates the
+Before a run is created, `materialize_episode_from_ingestion` creates the
 canonical episode using the ready ingestion job as both source bundle and
 stable episode identifier. Generated TEI is validated before persistence.
 Episode updates increment `tei_revision`, retain the writing run identifier,
