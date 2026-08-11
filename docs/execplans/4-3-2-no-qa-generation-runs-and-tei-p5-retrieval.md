@@ -426,8 +426,12 @@ when any of the following is breached.
   `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b` follows. Sequential gate
   evidence: `make check-fmt` passed; `make test` 1,099 passed/3 skipped/53
   snapshots passed; `make typecheck` 0 errors/3 warnings; `make lint`
-  passed/Pylint 10/10. PR retarget, stack link, and force-with-lease remain
-  pending until confirmed.
+  passed/Pylint 10/10. Force-with-lease published remote `70e67b4` as current
+  commit `f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the
+  requested base `configure-df12-lints`; direct `gh pr edit` was rejected
+  because it belongs to a stack. PR #220 is `main <- configure-df12-lints`,
+  and `gh stack link --base main 220 141` confirmed that the two-PR stack is
+  already up to date. Remote head equals local.
 
 ## Surprises & discoveries
 
@@ -824,8 +828,13 @@ when any of the following is breached.
   `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b`. The sequential gate evidence is
   `make check-fmt` passed, `make test` 1,099 passed/3 skipped/53 snapshots
   passed, `make typecheck` 0 errors/3 warnings, and `make lint`
-  passed/Pylint 10/10. PR retarget, stack link, and force-with-lease remain
-  pending until confirmed. Date/Author: 2026-08-11, implementation agent.
+  passed/Pylint 10/10. Force-with-lease published remote `70e67b4` as current
+  commit `f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the
+  requested base `configure-df12-lints`; direct `gh pr edit` was rejected
+  because it belongs to a stack. PR #220 is `main <- configure-df12-lints`,
+  and `gh stack link --base main 220 141` confirmed that the two-PR stack is
+  already up to date. Remote head equals local. Date/Author: 2026-08-11,
+  implementation agent.
 
 ## Context and orientation
 
@@ -1825,8 +1834,12 @@ target. Forty-one feature commits replayed, followed by formatter-only commit
 `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b`. Sequential gate evidence is
 `make check-fmt` passed; `make test` 1,099 passed/3 skipped/53 snapshots
 passed; `make typecheck` 0 errors/3 warnings; and `make lint` passed/Pylint
-10/10. PR retarget, stack link, and force-with-lease remain pending until
-confirmed.
+10/10. Force-with-lease published remote `70e67b4` as current commit
+`f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the requested
+base `configure-df12-lints`; direct `gh pr edit` was rejected because it
+belongs to a stack. PR #220 is `main <- configure-df12-lints`, and
+`gh stack link --base main 220 141` confirmed that the two-PR stack is already
+up to date. Remote head equals local.
 
 ## Revision note
 
@@ -1930,5 +1943,9 @@ matches the target; 41 feature commits replayed; and formatter-only commit
 `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b` follows. Sequential gate evidence
 is `make check-fmt` passed, `make test` 1,099 passed/3 skipped/53 snapshots
 passed, `make typecheck` 0 errors/3 warnings, and `make lint` passed/Pylint
-10/10. PR retarget, stack link, and force-with-lease remain pending until
-confirmed.
+10/10. Force-with-lease published remote `70e67b4` as current commit
+`f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the requested
+base `configure-df12-lints`; direct `gh pr edit` was rejected because it
+belongs to a stack. PR #220 is `main <- configure-df12-lints`, and
+`gh stack link --base main 220 141` confirmed that the two-PR stack is already
+up to date. Remote head equals local.
