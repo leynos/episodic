@@ -39,6 +39,13 @@ The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
 
+## Coverage
+
+GitHub Actions reports production coverage to CodeScene. The pull-request and
+main-branch workflows run Slipcover with `--source episodic,alembic`, so the
+coverage percentage measures application and migration code rather than test
+implementation detail. Keep those source paths identical in both workflows.
+
 ## Linting
 
 Run the full lint gate with:
