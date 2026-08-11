@@ -87,7 +87,7 @@ class ExecuteNodeFn(typ.Protocol):
         ...
 
 
-@dc.dataclass
+@dc.dataclass(slots=True)
 class GenerationGraphExtensions:
     """Optional collaborators for the generation orchestration graph."""
 

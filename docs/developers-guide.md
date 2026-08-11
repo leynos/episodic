@@ -114,12 +114,12 @@ command when investigating a snapshot finding:
 
 ```shell
 uv tool run --python 3.14 \
-  --from 'git+https://github.com/leynos/df12-python-lints.git@v0.1.0' \
+  --from 'git+https://github.com/leynos/df12-python-lints.git@v0.2.0' \
   ambrleaks tests
 ```
 
 The two commands intentionally provision the package differently:
-`pyproject.toml` pins `df12-python-lints` at `v0.1.0` for the project-environment
+`pyproject.toml` pins `df12-python-lints` at `v0.2.0` for the project-environment
 Pylint pass, while `DF12_PYTHON_LINTS_REF` controls the separately provisioned
 `ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for both commands.
 Maintainers must update both package pins together and validate the complete

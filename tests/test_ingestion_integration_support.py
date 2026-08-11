@@ -66,7 +66,7 @@ class _SnapshotSourceDocument(typ.Protocol):
     metadata: dict[str, object]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class IngestionTestContext:
     """Test fixtures for multi-source ingestion error tests."""
 
