@@ -51,6 +51,8 @@ def assert_validation_workflow_result(
     """
     # Strict equality is part of the process exit-code contract.
     assert exit_code == 0, f"act failed:\n{logs}"  # pylint: disable=use-implicit-booleaness-not-comparison-to-zero  # Process status must equal zero exactly.
+    # Keep malformed-artifact handling separate from successful validation.
+    # pylint: disable-next=no-else-raise
     try:
         data = read_artifact_json(artifact_dir, artifact_name, logs)
     except json.JSONDecodeError as exc:
