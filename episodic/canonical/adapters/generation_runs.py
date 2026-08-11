@@ -43,6 +43,8 @@ def _now_utc() -> dt.datetime:
 def _default_time_provider() -> TimeProvider:
     """Return the default in-memory timestamp provider."""
     return _now_utc
+
+
 @dc.dataclass(slots=True)
 class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
     """In-memory reference adapter for the composite generation-run port."""
