@@ -97,5 +97,5 @@ def test_enrich_tei_with_empty_guest_bios_result_returns_original() -> None:
     result = GuestBiosResult(entries=(), usage=_usage())
 
     assert enrich_tei_with_guest_bios(SCRIPT_TEI, result) == SCRIPT_TEI, (
-        "Expected values to match"
+        "An empty GuestBiosResult must preserve the original TEI XML"
     )

@@ -79,11 +79,6 @@ def _request(correlation_id: str = "callback-probe") -> GenerationOrchestrationR
 
 def _planner_result_from_tokens(tokens: PropTokenInputs) -> PlannerResult:
     """Build a planner result from generated token counts."""
-    planner_usage = LLMUsage(
-        tokens.planner_input,
-        tokens.planner_output,
-        tokens.planner_input + tokens.planner_output,
-    )
     return PlannerResult(
         plan=ExecutionPlan(
             plan_version="1.0",
@@ -99,7 +94,11 @@ def _planner_result_from_tokens(tokens: PropTokenInputs) -> PlannerResult:
                 ),
             ),
         ),
-        usage=planner_usage,
+        usage=LLMUsage(
+            tokens.planner_input,
+            tokens.planner_output,
+            tokens.planner_input + tokens.planner_output,
+        ),
         model="gpt-4.1",
         provider_response_id="prop-planner",
         finish_reason="stop",
@@ -108,18 +107,17 @@ def _planner_result_from_tokens(tokens: PropTokenInputs) -> PlannerResult:
 
 def _action_result_from_tokens(tokens: PropTokenInputs) -> ActionExecutionResult:
     """Build an action result from generated token counts."""
-    tool_usage = LLMUsage(
-        tokens.action_input,
-        tokens.action_output,
-        tokens.action_input + tokens.action_output,
-    )
     return ActionExecutionResult(
         action_id="action-1",
         action_kind=ActionKind.GENERATE_SHOW_NOTES,
         model_tier=ModelTier.EXECUTION,
         model="prop-exec-model",
         summary="prop graph synthesis",
-        usage=tool_usage,
+        usage=LLMUsage(
+            tokens.action_input,
+            tokens.action_output,
+            tokens.action_input + tokens.action_output,
+        ),
     )
 
 
@@ -131,6 +129,7 @@ def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
     assert usage.total_tokens == expected_total, (
         "usage.total_tokens must equal the expected aggregate"
     )
+    return
 
 
 @given(
@@ -169,6 +168,7 @@ async def test_langgraph_total_tokens_non_negative(
     assert state["action_results"][0].model == "prop-exec-model", (
         "first action result model must be prop-exec-model"
     )
+    return
 
 
 @given(
