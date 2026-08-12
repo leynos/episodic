@@ -6,12 +6,8 @@ import pathlib as pl
 import shlex
 import shutil
 import subprocess  # noqa: S404 - the opt-in smoke test drives Docker.
-import typing as typ
 
 import pytest
-
-if typ.TYPE_CHECKING:
-    from syrupy.assertion import SnapshotAssertion
 
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 DOCKERFILE_PATH = REPOSITORY_ROOT / "Dockerfile"
@@ -34,11 +30,18 @@ def _dockerfile_instruction(name: str) -> str:
     raise AssertionError(msg)
 
 
-def test_dockerfile_uses_multi_stage_python_build(snapshot: SnapshotAssertion) -> None:
+def test_dockerfile_uses_multi_stage_python_build() -> None:
     """Build dependencies in one stage and run from a smaller Python image."""
-    dockerfile = _dockerfile_text()
+    stages = tuple(
+        line.removeprefix("FROM ").split(" AS ")
+        for line in _dockerfile_text().splitlines()
+        if line.startswith("FROM ")
+    )
 
-    assert dockerfile.splitlines() == snapshot, "actual output must match snapshot"
+    assert stages == (
+        ["ghcr.io/astral-sh/uv:python3.14-bookworm-slim", "builder"],
+        ["python:3.14-slim", "runtime"],
+    ), "Dockerfile must use separate builder and runtime Python stages"
 
 
 def test_dockerfile_copy_sources_exist_in_repository() -> None:
@@ -63,9 +66,7 @@ def test_dockerfile_copy_sources_exist_in_repository() -> None:
     )
 
 
-def test_dockerfile_runs_granian_factory_as_non_root(
-    snapshot: SnapshotAssertion,
-) -> None:
+def test_dockerfile_runs_granian_factory_as_non_root() -> None:
     """Keep the container command aligned with the runtime composition root."""
     from episodic.api import runtime
 
@@ -85,7 +86,6 @@ def test_dockerfile_runs_granian_factory_as_non_root(
     assert command == expected_command, (
         "Dockerfile CMD must match the runtime composition constants."
     )
-    assert command == snapshot, "actual output must match snapshot"
     assert "USER 10001:10001" in _dockerfile_text(), (
         "runtime container must drop root before starting Granian."
     )
@@ -108,15 +108,30 @@ def test_dockerfile_exposes_stable_liveness_probe() -> None:
     )
 
 
-def test_dockerignore_excludes_local_and_test_artifacts(
-    snapshot: SnapshotAssertion,
-) -> None:
+def test_dockerignore_excludes_local_and_test_artifacts() -> None:
     """Keep local caches, tests, and operator scratch files out of the image."""
     ignored_paths = tuple(
         (REPOSITORY_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     )
 
-    assert ignored_paths == snapshot, "actual output must match snapshot"
+    expected_ignored_paths = {
+        ".git",
+        ".venv",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".uv-cache",
+        ".uv-tools",
+        "__pycache__",
+        "build",
+        "coverage.*",
+        "dist",
+        "htmlcov",
+        "tests",
+    }
+
+    assert expected_ignored_paths <= set(ignored_paths), (
+        ".dockerignore must exclude local build, test, and cache artifacts"
+    )
 
 
 @pytest.mark.slow

@@ -1,5 +1,7 @@
 """Shared schema constants for reusable reference-document storage."""
 
+from types import MappingProxyType
+
 from episodic.canonical.domain import (
     ReferenceBindingTargetKind,
     ReferenceDocumentKind,
@@ -10,14 +12,14 @@ REFERENCE_DOCUMENT_KIND_VALUES = tuple(member.value for member in ReferenceDocum
 REFERENCE_DOCUMENT_LIFECYCLE_STATE_VALUES = tuple(
     member.value for member in ReferenceDocumentLifecycleState
 )
-REFERENCE_BINDING_TARGET_KIND_VALUES = {
+REFERENCE_BINDING_TARGET_KIND_VALUES = MappingProxyType({
     kind: kind.value
     for kind in (
         ReferenceBindingTargetKind.SERIES_PROFILE,
         ReferenceBindingTargetKind.EPISODE_TEMPLATE,
         ReferenceBindingTargetKind.INGESTION_JOB,
     )
-}
+})
 TARGET_KIND_SERIES_PROFILE = REFERENCE_BINDING_TARGET_KIND_VALUES[
     ReferenceBindingTargetKind.SERIES_PROFILE
 ]

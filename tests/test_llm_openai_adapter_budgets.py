@@ -93,6 +93,15 @@ def test_estimate_token_count_matches_ceiling_ratio(
         )
 
 
+def test_estimate_token_count_handles_smallest_accepted_ratio() -> None:
+    """Estimate with the smallest accepted finite ratio without iteration."""
+    estimated_tokens = _estimate_token_count(0.001, "x")
+
+    assert estimated_tokens == 1_000, (
+        "the smallest accepted ratio must produce a bounded token estimate"
+    )
+
+
 def _build_budget_request(*, operation: str = "chat_completions") -> LLMRequest:
     """Build a representative budgeted LLMRequest for budget tests."""
     return LLMRequest(

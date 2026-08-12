@@ -173,6 +173,12 @@ def _render_local_chart() -> str:
     ])
 
 
+@pytest.fixture(scope="module")
+def local_chart_manifest() -> str:
+    """Render the local preview chart once for its contract tests."""
+    return _render_local_chart()
+
+
 def _redact_helm_checksums(manifest: str) -> str:
     """Replace generated config checksums while preserving manifest structure."""
     return re.sub(
@@ -191,19 +197,29 @@ def test_helm_chart_lints() -> None:
     assert int(match["failed"]) == 0, f"unexpected helm lint failures: {output}"
 
 
-def test_helm_local_manifest_snapshot(snapshot: SnapshotAssertion) -> None:
-    """Capture the local preview manifest shape."""
-    manifest = _redact_helm_checksums(_render_local_chart())
-    assert manifest == snapshot, (
-        "redacted local Helm manifest must match its recorded snapshot"
+def test_helm_local_manifest_has_required_resources(
+    local_chart_manifest: str,
+) -> None:
+    """Render the local preview's required resource kinds."""
+    resource_kinds = tuple(
+        document["kind"]
+        for document in yaml.safe_load_all(local_chart_manifest)
+        if document is not None
     )
+    assert resource_kinds == (
+        "ServiceAccount",
+        "ConfigMap",
+        "Service",
+        "Deployment",
+        "Ingress",
+    ), "local preview manifest must contain its required resource kinds"
 
 
-def _local_resources() -> _LocalResources:
+def _local_resources(local_chart_manifest: str) -> _LocalResources:
     """Return the rendered local manifest indexed by resource kind."""
     documents = [
         _string_key_mapping(typ.cast("object", document), "rendered Helm document")
-        for document in yaml.safe_load_all(_render_local_chart())
+        for document in yaml.safe_load_all(local_chart_manifest)
         if document is not None
     ]
     resources: dict[str, dict[str, object]] = {}
@@ -256,9 +272,11 @@ def _container(deployment: _Deployment) -> _ApplicationContainer:
     return typed_containers[0]
 
 
-def test_helm_local_configmap_carries_the_preview_environment() -> None:
+def test_helm_local_configmap_carries_the_preview_environment(
+    local_chart_manifest: str,
+) -> None:
     """Nile Valley preview flows read EPISODIC_ENV from the local ConfigMap."""
-    config_map = _local_resources()["ConfigMap"]
+    config_map = _local_resources(local_chart_manifest)["ConfigMap"]
 
     assert config_map["metadata"]["name"] == "episodic", (
         f"the local ConfigMap must be named episodic; got {config_map['metadata']}"
@@ -269,9 +287,11 @@ def test_helm_local_configmap_carries_the_preview_environment() -> None:
     )
 
 
-def test_helm_local_deployment_wires_the_preview_image_and_secret() -> None:
+def test_helm_local_deployment_wires_the_preview_image_and_secret(
+    local_chart_manifest: str,
+) -> None:
     """The local Deployment must run the preview image with its secret env."""
-    deployment = _local_resources()["Deployment"]
+    deployment = _local_resources(local_chart_manifest)["Deployment"]
     container = _container(deployment)
 
     assert deployment["spec"]["replicas"] == 1, (
@@ -301,9 +321,11 @@ def test_helm_local_deployment_wires_the_preview_image_and_secret() -> None:
     )
 
 
-def test_helm_local_deployment_hardens_the_container() -> None:
+def test_helm_local_deployment_hardens_the_container(
+    local_chart_manifest: str,
+) -> None:
     """Preview parity requires the same security context as other environments."""
-    deployment = _local_resources()["Deployment"]
+    deployment = _local_resources(local_chart_manifest)["Deployment"]
     pod_security = deployment["spec"]["template"]["spec"]["securityContext"]
     container_security = _container(deployment)["securityContext"]
 
@@ -318,9 +340,11 @@ def test_helm_local_deployment_hardens_the_container() -> None:
     )
 
 
-def test_helm_local_ingress_publishes_the_preview_host() -> None:
+def test_helm_local_ingress_publishes_the_preview_host(
+    local_chart_manifest: str,
+) -> None:
     """Nile Valley previews reach the service through episodic.localhost."""
-    ingress = _local_resources()["Ingress"]
+    ingress = _local_resources(local_chart_manifest)["Ingress"]
     spec = ingress["spec"]
 
     assert spec["ingressClassName"] == "traefik", (

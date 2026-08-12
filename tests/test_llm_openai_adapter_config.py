@@ -28,6 +28,7 @@ if typ.TYPE_CHECKING:
         ({"timeout_seconds": 0}, "timeout_seconds"),
         ({"timeout_seconds": "10"}, "timeout_seconds"),
         ({"chars_per_token": 0}, "chars_per_token"),
+        ({"chars_per_token": 1e-300}, "chars_per_token"),
         ({"chars_per_token": -1.0}, "chars_per_token"),
         ({"chars_per_token": float("nan")}, "chars_per_token"),
         ({"chars_per_token": float("inf")}, "chars_per_token"),

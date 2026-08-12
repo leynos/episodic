@@ -74,7 +74,10 @@ def test_validation_workflow_result_maps_malformed_json_to_assertion(
     artifact_name = "result.json"
     (tmp_path / artifact_name).write_text("{", encoding="utf-8")
 
-    with pytest.raises(AssertionError) as exc_info:
+    with pytest.raises(
+        AssertionError,
+        match=r"^workflow artifact contains malformed JSON: result\.json$",
+    ) as exc_info:
         assert_validation_workflow_result(0, "", tmp_path, artifact_name)
 
     assert isinstance(exc_info.value.__cause__, json.JSONDecodeError), (

@@ -44,6 +44,8 @@ _log_override: contextvars.ContextVar[typ.Any | None] = contextvars.ContextVar(
 type _TokenBudgetLabel = typ.Literal["input", "output", "total"]
 type _PreflightBudgetReason = typ.Literal["input", "total"]
 
+_MIN_CHARS_PER_TOKEN = 0.001
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class _PreflightBudgetContext:
@@ -143,7 +145,7 @@ def _llm_config_checks(
 ) -> list[tuple[bool, str, str]]:
     """Return validation checks for OpenAI-compatible adapter config."""
     chars_per_token_msg = (
-        "chars_per_token must be finite and greater than zero "
+        f"chars_per_token must be finite and at least {_MIN_CHARS_PER_TOKEN} "
         f"(got {chars_per_token!r})."
     )
     return [
@@ -178,11 +180,7 @@ def _estimate_token_count(chars_per_token: float, *parts: str | None) -> int:
     if not combined:
         return 0
     token_count = math.ceil(len(combined) / chars_per_token)
-    while token_count * chars_per_token < len(combined):
-        token_count += 1
-    while token_count > 0 and (token_count - 1) * chars_per_token >= len(combined):
-        token_count -= 1
-    return token_count
+    return token_count - int((token_count - 1) * chars_per_token >= len(combined))
 
 
 def _check_token_limit(actual: int, limit: int, label: str) -> None:
@@ -418,12 +416,12 @@ def _is_non_empty_string(value: object) -> bool:
 
 
 def _is_valid_chars_per_token(value: object) -> bool:
-    """Return True when *value* is a finite positive number (not bool)."""
+    """Return True when *value* can produce stable token-count estimates."""
     return (
         isinstance(value, int | float)
         and not isinstance(value, bool)
         and math.isfinite(value)
-        and value > 0
+        and value >= _MIN_CHARS_PER_TOKEN
     )
 
 
