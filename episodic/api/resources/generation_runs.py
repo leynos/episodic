@@ -16,6 +16,7 @@ from episodic.api.source_idempotency import (
     IdempotencyContext,
     IdempotentResponse,
     apply_response,
+    principal_id,
     run_idempotent,
 )
 from episodic.api.source_intake_support import json_body_hash, require_str
@@ -39,6 +40,7 @@ if typ.TYPE_CHECKING:
 _GENERATION_RUN_OPERATION = "generation_run.create"
 _RETRY_AFTER = "1"
 _MAX_EVENT_LIMIT = 100
+_DEFAULT_EVENT_LIMIT = 20
 
 
 class GenerationRunsResource:
@@ -64,9 +66,15 @@ class GenerationRunsResource:
         payload = require_payload_dict(await req.get_media())
         request = _parse_create_request(payload)
         launcher = self._require_launcher()
+        idempotency_key = req.get_header("Idempotency-Key")
 
         async def work() -> IdempotentResponse:
-            run = await self._create_run(source_bundle_id, request)
+            run = await self._create_run(
+                source_bundle_id,
+                request,
+                idempotency_key=idempotency_key,
+                idempotency_principal_id=principal_id(req),
+            )
             try:
                 await launcher.launch(run.id)
             except Exception as exc:
@@ -105,6 +113,9 @@ class GenerationRunsResource:
         self,
         source_bundle_id: uuid.UUID,
         request: _CreateGenerationRun,
+        *,
+        idempotency_key: str | None,
+        idempotency_principal_id: str | None,
     ) -> GenerationRun:
         async with self._uow_factory() as uow:
             try:
@@ -139,7 +150,11 @@ class GenerationRunsResource:
                 qa_status=QaStatus.SKIPPED,
                 skip_qa_rationale=request.skip_qa_rationale,
             )
-            await uow.generation_runs.create_run(run)
+            run = await uow.generation_runs.create_run(
+                run,
+                idempotency_key=idempotency_key,
+                idempotency_principal_id=idempotency_principal_id,
+            )
             await uow.commit()
             return run
 
@@ -200,12 +215,18 @@ class GenerationRunEventsResource:
         parsed_run_id = parse_uuid(run_id, "run_id")
         after_seq = _parse_optional_positive_int(req, "after_seq")
         limit = _parse_limit(req)
+        offset = _parse_offset(req)
         async with self._uow_factory() as uow:
             try:
                 events = await uow.generation_runs.list_events(
                     parsed_run_id,
                     after_seq=None if after_seq is None else event_seq(after_seq),
                     limit=limit,
+                    offset=offset,
+                )
+                total = await uow.generation_runs.count_events(
+                    parsed_run_id,
+                    after_seq=None if after_seq is None else event_seq(after_seq),
                 )
             except RunNotFound as exc:
                 raise _run_not_found(parsed_run_id) from exc
@@ -213,6 +234,8 @@ class GenerationRunEventsResource:
             "items": [serialize_generation_event(event) for event in events],
             "after_seq": after_seq,
             "limit": limit,
+            "offset": offset,
+            "total": total,
         }
         resp.status = falcon.HTTP_200
 
@@ -303,12 +326,26 @@ def _parse_optional_positive_int(req: falcon.Request, name: str) -> int | None:
 
 def _parse_limit(req: falcon.Request) -> int:
     raw = req.get_param("limit")
-    value = _MAX_EVENT_LIMIT if raw is None else _parse_int(raw, "limit")
+    value = _DEFAULT_EVENT_LIMIT if raw is None else _parse_int(raw, "limit")
     if value < 1 or value > _MAX_EVENT_LIMIT:
         message = f"limit must be between 1 and {_MAX_EVENT_LIMIT}."
         raise validation_error(
             message,
             field="limit",
+            constraint="range",
+        )
+    return value
+
+
+def _parse_offset(req: falcon.Request) -> int:
+    """Parse the event collection offset."""
+    raw = req.get_param("offset")
+    value = 0 if raw is None else _parse_int(raw, "offset")
+    if value < 0:
+        message = "offset must be a non-negative integer."
+        raise validation_error(
+            message,
+            field="offset",
             constraint="range",
         )
     return value

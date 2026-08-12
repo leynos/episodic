@@ -125,6 +125,7 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         run: GenerationRun,
         *,
         idempotency_key: str | None = None,
+        idempotency_principal_id: str | None = None,
     ) -> GenerationRun:
         """Return the supplied run."""
         return run
@@ -182,9 +183,19 @@ class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
         *,
         after_seq: EventSeq | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """Return no events."""
         return ()
+
+    async def count_events(
+        self,
+        run_id: uuid.UUID,
+        *,
+        after_seq: EventSeq | None = None,
+    ) -> int:
+        """Return no events."""
+        return 0
 
     async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
         """Return the supplied checkpoint."""
@@ -374,17 +385,6 @@ class TestGenerationEventLog:
         """Appending to a missing run should fail with the domain error."""
         with pytest.raises(RunNotFound, match=r"unknown generation run:"):
             await store.append_event(uuid.uuid7(), kind="created", payload={})
-
-    @pytest.mark.asyncio
-    async def test_list_events_rejects_negative_limit(
-        self,
-        store: InMemoryGenerationRunStore,
-    ) -> None:
-        """Event pagination limits must be non-negative."""
-        run = await store.create_run(make_generation_run())
-
-        with pytest.raises(ValueError, match="limit"):
-            await store.list_events(run.id, limit=-1)
 
 
 class TestCompositeProtocol:

@@ -59,8 +59,9 @@ class GenerationRunRepository(typ.Protocol):
         run: GenerationRun,
         *,
         idempotency_key: str | None = None,
+        idempotency_principal_id: str | None = None,
     ) -> GenerationRun:
-        """Create a run or return the first run for an idempotency key."""
+        """Create a run or return the first run for a principal-scoped key."""
         raise NotImplementedError
 
     async def get_run(self, run_id: uuid.UUID) -> GenerationRun | None:
@@ -128,8 +129,18 @@ class GenerationEventLog(typ.Protocol):
         *,
         after_seq: EventSeq | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run."""
+        raise NotImplementedError
+
+    async def count_events(
+        self,
+        run_id: uuid.UUID,
+        *,
+        after_seq: EventSeq | None = None,
+    ) -> int:
+        """Count events for a run after an optional sequence cursor."""
         raise NotImplementedError
 
 

@@ -6,10 +6,12 @@ import hashlib
 import typing as typ
 import uuid
 
+import falcon
 import httpx
 import pytest
 
 from episodic.api import create_app
+from episodic.api.resources.episode_tei import negotiate_tei_media_type
 from episodic.canonical.domain import EpisodeTeiUpdate
 from episodic.canonical.generation_quality import QaStatus
 from tests.fixtures.api import build_api_dependencies
@@ -18,6 +20,34 @@ from tests.test_generation_run_api import RecordingLauncher
 if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@pytest.mark.parametrize(
+    ("accept", "expected"),
+    [
+        ("application/tei+xml;q=0, application/json;q=0.5", "application/json"),
+        (
+            "application/json;q=0.1, application/tei+xml;q=0.9",
+            "application/tei+xml",
+        ),
+        ("application/tei+xml;q=0.1, */*;q=0.5", "application/json"),
+    ],
+)
+def test_negotiate_tei_media_type_honours_accept_quality(
+    accept: str,
+    expected: str,
+) -> None:
+    """TEI negotiation selects the highest-quality supported representation."""
+    actual = negotiate_tei_media_type(accept)
+    assert actual == expected, (
+        f"Accept {accept!r}: expected {expected!r}, got {actual!r}"
+    )
+
+
+def test_negotiate_tei_media_type_rejects_zero_quality_ranges() -> None:
+    """TEI negotiation rejects headers that exclude every supported type."""
+    with pytest.raises(falcon.HTTPNotAcceptable):
+        negotiate_tei_media_type("application/json;q=0, application/tei+xml;q=0")
 
 
 @pytest.mark.asyncio

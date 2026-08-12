@@ -77,7 +77,12 @@ def _create_generation_runs_table() -> None:
         ),
         sa.Column("qa_status", _enum("qa_status", "skipped"), nullable=True),
         sa.Column("skip_qa_rationale", sa.Text(), nullable=True),
-        sa.Column("idempotency_key", sa.String(length=512), nullable=True, unique=True),
+        sa.Column(
+            "idempotency_principal_id",
+            sa.String(length=200),
+            nullable=False,
+        ),
+        sa.Column("idempotency_key", sa.String(length=512), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("error_category", sa.String(length=120), nullable=True),
         sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
@@ -94,6 +99,11 @@ def _create_generation_runs_table() -> None:
             sa.DateTime(timezone=True),
             server_default=sa.func.now(),
             nullable=False,
+        ),
+        sa.UniqueConstraint(
+            "idempotency_principal_id",
+            "idempotency_key",
+            name="uq_generation_runs_idempotency_principal_key",
         ),
     )
     op.create_index(

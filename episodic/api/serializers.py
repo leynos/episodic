@@ -1,4 +1,8 @@
-"""Response serializers for Falcon profile and template endpoints."""
+"""Serialize canonical resources for Falcon API responses.
+
+The serializers cover profiles and templates, reusable reference documents,
+source-intake resources, generation runs and events, and TEI envelopes.
+"""
 
 import typing as typ
 import uuid  # noqa: TC003  # This type remains available at runtime for annotation introspection.

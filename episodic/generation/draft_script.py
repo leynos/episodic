@@ -217,7 +217,10 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
 
 def _require_non_empty_text(value: str, field_name: str) -> None:
     """Reject blank strings."""
-    if not isinstance(value, str) or value.strip() == "":
+    if not isinstance(value, str):
+        msg = f"{field_name} must be a string."
+        raise TypeError(msg)
+    if value.strip() == "":
         msg = f"{field_name} must be a non-empty string."
         raise ValueError(msg)
 

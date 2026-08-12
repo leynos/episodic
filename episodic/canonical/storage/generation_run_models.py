@@ -67,10 +67,13 @@ class GenerationRunRecord(Base):
         sa.Text,
         nullable=True,
     )
+    idempotency_principal_id: orm.Mapped[str] = orm.mapped_column(
+        sa.String(200),
+        nullable=False,
+    )
     idempotency_key: orm.Mapped[str | None] = orm.mapped_column(
         sa.String(512),
         nullable=True,
-        unique=True,
     )
     error_message: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
     error_category: orm.Mapped[str | None] = orm.mapped_column(
@@ -100,6 +103,14 @@ class GenerationRunRecord(Base):
         nullable=False,
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "idempotency_principal_id",
+            "idempotency_key",
+            name="uq_generation_runs_idempotency_principal_key",
+        ),
     )
 
 

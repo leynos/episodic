@@ -56,7 +56,9 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
     )
     _events: dict[uuid.UUID, list[GenerationEvent]] = dc.field(default_factory=dict)
     _checkpoints: dict[uuid.UUID, Checkpoint] = dc.field(default_factory=dict)
-    _idempotency_keys: dict[str, uuid.UUID] = dc.field(default_factory=dict)
+    _idempotency_keys: dict[tuple[str | None, str], uuid.UUID] = dc.field(
+        default_factory=dict
+    )
     _lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
 
     def _require_mutable_run(
@@ -85,6 +87,8 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
         offset: int,
     ) -> tuple[GenerationRun, ...]:
         """Return indexed runs for one episode without scanning all runs."""
+        if limit == 0:
+            return ()
         indexed_ids = self._run_ids_by_episode.get(episode_id, [])
         if status is None:
             selected_ids = indexed_ids[offset : offset + limit]
@@ -108,6 +112,7 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
         run: GenerationRun,
         *,
         idempotency_key: str | None = None,
+        idempotency_principal_id: str | None = None,
     ) -> GenerationRun:
         """Create a run, preserving first-write-wins idempotency.
 
@@ -119,7 +124,8 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
         """
         async with self._lock:
             if idempotency_key is not None:
-                existing_id = self._idempotency_keys.get(idempotency_key)
+                scope = (idempotency_principal_id, idempotency_key)
+                existing_id = self._idempotency_keys.get(scope)
                 if existing_id is not None:
                     _log_event(
                         "info",
@@ -136,7 +142,7 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
             )
             self._events.setdefault(run.id, [])
             if idempotency_key is not None:
-                self._idempotency_keys[idempotency_key] = run.id
+                self._idempotency_keys[scope] = run.id
             _log_event(
                 "info",
                 "generation_run_store.create_run",
@@ -226,7 +232,17 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
         started_at: dt.datetime,
         lease_expires_at: dt.datetime | None,
     ) -> GenerationRun | None:
-        """Atomically claim a pending run for execution."""
+        """Atomically claim a pending run for execution.
+
+        The reference adapter logs ``lease_expires_at`` for protocol parity but
+        does not retain it: ``GenerationRun`` has no lease field and no
+        in-memory consumer reads lease state.
+
+        Returns
+        -------
+        GenerationRun | None
+            The claimed run, or ``None`` when another claimant already won.
+        """
         async with self._lock:
             run = self._require_mutable_run(
                 run_id,
@@ -324,10 +340,11 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
         *,
         after_seq: EventSeq | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run after an optional sequence cursor."""
-        if limit < 0:
-            msg = "limit must be non-negative."
+        if limit < 0 or offset < 0:
+            msg = "limit and offset must be non-negative."
             raise ValueError(msg)
         async with self._lock:
             if run_id not in self._runs:
@@ -338,4 +355,19 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
                 for event in self._events.get(run_id, [])
                 if event.seq > minimum_seq
             ]
-            return tuple(events[:limit])
+            return tuple(events[offset : offset + limit])
+
+    async def count_events(
+        self,
+        run_id: uuid.UUID,
+        *,
+        after_seq: EventSeq | None = None,
+    ) -> int:
+        """Count events for a run after an optional sequence cursor."""
+        async with self._lock:
+            if run_id not in self._runs:
+                raise RunNotFound(run_id)
+            minimum_seq = int(after_seq) if after_seq is not None else 0
+            return sum(
+                event.seq > minimum_seq for event in self._events.get(run_id, [])
+            )

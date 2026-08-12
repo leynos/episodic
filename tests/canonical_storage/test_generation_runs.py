@@ -103,10 +103,9 @@ async def test_generation_run_store_persists_across_unit_of_work(
     session_factory: object,
 ) -> None:
     """Runs and events should survive fresh unit-of-work instances."""
-    factory = _factory(session_factory)
     run = make_generation_run()
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(_factory(session_factory)) as uow:
         stored = await uow.generation_runs.create_run(
             run,
             idempotency_key="persist-run",
@@ -119,7 +118,7 @@ async def test_generation_run_store_persists_across_unit_of_work(
         )
         await uow.commit()
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(_factory(session_factory)) as uow:
         fetched = await uow.generation_runs.get_run(run.id)
         events = await uow.generation_runs.list_events(run.id)
 

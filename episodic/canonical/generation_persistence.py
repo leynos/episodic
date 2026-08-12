@@ -3,7 +3,6 @@
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
-import hashlib
 import typing as typ
 import uuid
 
@@ -20,6 +19,7 @@ from episodic.canonical.domain import (
     TeiHeader,
 )
 from episodic.canonical.generation_quality import QaStatus
+from episodic.canonical.hashing import sha256_text
 from episodic.canonical.source_intake_errors import IngestionJobNotFoundError
 from episodic.canonical.tei import parse_tei_header
 
@@ -299,17 +299,12 @@ def _source_content_hash(source: IngestionJobSource, upload: Upload | None) -> s
         return metadata_hash
     if upload is not None and upload.content_hash:
         return upload.content_hash
-    return _sha256_text(f"{source.source_type}:{_source_uri(source, upload)}")
+    return sha256_text(f"{source.source_type}:{_source_uri(source, upload)}")
 
 
 def _validate_draft_result(result: DraftScriptResult) -> None:
     """Validate draft result metadata before writing episode TEI."""
-    expected_hash = _sha256_text(result.tei_xml)
+    expected_hash = sha256_text(result.tei_xml)
     if result.content_hash != expected_hash:
         msg = "Draft script content_hash does not match tei_xml."
         raise DraftScriptPersistenceError(msg)
-
-
-def _sha256_text(value: str) -> str:
-    """Return a prefixed SHA-256 text hash."""
-    return f"sha256:{hashlib.sha256(value.encode()).hexdigest()}"

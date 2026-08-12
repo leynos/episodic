@@ -79,7 +79,13 @@ class EpisodeRepository(typ.Protocol):
         *,
         update: EpisodeTeiUpdate,
     ) -> CanonicalEpisode:
-        """Update episode TEI with an optimistic revision precondition."""
+        """Update episode TEI with an optimistic revision precondition.
+
+        Raises
+        ------
+        EpisodeRevisionConflictError
+            If ``update.expected_revision`` differs from the stored revision.
+        """
         raise NotImplementedError
 
 

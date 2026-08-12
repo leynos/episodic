@@ -113,6 +113,12 @@ class EpisodeRecord(Base):
     """
 
     __tablename__ = "episodes"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "tei_revision >= 1",
+            name="ck_episodes_tei_revision_positive",
+        ),
+    )
 
     id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -150,7 +156,7 @@ class EpisodeRecord(Base):
     )
     last_generation_run_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
-        sa.ForeignKey("generation_runs.id"),
+        sa.ForeignKey("generation_runs.id", ondelete="SET NULL"),
         nullable=True,
     )
     status: orm.Mapped[EpisodeStatus] = orm.mapped_column(

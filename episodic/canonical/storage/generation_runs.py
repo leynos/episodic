@@ -23,6 +23,8 @@ from episodic.orchestration._types import _log_event
 
 from .generation_run_models import GenerationEventRecord, GenerationRunRecord
 
+_ANONYMOUS_IDEMPOTENCY_PRINCIPAL = "__anonymous__"
+
 if typ.TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,6 +62,7 @@ def _run_to_record(
     run: GenerationRun,
     *,
     idempotency_key: str | None,
+    idempotency_principal_id: str | None,
 ) -> GenerationRunRecord:
     """Map a generation-run domain entity to a SQLAlchemy record."""
     return GenerationRunRecord(
@@ -74,6 +77,9 @@ def _run_to_record(
         quality_mode=run.quality_mode,
         qa_status=run.qa_status,
         skip_qa_rationale=run.skip_qa_rationale,
+        idempotency_principal_id=(
+            idempotency_principal_id or _ANONYMOUS_IDEMPOTENCY_PRINCIPAL
+        ),
         idempotency_key=idempotency_key,
         error_message=run.error_message,
         error_category=run.error_category,
@@ -136,12 +142,15 @@ class SqlAlchemyGenerationRunStore:
 
     async def _get_by_idempotency_key(
         self,
+        idempotency_principal_id: str | None,
         idempotency_key: str,
     ) -> GenerationRun | None:
         """Return the first run for an idempotency key."""
         result = await self._session.execute(
             sa.select(GenerationRunRecord).where(
-                GenerationRunRecord.idempotency_key == idempotency_key
+                GenerationRunRecord.idempotency_principal_id
+                == (idempotency_principal_id or _ANONYMOUS_IDEMPOTENCY_PRINCIPAL),
+                GenerationRunRecord.idempotency_key == idempotency_key,
             )
         )
         record = result.scalar_one_or_none()
@@ -154,14 +163,22 @@ class SqlAlchemyGenerationRunStore:
         run: GenerationRun,
         *,
         idempotency_key: str | None = None,
+        idempotency_principal_id: str | None = None,
     ) -> GenerationRun:
         """Create a run, reusing the first run for an idempotency key."""
         if idempotency_key is not None:
-            existing = await self._get_by_idempotency_key(idempotency_key)
+            existing = await self._get_by_idempotency_key(
+                idempotency_principal_id,
+                idempotency_key,
+            )
             if existing is not None:
                 return existing
 
-        record = _run_to_record(run, idempotency_key=idempotency_key)
+        record = _run_to_record(
+            run,
+            idempotency_key=idempotency_key,
+            idempotency_principal_id=idempotency_principal_id,
+        )
         try:
             async with self._session.begin_nested():
                 self._session.add(record)
@@ -169,7 +186,10 @@ class SqlAlchemyGenerationRunStore:
         except IntegrityError:
             if idempotency_key is None:
                 raise
-            existing = await self._get_by_idempotency_key(idempotency_key)
+            existing = await self._get_by_idempotency_key(
+                idempotency_principal_id,
+                idempotency_key,
+            )
             if existing is not None:
                 return existing
             raise
@@ -322,10 +342,11 @@ class SqlAlchemyGenerationRunStore:
         *,
         after_seq: EventSeq | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run after an optional sequence cursor."""
-        if limit < 0:
-            msg = "limit must be non-negative."
+        if limit < 0 or offset < 0:
+            msg = "limit and offset must be non-negative."
             raise ValueError(msg)
         if await self._get_record(run_id) is None:
             raise RunNotFound(run_id)
@@ -339,5 +360,27 @@ class SqlAlchemyGenerationRunStore:
             )
             .order_by(GenerationEventRecord.seq)
             .limit(limit)
+            .offset(offset)
         )
         return tuple(_event_from_record(record) for record in result.scalars())
+
+    async def count_events(
+        self,
+        run_id: uuid.UUID,
+        *,
+        after_seq: EventSeq | None = None,
+    ) -> int:
+        """Count events for a run after an optional sequence cursor."""
+        if await self._get_record(run_id) is None:
+            raise RunNotFound(run_id)
+        minimum_seq = int(after_seq) if after_seq is not None else 0
+        count = await self._session.scalar(
+            sa
+            .select(sa.func.count())
+            .select_from(GenerationEventRecord)
+            .where(
+                GenerationEventRecord.generation_run_id == run_id,
+                GenerationEventRecord.seq > minimum_seq,
+            )
+        )
+        return typ.cast("int", count)

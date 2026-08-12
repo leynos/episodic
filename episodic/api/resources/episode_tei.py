@@ -49,10 +49,11 @@ def negotiate_tei_media_type(accept: str | None) -> str:
     """Choose JSON metadata or raw TEI XML from an HTTP Accept header."""
     if accept is None or not accept.strip():
         return _JSON_MEDIA_TYPE
-    accepted = {part.split(";", maxsplit=1)[0].strip() for part in accept.split(",")}
-    if _TEI_MEDIA_TYPE in accepted:
+    tei_quality = falcon.mediatypes.quality(_TEI_MEDIA_TYPE, accept)
+    json_quality = falcon.mediatypes.quality(_JSON_MEDIA_TYPE, accept)
+    if tei_quality > 0 and tei_quality > json_quality:
         return _TEI_MEDIA_TYPE
-    if _JSON_MEDIA_TYPE in accepted or "*/*" in accepted:
+    if json_quality > 0:
         return _JSON_MEDIA_TYPE
     raise typ.cast(
         "falcon.HTTPNotAcceptable",

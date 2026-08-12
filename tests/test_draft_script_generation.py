@@ -124,6 +124,18 @@ def _request() -> DraftScriptRequest:
     )
 
 
+def test_draft_source_rejects_non_string_content() -> None:
+    """Source validation distinguishes type errors from blank text."""
+    with pytest.raises(TypeError, match="content must be a string"):
+        DraftScriptSource(
+            source_id="source-1",
+            source_type="research_brief",
+            source_uri="https://example.test/source",
+            content=typ.cast("str", 1),
+            weight=1.0,
+        )
+
+
 @pytest.mark.asyncio
 async def test_draft_script_generator_emits_valid_stable_tei(
     snapshot: SnapshotAssertion,

@@ -22,6 +22,11 @@ def upgrade() -> None:
         "episodes",
         sa.Column("tei_revision", sa.Integer(), server_default="1", nullable=False),
     )
+    op.create_check_constraint(
+        "ck_episodes_tei_revision_positive",
+        "episodes",
+        "tei_revision >= 1",
+    )
     op.add_column(
         "episodes",
         sa.Column("tei_content_hash", sa.String(length=128), nullable=True),
@@ -44,6 +49,7 @@ def upgrade() -> None:
         "generation_runs",
         ["last_generation_run_id"],
         ["id"],
+        ondelete="SET NULL",
     )
 
 
@@ -57,4 +63,9 @@ def downgrade() -> None:
     op.drop_column("episodes", "last_generation_run_id")
     op.drop_column("episodes", "qa_status")
     op.drop_column("episodes", "tei_content_hash")
+    op.drop_constraint(
+        "ck_episodes_tei_revision_positive",
+        "episodes",
+        type_="check",
+    )
     op.drop_column("episodes", "tei_revision")

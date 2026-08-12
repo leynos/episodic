@@ -264,6 +264,17 @@ Runtime environment:
   `FilesystemObjectStore` for source-intake upload bytes. The runtime fails
   fast when the value is missing, because `POST /v1/uploads` cannot accept
   payloads without an object-store adapter.
+- `OPENAI_BASE_URL` and `OPENAI_API_KEY` are optional paired settings. Set both
+  to configure the OpenAI-compatible provider; setting only one is invalid and
+  prevents startup.
+- `DRAFT_MODEL` defaults to `gpt-4o-mini`. When set explicitly, it must be a
+  non-empty string after whitespace is trimmed.
+- When the OpenAI settings are configured, startup builds an
+  `OpenAICompatibleLLMAdapter` and an `InProcessGenerationRunLauncher`. When
+  they are not configured, generation-run creation returns `503 Service
+  Unavailable` because no launcher is available.
+- During shutdown, the runtime shuts down the launcher (cancelling and
+  draining its scheduled tasks) before closing the provider client.
 
 Health contract:
 
@@ -1509,8 +1520,8 @@ tasks.
 The launcher conditionally claims pending runs, resolves host and guest
 profiles, and emits ordered events before persisting terminal status. Preserve
 the stable failure categories and bounded-cardinality metric labels when adding
-new generation failures. Lease expiry and the stuck-run gauge are operational
-recovery hooks, not an automatic retry mechanism.
+new generation failures. Lease expiry and the persisted lease fields are
+operational recovery hooks, not an automatic retry mechanism.
 
 TEI representation selection is centralized in
 `episodic.api.resources.episode_tei.negotiate_tei_media_type`. Keep JSON as the

@@ -21,7 +21,6 @@ import sqlalchemy as sa
 from episodic.canonical.entity_protocols import (
     ApprovalEventRepository,
     EpisodeTemplateRepository,
-    IngestionJobRepository,
     SeriesProfileRepository,
     SourceDocumentRepository,
     TeiHeaderRepository,
@@ -32,8 +31,6 @@ from .entity_mappers import (
     _approval_event_to_record,
     _episode_template_from_record,
     _episode_template_to_record,
-    _ingestion_job_from_record,
-    _ingestion_job_to_record,
     _series_profile_from_record,
     _series_profile_to_record,
     _source_document_from_record,
@@ -43,7 +40,6 @@ from .entity_mappers import (
 )
 from .entity_models import (
     ApprovalEventRecord,
-    IngestionJobRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
 )
@@ -66,7 +62,6 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         ApprovalEvent,
         EpisodeTemplate,
-        IngestionJob,
         SeriesProfile,
         SourceDocument,
         TeiHeader,
@@ -165,54 +160,6 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
             TeiHeaderRecord,
             TeiHeaderRecord.id == header_id,
             _tei_header_from_record,
-        )
-
-
-class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
-    """Persist ingestion jobs using SQLAlchemy."""
-
-    async def add(self, job: IngestionJob) -> None:
-        """Add an ingestion job record.
-
-        Parameters
-        ----------
-        job : IngestionJob
-            Ingestion job domain entity to persist.
-
-        """
-        self._session.add(_ingestion_job_to_record(job))
-
-    async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
-        """Fetch an ingestion job by identifier."""
-        return await self._get_one_or_none(
-            IngestionJobRecord,
-            IngestionJobRecord.id == job_id,
-            _ingestion_job_from_record,
-        )
-
-    async def get_for_update(self, job_id: uuid.UUID) -> IngestionJob | None:
-        """Fetch and lock an ingestion job for transactional mutation."""
-        result = await self._session.execute(
-            sa
-            .select(IngestionJobRecord)
-            .where(IngestionJobRecord.id == job_id)
-            .with_for_update()
-        )
-        record = result.scalar_one_or_none()
-        return None if record is None else _ingestion_job_from_record(record)
-
-    async def set_target_episode(
-        self,
-        job_id: uuid.UUID,
-        *,
-        episode_id: uuid.UUID,
-    ) -> None:
-        """Associate an ingestion job with its materialized episode."""
-        await self._session.execute(
-            sa
-            .update(IngestionJobRecord)
-            .where(IngestionJobRecord.id == job_id)
-            .values(target_episode_id=episode_id, updated_at=sa.func.now())
         )
 
 
@@ -368,7 +315,6 @@ __all__ = (
     "SqlAlchemyApprovalEventRepository",
     "SqlAlchemyEpisodeTemplateHistoryRepository",
     "SqlAlchemyEpisodeTemplateRepository",
-    "SqlAlchemyIngestionJobRepository",
     "SqlAlchemyReferenceBindingRepository",
     "SqlAlchemyReferenceDocumentRepository",
     "SqlAlchemyReferenceDocumentRevisionRepository",

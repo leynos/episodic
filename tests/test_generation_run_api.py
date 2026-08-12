@@ -117,6 +117,12 @@ async def test_generation_run_create_replay_and_poll(
     assert events_response.json()["after_seq"] == 1, (
         f"expected after_seq 1, got {events_response.json()['after_seq']!r}"
     )
+    assert events_response.json()["offset"] == 0, (
+        f"expected offset 0, got {events_response.json()['offset']!r}"
+    )
+    assert events_response.json()["total"] == 1, (
+        f"expected one matching event, got {events_response.json()['total']!r}"
+    )
 
 
 @pytest.mark.asyncio

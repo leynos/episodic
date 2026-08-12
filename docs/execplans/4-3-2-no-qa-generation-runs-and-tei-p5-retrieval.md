@@ -172,18 +172,18 @@ when any of the following is breached.
   high (happens on every deploy overlapping an in-flight run). Mitigation:
   persist `started_at` (indexed) and add `lease_expires_at` and
   `error_category` columns now (additive); make `pending → running` a
-  conditional update; emit a startup stuck-run gauge (count of `running` older
-  than a threshold) so the state is alertable; document a manual-fail runbook.
-  The automated reaper itself is deferred to 2.6.2, but the recoverable hooks
-  and signal ship now (ADR 009 §Partial-failure recovery and §Observability
-  require this regardless of when the worker lands).
+  conditional update; retain the launcher's terminal-state, draft-error,
+  QA-bypass, and draft-latency metrics; document a manual-fail runbook. The
+  automated reaper itself is deferred to 2.6.2, but the recoverable hooks ship
+  now (ADR 009 §Partial-failure recovery and §Observability require this
+  regardless of when the worker lands).
 - Risk: idempotency partial failure — the run row is created but task scheduling
   fails, orphaning a `pending` run while the idempotency record is `failed` or
   `complete`. Severity: high. Likelihood: medium. Mitigation: specify the
   ordering — create the run row and schedule the task inside the same `work()`;
   if scheduling fails, mark the run `failed` with an `error_message` (do not
   merely fail the idempotency record) so the orphan is visible and the
-  stuck-run gauge catches it.
+  manual recovery can identify it.
 - Risk: the generated draft is not valid TEI-P5 and fails `tei-rapporteur`
   validation on persistence, raising inside the detached task with no Falcon
   handler. Severity: high. Likelihood: medium. Mitigation: the launcher's outer
@@ -1464,7 +1464,7 @@ Gate: full Python gates including the now-active scenarios. Commit.
 1. Add `docs/adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md`
    recording: the in-process launcher port (a degenerate `TaskResumePort`) and
    the Celery deferral, the single-worker assumption and stuck-run hooks (lease
-   columns, conditional transitions, stuck-run gauge, manual-fail runbook),
+   columns, conditional transitions, manual-fail runbook),
    episode materialization from ingestion, the `DraftScriptGenerator` port and
    its 4.4.1 successor, episode TEI revisioning and optimistic update, the
    422-vs-400 and 404 contract decisions, and the content-negotiation approach.
@@ -1625,11 +1625,10 @@ checking then.
   episode TEI write is optimistic on `tei_revision`. This prevents double-spend
   and clobbering if a future reaper re-launches.
 - If the service restarts mid-run, the run may remain `running` (no automated
-  reaper in this slice). The `started_at`/`lease_expires_at` columns and the
-  startup stuck-run gauge make this state recoverable and alertable; the
-  manual-fail runbook (in ADR 016 / developers' guide) describes how to fail a
-  stuck run and its idempotency record. The automated reaper is a 2.6.2
-  follow-up.
+  reaper in this slice). The `started_at`/`lease_expires_at` columns support
+  manual recovery; the manual-fail runbook (in ADR 016 / developers' guide)
+  describes how to fail a stuck run and its idempotency record. The automated
+  reaper is a 2.6.2 follow-up.
 - Known limitation: a `pending`/`running` run that outlives the 24h idempotency
   TTL could let a replayed key create a second run; documented for the 2.6.2
   recovery work.
@@ -1848,8 +1847,8 @@ Changes: split Milestone 2 into 2a (runs/events) and 2b (episode TEI columns)
 to respect the file/line tolerance; made the launcher own a fresh unit of work
 (use-after-free fix) with a dedicated detached-session test; added durable
 stuck-run hooks (indexed `started_at`, `lease_expires_at`, `error_category`,
-conditional `pending → running`, optimistic TEI update, startup stuck-run
-gauge); extended idempotency replay to carry `Location`/`Retry-After`;
+conditional `pending → running`, optimistic TEI update); extended idempotency
+replay to carry `Location`/`Retry-After`;
 corrected the `json_body_hash` module path and added the
 `generation_run.create` operation; specified the request-body required/optional
 split and the 422-vs-400 and 404 contract decisions; made cost-recorder wiring
