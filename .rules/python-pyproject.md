@@ -320,9 +320,10 @@ package = true
 
 4. **Build System:**
 
-   - `setuptools>=64.0` plus `wheel` ensures both legacy and editable installs
-     work. ✱ Newer versions of setuptools support PEP 660 editable installs
-     without a `setup.py` stub. (Python Packaging[^4], Astral Docs[^7])
+   - `setuptools>=64.0` provides PEP 660 editable-install support for
+     compatible project layouts. ✱ Newer versions of setuptools support PEP 660
+     editable installs without a `setup.py` stub. (Python Packaging[^4], Astral
+     Docs[^7])
    - `build-backend = "setuptools.build_meta"` tells `uv` how to compile your
      package. (Python Packaging[^4], Astral Docs[^7])
 

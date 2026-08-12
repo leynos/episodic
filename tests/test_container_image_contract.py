@@ -114,23 +114,26 @@ def test_dockerignore_excludes_local_and_test_artifacts() -> None:
         (REPOSITORY_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     )
 
-    expected_ignored_paths = {
+    expected_ignored_paths = (
         ".git",
-        ".venv",
         ".pytest_cache",
         ".ruff_cache",
         ".uv-cache",
         ".uv-tools",
+        ".venv",
         "__pycache__",
         "build",
         "coverage.*",
         "dist",
         "htmlcov",
         "tests",
-    }
+    )
 
-    assert expected_ignored_paths <= set(ignored_paths), (
-        ".dockerignore must exclude local build, test, and cache artifacts"
+    required_exclusions = tuple(
+        path for path in ignored_paths if path in expected_ignored_paths
+    )
+    assert required_exclusions == expected_ignored_paths, (
+        ".dockerignore must exclude local build, test, and cache artifacts in order"
     )
 
 
