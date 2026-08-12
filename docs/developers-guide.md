@@ -540,6 +540,17 @@ autogenerate feature:
 DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
 ```
 
+### Alembic database URL resolution
+
+`alembic/env.py` delegates URL setup to `configure_database_url` in
+`episodic.canonical.storage.alembic_helpers`. The helper gives `DATABASE_URL`
+precedence over any existing `sqlalchemy.url` value in the Alembic
+configuration. When `DATABASE_URL` is unset, a non-empty configured
+`sqlalchemy.url` is retained as the fallback. Percent signs are doubled before
+the URL is written to Alembic's `ConfigParser`, so percent-encoded credentials
+round-trip correctly. If neither source provides a URL,
+`configure_database_url` raises `ValueError`.
+
 Migration files follow the naming convention
 `YYYYMMDD_NNNNNN_short_description.py` (for example
 `20260203_000001_create_canonical_schema.py`).
