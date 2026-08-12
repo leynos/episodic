@@ -32,9 +32,15 @@ from tests._orchestration_property_support import (
     token_inputs_strategy,
 )
 
+_DEFAULT_PLANNER_USAGE = LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2)
 
-def _planner_result() -> PlannerResult:
-    """Build a minimal planner result for graph callback probes."""
+
+def _planner_result(
+    *,
+    usage: LLMUsage = _DEFAULT_PLANNER_USAGE,
+    model: str = "prop-plan-model",
+) -> PlannerResult:
+    """Build a planner result for graph tests."""
     return PlannerResult(
         plan=ExecutionPlan(
             plan_version="1.0",
@@ -50,8 +56,8 @@ def _planner_result() -> PlannerResult:
                 ),
             ),
         ),
-        usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
-        model="prop-plan-model",
+        usage=usage,
+        model=model,
         provider_response_id="prop-planner",
         finish_reason="stop",
     )
@@ -74,34 +80,6 @@ def _request(correlation_id: str = "callback-probe") -> GenerationOrchestrationR
     return GenerationOrchestrationRequest(
         correlation_id=correlation_id,
         script_tei_xml="<TEI><text><body><p>body</p></body></text></TEI>",
-    )
-
-
-def _planner_result_from_tokens(tokens: PropTokenInputs) -> PlannerResult:
-    """Build a planner result from generated token counts."""
-    return PlannerResult(
-        plan=ExecutionPlan(
-            plan_version="1.0",
-            selected_planning_model="prop-plan-model",
-            selected_execution_model="prop-exec-model",
-            steps=(
-                PlannedAction(
-                    action_id="action-1",
-                    action_kind=ActionKind.GENERATE_SHOW_NOTES,
-                    rationale="prop graph rationale",
-                    model_tier=ModelTier.EXECUTION,
-                    required_inputs=("script_tei_xml",),
-                ),
-            ),
-        ),
-        usage=LLMUsage(
-            tokens.planner_input,
-            tokens.planner_output,
-            tokens.planner_input + tokens.planner_output,
-        ),
-        model="gpt-4.1",
-        provider_response_id="prop-planner",
-        finish_reason="stop",
     )
 
 
@@ -146,7 +124,14 @@ async def test_langgraph_total_tokens_non_negative(
     correlation_id: str,
 ) -> None:
     """Property test: LangGraph rollups keep total token counts semiring-safe."""
-    planner_result = _planner_result_from_tokens(tokens)
+    planner_result = _planner_result(
+        usage=LLMUsage(
+            tokens.planner_input,
+            tokens.planner_output,
+            tokens.planner_input + tokens.planner_output,
+        ),
+        model="gpt-4.1",
+    )
     tool_result = _action_result_from_tokens(tokens)
 
     graph = build_generation_orchestration_graph(
