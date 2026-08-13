@@ -19,7 +19,8 @@ from .tasks import (
     IoDiagnosticResult,
     WorkerDependencies,
 )
-from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology, WorkloadClass
+from .topology import DEFAULT_WORKER_TOPOLOGY, WorkerTopology
+from .workloads import WorkloadClass
 
 __all__ = [
     "CPU_DIAGNOSTIC_TASK_NAME",

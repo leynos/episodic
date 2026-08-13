@@ -27,7 +27,7 @@ from episodic.canonical.generation_run_errors import (
     RunNotFound,
 )
 from episodic.canonical.generation_run_ports import EventSeq, event_seq
-from episodic.orchestration._types import _log_event
+from episodic.logging import log_event as _log_event
 
 TimeProvider = cabc.Callable[[], dt.datetime]
 

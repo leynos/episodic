@@ -17,7 +17,7 @@ import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
 
-from episodic.orchestration._dto import WorkflowCheckpoint
+from episodic.orchestration._checkpoint_dto import WorkflowCheckpoint
 from episodic.orchestration._types import _log_event
 
 TimeProvider = cabc.Callable[[], dt.datetime]

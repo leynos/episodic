@@ -97,6 +97,8 @@ or delivery planning.
   - import-boundary enforcement model.
 - [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
   - source-intake upload storage and idempotency port decisions.
+- [ADR 016: Orchestration architecture enforcement](adr/adr-016-orchestration-architecture-enforcement.md)
+  - LangGraph node, Celery task, and checkpoint payload enforcement decisions.
 
 ## Execution plans
 
@@ -142,6 +144,8 @@ or delivery planning.
   - orchestration checkpoint plan.
 - [Configure Celery queue routing](execplans/2-4-3-configure-celery-queue-routing.md)
   - worker routing plan.
+- [Extend architecture enforcement to orchestration code](execplans/2-4-5-extend-architecture-enforcement-to-orchestration-code.md)
+  - orchestration architecture enforcement plan.
 - [LLM port adapter](execplans/3-2-1-llm-port-adapter.md) - large language
   model adapter plan.
 - [Introduce v1 target API prefix](execplans/4-1-1-introduce-v1-target-api-prefix.md)
