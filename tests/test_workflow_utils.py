@@ -236,6 +236,8 @@ def _run_act_subprocess(cmd: list[str], env: dict[str, str]) -> tuple[int, str]:
 def _has_unsupported_artifact_protocol(logs: str) -> bool:
     """Return whether act rejected upload-artifact's current request schema."""
     return _UNSUPPORTED_ARTIFACT_FIELD in logs
+
+
 def run_act(
     *,
     job_name: str,
