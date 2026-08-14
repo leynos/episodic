@@ -99,7 +99,10 @@ def _action_result_from_tokens(tokens: PropTokenInputs) -> ActionExecutionResult
     )
 
 
-def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
+def _assert_non_negative_usage(  # pylint: disable=useless-return  # The helper ends explicitly after its assertion contract.
+    usage: LLMUsage,
+    expected_total: int,
+) -> None:
     """Assert non-negative token counts and the expected aggregate total."""
     assert usage.input_tokens >= 0, "usage.input_tokens count must be non-negative"
     assert usage.output_tokens >= 0, "usage.output_tokens count must be non-negative"
@@ -107,6 +110,7 @@ def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
     assert usage.total_tokens == expected_total, (
         "usage.total_tokens must equal the expected aggregate"
     )
+    return  # noqa: PLR1711  # The helper ends explicitly after its assertion contract.
 
 
 @given(
@@ -122,7 +126,7 @@ def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
 async def test_langgraph_total_tokens_non_negative(
     tokens: PropTokenInputs,
     correlation_id: str,
-) -> None:
+) -> None:  # pylint: disable=useless-return  # The property test ends explicitly after its assertion contract.
     """Property test: LangGraph rollups keep total token counts semiring-safe."""
     planner_result = _planner_result(
         usage=LLMUsage(
@@ -152,6 +156,7 @@ async def test_langgraph_total_tokens_non_negative(
     assert state["action_results"][0].model == "prop-exec-model", (
         "first action result model must be prop-exec-model"
     )
+    return  # noqa: PLR1711  # The property test ends explicitly after its assertion contract.
 
 
 @given(
