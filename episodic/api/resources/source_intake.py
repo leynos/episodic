@@ -227,11 +227,11 @@ class IngestionJobResource:
         self,
         req: falcon.Request,
         resp: falcon.Response,
-        job_id: str,
+        ingestion_job_id: str,
     ) -> None:
         """Return the current intake status for one ingestion job."""
         del req
-        parsed_job_id = parse_uuid(job_id, "job_id")
+        parsed_job_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         async with self._uow_factory() as uow:
             try:
                 job = await get_ingestion_job_status(uow, parsed_job_id)
@@ -257,10 +257,10 @@ class IngestionJobSourcesResource:
         self,
         req: falcon.Request,
         resp: falcon.Response,
-        job_id: str,
+        ingestion_job_id: str,
     ) -> None:
         """Attach one upload or remote URI source to an ingestion job."""
-        parsed_job_id = parse_uuid(job_id, "job_id")
+        parsed_job_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         payload = require_payload_dict(await req.get_media())
         body_hash = json_body_hash(payload)
         attach_request = build_attach_source_request(parsed_job_id, payload)
@@ -291,10 +291,10 @@ class IngestionJobSourcesResource:
         self,
         req: falcon.Request,
         resp: falcon.Response,
-        job_id: str,
+        ingestion_job_id: str,
     ) -> None:
         """List source attachments for one ingestion job."""
-        parsed_job_id = parse_uuid(job_id, "job_id")
+        parsed_job_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         pagination = parse_pagination(req)
         async with self._uow_factory() as uow:
             try:

@@ -49,6 +49,7 @@ class RuntimeConfig:
     llm_base_url: str | None
     llm_api_key: str | None
     draft_model: str
+    pricing_snapshot_directory: pathlib.Path
 
 
 _SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
@@ -59,7 +60,13 @@ GRANIAN_INTERFACE = "asgi"
 HTTP_BIND_PORT = 8080
 _DEFAULT_DRAFT_MODEL = "gpt-4o-mini"
 _DEFAULT_LLM_PROVIDER_NAME = "openai"
-_DEFAULT_PRICING_DIRECTORY = pathlib.Path("config/pricing-snapshots")
+_REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_DEFAULT_PRICING_DIRECTORY = _REPOSITORY_ROOT / "config/pricing-snapshots"
+_PRICING_DIRECTORY_SETTING = "PRICING_SNAPSHOT_DIRECTORY"
+
+
+class RuntimeConfigurationError(RuntimeError):
+    """Raised when required HTTP-runtime configuration is invalid."""
 
 
 class PsycopgConnectKwargs(typ.TypedDict, total=False):
@@ -84,7 +91,7 @@ def _required_setting(
     """Return a required, non-empty environment setting."""
     value = environment.get(name, "").strip()
     if not value:
-        raise RuntimeError(error_message)
+        raise RuntimeConfigurationError(error_message)
     return value
 
 
@@ -96,8 +103,22 @@ def _llm_settings(
     api_key = environment.get("OPENAI_API_KEY", "").strip() or None
     if (base_url is None) != (api_key is None):
         msg = "OPENAI_BASE_URL and OPENAI_API_KEY must be configured together."
-        raise RuntimeError(msg)
+        raise RuntimeConfigurationError(msg)
     return base_url, api_key
+
+
+def _pricing_snapshot_directory(
+    environment: cabc.Mapping[str, str],
+) -> pathlib.Path:
+    """Return the configured immutable pricing-catalogue directory."""
+    configured = environment.get(_PRICING_DIRECTORY_SETTING, "").strip()
+    candidate = pathlib.Path(configured) if configured else _DEFAULT_PRICING_DIRECTORY
+    directory = candidate if candidate.is_absolute() else _REPOSITORY_ROOT / candidate
+    resolved = directory.resolve()
+    if not resolved.is_dir():
+        msg = f"{_PRICING_DIRECTORY_SETTING} must name an existing directory."
+        raise RuntimeConfigurationError(msg)
+    return resolved
 
 
 def _load_runtime_config(
@@ -117,7 +138,7 @@ def _load_runtime_config(
             "SOURCE_INTAKE_OBJECT_STORE_ROOT must be set before starting "
             "the HTTP service.",
         )
-    except RuntimeError:
+    except RuntimeConfigurationError:
         log_warning(
             logger,
             "runtime_config_missing setting=%s",
@@ -134,6 +155,7 @@ def _load_runtime_config(
         if "DRAFT_MODEL" in environment
         else _DEFAULT_DRAFT_MODEL
     )
+    pricing_snapshot_directory = _pricing_snapshot_directory(environment)
     log_info(
         logger,
         "runtime_config_loaded source_intake_object_store_configured",
@@ -144,6 +166,7 @@ def _load_runtime_config(
         llm_base_url=llm_base_url,
         llm_api_key=llm_api_key,
         draft_model=draft_model,
+        pricing_snapshot_directory=pricing_snapshot_directory,
     )
 
 
@@ -200,12 +223,18 @@ def _build_generation_launcher(
     llm_port: LLMPort | None,
     *,
     object_store: ObjectStorePort | None = None,
-    draft_model: str = _DEFAULT_DRAFT_MODEL,
+    config: RuntimeConfig | None = None,
 ) -> InProcessGenerationRunLauncher | None:
     """Build the no-QA generation-run launcher when an LLM port is configured."""
     if llm_port is None:
         return None
-    pricing_catalogue = FilePricingCatalogue(_DEFAULT_PRICING_DIRECTORY)
+    draft_model = _DEFAULT_DRAFT_MODEL if config is None else config.draft_model
+    pricing_directory = (
+        _DEFAULT_PRICING_DIRECTORY
+        if config is None
+        else config.pricing_snapshot_directory
+    )
+    pricing_catalogue = FilePricingCatalogue(pricing_directory)
 
     def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
         return CostRecorder(
@@ -309,7 +338,7 @@ def create_app_from_env() -> asgi.App:
         uow_factory,
         llm_port,
         object_store=object_store,
-        draft_model=config.draft_model,
+        config=config,
     )
     if launcher is None:
         shutdown_hooks = (shutdown_hook,)

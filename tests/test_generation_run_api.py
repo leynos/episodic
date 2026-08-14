@@ -3,6 +3,7 @@
 import dataclasses as dc
 import datetime as dt
 import typing as typ
+import uuid
 from unittest import mock
 
 import httpx
@@ -12,8 +13,6 @@ from episodic.api import create_app
 from tests.fixtures.api import build_api_dependencies
 
 if typ.TYPE_CHECKING:
-    import uuid
-
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -66,12 +65,12 @@ async def test_generation_run_create_replay_and_poll(
         ingestion_job_id = await _create_ready_ingestion_job(client)
         payload = _generation_payload()
         first = await client.post(
-            f"/v1/episodes/{ingestion_job_id}/generation-runs",
+            f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
             headers={"Idempotency-Key": "generation-key"},
             json=payload,
         )
         replay = await client.post(
-            f"/v1/episodes/{ingestion_job_id}/generation-runs",
+            f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
             headers={"Idempotency-Key": "generation-key"},
             json=payload,
         )
@@ -140,7 +139,7 @@ async def test_generation_run_validation_and_idempotency_conflict(
         base_url="http://testserver",
     ) as client:
         ingestion_job_id = await _create_ready_ingestion_job(client)
-        endpoint = f"/v1/episodes/{ingestion_job_id}/generation-runs"
+        endpoint = f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs"
         accepted = await client.post(
             endpoint,
             headers={"Idempotency-Key": "conflict-key"},
@@ -175,6 +174,52 @@ async def test_generation_run_validation_and_idempotency_conflict(
     assert unsupported_mode.status_code == 422, (
         f"expected unsupported-mode status 422, got {unsupported_mode.status_code}"
     )
+
+
+@pytest.mark.asyncio
+async def test_generation_run_resource_uses_injected_factories(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Run creation should use deterministic IDs and lifecycle timestamps."""
+    from episodic.api.resources.generation_runs import (
+        GenerationRunsResource,
+        _CreateGenerationRun,
+    )
+
+    dependencies = build_api_dependencies(session_factory)
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        ingestion_job_id = uuid.UUID(await _create_ready_ingestion_job(client))
+
+    ids = tuple(uuid.uuid7() for _ in range(4))
+    now = dt.datetime(2026, 7, 22, tzinfo=dt.UTC)
+    resource = GenerationRunsResource(
+        dependencies.uow_factory,
+        launcher=RecordingLauncher(),
+        clock=lambda: now,
+        uuid_factory=iter(ids).__next__,
+    )
+    run = await resource._create_run(
+        ingestion_job_id,
+        _CreateGenerationRun(
+            actor="editor@example.com",
+            skip_qa_rationale="Deterministic resource construction.",
+            configuration={},
+            budget_snapshot={},
+        ),
+        idempotency_key="factory-key",
+        idempotency_principal_id=None,
+    )
+
+    assert run.id == ids[3], f"expected factory run id {ids[3]}, got {run.id}"
+    assert run.episode_id == ids[0], (
+        f"expected factory episode id {ids[0]}, got {run.episode_id}"
+    )
+    assert run.created_at == now, f"expected fixed creation time, got {run.created_at}"
+    assert run.updated_at == now, f"expected fixed update time, got {run.updated_at}"
 
 
 async def _create_ready_ingestion_job(client: httpx.AsyncClient) -> str:

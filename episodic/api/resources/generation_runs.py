@@ -42,6 +42,19 @@ _RETRY_AFTER = "1"
 _MAX_EVENT_LIMIT = 100
 _DEFAULT_EVENT_LIMIT = 20
 
+type Clock = cabc.Callable[[], dt.datetime]
+type UuidFactory = cabc.Callable[[], uuid.UUID]
+
+
+def _utc_now() -> dt.datetime:
+    """Return the current UTC timestamp."""
+    return dt.datetime.now(dt.UTC)
+
+
+def _uuid7() -> uuid.UUID:
+    """Return a time-ordered UUID."""
+    return uuid.uuid7()
+
 
 class GenerationRunsResource:
     """Create no-QA generation runs for ready ingestion jobs."""
@@ -51,18 +64,22 @@ class GenerationRunsResource:
         uow_factory: UowFactory,
         *,
         launcher: GenerationRunLauncher | None,
+        clock: Clock = _utc_now,
+        uuid_factory: UuidFactory = _uuid7,
     ) -> None:
         self._uow_factory = uow_factory
         self._launcher = launcher
+        self._clock = clock
+        self._uuid_factory = uuid_factory
 
     async def on_post(
         self,
         req: falcon.Request,
         resp: falcon.Response,
-        episode_id: str,
+        ingestion_job_id: str,
     ) -> None:
         """Materialize an episode and schedule its draft generation run."""
-        source_bundle_id = parse_uuid(episode_id, "episode_id")
+        source_bundle_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         payload = require_payload_dict(await req.get_media())
         request = _parse_create_request(payload)
         launcher = self._require_launcher()
@@ -124,16 +141,17 @@ class GenerationRunsResource:
                     EpisodeMaterialisationRequest(
                         ingestion_job_id=source_bundle_id,
                         title=f"Episode {source_bundle_id}",
-                        uuid_factory=_episode_uuid_factory(source_bundle_id),
+                        clock=self._clock,
+                        uuid_factory=self._uuid_factory,
                     ),
                 )
             except SourceIntakeError as exc:
                 raise map_source_intake_error(exc) from exc
             except DraftScriptPersistenceError as exc:
                 raise _generation_input_error(str(exc)) from exc
-            now = dt.datetime.now(dt.UTC)
+            now = self._clock()
             run = GenerationRun(
-                id=uuid.uuid7(),
+                id=self._uuid_factory(),
                 episode_id=episode.id,
                 source_bundle_id=source_bundle_id,
                 actor=request.actor,
@@ -159,7 +177,7 @@ class GenerationRunsResource:
             return run
 
     async def _mark_launch_failed(self, run_id: uuid.UUID, exc: Exception) -> None:
-        now = dt.datetime.now(dt.UTC)
+        now = self._clock()
         async with self._uow_factory() as uow:
             await uow.generation_runs.update_run_status(
                 run_id,
@@ -294,19 +312,6 @@ def _optional_mapping(payload: JsonPayload, field_name: str) -> JsonPayload:
             constraint="object",
         )
     return typ.cast("JsonPayload", value)
-
-
-def _episode_uuid_factory(episode_id: uuid.UUID) -> cabc.Callable[[], uuid.UUID]:
-    first = True
-
-    def next_uuid() -> uuid.UUID:
-        nonlocal first
-        if first:
-            first = False
-            return episode_id
-        return uuid.uuid7()
-
-    return next_uuid
 
 
 def _parse_optional_positive_int(req: falcon.Request, name: str) -> int | None:

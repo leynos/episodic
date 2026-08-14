@@ -219,7 +219,7 @@ def _create(
     response = context.runner.run(
         context.request(
             "POST",
-            f"/v1/episodes/{job_id}/generation-runs",
+            f"/v1/ingestion-jobs/{job_id}/generation-runs",
             headers={"Idempotency-Key": key},
             json=payload,
         )

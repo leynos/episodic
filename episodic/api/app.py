@@ -156,11 +156,11 @@ def _register_intake_routes(
     app.add_route("/v1/uploads/{upload_id}", UploadResource(uow_factory))
     app.add_route("/v1/ingestion-jobs", IngestionJobsResource(uow_factory))
     app.add_route(
-        "/v1/ingestion-jobs/{job_id}",
+        "/v1/ingestion-jobs/{ingestion_job_id}",
         IngestionJobResource(uow_factory),
     )
     app.add_route(
-        "/v1/ingestion-jobs/{job_id}/sources",
+        "/v1/ingestion-jobs/{ingestion_job_id}/sources",
         IngestionJobSourcesResource(uow_factory),
     )
 
@@ -171,7 +171,7 @@ def _register_generation_run_routes(
     dependencies: ApiDependencies,
 ) -> None:
     app.add_route(
-        "/v1/episodes/{episode_id}/generation-runs",
+        "/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
         GenerationRunsResource(uow_factory, launcher=dependencies.launcher),
     )
     app.add_route(

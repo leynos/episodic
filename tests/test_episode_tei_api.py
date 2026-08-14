@@ -192,7 +192,7 @@ async def _create_generation_run(client: httpx.AsyncClient) -> uuid.UUID:
     assert job.status_code == 201, job.text
     assert source.status_code == 201, source.text
     run = await client.post(
-        f"/v1/episodes/{job.json()['id']}/generation-runs",
+        f"/v1/ingestion-jobs/{job.json()['id']}/generation-runs",
         headers={"Idempotency-Key": "tei-generation-key"},
         json={
             "quality_mode": "draft_without_qa",
