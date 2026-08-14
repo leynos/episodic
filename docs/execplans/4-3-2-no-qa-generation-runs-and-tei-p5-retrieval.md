@@ -36,7 +36,8 @@ full approval, QA, audio, and export surfaces land.
 Success is observable by running the end-to-end behavioural scenario
 `tests/features/no_qa_generation_slice.feature` (added by this plan) against a
 running service backed by a Vidai Mock inference server: a `POST` to
-`/v1/episodes/{episode_id}/generation-runs` returns `202 Accepted` with a
+`/v1/ingestion-jobs/{ingestion_job_id}/generation-runs` for a ready ingestion
+job returns `202 Accepted` with a
 `Location` header, polling `GET /v1/generation-runs/{run_id}` transitions from
 `pending` to `succeeded`, and `GET /v1/episodes/{episode_id}/tei` with
 `Accept: application/tei+xml` returns a downloadable TEI-P5 document whose
@@ -732,14 +733,15 @@ when any of the following is breached.
   validation. Splitting the retrieval solely to lower a file-average metric
   would add metric-driven churn without a concrete design improvement.
   Date/Author: 2026-07-22, implementation agent.
-- Decision: before materialization, the identifier in
-  `POST /v1/episodes/{episode_id}/generation-runs` names the ready ingestion
-  job and is reused as the newly materialized episode id; it is also stored as
-  `GenerationRun.source_bundle_id`. Rationale: the request contract has no
-  separate source-bundle field, intake jobs cannot reference a not-yet-created
-  episode because of the foreign key, and using one stable identifier preserves
-  the documented upload → ingest → generate flow without adding an episode
-  creation endpoint. Date/Author: 2026-07-22, implementation agent.
+- Decision: before materialization, the `ingestion_job_id` in
+  `POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs` names the ready
+  ingestion job and is reused as the newly materialized episode id; it is also
+  stored as `GenerationRun.source_bundle_id`. Rationale: the request contract
+  has no separate source-bundle field, and intake jobs cannot reference a
+  not-yet-created episode because of the foreign key. Using one stable
+  identifier preserves the documented upload → ingest → generate flow without
+  adding an episode creation endpoint. Date/Author: 2026-07-22, implementation
+  agent.
 
 - Decision: serialize episode materialization on the ingestion-job row and
   persist `target_episode_id` after the episode row is flushed, all within the
@@ -1153,8 +1155,9 @@ touching the REST or domain layers; the new ADR documents it as a degenerate
 New resources, wired by a new `_register_generation_run_routes` and
 `_register_episode_tei_routes` in `episodic/api/app.py`:
 
-- `POST /v1/episodes/{episode_id}/generation-runs` — `GenerationRunsResource`.
-  Body: required `quality_mode`, `skip_qa_rationale`, `actor`; optional
+- `POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs` —
+  `GenerationRunsResource` for a ready ingestion job. Body: required
+  `quality_mode`, `skip_qa_rationale`, `actor`; optional
   accepted-and-ignored `template_id`, `prompt_overrides`, `budget_hints` (do not
   `400` on them; round-trip them into `configuration`/`budget_snapshot` so
   they survive). Validation: missing/blank rationale or malformed body → `400`;
@@ -1567,8 +1570,9 @@ The slice is done when:
   with a `vidaimock` binary present (transcript captured in
   `Artefacts and notes`). The `shutil.which` skip only protects binary-less CI;
   it does not satisfy the acceptance gate.
-- Manually, against a running service with a Vidai Mock backend:
-  `POST /v1/episodes/{episode_id}/generation-runs` with
+- Manually, against a running service with a Vidai Mock backend, create a run
+  for a ready ingestion job with:
+  `POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs` and
   `{"quality_mode":"draft_without_qa","skip_qa_rationale":"vertical-slice demo","actor":"editor@example.test"}`
   and an `Idempotency-Key` returns `202 Accepted` with
   `Location: /v1/generation-runs/{run_id}` and `Retry-After`; polling

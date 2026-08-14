@@ -225,11 +225,12 @@ ingestion-job source.
 
 ### Generation runs
 
-Each generation run is a first-class resource with an append-only event log and
-checkpoint support for human-in-the-loop intervention.
+Each generation run is created from a ready ingestion job and is a first-class
+resource with an append-only event log and checkpoint support for
+human-in-the-loop intervention.
 
 ```plaintext
-POST   /v1/episodes/{episode_id}/generation-runs
+POST   /v1/ingestion-jobs/{ingestion_job_id}/generation-runs
        Body: template_id, quality_mode, prompt_overrides,
              budget_hints, skip_qa_rationale, actor
        Header: Idempotency-Key
@@ -670,7 +671,8 @@ _Table: WebSocket close codes and their meanings._
 ### Start run then watch events
 
 For screen readers: the following sequence diagram shows a TUI client starting
-a generation run via REST, then subscribing to live events via WebSocket.
+a generation run for a ready ingestion job via REST, then subscribing to live
+events via WebSocket.
 
 ```mermaid
 sequenceDiagram
@@ -679,7 +681,7 @@ sequenceDiagram
     participant WS as WS /ws/runs/{run_id}
     participant Orchestrator
 
-    TUI->>REST: POST /v1/episodes/{id}/generation-runs (Idempotency-Key: {uuid})
+    TUI->>REST: POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs (Idempotency-Key: {uuid})
     Note right of TUI: quality_mode=draft_without_qa
     REST-->>TUI: 202 Accepted {run_id}
     TUI->>WS: connect
@@ -748,7 +750,7 @@ _Figure 3: Source upload and ingestion job lifecycle._
 ### Source-to-script completion
 
 For screen readers: the following sequence diagram shows the REST-only path
-from completed source ingestion to TEI-P5 XML download.
+from a ready ingestion job to TEI-P5 XML download.
 
 ```mermaid
 sequenceDiagram
@@ -756,7 +758,7 @@ sequenceDiagram
     participant REST as REST API
     participant Generator as Generation Orchestrator
 
-    Client->>REST: POST /v1/episodes/{id}/generation-runs (Idempotency-Key: {uuid})
+    Client->>REST: POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs (Idempotency-Key: {uuid})
     Note right of Client: quality_mode=draft_without_qa
     REST-->>Client: 202 Accepted {run_id}
     Client->>REST: GET /v1/generation-runs/{run_id}
@@ -1095,8 +1097,9 @@ erDiagram
 
 _Figure: Sequence diagram illustrating the end-to-end flow for starting a
 generation run and observing events via WebSocket. The user configures
-generation parameters through the TUI, which creates a run via REST and
-establishes a WebSocket connection to subscribe to events. The orchestrator
+generation parameters for a ready ingestion job through the TUI, which creates
+a run via REST and establishes a WebSocket connection to subscribe to events.
+The orchestrator
 publishes events as the run progresses, including checkpoints that require
 human approval. The TUI acknowledges each event and submits checkpoint
 responses via REST. The sequence concludes when the run completes successfully._
@@ -1110,7 +1113,7 @@ sequenceDiagram
     participant Orchestrator
 
     User->>TUI: Configure generation parameters
-    TUI->>REST_v1: POST /v1/episodes/{episode_id}/generation-runs (Idempotency-Key: {uuid})
+    TUI->>REST_v1: POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs (Idempotency-Key: {uuid})
     REST_v1-->>TUI: 202 Accepted {run_id}
 
     TUI->>WS_runs: WebSocket connect /ws/runs/{run_id}

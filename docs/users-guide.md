@@ -88,8 +88,8 @@ adapter that can use pre-signed upload URLs.
 
 #### Generate and download a no-QA draft
 
-After an ingestion job is ready, create a draft run with
-`POST /v1/episodes/{episode_id}/generation-runs`. Supply an
+Create a draft run for a ready ingestion job with
+`POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs`. Supply an
 `Idempotency-Key` and a JSON body containing `quality_mode` set to
 `draft_without_qa`, `skip_qa_rationale`, and `actor`. The server returns
 `202 Accepted`, a `Location` header for the run, and `Retry-After` guidance.

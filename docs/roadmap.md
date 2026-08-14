@@ -677,9 +677,9 @@ vertical slice].
     until the source context is ready for generation.
 - [x] 4.3.2. Implement no-QA generation runs and TEI-P5 retrieval.
   - Requires 2.1.1, 2.4.2, and 4.3.1.
-  - Implement `/v1/episodes/{episode_id}/generation-runs` creation with
-    `quality_mode=draft_without_qa`, `skip_qa_rationale`, actor metadata, and
-    `Idempotency-Key` enforcement.
+  - Implement `/v1/ingestion-jobs/{ingestion_job_id}/generation-runs` creation
+    for a ready ingestion job with `quality_mode=draft_without_qa`,
+    `skip_qa_rationale`, actor metadata, and `Idempotency-Key` enforcement.
   - Implement `/v1/generation-runs/{run_id}` and
     `/v1/generation-runs/{run_id}/events` as JSON polling surfaces for the
     draft generation lifecycle.
