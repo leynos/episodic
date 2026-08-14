@@ -1627,8 +1627,10 @@ checking then.
 - If the service restarts mid-run, the run may remain `running` (no automated
   reaper in this slice). The `started_at`/`lease_expires_at` columns support
   manual recovery; the manual-fail runbook (in ADR 016 / developers' guide)
-  describes how to fail a stuck run and its idempotency record. The automated
-  reaper is a 2.6.2 follow-up.
+  The previously identified documentation gap is now addressed by the
+  developers' guide runbook, which describes how to inspect expiry,
+  conditionally fail a stuck run, append its failure event, and preserve its
+  idempotency record. The automated reaper is a 2.6.2 follow-up.
 - Known limitation: a `pending`/`running` run that outlives the 24h idempotency
   TTL could let a replayed key create a second run; documented for the 2.6.2
   recovery work.

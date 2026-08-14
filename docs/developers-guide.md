@@ -1523,6 +1523,79 @@ the stable failure categories and bounded-cardinality metric labels when adding
 new generation failures. Lease expiry and the persisted lease fields are
 operational recovery hooks, not an automatic retry mechanism.
 
+
+### Manual recovery of expired generation-run leases
+
+Use this procedure when a process restart or worker loss leaves a run in
+`running`. The `started_at` value records when the conditional claim won, and
+`lease_expires_at` is the deadline used to identify an expired lease. Inspect
+both fields with the run status, event log, and stuck-run metric before taking
+action:
+
+```sql
+SELECT id, status, started_at, lease_expires_at,
+       idempotency_principal_id, idempotency_key,
+       error_category, error_message
+FROM generation_runs
+WHERE id = :run_id;
+```
+
+Proceed only when the status is `running`, `lease_expires_at` is non-null and
+earlier than the current UTC time, and the owning process is no longer able to
+finish the run. A worker claim is itself conditional on
+`status = 'pending'`; a claim that updates zero rows has lost the race or found
+a terminal run. Do not reset an expired `running` row to `pending` or launch a
+replacement: this slice has no automatic reaper or reassignment path.
+
+To fail the run manually, use a privileged database transaction. Lock and
+recheck the row, append the failure event, and then execute the following
+conditional update. Continue only if the `RETURNING` clause returns the
+requested run; otherwise roll back because the run changed state or its lease
+has not expired.
+
+```sql
+BEGIN;
+
+SELECT id
+FROM generation_runs
+WHERE id = :run_id
+FOR UPDATE;
+
+-- Only after the locked row is confirmed expired, append run.failed with the
+-- same error_category and error_message, using the next per-run event sequence.
+INSERT INTO generation_events
+    (id, generation_run_id, seq, kind, payload, occurred_at, created_at)
+SELECT :event_id, :run_id, COALESCE(MAX(seq), 0) + 1, 'run.failed',
+       jsonb_build_object(
+           'error_category', 'launcher.lease_expired',
+           'error_message', 'Generation lease expired; failed manually.'
+       ), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM generation_events
+WHERE generation_run_id = :run_id;
+
+UPDATE generation_runs
+SET status = 'failed',
+    current_node = 'failed',
+    ended_at = CURRENT_TIMESTAMP,
+    error_message = 'Generation lease expired; failed manually.',
+    error_category = 'launcher.lease_expired',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = :run_id
+  AND status = 'running'
+  AND lease_expires_at IS NOT NULL
+  AND lease_expires_at <= CURRENT_TIMESTAMP
+RETURNING id;
+
+-- If RETURNING returns zero rows, roll back the transaction, including the
+-- event insert.
+COMMIT;
+```
+
+Keep `idempotency_principal_id` and `idempotency_key` unchanged. They remain
+attached to the failed generation run so a replay is tied to the existing
+record rather than creating an untracked replacement. Automatic recovery and
+reassignment remain roadmap item `2.6.2`.
+
 TEI representation selection is centralized in
 `episodic.api.resources.episode_tei.negotiate_tei_media_type`. Keep JSON as the
 default, raw XML for `application/tei+xml`, and `406` for unsupported types.
