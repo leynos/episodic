@@ -7,8 +7,11 @@ import json
 import typing as typ
 
 from episodic.canonical.domain import ReferenceDocumentKind
+from episodic.canonical.episode_errors import (
+    EpisodeNotFoundError,
+    EpisodeRevisionConflictError,
+)
 from episodic.canonical.generation_persistence import InvalidDraftTeiError
-from episodic.canonical.generation_run_errors import RunNotFound
 from episodic.cost.ports import (
     BillingPeriodKey,
     IdempotencyKey,
@@ -134,10 +137,10 @@ async def require_episode(
     uow: CanonicalUnitOfWork,
     episode_id: uuid.UUID,
 ) -> CanonicalEpisode:
-    """Return an episode or raise the run-not-found error family."""
+    """Return an episode or raise the episode-not-found error."""
     episode = await uow.episodes.get(episode_id)
     if episode is None:
-        raise RunNotFound(episode_id)
+        raise EpisodeNotFoundError(episode_id)
     return episode
 
 
@@ -304,6 +307,8 @@ _FAILURE_CATEGORIES: tuple[
     tuple[type[Exception] | tuple[type[Exception], ...], str, bool],
     ...,
 ] = (
+    (EpisodeRevisionConflictError, "episode.persistence_conflict", False),
+    (EpisodeNotFoundError, "episode.not_found", False),
     ((InvalidDraftTeiError, DraftScriptTeiError), "tei.invalid", True),
     (DraftScriptTransientProviderError, "provider.transient", False),
     (DraftScriptProviderResponseError, "provider.response", False),
