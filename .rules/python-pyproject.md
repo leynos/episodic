@@ -192,19 +192,20 @@ ______________________________________________________________________
 ## 5. Declaring a Build System
 
 PEP 517/518 require a `[build-system]` table to tell tools how to build and
-install your project. A "modern" convention is to specify `setuptools>=64.0`
-(for editable installs without `setup.py`) or a lighter alternative like
-`flit_core`. Below is the typical setup using setuptools:
+install your project. A common setuptools configuration specifies
+`setuptools>=64.0`, which supports compatible PEP 660 editable installs without
+a `setup.py` stub, or uses a lighter alternative such as `flit_core`. Below is
+the typical setup using setuptools:
 
 ```toml
 [build-system]
-requires = ["setuptools>=64.0", "wheel"]
+requires = ["setuptools>=64.0"]
 build-backend = "setuptools.build_meta"
 ```
 
-- **`requires`:** A list of packages needed at build time. For editable installs
-  in `uv`, you need at least `setuptools>=64.0` and `wheel`. (Python
-  Packaging[^4], Astral Docs[^7])
+- **`requires`:** A list of packages needed at build time.
+  `setuptools>=64.0` supplies PEP 660 support for compatible editable installs
+  in `uv`; `wheel` is not required. (Python Packaging[^4], Astral Docs[^7])
 - **`build-backend`:** The entry point for your build backend.
   `setuptools.build_meta` is the PEP 517-compliant backend for setuptools.
   (Python Packaging[^4], Astral Docs[^7])
@@ -284,7 +285,7 @@ docs = [
 mycli = "my_project.cli:main"
 
 [build-system]
-requires = ["setuptools>=64.0", "wheel"]
+requires = ["setuptools>=64.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.uv]
@@ -375,9 +376,9 @@ A "modern" `pyproject.toml` for an Astral `uv` project should:
   `[dependency-groups]` (the `dev` group installs by default).
 - Define any CLI or GUI entry points under `[project.scripts]` or
   `[project.gui-scripts]`.
-- Declare a PEP 517 `[build-system]` (e.g. `setuptools>=64.0`, `wheel`,
-  `setuptools.build_meta`) to support editable installs, or omit it and rely on
-  `tool.uv.package = true`.
+- Declare a PEP 517 `[build-system]` (e.g. `setuptools>=64.0` with
+  `setuptools.build_meta`) to support compatible PEP 660 editable installs, or
+  omit it and rely on `tool.uv.package = true`.
 - Include a `[tool.uv]` section, at minimum `package = true` if you want `uv` to
   build and install your own package.
 

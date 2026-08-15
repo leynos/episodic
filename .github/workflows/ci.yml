@@ -105,7 +105,7 @@ jobs:
         # application and migration packages so test implementation detail
         # cannot dilute the quality signal.
         run: >-
-          uv run --with 'slipcover>=1.0.18' python -m slipcover
+          uv run --with 'slipcover==1.0.18' python -m slipcover
           --source episodic,alembic --branch --xml --out coverage.xml
           -m pytest -v
 
