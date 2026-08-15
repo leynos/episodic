@@ -51,6 +51,31 @@ async def test_guest_bios_tool_executor_requires_series_profile_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_guest_bios_tool_executor_rejects_uninitialized_generator() -> None:
+    """A missing generator must fail before guest-bios generation starts."""
+    llm = _FakeLLMPort([])
+    executor = GuestBiosToolExecutor(
+        llm=llm,
+        config=_config(),
+        uow=typ.cast("CanonicalUnitOfWork", object()),
+    )
+    object.__setattr__(executor, "generator", None)
+    request = GenerationOrchestrationRequest(
+        correlation_id="corr-guest-bios",
+        script_tei_xml=SCRIPT_TEI,
+        series_profile_id=uuid4(),
+    )
+
+    with pytest.raises(
+        ToolExecutionError,
+        match=r"^Guest-bios generator was not initialized$",
+    ):
+        await executor.execute(_guest_bios_action(), request)
+
+    assert not llm.requests, "missing generators must fail before any LLM request"
+
+
+@pytest.mark.asyncio
 async def test_guest_bios_executor_wraps_format_error_distinctly() -> None:
     """Structured guest-bios validation errors should keep a distinct wrapper."""
     generator_error = GuestBiosResponseFormatError("guests must be a list.")

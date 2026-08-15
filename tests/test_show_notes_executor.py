@@ -23,6 +23,7 @@ from episodic.orchestration import (
     ToolExecutionError,
     UnsupportedActionError,
 )
+from episodic.orchestration._types import ShowNotesGeneratorNotInitializedError
 from tests._orchestration_fakes import (
     _config,
     _FakeLLMPort,
@@ -146,6 +147,22 @@ async def test_show_notes_executor_rejects_planning_tier(
 
     with pytest.raises(UnsupportedActionError, match=expected_tier_pattern):
         await tool_executor.execute(planning_tier_action, _request())
+
+
+@pytest.mark.asyncio
+async def test_show_notes_executor_rejects_uninitialized_generator() -> None:
+    """A missing generator must fail before show-notes generation starts."""
+    llm = _FakeLLMPort([])
+    tool_executor = ShowNotesToolExecutor(llm=llm, config=_config())
+    object.__setattr__(tool_executor, "generator", None)
+
+    with pytest.raises(
+        ShowNotesGeneratorNotInitializedError,
+        match=r"^Show-notes generator was not initialized$",
+    ):
+        await tool_executor.execute(_planned_action(), _request())
+
+    assert not llm.requests, "missing generators must fail before any LLM request"
 
 
 @pytest.mark.asyncio
