@@ -434,6 +434,12 @@ when any of the following is breached.
   and `gh stack link --base main 220 141` confirmed that the two-PR stack is
   already up to date. Remote head equals local.
 
+- [x] (completed, 2026-08-15) Documentation clarification: confirmed that
+  `episode_id` is included in the `202 Accepted` generation-run representation
+  and is also available from the polled run resource before the client
+  requests TEI. Updated `docs/users-guide.md` to state this procedure. No
+  full gates were run for this documentation-only change, as requested.
+
 ## Surprises & discoveries
 
 - Observation: the existing generation-orchestration graph
@@ -837,6 +843,13 @@ when any of the following is breached.
   and `gh stack link --base main 220 141` confirmed that the two-PR stack is
   already up to date. Remote head equals local. Date/Author: 2026-08-11,
   implementation agent.
+- Decision: document `episode_id` as available in the `202 Accepted`
+  generation-run representation and in the polled run resource, and instruct
+  clients to read it before requesting TEI. Rationale:
+  `serialize_generation_run` includes `episode_id`, and the run-creation
+  response uses that representation, so clients can follow the returned run
+  resource without inferring the episode identifier. Confirmed on 2026-08-15.
+  Date/Author: 2026-08-15, documentation agent.
 
 ## Context and orientation
 

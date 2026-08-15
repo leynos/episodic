@@ -95,7 +95,9 @@ Create a draft run for a ready ingestion job with
 `202 Accepted`, a `Location` header for the run, and `Retry-After` guidance.
 
 Poll the `Location` resource until its status is `succeeded` or `failed`.
-Lifecycle details are available from
+The `202 Accepted` representation includes `episode_id`, and the polled run
+resource returns it as well. Read `episode_id` from the polled run resource
+before requesting the episode TEI. Lifecycle details are available from
 `GET /v1/generation-runs/{run_id}/events`. Replaying the original request with
 the same key and body returns the same run and polling headers; changing the
 body under that key returns `409 Conflict`.
