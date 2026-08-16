@@ -47,6 +47,23 @@ async def _append_generation_events(
         await uow.commit()
 
 
+def _assert_generation_event_page(response: httpx.Response) -> None:
+    """Assert the cursor-filtered generation event page contract."""
+    assert response.status_code == 200, response.text
+    assert [event["kind"] for event in response.json()["items"]] == [
+        "draft.generated"
+    ], f"expected one draft.generated event, got {response.json()['items']!r}"
+    assert response.json()["after_seq"] == 1, (
+        f"expected after_seq 1, got {response.json()['after_seq']!r}"
+    )
+    assert response.json()["offset"] == 0, (
+        f"expected offset 0, got {response.json()['offset']!r}"
+    )
+    assert response.json()["total"] == 1, (
+        f"expected one matching event, got {response.json()['total']!r}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_generation_run_create_replay_and_poll(
     session_factory: async_sessionmaker[AsyncSession],
@@ -109,19 +126,7 @@ async def test_generation_run_create_replay_and_poll(
     assert run_response.headers["Retry-After"] == "1", (
         f"expected retry delay '1', got {run_response.headers['Retry-After']!r}"
     )
-    assert events_response.status_code == 200, events_response.text
-    assert [event["kind"] for event in events_response.json()["items"]] == [
-        "draft.generated"
-    ], f"expected one draft.generated event, got {events_response.json()['items']!r}"
-    assert events_response.json()["after_seq"] == 1, (
-        f"expected after_seq 1, got {events_response.json()['after_seq']!r}"
-    )
-    assert events_response.json()["offset"] == 0, (
-        f"expected offset 0, got {events_response.json()['offset']!r}"
-    )
-    assert events_response.json()["total"] == 1, (
-        f"expected one matching event, got {events_response.json()['total']!r}"
-    )
+    _assert_generation_event_page(events_response)
 
 
 @pytest.mark.asyncio
