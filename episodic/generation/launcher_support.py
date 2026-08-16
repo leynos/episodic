@@ -18,7 +18,10 @@ from episodic.cost.ports import (
     PricingModel,
     UsageSource,
 )
-from episodic.cost.recorder import CostProviderOperation, ProviderCallRecord
+from episodic.cost.recorder import (
+    CostRecorderPort,
+    ProviderCallRecord,
+)
 from episodic.generation.draft_script import (
     DraftPresenterProfile,
     DraftScriptGenerationError,
@@ -47,31 +50,6 @@ if typ.TYPE_CHECKING:
 
 type Clock = cabc.Callable[[], dt.datetime]
 type DraftIdFactoryFactory = cabc.Callable[[], cabc.Callable[[str], str]]
-
-
-class CostRecorderPort(typ.Protocol):
-    """Cost-recorder surface used by the launcher."""
-
-    async def pin_run_pricing(
-        self,
-        workflow_run_id: str,
-        providers: tuple[CostProviderOperation, ...],
-        billing_period_key: BillingPeriodKey,
-    ) -> None:
-        """Pin pricing for a workflow run."""
-
-    async def record_provider_call(
-        self,
-        record: ProviderCallRecord,
-    ) -> object:
-        """Record one provider call."""
-
-    async def finalize_run(
-        self,
-        workflow_run_id: str,
-        workflow_node: str | None,
-    ) -> object:
-        """Record the run roll-up."""
 
 
 class CostRecorderFactory(typ.Protocol):

@@ -440,6 +440,17 @@ when any of the following is breached.
   requests TEI. Updated `docs/users-guide.md` to state this procedure. No
   full gates were run for this documentation-only change, as requested.
 
+- [ ] (in progress, 2026-08-16) Continuation after rebasing the current
+  revision `f5a3d6e`: the deterministic baseline gates all passed — `make
+  check-fmt`, `make test`, `make typecheck`, `make lint`, `make markdownlint`,
+  `make nixie`, and `make check-migrations`. CodeRabbit review is queued as
+  `fa3b30db` (approximately 1h14m). Required hardening decisions are to add
+  bounded in-process admission before task creation and terminalize overload
+  failures; expose a tracer port with bounded non-sensitive attributes; use a
+  single `CostRecorderPort` under `episodic.cost`; serialize shutdown in
+  launcher → LLM → engine order; retain the SQL conditional update as the
+  claim linearization point; and add property/race proofs.
+
 ## Surprises & discoveries
 
 - Observation: the existing generation-orchestration graph

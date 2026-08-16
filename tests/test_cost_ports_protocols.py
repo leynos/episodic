@@ -21,7 +21,9 @@ from episodic.cost.ports import (
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.cost.recorder import CostRecorderPort
 from episodic.llm.ports import LLMResponse, LLMUsage, ProviderCallUsage
+from tests.generation_run_launcher_support import RecordingCostRecorder
 
 _DEFAULT_BILLING_PERIOD = BillingPeriodKey("2026-06")
 _DEFAULT_SNAPSHOT_KEY = RunPricingKey(
@@ -160,6 +162,24 @@ def test_cost_protocol_fakes_satisfy_public_ports() -> None:
         "Expected value to have the required type"
     )
     assert inspect.iscoroutinefunction(metering.consume), "Expected condition to hold"
+
+
+def test_recording_cost_recorder_satisfies_public_port() -> None:
+    """The generation-run recorder fake matches the public cost contract."""
+    recorder = RecordingCostRecorder()
+
+    assert isinstance(recorder, CostRecorderPort), (
+        "Expected value to have the required type"
+    )
+    assert inspect.iscoroutinefunction(recorder.pin_run_pricing), (
+        "Expected condition to hold"
+    )
+    assert inspect.iscoroutinefunction(recorder.record_provider_call), (
+        "Expected condition to hold"
+    )
+    assert inspect.iscoroutinefunction(recorder.finalize_run), (
+        "Expected condition to hold"
+    )
 
 
 def test_pricing_engine_returns_priced_call() -> None:
