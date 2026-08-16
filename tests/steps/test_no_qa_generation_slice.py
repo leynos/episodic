@@ -8,6 +8,7 @@ import pytest
 from pytest_bdd import given, parsers, scenario, then, when
 
 from episodic.canonical.tei import parse_tei_header
+from tests.steps import no_qa_generation_slice_assertions
 from tests.steps.no_qa_generation_slice_support import (
     NoQaGenerationSliceContext,
     assert_replay_headers,
@@ -19,6 +20,8 @@ from tests.steps.no_qa_generation_slice_support import (
     require,
     select_malformed_completion,
 )
+
+_FEATURE = "../features/no_qa_generation_slice.feature"
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -38,57 +41,37 @@ def context(
     ctx.tear_down()
 
 
-@scenario(
-    "../features/no_qa_generation_slice.feature",
-    "Draft generation without QA produces a downloadable TEI-P5 script",
-)
+@scenario(_FEATURE, "Draft generation without QA produces a downloadable TEI-P5 script")
 def test_no_qa_generation_produces_downloadable_tei() -> None:
     """Run the no-QA generation happy path."""
 
 
-@scenario(
-    "../features/no_qa_generation_slice.feature",
-    "Reusing an idempotency key with the same body replays the run",
-)
+@scenario(_FEATURE, "Reusing an idempotency key with the same body replays the run")
 def test_no_qa_generation_idempotency_replays_same_body() -> None:
     """Run the idempotent replay scenario."""
 
 
-@scenario(
-    "../features/no_qa_generation_slice.feature",
-    "Reusing an idempotency key with a different body conflicts",
-)
+@scenario(_FEATURE, "Reusing an idempotency key with a different body conflicts")
 def test_no_qa_generation_idempotency_conflicts_on_body_mismatch() -> None:
     """Run the idempotency conflict scenario."""
 
 
-@scenario(
-    "../features/no_qa_generation_slice.feature", "A missing rationale is rejected"
-)
+@scenario(_FEATURE, "A missing rationale is rejected")
 def test_no_qa_generation_rejects_missing_rationale() -> None:
     """Run the missing-rationale scenario."""
 
 
-@scenario(
-    "../features/no_qa_generation_slice.feature",
-    "An unsupported quality mode is unprocessable",
-)
+@scenario(_FEATURE, "An unsupported quality mode is unprocessable")
 def test_no_qa_generation_rejects_unsupported_quality_mode() -> None:
     """Run the unsupported-quality-mode scenario."""
 
 
-@scenario(
-    "../features/no_qa_generation_slice.feature",
-    "Generation failure is reported on the run",
-)
+@scenario(_FEATURE, "Generation failure is reported on the run")
 def test_no_qa_generation_reports_generation_failure() -> None:
     """Run the provider failure scenario."""
 
 
-@scenario(
-    "../features/no_qa_generation_slice.feature",
-    "A malformed completion is reported as a failed run",
-)
+@scenario(_FEATURE, "A malformed completion is reported as a failed run")
 def test_no_qa_generation_reports_malformed_completion() -> None:
     """Run the malformed-completion scenario."""
 
@@ -377,19 +360,19 @@ def replay_preserves_polling_headers(context: NoQaGenerationSliceContext) -> Non
 @then("the second response is 409 Conflict")
 def second_response_is_conflict(context: NoQaGenerationSliceContext) -> None:
     """Verify changed input is rejected under the reused key."""
-    assert_response_status(context.responses[1], 409)
+    no_qa_generation_slice_assertions.second_response_is_conflict(context)
 
 
 @then("the response is 400 Bad Request")
 def response_is_bad_request(context: NoQaGenerationSliceContext) -> None:
     """Verify malformed quality metadata is a bad request."""
-    assert_response_status(context.responses[0], 400)
+    no_qa_generation_slice_assertions.response_is_bad_request(context)
 
 
 @then("the response is 422 Unprocessable Entity")
 def response_is_unprocessable(context: NoQaGenerationSliceContext) -> None:
     """Verify a recognized unsupported mode is unprocessable."""
-    assert_response_status(context.responses[0], 422)
+    no_qa_generation_slice_assertions.response_is_unprocessable(context)
 
 
 @then("the run records an error message and an error category")

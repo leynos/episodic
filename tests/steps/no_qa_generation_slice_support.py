@@ -116,6 +116,25 @@ def assert_response_status(response: httpx.Response, expected: int) -> None:
     )
 
 
+def assert_error_envelope(
+    response: httpx.Response,
+    *,
+    status: int,
+    code: str,
+    message: str,
+    details: dict[str, object],
+) -> None:
+    """Assert the standard API error envelope exactly."""
+    assert_response_status(response, status)
+    payload = response.json()
+    assert set(payload) == {"code", "message", "details"}, (
+        f"error envelope keys: {payload!r}"
+    )
+    assert payload["code"] == code, f"error code: {payload['code']!r}"
+    assert payload["message"] == message, f"error message: {payload['message']!r}"
+    assert payload["details"] == details, f"error details: {payload['details']!r}"
+
+
 def assert_tei_response(
     response: httpx.Response,
     run_response: httpx.Response,
