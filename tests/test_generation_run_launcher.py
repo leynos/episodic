@@ -1,6 +1,7 @@
 """Tests for in-process generation-run launching."""
 
 import asyncio
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -18,6 +19,7 @@ from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWo
 from episodic.generation.draft_script import DraftScriptTransientProviderError
 from episodic.generation.launcher import GenerationRunAdmissionError
 from episodic.generation.launcher_support import source_from_document
+from episodic.observability import RecordingTracer
 from tests.generation_run_launcher_support import (
     BlockingDraftGenerator,
     FailingDraftGenerator,
@@ -44,6 +46,38 @@ async def _uploaded_chunks() -> cabc.AsyncIterator[bytes]:
     await asyncio.sleep(0)
     yield b"Uploaded source line one.\r\n"
     yield b"Line two.\n"
+
+
+@dc.dataclass(slots=True)
+class _RecordingMetrics:
+    """Capture bounded launcher metrics for assertions."""
+
+    counters: list[tuple[str, dict[str, str]]] = dc.field(default_factory=list)
+    values: list[tuple[str, float, dict[str, str]]] = dc.field(default_factory=list)
+
+    def increment_counter(self, name: str, *, labels: cabc.Mapping[str, str]) -> None:
+        """Capture one counter increment."""
+        self.counters.append((name, dict(labels)))
+
+    def observe_latency_ms(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Accept latency observations outside this test's scope."""
+        _ = (name, value, labels)
+
+    def observe_value(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Capture a scalar observation."""
+        self.values.append((name, value, dict(labels)))
 
 
 async def _launch_and_load_run(
@@ -160,6 +194,8 @@ async def test_launcher_records_provider_failure(
         factory,
         FailingDraftGenerator(DraftScriptTransientProviderError("try again later")),
     )
+    tracer = RecordingTracer()
+    run_launcher.tracer = tracer
 
     run, events = await _launch_and_load_run(factory, run_id, run_launcher)
 
@@ -178,6 +214,11 @@ async def test_launcher_records_provider_failure(
     assert events[-1].payload["error_category"] == "provider.transient", (
         f"run {run_id} final event={events[-1]!r}"
     )
+    attributes = tracer.spans[0].attributes
+    assert attributes["operation"] == "generation_run.execute", attributes
+    assert attributes["run_id"] == str(run_id), attributes
+    assert attributes["outcome"] == "failed", attributes
+    assert attributes["failure_category"] == "provider.transient", attributes
 
 
 @pytest.mark.asyncio
@@ -282,6 +323,8 @@ async def test_launcher_returns_while_concurrency_slot_is_busy(
         generator,
         options=LauncherOptions(max_concurrency=1, max_pending_runs=1),
     )
+    metrics = _RecordingMetrics()
+    run_launcher.metrics = metrics
 
     await run_launcher.launch(run_id)
     await generator.started.wait()
@@ -292,6 +335,15 @@ async def test_launcher_returns_while_concurrency_slot_is_busy(
     assert len(run_launcher._tasks) == 2, (
         f"expected one running and one pending task, got {run_launcher._tasks!r}"
     )
+    assert (
+        "generation_run_admission_rejected_total",
+        {"reason": "capacity"},
+    ) in metrics.counters, metrics.counters
+    assert metrics.values[-1] == (
+        "generation_run_pending_depth",
+        1.0,
+        {},
+    ), metrics.values
 
     await run_launcher.shutdown()
 

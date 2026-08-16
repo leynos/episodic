@@ -36,20 +36,39 @@ def test_recording_tracer_preserves_span_details_and_completion() -> None:
     assert tracer.spans[0].is_completed, tracer.spans
 
 
-def test_structured_log_tracer_excludes_sensitive_attributes() -> None:
-    """Structured span events include only the non-sensitive span name."""
+def test_structured_log_tracer_allows_bounded_operation_attributes() -> None:
+    """Structured spans retain only allow-listed bounded operation attributes."""
     logger = _RecordingLogger()
     tracer = StructuredLogTracer(logger=logger)
 
     with tracer.start_span(
         "generation_run.admission",
-        attributes={"access_token": "secret-value"},
-    ):
-        pass
+        attributes={
+            "operation": "generation_run.admission",
+            "run_id": "run-42",
+            "access_token": "secret-value",
+        },
+    ) as span:
+        span.set_attribute("outcome", "rejected")
+        span.set_attribute("failure_category", "launcher.overloaded")
 
     expected_events = [
-        ("trace_span_started", {"span_name": "generation_run.admission"}),
-        ("trace_span_completed", {"span_name": "generation_run.admission"}),
+        (
+            "trace_span_started",
+            {
+                "span_name": "generation_run.admission",
+                "operation": "generation_run.admission",
+            },
+        ),
+        (
+            "trace_span_completed",
+            {
+                "span_name": "generation_run.admission",
+                "operation": "generation_run.admission",
+                "outcome": "rejected",
+                "failure_category": "launcher.overloaded",
+            },
+        ),
     ]
     assert logger.events == expected_events, logger.events
 

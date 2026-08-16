@@ -55,12 +55,12 @@ from episodic.generation.launcher_support import (
 )
 from episodic.logging import get_logger, log_error, log_info
 from episodic.observability import (
-    MetricsPort,
     MonotonicClockPort,
-    NoopMetrics,
     NoopTracer,
+    NoopValueMetrics,
     PerfCounterClock,
     TracerPort,
+    ValueMetricsPort,
 )
 
 if typ.TYPE_CHECKING:
@@ -83,6 +83,8 @@ _METRIC_TERMINAL_STATES = "generation_run_terminal_total"
 _METRIC_DRAFT_ERRORS = "generation_run_draft_errors_total"
 _METRIC_QA_BYPASS = "generation_run_qa_bypass_total"
 _METRIC_DRAFT_LATENCY = "generation_run_draft_latency_ms"
+_METRIC_ADMISSION_REJECTED = "generation_run_admission_rejected_total"
+_METRIC_PENDING_DEPTH = "generation_run_pending_depth"
 
 logger = get_logger(__name__)
 
@@ -96,6 +98,14 @@ class GenerationRunLauncher(typ.Protocol):
 
 class GenerationRunAdmissionError(RuntimeError):
     """Raised when a launcher cannot retain another pending run."""
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ExecutionOutcome:
+    """Describe the terminal result of one launcher task."""
+
+    outcome: str
+    failure_category: str | None = None
 
 
 @dc.dataclass(slots=True)
@@ -113,7 +123,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     max_concurrency: int = _DEFAULT_MAX_CONCURRENCY
     max_pending_runs: int = _DEFAULT_MAX_PENDING_RUNS
     lease_seconds: int = _DEFAULT_LEASE_SECONDS
-    metrics: MetricsPort = dc.field(default_factory=NoopMetrics)
+    metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     _tasks: TaskSet = dc.field(default_factory=set, init=False)
@@ -145,6 +155,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             )
         except Exception:
             self._admitted_run_count -= 1
+            self._record_pending_depth()
             raise
         self._tasks.add(task)
         self._task_run_ids[task] = run_id
@@ -169,17 +180,27 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         self._tasks.discard(task)
         self._task_run_ids.pop(task, None)
         self._admitted_run_count -= 1
+        self._record_pending_depth()
 
     def _admit(self) -> None:
         """Reserve bounded capacity before creating a background task."""
         if self._is_shutting_down:
+            self.metrics.increment_counter(
+                _METRIC_ADMISSION_REJECTED,
+                labels={"reason": "shutdown"},
+            )
             msg = "Generation run admission is closed during shutdown."
             raise GenerationRunAdmissionError(msg)
         capacity = self.max_concurrency + self.max_pending_runs
         if self._admitted_run_count >= capacity:
+            self.metrics.increment_counter(
+                _METRIC_ADMISSION_REJECTED,
+                labels={"reason": "capacity"},
+            )
             msg = "Generation run admission capacity is exhausted."
             raise GenerationRunAdmissionError(msg)
         self._admitted_run_count += 1
+        self._record_pending_depth()
 
     async def _run_task(self, run_id: uuid.UUID) -> None:
         """Execute one scheduled generation run."""
@@ -189,26 +210,34 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         ) as span:
             try:
                 async with self._semaphore:
-                    await self._execute_run(run_id)
+                    outcome = await self._execute_run(run_id)
             except asyncio.CancelledError:
                 span.set_attribute("outcome", "cancelled")
                 span.set_attribute("failure_category", "launcher.shutdown")
                 await asyncio.shield(self._record_cancellation(run_id))
                 raise
             else:
-                span.set_attribute("outcome", "completed")
+                span.set_attribute("outcome", outcome.outcome)
+                if outcome.failure_category is not None:
+                    span.set_attribute("failure_category", outcome.failure_category)
 
-    async def _execute_run(self, run_id: uuid.UUID) -> None:
+    async def _execute_run(self, run_id: uuid.UUID) -> _ExecutionOutcome:
         """Execute one generation run while its concurrency permit is held."""
         try:
             claimed = await self._claim(run_id)
             if claimed is None:
-                return
+                return _ExecutionOutcome(outcome="not_claimed")
             result = await self._generate(claimed)
             await self._record_draft_generated(claimed.run.id, result)
             await self._persist_success(claimed, result)
+            return _ExecutionOutcome(outcome="completed")
         except Exception as exc:  # noqa: BLE001  # Task boundary must persist unexpected failures.
-            await self._record_failure(run_id, classify_failure(exc))
+            failure = classify_failure(exc)
+            await self._record_failure(run_id, failure)
+            return _ExecutionOutcome(
+                outcome="failed",
+                failure_category=failure.category,
+            )
 
     async def _record_cancellation(self, run_id: uuid.UUID) -> None:
         """Record cancellation consistently before or during execution."""
@@ -469,6 +498,15 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         self.metrics.increment_counter(
             _METRIC_TERMINAL_STATES,
             labels={"status": status.value, "error_category": error_category},
+        )
+
+    def _record_pending_depth(self) -> None:
+        """Report bounded work waiting beyond the execution capacity."""
+        pending_depth = max(0, self._admitted_run_count - self.max_concurrency)
+        self.metrics.observe_value(
+            _METRIC_PENDING_DEPTH,
+            float(pending_depth),
+            labels={},
         )
 
 

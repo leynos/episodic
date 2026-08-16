@@ -53,6 +53,19 @@ class MetricsPort(typ.Protocol):
         """Observe a latency measurement in milliseconds."""
 
 
+class ValueMetricsPort(MetricsPort, typ.Protocol):
+    """Metrics sink that additionally records bounded scalar values."""
+
+    def observe_value(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Observe a bounded scalar value."""
+
+
 class SpanHandle(typ.Protocol):
     """Context handle returned when a trace span starts.
 
@@ -122,6 +135,21 @@ class NoopMetrics:
 
 
 @dc.dataclass(frozen=True, slots=True)
+class NoopValueMetrics(NoopMetrics):
+    """Default scalar-metrics sink used when no backend is wired."""
+
+    def observe_value(  # noqa: PLR6301  # No-op metrics intentionally retain no state.
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Ignore scalar observations."""
+        del name, value, labels
+
+
+@dc.dataclass(frozen=True, slots=True)
 class StructuredLogMetrics:
     """Production metrics adapter that emits bounded structured observations."""
 
@@ -148,6 +176,19 @@ class StructuredLogMetrics:
         """Emit one bounded latency observation."""
         self.logger.info(
             "metric_latency",
+            extra={"metric_name": name, "value": str(value), **labels},
+        )
+
+    def observe_value(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Emit one bounded scalar observation."""
+        self.logger.info(
+            "metric_value",
             extra={"metric_name": name, "value": str(value), **labels},
         )
 
@@ -210,12 +251,16 @@ class _StructuredLogSink(typ.Protocol):
         """Emit an INFO-level structured event."""
 
 
-@dc.dataclass(frozen=True, slots=True)
+_SAFE_SPAN_ATTRIBUTES = frozenset({"operation", "outcome", "failure_category"})
+
+
+@dc.dataclass(slots=True)
 class _StructuredLogSpan:
-    """Complete a structured-log span without retaining its attributes."""
+    """Complete a structured-log span with allow-listed attributes only."""
 
     logger: _StructuredLogSink
     name: str
+    attributes: dict[str, str]
 
     def __enter__(self) -> typ.Self:
         """Enter the structured-log span context."""
@@ -230,25 +275,25 @@ class _StructuredLogSpan:
         """Log completion without suppressing an operation exception."""
         del exc_value, traceback
         event = "trace_span_completed" if exc_type is None else "trace_span_failed"
-        self.logger.info(event, extra={"span_name": self.name})
+        self.logger.info(
+            event,
+            extra={"span_name": self.name, **self.attributes},
+        )
         return False
 
-    def set_attribute(  # noqa: PLR6301  # Structured logging intentionally excludes attributes.
-        self,
-        name: str,
-        value: str,
-    ) -> None:
-        """Discard operation metadata to keep structured logs non-sensitive."""
-        del name, value
+    def set_attribute(self, name: str, value: str) -> None:
+        """Retain an allow-listed bounded operation attribute."""
+        if name in _SAFE_SPAN_ATTRIBUTES:
+            self.attributes[name] = value
 
 
 @dc.dataclass(frozen=True, slots=True)
 class StructuredLogTracer:
     """Trace adapter that logs safe span lifecycle metadata.
 
-    The adapter logs the event name and span name at start and completion. It
-    deliberately excludes caller attributes from log records because they may
-    contain identifiers, paths, or other sensitive metadata.
+    The adapter logs the event name, span name, and allow-listed bounded
+    operation attributes at start and completion. It excludes run identifiers,
+    paths, and other sensitive metadata from log records.
     """
 
     logger: _StructuredLogSink = dc.field(
@@ -262,9 +307,20 @@ class StructuredLogTracer:
         attributes: cabc.Mapping[str, str],
     ) -> SpanHandle:
         """Log a safe span start and return its completion context."""
-        del attributes
-        self.logger.info("trace_span_started", extra={"span_name": name})
-        return _StructuredLogSpan(logger=self.logger, name=name)
+        safe_attributes = {
+            key: value
+            for key, value in attributes.items()
+            if key in _SAFE_SPAN_ATTRIBUTES
+        }
+        self.logger.info(
+            "trace_span_started",
+            extra={"span_name": name, **safe_attributes},
+        )
+        return _StructuredLogSpan(
+            logger=self.logger,
+            name=name,
+            attributes=safe_attributes,
+        )
 
 
 @dc.dataclass(slots=True)
