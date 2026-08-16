@@ -30,12 +30,15 @@ from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import RunNotFound
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate, event_seq
 from episodic.canonical.source_intake_service import SourceIntakeError
+from episodic.generation.launcher import GenerationRunAdmissionError
+from episodic.observability import NoopTracer
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.api.types import JsonPayload, UowFactory
     from episodic.generation.launcher import GenerationRunLauncher
+    from episodic.observability import TracerPort
 
 _GENERATION_RUN_OPERATION = "generation_run.create"
 _RETRY_AFTER = "1"
@@ -59,18 +62,20 @@ def _uuid7() -> uuid.UUID:
 class GenerationRunsResource:
     """Create no-QA generation runs for ready ingestion jobs."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913  # HTTP composition requires independent test seams.
         self,
         uow_factory: UowFactory,
         *,
         launcher: GenerationRunLauncher | None,
         clock: Clock = _utc_now,
         uuid_factory: UuidFactory = _uuid7,
+        tracer: TracerPort | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._launcher = launcher
         self._clock = clock
         self._uuid_factory = uuid_factory
+        self._tracer = NoopTracer() if tracer is None else tracer
 
     async def on_post(
         self,
@@ -92,11 +97,18 @@ class GenerationRunsResource:
                 idempotency_key=idempotency_key,
                 idempotency_principal_id=principal_id(req),
             )
+            span.set_attribute("run_id", str(run.id))
             try:
                 await launcher.launch(run.id)
-            except Exception as exc:
-                await self._mark_launch_failed(run.id, exc)
-                raise
+            except GenerationRunAdmissionError as exc:
+                span.set_attribute("outcome", "rejected")
+                span.set_attribute("failure_category", "launcher.overloaded")
+                await self._mark_launch_failed(
+                    run.id,
+                    error_message=str(exc),
+                    error_category="launcher.overloaded",
+                )
+                raise _generation_overloaded() from exc
             location = f"/v1/generation-runs/{run.id}"
             return IdempotentResponse(
                 falcon.HTTP_202,
@@ -105,15 +117,20 @@ class GenerationRunsResource:
                 retry_after=_RETRY_AFTER,
             )
 
-        result = await run_idempotent(
-            self._uow_factory,
-            context=IdempotencyContext(
-                req=req,
-                operation=_GENERATION_RUN_OPERATION,
-                body_hash=json_body_hash(payload),
-            ),
-            work=work,
-        )
+        with self._tracer.start_span(
+            "generation_run.command",
+            attributes={"operation": _GENERATION_RUN_OPERATION},
+        ) as span:
+            result = await run_idempotent(
+                self._uow_factory,
+                context=IdempotencyContext(
+                    req=req,
+                    operation=_GENERATION_RUN_OPERATION,
+                    body_hash=json_body_hash(payload),
+                ),
+                work=work,
+            )
+            span.set_attribute("outcome", "accepted")
         apply_response(resp, result)
 
     def _require_launcher(self) -> GenerationRunLauncher:
@@ -176,7 +193,13 @@ class GenerationRunsResource:
             await uow.commit()
             return run
 
-    async def _mark_launch_failed(self, run_id: uuid.UUID, exc: Exception) -> None:
+    async def _mark_launch_failed(
+        self,
+        run_id: uuid.UUID,
+        *,
+        error_message: str,
+        error_category: str,
+    ) -> None:
         now = self._clock()
         async with self._uow_factory() as uow:
             await uow.generation_runs.update_run_status(
@@ -185,11 +208,24 @@ class GenerationRunsResource:
                     status=GenerationRunStatus.FAILED,
                     current_node=None,
                     ended_at=now,
-                    error_message=str(exc),
-                    error_category="launcher.schedule",
+                    error_message=error_message,
+                    error_category=error_category,
                 ),
             )
             await uow.commit()
+
+
+def _generation_overloaded() -> falcon.HTTPServiceUnavailable:
+    """Build the stable response for a rejected in-process launch."""
+    return typ.cast(
+        "falcon.HTTPServiceUnavailable",
+        http_error(
+            falcon.HTTPServiceUnavailable(
+                description="Generation capacity is temporarily exhausted."
+            ),
+            code="generation_overloaded",
+        ),
+    )
 
 
 class GenerationRunResource:

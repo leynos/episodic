@@ -12,7 +12,6 @@ dependencies = ApiDependencies(uow_factory=uow_factory)
 app = create_app(dependencies)  # Returns a Falcon ASGI app with API routes.
 """
 
-import asyncio
 import typing as typ
 
 from falcon import asgi
@@ -66,9 +65,8 @@ class _ShutdownHooksMiddleware:
     ) -> None:
         """Release runtime-managed resources before the process exits."""
         del scope, event
-        await asyncio.gather(
-            *(shutdown_hook() for shutdown_hook in self._shutdown_hooks)
-        )
+        for shutdown_hook in self._shutdown_hooks:
+            await shutdown_hook()
 
 
 def _register_health_routes(app: asgi.App, dependencies: ApiDependencies) -> None:
@@ -172,7 +170,11 @@ def _register_generation_run_routes(
 ) -> None:
     app.add_route(
         "/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
-        GenerationRunsResource(uow_factory, launcher=dependencies.launcher),
+        GenerationRunsResource(
+            uow_factory,
+            launcher=dependencies.launcher,
+            tracer=dependencies.tracer,
+        ),
     )
     app.add_route(
         "/v1/generation-runs/{run_id}",

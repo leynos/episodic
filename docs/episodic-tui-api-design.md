@@ -1099,10 +1099,10 @@ _Figure: Sequence diagram illustrating the end-to-end flow for starting a
 generation run and observing events via WebSocket. The user configures
 generation parameters for a ready ingestion job through the TUI, which creates
 a run via REST and establishes a WebSocket connection to subscribe to events.
-The orchestrator
-publishes events as the run progresses, including checkpoints that require
-human approval. The TUI acknowledges each event and submits checkpoint
-responses via REST. The sequence concludes when the run completes successfully._
+The orchestrator publishes events as the run progresses, including checkpoints
+that require human approval. The TUI acknowledges each event and submits
+checkpoint responses via REST. The sequence concludes when the run completes
+successfully._
 
 ```mermaid
 sequenceDiagram

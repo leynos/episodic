@@ -37,11 +37,10 @@ Success is observable by running the end-to-end behavioural scenario
 `tests/features/no_qa_generation_slice.feature` (added by this plan) against a
 running service backed by a Vidai Mock inference server: a `POST` to
 `/v1/ingestion-jobs/{ingestion_job_id}/generation-runs` for a ready ingestion
-job returns `202 Accepted` with a
-`Location` header, polling `GET /v1/generation-runs/{run_id}` transitions from
-`pending` to `succeeded`, and `GET /v1/episodes/{episode_id}/tei` with
-`Accept: application/tei+xml` returns a downloadable TEI-P5 document whose
-`qa_status` is `skipped`.
+job returns `202 Accepted` with a `Location` header, polling
+`GET /v1/generation-runs/{run_id}` transitions from `pending` to `succeeded`,
+and `GET /v1/episodes/{episode_id}/tei` with `Accept: application/tei+xml`
+returns a downloadable TEI-P5 document whose `qa_status` is `skipped`.
 
 ## Scope and roadmap relationship
 
@@ -183,8 +182,8 @@ when any of the following is breached.
   `complete`. Severity: high. Likelihood: medium. Mitigation: specify the
   ordering — create the run row and schedule the task inside the same `work()`;
   if scheduling fails, mark the run `failed` with an `error_message` (do not
-  merely fail the idempotency record) so the orphan is visible and the
-  manual recovery can identify it.
+  merely fail the idempotency record) so the orphan is visible and the manual
+  recovery can identify it.
 - Risk: the generated draft is not valid TEI-P5 and fails `tei-rapporteur`
   validation on persistence, raising inside the detached task with no Falcon
   handler. Severity: high. Likelihood: medium. Mitigation: the launcher's outer
@@ -293,18 +292,18 @@ when any of the following is breached.
   evidence was HTTP 404 for both creation tests before route registration.
   Green focused evidence covers create, replay, conflict, validation, polling,
   event cursor pagination, domain/storage mapping, and existing intake
-  idempotency with `42 passed in 6.22s`. Full gates passed; `make test`
-  reported `1068 passed, 1 skipped, 7 xfailed`. After staging the complete
-  milestone delta, CodeRabbit reviewed the new resource and tests explicitly
-  and reported zero findings.
+  idempotency with `42 passed in 6.22s`. Full gates passed; `make test` reported
+  `1068 passed, 1 skipped, 7 xfailed`. After staging the complete milestone
+  delta, CodeRabbit reviewed the new resource and tests explicitly and reported
+  zero findings.
 - [x] (completed, 2026-07-22) M6: Episode TEI retrieval
   endpoint with content negotiation. Red evidence was HTTP 404 after a draft
   had been persisted because the route was absent. Green evidence covers the
   pre-draft 404, default JSON envelope, raw `application/tei+xml` attachment,
   content disposition, ETag, and unsupported-media 406; the combined M5-M6
   endpoint suite reports `3 passed`. Full gates passed; `make test` reported
-  `1069 passed, 1 skipped, 7 xfailed`. A staged-delta CodeRabbit review included
-  the new resource and tests and reported zero findings.
+  `1069 passed, 1 skipped, 7 xfailed`. A staged-delta CodeRabbit review
+  included the new resource and tests and reported zero findings.
 - [x] (completed, 2026-07-22) M7: End-to-end behavioural slice with Vidai
   Mock. The seven strict xfails are now live scenarios driving the Falcon API,
   SQL persistence, in-process launcher, OpenAI-compatible adapter, and Vidai
@@ -324,67 +323,66 @@ when any of the following is breached.
   lock generation-run rows before mutable status updates. Focused lint and
   regression evidence passes with `30 passed`. Full deterministic gates pass:
   `make check-fmt`, `make lint`, `make typecheck`, `make check-migrations`,
-  `make test` (`1078 passed, 1 skipped`), `make markdownlint`, and `make nixie`.
-  CodeRabbit reviewed the complete branch delta and reported zero findings.
+  `make test` (`1078 passed, 1 skipped`), `make markdownlint`, and
+  `make nixie`. CodeRabbit reviewed the complete branch delta and reported zero
+  findings.
 - [x] (completed, 2026-07-22) Review follow-up: verified the live BDD fix plus
   the row-locking, `error_category`, and idempotency work in the current tree;
   the remaining review findings are stale.
 - [x] (completed, 2026-07-23) Review follow-up at commit `42757a3`: verified
   and fixed the still-valid runtime LLM wiring, `READY_FOR_GENERATION`
   boundary, exact TEI validation, `Error`-suffixed episode exceptions, shared
-  SHA-256 helper, launcher semaphore cancellation safety, SQL paging
-  validation tests, and concurrent claim coverage. Skipped stale/already-fixed
-  findings for executable BDD scenarios, SQL status-row lock/error_category
-  roundtrip, in-memory `error_category` and duplicate exception wrappers,
-  stable materialization identity, roadmap/plan completion, and
-  users/developer docs coverage. No metric-driven split of
-  `_runs_for_episode` and no new tracing infrastructure or source-count policy
-  were introduced from broad warnings without a scoped design. Focused suites
-  passed; deterministic gates passed on 2026-07-23: `make check-fmt`, `make
-  lint`, `make typecheck`, `make test` (`1089 passed, 1 skipped`), `make
-  check-migrations`, `make markdownlint`, `make nixie`, and `mbake`. Final
-  CodeRabbit review is not yet claimed.
+  SHA-256 helper, launcher semaphore cancellation safety, SQL paging validation
+  tests, and concurrent claim coverage. Skipped stale/already-fixed findings
+  for executable BDD scenarios, SQL status-row lock/error_category roundtrip,
+  in-memory `error_category` and duplicate exception wrappers, stable
+  materialization identity, roadmap/plan completion, and users/developer docs
+  coverage. No metric-driven split of `_runs_for_episode` and no new tracing
+  infrastructure or source-count policy were introduced from broad warnings
+  without a scoped design. Focused suites passed; deterministic gates passed on
+  2026-07-23: `make check-fmt`, `make lint`, `make typecheck`, `make test`
+  (`1089 passed, 1 skipped`), `make check-migrations`, `make markdownlint`,
+  `make nixie`, and `mbake`. Final CodeRabbit review is not yet claimed.
 - [x] (completed, 2026-07-23) Post-completion quality check: live PR
   reconciliation found current CodeScene diagnostics in
   `episodic/canonical/domain.py` (two complex `__post_init__` methods),
   `episodic/api/runtime.py` (`_load_runtime_config` and module average),
-  `tests/test_generation_run_launcher.py` (duplication plus missing
-  diagnostic assertion messages), and `tests/test_generation_persistence.py`
+  `tests/test_generation_run_launcher.py` (duplication plus missing diagnostic
+  assertion messages), and `tests/test_generation_persistence.py`
   (duplication). The implementation extracted behaviour-preserving
   validation/config/test helpers and added assertion context. Focused tests
   passed with `34 passed, 1 environment warning`; `cs check` now reports
-  `10.00` with no findings for all four files. The 2026-07-23 quality
-  milestone passed `make check-fmt`, `make lint`, `make typecheck`, `make
-  test` (`1089 passed, 1 skipped`), `make check-migrations`, `make
-  markdownlint`, `make nixie`, `mbake validate Makefile`, and `git diff
-  --check`. `coderabbit review --agent` ran against clean commit `e02f2c3`,
-  returned terminal `review_completed` with zero findings, and did not require
-  a rate-limit retry.
+  `10.00` with no findings for all four files. The 2026-07-23 quality milestone
+  passed `make check-fmt`, `make lint`, `make typecheck`, `make test`
+  (`1089 passed, 1 skipped`), `make check-migrations`, `make markdownlint`,
+  `make nixie`, `mbake validate Makefile`, and `git diff --check`.
+  `coderabbit review --agent` ran against clean commit `e02f2c3`, returned
+  terminal `review_completed` with zero findings, and did not require a
+  rate-limit retry.
 
 - [x] (completed, 2026-07-31) Rebase and final validation: rebased onto
-  `origin/configure-df12-lints` at
-  `1d49da451abd6f7d276e91693d945ce5e5b7945a`; repaired the replay artefacts
-  and DF12 lint-base findings without weakening lint configuration. The exact
-  final evidence is: `make check-fmt` passed for 467 files; `make test` passed
-  with 1091 passed, 1 skipped, and 54 snapshots; `make typecheck`, `make lint`,
-  `make check-migrations`, `make markdownlint` (0 issues in 112 files),
-  `make nixie`, `mbake validate Makefile`, and `git diff --check` all passed.
-  Before publication, `origin/configure-df12-lints` advanced through 14
-  unrelated lint follow-up commits to final target
-  `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`. Weave predicted no overlap; the
-  second 38-commit replay was conflict-free, the final target is an ancestor,
-  and `uv.lock` remains byte-identical. The complete nine-gate suite passed
-  again on the final base with the same 1091 passed, 1 skipped, and 54
-  snapshots. `make typecheck` exited successfully with three unused-ignore
-  warnings confined to target-only `tests/test_serializers.py`.
-  Final review evidence: `coderabbit review --agent --base
-  origin/configure-df12-lints` completed in 177.037s with zero findings and no
-  rate-limit retry.
-  Superseding final-base review after the conflict-free replay onto final
-  target `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`: `coderabbit review
-  --agent --base origin/configure-df12-lints` completed in 98.255s with zero
-  findings and no rate-limit retry. The earlier 177.037s pre-advance review
-  remains historical evidence.
+  `origin/configure-df12-lints` at `1d49da451abd6f7d276e91693d945ce5e5b7945a`;
+  repaired the replay artefacts and DF12 lint-base findings without weakening
+  lint configuration. The exact final evidence is: `make check-fmt` passed for
+  467 files; `make test` passed with 1091 passed, 1 skipped, and 54 snapshots;
+  `make typecheck`, `make lint`, `make check-migrations`, `make markdownlint`
+  (0 issues in 112 files), `make nixie`, `mbake validate Makefile`, and
+  `git diff --check` all passed. Before publication,
+  `origin/configure-df12-lints` advanced through 14 unrelated lint follow-up
+  commits to final target `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`. Weave
+  predicted no overlap; the second 38-commit replay was conflict-free, the
+  final target is an ancestor, and `uv.lock` remains byte-identical. The
+  complete nine-gate suite passed again on the final base with the same 1091
+  passed, 1 skipped, and 54 snapshots. `make typecheck` exited successfully
+  with three unused-ignore warnings confined to target-only
+  `tests/test_serializers.py`. Final review evidence:
+  `coderabbit review --agent --base origin/configure-df12-lints` completed in
+  177.037s with zero findings and no rate-limit retry. Superseding final-base
+  review after the conflict-free replay onto final target
+  `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`:
+  `coderabbit review --agent --base origin/configure-df12-lints` completed in
+  98.255s with zero findings and no rate-limit retry. The earlier 177.037s
+  pre-advance review remains historical evidence.
 
 - [x] (completed, 2026-07-31) Latest rebase replay and structural validation:
   the target was force-rewritten to `origin/configure-df12-lints` at
@@ -399,16 +397,15 @@ when any of the following is breached.
   tree is marker-free. Final gates passed: `make check-fmt` passed 467 files;
   `make test` passed 1,091, skipped 1, with 54 snapshots (26 warnings);
   `make typecheck` passed with 3 unused-ignore warnings; and `make lint` and
-  `make check-migrations` passed. `make markdownlint` initially found the
-  three new `artefact` spellings; after correction to `artefact`, it passed.
+  `make check-migrations` passed. `make markdownlint` initially found the three
+  new `artefact` spellings; after correction to `artefact`, it passed.
   `make nixie`, `mbake validate Makefile`, and `git diff --check` passed.
-  CodeRabbit was attempted twice with
-  `--base origin/configure-df12-lints`; both attempts stopped externally at
-  `preparing_sandbox` with no findings, diagnostic, or rate-limit indication,
-  so no `vsleep` was warranted. A third attempt from clean committed head
-  `27477971b2153a5ba5f86f85d4ad991cea128cb6` stopped externally at
-  `connecting_to_review_service` after ~6.4s, with no findings or rate-limit
-  indication. An explicit lease-protected force push
+  CodeRabbit was attempted twice with `--base origin/configure-df12-lints`;
+  both attempts stopped externally at `preparing_sandbox` with no findings,
+  diagnostic, or rate-limit indication, so no `vsleep` was warranted. A third
+  attempt from clean committed head `27477971b2153a5ba5f86f85d4ad991cea128cb6`
+  stopped externally at `connecting_to_review_service` after ~6.4s, with no
+  findings or rate-limit indication. An explicit lease-protected force push
   replaced remote `74b8bd1` with `2747797`; PR #141 was retargeted to
   `configure-df12-lints`; and `gh stack link --base main 220 141` created
   remote stack #240. Verification showed PR #220 with base `main` and head
@@ -418,38 +415,38 @@ when any of the following is breached.
   actions are complete.
 
 - [x] (completed, 2026-08-11) Rebase and sequential validation: rebased onto
-  `origin/configure-df12-lints` at
-  `db01ed84e917b5f8411ea7ab75f55c5505d3c972`. Commit `ddc1c17` was safely
-  skipped because target `698e2fa` is the rewritten equivalent. Commit
-  `f7adc07` was resolved by taking the target `uv.lock`, running `uv lock`, and
-  confirming that it matches the target. Forty-one feature commits replayed;
-  formatter-only commit
-  `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b` follows. Sequential gate
-  evidence: `make check-fmt` passed; `make test` 1,099 passed/3 skipped/53
-  snapshots passed; `make typecheck` 0 errors/3 warnings; `make lint`
-  passed/Pylint 10/10. Force-with-lease published remote `70e67b4` as current
-  commit `f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the
-  requested base `configure-df12-lints`; direct `gh pr edit` was rejected
-  because it belongs to a stack. PR #220 is `main <- configure-df12-lints`,
-  and `gh stack link --base main 220 141` confirmed that the two-PR stack is
+  `origin/configure-df12-lints` at `db01ed84e917b5f8411ea7ab75f55c5505d3c972`.
+  Commit `ddc1c17` was safely skipped because target `698e2fa` is the rewritten
+  equivalent. Commit `f7adc07` was resolved by taking the target `uv.lock`,
+  running `uv lock`, and confirming that it matches the target. Forty-one
+  feature commits replayed; formatter-only commit
+  `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b` follows. Sequential gate evidence:
+  `make check-fmt` passed; `make test` 1,099 passed/3 skipped/53 snapshots
+  passed; `make typecheck` 0 errors/3 warnings; `make lint` passed/Pylint
+  10/10. Force-with-lease published remote `70e67b4` as current commit
+  `f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the requested
+  base `configure-df12-lints`; direct `gh pr edit` was rejected because it
+  belongs to a stack. PR #220 is `main <- configure-df12-lints`, and
+  `gh stack link --base main 220 141` confirmed that the two-PR stack is
   already up to date. Remote head equals local.
 
 - [x] (completed, 2026-08-15) Documentation clarification: confirmed that
   `episode_id` is included in the `202 Accepted` generation-run representation
-  and is also available from the polled run resource before the client
-  requests TEI. Updated `docs/users-guide.md` to state this procedure. No
-  full gates were run for this documentation-only change, as requested.
+  and is also available from the polled run resource before the client requests
+  TEI. Updated `docs/users-guide.md` to state this procedure. No full gates
+  were run for this documentation-only change, as requested.
 
 - [ ] (in progress, 2026-08-16) Continuation after rebasing the current
-  revision `f5a3d6e`: the deterministic baseline gates all passed — `make
-  check-fmt`, `make test`, `make typecheck`, `make lint`, `make markdownlint`,
-  `make nixie`, and `make check-migrations`. CodeRabbit review is queued as
-  `fa3b30db` (approximately 1h14m). Required hardening decisions are to add
-  bounded in-process admission before task creation and terminalize overload
-  failures; expose a tracer port with bounded non-sensitive attributes; use a
-  single `CostRecorderPort` under `episodic.cost`; serialize shutdown in
-  launcher → LLM → engine order; retain the SQL conditional update as the
-  claim linearization point; and add property/race proofs.
+  revision `f5a3d6e`: the deterministic baseline gates all passed —
+  `make check-fmt`, `make test`, `make typecheck`, `make lint`,
+  `make markdownlint`, `make nixie`, and `make check-migrations`. CodeRabbit
+  review is queued as `fa3b30db` (approximately 1h14m). Required hardening
+  decisions are to add bounded in-process admission before task creation and
+  terminalize overload failures; expose a tracer port with bounded
+  non-sensitive attributes; use a single `CostRecorderPort` under
+  `episodic.cost`; serialize shutdown in launcher → LLM → engine order; retain
+  the SQL conditional update as the claim linearization point; and add
+  property/race proofs.
 
 ## Surprises & discoveries
 
@@ -494,8 +491,8 @@ when any of the following is breached.
   `tests/steps/generation_orchestration_vidaimock.py`,
   `tests/_guest_bios_helpers.py`. Impact: Milestone 7 reuses the already
   extracted `generation_orchestration_vidaimock.py` process helper and narrows
-  its context requirement to a structural protocol rather than writing a
-  third process manager.
+  its context requirement to a structural protocol rather than writing a third
+  process manager.
 - Observation: cancelling the launcher during replay-scenario teardown can
   interrupt PGlite database work and make later scenarios lose the shared test
   server. Impact: the M7 context drains scheduled generation before launcher
@@ -514,10 +511,10 @@ when any of the following is breached.
   bound revisions, and focused launcher plus slice evidence is `12 passed`.
 - Observation: the post-turn lint hook found the final no-QA BDD step module at
   408 lines, above the repository's 400-line module limit. Impact: scenario
-  resource cleanup moved into `NoQaGenerationSliceContext.tear_down`, where
-  the launcher, adapter, and Vidai Mock process lifecycle now remain cohesive.
-  The step module is 400 lines; focused scenarios and the full formatting,
-  lint, and type-check gates pass.
+  resource cleanup moved into `NoQaGenerationSliceContext.tear_down`, where the
+  launcher, adapter, and Vidai Mock process lifecycle now remain cohesive. The
+  step module is 400 lines; focused scenarios and the full formatting, lint,
+  and type-check gates pass.
 - Observation: on 2026-06-24 the local branch was already named
   `4-3-2-no-qa-generation-runs-and-tei-p5-retrieval` and the matching remote
   branch existed at `origin`, but the worktree did not have an upstream branch
@@ -575,9 +572,9 @@ when any of the following is breached.
   LLM request can be made.
 - Observation: a null `IngestionJob.target_episode_id` caused each
   materialization retry to allocate another episode and duplicate its source
-  projections. Impact: materialization now locks the ingestion-job row,
-  creates the episode, and persists the association in one transaction;
-  subsequent calls return the original episode.
+  projections. Impact: materialization now locks the ingestion-job row, creates
+  the episode, and persists the association in one transaction; subsequent
+  calls return the original episode.
 - Observation: separate SQLAlchemy units of work could both read a running
   generation run before either committed a terminal update. Impact:
   `update_run_status` now acquires a row lock before checking terminal state,
@@ -588,9 +585,9 @@ when any of the following is breached.
   integration added by M4 is launcher dependency/runtime wiring. The seven
   scenarios in `tests/steps/test_no_qa_generation_slice.py` were still marked
   `xfail(strict=True)` and their creation steps deliberately fail with
-  `4.3.2 no-QA source-to-script slice is not implemented yet`. Impact:
-  this prevented premature completion, and Milestones 5-7 subsequently added
-  the missing routes and activated all seven scenarios.
+  `4.3.2 no-QA source-to-script slice is not implemented yet`. Impact: this
+  prevented premature completion, and Milestones 5-7 subsequently added the
+  missing routes and activated all seven scenarios.
 - Observation: after rebasing onto `origin/main`, updated SQLAlchemy typing
   required count queries in the storage tests to use `scalar_one()`. The local
   `act` artefact server also lacks the request schema used by the current
@@ -622,9 +619,8 @@ when any of the following is breached.
   `1d49da4` conflict history remains recorded, while publication used the
   conflict-free replay.
 - Observation: the DF12 lint base exposed assertion-message, alias,
-  suppression-rationale, wrapper, future-annotations, and module-size
-  findings. Impact: the fixes preserved behaviour and did not weaken lint
-  configuration.
+  suppression-rationale, wrapper, future-annotations, and module-size findings.
+  Impact: the fixes preserved behaviour and did not weaken lint configuration.
 - Observation: the force-rewritten target at
   `de457b7ba3d6a13df8600410a0bc7aea25658ff8` already contains rewritten
   equivalents of base-owned commits `f9a4afa` (lint adoption) and `4ed178a`
@@ -632,12 +628,12 @@ when any of the following is breached.
   and skipped, while all 39 feature commits were replayed.
 - Observation: Weave auto-resolved three entity pairs at very-high confidence,
   and `sem diff` confirmed cohesive feature extraction. Target `slots=True` in
-  `_TextUploadRequest` and the feature workflow artefact fallback survived;
-  the restored target lockfile remained byte-identical after `uv lock`. The
-  target is an ancestor and the tree is marker-free. Impact: structural
-  validation and all final deterministic gates passed. `make markdownlint`
-  initially found the three new `artefact` spellings; correcting them to
-  `artefact` made the gate pass.
+  `_TextUploadRequest` and the feature workflow artefact fallback survived; the
+  restored target lockfile remained byte-identical after `uv lock`. The target
+  is an ancestor and the tree is marker-free. Impact: structural validation and
+  all final deterministic gates passed. `make markdownlint` initially found the
+  three new `artefact` spellings; correcting them to `artefact` made the gate
+  pass.
 - Observation: two CodeRabbit attempts with
   `--base origin/configure-df12-lints` both stopped externally at
   `preparing_sandbox`, with no findings, diagnostic, or rate-limit indication.
@@ -647,18 +643,18 @@ when any of the following is breached.
   `connecting_to_review_service` after ~6.4s, with no findings or rate-limit
   indication. Impact: CodeRabbit did not produce a completed review.
 - Observation: an explicit lease-protected force push replaced remote
-  `74b8bd1` with `2747797`; PR #141 was retargeted to
-  `configure-df12-lints`; and `gh stack link --base main 220 141` created
-  remote stack #240. Verification showed PR #220 with base `main` and head
-  `de457b7`, and PR #141 with base `configure-df12-lints` and head `2747797`.
-  `gh stack view` has no local tracking by design after linking, so PR metadata
-  and successful link output are verification. Impact: push/PR/stack actions
-  are complete.
+  `74b8bd1` with `2747797`; PR #141 was retargeted to `configure-df12-lints`;
+  and `gh stack link --base main 220 141` created remote stack #240.
+  Verification showed PR #220 with base `main` and head `de457b7`, and PR #141
+  with base `configure-df12-lints` and head `2747797`. `gh stack view` has no
+  local tracking by design after linking, so PR metadata and successful link
+  output are verification. Impact: push/PR/stack actions are complete.
 - Observation: the 2026-08-11 replay encountered rewritten target history rather
   than requiring the earlier base-owned work to be replayed again. Evidence:
   `ddc1c17` matched target `698e2fa`, and the `f7adc07` lockfile resolution
-  matched the target after `uv lock`. Impact: the rebase retained the 41 feature
-  commits and the formatter-only commit without introducing dependency churn.
+  matched the target after `uv lock`. Impact: the rebase retained the 41
+  feature commits and the formatter-only commit without introducing dependency
+  churn.
 
 ## Decision log
 
@@ -781,14 +777,13 @@ when any of the following is breached.
 
 - Decision: rebase onto `origin/configure-df12-lints` at
   `1d49da451abd6f7d276e91693d945ce5e5b7945a`, resolving the single explicit
-  repository conflict by preserving the extracted
-  `SqlAlchemyEpisodeRepository` with TEI updates and retaining the target
-  branch's unrelated repositories. Rationale: preserve both branches'
-  intended changes while adopting the target branch's current structure.
-  Date/Author: 2026-07-31, implementation agent.
+  repository conflict by preserving the extracted `SqlAlchemyEpisodeRepository`
+  with TEI updates and retaining the target branch's unrelated repositories.
+  Rationale: preserve both branches' intended changes while adopting the target
+  branch's current structure. Date/Author: 2026-07-31, implementation agent.
 - Decision: use the target branch's `uv.lock` as the rebase baseline and run
-  `uv lock`; retain the result because it remained byte-identical to the
-  target lockfile. Rationale: avoid unrelated dependency churn. Date/Author:
+  `uv lock`; retain the result because it remained byte-identical to the target
+  lockfile. Rationale: avoid unrelated dependency churn. Date/Author:
   2026-07-31, implementation agent.
 - Decision: repair all sem/Weave replay artefacts and DF12 lint-base findings
   using target conventions, without weakening lint configuration. Rationale:
@@ -808,12 +803,11 @@ when any of the following is breached.
   unused-ignore warnings confined to target-only `tests/test_serializers.py`.
   Date/Author: 2026-07-31, implementation agent.
 - Decision: replay all 39 feature commits onto the force-rewritten target
-  `origin/configure-df12-lints` at
-  `de457b7ba3d6a13df8600410a0bc7aea25658ff8`, skipping base-owned commits
-  `f9a4afa` (lint adoption) and `4ed178a` (architecture/lock repair) because
-  rewritten equivalents already exist in the target. Rationale: preserve the
-  complete feature extraction while avoiding obsolete base history. Date/
-  Author: 2026-07-31, implementation agent.
+  `origin/configure-df12-lints` at `de457b7ba3d6a13df8600410a0bc7aea25658ff8`,
+  skipping base-owned commits `f9a4afa` (lint adoption) and `4ed178a`
+  (architecture/lock repair) because rewritten equivalents already exist in the
+  target. Rationale: preserve the complete feature extraction while avoiding
+  obsolete base history. Date/ Author: 2026-07-31, implementation agent.
 - Decision: restore the target lockfile before running `uv lock` and retain the
   result because the output is byte-identical. Rationale: avoid unrelated
   dependency churn. Date/Author: 2026-07-31, implementation agent.
@@ -826,8 +820,8 @@ when any of the following is breached.
 - Decision: do not apply a `vsleep` after the CodeRabbit attempts stopped
   externally. Rationale: the first two `preparing_sandbox` stops and the third
   `connecting_to_review_service` stop returned no rate-limit indication; the
-  third attempt also returned no findings after ~6.4s.
-  Date/Author: 2026-07-31, implementation agent.
+  third attempt also returned no findings after ~6.4s. Date/Author: 2026-07-31,
+  implementation agent.
 - Decision: publish the clean committed head with an explicit lease-protected
   force push, retarget PR #141 to `configure-df12-lints`, and link PRs #220 and
   #141 with `gh stack link --base main 220 141`. Rationale: the push replaced
@@ -838,22 +832,21 @@ when any of the following is breached.
   the verification evidence. Push/PR/stack actions are complete. Date/Author:
   2026-07-31, implementation agent.
 - Decision: for the 2026-08-11 rebase, use target
-  `origin/configure-df12-lints` at
-  `db01ed84e917b5f8411ea7ab75f55c5505d3c972`; safely skip `ddc1c17` because
-  target `698e2fa` is its rewritten equivalent; and resolve `f7adc07` with the
-  target `uv.lock` followed by `uv lock`, retaining the matching result.
-  Rationale: preserve target-owned history and avoid dependency churn while
-  replaying the 41 feature commits. Retain formatter-only commit
-  `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b`. The sequential gate evidence is
-  `make check-fmt` passed, `make test` 1,099 passed/3 skipped/53 snapshots
-  passed, `make typecheck` 0 errors/3 warnings, and `make lint`
-  passed/Pylint 10/10. Force-with-lease published remote `70e67b4` as current
-  commit `f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the
-  requested base `configure-df12-lints`; direct `gh pr edit` was rejected
-  because it belongs to a stack. PR #220 is `main <- configure-df12-lints`,
-  and `gh stack link --base main 220 141` confirmed that the two-PR stack is
-  already up to date. Remote head equals local. Date/Author: 2026-08-11,
-  implementation agent.
+  `origin/configure-df12-lints` at `db01ed84e917b5f8411ea7ab75f55c5505d3c972`;
+  safely skip `ddc1c17` because target `698e2fa` is its rewritten equivalent;
+  and resolve `f7adc07` with the target `uv.lock` followed by `uv lock`,
+  retaining the matching result. Rationale: preserve target-owned history and
+  avoid dependency churn while replaying the 41 feature commits. Retain
+  formatter-only commit `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b`. The
+  sequential gate evidence is `make check-fmt` passed, `make test` 1,099
+  passed/3 skipped/53 snapshots passed, `make typecheck` 0 errors/3 warnings,
+  and `make lint` passed/Pylint 10/10. Force-with-lease published remote
+  `70e67b4` as current commit `f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR
+  #141 already had the requested base `configure-df12-lints`; direct
+  `gh pr edit` was rejected because it belongs to a stack. PR #220 is
+  `main <- configure-df12-lints`, and `gh stack link --base main 220 141`
+  confirmed that the two-PR stack is already up to date. Remote head equals
+  local. Date/Author: 2026-08-11, implementation agent.
 - Decision: document `episode_id` as available in the `202 Accepted`
   generation-run representation and in the polled run resource, and instruct
   clients to read it before requesting TEI. Rationale:
@@ -1181,10 +1174,10 @@ New resources, wired by a new `_register_generation_run_routes` and
 
 - `POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs` —
   `GenerationRunsResource` for a ready ingestion job. Body: required
-  `quality_mode`, `skip_qa_rationale`, `actor`; optional
-  accepted-and-ignored `template_id`, `prompt_overrides`, `budget_hints` (do not
-  `400` on them; round-trip them into `configuration`/`budget_snapshot` so
-  they survive). Validation: missing/blank rationale or malformed body → `400`;
+  `quality_mode`, `skip_qa_rationale`, `actor`; optional accepted-and-ignored
+  `template_id`, `prompt_overrides`, `budget_hints` (do not `400` on them;
+  round-trip them into `configuration`/`budget_snapshot` so they survive).
+  Validation: missing/blank rationale or malformed body → `400`;
   recognized-but-unsupported `quality_mode` → `422`. Returns `202` with
   `Location: /v1/generation-runs/{run_id}` and `Retry-After`. The handler
   creates the run row AND schedules the launcher inside one `work()`;
@@ -1491,9 +1484,9 @@ Gate: full Python gates including the now-active scenarios. Commit.
 1. Add `docs/adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md`
    recording: the in-process launcher port (a degenerate `TaskResumePort`) and
    the Celery deferral, the single-worker assumption and stuck-run hooks (lease
-   columns, conditional transitions, manual-fail runbook),
-   episode materialization from ingestion, the `DraftScriptGenerator` port and
-   its 4.4.1 successor, episode TEI revisioning and optimistic update, the
+   columns, conditional transitions, manual-fail runbook), episode
+   materialization from ingestion, the `DraftScriptGenerator` port and its
+   4.4.1 successor, episode TEI revisioning and optimistic update, the
    422-vs-400 and 404 contract decisions, and the content-negotiation approach.
    Reference it from ADR 009 and the system design.
 2. Update `docs/episodic-podcast-generation-system-design.md`
@@ -1580,8 +1573,8 @@ $ uv run pytest tests/steps/test_no_qa_generation_slice.py -q
 ```
 
 CI installs the pinned Vidai Mock release from the `vidaiUK/VidaiMock` GitHub
-release archive in `.github/workflows/ci.yml`, verifies its SHA-256 digest,
-and places the binary in `$HOME/.local/bin` before running tests.
+release archive in `.github/workflows/ci.yml`, verifies its SHA-256 digest, and
+places the binary in `$HOME/.local/bin` before running tests.
 
 ## Validation and acceptance
 
@@ -1654,11 +1647,11 @@ checking then.
   and clobbering if a future reaper re-launches.
 - If the service restarts mid-run, the run may remain `running` (no automated
   reaper in this slice). The `started_at`/`lease_expires_at` columns support
-  manual recovery; the manual-fail runbook (in ADR 016 / developers' guide)
-  The previously identified documentation gap is now addressed by the
-  developers' guide runbook, which describes how to inspect expiry,
-  conditionally fail a stuck run, append its failure event, and preserve its
-  idempotency record. The automated reaper is a 2.6.2 follow-up.
+  manual recovery; the manual-fail runbook (in ADR 016 / developers' guide) The
+  previously identified documentation gap is now addressed by the developers'
+  guide runbook, which describes how to inspect expiry, conditionally fail a
+  stuck run, append its failure event, and preserve its idempotency record. The
+  automated reaper is a 2.6.2 follow-up.
 - Known limitation: a `pending`/`running` run that outlives the 24h idempotency
   TTL could let a replayed key create a second run; documented for the 2.6.2
   recovery work.
@@ -1764,9 +1757,8 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
   `make typecheck`, and `make lint` passed; Pylint rated the branch `10.00/10`.
   `make test` reported `1066 passed, 1 skipped, 7 xfailed`. At that point, the
   xfails were the unchanged M7 behavioural scaffold, not completed acceptance
-  evidence.
-  `make markdownlint` and `make nixie` also passed after refreshing the
-  generated spelling configuration and correcting Markdown drift.
+  evidence. `make markdownlint` and `make nixie` also passed after refreshing
+  the generated spelling configuration and correcting Markdown drift.
 
 - Intermediate red-state behavioural evidence (2026-07-22):
 
@@ -1808,8 +1800,7 @@ on a `vidaimock`-equipped host (mandatory acceptance evidence).
   `make typecheck`, `make lint`, `make check-migrations`, `make markdownlint`,
   and `make nixie` passed. A staged-delta `coderabbit review --agent` included
   `episodic/api/resources/episode_tei.py` and `tests/test_episode_tei_api.py`
-  and ended with
-  `{"type":"complete","status":"review_completed","findings":0}`.
+  and ended with `{"type":"complete","status":"review_completed","findings":0}`.
 
 ## Outcomes & retrospective
 
@@ -1823,15 +1814,15 @@ terminal checks from the in-memory adapter.
 
 All eight milestones are complete. The implementation exposes durable no-QA
 generation runs and event polling, resolves source and presenter context,
-persists revisioned TEI with explicit skipped-QA provenance, and serves JSON
-or downloadable TEI representations. Upload-backed sources are hydrated from
+persists revisioned TEI with explicit skipped-QA provenance, and serves JSON or
+downloadable TEI representations. Upload-backed sources are hydrated from
 object storage before generation, repeated materialization converges on the
 ingestion job's persisted episode, and terminal status updates are serialized.
 Full deterministic gates pass with `1078 passed, 1 skipped`; CodeRabbit's final
 complete-branch review reported zero findings. ADR 016 and the maintainer and
 user guides record the operational limits and successor work. Automated
-stuck-run recovery, the broader checkpoint REST surface, and the full
-QA-bypass generation graph remain assigned to 2.6.2, 2.6.3, and 4.4.1.
+stuck-run recovery, the broader checkpoint REST surface, and the full QA-bypass
+generation graph remain assigned to 2.6.2, 2.6.3, and 4.4.1.
 
 Latest rebase qualifier: the structural replay onto the force-rewritten
 `de457b7ba3d6a13df8600410a0bc7aea25658ff8` target is recorded above, including
@@ -1846,24 +1837,24 @@ with no findings, diagnostic, or rate-limit indication, so no `vsleep` was
 warranted. A third attempt from clean committed head
 `27477971b2153a5ba5f86f85d4ad991cea128cb6` stopped externally at
 `connecting_to_review_service` after ~6.4s, with no findings or rate-limit
-indication. An explicit lease-protected force push
-replaced remote `74b8bd1` with `2747797`; PR #141 was retargeted to
-`configure-df12-lints`; and `gh stack link --base main 220 141` created remote
-stack #240. PR metadata verifies #220 as base `main`/head `de457b7` and #141 as
-base `configure-df12-lints`/head `2747797`. Because `gh stack view` has no local
+indication. An explicit lease-protected force push replaced remote `74b8bd1`
+with `2747797`; PR #141 was retargeted to `configure-df12-lints`; and
+`gh stack link --base main 220 141` created remote stack #240. PR metadata
+verifies #220 as base `main`/head `de457b7` and #141 as base
+`configure-df12-lints`/head `2747797`. Because `gh stack view` has no local
 tracking by design after linking, the successful link output and PR metadata
 are the verification evidence. Push/PR/stack actions are complete.
 
 2026-08-11 rebase outcome: the branch was rebased onto
-`origin/configure-df12-lints` at
-`db01ed84e917b5f8411ea7ab75f55c5505d3c972`; `ddc1c17` was safely skipped as the
-rewritten equivalent of target `698e2fa`; and `f7adc07` was resolved with the
-target `uv.lock`, `uv lock`, and confirmation that the lockfile matches the
-target. Forty-one feature commits replayed, followed by formatter-only commit
+`origin/configure-df12-lints` at `db01ed84e917b5f8411ea7ab75f55c5505d3c972`;
+`ddc1c17` was safely skipped as the rewritten equivalent of target `698e2fa`;
+and `f7adc07` was resolved with the target `uv.lock`, `uv lock`, and
+confirmation that the lockfile matches the target. Forty-one feature commits
+replayed, followed by formatter-only commit
 `e168e39560cc73ea2b8726ac0e09ddb272cd1e6b`. Sequential gate evidence is
-`make check-fmt` passed; `make test` 1,099 passed/3 skipped/53 snapshots
-passed; `make typecheck` 0 errors/3 warnings; and `make lint` passed/Pylint
-10/10. Force-with-lease published remote `70e67b4` as current commit
+`make check-fmt` passed; `make test` 1,099 passed/3 skipped/53 snapshots passed;
+`make typecheck` 0 errors/3 warnings; and `make lint` passed/Pylint 10/10.
+Force-with-lease published remote `70e67b4` as current commit
 `f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the requested
 base `configure-df12-lints`; direct `gh pr edit` was rejected because it
 belongs to a stack. PR #220 is `main <- configure-df12-lints`, and
@@ -1878,18 +1869,17 @@ to respect the file/line tolerance; made the launcher own a fresh unit of work
 (use-after-free fix) with a dedicated detached-session test; added durable
 stuck-run hooks (indexed `started_at`, `lease_expires_at`, `error_category`,
 conditional `pending → running`, optimistic TEI update); extended idempotency
-replay to carry `Location`/`Retry-After`;
-corrected the `json_body_hash` module path and added the
-`generation_run.create` operation; specified the request-body required/optional
-split and the 422-vs-400 and 404 contract decisions; made cost-recorder wiring
-an explicit deliverable; specified deterministic TEI ids and clock injection
-for stable snapshots; clarified that episode materialization is a new step (not
-pure reuse); mandated `pyproject.toml` architecture-group registration for new
-modules; broadened LLM-failure and malformed-completion handling and tests;
-required observability acceptance; and turned the Vidai Mock skip into a
-must-run-once acceptance gate reusing existing helpers. These strengthen
-correctness and operability without enlarging the externally observable
-contract.
+replay to carry `Location`/`Retry-After`; corrected the `json_body_hash` module
+path and added the `generation_run.create` operation; specified the
+request-body required/optional split and the 422-vs-400 and 404 contract
+decisions; made cost-recorder wiring an explicit deliverable; specified
+deterministic TEI ids and clock injection for stable snapshots; clarified that
+episode materialization is a new step (not pure reuse); mandated
+`pyproject.toml` architecture-group registration for new modules; broadened
+LLM-failure and malformed-completion handling and tests; required observability
+acceptance; and turned the Vidai Mock skip into a must-run-once acceptance gate
+reusing existing helpers. These strengthen correctness and operability without
+enlarging the externally observable contract.
 
 Revised 2026-07-22 after a PR-head status audit. The audit identified the then
 missing M5-M7 REST and behavioural deliverables; subsequent milestones closed
@@ -1912,29 +1902,28 @@ rebased onto `origin/configure-df12-lints` at
 and the marker-free sem/Weave replay artefacts were repaired using target
 conventions. The target `uv.lock` remained byte-identical after `uv lock`, and
 DF12 lint-base fixes preserved behaviour without weakening configuration. The
-new final evidence is recorded in Progress: all named formatting, test,
-typing, lint, migration, Markdown, Mermaid, Makefile, and diff checks passed,
-including 1091 passed tests, 1 skipped test, 54 snapshots, and zero Markdown
-issues in 112 files.
-The final review, `coderabbit review --agent --base
-origin/configure-df12-lints`, completed in 177.037s with zero findings and no
-rate-limit retry.
+new final evidence is recorded in Progress: all named formatting, test, typing,
+lint, migration, Markdown, Mermaid, Makefile, and diff checks passed, including
+1091 passed tests, 1 skipped test, 54 snapshots, and zero Markdown issues in
+112 files. The final review,
+`coderabbit review --agent --base origin/configure-df12-lints`, completed in
+177.037s with zero findings and no rate-limit retry.
 
 The target then advanced through 14 unrelated lint follow-up commits before
-publication, reaching final target
-`5fd1f97d375f5703b90c5cb366f6a45a2d229e37`. Weave predicted no overlap; the
-second 38-commit replay was conflict-free, the final target is an ancestor,
-and `uv.lock` remains byte-identical. The complete nine-gate suite passed
-again on that final base with the same 1091 passed, 1 skipped, and 54
-snapshots. `make typecheck` exited successfully with three unused-ignore
-warnings confined to target-only `tests/test_serializers.py`. The initial
-`1d49da4` conflict history and prior CodeRabbit evidence remain unchanged.
+publication, reaching final target `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`.
+Weave predicted no overlap; the second 38-commit replay was conflict-free, the
+final target is an ancestor, and `uv.lock` remains byte-identical. The complete
+nine-gate suite passed again on that final base with the same 1091 passed, 1
+skipped, and 54 snapshots. `make typecheck` exited successfully with three
+unused-ignore warnings confined to target-only `tests/test_serializers.py`. The
+initial `1d49da4` conflict history and prior CodeRabbit evidence remain
+unchanged.
 
 The superseding final-base review after the conflict-free replay onto final
-target `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`, using `coderabbit review
---agent --base origin/configure-df12-lints`, completed in 98.255s with zero
-findings and no rate-limit retry. The earlier 177.037s pre-advance review
-remains historical evidence.
+target `5fd1f97d375f5703b90c5cb366f6a45a2d229e37`, using
+`coderabbit review --agent --base origin/configure-df12-lints`, completed in
+98.255s with zero findings and no rate-limit retry. The earlier 177.037s
+pre-advance review remains historical evidence.
 
 Revised 2026-07-31 after the latest force-rewritten-target rebase. Recorded the
 `de457b7ba3d6a13df8600410a0bc7aea25658ff8` target, the carefully inspected and
@@ -1955,24 +1944,23 @@ were corrected to `artefact`; and `make nixie`, `mbake validate Makefile`, and
 no `vsleep` was warranted. A third attempt from clean committed head
 `27477971b2153a5ba5f86f85d4ad991cea128cb6` stopped externally at
 `connecting_to_review_service` after ~6.4s, with no findings or rate-limit
-indication. An explicit lease-protected force push
-replaced remote `74b8bd1` with `2747797`; PR #141 was retargeted to
-`configure-df12-lints`; and `gh stack link --base main 220 141` created remote
-stack #240. Verification showed #220 with base `main` and head `de457b7`, and
-PR #141 with base `configure-df12-lints` and head `2747797`. `gh stack view`
-has no local tracking by design after linking, so PR metadata and successful
-link output are verification. Push/PR/stack actions are complete.
+indication. An explicit lease-protected force push replaced remote `74b8bd1`
+with `2747797`; PR #141 was retargeted to `configure-df12-lints`; and
+`gh stack link --base main 220 141` created remote stack #240. Verification
+showed #220 with base `main` and head `de457b7`, and PR #141 with base
+`configure-df12-lints` and head `2747797`. `gh stack view` has no local
+tracking by design after linking, so PR metadata and successful link output are
+verification. Push/PR/stack actions are complete.
 
-Revised 2026-08-11 after the rebase onto
-`origin/configure-df12-lints` at
+Revised 2026-08-11 after the rebase onto `origin/configure-df12-lints` at
 `db01ed84e917b5f8411ea7ab75f55c5505d3c972`. Recorded that `ddc1c17` was safely
 skipped because target `698e2fa` is the rewritten equivalent; `f7adc07` was
 resolved by taking the target `uv.lock`, running `uv lock`, and confirming it
 matches the target; 41 feature commits replayed; and formatter-only commit
-`e168e39560cc73ea2b8726ac0e09ddb272cd1e6b` follows. Sequential gate evidence
-is `make check-fmt` passed, `make test` 1,099 passed/3 skipped/53 snapshots
-passed, `make typecheck` 0 errors/3 warnings, and `make lint` passed/Pylint
-10/10. Force-with-lease published remote `70e67b4` as current commit
+`e168e39560cc73ea2b8726ac0e09ddb272cd1e6b` follows. Sequential gate evidence is
+`make check-fmt` passed, `make test` 1,099 passed/3 skipped/53 snapshots passed,
+`make typecheck` 0 errors/3 warnings, and `make lint` passed/Pylint 10/10.
+Force-with-lease published remote `70e67b4` as current commit
 `f3243528a12515d4fa4d421aa4e73da8d3c506d3`. PR #141 already had the requested
 base `configure-df12-lints`; direct `gh pr edit` was rejected because it
 belongs to a stack. PR #220 is `main <- configure-df12-lints`, and

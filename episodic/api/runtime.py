@@ -24,6 +24,7 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMConfig,
 )
 from episodic.logging import get_logger, log_info, log_warning
+from episodic.observability import StructuredLogMetrics, StructuredLogTracer
 
 from . import create_app
 from .dependencies import ApiDependencies, ReadinessProbe, ShutdownHook
@@ -220,14 +221,12 @@ def _build_database_probe(
 
 def _build_generation_launcher(
     uow_factory: UowFactory,
-    llm_port: LLMPort | None,
+    llm_port: LLMPort,
     *,
     object_store: ObjectStorePort | None = None,
     config: RuntimeConfig | None = None,
-) -> InProcessGenerationRunLauncher | None:
+) -> InProcessGenerationRunLauncher:
     """Build the no-QA generation-run launcher when an LLM port is configured."""
-    if llm_port is None:
-        return None
     draft_model = _DEFAULT_DRAFT_MODEL if config is None else config.draft_model
     pricing_directory = (
         _DEFAULT_PRICING_DIRECTORY
@@ -256,6 +255,8 @@ def _build_generation_launcher(
         cost_recorder_factory=_cost_recorder,
         provider_name=_DEFAULT_LLM_PROVIDER_NAME,
         provider_operation=LLMProviderOperation.CHAT_COMPLETIONS.value,
+        metrics=StructuredLogMetrics(),
+        tracer=StructuredLogTracer(),
     )
 
 
@@ -334,25 +335,24 @@ def create_app_from_env() -> asgi.App:
     )
     object_store = FilesystemObjectStore(config.source_intake_object_store_root)
     llm_port = _build_llm_port(config)
-    launcher = _build_generation_launcher(
-        uow_factory,
-        llm_port,
-        object_store=object_store,
-        config=config,
-    )
-    if launcher is None:
+    tracer = StructuredLogTracer()
+    if llm_port is None:
+        launcher = None
         shutdown_hooks = (shutdown_hook,)
     else:
-        if llm_port is None:  # pragma: no cover - launcher construction requires it.
-            msg = "Generation launcher requires an LLM port."
-            raise RuntimeError(msg)
+        launcher = _build_generation_launcher(
+            uow_factory,
+            llm_port,
+            object_store=object_store,
+            config=config,
+        )
 
         async def shutdown_generation() -> None:
-            """Drain generation work before closing its provider client."""
+            """Stop generation work before closing its provider client."""
             await launcher.shutdown()
             await llm_port.aclose()
 
-        shutdown_hooks = (shutdown_hook, shutdown_generation)
+        shutdown_hooks = (shutdown_generation, shutdown_hook)
     return create_app(
         ApiDependencies(
             uow_factory=uow_factory,
@@ -361,5 +361,6 @@ def create_app_from_env() -> asgi.App:
             shutdown_hooks=shutdown_hooks,
             llm_port=llm_port,
             launcher=launcher,
+            tracer=tracer,
         )
     )

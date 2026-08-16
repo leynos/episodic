@@ -178,7 +178,7 @@ async def test_create_app_from_env_wires_configured_llm_launcher(
     assert len(dependencies.shutdown_hooks) == 2, (
         f"expected two shutdown hooks, got {len(dependencies.shutdown_hooks)}"
     )
-    await dependencies.shutdown_hooks[1]()
+    await dependencies.shutdown_hooks[0]()
 
 
 @pytest.mark.asyncio

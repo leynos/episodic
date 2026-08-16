@@ -38,7 +38,9 @@ from episodic.observability import (
     MetricsPort,
     MonotonicClockPort,
     NoopMetrics,
+    NoopTracer,
     PerfCounterClock,
+    TracerPort,
 )
 
 if typ.TYPE_CHECKING:
@@ -55,6 +57,7 @@ if typ.TYPE_CHECKING:
 type TaskSet = set[asyncio.Task[None]]
 
 _DEFAULT_MAX_CONCURRENCY = 4
+_DEFAULT_MAX_PENDING_RUNS = 16
 _DEFAULT_LEASE_SECONDS = 900
 _METRIC_TERMINAL_STATES = "generation_run_terminal_total"
 _METRIC_DRAFT_ERRORS = "generation_run_draft_errors_total"
@@ -71,6 +74,10 @@ class GenerationRunLauncher(typ.Protocol):
         """Schedule generation for one run."""
 
 
+class GenerationRunAdmissionError(RuntimeError):
+    """Raised when a launcher cannot retain another pending run."""
+
+
 @dc.dataclass(slots=True)
 class InProcessGenerationRunLauncher(GenerationRunLauncher):
     """Schedule and execute no-QA draft generation in-process."""
@@ -84,8 +91,10 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     provider_name: str = "openai"
     provider_operation: str = "chat_completions"
     max_concurrency: int = _DEFAULT_MAX_CONCURRENCY
+    max_pending_runs: int = _DEFAULT_MAX_PENDING_RUNS
     lease_seconds: int = _DEFAULT_LEASE_SECONDS
     metrics: MetricsPort = dc.field(default_factory=NoopMetrics)
+    tracer: TracerPort = dc.field(default_factory=NoopTracer)
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
     _tasks: TaskSet = dc.field(default_factory=set, init=False)
     _task_run_ids: dict[asyncio.Task[None], uuid.UUID] = dc.field(
@@ -93,20 +102,30 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         init=False,
     )
     _semaphore: asyncio.Semaphore = dc.field(init=False)
+    _admitted_run_count: int = dc.field(default=0, init=False)
+    _is_shutting_down: bool = dc.field(default=False, init=False)
 
     def __post_init__(self) -> None:
         """Validate and initialise launcher state."""
         if self.max_concurrency < 1:
             msg = "max_concurrency must be at least 1."
             raise ValueError(msg)
+        if self.max_pending_runs < 0:
+            msg = "max_pending_runs must be non-negative."
+            raise ValueError(msg)
         self._semaphore = asyncio.Semaphore(self.max_concurrency)
 
     async def launch(self, run_id: uuid.UUID) -> None:
         """Schedule a background task for one generation run."""
-        task = asyncio.create_task(
-            self._run_task(run_id),
-            name=f"generation-run-{run_id}",
-        )
+        self._admit()
+        try:
+            task = asyncio.create_task(
+                self._run_task(run_id),
+                name=f"generation-run-{run_id}",
+            )
+        except Exception:
+            self._admitted_run_count -= 1
+            raise
         self._tasks.add(task)
         self._task_run_ids[task] = run_id
         task.add_done_callback(self._discard_task)
@@ -119,6 +138,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
 
     async def shutdown(self) -> None:
         """Cancel and drain all scheduled generation tasks."""
+        self._is_shutting_down = True
         for task in tuple(self._tasks):
             if not task.done():
                 task.cancel()
@@ -128,14 +148,35 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         """Remove finished tasks from the strong-reference registry."""
         self._tasks.discard(task)
         self._task_run_ids.pop(task, None)
+        self._admitted_run_count -= 1
+
+    def _admit(self) -> None:
+        """Reserve bounded capacity before creating a background task."""
+        if self._is_shutting_down:
+            msg = "Generation run admission is closed during shutdown."
+            raise GenerationRunAdmissionError(msg)
+        capacity = self.max_concurrency + self.max_pending_runs
+        if self._admitted_run_count >= capacity:
+            msg = "Generation run admission capacity is exhausted."
+            raise GenerationRunAdmissionError(msg)
+        self._admitted_run_count += 1
 
     async def _run_task(self, run_id: uuid.UUID) -> None:
         """Execute one scheduled generation run."""
-        try:
-            async with self._semaphore:
-                await self._execute_run(run_id)
-        except asyncio.CancelledError:
-            await self._record_cancellation(run_id)
+        with self.tracer.start_span(
+            "generation_run.execute",
+            attributes={"operation": "generation_run.execute", "run_id": str(run_id)},
+        ) as span:
+            try:
+                async with self._semaphore:
+                    await self._execute_run(run_id)
+            except asyncio.CancelledError:
+                span.set_attribute("outcome", "cancelled")
+                span.set_attribute("failure_category", "launcher.shutdown")
+                await asyncio.shield(self._record_cancellation(run_id))
+                raise
+            else:
+                span.set_attribute("outcome", "completed")
 
     async def _execute_run(self, run_id: uuid.UUID) -> None:
         """Execute one generation run while its concurrency permit is held."""
@@ -146,8 +187,6 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             result = await self._generate(claimed)
             await self._record_draft_generated(claimed.run.id, result)
             await self._persist_success(claimed, result)
-        except asyncio.CancelledError:
-            await self._record_cancellation(run_id)
         except Exception as exc:  # noqa: BLE001  # Task boundary must persist unexpected failures.
             await self._record_failure(run_id, classify_failure(exc))
 

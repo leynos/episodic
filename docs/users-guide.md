@@ -94,8 +94,8 @@ Create a draft run for a ready ingestion job with
 `draft_without_qa`, `skip_qa_rationale`, and `actor`. The server returns
 `202 Accepted`, a `Location` header for the run, and `Retry-After` guidance.
 
-Poll the `Location` resource until its status is `succeeded` or `failed`.
-The `202 Accepted` representation includes `episode_id`, and the polled run
+Poll the `Location` resource until its status is `succeeded` or `failed`. The
+`202 Accepted` representation includes `episode_id`, and the polled run
 resource returns it as well. Read `episode_id` from the polled run resource
 before requesting the episode TEI. Lifecycle details are available from
 `GET /v1/generation-runs/{run_id}/events`. Replaying the original request with

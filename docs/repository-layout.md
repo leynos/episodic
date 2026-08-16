@@ -72,8 +72,8 @@ The `episodic/` package is grouped by feature and boundary:
   adapters, pagination, ingestion services, profile templates, and reference
   document functionality.
 - `episodic/generation/` contains generation services for show notes, chapter
-  markers, guest biographies, draft scripts, generation-run launching, and
-  Text Encoding Initiative (TEI) payloads.
+  markers, guest biographies, draft scripts, generation-run launching, and Text
+  Encoding Initiative (TEI) payloads.
 - `episodic/llm/` contains large language model ports and OpenAI adapter code.
 - `episodic/orchestration/` contains workflow state, checkpoint payloads,
   suspend-and-resume support, and executor integration.

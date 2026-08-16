@@ -82,7 +82,6 @@ class NoQaGenerationSliceContext:
     async def close(self) -> None:
         """Release asynchronous resources owned by the scenario."""
         if self.launcher is not None:
-            await self.launcher.drain()
             await self.launcher.shutdown()
         if self.llm_adapter is not None:
             await self.llm_adapter.aclose()

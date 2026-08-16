@@ -45,6 +45,14 @@ if typ.TYPE_CHECKING:
 NOW = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
 
 
+@dc.dataclass(frozen=True, slots=True)
+class LauncherOptions:
+    """Execution and admission capacities for a test launcher."""
+
+    max_concurrency: int = 4
+    max_pending_runs: int = 16
+
+
 @dc.dataclass(slots=True)
 class RecordingDraftGenerator:
     """Draft generator fake that returns one configured result."""
@@ -297,9 +305,10 @@ def launcher(
     generator: DraftScriptGenerator,
     cost_recorder: RecordingCostRecorder | None = None,
     *,
-    max_concurrency: int = 4,
+    options: LauncherOptions | None = None,
 ) -> InProcessGenerationRunLauncher:
     """Build a launcher for tests."""
+    effective_options = LauncherOptions() if options is None else options
     return InProcessGenerationRunLauncher(
         uow_factory=lambda: SqlAlchemyUnitOfWork(factory),
         draft_generator=generator,
@@ -307,5 +316,6 @@ def launcher(
             None if cost_recorder is None else lambda uow: cost_recorder
         ),
         clock=_clock,
-        max_concurrency=max_concurrency,
+        max_concurrency=effective_options.max_concurrency,
+        max_pending_runs=effective_options.max_pending_runs,
     )

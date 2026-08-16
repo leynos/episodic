@@ -16,10 +16,12 @@ from episodic.canonical.domain import (
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptTransientProviderError
+from episodic.generation.launcher import GenerationRunAdmissionError
 from episodic.generation.launcher_support import source_from_document
 from tests.generation_run_launcher_support import (
     BlockingDraftGenerator,
     FailingDraftGenerator,
+    LauncherOptions,
     RecordingCostRecorder,
     RecordingDraftGenerator,
     draft_result,
@@ -275,10 +277,32 @@ async def test_launcher_returns_while_concurrency_slot_is_busy(
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
     run_id, _ = await prepare_pending_run(factory)
     generator = BlockingDraftGenerator()
-    run_launcher = launcher(factory, generator, max_concurrency=1)
+    run_launcher = launcher(
+        factory,
+        generator,
+        options=LauncherOptions(max_concurrency=1, max_pending_runs=1),
+    )
 
     await run_launcher.launch(run_id)
     await generator.started.wait()
     await asyncio.wait_for(run_launcher.launch(uuid.uuid7()), timeout=0.1)
+    with pytest.raises(GenerationRunAdmissionError, match="capacity"):
+        await run_launcher.launch(uuid.uuid7())
+
+    assert len(run_launcher._tasks) == 2, (
+        f"expected one running and one pending task, got {run_launcher._tasks!r}"
+    )
 
     await run_launcher.shutdown()
+
+
+def test_launcher_rejects_negative_pending_capacity(session_factory: object) -> None:
+    """Pending admission capacity should be non-negative."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+
+    with pytest.raises(ValueError, match="max_pending_runs"):
+        launcher(
+            factory,
+            RecordingDraftGenerator(draft_result(valid_tei())),
+            options=LauncherOptions(max_pending_runs=-1),
+        )

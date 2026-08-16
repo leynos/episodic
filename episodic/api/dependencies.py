@@ -10,6 +10,8 @@ import dataclasses as dc
 import inspect
 import typing as typ
 
+from episodic.observability import NoopTracer
+
 from .authorization import AuthorizationPort, PermitAll
 
 if typ.TYPE_CHECKING:
@@ -17,6 +19,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.generation import GenerationRunLauncher
     from episodic.llm import LLMPort
+    from episodic.observability import TracerPort
 
     from .types import UowFactory
 
@@ -99,6 +102,7 @@ class ApiDependencies:
     shutdown_hooks: tuple[ShutdownHook, ...] = ()
     llm_port: LLMPort | None = None
     launcher: GenerationRunLauncher | None = None
+    tracer: TracerPort = dc.field(default_factory=NoopTracer)
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
 
     def __post_init__(self) -> None:

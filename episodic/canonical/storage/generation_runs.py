@@ -14,94 +14,29 @@ from episodic.canonical.domain import (
     JsonMapping,
 )
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
-from episodic.canonical.generation_run_ports import (
-    EventSeq,
-    GenerationRunStatusUpdate,
-    event_seq,
-)
 from episodic.orchestration._types import _log_event
 
+from .generation_run_mappers import (
+    event_from_record,
+    normalise_idempotency_principal,
+    run_from_record,
+    run_to_record,
+)
 from .generation_run_models import GenerationEventRecord, GenerationRunRecord
-
-_ANONYMOUS_IDEMPOTENCY_PRINCIPAL = "__anonymous__"
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from episodic.canonical.generation_run_ports import (
+        EventSeq,
+        GenerationRunStatusUpdate,
+    )
+
 
 def _now() -> dt.datetime:
     """Return a timezone-aware timestamp for adapter-owned updates."""
     return dt.datetime.now(dt.UTC)
-
-
-def _run_from_record(record: GenerationRunRecord) -> GenerationRun:
-    """Map a generation-run record to a domain entity."""
-    return GenerationRun(
-        id=record.id,
-        episode_id=record.episode_id,
-        source_bundle_id=record.source_bundle_id,
-        actor=record.actor,
-        status=record.status,
-        current_node=record.current_node,
-        budget_snapshot=record.budget_snapshot,
-        configuration=record.configuration,
-        created_at=record.created_at,
-        updated_at=record.updated_at,
-        started_at=record.started_at,
-        ended_at=record.ended_at,
-        error_message=record.error_message,
-        error_category=record.error_category,
-        quality_mode=record.quality_mode,
-        qa_status=record.qa_status,
-        skip_qa_rationale=record.skip_qa_rationale,
-    )
-
-
-def _run_to_record(
-    run: GenerationRun,
-    *,
-    idempotency_key: str | None,
-    idempotency_principal_id: str | None,
-) -> GenerationRunRecord:
-    """Map a generation-run domain entity to a SQLAlchemy record."""
-    return GenerationRunRecord(
-        id=run.id,
-        episode_id=run.episode_id,
-        source_bundle_id=run.source_bundle_id,
-        actor=run.actor,
-        status=run.status,
-        current_node=run.current_node,
-        budget_snapshot=run.budget_snapshot,
-        configuration=run.configuration,
-        quality_mode=run.quality_mode,
-        qa_status=run.qa_status,
-        skip_qa_rationale=run.skip_qa_rationale,
-        idempotency_principal_id=(
-            idempotency_principal_id or _ANONYMOUS_IDEMPOTENCY_PRINCIPAL
-        ),
-        idempotency_key=idempotency_key,
-        error_message=run.error_message,
-        error_category=run.error_category,
-        lease_expires_at=None,
-        started_at=run.started_at,
-        ended_at=run.ended_at,
-        created_at=run.created_at,
-        updated_at=run.updated_at,
-    )
-
-
-def _event_from_record(record: GenerationEventRecord) -> GenerationEvent:
-    """Map an event record to a domain event."""
-    return GenerationEvent(
-        id=record.id,
-        generation_run_id=record.generation_run_id,
-        seq=event_seq(record.seq),
-        kind=record.kind,
-        payload=record.payload,
-        occurred_at=record.occurred_at,
-        created_at=record.created_at,
-    )
 
 
 class SqlAlchemyGenerationRunStore:
@@ -149,14 +84,14 @@ class SqlAlchemyGenerationRunStore:
         result = await self._session.execute(
             sa.select(GenerationRunRecord).where(
                 GenerationRunRecord.idempotency_principal_id
-                == (idempotency_principal_id or _ANONYMOUS_IDEMPOTENCY_PRINCIPAL),
+                == normalise_idempotency_principal(idempotency_principal_id),
                 GenerationRunRecord.idempotency_key == idempotency_key,
             )
         )
         record = result.scalar_one_or_none()
         if record is None:
             return None
-        return _run_from_record(record)
+        return run_from_record(record)
 
     async def create_run(
         self,
@@ -174,7 +109,7 @@ class SqlAlchemyGenerationRunStore:
             if existing is not None:
                 return existing
 
-        record = _run_to_record(
+        record = run_to_record(
             run,
             idempotency_key=idempotency_key,
             idempotency_principal_id=idempotency_principal_id,
@@ -200,14 +135,14 @@ class SqlAlchemyGenerationRunStore:
             episode_id=str(run.episode_id),
             idempotent=idempotency_key is not None,
         )
-        return _run_from_record(record)
+        return run_from_record(record)
 
     async def get_run(self, run_id: uuid.UUID) -> GenerationRun | None:
         """Return a run by identifier."""
         record = await self._get_record(run_id)
         if record is None:
             return None
-        return _run_from_record(record)
+        return run_from_record(record)
 
     async def list_runs(
         self,
@@ -232,7 +167,7 @@ class SqlAlchemyGenerationRunStore:
         if status is not None:
             statement = statement.where(GenerationRunRecord.status == status)
         result = await self._session.execute(statement)
-        return tuple(_run_from_record(record) for record in result.scalars())
+        return tuple(run_from_record(record) for record in result.scalars())
 
     async def update_run_status(
         self,
@@ -257,7 +192,7 @@ class SqlAlchemyGenerationRunStore:
             status=update.status.value,
             current_node=update.current_node,
         )
-        return _run_from_record(record)
+        return run_from_record(record)
 
     async def claim_run_for_execution(
         self,
@@ -289,13 +224,39 @@ class SqlAlchemyGenerationRunStore:
             record = await self._get_record(run_id)
             if record is None:  # pragma: no cover - guarded by updated row.
                 raise RunNotFound(run_id)
-            return _run_from_record(record)
+            _log_event(
+                "info",
+                "sql_generation_run_store.claim_run",
+                run_id=str(run_id),
+                current_node=current_node,
+                lease_expires_at=lease_expires_at.isoformat()
+                if lease_expires_at is not None
+                else None,
+            )
+            return run_from_record(record)
 
         record = await self._get_record(run_id)
         if record is None:
+            _log_event(
+                "warning",
+                "sql_generation_run_store.claim_run_missing",
+                run_id=str(run_id),
+            )
             raise RunNotFound(run_id)
         if record.status.is_terminal():
+            _log_event(
+                "warning",
+                "sql_generation_run_store.claim_run_terminal",
+                run_id=str(run_id),
+                status=record.status.value,
+            )
             raise RunAlreadyTerminal(run_id)
+        _log_event(
+            "info",
+            "sql_generation_run_store.claim_run_lost",
+            run_id=str(run_id),
+            status=record.status.value,
+        )
         return None
 
     async def append_event(
@@ -334,7 +295,7 @@ class SqlAlchemyGenerationRunStore:
             seq=record.seq,
             kind=kind,
         )
-        return _event_from_record(record)
+        return event_from_record(record)
 
     async def list_events(
         self,
@@ -362,7 +323,7 @@ class SqlAlchemyGenerationRunStore:
             .limit(limit)
             .offset(offset)
         )
-        return tuple(_event_from_record(record) for record in result.scalars())
+        return tuple(event_from_record(record) for record in result.scalars())
 
     async def count_events(
         self,

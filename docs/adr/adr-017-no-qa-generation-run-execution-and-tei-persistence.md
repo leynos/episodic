@@ -20,14 +20,14 @@ the later iterative workflow.
 
 Introduce `GenerationRunLauncher` as the scheduling port and implement
 `InProcessGenerationRunLauncher` in the API process. The launcher is a
-degenerate task-resume adapter: it accepts a run identifier, claims the
-pending run conditionally, opens fresh units of work for background writes,
-and records ordered lifecycle events. It bounds concurrency and keeps strong
-task references so shutdown can drain or cancel scheduled work. Celery
-dispatch is deferred until the worker boundary owns generation-run execution.
+degenerate task-resume adapter: it accepts a run identifier, claims the pending
+run conditionally, opens fresh units of work for background writes, and records
+ordered lifecycle events. It bounds concurrency and keeps strong task
+references so shutdown can drain or cancel scheduled work. Celery dispatch is
+deferred until the worker boundary owns generation-run execution.
 
-The launcher resolves bound host and guest reference-document revisions for
-the episode's series and supplies them, together with ingestion sources, to the
+The launcher resolves bound host and guest reference-document revisions for the
+episode's series and supplies them, together with ingestion sources, to the
 `DraftScriptGenerator` port. `LLMDraftScriptGenerator` is the single-pass
 implementation. Roadmap item `4.4.1` may replace its one-pass policy with the
 full duration-aware and QA-gated graph without changing the run or launcher
@@ -52,11 +52,11 @@ malformed or missing required fields return `400 Bad Request`. Episode TEI
 returns `404 Not Found` until a generated draft and its provenance metadata
 exist.
 
-`GET /v1/episodes/{episode_id}/tei` uses HTTP content negotiation rather than
-a separate export resource. The default representation is a JSON envelope.
+`GET /v1/episodes/{episode_id}/tei` uses HTTP content negotiation rather than a
+separate export resource. The default representation is a JSON envelope.
 `Accept: application/tei+xml` returns raw XML with `Content-Disposition`,
-`ETag`, and the TEI media type. Unsupported media types return `406 Not
-Acceptable`.
+`ETag`, and the TEI media type. Unsupported media types return
+`406 Not Acceptable`.
 
 ## Consequences
 
