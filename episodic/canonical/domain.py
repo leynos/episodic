@@ -316,32 +316,10 @@ class TeiHeader:
     updated_at: dt.datetime
 
 
-def _require_non_empty_string(value: object, field_name: str) -> None:
-    """Require a string containing at least one non-whitespace character."""
-    if not isinstance(value, str):
-        msg = f"{field_name} must be a string."
-        raise TypeError(msg)
-    if value.strip() == "":
-        msg = f"{field_name} must be a non-empty string."
-        raise ValueError(msg)
-
-
 def _require_positive_integer(value: object, field_name: str) -> None:
     """Require an exact positive integer, excluding boolean values."""
     if type(value) is not int or value < 1:
         msg = f"{field_name} must be a positive integer."
-        raise ValueError(msg)
-
-
-def _require_optional_non_empty_string(value: object, field_name: str) -> None:
-    """Require a non-empty string when an optional value is present."""
-    if value is None:
-        return
-    if not isinstance(value, str):
-        msg = f"{field_name} must be a string when set."
-        raise TypeError(msg)
-    if value.strip() == "":
-        msg = f"{field_name} must be a non-empty string when set."
         raise ValueError(msg)
 
 
@@ -372,9 +350,9 @@ class CanonicalEpisode:
 
     def __post_init__(self) -> None:
         """Validate TEI revision metadata."""
-        _require_non_empty_string(self.tei_xml, "tei_xml")
+        _validate_non_empty_text(self.tei_xml, "tei_xml")
         _require_positive_integer(self.tei_revision, "tei_revision")
-        _require_optional_non_empty_string(
+        _validate_optional_text(
             self.tei_content_hash,
             "tei_content_hash",
         )
@@ -392,7 +370,7 @@ class EpisodeTeiUpdate:
 
     def __post_init__(self) -> None:
         """Validate optimistic TEI update invariants."""
-        _require_non_empty_string(self.tei_xml, "tei_xml")
+        _validate_non_empty_text(self.tei_xml, "tei_xml")
         _require_value(self.qa_status, "qa_status")
         _require_value(self.last_generation_run_id, "last_generation_run_id")
         _require_positive_integer(self.expected_revision, "expected_revision")
