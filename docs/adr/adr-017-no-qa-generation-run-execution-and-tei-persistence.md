@@ -46,6 +46,29 @@ claims, `started_at`, `lease_expires_at`, terminal error category, and a
 stuck-run gauge. Operators may inspect expired leases and manually mark a run
 failed; automatic recovery and reassignment remain roadmap item `2.6.2`.
 
+Admission is bounded before task allocation. The launcher admits at most
+`max_concurrency + max_pending_runs` runs (currently four active and sixteen
+additional pending by default). When that capacity is exhausted, the API
+records a terminal `launcher.overloaded` failure on the already-created run and
+returns `503 Service Unavailable`. Shutdown closes admission before it cancels
+and drains the strong task registry, so no new work can race with teardown.
+
+Shutdown is serialized across the process boundaries: the launcher is shut down
+first, the LLM provider client is closed second, and the database engine is
+disposed last. A cancelled task shields its terminal failure write, allowing
+the run to receive `run.failed` with `launcher.shutdown` before the database
+becomes unavailable. A process restart still loses the in-memory task registry;
+lease fields support inspection and the documented privileged manual-failure
+procedure only. This slice deliberately provides no automatic reaper, retry, or
+reassignment of expired runs.
+
+The API command and launcher execution are traced as separate spans. The
+launcher emits bounded terminal-state, draft-error, QA-bypass, and
+draft-latency metrics, while stable failure categories make outcomes searchable
+without putting run identifiers into metric labels. The structured-log tracer
+records safe span lifecycle metadata and the test tracer remains injectable
+through the same port.
+
 Generation-run creation accepts only `quality_mode=draft_without_qa` in this
 slice. A recognized `qa_gated` request returns `422 Unprocessable Entity`;
 malformed or missing required fields return `400 Bad Request`. Episode TEI

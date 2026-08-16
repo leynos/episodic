@@ -1510,19 +1510,60 @@ implicitly; bridge logic belongs in the later orchestration and REST work.
 
 ### No-QA launcher and TEI retrieval
 
-`GenerationRunLauncher` is the scheduling seam used by the generation-run HTTP
-resource. The current `InProcessGenerationRunLauncher` owns background task
-references, bounds concurrency, and opens a fresh unit of work for each
-lifecycle phase. Shutdown hooks must drain or cancel those tasks before the
-database engine is disposed. Do not pass request-scoped sessions into launcher
-tasks.
+The no-QA path is deliberately a small application service around the
+`GenerationRunLauncher` scheduling seam. `GenerationRunsResource` creates the
+run only after `materialize_episode_from_ingestion` has materialized a ready
+ingestion job into a canonical episode, placeholder TEI header, and source
+documents. It commits that request-scoped unit of work before calling
+`launch(run_id)`. `EpisodeTeiResource` remains the retrieval boundary: it
+serves the persisted episode TEI as JSON by default or raw
+`application/tei+xml` with content negotiation.
 
-The launcher conditionally claims pending runs, resolves host and guest
-profiles, and emits ordered events before persisting terminal status. Preserve
-the stable failure categories and bounded-cardinality metric labels when adding
-new generation failures. Lease expiry and the persisted lease fields are
-operational recovery hooks, not an automatic retry mechanism.
+`DraftScriptGenerator` is the generation seam. The launcher projects canonical
+source documents and resolved host or guest reference-document revisions into
+`DraftScriptRequest`; `LLMDraftScriptGenerator` is the current single-pass
+`LLMPort` implementation. The generator returns `DraftScriptResult`, but does
+not open a unit of work or persist domain entities. Lifecycle repositories
+receive the frozen, slotted `GenerationRunStatusUpdate` value object so status,
+current node, terminal time, and optional failure details travel as one
+immutable command.
 
+`persist_draft_script` is the persistence boundary. It validates the generated
+TEI, applies the expected `tei_revision` check, and updates the episode with
+the TEI, content hash, generation-run identifier, and `QaStatus.SKIPPED`.
+Materialization and persistence use `CanonicalUnitOfWork` repository ports and
+leave commit or rollback to their caller. The launcher therefore uses detached
+units of work: one to claim and load inputs, another for `draft.generated`, and
+another to persist TEI, cost records, ordered terminal events, and status. A
+request-scoped unit of work must never be captured by a background task.
+
+When configured, `CostRecorder` records the provider call and final run roll-up
+in the persistence unit of work. It first pins the immutable provider pricing
+selected for the run, then records usage with a run-scoped idempotency key.
+`PRICING_SNAPSHOT_DIRECTORY` is optional: its default is
+`config/pricing-snapshots`; a configured relative path is resolved from the
+repository root, and startup rejects a path that is not an existing directory.
+The runtime constructs `FilePricingCatalogue` from the validated directory, so
+the same pricing source is used when costs are recorded.
+
+Admission is bounded before task allocation. The default capacity is four
+running tasks plus sixteen admitted pending tasks; exhaustion raises
+`GenerationRunAdmissionError`, and the API records `launcher.overloaded` on the
+run before returning `503 Service Unavailable`. Claims remain conditional
+`pending -> running` transitions with a lease. A process restart does not
+recover the in-memory task registry: inspect an expired lease and use the
+documented manual-failure procedure, because this slice has no automatic
+reaper, retry, or reassignment path.
+
+The lifecycle ordering is part of the contract. `launch` retains a strong task
+reference; `drain` waits for all retained tasks; `shutdown` closes admission,
+cancels unfinished tasks, and drains them. Cancellation shields its failure
+recording so the run receives `run.failed` with `launcher.shutdown`. Runtime
+shutdown calls launcher shutdown, then closes the LLM provider, and only then
+disposes the database engine. The launcher emits a `generation_run.execute`
+span and bounded terminal, draft-error, QA-bypass, and latency metrics; the API
+command span and stable failure categories provide the corresponding request
+and outcome trace without unbounded run identifiers in metric labels.
 
 ### Manual recovery of expired generation-run leases
 

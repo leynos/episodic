@@ -1,4 +1,26 @@
-"""Persistence services for draft-generation output."""
+"""Persist canonical state at the no-QA draft-generation boundaries.
+
+The public request types, :class:`EpisodeMaterialisationRequest` and
+:class:`DraftScriptPersistenceRequest`, and the services
+:func:`materialise_episode_from_ingestion` and :func:`persist_draft_script`
+bridge generation with the canonical domain. Materialization turns a ready
+:class:`~episodic.canonical.domain.IngestionJob` and its attached sources into
+a :class:`~episodic.canonical.domain.CanonicalEpisode`, TEI header, and source
+documents with a valid placeholder TEI. Persistence validates the
+``DraftScriptResult`` produced by the draft generator, then applies an
+optimistic :class:`~episodic.canonical.domain.EpisodeTeiUpdate` with explicit
+no-QA provenance, the generation-run identifier, revision, and content hash.
+
+Both services depend on the
+:class:`~episodic.canonical.unit_of_work_protocols.CanonicalUnitOfWork` ports
+and repository interfaces rather than a storage implementation. Materialization
+commits its short ingestion-job reservation and episode-plus-source projection
+so it can release the ingestion-job lock before source work and converge
+concurrent requests. The generation-run API resource uses materialization
+before creating a run, while the detached launcher uses draft persistence after
+generation. Storage adapters therefore remain behind the unit-of-work boundary,
+and the generator remains responsible only for producing the draft result.
+"""
 
 import collections.abc as cabc
 import dataclasses as dc
@@ -7,6 +29,7 @@ import typing as typ
 import uuid
 
 import tei_rapporteur as tei
+from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import (
     ApprovalState,
@@ -77,8 +100,8 @@ class _SourceDocumentProjection:
     source: IngestionJobSource
     upload: Upload | None
     episode_id: uuid.UUID
+    document_id: uuid.UUID
     now: dt.datetime
-    uuid_factory: UuidFactory
 
 
 async def materialise_episode_from_ingestion(
@@ -86,52 +109,48 @@ async def materialise_episode_from_ingestion(
     request: EpisodeMaterialisationRequest,
 ) -> CanonicalEpisode:
     """Create a placeholder canonical episode for a ready ingestion job."""
+    sources = await _list_all_sources(uow, request.ingestion_job_id)
+    if len(sources) == 0:
+        msg = f"Ingestion job {request.ingestion_job_id} has no attached sources."
+        raise DraftScriptPersistenceError(msg)
+
     job = await _get_ingestion_job_for_update(uow, request.ingestion_job_id)
     if job.intake_state is not IntakeState.READY_FOR_GENERATION:
         msg = f"Ingestion job {request.ingestion_job_id} is not ready for generation."
         raise DraftScriptPersistenceError(msg)
 
     episode_id = job.target_episode_id or request.uuid_factory()
-    existing_episode = await uow.episodes.get(episode_id)
-    if existing_episode is not None:
-        return existing_episode
-
-    sources = await _list_all_sources(uow, request.ingestion_job_id)
-    if len(sources) == 0:
-        msg = f"Ingestion job {request.ingestion_job_id} has no attached sources."
-        raise DraftScriptPersistenceError(msg)
-
     now = request.clock()
-    header = _build_placeholder_header(
-        header_id=request.uuid_factory(),
-        title=request.title,
-        now=now,
-    )
-    episode = _build_placeholder_episode(
-        episode_id=episode_id,
-        job=job,
-        header=header,
-        now=now,
-    )
-
-    await uow.tei_headers.add(header)
-    await uow.flush()
-    await uow.episodes.add(episode)
-    await uow.flush()
-    await uow.ingestion_jobs.set_target_episode(job.id, episode_id=episode.id)
-    for source in sources:
-        upload = await _upload_for_source(uow, source)
-        await uow.source_documents.add(
-            _source_document_from_attachment(
-                _SourceDocumentProjection(
-                    source=source,
-                    upload=upload,
-                    episode_id=episode.id,
-                    now=now,
-                    uuid_factory=request.uuid_factory,
-                )
-            )
+    existing_episode = await uow.episodes.get(episode_id)
+    if existing_episode is None:
+        header = _build_placeholder_header(
+            header_id=request.uuid_factory(),
+            title=request.title,
+            now=now,
         )
+        episode = _build_placeholder_episode(
+            episode_id=episode_id,
+            job=job,
+            header=header,
+            now=now,
+        )
+        await uow.tei_headers.add(header)
+        await uow.flush()
+        await uow.episodes.add(episode)
+        await uow.flush()
+        await uow.ingestion_jobs.set_target_episode(job.id, episode_id=episode.id)
+        # Commit the target association before external upload lookup and source
+        # projection, limiting the ingestion-job row lock to identity creation.
+        await uow.commit()
+    else:
+        episode = existing_episode
+        await uow.commit()
+
+    try:
+        await _project_source_documents(uow, sources, episode.id, now)
+        await uow.commit()
+    except IntegrityError:
+        await uow.rollback()
     return episode
 
 
@@ -186,6 +205,37 @@ async def _list_all_sources(
         if len(page) < page_size:
             return sources
         offset += page_size
+
+
+async def _project_source_documents(
+    uow: CanonicalUnitOfWork,
+    sources: list[IngestionJobSource],
+    episode_id: uuid.UUID,
+    now: dt.datetime,
+) -> None:
+    """Persist source projections absent from this episode's job."""
+    existing_document_ids = {
+        document.id
+        for document in await uow.source_documents.list_for_job(
+            sources[0].ingestion_job_id
+        )
+    }
+    for source in sources:
+        document_id = uuid.uuid5(episode_id, str(source.id))
+        if document_id in existing_document_ids:
+            continue
+        upload = await _upload_for_source(uow, source)
+        await uow.source_documents.add(
+            _source_document_from_attachment(
+                _SourceDocumentProjection(
+                    source=source,
+                    upload=upload,
+                    episode_id=episode_id,
+                    document_id=document_id,
+                    now=now,
+                )
+            )
+        )
 
 
 def _build_placeholder_header(
@@ -270,7 +320,7 @@ def _source_document_from_attachment(
 ) -> SourceDocument:
     """Project an intake source attachment into canonical source metadata."""
     return SourceDocument(
-        id=projection.uuid_factory(),
+        id=projection.document_id,
         ingestion_job_id=projection.source.ingestion_job_id,
         canonical_episode_id=projection.episode_id,
         reference_document_revision_id=None,

@@ -1,4 +1,24 @@
-"""In-process generation-run launcher for the no-QA slice."""
+"""Schedule and execute bounded no-QA generation runs in the API process.
+
+The public :class:`GenerationRunLauncher` port and
+:class:`InProcessGenerationRunLauncher` service connect the generation-run API
+resource to canonical run persistence. A launcher claims a
+:class:`~episodic.canonical.domain.GenerationRun`, loads its episode, source
+documents, and resolved presenter bindings through fresh
+:class:`~episodic.canonical.unit_of_work_protocols.CanonicalUnitOfWork`
+instances, then delegates draft creation to :class:`DraftScriptGenerator`.
+It records ordered lifecycle events, persists the generated TEI through
+``persist_draft_script``, records optional provider costs, and applies the
+immutable ``GenerationRunStatusUpdate`` command for terminal state changes.
+
+Admission is bounded before an asyncio task is allocated, and strong task
+references support draining or cancellation. The launcher exposes metrics and
+tracing ports, records cancellation as a terminal failure, and treats leases
+as inspection and manual-recovery hooks rather than restart recovery. The
+runtime shuts the launcher down before closing the provider and disposing the
+database engine; request-scoped units of work must never be passed to a
+background task.
+"""
 
 import asyncio
 import dataclasses as dc

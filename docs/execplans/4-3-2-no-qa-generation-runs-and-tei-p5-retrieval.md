@@ -1824,6 +1824,18 @@ user guides record the operational limits and successor work. Automated
 stuck-run recovery, the broader checkpoint REST surface, and the full QA-bypass
 generation graph remain assigned to 2.6.2, 2.6.3, and 4.4.1.
 
+
+## Current progress and decision
+
+As of `eaea7c9` (2026-08-17), the in-process launcher hardening is present:
+admission is bounded before task allocation, overload is persisted as
+`launcher.overloaded`, launcher/provider/database shutdown is serialized, and
+tracing plus bounded production metrics are injectable. This entry records
+current implementation progress and the associated operational decision; it
+does not mark the execution plan or roadmap task complete. Documentation
+synchronization and the explicitly deferred automatic recovery and QA-gated
+successor remain separate follow-up work.
+
 Latest rebase qualifier: the structural replay onto the force-rewritten
 `de457b7ba3d6a13df8600410a0bc7aea25658ff8` target is recorded above, including
 the ancestor and marker-free-tree checks and byte-identical lockfile result.

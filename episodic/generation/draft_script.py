@@ -1,4 +1,21 @@
-"""Single-pass draft script generation."""
+"""Define the port and implementation for one-pass draft script generation.
+
+The immutable ``DraftScriptSource``, ``DraftPresenterProfile``,
+``DraftScriptRequest``, ``DraftTurn``, and ``DraftScriptResult`` types carry
+the source, presenter, episode, and series context projected from canonical
+entities. ``DraftScriptGenerator`` is the public seam for alternate
+implementations; ``LLMDraftScriptGenerator`` is the current implementation
+over the :class:`~episodic.llm.LLMPort`. It sends a deterministic JSON prompt,
+maps provider errors to draft-generation errors, parses the response, and
+emits validated TEI-P5 XML with a content hash and usage metadata.
+
+This module does not load or persist domain entities. The launcher maps
+canonical source documents and reference bindings into a request, while
+``episodic.canonical.generation_persistence`` validates and stores the result
+on the canonical episode. The generation-run API reaches this generator
+indirectly through the launcher, preserving the unit-of-work and persistence
+boundaries.
+"""
 
 import collections.abc as cabc
 import dataclasses as dc

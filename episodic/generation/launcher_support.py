@@ -1,4 +1,20 @@
-"""Support types for in-process generation-run launching."""
+"""Translate canonical generation data at the launcher service boundary.
+
+The public support types—``CostRecorderFactory``, ``SequentialDraftIds``,
+``ClaimedRun``, ``Failure``, ``PersistedTei``, and
+``ProviderCallRecordRequest``—keep launcher orchestration independent of
+storage and provider representations. The helper services load source text
+from canonical :class:`~episodic.canonical.domain.SourceDocument` records or
+the object-store port, project resolved host and guest reference-document
+bindings, and build the immutable request consumed by ``DraftScriptGenerator``.
+
+The event-payload and provider-record helpers map ``DraftScriptResult`` usage,
+provider metadata, and content hashes into generation events and the
+``CostRecorderPort`` contract. ``classify_failure`` preserves stable terminal
+categories for the API and metrics. These helpers accept the canonical unit
+of work and outbound ports supplied by the launcher; they do not open,
+commit, or dispose persistence sessions themselves.
+"""
 
 import collections.abc as cabc
 import dataclasses as dc
