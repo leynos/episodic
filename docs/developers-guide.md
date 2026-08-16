@@ -22,8 +22,10 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-014-hexagonal-architecture-enforcement.md`](adr/adr-014-hexagonal-architecture-enforcement.md)
 - [`adr-015-generation-run-port-split.md`](adr/adr-015-generation-run-port-split.md)
 - [`adr-015-upload-and-idempotency-ports.md`](adr/adr-015-upload-and-idempotency-ports.md)
-- [`adr-017-no-qa-generation-run-execution-and-tei-persistence.md`](adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md)
+- [`adr-017-no-qa-generation-run-execution-and-tei-persistence.md`][adr-017]
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
+
+[adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 
 ## Local development
 
