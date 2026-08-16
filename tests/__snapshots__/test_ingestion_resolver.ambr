@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_conflict_resolver_records_resolution_notes
+  "Source 'Winner' selected as canonical (weight 0.900). Source 'Loser' rejected (weight 0.300)."
+# ---

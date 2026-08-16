@@ -1,7 +1,5 @@
 """Unit tests for canonical prompt template rendering helpers."""
 
-from __future__ import annotations
-
 import html
 import math
 import typing as typ

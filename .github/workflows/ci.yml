@@ -12,7 +12,7 @@ jobs:
       CARGO_HTTP_MULTIPLEXING: "false"
       CARGO_NET_RETRY: "10"
       # The Makefile exports this for its own uv invocations, but the
-      # shared generate-coverage action runs uv directly and rebuilds
+      # source-scoped coverage command runs uv directly and rebuilds
       # the tei-rapporteur PyO3 extension, which needs the stable-ABI
       # escape hatch under Python 3.14 (PyO3 0.23 supports up to 3.13).
       PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
@@ -96,22 +96,18 @@ jobs:
         run: make test
 
       # Coverage runs on pull requests only. Pushes to main upload their
-      # own coverage (and advance the ratchet baseline) via
+      # own coverage via
       # coverage-main.yml, so generating it here as well would duplicate
       # the work and the CodeScene upload for the same commit.
       - name: Generate coverage
         if: github.event_name == 'pull_request'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@8add2d99854a5b77548eae98cca59202e68fefc8
-        with:
-          output-path: coverage.xml
-          format: cobertura
-          # The suite's coverage run previously used slipcover with
-          # pytest-forked (serial, one process per test, no xdist); keep
-          # it serial to stay behaviour-preserving. A follow-up can drop
-          # this pin to adopt pytest-xdist once the suite is confirmed
-          # xdist-clean under coverage instrumentation.
-          pytest-workers: ''
-          with-ratchet: 'true'
+        # CodeScene measures production coverage. Restrict Slipcover to the
+        # application and migration packages so test implementation detail
+        # cannot dilute the quality signal.
+        run: >-
+          uv run --with 'slipcover==1.0.18' python -m slipcover
+          --source episodic,alembic --branch --xml --out coverage.xml
+          -m pytest -v
 
       # CodeScene project 76628's coverage gate has been enabled
       # CodeScene-side (verified via GET /v2/code-coverage/projects/76628/config
@@ -122,7 +118,7 @@ jobs:
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         if: env.CS_ACCESS_TOKEN != '' && github.event_name == 'pull_request'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@8add2d99854a5b77548eae98cca59202e68fefc8
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@1014f0ce1621506ca5fa66b596ed88ec30774cce
         with:
           format: cobertura
           mode: check

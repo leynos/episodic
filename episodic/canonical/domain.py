@@ -279,7 +279,7 @@ class Checkpoint:
             raise CheckpointAlreadyTerminal(self.id)
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class SeriesProfile:
     """Series metadata required for canonical ingestion."""
 
@@ -293,7 +293,7 @@ class SeriesProfile:
     updated_at: dt.datetime
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class TeiHeader:
     """Parsed TEI header payload."""
 
@@ -305,7 +305,7 @@ class TeiHeader:
     updated_at: dt.datetime
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class CanonicalEpisode:
     """Canonical episode representation."""
 
@@ -320,7 +320,7 @@ class CanonicalEpisode:
     updated_at: dt.datetime
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class IngestionJob:
     """Ingestion job state for source document runs."""
 
@@ -345,7 +345,7 @@ class IngestionJobListFilters:
     intake_state: IntakeState | None
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class SourceDocument:
     """Source document metadata for ingestion jobs."""
 
@@ -462,7 +462,7 @@ class ReferenceBinding:
             raise ValueError(msg)
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class ApprovalEvent:
     """Approval state transitions for canonical episodes."""
 
@@ -476,7 +476,7 @@ class ApprovalEvent:
     created_at: dt.datetime
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class SourceDocumentInput:
     """Input payload for new source documents."""
 
@@ -488,7 +488,7 @@ class SourceDocumentInput:
     reference_document_revision_id: uuid.UUID | None = None
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class IngestionRequest:
     """Input payload for canonical ingestion."""
 

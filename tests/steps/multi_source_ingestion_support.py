@@ -38,16 +38,6 @@ def run_async_step(
         Runner owned by the function-scoped test fixture.
     step_fn : Callable[[], Awaitable[None]]
         Zero-argument callable returning the coroutine for the BDD step.
-
-    Returns
-    -------
-    None
-        The step is executed for its assertions and context mutation.
-
-    Raises
-    ------
-    Exception
-        Propagates any exception raised by the asynchronous step.
     """
     coro = typ.cast("cabc.Coroutine[object, object, None]", step_fn())
     runner.run(coro)
@@ -103,11 +93,6 @@ def add_raw_source(
         Source payload to store in the context.
     replace : bool, default=False
         Replace all existing raw sources when true; append otherwise.
-
-    Returns
-    -------
-    None
-        The context is mutated in place.
     """
     if replace:
         multi_source_context["raw_sources"] = [source]

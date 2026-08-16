@@ -102,7 +102,7 @@ class TestSerializeTemplateForBrief:
         )
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class _TripleIds:
     """Shared identity and timestamp fields for a document/revision/binding triple."""
 
@@ -113,7 +113,7 @@ class _TripleIds:
     binding_id: uuid.UUID
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class _DocumentSpec:
     """Document-specific field overrides for ``_make_ref_doc_triple``."""
 
@@ -124,7 +124,7 @@ class _DocumentSpec:
     metadata: dict | None = None
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class _RevisionSpec:
     """Revision- and binding-specific field overrides for ``_make_ref_doc_triple``."""
 

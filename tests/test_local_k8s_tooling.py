@@ -2,6 +2,7 @@
 
 import socket
 import subprocess
+import typing as typ
 from collections.abc import Callable  # noqa: ICN003, TC003 - requested test shape.
 
 import pytest
@@ -14,6 +15,9 @@ from scripts.local_k8s.validation import (
     ensure_loopback_port_available,
     require_tools,
 )
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 
 class RecordingRunner:
@@ -47,21 +51,15 @@ class RecordingRunner:
         )
 
 
-def test_k3d_cluster_create_command_maps_ingress_port() -> None:
+def test_k3d_cluster_create_command_maps_ingress_port(
+    snapshot: SnapshotAssertion,
+) -> None:
     """Build the expected k3d load-balancer port mapping."""
     config = PreviewConfig(cluster_name="demo", ingress_port=9090)
 
-    assert commands.k3d_cluster_create_command(config) == [
-        "k3d",
-        "cluster",
-        "create",
-        "demo",
-        "--agents",
-        "1",
-        "--port",
-        "127.0.0.1:9090:80@loadbalancer",
-        "--wait",
-    ]
+    assert commands.k3d_cluster_create_command(config) == snapshot, (
+        "actual output must match snapshot"
+    )
 
 
 def test_helm_upgrade_command_uses_local_chart_values() -> None:
@@ -70,7 +68,13 @@ def test_helm_upgrade_command_uses_local_chart_values() -> None:
 
     command = commands.helm_upgrade_command(config)
 
-    assert command[:5] == ["helm", "--kube-context", "k3d-demo", "upgrade", "--install"]
+    assert command[:5] == [
+        "helm",
+        "--kube-context",
+        "k3d-demo",
+        "upgrade",
+        "--install",
+    ], "Expected values to match"
     assert "--values" in command, "local values file must be passed to Helm."
     assert str(config.values_path) in command, "local values path must be rendered."
 
@@ -83,7 +87,7 @@ def test_kubectl_secret_command_renders_database_url_literal() -> None:
 
     assert "--from-literal=database-url=postgresql+asyncpg://user:pass@postgres/db" in (
         command
-    )
+    ), "Expected collection to contain the value"
 
 
 def test_loopback_port_validation_reports_occupied_port() -> None:
@@ -143,6 +147,7 @@ def test_down_is_idempotent_when_cluster_is_absent() -> None:
 def test_up_bootstraps_postgres_before_installing_chart(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Apply local Postgres manifests before Helm waits on app readiness."""
     monkeypatch.setattr(
@@ -186,11 +191,7 @@ def test_up_bootstraps_postgres_before_installing_chart(
     ), "up must apply a local Postgres Service matching the preview database URL."
     assert runner.commands[-1][0] == "helm", "Helm must run after dependencies exist."
     banner = capsys.readouterr().out
-    assert "Preview URL: http://episodic.localhost:9090" in banner
-    assert "Health URL: http://episodic.localhost:9090/health/live" in banner
-    assert "Status: make local-k8s-status" in banner
-    assert "Logs: make local-k8s-logs" in banner
-    assert "Teardown: make local-k8s-down" in banner
+    assert banner.splitlines() == snapshot, "actual output must match snapshot"
 
 
 def test_up_rejects_existing_cluster_with_conflicting_ingress_port(
@@ -240,5 +241,9 @@ def test_command_reports_missing_cluster_without_kubectl(
 
     command(PreviewConfig(cluster_name="missing"), runner)
 
-    assert runner.commands == [["k3d", "cluster", "get", "missing"]]
-    assert "does not exist" in capsys.readouterr().out
+    assert runner.commands == [["k3d", "cluster", "get", "missing"]], (
+        "Expected values to match"
+    )
+    assert "does not exist" in capsys.readouterr().out, (
+        "Expected collection to contain the value"
+    )

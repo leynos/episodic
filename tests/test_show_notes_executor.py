@@ -23,6 +23,7 @@ from episodic.orchestration import (
     ToolExecutionError,
     UnsupportedActionError,
 )
+from episodic.orchestration._types import ShowNotesGeneratorNotInitializedError
 from tests._orchestration_fakes import (
     _config,
     _FakeLLMPort,
@@ -64,18 +65,22 @@ async def test_show_notes_tool_executor_uses_execution_model_and_returns_result(
 
     result = await tool_executor.execute(_planned_action(), _request())
 
-    assert result.model == "gpt-4o-mini"
-    assert result.usage == _usage(input_tokens=18, output_tokens=7)
-    assert result.show_notes_result is not None
+    assert result.model == "gpt-4o-mini", "Expected values to match"
+    assert result.usage == _usage(input_tokens=18, output_tokens=7), (
+        "Expected values to match"
+    )
+    assert result.show_notes_result is not None, "Expected value to be present"
     assert result.show_notes_result.entries[0] == ShowNotesEntry(
         topic="Introduction",
         summary="Opening remarks.",
         timestamp="PT0M30S",
-    )
+    ), "Expected values to match"
 
     request = llm.requests[0]
-    assert request.model == "gpt-4o-mini"
-    assert request.provider_operation == LLMProviderOperation.CHAT_COMPLETIONS
+    assert request.model == "gpt-4o-mini", "Expected values to match"
+    assert request.provider_operation == LLMProviderOperation.CHAT_COMPLETIONS, (
+        "Expected values to match"
+    )
 
 
 @pytest.mark.asyncio
@@ -106,7 +111,7 @@ async def test_show_notes_tool_executor_accepts_execution_tier_string() -> None:
 
     result = await tool_executor.execute(action, _request())
 
-    assert result.model_tier == ModelTier.EXECUTION
+    assert result.model_tier == ModelTier.EXECUTION, "Expected values to match"
 
 
 def test_show_notes_tool_executor_rejects_unsupported_action_kind() -> None:
@@ -145,6 +150,22 @@ async def test_show_notes_executor_rejects_planning_tier(
 
 
 @pytest.mark.asyncio
+async def test_show_notes_executor_rejects_uninitialized_generator() -> None:
+    """A missing generator must fail before show-notes generation starts."""
+    llm = _FakeLLMPort([])
+    tool_executor = ShowNotesToolExecutor(llm=llm, config=_config())
+    object.__setattr__(tool_executor, "generator", None)
+
+    with pytest.raises(
+        ShowNotesGeneratorNotInitializedError,
+        match=r"^Show-notes generator was not initialized$",
+    ):
+        await tool_executor.execute(_planned_action(), _request())
+
+    assert not llm.requests, "missing generators must fail before any LLM request"
+
+
+@pytest.mark.asyncio
 async def test_show_notes_tool_executor_wraps_generator_failures() -> None:
     """Show-notes tool should surface deterministic execution failures."""
     tool_executor = ShowNotesToolExecutor(
@@ -156,7 +177,9 @@ async def test_show_notes_tool_executor_wraps_generator_failures() -> None:
     with pytest.raises(ToolExecutionError) as exc_info:
         await tool_executor.execute(_planned_action(), _request())
 
-    assert isinstance(exc_info.value, _InjectedToolExecutionError)
+    assert isinstance(exc_info.value, _InjectedToolExecutionError), (
+        "Expected value to have the required type"
+    )
 
 
 @pytest.mark.asyncio
@@ -173,7 +196,9 @@ async def test_show_notes_executor_wraps_format_error_distinctly() -> None:
     ) as exc_info:
         await tool_executor.execute(_planned_action(), _request())
 
-    assert isinstance(exc_info.value.__cause__, ShowNotesResponseFormatError)
+    assert isinstance(exc_info.value.__cause__, ShowNotesResponseFormatError), (
+        "Expected value to have the required type"
+    )
 
 
 @pytest.mark.asyncio
@@ -188,8 +213,10 @@ async def _show_notes_format_error_is_subtype_test() -> None:
     with pytest.raises(ToolExecutionError) as exc_info:
         await tool_executor.execute(_planned_action(), _request())
 
-    assert isinstance(exc_info.value, ShowNotesFormatError)
-    assert type(exc_info.value) is not ToolExecutionError
+    assert isinstance(exc_info.value, ShowNotesFormatError), (
+        "Expected value to have the required type"
+    )
+    assert type(exc_info.value) is not ToolExecutionError, "Expected values to differ"
 
 
 test_show_notes_executor_format_error_is_subtype_of_tool_execution_error = (
@@ -225,5 +252,7 @@ async def test_show_notes_executor_propagates_llm_provider_errors(
     with pytest.raises(type(error)) as exc_info:
         await tool_executor.execute(_planned_action(), _request())
 
-    assert exc_info.value is error
-    assert not isinstance(exc_info.value, ToolExecutionError)
+    assert exc_info.value is error, "Expected values to match"
+    assert not isinstance(exc_info.value, ToolExecutionError), (
+        "Provider errors must not be wrapped in ToolExecutionError"
+    )

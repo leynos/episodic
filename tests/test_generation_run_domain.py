@@ -223,7 +223,7 @@ def test_checkpoint_validation_messages_snapshot(
         msg = "Expected checkpoint validation to fail."
         raise AssertionError(msg)
 
-    assert {
+    messages = {
         "blank_node": validation_message(node=" "),
         "blank_prompt": validation_message(prompt=" "),
         "empty_options": validation_message(options=()),
@@ -246,7 +246,8 @@ def test_checkpoint_validation_messages_snapshot(
             responded_by="reviewer@example.com",
             response_action=None,
         ),
-    } == snapshot
+    }
+    assert messages == snapshot, "actual output must match snapshot"
 
 
 def test_generation_run_and_checkpoint_repr_snapshot(
@@ -282,24 +283,26 @@ def test_generation_run_and_checkpoint_repr_snapshot(
         response_payload={},
     )
 
-    assert {
+    representations = {
         "generation_run": repr(run),
         "checkpoint": repr(checkpoint),
-    } == snapshot
+    }
+    assert representations == snapshot, "Expected values to match"
 
 
 def test_generation_run_error_messages_snapshot(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Snapshot stable generation-run domain error messages."""
-    assert {
+    messages = {
         "checkpoint_already_terminal": str(
             CheckpointAlreadyTerminal(FIXED_CHECKPOINT_ID)
         ),
         "checkpoint_not_found": str(CheckpointNotFound(FIXED_CHECKPOINT_ID)),
         "run_already_terminal": str(RunAlreadyTerminal(FIXED_RUN_ID)),
         "run_not_found": str(RunNotFound(FIXED_RUN_ID)),
-    } == snapshot
+    }
+    assert messages == snapshot, "actual output must match snapshot"
 
 
 def test_terminal_checkpoint_rejects_second_response(checkpoint: Checkpoint) -> None:

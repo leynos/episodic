@@ -5,8 +5,6 @@ payloads in compressed form while preserving backward-compatible reads from the
 existing text columns.
 """
 
-from __future__ import annotations
-
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 

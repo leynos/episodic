@@ -44,6 +44,8 @@ _log_override: contextvars.ContextVar[typ.Any | None] = contextvars.ContextVar(
 type _TokenBudgetLabel = typ.Literal["input", "output", "total"]
 type _PreflightBudgetReason = typ.Literal["input", "total"]
 
+_MIN_CHARS_PER_TOKEN = 0.001
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class _PreflightBudgetContext:
@@ -143,7 +145,7 @@ def _llm_config_checks(
 ) -> list[tuple[bool, str, str]]:
     """Return validation checks for OpenAI-compatible adapter config."""
     chars_per_token_msg = (
-        "chars_per_token must be finite and greater than zero "
+        f"chars_per_token must be finite and at least {_MIN_CHARS_PER_TOKEN} "
         f"(got {chars_per_token!r})."
     )
     return [
@@ -173,19 +175,12 @@ def _llm_config_checks(
 
 
 def _estimate_token_count(chars_per_token: float, *parts: str | None) -> int:
-    """Estimate prompt tokens using a configurable chars/token heuristic.
-
-    This heuristic approximates OpenAI/tiktoken GPT-4-era tokenization by
-    returning ``ceil(len(text) / chars_per_token)`` for the combined
-    non-``None`` prompt parts. Actual token counts vary by text shape,
-    language, and vocabulary, so this remains a heuristic-only implementation.
-    If other tokenizers need support later, this function is the extension
-    point for injecting a tokenizer.
-    """
+    """Estimate prompt tokens using a configurable characters-per-token ratio."""
     combined = "".join(part for part in parts if part is not None)
     if not combined:
         return 0
-    return math.ceil(len(combined) / chars_per_token)
+    token_count = math.ceil(len(combined) / chars_per_token)
+    return token_count - int((token_count - 1) * chars_per_token >= len(combined))
 
 
 def _check_token_limit(actual: int, limit: int, label: str) -> None:
@@ -421,21 +416,17 @@ def _is_non_empty_string(value: object) -> bool:
 
 
 def _is_valid_chars_per_token(value: object) -> bool:
-    """Return True when *value* is a finite positive number (not bool)."""
+    """Return True when *value* can produce stable token-count estimates."""
     return (
         isinstance(value, int | float)
         and not isinstance(value, bool)
         and math.isfinite(value)
-        and value > 0
+        and value >= _MIN_CHARS_PER_TOKEN
     )
 
 
 def _validate_llm_config(config: _OpenAIConfigForValidation) -> None:
-    """Validate OpenAICompatibleLLMConfig field values.
-
-    Emits ``openai_adapter.config_rejected`` with bounded configuration
-    diagnostics before raising ``ValueError`` for the first rejected field.
-    """
+    """Validate OpenAI-compatible LLM configuration field values."""
     base_url: object = config.base_url
     api_key: object = config.api_key
     chars_per_token: object = config.chars_per_token

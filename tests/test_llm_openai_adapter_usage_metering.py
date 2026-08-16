@@ -8,6 +8,9 @@ import pytest
 from episodic.cost import UsageSource
 
 if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
+
+if typ.TYPE_CHECKING:
     from openai_test_types import (
         _OpenAIAdapterFactory,
         _OpenAIJsonResponseBuilder,
@@ -20,6 +23,7 @@ async def test_chat_completion_provider_call_usage_includes_cached_tokens(
     openai_adapter_factory: _OpenAIAdapterFactory,
     openai_json_response: _OpenAIJsonResponseBuilder,
     openai_request_builder: _OpenAIRequestBuilder,
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Chat-completions usage details populate canonical cost metrics."""
 
@@ -66,14 +70,9 @@ async def test_chat_completion_provider_call_usage_includes_cached_tokens(
     assert response.provider_call_usage.finish_reason == "stop", (
         "unexpected finish_reason"
     )
-    assert response.provider_call_usage.usage_metrics == {
-        "input_tokens": 42,
-        "output_tokens": 18,
-        "cached_input_tokens": 11,
-        "audio_input_tokens": 3,
-        "reasoning_tokens": 7,
-        "audio_output_tokens": 5,
-    }, f"usage_metrics mismatch: {response.provider_call_usage.usage_metrics}"
+    assert response.provider_call_usage.usage_metrics == snapshot, (
+        "chat-completions usage metrics must match the recorded snapshot"
+    )
 
 
 @pytest.mark.asyncio
@@ -81,6 +80,7 @@ async def test_responses_provider_call_usage_includes_reasoning_tokens(
     openai_adapter_factory: _OpenAIAdapterFactory,
     openai_json_response: _OpenAIJsonResponseBuilder,
     openai_request_builder: _OpenAIRequestBuilder,
+    snapshot: SnapshotAssertion,
 ) -> None:
     """Responses usage details populate canonical cost metrics."""
 
@@ -119,9 +119,6 @@ async def test_responses_provider_call_usage_includes_reasoning_tokens(
     assert response.provider_call_usage is not None, (
         "expected provider_call_usage to be present on response"
     )
-    assert response.provider_call_usage.usage_metrics == {
-        "input_tokens": 15,
-        "output_tokens": 12,
-        "cached_input_tokens": 4,
-        "reasoning_tokens": 6,
-    }, f"unexpected usage_metrics: {response.provider_call_usage.usage_metrics}"
+    assert response.provider_call_usage.usage_metrics == snapshot, (
+        "Responses usage metrics must match the recorded snapshot"
+    )

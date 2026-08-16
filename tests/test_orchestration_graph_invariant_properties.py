@@ -32,9 +32,15 @@ from tests._orchestration_property_support import (
     token_inputs_strategy,
 )
 
+_DEFAULT_PLANNER_USAGE = LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2)
 
-def _planner_result() -> PlannerResult:
-    """Build a minimal planner result for graph callback probes."""
+
+def _planner_result(
+    *,
+    usage: LLMUsage = _DEFAULT_PLANNER_USAGE,
+    model: str = "prop-plan-model",
+) -> PlannerResult:
+    """Build a planner result for graph tests."""
     return PlannerResult(
         plan=ExecutionPlan(
             plan_version="1.0",
@@ -50,8 +56,8 @@ def _planner_result() -> PlannerResult:
                 ),
             ),
         ),
-        usage=LLMUsage(input_tokens=1, output_tokens=1, total_tokens=2),
-        model="prop-plan-model",
+        usage=usage,
+        model=model,
         provider_response_id="prop-planner",
         finish_reason="stop",
     )
@@ -77,6 +83,32 @@ def _request(correlation_id: str = "callback-probe") -> GenerationOrchestrationR
     )
 
 
+def _action_result_from_tokens(tokens: PropTokenInputs) -> ActionExecutionResult:
+    """Build an action result from generated token counts."""
+    return ActionExecutionResult(
+        action_id="action-1",
+        action_kind=ActionKind.GENERATE_SHOW_NOTES,
+        model_tier=ModelTier.EXECUTION,
+        model="prop-exec-model",
+        summary="prop graph synthesis",
+        usage=LLMUsage(
+            tokens.action_input,
+            tokens.action_output,
+            tokens.action_input + tokens.action_output,
+        ),
+    )
+
+
+def _assert_non_negative_usage(usage: LLMUsage, expected_total: int) -> None:
+    """Assert non-negative token counts and the expected aggregate total."""
+    assert usage.input_tokens >= 0, "usage.input_tokens count must be non-negative"
+    assert usage.output_tokens >= 0, "usage.output_tokens count must be non-negative"
+    assert usage.total_tokens >= 0, "usage.total_tokens count must be non-negative"
+    assert usage.total_tokens == expected_total, (
+        "usage.total_tokens must equal the expected aggregate"
+    )
+
+
 @given(
     tokens=token_inputs_strategy,
     correlation_id=st.text(
@@ -92,67 +124,34 @@ async def test_langgraph_total_tokens_non_negative(
     correlation_id: str,
 ) -> None:
     """Property test: LangGraph rollups keep total token counts semiring-safe."""
-    planner_usage = LLMUsage(
-        tokens.planner_input,
-        tokens.planner_output,
-        tokens.planner_input + tokens.planner_output,
-    )
-    tool_usage = LLMUsage(
-        tokens.action_input,
-        tokens.action_output,
-        tokens.action_input + tokens.action_output,
-    )
-    planner_result = PlannerResult(
-        plan=ExecutionPlan(
-            plan_version="1.0",
-            selected_planning_model="prop-plan-model",
-            selected_execution_model="prop-exec-model",
-            steps=(
-                PlannedAction(
-                    action_id="action-1",
-                    action_kind=ActionKind.GENERATE_SHOW_NOTES,
-                    rationale="prop graph rationale",
-                    model_tier=ModelTier.EXECUTION,
-                    required_inputs=("script_tei_xml",),
-                ),
-            ),
+    planner_result = _planner_result(
+        usage=LLMUsage(
+            tokens.planner_input,
+            tokens.planner_output,
+            tokens.planner_input + tokens.planner_output,
         ),
-        usage=planner_usage,
         model="gpt-4.1",
-        provider_response_id="prop-planner",
-        finish_reason="stop",
     )
-    tool_result = ActionExecutionResult(
-        action_id="action-1",
-        action_kind=ActionKind.GENERATE_SHOW_NOTES,
-        model_tier=ModelTier.EXECUTION,
-        model="prop-exec-model",
-        summary="prop graph synthesis",
-        usage=tool_usage,
-    )
+    tool_result = _action_result_from_tokens(tokens)
 
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=planner_result),
         tool_executor=PropGraphToolExecutor(result=tool_result),
     )
 
-    request = GenerationOrchestrationRequest(
-        correlation_id=correlation_id,
-        script_tei_xml=(
-            "<TEI><text><body><p>Hypothesis-driven graph workload</p></body>"
-            "</text></TEI>"
-        ),
-        template_structure=None,
-    )
+    request = _request(correlation_id)
     state = await graph.ainvoke(GenerationGraphState(request=request))
     orchestration_result = state["orchestration_result"]
-    expected_total_tokens = planner_usage.total_tokens + tool_usage.total_tokens
-    assert orchestration_result.total_usage.input_tokens >= 0
-    assert orchestration_result.total_usage.output_tokens >= 0
-    assert orchestration_result.total_usage.total_tokens >= 0
-    assert orchestration_result.total_usage.total_tokens == expected_total_tokens
-    assert state["planner_result"] == planner_result
-    assert state["action_results"][0].model == "prop-exec-model"
+    expected_planner_total = tokens.planner_input + tokens.planner_output
+    expected_tool_total = tokens.action_input + tokens.action_output
+    expected_total_tokens = expected_planner_total + expected_tool_total
+    _assert_non_negative_usage(orchestration_result.total_usage, expected_total_tokens)
+    assert state["planner_result"] == planner_result, (
+        "state planner_result must preserve the planner output"
+    )
+    assert state["action_results"][0].model == "prop-exec-model", (
+        "first action result model must be prop-exec-model"
+    )
 
 
 @given(
@@ -225,21 +224,21 @@ async def test_langgraph_respects_plan_execute_finish_order(
 
     state = await graph.ainvoke(GenerationGraphState(request=request))
 
-    assert event_recorder.events == ["plan", "execute", "finish"]
-    assert state["planner_result"] is not None
-    assert state["action_results"]
-    assert state["orchestration_result"] is not None
+    assert event_recorder.events == ["plan", "execute", "finish"], (
+        "graph events must follow plan, execute, finish order"
+    )
+    assert state["planner_result"] is not None, "state must contain planner_result"
+    assert state["action_results"], "state must contain action_results"
+    assert state["orchestration_result"] is not None, (
+        "state must contain orchestration_result"
+    )
 
 
 async def _invoke_with_callback(
     *,
     checkpoint_port: InMemoryCheckpointStore | None = None,
 ) -> tuple[dict[str, object], list[GenerationOrchestrationResult]]:
-    """Build a graph with a recording finish_callback and invoke it once.
-
-    Returns the final graph state and the list of domain results the
-    callback received, in invocation order.
-    """
+    """Invoke a graph once with a recording finish callback."""
     observed_results: list[GenerationOrchestrationResult] = []
     graph = build_generation_orchestration_graph(
         planner=PropGraphPlanner(result=_planner_result()),
@@ -258,9 +257,11 @@ async def test_finish_callback_is_invoked_in_direct_execute_path() -> None:
     """Direct execution invokes the finish callback with finished state."""
     state, observed_results = await _invoke_with_callback()
 
-    assert len(observed_results) == 1
-    assert observed_results[0] is not None
-    assert state["orchestration_result"] == observed_results[0]
+    assert len(observed_results) == 1, "finish callback must run exactly once"
+    assert observed_results[0] is not None, "finish callback must receive a result"
+    assert state["orchestration_result"] == observed_results[0], (
+        "callback result must equal state orchestration_result"
+    )
 
 
 @pytest.mark.asyncio
@@ -270,9 +271,13 @@ async def test_finish_callback_is_not_invoked_in_suspend_path() -> None:
         checkpoint_port=InMemoryCheckpointStore()
     )
 
-    assert not observed_results
-    assert isinstance(state["suspended_result"], SuspendedWorkflowResult)
-    assert state["orchestration_result"] is None
+    assert not observed_results, "suspended route must not invoke finish callback"
+    assert isinstance(state["suspended_result"], SuspendedWorkflowResult), (
+        "suspended route must produce SuspendedWorkflowResult"
+    )
+    assert state["orchestration_result"] is None, (
+        "suspended route must leave orchestration_result absent"
+    )
 
 
 @pytest.mark.asyncio
@@ -295,9 +300,15 @@ async def test_langgraph_finish_callback_errors_do_not_replace_result() -> None:
         GenerationGraphState(request=_request("callback-error"))
     )
 
-    assert state["orchestration_result"] is not None
-    assert state["planner_result"] == planner_result
-    assert state["action_results"] == (tool_result,)
+    assert state["orchestration_result"] is not None, (
+        "callback failure must preserve orchestration_result"
+    )
+    assert state["planner_result"] == planner_result, (
+        "callback failure must preserve planner_result"
+    )
+    assert state["action_results"] == (tool_result,), (
+        "callback failure must preserve action_results"
+    )
 
 
 @pytest.mark.asyncio
@@ -320,8 +331,14 @@ async def test_finish_callback_records_concurrent_direct_results() -> None:
         )
     )
 
-    assert len(observed_results) == expected_invocations
-    assert all(result is not None for result in observed_results)
+    assert len(observed_results) == expected_invocations, (
+        "finish callback count must equal concurrent invocation count"
+    )
+    assert all(result is not None for result in observed_results), (
+        "every concurrent callback result must be present"
+    )
     assert collections.Counter(
         state["orchestration_result"] for state in states
-    ) == collections.Counter(observed_results)
+    ) == collections.Counter(observed_results), (
+        "concurrent state results must equal the callback result collection"
+    )

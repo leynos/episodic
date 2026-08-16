@@ -15,7 +15,7 @@ offending task name or workload classification.
 chains :func:`load_runtime_config` and :func:`create_celery_app`.
 """
 
-import collections.abc as cabc  # noqa: TC003
+import collections.abc as cabc  # noqa: TC003  # This type remains available at runtime for annotation introspection.
 import dataclasses as dc
 import enum
 import importlib

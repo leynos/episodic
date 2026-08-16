@@ -7,6 +7,8 @@ Run the multi-source ingestion BDD scenarios:
 >>> pytest tests/steps/test_multi_source_ingestion_steps.py -v
 """
 
+from __future__ import annotations
+
 import asyncio  # noqa: TC003 - pytest-bdd inspects step annotations at runtime.
 import collections.abc as cabc  # noqa: TC003 - pytest-bdd inspects annotations.
 import datetime as dt

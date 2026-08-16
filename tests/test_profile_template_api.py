@@ -43,7 +43,8 @@ def _create_profile(
     profile_payload = create_profile_response.json
     profile_id = profile_payload["id"]
     assert profile_payload["revision"] == 1, "Expected revision 1 on create."
-    assert profile_payload["guardrails"]["instruction"] == "Keep claims attributable."
+    guardrails = profile_payload["guardrails"]
+    assert guardrails["instruction"] == "Keep claims attributable.", "must match"
     return profile_id, profile_payload
 
 
@@ -74,7 +75,8 @@ def _create_template(
     template_payload = create_template_response.json
     template_id = template_payload["id"]
     assert template_payload["revision"] == 1, "Expected template revision 1."
-    assert template_payload["guardrails"]["instruction"] == "End with a recap."
+    guardrails = template_payload["guardrails"]
+    assert guardrails["instruction"] == "End with a recap.", "must match"
     return template_id, template_payload
 
 

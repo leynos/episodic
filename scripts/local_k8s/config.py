@@ -7,8 +7,8 @@ import typing as typ
 
 REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[2]
 
-ContainerEngine = typ.Literal["docker", "podman"]
-ClusterProvider = typ.Literal["k3d", "kind"]
+type ContainerEngine = typ.Literal["docker", "podman"]
+type ClusterProvider = typ.Literal["k3d", "kind"]
 
 
 @dc.dataclass(frozen=True, slots=True)

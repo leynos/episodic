@@ -7,8 +7,6 @@ Run the unit-of-work tests:
 >>> pytest tests/canonical_storage/test_unit_of_work.py
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import typing as typ
 import uuid

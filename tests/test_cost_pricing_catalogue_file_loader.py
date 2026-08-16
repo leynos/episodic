@@ -130,8 +130,10 @@ async def test_file_pricing_catalogue_gets_pinned_snapshot_by_identifier(
 
     snapshot = await catalogue.get_snapshot(old_snapshot_id)
 
-    assert snapshot.pricing_snapshot_id == old_snapshot_id
-    assert snapshot.rates_minor_per_metric["input_tokens"] == 100
+    assert snapshot.pricing_snapshot_id == old_snapshot_id, "Expected values to match"
+    assert snapshot.rates_minor_per_metric["input_tokens"] == 100, (
+        "Expected values to match"
+    )
 
 
 @pytest.mark.asyncio

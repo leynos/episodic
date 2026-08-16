@@ -1,0 +1,15 @@
+# serializer version: 1
+# name: test_fixture_check_uses_injected_python_and_explicit_arguments
+  list([
+    '/custom/python',
+    '-m',
+    'hecate',
+    'check',
+    '--config',
+    '<generated-config>',
+    '--package',
+    'tests.fixtures.architecture.allowed_case',
+    '--root',
+    '<fixture-root>',
+  ])
+# ---

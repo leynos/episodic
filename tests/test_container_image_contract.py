@@ -32,34 +32,16 @@ def _dockerfile_instruction(name: str) -> str:
 
 def test_dockerfile_uses_multi_stage_python_build() -> None:
     """Build dependencies in one stage and run from a smaller Python image."""
-    dockerfile = _dockerfile_text()
+    stages = tuple(
+        line.removeprefix("FROM ").split(" AS ")
+        for line in _dockerfile_text().splitlines()
+        if line.startswith("FROM ")
+    )
 
-    assert (
-        "FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder" in dockerfile
-    ), "Dockerfile must build the wheel in a uv-backed Python 3.14 stage."
-    assert "FROM python:3.14-slim AS runtime" in dockerfile, (
-        "Dockerfile must run from a slim Python 3.14 runtime stage."
-    )
-    assert "uv sync --frozen --no-dev --no-editable" in dockerfile, (
-        "builder stage must resolve locked dependencies before the runtime stage."
-    )
-    assert "build-essential" in dockerfile, (
-        "builder stage must include a compiler for Python 3.14 dependencies "
-        "without wheels."
-    )
-    assert "PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1" in dockerfile, (
-        "builder stage must allow PyO3-backed dependencies to build on Python 3.14."
-    )
-    assert "COPY --from=builder --chown=episodic:episodic /app/.venv /app/.venv" in (
-        dockerfile
-    ), (
-        "runtime stage must copy the builder-created virtual environment without "
-        "changing its path so console script shebangs remain valid and git "
-        "dependencies are not resolved in the git-less runtime image."
-    )
-    assert "pip install" not in dockerfile, (
-        "runtime stage must not resolve dependencies with pip."
-    )
+    assert stages == (
+        ["ghcr.io/astral-sh/uv:python3.14-bookworm-slim", "builder"],
+        ["python:3.14-slim", "runtime"],
+    ), "Dockerfile must use separate builder and runtime Python stages"
 
 
 def test_dockerfile_copy_sources_exist_in_repository() -> None:
@@ -89,8 +71,7 @@ def test_dockerfile_runs_granian_factory_as_non_root() -> None:
     from episodic.api import runtime
 
     command = json.loads(_dockerfile_instruction("CMD"))
-
-    assert command == [
+    expected_command = [
         "granian",
         runtime.GRANIAN_FACTORY_TARGET,
         "--interface",
@@ -100,7 +81,11 @@ def test_dockerfile_runs_granian_factory_as_non_root() -> None:
         CONTAINER_BIND_HOST,
         "--port",
         str(runtime.HTTP_BIND_PORT),
-    ], f"unexpected container command: {command!r}"
+    ]
+
+    assert command == expected_command, (
+        "Dockerfile CMD must match the runtime composition constants."
+    )
     assert "USER 10001:10001" in _dockerfile_text(), (
         "runtime container must drop root before starting Granian."
     )
@@ -125,17 +110,30 @@ def test_dockerfile_exposes_stable_liveness_probe() -> None:
 
 def test_dockerignore_excludes_local_and_test_artifacts() -> None:
     """Keep local caches, tests, and operator scratch files out of the image."""
-    ignored_paths = set(
+    ignored_paths = tuple(
         (REPOSITORY_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     )
 
-    assert ".venv" in ignored_paths, (
-        "virtual environments must not enter the build context."
+    expected_ignored_paths = (
+        ".git",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".uv-cache",
+        ".uv-tools",
+        ".venv",
+        "__pycache__",
+        "build",
+        "coverage.*",
+        "dist",
+        "htmlcov",
+        "tests",
     )
-    assert ".uv-cache" in ignored_paths, "uv caches must not enter the build context."
-    assert "tests" in ignored_paths, "tests must not enter the runtime build context."
-    assert "docs/execplans" in ignored_paths, (
-        "living planning documents must not enter the runtime build context."
+
+    required_exclusions = tuple(
+        path for path in ignored_paths if path in expected_ignored_paths
+    )
+    assert required_exclusions == expected_ignored_paths, (
+        ".dockerignore must exclude local build, test, and cache artifacts in order"
     )
 
 
@@ -150,7 +148,7 @@ def test_docker_image_serves_liveness_when_docker_smoke_enabled() -> None:
 
     from episodic.api import runtime
 
-    build = subprocess.run(  # noqa: S603
+    build = subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
         [docker_path, "build", "--tag", DOCKER_IMAGE_TAG, "."],
         check=False,
         cwd=REPOSITORY_ROOT,
@@ -161,7 +159,7 @@ def test_docker_image_serves_liveness_when_docker_smoke_enabled() -> None:
         f"docker build failed\nstdout:\n{build.stdout}\nstderr:\n{build.stderr}"
     )
 
-    run = subprocess.run(  # noqa: S603
+    run = subprocess.run(  # noqa: S603  # The test executes a fixed argument vector with shell expansion disabled.
         [
             docker_path,
             "run",

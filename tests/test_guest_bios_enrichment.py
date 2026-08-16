@@ -28,23 +28,29 @@ def test_enrich_tei_with_guest_bios_appends_canonical_div() -> None:
     blocks = _body_blocks(enriched_xml)
     guest_bios = typ.cast("dict[str, object]", blocks[-1])
 
-    assert guest_bios["type"] == "div"
-    assert guest_bios["div_type"] == "guest-bios"
+    assert guest_bios["type"] == "div", "guest-bios block type must be div"
+    assert guest_bios["div_type"] == "guest-bios", (
+        "guest-bios block div_type must be guest-bios"
+    )
     content = typ.cast("list[object]", guest_bios["content"])
     guest_list = typ.cast("dict[str, object]", content[0])
     item = typ.cast(
         "dict[str, object]", typ.cast("list[object]", guest_list["items"])[0]
     )
 
-    assert item["corresp"] == ["urn:episodic:reference-document-revision:rev-ada"]
-    assert item["n"] == "Mathematician"
-    assert item["label"] == {"content": [{"type": "text", "value": "Ada Lovelace"}]}
+    assert item["corresp"] == ["urn:episodic:reference-document-revision:rev-ada"], (
+        "guest item corresp must identify the reference-document revision"
+    )
+    assert item["n"] == "Mathematician", "guest item n must contain the role"
+    assert item["label"] == {"content": [{"type": "text", "value": "Ada Lovelace"}]}, (
+        "guest item label must contain the display name"
+    )
     assert item["content"] == [
         {
             "type": "text",
             "value": "Ada Lovelace writes about analytical engines.",
         }
-    ]
+    ], "guest item content must contain the biography"
 
 
 def test_enrich_tei_with_guest_bios_replaces_existing_guest_bios_div() -> None:
@@ -79,13 +85,17 @@ def test_enrich_tei_with_guest_bios_replaces_existing_guest_bios_div() -> None:
             if block_payload.get("div_type") == "guest-bios":
                 guest_bio_blocks.append(block_payload)
 
-    assert len(guest_bio_blocks) == 1
-    assert "Old biography." not in twice
-    assert "Grace Hopper advanced compiler design." in twice
+    assert len(guest_bio_blocks) == 1, "enrichment must leave one guest-bios div"
+    assert "Old biography." not in twice, "replacement must remove the old biography"
+    assert "Grace Hopper advanced compiler design." in twice, (
+        "replacement must include the new biography"
+    )
 
 
 def test_enrich_tei_with_empty_guest_bios_result_returns_original() -> None:
     """Return the input TEI unchanged when there are no guest bios."""
     result = GuestBiosResult(entries=(), usage=_usage())
 
-    assert enrich_tei_with_guest_bios(SCRIPT_TEI, result) == SCRIPT_TEI
+    assert enrich_tei_with_guest_bios(SCRIPT_TEI, result) == SCRIPT_TEI, (
+        "An empty GuestBiosResult must preserve the original TEI XML"
+    )

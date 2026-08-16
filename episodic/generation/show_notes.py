@@ -236,9 +236,17 @@ def _require_non_empty_string(value: object, field_name: str) -> str:
 
 
 def _require_optional_string(value: object, field_name: str) -> str | None:
-    """Return *value* typed as ``str | None``.
+    """Return an input string unchanged or ``None``.
 
-    Raise if it is a non-null non-string.
+    Returns
+    -------
+    str | None
+        The input string unchanged, or ``None`` when the input is ``None``.
+
+    Raises
+    ------
+    ShowNotesResponseFormatError
+        If *value* is neither a string nor ``None``.
     """
     if value is not None and not isinstance(value, str):
         msg = f"{field_name} must be a string or null."
@@ -376,12 +384,15 @@ class ShowNotesGenerator:
         Raises
         ------
         ShowNotesResponseFormatError
-            If the LLM response cannot be parsed into the expected format.
+            If the provider response cannot be parsed into the expected format.
         LLMProviderResponseError
-            If the LLM call fails with a non-retryable error.
+            If the provider returns a non-retryable error response.
         LLMTransientProviderError
-            If the LLM call fails transiently after exhausting retries.
-        """
+            If transient provider failures exhaust all retry attempts.
+        LLMTokenBudgetExceededError
+            If preflight validation or provider-reported usage exceeds the
+            request token budget.
+        """  # noqa: DOC502  # Documents exceptions propagated by collaborators.
         prompt = self.build_prompt(
             script_tei_xml, template_structure=template_structure
         )

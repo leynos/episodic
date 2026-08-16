@@ -2,7 +2,7 @@
 
 import collections.abc as cabc  # noqa: TC003 - BindingResolver protocol is part of the runtime executor contract.
 import dataclasses as dc
-import typing  # noqa: ICN001
+import typing  # noqa: ICN001  # Qualified typing names distinguish the module's dense protocol annotations.
 
 from episodic.generation import (
     GuestBiosEnrichmentRequest,
@@ -50,10 +50,10 @@ _LLM_PROVIDER_ERROR_EVENTS: dict[type[Exception], str] = {
 }
 
 
-class BindingResolver(typing.Protocol):  # pylint: disable=too-many-arguments
+class BindingResolver(typing.Protocol):  # pylint: disable=too-many-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
     """Resolve pinned reference-document bindings for one generation context."""
 
-    def __call__(  # pylint: disable=too-many-arguments
+    def __call__(  # pylint: disable=too-many-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
         self,
         uow: CanonicalUnitOfWork,
         *,
@@ -92,39 +92,41 @@ def _handle_generator_error(
     action: PlannedAction,
 ) -> typing.Never:
     """Dispatch a generator exception to the appropriate tool-layer error."""
-    if isinstance(exc, ToolExecutionError):
-        _log_event(
-            "error",
-            f"{_EVENT_PREFIX}.tool_error",
-            correlation_id=context.correlation_id,
-            action_id=action.action_id,
-        )
-        raise exc
-    if isinstance(exc, GuestBiosResponseFormatError):
-        _log_event(
-            "error",
-            f"{_EVENT_PREFIX}.format_error",
-            correlation_id=context.correlation_id,
-            action_id=action.action_id,
-        )
-        msg = "guest-bios tool returned malformed structured JSON"
-        raise GuestBiosFormatError(msg) from exc
-    if isinstance(exc, LLMError):
-        _log_provider_error(exc, context, action)
-        raise exc
-    _log_event(
-        "error",
-        f"{_EVENT_PREFIX}.unexpected_error",
-        correlation_id=context.correlation_id,
-        action_id=action.action_id,
-        error_type=type(exc).__name__,
-    )
-    msg = "guest-bios tool execution failed"
-    raise ToolExecutionError(msg) from exc
+    match exc:
+        case ToolExecutionError():
+            _log_event(
+                "error",
+                f"{_EVENT_PREFIX}.tool_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+            )
+            raise exc
+        case GuestBiosResponseFormatError():
+            _log_event(
+                "error",
+                f"{_EVENT_PREFIX}.format_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+            )
+            msg = "guest-bios tool returned malformed structured JSON"
+            raise GuestBiosFormatError(msg) from exc
+        case LLMError():
+            _log_provider_error(exc, context, action)
+            raise exc
+        case _:
+            _log_event(
+                "error",
+                f"{_EVENT_PREFIX}.unexpected_error",
+                correlation_id=context.correlation_id,
+                action_id=action.action_id,
+                error_type=type(exc).__name__,
+            )
+            msg = "guest-bios tool execution failed"
+            raise ToolExecutionError(msg) from exc
 
 
 @dc.dataclass(slots=True, frozen=True)
-class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments
+class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments  # The parameter-rich signature is fixed by the explicit port or fixture contract.
     """Adapter that runs ``generate_guest_bios`` through the guest-bios generator."""
 
     llm: LLMPort
@@ -151,7 +153,9 @@ class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments
 
     def _get_generator(self) -> GuestBiosGenerator:
         """Return the pre-built guest-bios generator."""
-        assert self.generator is not None  # noqa: S101  # guaranteed by __post_init__
+        if self.generator is None:
+            msg = "Guest-bios generator was not initialized"
+            raise ToolExecutionError(msg)
         return self.generator
 
     @staticmethod
@@ -233,7 +237,7 @@ class GuestBiosToolExecutor:  # pylint: disable=too-many-arguments
                 generator=self._get_generator(),
                 **generation_kwargs,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # This adapter boundary must translate arbitrary third-party failures.
             _handle_generator_error(exc, context, action)
 
         entry_count = len(result.generation_result.entries)

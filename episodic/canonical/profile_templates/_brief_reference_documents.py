@@ -62,12 +62,7 @@ async def _load_episode_aware_reference_documents(
     template_items: list[tuple[EpisodeTemplate, int]],
     episode_id: uuid.UUID,
 ) -> list[JsonMapping]:
-    """Load reference documents using episode-aware resolution.
-
-    Validates the episode, resolves series-level bindings via
-    ``effective_from_episode_id`` precedence, then appends any template-scoped
-    bindings without episode filtering.
-    """
+    """Resolve episode-aware series bindings and append template bindings."""
     await _validate_episode_for_brief(uow, episode_id=episode_id, profile_id=profile_id)
     resolved_bindings = await resolve_bindings(
         uow,
@@ -140,11 +135,7 @@ async def _load_legacy_reference_documents(
     profile_id: uuid.UUID,
     template_items: list[tuple[EpisodeTemplate, int]],
 ) -> list[JsonMapping]:
-    """Load reference documents using the legacy (non-episode-aware) path.
-
-    Aggregates all SERIES_PROFILE bindings plus EPISODE_TEMPLATE bindings for
-    every template in ``template_items``, then serialises the full set.
-    """
+    """Serialize all series and template bindings without episode filtering."""
     all_bindings = await uow.reference_bindings.list_for_target(
         target_kind=ReferenceBindingTargetKind.SERIES_PROFILE,
         target_id=profile_id,

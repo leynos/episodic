@@ -63,10 +63,12 @@ def test_normalize_database_urls_avoids_rendering_passwords() -> None:
         f"postgresql://api-user:{credential}@example.test:5432/episodic?sslmode=require"
     )
 
-    assert async_url.password == credential
-    assert credential not in async_url.render_as_string(hide_password=True)
-    assert probe_kwargs["password"] == credential
-    assert probe_kwargs["sslmode"] == "require"
+    assert async_url.password == credential, "Expected values to match"
+    assert credential not in async_url.render_as_string(hide_password=True), (
+        "Expected collection to exclude the value"
+    )
+    assert probe_kwargs["password"] == credential, "Expected values to match"
+    assert probe_kwargs["sslmode"] == "require", "Expected values to match"
 
 
 def test_normalize_database_urls_uses_query_port_for_probe() -> None:
@@ -77,8 +79,8 @@ def test_normalize_database_urls_uses_query_port_for_probe() -> None:
         "postgresql:///episodic?host=/var/run/postgresql&port=6544"
     )
 
-    assert probe_kwargs["host"] == "/var/run/postgresql"
-    assert probe_kwargs["port"] == 6544
+    assert probe_kwargs["host"] == "/var/run/postgresql", "Expected values to match"
+    assert probe_kwargs["port"] == 6544, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -258,6 +260,8 @@ async def test_create_app_from_env_wires_object_store_for_uploads(
     response_body = response.json()
     expected_hash = hashlib.sha256(payload).hexdigest()
     stored_path = object_store_root / "uploads" / response_body["id"]
-    assert response_body["content_hash"] == f"sha256:{expected_hash}"
+    assert response_body["content_hash"] == f"sha256:{expected_hash}", (
+        "Expected values to match"
+    )
     assert stored_path.is_file(), f"expected upload payload at {stored_path}"
-    assert stored_path.read_bytes() == payload
+    assert stored_path.read_bytes() == payload, "Expected values to match"

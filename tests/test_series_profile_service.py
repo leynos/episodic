@@ -13,7 +13,9 @@ from episodic.canonical.profile_templates import (
     update_series_profile,
 )
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from tests.fixtures import profile_template_fixtures
+from tests.fixtures.profile_template_fixtures import base_profile
+
+__all__ = ["base_profile"]
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -21,9 +23,7 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.canonical.domain import SeriesProfileHistoryEntry
-
-
-base_profile = profile_template_fixtures.base_profile
+    from tests.fixtures.profile_template_fixtures import BaseProfileFixture
 
 
 class TestSeriesProfileService:
@@ -33,7 +33,7 @@ class TestSeriesProfileService:
     async def test_create_series_profile_creates_initial_history(
         self,
         session_factory: cabc.Callable[[], AsyncSession],
-        base_profile: profile_template_fixtures.BaseProfileFixture,
+        base_profile: BaseProfileFixture,
     ) -> None:
         """Creating a profile also creates revision 1 history."""
         profile = base_profile.profile
@@ -59,7 +59,7 @@ class TestSeriesProfileService:
     async def test_update_series_profile_rejects_revision_conflicts(
         self,
         session_factory: cabc.Callable[[], AsyncSession],
-        base_profile: profile_template_fixtures.BaseProfileFixture,
+        base_profile: BaseProfileFixture,
     ) -> None:
         """Updating with stale expected revision raises conflict."""
         profile = base_profile.profile
@@ -88,7 +88,7 @@ class TestSeriesProfileService:
     async def test_update_series_profile_updates_entity_and_appends_history(
         self,
         session_factory: cabc.Callable[[], AsyncSession],
-        base_profile: profile_template_fixtures.BaseProfileFixture,
+        base_profile: BaseProfileFixture,
     ) -> None:
         """Updating with the current revision mutates entity data and history."""
         profile = base_profile.profile

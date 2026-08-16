@@ -214,9 +214,7 @@ def image_save_command(config: PreviewConfig) -> list[str] | None:
     return None
 
 
-def docker_build_command(config: PreviewConfig) -> list[str]:
-    """Build the legacy local Docker image build command."""
-    return image_build_command(config)
+docker_build_command = image_build_command
 
 
 def _kubectl_cmd(config: PreviewConfig) -> list[str]:

@@ -39,13 +39,15 @@ def _require_non_empty_string(value: object, *, field_name: str) -> str:
 
 def _require_int_type(value: object, *, field_name: str) -> int:
     """Raise TypeError if value is bool or not an int."""
-    if isinstance(value, bool):
-        msg = f"{field_name} must be a positive integer."
-        raise TypeError(msg)
-    if not isinstance(value, int):
-        msg = f"{field_name} must be a positive integer."
-        raise TypeError(msg)
-    return value  # type: ignore[return-value]
+    match value:
+        case bool():
+            msg = f"{field_name} must be a positive integer."
+            raise TypeError(msg)
+        case int():
+            return value
+        case _:
+            msg = f"{field_name} must be a positive integer."
+            raise TypeError(msg)
 
 
 def _require_int_range(value: int, *, field_name: str) -> int:
@@ -154,8 +156,8 @@ class CpuDiagnosticResult:
         }
 
 
-IoDiagnosticHandler = cabc.Callable[[IoDiagnosticRequest], IoDiagnosticResult]
-CpuDiagnosticHandler = cabc.Callable[[CpuDiagnosticRequest], CpuDiagnosticResult]
+type IoDiagnosticHandler = cabc.Callable[[IoDiagnosticRequest], IoDiagnosticResult]
+type CpuDiagnosticHandler = cabc.Callable[[CpuDiagnosticRequest], CpuDiagnosticResult]
 
 
 def _default_io_diagnostic(request: IoDiagnosticRequest) -> IoDiagnosticResult:

@@ -152,8 +152,12 @@ def test_build_generation_result_total_usage_property(
 
     expected_input_tokens = planner[0] + action[0]
     expected_output_tokens = planner[1] + action[1]
-    assert result.total_usage.input_tokens == expected_input_tokens
-    assert result.total_usage.output_tokens == expected_output_tokens
+    assert result.total_usage.input_tokens == expected_input_tokens, (
+        "result.total_usage.input_tokens must equal the summed input token count"
+    )
+    assert result.total_usage.output_tokens == expected_output_tokens, (
+        "result.total_usage.output_tokens must equal the summed output token count"
+    )
     assert result.total_usage.total_tokens == (
         expected_input_tokens + expected_output_tokens
     ), f"expected total usage derived from summed counts, got {result.total_usage!r}"

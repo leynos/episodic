@@ -1,0 +1,14 @@
+# serializer version: 1
+# name: test_build_prompt_includes_template_structure
+  '''
+  {
+    "script_tei_xml": "<TEI><text><body><p>Test script.</p></body></text></TEI>",
+    "template_structure": {
+      "sections": [
+        "intro",
+        "main"
+      ]
+    }
+  }
+  '''
+# ---

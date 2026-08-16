@@ -58,12 +58,6 @@ def is_openai_choice_payload(payload: object) -> bool:
         non-empty string content and an optional string or ``None``
         ``finish_reason``.
 
-    Raises
-    ------
-    None
-        This predicate reports invalid input with ``False`` rather than
-        raising.
-
     Examples
     --------
     >>> is_openai_choice_payload({"message": {"content": "Hello"}})
@@ -128,12 +122,6 @@ def is_openai_chat_completion_payload(payload: object) -> bool:
     bool
         ``True`` when identity fields, choice entries, and optional usage
         metadata are structurally valid.
-
-    Raises
-    ------
-    None
-        Invalid input returns ``False`` so callers can decide whether to raise
-        a domain-specific validation error.
 
     Examples
     --------

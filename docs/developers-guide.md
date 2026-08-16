@@ -32,12 +32,19 @@ Accepted design decisions relevant to current implementation work:
   repository logic.
 - The Makefile exports `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` so the
   `tei-rapporteur` bindings build against Python 3.14.
-- The build backend is `uv_build` (`>=0.11.7,<0.12.0`), declared in the
+- The build backend is `uv_build` (`>=0.11.32,<0.12.0`), declared in the
   `[build-system]` table of `pyproject.toml`.
 
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
+
+## Coverage
+
+GitHub Actions reports production coverage to CodeScene. The pull-request and
+main-branch workflows run Slipcover with `--source episodic,alembic`, so the
+coverage percentage measures application and migration code rather than test
+implementation detail. Keep those source paths identical in both workflows.
 
 ## Linting
 
@@ -47,9 +54,17 @@ Run the full lint gate with:
 make lint
 ```
 
-The target runs the Hecate architecture import-boundary checker, Ruff, and a
-focused Pylint 4 pass. The Pylint pass is invoked through
-`uv tool run --python pypy` with the pinned `pylint-pypy-shim` wrapper from
+The target runs this repository-wide pipeline, in order:
+
+1. Hecate architecture import-boundary checks;
+2. Ruff formatting-independent lint checks;
+3. the focused built-in Pylint 4 rules under managed PyPy;
+4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
+   separate future-annotations pass; and
+5. `ambrleaks` over Syrupy snapshots under `tests`.
+
+The built-in Pylint pass is invoked through `uv tool run --python pypy` with
+the pinned `pylint-pypy-shim` wrapper from
 [github.com/leynos/pylint-pypy-shim](https://github.com/leynos/pylint-pypy-shim).
 That wrapper installs the PyPy-specific Astroid compatibility patch before
 delegating to Pylint.
@@ -65,6 +80,57 @@ managed PyPy runtime currently parses Python 3.11 syntax while the project
 targets Python 3.14. Files that PyPy-backed Pylint cannot parse are reported by
 the wrapper and skipped, which keeps parse incompatibilities visible without
 hiding other diagnostics from files that PyPy can analyse.
+
+The lint target therefore runs the `df12-python-lints` Pylint plug-in
+separately under CPython 3.14. This pass uses the project's actual syntax and
+Astroid runtime, while the PyPy pass retains its compatibility shim for the
+built-in Pylint checks. The project environment hard-pins the plug-in version
+in `pyproject.toml`. The equivalent df12 command is:
+
+```shell
+uv run --python 3.14 pylint --disable=all \
+  --load-plugins=df12_python_lints \
+  --enable=R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111 \
+  alembic episodic openai_test_types.py tests
+```
+
+The df12 pass covers the same `PYLINT_TARGETS` scope as the PyPy pass:
+application and migration code, the OpenAI test types, and the complete test
+suite. Keep new df12 checks in the `DF12_PYLINT_MESSAGES` allow-list so their
+adoption remains explicit. The C9112 future-annotations check runs separately
+over the same scope:
+
+```shell
+uv run --python 3.14 pylint --disable=all \
+  --load-plugins=df12_python_lints --enable=C9112 \
+  --ignore-paths='^tests/steps/test_.*_steps[.]py$' \
+  alembic episodic openai_test_types.py tests
+```
+
+Existing pytest-bdd step modules under `tests/steps/` match
+`test_*_steps.py` and retain postponed annotations because pytest-bdd
+evaluates step annotations at runtime. The anchored path expression in the
+separate C9112 pass exempts only those modules; every other df12 check still
+covers them.
+
+`ambrleaks`, provided by the same `df12-python-lints` package and run under the
+same CPython 3.14 interpreter, checks Syrupy snapshot files under `tests` for
+values that should have been redacted. Keep deterministic public test values in
+`ambrleaks.toml` rather than weakening snapshot scanning. Run the standalone
+command when investigating a snapshot finding:
+
+```shell
+uv tool run --python 3.14 \
+  --from 'git+https://github.com/leynos/df12-python-lints.git@v0.2.0' \
+  ambrleaks tests
+```
+
+The two commands intentionally provision the package differently:
+`pyproject.toml` pins `df12-python-lints` at `v0.2.0` for the project-environment
+Pylint pass, while `DF12_PYTHON_LINTS_REF` controls the separately provisioned
+`ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for both commands.
+Maintainers must update both package pins together and validate the complete
+`make lint` pipeline.
 
 ## Spelling policy
 
@@ -473,6 +539,17 @@ autogenerate feature:
 ```shell
 DATABASE_URL=<database-url> alembic revision --autogenerate -m "description"
 ```
+
+### Alembic database URL resolution
+
+`alembic/env.py` delegates URL setup to `configure_database_url` in
+`episodic.canonical.storage.alembic_helpers`. The helper gives `DATABASE_URL`
+precedence over any existing `sqlalchemy.url` value in the Alembic
+configuration. When `DATABASE_URL` is unset, a non-empty configured
+`sqlalchemy.url` is retained as the fallback. Percent signs are doubled before
+the URL is written to Alembic's `ConfigParser`, so percent-encoded credentials
+round-trip correctly. If neither source provides a URL,
+`configure_database_url` raises `ValueError`.
 
 Migration files follow the naming convention
 `YYYYMMDD_NNNNNN_short_description.py` (for example
@@ -912,6 +989,33 @@ idempotency state manually. Stale `uploads` rows in `pending` or `failed` state
 identify blobs that can be deleted through the configured object-store adapter.
 Expired idempotency rows can be purged with a bounded SQL delete against
 `idempotency_records.expires_at`.
+
+### Source-intake storage runtime
+
+The SQLAlchemy source-intake adapters take their ambient dependencies from an
+injectable provider bundle rather than reaching for module-level globals. The
+bundle is the frozen dataclass `SourceIntakeStorageRuntime` in
+`episodic.canonical.storage.source_intake_repository_runtime`, and it carries
+four providers:
+
+- `clock` returns the current timestamp used for idempotency records.
+- `uuid_factory` returns identifiers for newly created rows.
+- `metrics` is the `MetricsPort` implementation the adapters report through.
+- `monotonic_clock` is the `MonotonicClockPort` used for latency measurement.
+
+Callers resolve the bundle through `source_intake_storage_runtime(runtime)`. A
+supplied runtime is returned unchanged, so an explicit bundle always wins. When
+`runtime` is `None`, the function constructs one from production defaults: UTC
+time via `datetime.now(datetime.UTC)`, identifiers via `uuid.uuid4()`,
+`NoopMetrics`, and `PerfCounterClock`. The optional `metrics` and
+`monotonic_clock` keyword arguments override those two defaults individually,
+which is how the unit of work threads its configured observability ports
+through to the repositories.
+
+Tests inject deterministic providers instead of patching module state. The
+source-intake repository tests build a `SourceIntakeStorageRuntime` with a
+fixed `clock`, a fixed `uuid_factory`, and test doubles for the observability
+ports, then assert on the exact persisted timestamps and identifiers.
 
 ### Prompt scaffolding for generators
 

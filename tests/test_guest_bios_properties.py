@@ -118,7 +118,9 @@ def test_enriched_guest_bios_round_trip(entries: tuple[GuestBioEntry, ...]) -> N
 
     document = tei.parse_xml(enriched)
     document.validate()
-    assert 'type="guest-bios"' in tei.emit_xml(document)
+    assert 'type="guest-bios"' in tei.emit_xml(document), (
+        "Expected collection to contain the value"
+    )
 
 
 @given(_guest_entries())
@@ -129,7 +131,9 @@ def test_enriched_guest_bios_preserves_entry_order(
     enriched = enrich_tei_with_guest_bios(SCRIPT_TEI, _result(entries))
     item_labels = [_label_text(item) for item in _guest_bio_items(enriched)]
 
-    assert item_labels == [entry.display_name for entry in entries]
+    assert item_labels == [entry.display_name for entry in entries], (
+        "Expected collection to contain the value"
+    )
 
 
 @given(_guest_entries(), _guest_entries())
@@ -146,8 +150,10 @@ def test_enriched_guest_bios_replaces_prior_guest_bios_div(
     text_payload = typ.cast("dict[str, object]", document_payload["text"])
     body_payload = typ.cast("dict[str, object]", text_payload["body"])
     guest_bios_divs = _guest_bio_divs(typ.cast("list[object]", body_payload["blocks"]))
-    assert len(guest_bios_divs) == 1
-    assert item_bios == [entry.bio for entry in second_entries]
+    assert len(guest_bios_divs) == 1, "Expected values to match"
+    assert item_bios == [entry.bio for entry in second_entries], (
+        "Expected collection to contain the value"
+    )
 
 
 @given(_TEXT)
@@ -161,7 +167,9 @@ def test_empty_guest_bios_result_is_no_op(script_text: str) -> None:
         "</TEI>"
     )
 
-    assert enrich_tei_with_guest_bios(tei_xml, _result(())) == tei_xml
+    assert enrich_tei_with_guest_bios(tei_xml, _result(())) == tei_xml, (
+        "Expected values to match"
+    )
 
 
 @given(st.text(max_size=12).filter(lambda value: not value.strip()))

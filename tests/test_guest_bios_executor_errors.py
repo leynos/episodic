@@ -51,6 +51,31 @@ async def test_guest_bios_tool_executor_requires_series_profile_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_guest_bios_tool_executor_rejects_uninitialized_generator() -> None:
+    """A missing generator must fail before guest-bios generation starts."""
+    llm = _FakeLLMPort([])
+    executor = GuestBiosToolExecutor(
+        llm=llm,
+        config=_config(),
+        uow=typ.cast("CanonicalUnitOfWork", object()),
+    )
+    object.__setattr__(executor, "generator", None)
+    request = GenerationOrchestrationRequest(
+        correlation_id="corr-guest-bios",
+        script_tei_xml=SCRIPT_TEI,
+        series_profile_id=uuid4(),
+    )
+
+    with pytest.raises(
+        ToolExecutionError,
+        match=r"^Guest-bios generator was not initialized$",
+    ):
+        await executor.execute(_guest_bios_action(), request)
+
+    assert not llm.requests, "missing generators must fail before any LLM request"
+
+
+@pytest.mark.asyncio
 async def test_guest_bios_executor_wraps_format_error_distinctly() -> None:
     """Structured guest-bios validation errors should keep a distinct wrapper."""
     generator_error = GuestBiosResponseFormatError("guests must be a list.")
@@ -75,7 +100,7 @@ async def test_guest_bios_executor_wraps_format_error_distinctly() -> None:
     ) as exc_info:
         await executor.execute(_guest_bios_action(), request)
 
-    assert exc_info.value.__cause__ is generator_error
+    assert exc_info.value.__cause__ is generator_error, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -123,12 +148,12 @@ async def test_guest_bios_executor_propagates_llm_provider_errors(
     with pytest.raises(type(error)) as exc_info:
         await executor.execute(_guest_bios_action(), request)
 
-    assert exc_info.value is error
+    assert exc_info.value is error, "Expected values to match"
     assert any(
         message.startswith("guest_bios_tool_executor.execute")
         and fields.get("error_type") == type(error).__name__
         for _, message, fields in events
-    )
+    ), "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -191,7 +216,7 @@ async def test_guest_bios_executor_logs_unknown_llm_subclass(
         message == "guest_bios_tool_executor.execute.llm_error"
         and fields.get("error_type") == "_CustomLLMError"
         for _, message, fields in events
-    )
+    ), "Expected values to match"
 
 
 @pytest.mark.asyncio

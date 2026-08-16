@@ -5,8 +5,6 @@ consistent metadata for custom event-loop task factories while preserving safe
 behaviour when no factory is installed.
 """
 
-from __future__ import annotations
-
 import asyncio
 import typing as typ
 

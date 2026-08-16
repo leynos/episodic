@@ -55,7 +55,7 @@ class _PlannedActionKwargs(typ.TypedDict):
     required_inputs: tuple[str, ...]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class _OrchestrationResultSpec:
     """Parameter object for building the canonical orchestration DTO graph."""
 

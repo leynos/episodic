@@ -250,7 +250,7 @@ def checkpoint_status_becomes(
     """Assert the final checkpoint status."""
     assert _require_checkpoint(generation_run_context).status is CheckpointStatus(
         status
-    )
+    ), "Expected values to match"
 
 
 @then("the response payload is recorded")
@@ -262,7 +262,7 @@ def response_payload_recorded(
     if checkpoint is None:
         msg = "Checkpoint was not prepared."
         raise AssertionError(msg)
-    assert checkpoint.response_payload == {"approved": True}
+    assert checkpoint.response_payload == {"approved": True}, "Expected values to match"
 
 
 @then("a CheckpointAlreadyTerminal error is raised")

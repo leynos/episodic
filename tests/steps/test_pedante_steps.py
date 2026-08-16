@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio  # noqa: TC003  # pytest-bdd evaluates step annotations.
 import dataclasses as dc
 import json
 import shutil
@@ -9,6 +10,7 @@ import socket
 import subprocess  # noqa: S404 - required to start a local Vidai Mock test server
 import time
 import typing as typ
+from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
 import pytest
 from pytest_bdd import given, scenario, then, when
@@ -26,9 +28,7 @@ from episodic.qa.pedante import (
 )
 
 if typ.TYPE_CHECKING:
-    import asyncio
     import collections.abc as cabc
-    from pathlib import Path
 
     from episodic.qa.pedante import PedanteEvaluationResult
 
@@ -82,13 +82,7 @@ def _find_free_port() -> int:
 
 
 def _build_assistant_content_literal() -> str:
-    """Build the double-encoded assistant content JSON literal.
-
-    The OpenAI chat-completion schema requires ``message.content`` to be a JSON
-    string, not a raw object.  The inner ``json.dumps`` produces the Pedante
-    result object; the outer ``json.dumps`` wraps it in a JSON string literal so
-    that the Jinja template emits a valid ``"content": "<escaped-json>"`` field.
-    """
+    """Build the double-encoded assistant content JSON literal."""
     assistant_content = json.dumps({
         "summary": "One likely inaccuracy requires revision.",
         "findings": [
@@ -205,7 +199,7 @@ def _start_vidaimock_process(
         raise RuntimeError(msg)
 
     pedante_context.base_url = f"http://127.0.0.1:{port}/v1"
-    pedante_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with
+    pedante_context.process = subprocess.Popen(  # noqa: S603  # pylint: disable=consider-using-with  # The test executes a fixed argument vector with shell expansion disabled.
         [
             vidaimock_path,
             "--host",
@@ -303,22 +297,32 @@ def evaluate_script(
 def assert_result(pedante_context: PedanteBDDContext) -> None:
     """Assert findings, usage, and metadata survive the live adapter path."""
     result = typ.cast("PedanteEvaluationResult", pedante_context.result)
-    assert result.summary == "One likely inaccuracy requires revision."
-    assert result.usage.input_tokens == 32
-    assert result.usage.output_tokens == 18
-    assert result.usage.total_tokens == 50
-    assert result.requires_revision is True
-    assert len(result.findings) == 1
-    assert result.findings[0].claim_id == "claim-1"
-    assert result.findings[0].cited_source_ids == ("src-1",)
+    assert result.summary == "One likely inaccuracy requires revision.", (
+        "Expected values to match"
+    )
+    assert result.usage.input_tokens == 32, "Expected values to match"
+    assert result.usage.output_tokens == 18, "Expected values to match"
+    assert result.usage.total_tokens == 50, "Expected values to match"
+    assert result.requires_revision is True, "Expected values to match"
+    assert len(result.findings) == 1, "Expected values to match"
+    assert result.findings[0].claim_id == "claim-1", "Expected values to match"
+    assert result.findings[0].cited_source_ids == ("src-1",), "Expected values to match"
 
-    assert result.model == "gpt-4o-mini"
-    assert result.provider_response_id.startswith("chatcmpl-")
+    assert result.model == "gpt-4o-mini", "Expected values to match"
+    assert result.provider_response_id.startswith("chatcmpl-"), (
+        "Expected value to have the required prefix"
+    )
 
 
 @then("the Pedante prompt includes TEI XML and cited source packets")
 def assert_prompt(pedante_context: PedanteBDDContext) -> None:
     """Assert prompt construction stays on the TEI-backed request spine."""
-    assert "<TEI>" in pedante_context.prompt_text
-    assert "Source 1" in pedante_context.prompt_text
-    assert "tei_locator" in pedante_context.prompt_text
+    assert "<TEI>" in pedante_context.prompt_text, (
+        "Expected collection to contain the value"
+    )
+    assert "Source 1" in pedante_context.prompt_text, (
+        "Expected collection to contain the value"
+    )
+    assert "tei_locator" in pedante_context.prompt_text, (
+        "Expected collection to contain the value"
+    )

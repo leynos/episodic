@@ -1,0 +1,24 @@
+# serializer version: 1
+# name: test_k3d_cluster_create_command_maps_ingress_port
+  list([
+    'k3d',
+    'cluster',
+    'create',
+    'demo',
+    '--agents',
+    '1',
+    '--port',
+    '127.0.0.1:9090:80@loadbalancer',
+    '--wait',
+  ])
+# ---
+# name: test_up_bootstraps_postgres_before_installing_chart
+  list([
+    'Episodic preview is ready.',
+    'Preview URL: http://episodic.localhost:9090',
+    'Health URL: http://episodic.localhost:9090/health/live',
+    'Status: make local-k8s-status',
+    'Logs: make local-k8s-logs',
+    'Teardown: make local-k8s-down',
+  ])
+# ---

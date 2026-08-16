@@ -56,8 +56,10 @@ async def test_generate_supports_concurrent_calls() -> None:
         generator.generate(minimal_tei()),
     )
 
-    assert [result.chapters[0].title for result in results] == ["Intro", "Intro"]
-    assert len(llm.requests) == 2
+    assert [result.chapters[0].title for result in results] == ["Intro", "Intro"], (
+        "Expected collection to contain the value"
+    )
+    assert len(llm.requests) == 2, "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -69,7 +71,7 @@ async def test_generate_propagates_timeout_cancellation() -> None:
     with pytest.raises(TimeoutError):
         await asyncio.wait_for(generator.generate(minimal_tei()), timeout=0.01)
 
-    assert llm.started.is_set()
+    assert llm.started.is_set(), "Expected condition to hold"
 
 
 @pytest.mark.asyncio
@@ -86,10 +88,10 @@ async def test_generate_calls_llm_and_returns_result() -> None:
         segment_structure={"segments": [{"id": "seg-intro", "start": "PT0S"}]},
     )
 
-    assert len(fake_llm.requests) == 1
-    assert len(result.chapters) == 1
-    assert result.chapters[0].title == "Introduction"
-    assert fake_llm.requests[0].model == "test-model"
+    assert len(fake_llm.requests) == 1, "Expected values to match"
+    assert len(result.chapters) == 1, "Expected values to match"
+    assert result.chapters[0].title == "Introduction", "Expected values to match"
+    assert fake_llm.requests[0].model == "test-model", "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -116,7 +118,7 @@ async def test_generate_accepts_equivalent_duration_spellings() -> None:
         },
     )
 
-    assert result.chapters[0].start == "PT5M30S"
+    assert result.chapters[0].start == "PT5M30S", "Expected values to match"
 
 
 @pytest.mark.asyncio
@@ -220,9 +222,9 @@ def test_aligned_chapters_pass_segment_validation(
         )
     )
 
-    assert len(result.chapters) == len(sorted_seconds)
+    assert len(result.chapters) == len(sorted_seconds), "Expected values to match"
     for chapter, seconds in zip(result.chapters, sorted_seconds, strict=True):
-        assert chapter.start == iso_duration(seconds)
+        assert chapter.start == iso_duration(seconds), "Expected values to match"
 
 
 @given(start_secs=st.integers(min_value=0, max_value=3_600))
@@ -252,8 +254,8 @@ def test_repeated_locator_with_same_start_passes_validation(
         )
     )
 
-    assert len(result.chapters) == 1
-    assert result.chapters[0].tei_locator == "#shared"
+    assert len(result.chapters) == 1, "Expected values to match"
+    assert result.chapters[0].tei_locator == "#shared", "Expected values to match"
 
 
 @pytest.mark.asyncio

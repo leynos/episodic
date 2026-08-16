@@ -72,11 +72,6 @@ class SeriesProfilesResource(_CreateResourceBase[object]):
             Incoming Falcon request object.
         resp : falcon.Response
             Outgoing Falcon response object populated by this handler.
-
-        Returns
-        -------
-        None
-            Response media is set to an ``items`` list and status ``200``.
         """
         page = parse_pagination(req)
         service_fn = partial(
@@ -273,19 +268,14 @@ class SeriesProfileBriefResource:
         profile_id : str
             Raw series-profile identifier from the route path.
 
-        Returns
-        -------
-        None
-            Response media is set to the brief payload and status ``200``.
-
         Raises
         ------
         falcon.HTTPBadRequest
-            Raised when ``profile_id``, ``template_id``, or ``episode_id`` is
-            not a valid UUID.
+            If ``profile_id``, ``template_id``, or ``episode_id`` is not a
+            valid UUID.
         falcon.HTTPNotFound
-            Raised when the requested profile or template is not found.
-        """
+            If a requested profile, template, or episode does not exist.
+        """  # noqa: DOC502  # UUID validation is delegated to parse_uuid.
         parsed_profile_id = parse_uuid(profile_id, "profile_id")
         raw_template_id = req.get_param("template_id")
         raw_episode_id = req.get_param("episode_id")

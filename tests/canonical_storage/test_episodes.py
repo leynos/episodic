@@ -7,8 +7,6 @@ Run the episode repository tests:
 >>> pytest tests/canonical_storage/test_episodes.py
 """
 
-from __future__ import annotations
-
 import dataclasses as dc
 import typing as typ
 

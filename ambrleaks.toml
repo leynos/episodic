@@ -1,0 +1,11 @@
+[allowlist]
+# These are public standards or intentional container/preview contract values,
+# deterministic test identifiers, not machine-specific paths, production
+# endpoints, or leaked runtime values.
+values = [
+  '^http://www\.tei-c\.org/ns/1\.0$',
+  '^http://episodic\.localhost(?::[0-9]+)?$',
+  '^http://episodic\.localhost(?::[0-9]+)?/health/live$',
+  '^/(?:var/lib/apt/lists|app/\.venv/bin|usr/sbin/nologin)$',
+  '^018fdcf0-0000-7000-8000-00000000000[1-4]$',
+]
