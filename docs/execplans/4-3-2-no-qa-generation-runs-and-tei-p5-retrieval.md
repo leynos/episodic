@@ -1231,9 +1231,8 @@ The feature (full text embedded here so the plan is self-contained):
 ```gherkin
 Feature: No-QA source-to-script generation slice
 
-  As an integration client
-  I want to generate a draft script without QA and download the TEI
-  So that I can validate the source-to-script workflow over REST
+  The source-to-script workflow generates a draft script without QA and
+  downloads the TEI for validation over REST
 
   Background:
     Given a Vidai Mock inference server is running
@@ -1245,7 +1244,7 @@ Feature: No-QA source-to-script generation slice
     When I create a draft-without-qa generation run for the ingested episode
     Then the run creation responds 202 Accepted with a Location header
     And the response carries a Retry-After header
-    And the run is created with qa_status "skipped" and my rationale recorded
+    And the run is created with qa_status "skipped" and the supplied skip_qa_rationale is recorded
     When I poll the generation run until it reaches a terminal state
     Then the run status is "succeeded"
     And the event log contains a "tei.persisted" event
@@ -1835,6 +1834,13 @@ current implementation progress and the associated operational decision; it
 does not mark the execution plan or roadmap task complete. Documentation
 synchronization and the explicitly deferred automatic recovery and QA-gated
 successor remain separate follow-up work.
+
+Implementation progress across `fde42bc`, `eaea7c9`, and `b4dc700` also covers
+the unified cost-recorder protocol and a shorter materialization lock scope:
+sources are validated before locking, and the episode/target association is
+committed before source projection. Durable claim-outcome logging and race
+coverage are present, but broader durability and property-based verification
+for this hardening slice remain outstanding.
 
 Latest rebase qualifier: the structural replay onto the force-rewritten
 `de457b7ba3d6a13df8600410a0bc7aea25658ff8` target is recorded above, including
