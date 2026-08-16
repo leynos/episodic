@@ -70,6 +70,43 @@ class DraftScriptPersistenceError(Exception):
     """Base class for draft persistence failures."""
 
 
+class IngestionJobNotReadyError(DraftScriptPersistenceError):
+    """Raised when materialization is requested before an intake job is ready."""
+
+    def __init__(self, ingestion_job_id: uuid.UUID) -> None:
+        self.ingestion_job_id = ingestion_job_id
+        message = f"Ingestion job {ingestion_job_id} is not ready for generation."
+        super().__init__(message)
+
+
+class MissingAttachedSourcesError(DraftScriptPersistenceError):
+    """Raised when a ready ingestion job has no source attachments."""
+
+    def __init__(self, ingestion_job_id: uuid.UUID) -> None:
+        self.ingestion_job_id = ingestion_job_id
+        message = f"Ingestion job {ingestion_job_id} has no attached sources."
+        super().__init__(message)
+
+
+class GenerationSourceUploadNotFoundError(DraftScriptPersistenceError):
+    """Raised when a generation source refers to an absent upload."""
+
+    def __init__(self, upload_id: uuid.UUID) -> None:
+        self.upload_id = upload_id
+        message = f"Upload {upload_id} was not found for ingestion source."
+        super().__init__(message)
+
+
+class DraftContentHashMismatchError(DraftScriptPersistenceError):
+    """Raised when generated TEI and its declared hash disagree."""
+
+    def __init__(self, expected_hash: str, actual_hash: str) -> None:
+        self.expected_hash = expected_hash
+        self.actual_hash = actual_hash
+        message = "Draft script content_hash does not match tei_xml."
+        super().__init__(message)
+
+
 class InvalidDraftTeiError(DraftScriptPersistenceError, ValueError):
     """Raised when generated TEI cannot be validated."""
 
@@ -111,13 +148,11 @@ async def materialise_episode_from_ingestion(
     """Create a placeholder canonical episode for a ready ingestion job."""
     sources = await _list_all_sources(uow, request.ingestion_job_id)
     if len(sources) == 0:
-        msg = f"Ingestion job {request.ingestion_job_id} has no attached sources."
-        raise DraftScriptPersistenceError(msg)
+        raise MissingAttachedSourcesError(request.ingestion_job_id)
 
     job = await _get_ingestion_job_for_update(uow, request.ingestion_job_id)
     if job.intake_state is not IntakeState.READY_FOR_GENERATION:
-        msg = f"Ingestion job {request.ingestion_job_id} is not ready for generation."
-        raise DraftScriptPersistenceError(msg)
+        raise IngestionJobNotReadyError(request.ingestion_job_id)
 
     episode_id = job.target_episode_id or request.uuid_factory()
     now = request.clock()
@@ -310,8 +345,7 @@ async def _upload_for_source(
         return None
     upload = await uow.uploads.get(source.upload_id)
     if upload is None:
-        msg = f"Upload {source.upload_id} was not found for ingestion source."
-        raise DraftScriptPersistenceError(msg)
+        raise GenerationSourceUploadNotFoundError(source.upload_id)
     return upload
 
 
@@ -344,9 +378,9 @@ def _source_uri(source: IngestionJobSource, upload: Upload | None) -> str:
 
 def _source_content_hash(source: IngestionJobSource, upload: Upload | None) -> str:
     """Return the best available source content hash."""
-    metadata_hash = source.metadata.get("content_hash")
-    if isinstance(metadata_hash, str) and metadata_hash.strip():
-        return metadata_hash
+    match source.metadata.get("content_hash"):
+        case str() as metadata_hash if metadata_hash.strip():
+            return metadata_hash
     if upload is not None and upload.content_hash:
         return upload.content_hash
     return sha256_text(f"{source.source_type}:{_source_uri(source, upload)}")
@@ -356,5 +390,4 @@ def _validate_draft_result(result: DraftScriptResult) -> None:
     """Validate draft result metadata before writing episode TEI."""
     expected_hash = sha256_text(result.tei_xml)
     if result.content_hash != expected_hash:
-        msg = "Draft script content_hash does not match tei_xml."
-        raise DraftScriptPersistenceError(msg)
+        raise DraftContentHashMismatchError(expected_hash, result.content_hash)

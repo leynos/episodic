@@ -88,15 +88,16 @@ class NoQaGenerationSliceContext:
 
     def tear_down(self) -> None:
         """Release asynchronous resources and stop the Vidai Mock process."""
-        self.runner.run(self.close())
-        if self.process is None:
-            return
-        self.process.terminate()
         try:
-            self.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait(timeout=5)
+            self.runner.run(self.close())
+        finally:
+            if self.process is not None:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait(timeout=5)
 
 
 def require[RequiredValue](

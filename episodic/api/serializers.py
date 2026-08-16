@@ -7,6 +7,8 @@ source-intake resources, generation runs and events, and TEI envelopes.
 import typing as typ
 import uuid  # noqa: TC003  # This type remains available at runtime for annotation introspection.
 
+from episodic.canonical.generation_quality import QualityMode
+
 if typ.TYPE_CHECKING:
     from episodic.canonical.domain import (
         CanonicalEpisode,
@@ -257,7 +259,7 @@ def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
         "content_hash": episode.tei_content_hash,
         "version": episode.tei_revision,
         "last_generation_run_id": _optional_uuid_str(episode.last_generation_run_id),
-        "quality_mode": "draft_without_qa",
+        "quality_mode": QualityMode.DRAFT_WITHOUT_QA.value,
         "qa_status": None if episode.qa_status is None else episode.qa_status.value,
         "updated_at": episode.updated_at.isoformat(),
     }

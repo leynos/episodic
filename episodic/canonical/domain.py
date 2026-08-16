@@ -349,7 +349,7 @@ def _require_value(value: object, field_name: str) -> None:
     """Require a non-null provenance value."""
     if value is None:
         msg = f"{field_name} must be set."
-        raise TypeError(msg)
+        raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)

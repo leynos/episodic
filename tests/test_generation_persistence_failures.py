@@ -1,0 +1,173 @@
+"""Typed failure tests for draft-generation persistence services."""
+
+import dataclasses as dc
+import typing as typ
+import uuid
+
+import pytest
+
+from episodic.canonical.domain import IntakeState
+from episodic.canonical.generation_persistence import (
+    DraftContentHashMismatchError,
+    DraftScriptPersistenceRequest,
+    EpisodeMaterialisationRequest,
+    GenerationSourceUploadNotFoundError,
+    IngestionJobNotReadyError,
+    MissingAttachedSourcesError,
+    _upload_for_source,
+    materialise_episode_from_ingestion,
+    persist_draft_script,
+)
+from episodic.canonical.ingestion_sources import AttachmentKind
+from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from tests.test_generation_persistence import (
+    SequentialUuids,
+    _clock,
+    _draft_result,
+    _ingestion_job,
+    _persist_materialisation_input,
+    _persist_ready_job,
+    _run,
+    _series_profile,
+    _source,
+)
+
+if typ.TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+
+
+class _MissingUploadRepository:
+    """Return no upload for the focused source-resolution failure path."""
+
+    async def get(self, upload_id: uuid.UUID) -> None:
+        """Report the requested upload as absent."""
+        del upload_id
+
+
+class _MissingUploadUnitOfWork:
+    """Provide the only repository needed by ``_upload_for_source``."""
+
+    uploads = _MissingUploadRepository()
+
+
+async def _materialise(
+    factory: async_sessionmaker[AsyncSession],
+    ingestion_job_id: uuid.UUID,
+) -> object:
+    """Materialize one episode using deterministic test seams."""
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        return await materialise_episode_from_ingestion(
+            uow,
+            EpisodeMaterialisationRequest(
+                ingestion_job_id=ingestion_job_id,
+                title="Bridgewater Futures",
+                clock=_clock,
+                uuid_factory=SequentialUuids(),
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_materialise_episode_requires_attached_sources(
+    session_factory: object,
+) -> None:
+    """A source-free job raises the source-specific persistence error."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    job = _ingestion_job(_series_profile().id, None)
+
+    await _persist_materialisation_input(factory, job)
+    with pytest.raises(MissingAttachedSourcesError, match="sources") as raised:
+        await _materialise(factory, job.id)
+
+    assert raised.value.ingestion_job_id == job.id, (
+        f"source-free job id: {raised.value.ingestion_job_id}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_materialise_episode_requires_ready_ingestion_job(
+    session_factory: object,
+) -> None:
+    """A non-ready job raises the readiness-specific persistence error."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    job = _ingestion_job(
+        _series_profile().id,
+        None,
+        intake_state=IntakeState.AWAITING_SOURCES,
+    )
+
+    await _persist_materialisation_input(factory, job, source=_source(job.id))
+    with pytest.raises(IngestionJobNotReadyError, match="not ready") as raised:
+        await _materialise(factory, job.id)
+
+    assert raised.value.ingestion_job_id == job.id, (
+        f"non-ready job id: {raised.value.ingestion_job_id}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_source_upload_resolution_rejects_missing_upload() -> None:
+    """A missing source upload raises a typed source-resolution error."""
+    job = _ingestion_job(_series_profile().id, None)
+    upload_id = uuid.UUID("00000000-0000-0000-0000-000000000601")
+    source = dc.replace(
+        _source(job.id),
+        attachment_kind=AttachmentKind.UPLOAD,
+        upload_id=upload_id,
+        source_uri=None,
+    )
+
+    with pytest.raises(GenerationSourceUploadNotFoundError) as raised:
+        await _upload_for_source(
+            typ.cast("CanonicalUnitOfWork", _MissingUploadUnitOfWork()),
+            source,
+        )
+
+    assert raised.value.upload_id == upload_id, (
+        f"missing upload id: {raised.value.upload_id}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_persist_draft_script_rejects_mismatched_content_hash(
+    session_factory: object,
+) -> None:
+    """Generated TEI requires a matching declared content hash."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    _, job = await _persist_ready_job(factory)
+    tei_xml = (
+        '<TEI xmlns="http://www.tei-c.org/ns/1.0">'
+        "<teiHeader><fileDesc><title>Bridgewater Futures</title></fileDesc></teiHeader>"
+        '<text><body><u who="Host">Welcome.</u></body></text></TEI>'
+    )
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        episode = await materialise_episode_from_ingestion(
+            uow,
+            EpisodeMaterialisationRequest(
+                ingestion_job_id=job.id,
+                title="Bridgewater Futures",
+                clock=_clock,
+                uuid_factory=SequentialUuids(),
+            ),
+        )
+        run = _run(episode.id, job.id)
+        await uow.generation_runs.create_run(run)
+        result = dc.replace(_draft_result(tei_xml), content_hash="sha256:wrong")
+        with pytest.raises(DraftContentHashMismatchError) as raised:
+            await persist_draft_script(
+                uow,
+                DraftScriptPersistenceRequest(
+                    episode_id=episode.id,
+                    generation_run_id=run.id,
+                    result=result,
+                    expected_revision=episode.tei_revision,
+                    clock=_clock,
+                ),
+            )
+
+    assert raised.value.expected_hash != raised.value.actual_hash, (
+        f"hashes: {raised.value.expected_hash!r}, {raised.value.actual_hash!r}"
+    )

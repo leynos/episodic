@@ -138,7 +138,7 @@ def _episode_to_record(episode: CanonicalEpisode) -> EpisodeRecord:
         tei_xml=tei_xml,
         tei_xml_zstd=tei_xml_zstd,
         tei_revision=episode.tei_revision,
-        tei_content_hash=episode.tei_content_hash or sha256_text(episode.tei_xml),
+        tei_content_hash=sha256_text(episode.tei_xml),
         qa_status=episode.qa_status,
         last_generation_run_id=episode.last_generation_run_id,
         status=episode.status,

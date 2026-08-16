@@ -16,7 +16,6 @@ from episodic.canonical.domain import (
     SeriesProfile,
 )
 from episodic.canonical.generation_persistence import (
-    DraftScriptPersistenceError,
     DraftScriptPersistenceRequest,
     EpisodeMaterialisationRequest,
     InvalidDraftTeiError,
@@ -71,26 +70,6 @@ async def _persist_materialisation_input(
         if source is not None:
             await uow.ingestion_job_sources.add(source)
         await uow.commit()
-
-
-async def _assert_materialisation_rejected(
-    factory: async_sessionmaker[AsyncSession],
-    job: IngestionJob,
-    *,
-    message_pattern: str,
-) -> None:
-    """Assert that an invalid ingestion job cannot be materialized."""
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        with pytest.raises(DraftScriptPersistenceError, match=message_pattern):
-            await materialise_episode_from_ingestion(
-                uow,
-                EpisodeMaterialisationRequest(
-                    ingestion_job_id=job.id,
-                    title="Bridgewater Futures",
-                    clock=_clock,
-                    uuid_factory=SequentialUuids(),
-                ),
-            )
 
 
 def _series_profile() -> SeriesProfile:
@@ -370,31 +349,3 @@ async def test_persist_draft_script_rejects_invalid_tei(
                     clock=_clock,
                 ),
             )
-
-
-@pytest.mark.asyncio
-async def test_materialise_episode_requires_attached_sources(
-    session_factory: object,
-) -> None:
-    """Materialisation should fail loudly when an intake job has no sources."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    job = _ingestion_job(_series_profile().id, None)
-
-    await _persist_materialisation_input(factory, job)
-    await _assert_materialisation_rejected(factory, job, message_pattern="sources")
-
-
-@pytest.mark.asyncio
-async def test_materialise_episode_requires_ready_ingestion_job(
-    session_factory: object,
-) -> None:
-    """Materialization should reject source bundles that are not ready."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    job = _ingestion_job(
-        _series_profile().id,
-        None,
-        intake_state=IntakeState.AWAITING_SOURCES,
-    )
-
-    await _persist_materialisation_input(factory, job, source=_source(job.id))
-    await _assert_materialisation_rejected(factory, job, message_pattern="not ready")

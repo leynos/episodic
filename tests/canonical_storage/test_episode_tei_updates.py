@@ -17,6 +17,7 @@ from episodic.canonical.domain import (
 from episodic.canonical.episode_errors import EpisodeRevisionConflictError
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage.entity_mappers import _episode_to_record
 from episodic.canonical.storage.models import EpisodeRecord
 
 if typ.TYPE_CHECKING:
@@ -90,14 +91,34 @@ def test_episode_content_hash_requires_string(
         dc.replace(episode, tei_content_hash=typ.cast("typ.Any", 42))
 
 
+def test_episode_mapper_derives_tei_content_hash(
+    episode_fixture: tuple[
+        SeriesProfile,
+        TeiHeader,
+        CanonicalEpisode,
+        IngestionJob,
+        SourceDocument,
+    ],
+) -> None:
+    """Storage records derive their TEI hash from the mapped XML."""
+    _, _, episode, _, _ = episode_fixture
+    stale_episode = dc.replace(episode, tei_content_hash="sha256:stale")
+
+    record = _episode_to_record(stale_episode)
+
+    assert record.tei_content_hash == _tei_hash(episode.tei_xml), (
+        f"record hash: {record.tei_content_hash!r}"
+    )
+
+
 @pytest.mark.parametrize(
     ("overrides", "error_type", "message"),
     [
         ({"tei_xml": 42}, TypeError, "tei_xml must be a string"),
-        ({"qa_status": None}, TypeError, "qa_status must be set"),
+        ({"qa_status": None}, ValueError, "qa_status must be set"),
         (
             {"last_generation_run_id": None},
-            TypeError,
+            ValueError,
             "last_generation_run_id must be set",
         ),
         ({"expected_revision": True}, ValueError, "positive integer"),
