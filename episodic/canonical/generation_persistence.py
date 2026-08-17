@@ -55,9 +55,6 @@ async def materialise_episode_from_ingestion(
 ) -> CanonicalEpisode:
     """Materialise a ready ingestion job as a placeholder canonical episode.
 
-    The service reserves a target episode identity before source projection.
-    Retries therefore converge on deterministic source-document identifiers.
-
     Parameters
     ----------
     uow
@@ -69,7 +66,8 @@ async def materialise_episode_from_ingestion(
     Returns
     -------
     CanonicalEpisode
-        Placeholder episode for the ingestion job.
+        Placeholder episode reserved before source projection, so retries
+        converge on deterministic source-document identifiers.
 
     Raises
     ------
@@ -87,6 +85,8 @@ async def materialise_episode_from_ingestion(
         job = await uow.ingestion_jobs.get(request.ingestion_job_id)
         if job is None:
             raise IngestionJobNotFoundError(str(request.ingestion_job_id))
+        if job.intake_state is not IntakeState.READY_FOR_GENERATION:
+            raise IngestionJobNotReadyError(request.ingestion_job_id)
         raise MissingAttachedSourcesError(request.ingestion_job_id)
 
     job = await _get_ingestion_job_for_update(uow, request.ingestion_job_id)
