@@ -37,6 +37,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.llm import LLMPort
+    from episodic.observability import MetricsPort, ValueMetricsPort
 
     from .types import UowFactory
 
@@ -51,6 +52,15 @@ class RuntimeConfig:
     llm_api_key: str | None
     draft_model: str
     pricing_snapshot_directory: pathlib.Path
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _GenerationLauncherRuntime:
+    """Composition inputs for the in-process generation launcher."""
+
+    metrics: ValueMetricsPort
+    object_store: ObjectStorePort | None = None
+    config: RuntimeConfig | None = None
 
 
 _SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
@@ -186,6 +196,8 @@ def _build_llm_port(config: RuntimeConfig) -> OpenAICompatibleLLMAdapter | None:
 
 def _build_database_probe(
     database_url: str,
+    *,
+    metrics: MetricsPort,
 ) -> tuple[ReadinessProbe, UowFactory, ShutdownHook]:
     """Build the database readiness probe and unit-of-work factory."""
     async_database_url, probe_connection_kwargs = _normalize_database_urls(database_url)
@@ -210,7 +222,7 @@ def _build_database_probe(
         return True
 
     def uow_factory() -> CanonicalUnitOfWork:
-        return SqlAlchemyUnitOfWork(session_factory)
+        return SqlAlchemyUnitOfWork(session_factory, metrics=metrics)
 
     return (
         ReadinessProbe(name="database", check=check_database),
@@ -222,16 +234,16 @@ def _build_database_probe(
 def _build_generation_launcher(
     uow_factory: UowFactory,
     llm_port: LLMPort,
-    *,
-    object_store: ObjectStorePort | None = None,
-    config: RuntimeConfig | None = None,
+    runtime: _GenerationLauncherRuntime,
 ) -> InProcessGenerationRunLauncher:
     """Build the no-QA generation-run launcher when an LLM port is configured."""
-    draft_model = _DEFAULT_DRAFT_MODEL if config is None else config.draft_model
+    draft_model = (
+        _DEFAULT_DRAFT_MODEL if runtime.config is None else runtime.config.draft_model
+    )
     pricing_directory = (
         _DEFAULT_PRICING_DIRECTORY
-        if config is None
-        else config.pricing_snapshot_directory
+        if runtime.config is None
+        else runtime.config.pricing_snapshot_directory
     )
     pricing_catalogue = FilePricingCatalogue(pricing_directory)
 
@@ -251,11 +263,11 @@ def _build_generation_launcher(
                 provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
             ),
         ),
-        object_store=object_store,
+        object_store=runtime.object_store,
         cost_recorder_factory=_cost_recorder,
         provider_name=_DEFAULT_LLM_PROVIDER_NAME,
         provider_operation=LLMProviderOperation.CHAT_COMPLETIONS.value,
-        metrics=StructuredLogMetrics(),
+        metrics=runtime.metrics,
         tracer=StructuredLogTracer(),
     )
 
@@ -330,8 +342,10 @@ def _psycopg_connection_kwargs(url: URL) -> PsycopgConnectKwargs:
 def create_app_from_env() -> asgi.App:
     """Build the Falcon ASGI service from environment configuration."""
     config = _load_runtime_config()
+    metrics = StructuredLogMetrics()
     database_probe, uow_factory, shutdown_hook = _build_database_probe(
-        config.database_url
+        config.database_url,
+        metrics=metrics,
     )
     object_store = FilesystemObjectStore(config.source_intake_object_store_root)
     llm_port = _build_llm_port(config)
@@ -343,8 +357,11 @@ def create_app_from_env() -> asgi.App:
         launcher = _build_generation_launcher(
             uow_factory,
             llm_port,
-            object_store=object_store,
-            config=config,
+            _GenerationLauncherRuntime(
+                metrics=metrics,
+                object_store=object_store,
+                config=config,
+            ),
         )
 
         async def shutdown_generation() -> None:
