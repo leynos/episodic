@@ -23,12 +23,11 @@ if typ.TYPE_CHECKING:
 
 @pytest.mark.asyncio
 async def test_launcher_releases_admission_capacity_after_completion(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A completed run should release capacity for a later launch."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    first_run_id, _ = await prepare_pending_run(factory)
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    first_run_id, _ = await prepare_pending_run(session_factory)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         first_run = await uow.generation_runs.get_run(first_run_id)
         assert first_run is not None, f"run {first_run_id} was not persisted"
         second_run_id = uuid.uuid7()
@@ -36,7 +35,7 @@ async def test_launcher_releases_admission_capacity_after_completion(
         await uow.commit()
     generator = ReleasableDraftGenerator(draft_result(valid_tei()))
     run_launcher = launcher(
-        factory,
+        session_factory,
         generator,
         options=LauncherOptions(max_concurrency=1, max_pending_runs=0),
     )

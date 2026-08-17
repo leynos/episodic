@@ -227,7 +227,7 @@ async def test_materialise_episode_from_ingestion_rejects_unknown_job(
     unknown_job_id = uuid.uuid7()
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(IngestionJobNotFoundError) as exc_info:
+        with pytest.raises(IngestionJobNotFoundError, match=str(unknown_job_id)):
             await materialise_episode_from_ingestion(
                 uow,
                 EpisodeMaterialisationRequest(
@@ -237,8 +237,6 @@ async def test_materialise_episode_from_ingestion_rejects_unknown_job(
                     uuid_factory=SequentialUuids(),
                 ),
             )
-
-    assert str(unknown_job_id) in str(exc_info.value), exc_info.value
 
 
 @pytest.mark.asyncio

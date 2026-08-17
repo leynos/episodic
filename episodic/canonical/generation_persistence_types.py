@@ -26,40 +26,122 @@ def _uuid7() -> uuid.UUID:
 
 
 class DraftScriptPersistenceError(Exception):
-    """Base class for draft persistence failures."""
+    """Base class for draft persistence failures.
+
+    Catch this exception to handle failures raised while materialising an
+    episode or persisting its generated draft.
+    """
 
 
 class IngestionJobNotReadyError(DraftScriptPersistenceError):
-    """Raised when materialisation is requested before an intake job is ready."""
+    """Raised when materialisation is requested before an intake job is ready.
+
+    Parameters
+    ----------
+    ingestion_job_id : uuid.UUID
+        Identifier of the ingestion job that is not ready for generation.
+
+    Attributes
+    ----------
+    ingestion_job_id : uuid.UUID
+        Identifier of the ingestion job retained for diagnostics.
+    """
 
     def __init__(self, ingestion_job_id: uuid.UUID) -> None:
+        """Initialize an error for an ingestion job that is not ready.
+
+        Parameters
+        ----------
+        ingestion_job_id : uuid.UUID
+            Identifier of the ingestion job that is not ready for generation.
+        """
         self.ingestion_job_id = ingestion_job_id
         message = f"Ingestion job {ingestion_job_id} is not ready for generation."
         super().__init__(message)
 
 
 class MissingAttachedSourcesError(DraftScriptPersistenceError):
-    """Raised when a ready ingestion job has no source attachments."""
+    """Raised when a ready ingestion job has no source attachments.
+
+    Parameters
+    ----------
+    ingestion_job_id : uuid.UUID
+        Identifier of the ready ingestion job without source attachments.
+
+    Attributes
+    ----------
+    ingestion_job_id : uuid.UUID
+        Identifier of the ingestion job retained for diagnostics.
+    """
 
     def __init__(self, ingestion_job_id: uuid.UUID) -> None:
+        """Initialize an error for an ingestion job with no sources.
+
+        Parameters
+        ----------
+        ingestion_job_id : uuid.UUID
+            Identifier of the ready ingestion job without source attachments.
+        """
         self.ingestion_job_id = ingestion_job_id
         message = f"Ingestion job {ingestion_job_id} has no attached sources."
         super().__init__(message)
 
 
 class GenerationSourceUploadNotFoundError(DraftScriptPersistenceError):
-    """Raised when a generation source refers to an absent upload."""
+    """Raised when a generation source refers to an absent upload.
+
+    Parameters
+    ----------
+    upload_id : uuid.UUID
+        Identifier of the upload referenced by the generation source.
+
+    Attributes
+    ----------
+    upload_id : uuid.UUID
+        Identifier of the missing upload retained for diagnostics.
+    """
 
     def __init__(self, upload_id: uuid.UUID) -> None:
+        """Initialize an error for a missing generation-source upload.
+
+        Parameters
+        ----------
+        upload_id : uuid.UUID
+            Identifier of the upload referenced by the generation source.
+        """
         self.upload_id = upload_id
         message = f"Upload {upload_id} was not found for ingestion source."
         super().__init__(message)
 
 
 class DraftContentHashMismatchError(DraftScriptPersistenceError):
-    """Raised when generated TEI and its declared hash disagree."""
+    """Raised when generated TEI and its declared hash disagree.
+
+    Parameters
+    ----------
+    expected_hash : str
+        SHA-256 hash calculated from the generated TEI.
+    actual_hash : str
+        Hash declared by the generated draft result.
+
+    Attributes
+    ----------
+    expected_hash : str
+        SHA-256 hash calculated from the generated TEI.
+    actual_hash : str
+        Hash declared by the generated draft result.
+    """
 
     def __init__(self, expected_hash: str, actual_hash: str) -> None:
+        """Initialize an error for mismatched generated-content hashes.
+
+        Parameters
+        ----------
+        expected_hash : str
+            SHA-256 hash calculated from the generated TEI.
+        actual_hash : str
+            Hash declared by the generated draft result.
+        """
         self.expected_hash = expected_hash
         self.actual_hash = actual_hash
         message = "Draft script content_hash does not match tei_xml."
@@ -67,13 +149,38 @@ class DraftContentHashMismatchError(DraftScriptPersistenceError):
 
 
 class InvalidDraftTeiError(DraftScriptPersistenceError, ValueError):
-    """Raised when generated TEI cannot be validated."""
+    """Raised when generated TEI cannot be validated.
+
+    The validation message is supplied to the inherited :class:`ValueError`
+    constructor and is available through the standard exception arguments.
+    """
 
 
 class SourceDocumentProjectionError(DraftScriptPersistenceError):
-    """Raised when a duplicate projection does not contain every source row."""
+    """Raised when a duplicate projection does not contain every source row.
+
+    Parameters
+    ----------
+    missing_document_ids : collections.abc.Collection[uuid.UUID]
+        Identifiers expected from the projection but absent after the
+        duplicate-write race.
+
+    Attributes
+    ----------
+    missing_document_ids : tuple[uuid.UUID, ...]
+        Missing document identifiers, sorted by their string representation
+        and retained as an immutable tuple for diagnostics.
+    """
 
     def __init__(self, missing_document_ids: cabc.Collection[uuid.UUID]) -> None:
+        """Initialize an error for an incomplete source-document projection.
+
+        Parameters
+        ----------
+        missing_document_ids : collections.abc.Collection[uuid.UUID]
+            Identifiers expected from the projection but absent after the
+            duplicate-write race.
+        """
         self.missing_document_ids = tuple(sorted(missing_document_ids, key=str))
         missing_ids = ", ".join(
             str(document_id) for document_id in self.missing_document_ids

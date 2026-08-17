@@ -1,6 +1,7 @@
 """Tests for workflow integration test helpers."""
 
 from tests.test_workflow_utils import (
+    _failed_act_steps,
     _has_unsupported_artifact_protocol,
     artifact_server_addr,
     artifact_server_port,
@@ -51,3 +52,23 @@ def test_artifact_protocol_detection_preserves_other_failed_steps() -> None:
     assert not _has_unsupported_artifact_protocol(logs), (
         "A separate failed step must remain visible as a workflow failure."
     )
+
+
+def test_failed_act_steps_preserves_message_fallback_type_validation() -> None:
+    """Structured act parsing should retain the existing msg fallback semantics."""
+    logs = "\n".join((
+        '{"level":"error","job":"build","step":"compile","message":"fallback message"}',
+        (
+            '{"level":"error","job":"build","step":"compile",'
+            '"msg":"","message":"empty-msg fallback"}'
+        ),
+        (
+            '{"level":"error","job":"build","step":"compile",'
+            '"msg":7,"message":"must be ignored"}'
+        ),
+        '{"level":"error","job":7,"step":"compile","msg":"must be ignored"}',
+    ))
+
+    assert _failed_act_steps(logs) == {
+        ("build", "compile"): ["fallback message", "empty-msg fallback"]
+    }, _failed_act_steps(logs)

@@ -241,14 +241,22 @@ def _failed_act_steps(logs: str) -> dict[tuple[str, str], list[str]]:
             entry = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if not isinstance(entry, dict) or entry.get("level") != "error":
-            continue
-        job = entry.get("job")
-        step = entry.get("step")
-        message = entry.get("msg") or entry.get("message")
-        if not all(isinstance(value, str) for value in (job, step, message)):
-            continue
-        failed_steps.setdefault((job, step), []).append(message)
+        match entry:
+            case {
+                "level": "error",
+                "job": str() as job,
+                "step": str() as step,
+                **fields,
+            }:
+                match fields.get("msg"):
+                    case str() as message if message:
+                        failed_steps.setdefault((job, step), []).append(message)
+                    case value if value:
+                        continue
+                    case _:
+                        match fields.get("message"):
+                            case str() as message:
+                                failed_steps.setdefault((job, step), []).append(message)
     return failed_steps
 
 

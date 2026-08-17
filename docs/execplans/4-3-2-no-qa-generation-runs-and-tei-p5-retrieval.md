@@ -465,9 +465,10 @@ when any of the following is breached.
   has no current idempotency contract.
 - [x] (recorded, 2026-08-17) Current CodeRabbit follow-up decisions: retain
   diagnostic projection IDs, add coverage for cancellation-write shielding and
-  admission capacity release, clean up test-only types, and reject a CodeScene
-  suppression because the gates pass and the `list_runs` and `list_events`
-  contracts remain distinct.
+  admission capacity release, clean up test-only types, and retain distinct
+  `list_runs` and `list_events` contracts. CodeScene's test-stub duplication is
+  a structural metric only; it requires a narrowly scoped platform suppression,
+  not a repository refactor or a source-level lint suppression.
 
 ## Surprises & discoveries
 

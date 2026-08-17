@@ -282,17 +282,19 @@ async def test_launcher_uses_detached_unit_of_work(
 
 @pytest.mark.asyncio
 async def test_launcher_immediate_shutdown_marks_pending_task_failed(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Shutdown should persist cancellation before a task first executes."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    run_id, _ = await prepare_pending_run(factory)
-    run_launcher = launcher(factory, RecordingDraftGenerator(draft_result(valid_tei())))
+    run_id, _ = await prepare_pending_run(session_factory)
+    run_launcher = launcher(
+        session_factory,
+        RecordingDraftGenerator(draft_result(valid_tei())),
+    )
 
     await run_launcher.launch(run_id)
     await run_launcher.shutdown()
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         run = await uow.generation_runs.get_run(run_id)
         events = await uow.generation_runs.list_events(run_id)
 
@@ -310,19 +312,18 @@ async def test_launcher_immediate_shutdown_marks_pending_task_failed(
 
 @pytest.mark.asyncio
 async def test_launcher_shutdown_marks_running_task_failed(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Shutdown should fail a still-running background generation task."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    run_id, _ = await prepare_pending_run(factory)
+    run_id, _ = await prepare_pending_run(session_factory)
     generator = BlockingDraftGenerator()
-    run_launcher = launcher(factory, generator)
+    run_launcher = launcher(session_factory, generator)
 
     await run_launcher.launch(run_id)
     await generator.started.wait()
     await run_launcher.shutdown()
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         run = await uow.generation_runs.get_run(run_id)
         events = await uow.generation_runs.list_events(run_id)
 
@@ -344,14 +345,13 @@ async def test_launcher_shutdown_marks_running_task_failed(
 
 @pytest.mark.asyncio
 async def test_launcher_returns_while_concurrency_slot_is_busy(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Scheduling should not wait for an execution semaphore permit."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    run_id, _ = await prepare_pending_run(factory)
+    run_id, _ = await prepare_pending_run(session_factory)
     generator = BlockingDraftGenerator()
     run_launcher = launcher(
-        factory,
+        session_factory,
         generator,
         options=LauncherOptions(max_concurrency=1, max_pending_runs=1),
     )
