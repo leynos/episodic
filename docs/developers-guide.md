@@ -1593,11 +1593,12 @@ finish the run. A worker claim is itself conditional on
 a terminal run. Do not reset an expired `running` row to `pending` or launch a
 replacement: this slice has no automatic reaper or reassignment path.
 
-To fail the run manually, use a privileged database transaction. Lock and
-recheck the row, append the failure event, and then execute the following
-conditional update. Continue only if the `RETURNING` clause returns the
-requested run; otherwise roll back because the run changed state or its lease
-has not expired.
+To fail the run manually, use a privileged database transaction. The locking
+query below selects only a running run with a non-null expired lease. If it
+returns no row, execute `ROLLBACK` and stop: this is an explicit no-op, and the
+event and status update must not be executed. If it returns the requested run,
+keep the transaction open, append the failure event, update the terminal state,
+and then commit both writes together.
 
 ```sql
 BEGIN;
@@ -1605,19 +1606,27 @@ BEGIN;
 SELECT id
 FROM generation_runs
 WHERE id = :run_id
+  AND status = 'running'
+  AND lease_expires_at IS NOT NULL
+  AND lease_expires_at <= CURRENT_TIMESTAMP
 FOR UPDATE;
 
--- Only after the locked row is confirmed expired, append run.failed with the
--- same error_category and error_message, using the next per-run event sequence.
+-- If no row is returned, execute ROLLBACK and stop. Do not execute the
+-- statements below.
+
+-- After the qualifying row is locked, append run.failed with the same
+-- error_category and error_message, using the next per-run event sequence.
 INSERT INTO generation_events
     (id, generation_run_id, seq, kind, payload, occurred_at, created_at)
-SELECT :event_id, :run_id, COALESCE(MAX(seq), 0) + 1, 'run.failed',
+SELECT :event_id, :run_id,
+       (SELECT COALESCE(MAX(seq), 0) + 1
+        FROM generation_events
+        WHERE generation_run_id = :run_id),
+       'run.failed',
        jsonb_build_object(
            'error_category', 'launcher.lease_expired',
            'error_message', 'Generation lease expired; failed manually.'
-       ), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM generation_events
-WHERE generation_run_id = :run_id;
+       ), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP;
 
 UPDATE generation_runs
 SET status = 'failed',
@@ -1627,15 +1636,15 @@ SET status = 'failed',
     error_category = 'launcher.lease_expired',
     updated_at = CURRENT_TIMESTAMP
 WHERE id = :run_id
-  AND status = 'running'
-  AND lease_expires_at IS NOT NULL
-  AND lease_expires_at <= CURRENT_TIMESTAMP
 RETURNING id;
 
--- If RETURNING returns zero rows, roll back the transaction, including the
--- event insert.
 COMMIT;
 ```
+
+The resulting semantics are compare-and-act: only the qualifying row is locked,
+and a missing row causes an explicit rollback with no persisted event or status
+change. The `run.failed` event and `failed` terminal update are committed
+atomically after that lock succeeds.
 
 Keep `idempotency_principal_id` and `idempotency_key` unchanged. They remain
 attached to the failed generation run so a replay is tied to the existing
