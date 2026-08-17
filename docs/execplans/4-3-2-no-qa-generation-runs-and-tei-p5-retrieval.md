@@ -454,9 +454,10 @@ when any of the following is breached.
   follow-up and roadmap item 4.3.2 remain in progress.
 
 - [x] (recorded, 2026-08-17) Current review-remediation decisions: launcher
-  composition supplies configuration explicitly; episode materialization locks
-  and validates the ingestion job before source paging, retaining
-  source-document duplicate recovery only after verification; generation-run
+  composition supplies configuration explicitly; episode materialization
+  validates attached sources before its short ingestion-job reservation lock,
+  retaining source-document duplicate recovery only after verification;
+  generation-run
   `episode_id` and `source_bundle_id` foreign keys remain enforced, so test
   fixtures must provision the related episode and ingestion-job rows; manual
   recovery SQL uses a conditional lock and commits the failure event and status
@@ -469,6 +470,10 @@ when any of the following is breached.
   `list_runs` and `list_events` contracts. CodeScene's test-stub duplication is
   a structural metric only; it requires a narrowly scoped platform suppression,
   not a repository refactor or a source-level lint suppression.
+- Observation (2026-08-17): the current refactor extracts a private
+  episode-reuse helper, preserves source paging before the ingestion-job lock,
+  preserves committing the target episode association before projection, and
+  leaves duplicate-projection rollback in the public service.
 
 ## Surprises & discoveries
 

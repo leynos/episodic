@@ -33,45 +33,45 @@ if typ.TYPE_CHECKING:
 
 
 @pytest.mark.asyncio
-async def test_materialisation_locks_job_before_source_paging(
+async def test_materialisation_releases_job_lock_before_source_work(
     session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The materializer locks the job row before it pages attached sources."""
+    """Source paging finishes before the materializer locks the job row."""
     _, job = await _persist_ready_job(session_factory)
-    job_locked = False
+    source_page_loaded = False
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         original_list = uow.ingestion_job_sources.list_for_job_paged
         original_get_for_update = uow.ingestion_jobs.get_for_update
 
-        async def list_sources_after_lock(
+        async def list_sources_before_lock(
             ingestion_job_id: uuid.UUID,
             *,
             limit: int,
             offset: int,
         ) -> cabc.Sequence[IngestionJobSource]:
-            """Verify source paging follows the ingestion-job lock."""
-            assert job_locked, "source paging preceded the ingestion-job lock"
+            """Record source work performed outside the ingestion-job lock."""
+            nonlocal source_page_loaded
+            source_page_loaded = True
             return await original_list(ingestion_job_id, limit=limit, offset=offset)
 
-        async def lock_before_source_paging(
+        async def lock_after_source_paging(
             ingestion_job_id: uuid.UUID,
         ) -> IngestionJob | None:
-            """Record that the ingestion job is locked before source paging."""
-            nonlocal job_locked
-            job_locked = True
+            """Verify the short reservation lock follows source paging."""
+            assert source_page_loaded, "ingestion-job lock preceded source paging"
             return await original_get_for_update(ingestion_job_id)
 
         monkeypatch.setattr(
             uow.ingestion_job_sources,
             "list_for_job_paged",
-            list_sources_after_lock,
+            list_sources_before_lock,
         )
         monkeypatch.setattr(
             uow.ingestion_jobs,
             "get_for_update",
-            lock_before_source_paging,
+            lock_after_source_paging,
         )
         await materialise_episode_from_ingestion(
             uow,

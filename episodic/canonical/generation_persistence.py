@@ -1,15 +1,10 @@
 """Persist canonical state at the no-QA draft-generation boundaries.
 
-Materialization turns a ready
-:class:`~episodic.canonical.domain.IngestionJob` and its attached sources into
-a :class:`~episodic.canonical.domain.CanonicalEpisode`, TEI header, and source
-documents with a valid placeholder TEI. Persistence validates the
-``DraftScriptResult`` produced by the draft generator, then applies an
-optimistic :class:`~episodic.canonical.domain.EpisodeTeiUpdate` with explicit
-no-QA provenance, the generation-run identifier, revision, and content hash.
+Materialization turns a ready ingestion job into an episode, TEI header, and
+source documents with placeholder TEI. Persistence validates generator output
+and applies optimistic TEI updates.
 
-The generation-run API materialises before creating a run; the detached launcher
-persists generated drafts afterwards.
+The API materialises before launching; the detached launcher persists drafts.
 """
 
 import typing as typ
@@ -66,65 +61,40 @@ async def materialise_episode_from_ingestion(
     Parameters
     ----------
     uow
-        Open canonical unit of work. The service commits the reservation and
-        completed source projection, and rolls back only a verified duplicate
-        source-document race.
+        Open unit of work; commits the reservation/projection and rolls back
+        duplicate races.
     request
         Materialisation command describing the job and deterministic seams.
 
     Returns
     -------
     CanonicalEpisode
-        Existing or newly created placeholder episode for the ingestion job.
+        Placeholder episode for the ingestion job.
 
     Raises
     ------
+    IngestionJobNotFoundError
+        If no ingestion job exists for the requested identifier.
     IngestionJobNotReadyError
         If the job is not ready for generation.
     MissingAttachedSourcesError
         If the ready job has no attached sources.
     IntegrityError
         If source projection violates an unrelated storage constraint.
-
-    Notes
-    -----
-    The ingestion-job lookup preserves ``IngestionJobNotFoundError``. Source
-    upload and projection failures preserve their typed persistence errors.
     """
+    sources = await _list_all_sources(uow, request.ingestion_job_id)
+    if len(sources) == 0:
+        job = await uow.ingestion_jobs.get(request.ingestion_job_id)
+        if job is None:
+            raise IngestionJobNotFoundError(str(request.ingestion_job_id))
+        raise MissingAttachedSourcesError(request.ingestion_job_id)
+
     job = await _get_ingestion_job_for_update(uow, request.ingestion_job_id)
     if job.intake_state is not IntakeState.READY_FOR_GENERATION:
         raise IngestionJobNotReadyError(request.ingestion_job_id)
 
-    sources = await _list_all_sources(uow, request.ingestion_job_id)
-    if len(sources) == 0:
-        raise MissingAttachedSourcesError(request.ingestion_job_id)
-
-    episode_id = job.target_episode_id or request.uuid_factory()
     now = request.clock()
-    existing_episode = await uow.episodes.get(episode_id)
-    if existing_episode is None:
-        header = _build_placeholder_header(
-            header_id=request.uuid_factory(),
-            title=request.title,
-            now=now,
-        )
-        episode = _build_placeholder_episode(
-            episode_id=episode_id,
-            job=job,
-            header=header,
-            now=now,
-        )
-        await uow.tei_headers.add(header)
-        await uow.flush()
-        await uow.episodes.add(episode)
-        await uow.flush()
-        await uow.ingestion_jobs.set_target_episode(job.id, episode_id=episode.id)
-        # Commit the target association before external upload lookup and source
-        # projection, limiting the ingestion-job row lock to identity creation.
-        await uow.commit()
-    else:
-        episode = existing_episode
-        await uow.commit()
+    episode = await _materialise_or_reuse_episode(uow, job, request, now)
 
     try:
         await _project_source_documents(uow, sources, episode.id, now)
@@ -134,6 +104,40 @@ async def materialise_episode_from_ingestion(
         if not _is_source_document_duplicate(exc):
             raise
         await _require_projected_source_documents(uow, sources, episode.id)
+    return episode
+
+
+async def _materialise_or_reuse_episode(
+    uow: CanonicalUnitOfWork,
+    job: IngestionJob,
+    request: EpisodeMaterialisationRequest,
+    now: dt.datetime,
+) -> CanonicalEpisode:
+    """Reserve and return the ingestion job's canonical episode."""
+    episode_id = job.target_episode_id or request.uuid_factory()
+    existing_episode = await uow.episodes.get(episode_id)
+    if existing_episode is not None:
+        await uow.commit()
+        return existing_episode
+
+    header = _build_placeholder_header(
+        header_id=request.uuid_factory(),
+        title=request.title,
+        now=now,
+    )
+    episode = _build_placeholder_episode(
+        episode_id=episode_id,
+        job=job,
+        header=header,
+        now=now,
+    )
+    await uow.tei_headers.add(header)
+    await uow.flush()
+    await uow.episodes.add(episode)
+    await uow.flush()
+    await uow.ingestion_jobs.set_target_episode(job.id, episode_id=episode.id)
+    # Commit before source projection to limit the ingestion-job row lock.
+    await uow.commit()
     return episode
 
 
