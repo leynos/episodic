@@ -248,11 +248,15 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
             If the provider returns a non-retryable response error.
         DraftScriptTransientProviderError
             If the provider reports a transient failure.
+        DraftScriptResponseFormatError
+            If the provider response is not the expected JSON draft.
+        DraftScriptTeiError
+            If the parsed draft cannot be emitted as valid TEI-P5.
 
         Notes
         -----
         Provider errors are translated before parsing and TEI emission.
-        """
+        """  # noqa: DOC502  # Parsing and TEI helpers raise these documented exceptions.
         llm_request = LLMRequest(
             model=self.config.model,
             prompt=_build_prompt(request),
