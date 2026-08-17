@@ -344,10 +344,9 @@ class TestGenerationRunRepository:
                 lease_expires_at=NOW + dt.timedelta(minutes=5),
             ),
         )
-        claimed = next(result for result in results if result is not None)
-
         claim_count = sum(result is not None for result in results)
         assert claim_count == 1, f"expected one successful claim, got {claim_count}"
+        claimed = next(result for result in results if result is not None)
         assert claimed.status is GenerationRunStatus.RUNNING, (
             f"status: {claimed.status}"
         )
