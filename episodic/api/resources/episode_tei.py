@@ -1,5 +1,7 @@
 """Falcon resource and content negotiation for generated episode TEI."""
 
+import hashlib
+import json
 import typing as typ
 
 import falcon
@@ -39,14 +41,31 @@ class EpisodeTeiResource:
 
         media_type = negotiate_tei_media_type(req.accept)
         if media_type == _TEI_MEDIA_TYPE:
-            _apply_tei_attachment(resp, episode)
+            _apply_tei_attachment(req, resp, episode)
             return
-        resp.media = serialize_tei_envelope(episode)
-        resp.status = falcon.HTTP_200
+        _apply_tei_json(req, resp, episode)
 
 
 def negotiate_tei_media_type(accept: str | None) -> str:
-    """Choose JSON metadata or raw TEI XML from an HTTP Accept header."""
+    """Choose JSON metadata or raw TEI XML from an HTTP Accept header.
+
+    Parameters
+    ----------
+    accept
+        Raw value of the request ``Accept`` header. Missing or blank values
+        select JSON metadata.
+
+    Returns
+    -------
+    str
+        ``application/json`` or ``application/tei+xml``, chosen by the
+        highest acceptable quality value.
+
+    Raises
+    ------
+    falcon.HTTPNotAcceptable
+        Raised when neither supported representation has a positive quality.
+    """  # noqa: DOC502 - http_error() preserves the concrete Falcon exception.
     if accept is None or not accept.strip():
         return _JSON_MEDIA_TYPE
     tei_quality = falcon.mediatypes.quality(_TEI_MEDIA_TYPE, accept)
@@ -55,16 +74,15 @@ def negotiate_tei_media_type(accept: str | None) -> str:
         return _TEI_MEDIA_TYPE
     if json_quality > 0:
         return _JSON_MEDIA_TYPE
-    raise typ.cast(
-        "falcon.HTTPNotAcceptable",
-        http_error(
-            falcon.HTTPNotAcceptable(
-                description="Accept must allow application/json or application/tei+xml."
-            ),
-            code="not_acceptable",
-            details={"supported": [_JSON_MEDIA_TYPE, _TEI_MEDIA_TYPE]},
-        ),
+    error = falcon.HTTPNotAcceptable(
+        description="Accept must allow application/json or application/tei+xml."
     )
+    http_error(
+        error,
+        code="not_acceptable",
+        details={"supported": [_JSON_MEDIA_TYPE, _TEI_MEDIA_TYPE]},
+    )
+    raise error
 
 
 def _has_generated_draft(episode: CanonicalEpisode) -> bool:
@@ -75,18 +93,53 @@ def _has_generated_draft(episode: CanonicalEpisode) -> bool:
     )
 
 
-def _apply_tei_attachment(
+def _apply_tei_json(
+    req: falcon.Request,
     resp: falcon.Response,
     episode: CanonicalEpisode,
 ) -> None:
-    resp.status = falcon.HTTP_200
-    resp.content_type = _TEI_MEDIA_TYPE
-    resp.text = episode.tei_xml
+    content = json.dumps(serialize_tei_envelope(episode), ensure_ascii=False).encode()
+    _apply_representation(req, resp, content=content, media_type=_JSON_MEDIA_TYPE)
+
+
+def _apply_tei_attachment(
+    req: falcon.Request,
+    resp: falcon.Response,
+    episode: CanonicalEpisode,
+) -> None:
     resp.set_header(
         "Content-Disposition",
         f'attachment; filename="episode-{episode.id}.xml"',
     )
-    resp.set_header("ETag", f'"{episode.tei_content_hash}"')
+    _apply_representation(
+        req,
+        resp,
+        content=episode.tei_xml.encode(),
+        media_type=_TEI_MEDIA_TYPE,
+    )
+
+
+def _apply_representation(
+    req: falcon.Request,
+    resp: falcon.Response,
+    *,
+    content: bytes,
+    media_type: str,
+) -> None:
+    """Set one TEI representation or its conditional ``304`` response."""
+    etag = _representation_etag(content)
+    resp.set_header("ETag", f'"{etag}"')
+    if any(validator in {"*", etag} for validator in req.if_none_match or []):
+        resp.status = falcon.HTTP_304
+        return
+    resp.status = falcon.HTTP_200
+    resp.content_type = media_type
+    resp.data = content
+
+
+def _representation_etag(content: bytes) -> str:
+    """Return the strong ETag value for serialized representation bytes."""
+    return hashlib.sha256(content).hexdigest()
 
 
 def _tei_not_found(episode_id: uuid.UUID) -> falcon.HTTPNotFound:

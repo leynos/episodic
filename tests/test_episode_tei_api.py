@@ -21,6 +21,8 @@ if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.api.dependencies import ApiDependencies
+
 
 @pytest.mark.parametrize(
     ("accept", "expected"),
@@ -107,6 +109,87 @@ async def test_episode_tei_json_and_xml_retrieval(
         episode_id=episode_id,
         tei_xml=tei_xml,
     )
+    assert json_response.headers["ETag"] != xml_response.headers["ETag"], (
+        "expected representation-specific ETags for JSON metadata and TEI XML"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("accept", [None, "application/tei+xml"])
+@pytest.mark.parametrize(
+    ("validator_kind", "expected_status"),
+    [
+        ("matching", 304),
+        ("nonmatching", 200),
+        ("wildcard", 304),
+        ("absent", 200),
+    ],
+)
+async def test_episode_tei_honours_conditional_get_validators(
+    session_factory: async_sessionmaker[AsyncSession],
+    accept: str | None,
+    validator_kind: str,
+    expected_status: int,
+) -> None:
+    """Return a body only when the selected TEI representation has changed."""
+    launcher = RecordingLauncher()
+    dependencies = dc.replace(
+        build_api_dependencies(session_factory),
+        launcher=launcher,
+    )
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        episode_id = await _create_generation_run(client)
+        await _persist_generated_tei(dependencies, episode_id, launcher.run_ids[0])
+        headers = {} if accept is None else {"Accept": accept}
+        initial_response = await client.get(
+            f"/v1/episodes/{episode_id}/tei", headers=headers
+        )
+        validator = {
+            "matching": initial_response.headers["ETag"],
+            "nonmatching": '"not-a-match"',
+            "wildcard": "*",
+            "absent": None,
+        }[validator_kind]
+        conditional_response = await client.get(
+            f"/v1/episodes/{episode_id}/tei",
+            headers=headers
+            if validator is None
+            else headers | {"If-None-Match": validator},
+        )
+
+    assert initial_response.status_code == 200, initial_response.text
+    assert conditional_response.status_code == expected_status, (
+        conditional_response.text
+    )
+    assert conditional_response.headers["ETag"] == initial_response.headers["ETag"], (
+        "expected conditional response to retain the selected representation ETag"
+    )
+    if expected_status == 304:
+        assert conditional_response.content == b"", conditional_response.content
+
+
+async def _persist_generated_tei(
+    dependencies: ApiDependencies,
+    episode_id: uuid.UUID,
+    generation_run_id: uuid.UUID,
+) -> None:
+    """Persist generated TEI needed by endpoint retrieval tests."""
+    async with dependencies.uow_factory() as uow:
+        await uow.episodes.update(
+            episode_id,
+            update=EpisodeTeiUpdate(
+                tei_xml="<TEI><text><body><p>Generated script.</p></body></text></TEI>",
+                qa_status=QaStatus.SKIPPED,
+                last_generation_run_id=generation_run_id,
+                expected_revision=1,
+                updated_at=dt.datetime(2026, 7, 22, 12, 0, tzinfo=dt.UTC),
+            ),
+        )
+        await uow.commit()
 
 
 def _assert_tei_json_response(
@@ -132,6 +215,9 @@ def _assert_tei_json_response(
     assert response.json() == expected_payload, (
         f"expected TEI metadata {expected_payload!r}, got {response.json()!r}"
     )
+    assert response.headers["ETag"] == _response_etag(response), (
+        f"expected JSON ETag for serialized response, got {response.headers['ETag']!r}"
+    )
 
 
 def _assert_tei_xml_response(
@@ -156,9 +242,14 @@ def _assert_tei_xml_response(
         "expected episode attachment Content-Disposition, got "
         f"{response.headers['Content-Disposition']!r}"
     )
-    assert response.headers["ETag"] == f'"{_tei_hash(tei_xml)}"', (
+    assert response.headers["ETag"] == _response_etag(response), (
         f"expected ETag for generated TEI, got {response.headers['ETag']!r}"
     )
+
+
+def _response_etag(response: httpx.Response) -> str:
+    """Return the quoted SHA-256 ETag for the response representation bytes."""
+    return f'"{hashlib.sha256(response.content).hexdigest()}"'
 
 
 async def _create_generation_run(client: httpx.AsyncClient) -> uuid.UUID:
