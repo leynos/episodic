@@ -1,6 +1,7 @@
 """Generation-run execution-claim SQLAlchemy adapter contract tests."""
 
 import asyncio
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -25,6 +26,16 @@ from tests.canonical_storage._generation_run_support import (
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ClaimOutcomeLogExpectations:
+    """Expected identifiers and lease timestamp for claim-outcome logs."""
+
+    pending_run_id: uuid.UUID
+    missing_run_id: uuid.UUID
+    terminal_run_id: uuid.UUID
+    lease_expires_at: dt.datetime
 
 
 async def _manually_fail_expired_run(
@@ -116,15 +127,9 @@ async def _assert_manual_recovery_state(
     )
 
 
-# The assertion contract intentionally exposes each expected log value.
-# pylint: disable-next=too-many-arguments
 def _assert_claim_outcome_logs(
     events: list[tuple[str, str, dict[str, object]]],
-    *,
-    pending_run_id: uuid.UUID,
-    missing_run_id: uuid.UUID,
-    terminal_run_id: uuid.UUID,
-    lease_expires_at: dt.datetime,
+    expected: _ClaimOutcomeLogExpectations,
 ) -> None:
     """Assert the ordered structured-log contract for every claim outcome."""
     observed_event_names = [message for _, message, _ in events]
@@ -138,20 +143,22 @@ def _assert_claim_outcome_logs(
     assert len(events_by_name) == len(events) == 4, events
     claimed_log = events_by_name["sql_generation_run_store.claim_run"]
     assert claimed_log[0] == "info", events
-    assert claimed_log[1]["run_id"] == str(pending_run_id), events
+    assert claimed_log[1]["run_id"] == str(expected.pending_run_id), events
     assert claimed_log[1]["current_node"] == "draft", events
-    assert claimed_log[1]["lease_expires_at"] == lease_expires_at.isoformat(), events
+    assert (
+        claimed_log[1]["lease_expires_at"] == expected.lease_expires_at.isoformat()
+    ), events
     assert events_by_name["sql_generation_run_store.claim_run_lost"] == (
         "info",
-        {"run_id": str(pending_run_id), "status": "running"},
+        {"run_id": str(expected.pending_run_id), "status": "running"},
     ), events
     assert events_by_name["sql_generation_run_store.claim_run_missing"] == (
         "warning",
-        {"run_id": str(missing_run_id)},
+        {"run_id": str(expected.missing_run_id)},
     ), events
     assert events_by_name["sql_generation_run_store.claim_run_terminal"] == (
         "warning",
-        {"run_id": str(terminal_run_id), "status": "succeeded"},
+        {"run_id": str(expected.terminal_run_id), "status": "succeeded"},
     ), events
 
 
@@ -334,10 +341,10 @@ async def test_generation_run_store_logs_claim_outcomes(
 
     assert claimed is not None, f"expected pending run {pending_run.id} to be claimed"
     assert lost is None, f"expected second claim to lose, got {lost!r}"
-    _assert_claim_outcome_logs(
-        events,
+    expected = _ClaimOutcomeLogExpectations(
         pending_run_id=pending_run.id,
         missing_run_id=missing_run_id,
         terminal_run_id=terminal_run.id,
         lease_expires_at=lease_expires_at,
     )
+    _assert_claim_outcome_logs(events, expected)
