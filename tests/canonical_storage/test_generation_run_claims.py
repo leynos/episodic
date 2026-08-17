@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime as dt
+import typing as typ
 import uuid
 
 import pytest
@@ -11,40 +12,42 @@ from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotF
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.storage import generation_runs as generation_runs_module
-from tests.canonical_storage.test_generation_runs import (
+from tests.canonical_storage._generation_run_support import (
     NOW,
-    _factory,
+    claim_run_in_independent_uow,
     make_generation_run,
+    persist_generation_run_prerequisites,
 )
+
+if typ.TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 @pytest.mark.asyncio
 async def test_generation_run_store_claims_pending_run_once_concurrently(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Two coordinated sessions should produce one winner and one lost claim."""
-    factory = _factory(session_factory)
     run = make_generation_run()
     lease_expires_at = NOW + dt.timedelta(minutes=5)
     claim_barrier = asyncio.Barrier(2)
+    await persist_generation_run_prerequisites(session_factory, run)
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.generation_runs.create_run(run)
         await uow.commit()
 
     async def claim_from_independent_session(
         current_node: str,
     ) -> GenerationRun | None:
-        async with SqlAlchemyUnitOfWork(factory) as uow:
-            await claim_barrier.wait()
-            claimed = await uow.generation_runs.claim_run_for_execution(
-                run.id,
-                current_node=current_node,
-                started_at=NOW,
-                lease_expires_at=lease_expires_at,
-            )
-            await uow.commit()
-            return claimed
+        await claim_barrier.wait()
+        return await claim_run_in_independent_uow(
+            session_factory,
+            run.id,
+            current_node=current_node,
+            started_at=NOW,
+            lease_expires_at=lease_expires_at,
+        )
 
     claims = await asyncio.gather(
         claim_from_independent_session("draft-a"),
@@ -60,7 +63,7 @@ async def test_generation_run_store_claims_pending_run_once_concurrently(
         f"expected running claim, got {running_claims[0]!r}"
     )
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         persisted = await uow.generation_runs.get_run(run.id)
 
     assert persisted is not None, f"expected persisted run {run.id}, got {persisted!r}"
@@ -71,16 +74,20 @@ async def test_generation_run_store_claims_pending_run_once_concurrently(
 
 @pytest.mark.asyncio
 async def test_generation_run_store_logs_claim_outcomes(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Claim outcomes should emit bounded structured operational fields."""
-    factory = _factory(session_factory)
     pending_run = make_generation_run()
     terminal_run = make_generation_run()
     lease_expires_at = NOW + dt.timedelta(minutes=5)
+    await persist_generation_run_prerequisites(
+        session_factory,
+        pending_run,
+        terminal_run,
+    )
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.generation_runs.create_run(pending_run)
         await uow.generation_runs.create_run(terminal_run)
         await uow.generation_runs.update_run_status(
@@ -100,69 +107,63 @@ async def test_generation_run_store_logs_claim_outcomes(
 
     monkeypatch.setattr(generation_runs_module, "_log_event", capture_log_event)
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        claimed = await uow.generation_runs.claim_run_for_execution(
-            pending_run.id,
-            current_node="draft",
-            started_at=NOW,
-            lease_expires_at=lease_expires_at,
-        )
-        await uow.commit()
-
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        lost = await uow.generation_runs.claim_run_for_execution(
-            pending_run.id,
-            current_node="draft",
-            started_at=NOW,
-            lease_expires_at=lease_expires_at,
-        )
+    claimed = await claim_run_in_independent_uow(
+        session_factory,
+        pending_run.id,
+        current_node="draft",
+        started_at=NOW,
+        lease_expires_at=lease_expires_at,
+    )
+    lost = await claim_run_in_independent_uow(
+        session_factory,
+        pending_run.id,
+        current_node="draft",
+        started_at=NOW,
+        lease_expires_at=lease_expires_at,
+    )
 
     missing_run_id = uuid.uuid7()
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        with pytest.raises(RunNotFound):
-            await uow.generation_runs.claim_run_for_execution(
-                missing_run_id,
-                current_node="draft",
-                started_at=NOW,
-                lease_expires_at=lease_expires_at,
-            )
+    with pytest.raises(RunNotFound):
+        await claim_run_in_independent_uow(
+            session_factory,
+            missing_run_id,
+            current_node="draft",
+            started_at=NOW,
+            lease_expires_at=lease_expires_at,
+        )
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
-        with pytest.raises(RunAlreadyTerminal):
-            await uow.generation_runs.claim_run_for_execution(
-                terminal_run.id,
-                current_node="draft",
-                started_at=NOW,
-                lease_expires_at=lease_expires_at,
-            )
+    with pytest.raises(RunAlreadyTerminal):
+        await claim_run_in_independent_uow(
+            session_factory,
+            terminal_run.id,
+            current_node="draft",
+            started_at=NOW,
+            lease_expires_at=lease_expires_at,
+        )
 
     assert claimed is not None, f"expected pending run {pending_run.id} to be claimed"
     assert lost is None, f"expected second claim to lose, got {lost!r}"
-    observed_event_names = [event[1] for event in events]
-    assert observed_event_names == [
-        "sql_generation_run_store.claim_run",
-        "sql_generation_run_store.claim_run_lost",
-        "sql_generation_run_store.claim_run_missing",
-        "sql_generation_run_store.claim_run_terminal",
-    ], events
-    assert events[0][0] == "info", events
-    assert events[0][2] == {
-        "run_id": str(pending_run.id),
-        "current_node": "draft",
-        "lease_expires_at": lease_expires_at.isoformat(),
-    }, events
-    assert events[1] == (
+    events_by_name = {
+        message: (level, fields) for level, message, fields in events
+    }
+    assert len(events_by_name) == len(events) == 4, events
+    assert events_by_name["sql_generation_run_store.claim_run"] == (
         "info",
-        "sql_generation_run_store.claim_run_lost",
+        {
+            "run_id": str(pending_run.id),
+            "current_node": "draft",
+            "lease_expires_at": lease_expires_at.isoformat(),
+        },
+    ), events
+    assert events_by_name["sql_generation_run_store.claim_run_lost"] == (
+        "info",
         {"run_id": str(pending_run.id), "status": "running"},
     ), events
-    assert events[2] == (
+    assert events_by_name["sql_generation_run_store.claim_run_missing"] == (
         "warning",
-        "sql_generation_run_store.claim_run_missing",
         {"run_id": str(missing_run_id)},
     ), events
-    assert events[3] == (
+    assert events_by_name["sql_generation_run_store.claim_run_terminal"] == (
         "warning",
-        "sql_generation_run_store.claim_run_terminal",
         {"run_id": str(terminal_run.id), "status": "succeeded"},
     ), events

@@ -5,8 +5,12 @@ import typing as typ
 import pytest
 
 from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from tests.canonical_storage.test_generation_runs import _factory, make_generation_run
+from episodic.canonical.storage import GenerationRunRecord, SqlAlchemyUnitOfWork
+from tests.canonical_storage._generation_run_support import (
+    count_records,
+    make_generation_run,
+    persist_generation_run_prerequisites,
+)
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -45,18 +49,38 @@ async def test_sql_generation_runs_scope_keys_to_principals(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The SQL adapter persists a distinct run for each principal scope."""
-    factory = _factory(session_factory)
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    first_request = make_generation_run()
+    second_request = make_generation_run()
+    replay_request = make_generation_run()
+    await persist_generation_run_prerequisites(
+        session_factory,
+        first_request,
+        second_request,
+        replay_request,
+    )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         first = await uow.generation_runs.create_run(
-            make_generation_run(),
+            first_request,
             idempotency_key="run-key",
             idempotency_principal_id="principal-a",
         )
         second = await uow.generation_runs.create_run(
-            make_generation_run(),
+            second_request,
             idempotency_key="run-key",
             idempotency_principal_id="principal-b",
         )
         await uow.commit()
 
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        replayed = await uow.generation_runs.create_run(
+            replay_request,
+            idempotency_key="run-key",
+            idempotency_principal_id="principal-a",
+        )
+        await uow.commit()
+
     assert first.id != second.id, "principal scopes must not share a run"
+    assert replayed == first, "same-principal replay must return the first run"
+    record_count = await count_records(session_factory, GenerationRunRecord)
+    assert record_count == 2, f"expected two generation runs, got {record_count}"
