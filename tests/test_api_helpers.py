@@ -43,6 +43,8 @@ def _call_builder_with_payload(
     }:
         return builder(uuid.uuid4(), payload)
     return builder(payload)
+
+
 class TestTypedUpdateRequest:
     """Tests for typed update-request composition helper behavior."""
 

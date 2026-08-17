@@ -86,7 +86,7 @@ def test_parse_skylos_findings_uses_unused_symbol_categories() -> None:
 
     findings = parse_skylos_findings(payload, corpus_root=Path("/corpus"))
 
-    assert findings == (
+    expected_findings = (
         Finding(
             path="symbols.py",
             line=2,
@@ -99,7 +99,10 @@ def test_parse_skylos_findings_uses_unused_symbol_categories() -> None:
             lane=Lane.UNUSED_SYMBOL,
             category="unused_imports",
         ),
-    ), "Expected Skylos findings to retain normalized category order."
+    )
+    assert findings == expected_findings, (
+        "Expected Skylos findings to retain normalized category order."
+    )
 
 
 def test_score_findings_deduplicates_locations_across_lanes_and_categories() -> None:

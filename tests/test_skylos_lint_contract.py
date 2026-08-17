@@ -118,27 +118,20 @@ def test_skylos_allow_requires_name_and_reason() -> None:
     """Guard the command that adds a named, non-entry-point exception."""
     makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
 
-    assert (
-        "skylos-allow: ## Document one named Skylos exception, not an entry point"
-        in makefile
-    ), "Expected the documented skylos-allow target."
-    assert "skylos-allow: export SKYLOS_NAME = $(value NAME)" in makefile, (
-        "Expected skylos-allow to export the raw NAME value."
+    required_fragments = (
+        "skylos-allow: ## Document one named Skylos exception, not an entry point",
+        "skylos-allow: export SKYLOS_NAME = $(value NAME)",
+        "skylos-allow: export SKYLOS_REASON = $(value REASON)",
+        'test -n "$${SKYLOS_NAME}"',
+        'test -n "$${SKYLOS_REASON}"',
+        "NAME is required for a named whitelist exception",
+        "REASON is required for a named whitelist exception",
     )
-    assert "skylos-allow: export SKYLOS_REASON = $(value REASON)" in makefile, (
-        "Expected skylos-allow to export the raw REASON value."
+    missing_fragments = tuple(
+        fragment for fragment in required_fragments if fragment not in makefile
     )
-    assert 'test -n "$${SKYLOS_NAME}"' in makefile, (
-        "Expected skylos-allow to validate the quoted NAME environment value."
-    )
-    assert 'test -n "$${SKYLOS_REASON}"' in makefile, (
-        "Expected skylos-allow to validate the quoted REASON environment value."
-    )
-    assert "NAME is required for a named whitelist exception" in makefile, (
-        "Expected skylos-allow to explain a missing NAME."
-    )
-    assert "REASON is required for a named whitelist exception" in makefile, (
-        "Expected skylos-allow to explain a missing REASON."
+    assert not missing_fragments, (
+        f"Expected skylos-allow target requirements; missing {missing_fragments!r}."
     )
     command = '$(SKYLOS) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"'
     assert makefile.count(command) == 1, (

@@ -270,6 +270,8 @@ def _build_update_kwargs[DataT](
         data=data_builder(payload),
         audit=build_audit_metadata(payload),
     )
+
+
 def _optional_json_object_field(
     payload: JsonPayload,
     field_name: str,
