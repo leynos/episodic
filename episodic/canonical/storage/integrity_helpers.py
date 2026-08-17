@@ -26,6 +26,11 @@ def constraint_name(exc: BaseException) -> str | None:
     exception, including each candidate's ``diag.constraint_name``. Returns
     ``None`` when no candidate reports a constraint name.
 
+    Parameters
+    ----------
+    exc : BaseException
+        Exception whose PostgreSQL constraint metadata should be inspected.
+
     Returns
     -------
     str | None
@@ -61,6 +66,13 @@ def is_revision_conflict_integrity_error(
     drivers that do not surface a constraint name. ``entity_id_field`` names the
     parent column (e.g. ``"series_profile_id"``) used to disambiguate generic
     error messages.
+
+    Parameters
+    ----------
+    exc : sqlalchemy.exc.IntegrityError
+        Integrity error to classify.
+    entity_id_field : str
+        Parent-column name used to disambiguate generic driver messages.
 
     Returns
     -------

@@ -95,7 +95,7 @@
     names the verified runtime caller. Match methods as `type = "method"`,
     rather than `"function"`. Use the named allow-list target only when an
     entry-point rule cannot describe the boundary: run
-    `make skylos-allow NAME=registered_handler REASON="Loaded by plugin registry"`
+    `make skylos-allow NAME=handler REASON="Loaded by plugin registry"`
     with the verified caller in the reason.
   - **Formatting:** Adheres to formatting standards (`make check-fmt`; use
     `make fmt` to apply fixes).

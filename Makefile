@@ -35,7 +35,9 @@ DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
 	--ignore-paths='^tests/steps/test_.*_steps[.]py$$'
 AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
-SKYLOS = $(UV_ENV) $(UV) run skylos --config-file pyproject.toml
+SKYLOS_VERSION = 4.33.2
+SKYLOS = $(UV_ENV) $(UV) tool run --from 'skylos==$(SKYLOS_VERSION)' skylos \
+	--config-file pyproject.toml
 SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
@@ -109,14 +111,8 @@ lint: check-architecture ## Run linters
 skylos-allow: export SKYLOS_NAME = $(value NAME)
 skylos-allow: export SKYLOS_REASON = $(value REASON)
 skylos-allow: ## Document one named Skylos exception, not an entry point
-	@test -n "$${SKYLOS_NAME}" || { \
-	  printf "Error: NAME is required for a named whitelist exception\\n" >&2; \
-	  exit 2; \
-	}
-	@test -n "$${SKYLOS_REASON}" || { \
-	  printf "Error: REASON is required for a named whitelist exception\\n" >&2; \
-	  exit 2; \
-	}
+	@test -n "$${SKYLOS_NAME}" || { printf "Error: NAME is required for a named whitelist exception\\n" >&2; exit 2; }
+	@test -n "$${SKYLOS_REASON}" || { printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2; }
 	$(SKYLOS) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"
 
 check-architecture: build ## Check hexagonal architecture import boundaries

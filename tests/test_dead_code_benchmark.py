@@ -1,4 +1,10 @@
-"""Unit tests for dead-code benchmark result normalization."""
+"""Test the dead-code benchmark parser and scorer contracts.
+
+Parser contract tests verify report-shape validation, path normalization, and
+finding order for the pyscn and Skylos result schemas. Scorer contract tests
+verify lane attribution, location deduplication, and expectation classification
+so benchmark results remain comparable across detector runs.
+"""
 
 import re
 from pathlib import Path

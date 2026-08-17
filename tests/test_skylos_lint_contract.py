@@ -7,6 +7,8 @@ import tomllib
 import typing as typ
 from pathlib import Path
 
+import pytest
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -17,14 +19,22 @@ def _pyproject() -> dict[str, object]:
     )
 
 
-def test_skylos_is_a_development_dependency() -> None:
-    """Install Skylos with the tools needed by contributors and CI."""
+def test_skylos_is_a_pinned_external_tool() -> None:
+    """Keep Skylos out of the project environment and pin its tool release."""
     config = _pyproject()
     dependency_groups = typ.cast("dict[str, list[str]]", config["dependency-groups"])
 
     dependencies = dependency_groups["dev"]
-    assert any(dependency.startswith("skylos") for dependency in dependencies), (
-        "Expected Skylos in the development dependency group."
+    assert not any(dependency.startswith("skylos") for dependency in dependencies), (
+        "Expected Skylos to be separately provisioned from the development "
+        "dependency group."
+    )
+    makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "SKYLOS_VERSION = 4.33.2" in makefile, (
+        "Expected the separately provisioned Skylos tool version to be exact."
+    )
+    assert "--from 'skylos==$(SKYLOS_VERSION)' skylos" in makefile, (
+        "Expected Skylos to run from its separately provisioned tool environment."
     )
 
 
@@ -91,9 +101,9 @@ def test_make_lint_runs_local_blocking_dead_code_scan() -> None:
     assert expected_command in makefile, (
         "Expected make lint to run the blocking production-only Skylos command."
     )
-    assert (
-        "SKYLOS = $(UV_ENV) $(UV) run skylos --config-file pyproject.toml" in makefile
-    ), "Expected the local Skylos command to load pyproject.toml."
+    assert "--config-file pyproject.toml" in makefile, (
+        "Expected the pinned local Skylos command to load pyproject.toml."
+    )
     production_targets = next(
         line
         for line in makefile.splitlines()
@@ -178,6 +188,55 @@ def test_skylos_allow_preserves_metacharacters_as_arguments(tmp_path: Path) -> N
         reason,
     ], "Expected NAME and REASON to remain single whitelist arguments."
     assert not marker.exists(), "Expected no injected shell command to execute."
+
+
+@pytest.mark.parametrize(
+    ("provided_assignment", "expected_error"),
+    [
+        (
+            "REASON=loaded by the verified plugin registry",
+            "Error: NAME is required for a named whitelist exception",
+        ),
+        (
+            "NAME=registered_handler",
+            "Error: REASON is required for a named whitelist exception",
+        ),
+    ],
+)
+def test_skylos_allow_rejects_missing_required_value(
+    tmp_path: Path,
+    provided_assignment: str,
+    expected_error: str,
+) -> None:
+    """Reject a missing allow-list value before invoking Skylos."""
+    recorder = tmp_path / "skylos-recorder"
+    capture = tmp_path / "arguments.txt"
+    recorder.write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$SKYLOS_CAPTURE"\n',
+        encoding="utf-8",
+    )
+    recorder.chmod(0o755)
+    make_executable = shutil.which("make")
+    assert make_executable is not None, "Expected make to be available for the test."
+
+    result = subprocess.run(  # noqa: S603 - tests Makefile validation safely
+        [
+            make_executable,
+            "--no-print-directory",
+            "skylos-allow",
+            provided_assignment,
+            f"SKYLOS={recorder}",
+        ],
+        cwd=REPOSITORY_ROOT,
+        env={**os.environ, "SKYLOS_CAPTURE": str(capture)},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2, "Expected missing values to return status 2."
+    assert expected_error in result.stderr, "Expected the missing-value diagnostic."
+    assert not capture.exists(), "Expected Skylos not to run after validation fails."
 
 
 def test_skylos_cache_is_ignored() -> None:

@@ -199,10 +199,11 @@ questions, and 139 false positives after repository-aware review. Confidence
 filtering reduced subclass-hook noise but did not solve implicit dataclass,
 framework, export, and interface semantics.
 
-All Python, formatting, lint, typing, test, Markdown, Mermaid, and Makefile
-validation passed. The default merman Mermaid backend timed out on an unchanged
-large TUI design diagram; the supported `mmdc` backend validated the full
-documentation set successfully. The repository scan identified
+The `make check-fmt`, `make test`, `make typecheck`, `make lint`,
+`make markdownlint`, `make nixie`, and `mbake validate Makefile` checks passed.
+The default merman Mermaid backend timed out on an unchanged large TUI design
+diagram; the supported `mmdc` backend validated the full documentation set
+successfully. The repository scan identified
 `_load_reference_documents_for_target` as having no production caller, and this
 PR removed the helper after confirmation. The benchmark itself did not
 automatically delete production code.
@@ -234,8 +235,8 @@ bounded study; reported findings will instead be manually classified.
 
 ### Stage A: establish tool contracts
 
-Resolve each latest released version through `uvx`, capture `--version` and
-relevant help, and run a one-file smoke test. Compare those interfaces with the
+Resolve each recorded release through `uvx`, capture `--version` and relevant
+help, and run a one-file smoke test. Compare those interfaces with the
 Firecrawl research and update this plan when observed behaviour contradicts the
 docs. This stage is a go only when both tools can scan a local Python file
 without external services.
@@ -280,10 +281,10 @@ Run all commands from the repository root.
 1. Resolve tool interfaces without changing project dependencies:
 
    ```bash
-   uvx --from pyscn pyscn --version
-   uvx --from pyscn pyscn analyze --help
-   uvx --from skylos skylos --version
-   uvx --from skylos skylos --help
+   uvx pyscn@1.28.0 --version
+   uvx pyscn@1.28.0 analyze --help
+   uvx skylos@4.30.0 --version
+   uvx skylos@4.30.0 --help
    ```
 
    Record exact resolved versions. A successful transcript names both versions
@@ -292,9 +293,9 @@ Run all commands from the repository root.
    The successful bounded smoke invocations are:
 
    ```bash
-   uvx pyscn@latest analyze --select deadcode --min-severity info --json \
+   uvx pyscn@1.28.0 analyze --select deadcode --min-severity info --json \
      /tmp/dead-code-smoke
-   uvx skylos /tmp/dead-code-smoke --no-upload --no-provenance \
+   uvx skylos@4.30.0 /tmp/dead-code-smoke --no-upload --no-provenance \
      --confidence 0 --no-grep-verify --format json
    ```
 
@@ -352,7 +353,7 @@ Acceptance requires all of the following observable outcomes:
 
 Performance observations are descriptive wall-clock measurements from this
 host, not a microbenchmark claim. Security acceptance requires that neither
-tool uploads source or invokes optional large language model services.
+tool uploads source nor invokes optional large language model services.
 
 ## Idempotence and recovery
 

@@ -349,7 +349,7 @@
     "episodic-dead-code-corpus-20260727.flow.after_return": {
       "name": "episodic-dead-code-corpus-20260727.flow.after_return",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
-      "line": 5,
+      "line": 7,
       "type": "function",
       "loc": 3,
       "complexity": 1,
@@ -389,7 +389,7 @@
     "episodic-dead-code-corpus-20260727.flow.after_raise": {
       "name": "episodic-dead-code-corpus-20260727.flow.after_raise",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
-      "line": 10,
+      "line": 12,
       "type": "function",
       "loc": 3,
       "complexity": 1,
@@ -429,7 +429,7 @@
     "episodic-dead-code-corpus-20260727.flow.after_continue": {
       "name": "episodic-dead-code-corpus-20260727.flow.after_continue",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
-      "line": 15,
+      "line": 17,
       "type": "function",
       "loc": 5,
       "complexity": 2,
@@ -473,7 +473,7 @@
     "episodic-dead-code-corpus-20260727.flow.after_break": {
       "name": "episodic-dead-code-corpus-20260727.flow.after_break",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
-      "line": 22,
+      "line": 24,
       "type": "function",
       "loc": 5,
       "complexity": 2,
@@ -517,7 +517,7 @@
     "episodic-dead-code-corpus-20260727.flow.constant_false_branch": {
       "name": "episodic-dead-code-corpus-20260727.flow.constant_false_branch",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
-      "line": 29,
+      "line": 31,
       "type": "function",
       "loc": 4,
       "complexity": 2,
@@ -557,7 +557,7 @@
     "episodic-dead-code-corpus-20260727.flow.conditional_return": {
       "name": "episodic-dead-code-corpus-20260727.flow.conditional_return",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
-      "line": 35,
+      "line": 37,
       "type": "function",
       "loc": 5,
       "complexity": 2,
@@ -1345,7 +1345,7 @@
       "type": "variable",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
       "basename": "flow.py",
-      "line": 7,
+      "line": 9,
       "confidence": 90,
       "references": 0,
       "dead_code_classification": "likely_dead",
@@ -1418,7 +1418,7 @@
       "type": "variable",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
       "basename": "flow.py",
-      "line": 12,
+      "line": 14,
       "confidence": 90,
       "references": 0,
       "dead_code_classification": "likely_dead",
@@ -1491,7 +1491,7 @@
       "type": "variable",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
       "basename": "flow.py",
-      "line": 18,
+      "line": 20,
       "confidence": 90,
       "references": 0,
       "dead_code_classification": "likely_dead",
@@ -1564,7 +1564,7 @@
       "type": "variable",
       "file": "/tmp/episodic-dead-code-corpus-20260727/flow.py",
       "basename": "flow.py",
-      "line": 25,
+      "line": 27,
       "confidence": 90,
       "references": 0,
       "dead_code_classification": "likely_dead",
@@ -3141,7 +3141,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_break",
         "kind": "function",
-        "line": 22,
+        "line": 24,
         "classification": "alive",
         "decision": {
           "classification": "alive",
@@ -3170,7 +3170,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_break.unreachable_after_break",
         "kind": "variable",
-        "line": 25,
+        "line": 27,
         "classification": "likely_dead",
         "decision": {
           "classification": "likely_dead",
@@ -3269,7 +3269,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_continue",
         "kind": "function",
-        "line": 15,
+        "line": 17,
         "classification": "alive",
         "decision": {
           "classification": "alive",
@@ -3298,7 +3298,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_continue.unreachable_after_continue",
         "kind": "variable",
-        "line": 18,
+        "line": 20,
         "classification": "likely_dead",
         "decision": {
           "classification": "likely_dead",
@@ -3397,7 +3397,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_raise",
         "kind": "function",
-        "line": 10,
+        "line": 12,
         "classification": "alive",
         "decision": {
           "classification": "alive",
@@ -3426,7 +3426,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_raise.unreachable_after_raise",
         "kind": "variable",
-        "line": 12,
+        "line": 14,
         "classification": "likely_dead",
         "decision": {
           "classification": "likely_dead",
@@ -3487,7 +3487,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_return",
         "kind": "function",
-        "line": 5,
+        "line": 7,
         "classification": "alive",
         "decision": {
           "classification": "alive",
@@ -3516,7 +3516,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.after_return.unreachable_after_return",
         "kind": "variable",
-        "line": 7,
+        "line": 9,
         "classification": "likely_dead",
         "decision": {
           "classification": "likely_dead",
@@ -3577,7 +3577,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.conditional_return",
         "kind": "function",
-        "line": 35,
+        "line": 37,
         "classification": "alive",
         "decision": {
           "classification": "alive",
@@ -3606,7 +3606,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.conditional_return.reachable_after_conditional",
         "kind": "variable",
-        "line": 38,
+        "line": 40,
         "classification": "alive",
         "decision": {
           "classification": "alive",
@@ -3635,7 +3635,7 @@
         "file": "flow.py",
         "qualified_name": "episodic-dead-code-corpus-20260727.flow.constant_false_branch",
         "kind": "function",
-        "line": 29,
+        "line": 31,
         "classification": "alive",
         "decision": {
           "classification": "alive",

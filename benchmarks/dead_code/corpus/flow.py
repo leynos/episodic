@@ -1,6 +1,8 @@
 # Benchmark source locations are intentionally stable.
 """Reachable and unreachable statements for control-flow comparison."""
 
+EXPECTED_BENCHMARK_EXCEPTION_MESSAGE = "expected benchmark exception"
+
 
 def after_return() -> int:  # noqa: D103, RET503
     return 41
@@ -8,7 +10,7 @@ def after_return() -> int:  # noqa: D103, RET503
 
 
 def after_raise() -> None:  # noqa: D103
-    raise ValueError("expected benchmark exception")  # noqa: TRY003
+    raise ValueError(EXPECTED_BENCHMARK_EXCEPTION_MESSAGE)
     unreachable_after_raise = 47  # noqa: F841
 
 

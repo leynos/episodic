@@ -11,8 +11,8 @@
               {
                 "location": {
                   "file_path": "flow.py",
-                  "start_line": 7,
-                  "end_line": 7,
+                  "start_line": 9,
+                  "end_line": 9,
                   "start_column": 0,
                   "end_column": 0
                 },
@@ -38,8 +38,8 @@
               {
                 "location": {
                   "file_path": "flow.py",
-                  "start_line": 12,
-                  "end_line": 12,
+                  "start_line": 14,
+                  "end_line": 14,
                   "start_column": 0,
                   "end_column": 0
                 },
@@ -65,8 +65,8 @@
               {
                 "location": {
                   "file_path": "flow.py",
-                  "start_line": 18,
-                  "end_line": 18,
+                  "start_line": 20,
+                  "end_line": 20,
                   "start_column": 0,
                   "end_column": 0
                 },
@@ -92,8 +92,8 @@
               {
                 "location": {
                   "file_path": "flow.py",
-                  "start_line": 25,
-                  "end_line": 25,
+                  "start_line": 27,
+                  "end_line": 27,
                   "start_column": 0,
                   "end_column": 0
                 },
@@ -209,13 +209,13 @@
       "title": "Remove dead code after unreachable_after_return in 'after_return'",
       "description": "Code appears after a return statement and will never be executed",
       "steps": [
-        "Delete lines 7-7 in flow.py",
+        "Delete lines 9-9 in flow.py",
         "Verify no side effects are lost (logging, cleanup, assignments)",
         "Run tests to confirm no regressions"
       ],
       "file_path": "flow.py",
       "function": "after_return",
-      "start_line": 7
+      "start_line": 9
     },
     {
       "category": "dead_code",
@@ -224,13 +224,13 @@
       "title": "Remove dead code after unreachable_after_raise in 'after_raise'",
       "description": "Code appears after a raise statement and will never be executed",
       "steps": [
-        "Delete lines 12-12 in flow.py",
+        "Delete lines 14-14 in flow.py",
         "Verify no side effects are lost (logging, cleanup, assignments)",
         "Run tests to confirm no regressions"
       ],
       "file_path": "flow.py",
       "function": "after_raise",
-      "start_line": 12
+      "start_line": 14
     },
     {
       "category": "dead_code",
@@ -239,13 +239,13 @@
       "title": "Remove dead code after unreachable_after_continue in 'after_continue'",
       "description": "Code appears after a continue statement and will never be executed",
       "steps": [
-        "Delete lines 18-18 in flow.py",
+        "Delete lines 20-20 in flow.py",
         "Verify no side effects are lost (logging, cleanup, assignments)",
         "Run tests to confirm no regressions"
       ],
       "file_path": "flow.py",
       "function": "after_continue",
-      "start_line": 18
+      "start_line": 20
     },
     {
       "category": "dead_code",
@@ -254,13 +254,13 @@
       "title": "Remove dead code after unreachable_after_break in 'after_break'",
       "description": "Code appears after a break statement and will never be executed",
       "steps": [
-        "Delete lines 25-25 in flow.py",
+        "Delete lines 27-27 in flow.py",
         "Verify no side effects are lost (logging, cleanup, assignments)",
         "Run tests to confirm no regressions"
       ],
       "file_path": "flow.py",
       "function": "after_break",
-      "start_line": 25
+      "start_line": 27
     }
   ],
   "summary": {

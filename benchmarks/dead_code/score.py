@@ -1,4 +1,30 @@
-"""Normalize and score dead-code detector findings against labelled source."""
+"""Normalize and score dead-code detector findings against labelled source.
+
+Overview
+--------
+The public parsers normalize the distinct JSON reports emitted by pyscn and
+Skylos into the benchmark's tool-neutral findings.
+
+Scoring
+-------
+The scorer compares normalized findings with labelled expectations, preserving
+lane-specific confusion counts and reporting unique unmatched findings.
+
+Utility
+-------
+Validation and path-normalization helpers keep parser errors consistent while
+ensuring that findings remain relative to the corpus root.
+
+Benchmark consumers
+-------------------
+The benchmark tests, score-generation script, and retained result reports use
+these public parsers and scorer to compare detector runs.
+
+Benchmark contract
+------------------
+Public data shapes, finding order, source locations, validation behaviour, and
+scoring semantics are stable inputs to the benchmark evidence.
+"""
 
 import dataclasses as dc
 import enum

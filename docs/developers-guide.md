@@ -132,10 +132,11 @@ separately provisioned `ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for
 both commands. Maintainers must update both package pins together and validate
 the complete `make lint` pipeline.
 
-Skylos runs locally with concise, non-interactive output. The lint command
-disables uploads and provenance collection, selects only dead-code analysis,
-and fails when an unexplained finding remains. It does not invoke cloud or
-Large Language Model (LLM) analysis and never modifies source files.
+Skylos is separately provisioned by the Makefile at exact release `4.33.2` and
+runs locally with concise, non-interactive output. The lint command disables
+uploads and provenance collection, selects only dead-code analysis, and fails
+when an unexplained finding remains. It does not invoke cloud or Large Language
+Model (LLM) analysis and never modifies source files.
 
 Treat every new finding as dead code until its runtime caller is verified.
 Remove genuine dead code. For framework callbacks, protocol implementations, or

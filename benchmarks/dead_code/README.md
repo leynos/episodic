@@ -25,7 +25,7 @@ schema differences inside an existing parser.
 repository-scan adjudication from 2026-07-27. The large repository reports are
 compressed with deterministic gzip metadata; their SHA-256 digests are in
 `production-adjudication.json`. Absolute checkout prefixes in the Skylos report
-were replaced by `./` before compression so the retained evidence does not
+were replaced by `./` before compression, so the retained evidence does not
 depend on one workstation path. Finding content was otherwise unchanged.
 
 Run the corpus commands from `benchmarks/dead_code/corpus/`:
