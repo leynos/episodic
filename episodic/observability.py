@@ -11,9 +11,10 @@ services across the codebase wire against:
   elapsed operation time. Feature modules (for example
   :mod:`episodic.qa.chrono`) reuse this port directly rather than declaring
   parallel hierarchies.
-- :class:`TracerPort` provides synchronous span contexts. Its structured-log
-  adapter emits span names but deliberately never logs attributes, because
-  callers may attach sensitive operation metadata.
+- :class:`TracerPort` provides synchronous span contexts. The
+  :class:`StructuredLogTracer` adapter logs span names and only the safe
+  allow-list of ``operation``, ``outcome``, and ``failure_category``; it drops
+  all other attributes because callers may attach sensitive operation metadata.
 
 :class:`episodic.metrics_ports.BoundedMetricsPort` is a deliberately narrower
 structural subtype with ``dict[str, str]`` labels, retained because feature-
