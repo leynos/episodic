@@ -10,8 +10,8 @@ Current implementation status (core slice completed 2026-07-22): Milestones 0-8
 and the post-implementation correctness review are complete. The REST
 resources, TEI retrieval route, upload-backed source hydration, presenter
 resolution, idempotent episode materialization, and serialized terminal updates
-are implemented. The current hardening follow-up remains in progress, so
-roadmap item 4.3.2 remains in progress pending that follow-up.
+are implemented. The current hardening follow-up remains in progress, but
+roadmap item 4.3.2 is complete for the delivered core slice.
 
 ## Purpose / big picture
 
@@ -451,7 +451,7 @@ when any of the following is breached.
   work after each `POST` response because the session-scoped PGlite test server
   supports one connection at a time. This keeps the REST response assertions
   while launcher/API tests cover non-blocking scheduling; the hardening
-  follow-up and roadmap item 4.3.2 remain in progress.
+  follow-up remains in progress while roadmap item 4.3.2 is complete.
 
 - [x] (recorded, 2026-08-17) Current review-remediation decisions: launcher
   composition supplies configuration explicitly; episode materialization
@@ -1872,9 +1872,10 @@ admission is bounded before task allocation, overload is persisted as
 `launcher.overloaded`, launcher/provider/database shutdown is serialized, and
 tracing plus bounded production metrics are injectable. This entry records
 current implementation progress and the associated operational decision; it
-does not mark the execution plan or roadmap task complete. Documentation
-synchronization and the explicitly deferred automatic recovery and QA-gated
-successor remain separate follow-up work.
+does not mark the hardening follow-up complete. Roadmap item 4.3.2 is complete
+for the delivered core slice. Documentation synchronization and the explicitly
+deferred automatic recovery and QA-gated successor remain separate follow-up
+work.
 
 Implementation progress across `fde42bc`, `eaea7c9`, and `b4dc700` also covers
 the unified cost-recorder protocol and a shorter materialization lock scope:

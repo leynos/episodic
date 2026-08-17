@@ -88,6 +88,10 @@ adapter that can use pre-signed upload URLs.
 
 #### Generate and download a no-QA draft
 
+Before using these endpoints, apply the latest Alembic migrations to the
+service database with `alembic upgrade head`. The application does not apply
+schema migrations during startup.
+
 Create a draft run for a ready ingestion job with
 `POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs`. Supply an
 `Idempotency-Key` and a JSON body containing `quality_mode` set to
