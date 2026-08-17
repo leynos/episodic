@@ -34,15 +34,14 @@ if typ.TYPE_CHECKING:
 
 @pytest.mark.asyncio
 async def test_materialisation_locks_job_before_source_paging(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The materializer locks the job row before it pages attached sources."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    _, job = await _persist_ready_job(factory)
+    _, job = await _persist_ready_job(session_factory)
     job_locked = False
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         original_list = uow.ingestion_job_sources.list_for_job_paged
         original_get_for_update = uow.ingestion_jobs.get_for_update
 
@@ -87,16 +86,15 @@ async def test_materialisation_locks_job_before_source_paging(
 
 @pytest.mark.asyncio
 async def test_materialisation_converges_under_two_session_contention(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Concurrent materialisation keeps one durable episode and source projection."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    _, job = await _persist_ready_job(factory)
+    _, job = await _persist_ready_job(session_factory)
     barrier = asyncio.Barrier(2)
 
     async def materialise_in_independent_unit_of_work() -> uuid.UUID:
         """Start one materialisation attempt concurrently with its peer."""
-        async with SqlAlchemyUnitOfWork(factory) as uow:
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
             await barrier.wait()
             episode = await materialise_episode_from_ingestion(
                 uow,
@@ -114,7 +112,7 @@ async def test_materialisation_converges_under_two_session_contention(
         materialise_in_independent_unit_of_work(),
     )
 
-    async with factory() as session:
+    async with session_factory() as session:
         episode_count = await session.scalar(sa.select(sa.func.count(EpisodeRecord.id)))
         header_count = await session.scalar(
             sa.select(sa.func.count(TeiHeaderRecord.id))

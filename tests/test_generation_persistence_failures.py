@@ -15,6 +15,7 @@ from episodic.canonical.generation_persistence import (
     GenerationSourceUploadNotFoundError,
     IngestionJobNotReadyError,
     MissingAttachedSourcesError,
+    SourceDocumentProjectionError,
     _upload_for_source,
     materialise_episode_from_ingestion,
     persist_draft_script,
@@ -54,6 +55,20 @@ class _MissingUploadUnitOfWork:
     """Provide the only repository needed by ``_upload_for_source``."""
 
     uploads = _MissingUploadRepository()
+
+
+def test_source_document_projection_error_retains_missing_document_ids() -> None:
+    """Projection failures should retain immutable missing-row diagnostics."""
+    first_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    second_id = uuid.UUID("00000000-0000-0000-0000-000000000002")
+
+    error = SourceDocumentProjectionError({second_id, first_id})
+
+    assert error.missing_document_ids == (first_id, second_id), (
+        f"missing IDs: {error.missing_document_ids!r}"
+    )
+    assert str(first_id) in str(error), f"projection error: {error!s}"
+    assert str(second_id) in str(error), f"projection error: {error!s}"
 
 
 async def _materialise(
@@ -179,14 +194,13 @@ async def test_persist_draft_script_rejects_mismatched_content_hash(
 
 @pytest.mark.asyncio
 async def test_materialise_reraises_unrelated_projection_integrity_error(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Only a source-document duplicate may be recovered as a retry race."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    _, job = await _persist_ready_job(factory)
+    _, job = await _persist_ready_job(session_factory)
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         original_commit = uow.commit
         commit_count = 0
 
@@ -216,12 +230,11 @@ async def test_materialise_reraises_unrelated_projection_integrity_error(
 
 @pytest.mark.asyncio
 async def test_materialise_verifies_duplicate_projection_rows(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A duplicate race succeeds only after all deterministic rows are found."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-    _, job = await _persist_ready_job(factory)
+    _, job = await _persist_ready_job(session_factory)
     request = EpisodeMaterialisationRequest(
         ingestion_job_id=job.id,
         title="Bridgewater Futures",
@@ -229,10 +242,10 @@ async def test_materialise_verifies_duplicate_projection_rows(
         uuid_factory=SequentialUuids(),
     )
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         first = await materialise_episode_from_ingestion(uow, request)
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         original_list = uow.source_documents.list_for_job
         list_count = 0
 

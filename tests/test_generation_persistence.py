@@ -221,13 +221,12 @@ async def test_materialise_episode_from_ingestion_creates_placeholder_episode(
 
 @pytest.mark.asyncio
 async def test_materialise_episode_from_ingestion_rejects_unknown_job(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Unknown jobs should retain the source-intake not-found contract."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
     unknown_job_id = uuid.uuid7()
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(IngestionJobNotFoundError) as exc_info:
             await materialise_episode_from_ingestion(
                 uow,

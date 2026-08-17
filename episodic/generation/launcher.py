@@ -184,7 +184,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         await self.drain()
         for task, run_id in cancelled_tasks:
             if task.cancelled() and run_id not in self._cancelled_run_ids:
-                await self._record_cancellation(run_id)
+                await asyncio.shield(self._record_cancellation(run_id))
                 self._cancelled_run_ids.add(run_id)
 
     def _discard_task(self, task: asyncio.Task[None]) -> None:

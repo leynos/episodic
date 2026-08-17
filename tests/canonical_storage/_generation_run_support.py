@@ -24,6 +24,8 @@ from episodic.canonical.storage import SqlAlchemyUnitOfWork
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.canonical.storage.models_base import Base
+
 
 NOW = dt.datetime(2026, 6, 24, 8, 30, tzinfo=dt.UTC)
 
@@ -106,9 +108,8 @@ async def persist_generation_run_prerequisites(
                 created_at=NOW,
                 updated_at=NOW,
             )
-        jobs.setdefault(
-            run.source_bundle_id,
-            IngestionJob(
+        if run.source_bundle_id not in jobs:
+            jobs[run.source_bundle_id] = IngestionJob(
                 id=run.source_bundle_id,
                 series_profile_id=series.id,
                 target_episode_id=run.episode_id,
@@ -119,8 +120,7 @@ async def persist_generation_run_prerequisites(
                 error_message=None,
                 created_at=NOW,
                 updated_at=NOW,
-            ),
-        )
+            )
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.series_profiles.add(series)
@@ -141,7 +141,7 @@ async def persist_generation_run_prerequisites(
 
 async def count_records(
     session_factory: async_sessionmaker[AsyncSession],
-    record_type: type[object],
+    record_type: type[Base],
 ) -> int:
     """Count persisted records of one SQLAlchemy model type."""
     async with session_factory() as session:

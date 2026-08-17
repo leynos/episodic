@@ -73,6 +73,17 @@ class InvalidDraftTeiError(DraftScriptPersistenceError, ValueError):
 class SourceDocumentProjectionError(DraftScriptPersistenceError):
     """Raised when a duplicate projection does not contain every source row."""
 
+    def __init__(self, missing_document_ids: cabc.Collection[uuid.UUID]) -> None:
+        self.missing_document_ids = tuple(sorted(missing_document_ids, key=str))
+        missing_ids = ", ".join(
+            str(document_id) for document_id in self.missing_document_ids
+        )
+        message = (
+            "Source document projection did not complete after a duplicate race: "
+            f"missing {missing_ids}."
+        )
+        super().__init__(message)
+
 
 @dc.dataclass(frozen=True, slots=True)
 class EpisodeMaterialisationRequest:

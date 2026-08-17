@@ -92,6 +92,22 @@ class BlockingDraftGenerator:
         raise AssertionError
 
 
+class ReleasableDraftGenerator:
+    """Draft generator fake that completes when the test releases it."""
+
+    def __init__(self, result: DraftScriptResult) -> None:
+        self.result = result
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def generate(self, request: DraftScriptRequest) -> DraftScriptResult:
+        """Wait for the test and then return the configured draft."""
+        _ = request
+        self.started.set()
+        await self.release.wait()
+        return self.result
+
+
 @dc.dataclass(slots=True)
 class RecordingCostRecorder:
     """Cost recorder fake that captures provider calls and roll-ups."""

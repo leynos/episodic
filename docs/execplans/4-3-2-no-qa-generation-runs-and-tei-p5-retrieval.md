@@ -463,6 +463,11 @@ when any of the following is breached.
   atomically; observability logs only safe, allow-listed attributes; and the
   series-profile `Idempotency-Key` review item is stale because that endpoint
   has no current idempotency contract.
+- [x] (recorded, 2026-08-17) Current CodeRabbit follow-up decisions: retain
+  diagnostic projection IDs, add coverage for cancellation-write shielding and
+  admission capacity release, clean up test-only types, and reject a CodeScene
+  suppression because the gates pass and the `list_runs` and `list_events`
+  contracts remain distinct.
 
 ## Surprises & discoveries
 

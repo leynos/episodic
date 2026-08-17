@@ -260,8 +260,7 @@ async def _require_projected_source_documents(
     expected_ids = {uuid.uuid5(episode_id, str(source.id)) for source in sources}
     missing_ids = expected_ids - projected_ids
     if missing_ids:
-        msg = "Source document projection did not complete after a duplicate race."
-        raise SourceDocumentProjectionError(msg)
+        raise SourceDocumentProjectionError(missing_ids)
 
 
 def _is_source_document_duplicate(error: IntegrityError) -> bool:
