@@ -9,7 +9,7 @@ Status: COMPLETE for the core slice; hardening follow-up IN PROGRESS
 Current implementation status (core slice completed 2026-07-22): Milestones 0-8
 and the post-implementation correctness review are complete. The REST
 resources, TEI retrieval route, upload-backed source hydration, presenter
-resolution, idempotent episode materialisation, and serialized terminal updates
+resolution, idempotent episode materialization, and serialized terminal updates
 are implemented. The current hardening follow-up remains in progress, so
 roadmap item 4.3.2 remains in progress pending that follow-up.
 

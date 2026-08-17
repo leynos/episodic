@@ -28,6 +28,8 @@ ignore = [
     # The documentation style guide cites this API field as its own example of
     # keeping United States spelling inside code.
     "`color`",
+    # Public service name whose British spelling is part of the Python API.
+    "\\bmaterialise_episode_from_ingestion\\b",
 ]
 
 [files]
