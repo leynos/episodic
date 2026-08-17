@@ -280,6 +280,34 @@ async def test_launcher_uses_detached_unit_of_work(
 
 
 @pytest.mark.asyncio
+async def test_launcher_immediate_shutdown_marks_pending_task_failed(
+    session_factory: object,
+) -> None:
+    """Shutdown should persist cancellation before a task first executes."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    run_id, _ = await prepare_pending_run(factory)
+    run_launcher = launcher(factory, RecordingDraftGenerator(draft_result(valid_tei())))
+
+    await run_launcher.launch(run_id)
+    await run_launcher.shutdown()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        run = await uow.generation_runs.get_run(run_id)
+        events = await uow.generation_runs.list_events(run_id)
+
+    assert run is not None, f"run {run_id} was not persisted; events={events!r}"
+    assert run.status is GenerationRunStatus.FAILED, (
+        f"run {run_id} status={run.status}; events={events!r}"
+    )
+    assert run.error_category == "launcher.shutdown", (
+        f"run {run_id} error category={run.error_category!r}; events={events!r}"
+    )
+    assert [event.kind for event in events].count("run.failed") == 1, (
+        f"run {run_id} events={events!r}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_launcher_shutdown_marks_running_task_failed(
     session_factory: object,
 ) -> None:

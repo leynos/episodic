@@ -170,10 +170,15 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     async def shutdown(self) -> None:
         """Cancel and drain all scheduled generation tasks."""
         self._is_shutting_down = True
+        cancelled_run_ids = tuple(
+            self._task_run_ids[task] for task in self._tasks if not task.done()
+        )
         for task in tuple(self._tasks):
             if not task.done():
                 task.cancel()
         await self.drain()
+        for run_id in cancelled_run_ids:
+            await self._record_cancellation(run_id)
 
     def _discard_task(self, task: asyncio.Task[None]) -> None:
         """Remove finished tasks from the strong-reference registry."""
