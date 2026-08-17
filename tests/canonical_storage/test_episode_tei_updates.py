@@ -156,7 +156,7 @@ async def _persist_episode_parents(
 
 @pytest.mark.asyncio
 async def test_episode_update_tei_records_revision_and_generation_metadata(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
     episode_fixture: tuple[
         SeriesProfile,
         TeiHeader,
@@ -170,10 +170,8 @@ async def test_episode_update_tei_records_revision_and_generation_metadata(
     run = _generation_run(episode)
     updated_xml = "<TEI><text><body><p>Generated script.</p></body></text></TEI>"
     updated_at = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-
-    await _persist_episode_parents(factory, series, header)
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    await _persist_episode_parents(session_factory, series, header)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.episodes.add(episode)
         await uow.generation_runs.create_run(run)
         updated = await uow.episodes.update(
@@ -208,7 +206,7 @@ async def test_episode_update_tei_records_revision_and_generation_metadata(
         f"expected update time {updated_at!r}, got {updated.updated_at!r}"
     )
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         fetched = await uow.episodes.get(episode.id)
 
     assert fetched is not None, f"expected episode {episode.id}, got {fetched!r}"
@@ -232,7 +230,7 @@ async def test_episode_update_tei_records_revision_and_generation_metadata(
 
 @pytest.mark.asyncio
 async def test_episode_update_tei_keeps_compressed_storage_in_sync(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
     episode_fixture: tuple[
         SeriesProfile,
         TeiHeader,
@@ -245,10 +243,8 @@ async def test_episode_update_tei_keeps_compressed_storage_in_sync(
     series, header, episode, _, _ = episode_fixture
     run = _generation_run(episode)
     updated_xml = "<TEI>" + ("generated episode " * 1200) + "</TEI>"
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-
-    await _persist_episode_parents(factory, series, header)
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    await _persist_episode_parents(session_factory, series, header)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.episodes.add(episode)
         await uow.generation_runs.create_run(run)
         await uow.episodes.update(
@@ -262,7 +258,7 @@ async def test_episode_update_tei_keeps_compressed_storage_in_sync(
         )
         await uow.commit()
 
-    async with factory() as session:
+    async with session_factory() as session:
         result = await session.execute(
             sa.select(EpisodeRecord).where(EpisodeRecord.id == episode.id)
         )
@@ -288,7 +284,7 @@ async def test_episode_update_tei_keeps_compressed_storage_in_sync(
         f"expected compressed record run {run.id}, got {record.last_generation_run_id}"
     )
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         fetched = await uow.episodes.get(episode.id)
 
     assert fetched is not None, f"expected episode {episode.id}, got {fetched!r}"
@@ -300,7 +296,7 @@ async def test_episode_update_tei_keeps_compressed_storage_in_sync(
 
 @pytest.mark.asyncio
 async def test_episode_update_tei_rejects_stale_revision(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
     episode_fixture: tuple[
         SeriesProfile,
         TeiHeader,
@@ -312,15 +308,13 @@ async def test_episode_update_tei_rejects_stale_revision(
     """Updating with a stale expected revision should raise a conflict."""
     series, header, episode, _, _ = episode_fixture
     run = _generation_run(episode)
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
-
-    await _persist_episode_parents(factory, series, header)
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    await _persist_episode_parents(session_factory, series, header)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.episodes.add(episode)
         await uow.generation_runs.create_run(run)
         await uow.commit()
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(EpisodeRevisionConflictError):
             await uow.episodes.update(
                 episode.id,

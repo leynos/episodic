@@ -64,6 +64,28 @@ def _assert_generation_event_page(response: httpx.Response) -> None:
     )
 
 
+class _ExpectedError(typ.NamedTuple):
+    """Describe one stable REST error response."""
+
+    status: int
+    code: str
+    message: str
+    details: dict[str, str]
+
+
+def _assert_error_envelope(
+    response: httpx.Response,
+    expected: _ExpectedError,
+) -> None:
+    """Assert one complete API error response contract."""
+    assert response.status_code == expected.status, response.text
+    payload = response.json()
+    assert set(payload) == {"code", "message", "details"}, payload
+    assert payload["code"] == expected.code, payload
+    assert payload["message"] == expected.message, payload
+    assert payload["details"] == expected.details, payload
+
+
 @pytest.mark.asyncio
 async def test_generation_run_create_replay_and_poll(
     session_factory: async_sessionmaker[AsyncSession],
@@ -167,17 +189,37 @@ async def test_generation_run_validation_and_idempotency_conflict(
         )
 
     assert accepted.status_code == 202, accepted.text
-    assert changed.status_code == 409, (
-        f"expected conflict status 409, got {changed.status_code}"
+    changed_details = changed.json()["details"]
+    assert isinstance(changed_details, dict), changed_details
+    record_id = changed_details.get("record_id")
+    assert isinstance(record_id, str), changed_details
+    uuid.UUID(record_id)
+    _assert_error_envelope(
+        changed,
+        _ExpectedError(
+            status=409,
+            code="idempotency_conflict",
+            message="Idempotency key body mismatch.",
+            details={"record_id": record_id},
+        ),
     )
-    assert changed.json()["code"] == "idempotency_conflict", (
-        f"expected idempotency_conflict, got {changed.json()['code']!r}"
+    _assert_error_envelope(
+        missing_rationale,
+        _ExpectedError(
+            status=400,
+            code="validation_error",
+            message="Missing required field: skip_qa_rationale",
+            details={"field": "skip_qa_rationale", "constraint": "required"},
+        ),
     )
-    assert missing_rationale.status_code == 400, (
-        f"expected missing-rationale status 400, got {missing_rationale.status_code}"
-    )
-    assert unsupported_mode.status_code == 422, (
-        f"expected unsupported-mode status 422, got {unsupported_mode.status_code}"
+    _assert_error_envelope(
+        unsupported_mode,
+        _ExpectedError(
+            status=422,
+            code="quality_mode_unsupported",
+            message="Unsupported quality_mode: qa_gated.",
+            details={"quality_mode": "qa_gated"},
+        ),
     )
 
 
@@ -219,7 +261,7 @@ async def test_generation_run_resource_uses_injected_factories(
         idempotency_principal_id=None,
     )
 
-    assert run.id == ids[3], f"expected factory run id {ids[3]}, got {run.id}"
+    assert run.id == ids[2], f"expected factory run id {ids[2]}, got {run.id}"
     assert run.episode_id == ids[0], (
         f"expected factory episode id {ids[0]}, got {run.episode_id}"
     )

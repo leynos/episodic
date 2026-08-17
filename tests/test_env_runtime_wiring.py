@@ -15,6 +15,7 @@ if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.api.dependencies import ApiDependencies
     from episodic.llm import LLMRequest, LLMResponse
 
 
@@ -135,7 +136,7 @@ async def test_create_app_from_env_wires_configured_llm_launcher(
     monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path))
     monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.test/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    captured_dependencies = None
+    captured_dependencies: ApiDependencies | None = None
 
     async def shutdown_database() -> None:
         await asyncio.sleep(0)
@@ -147,7 +148,7 @@ async def test_create_app_from_env_wires_configured_llm_launcher(
     def unit_of_work_factory() -> object:
         return object()
 
-    def capture_dependencies(dependencies: object) -> object:
+    def capture_dependencies(dependencies: ApiDependencies) -> object:
         nonlocal captured_dependencies
         captured_dependencies = dependencies
         return object()
@@ -168,17 +169,17 @@ async def test_create_app_from_env_wires_configured_llm_launcher(
         runtime_module.create_app_from_env()
 
     assert captured_dependencies is not None, "expected captured dependencies, got None"
-    dependencies = typ.cast("typ.Any", captured_dependencies)
-    assert isinstance(dependencies.llm_port, OpenAICompatibleLLMAdapter), (
-        f"expected OpenAI adapter, got {type(dependencies.llm_port).__name__}"
+    assert isinstance(captured_dependencies.llm_port, OpenAICompatibleLLMAdapter), (
+        f"expected OpenAI adapter, got {type(captured_dependencies.llm_port).__name__}"
     )
-    assert isinstance(dependencies.launcher, InProcessGenerationRunLauncher), (
-        f"expected in-process launcher, got {type(dependencies.launcher).__name__}"
+    assert isinstance(captured_dependencies.launcher, InProcessGenerationRunLauncher), (
+        "expected in-process launcher, got "
+        f"{type(captured_dependencies.launcher).__name__}"
     )
-    assert len(dependencies.shutdown_hooks) == 2, (
-        f"expected two shutdown hooks, got {len(dependencies.shutdown_hooks)}"
+    assert len(captured_dependencies.shutdown_hooks) == 2, (
+        f"expected two shutdown hooks, got {len(captured_dependencies.shutdown_hooks)}"
     )
-    await dependencies.shutdown_hooks[0]()
+    await captured_dependencies.shutdown_hooks[0]()
 
 
 @pytest.mark.asyncio
