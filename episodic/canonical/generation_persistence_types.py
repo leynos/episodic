@@ -33,7 +33,20 @@ class DraftScriptPersistenceError(Exception):
     """
 
 
-class IngestionJobNotReadyError(DraftScriptPersistenceError):
+class _IngestionJobPersistenceError(DraftScriptPersistenceError):
+    """Base error that retains an ingestion-job identifier for diagnostics."""
+
+    message_template: typ.ClassVar[str]
+
+    def __init__(self, ingestion_job_id: uuid.UUID) -> None:
+        """Initialize an ingestion-job persistence error."""
+        self.ingestion_job_id = ingestion_job_id
+        super().__init__(
+            self.message_template.format(ingestion_job_id=ingestion_job_id)
+        )
+
+
+class IngestionJobNotReadyError(_IngestionJobPersistenceError):
     """Raised when materialisation is requested before an intake job is ready.
 
     Parameters
@@ -47,20 +60,12 @@ class IngestionJobNotReadyError(DraftScriptPersistenceError):
         Identifier of the ingestion job retained for diagnostics.
     """
 
-    def __init__(self, ingestion_job_id: uuid.UUID) -> None:
-        """Initialize an error for an ingestion job that is not ready.
-
-        Parameters
-        ----------
-        ingestion_job_id : uuid.UUID
-            Identifier of the ingestion job that is not ready for generation.
-        """
-        self.ingestion_job_id = ingestion_job_id
-        message = f"Ingestion job {ingestion_job_id} is not ready for generation."
-        super().__init__(message)
+    message_template: typ.ClassVar[str] = (
+        "Ingestion job {ingestion_job_id} is not ready for generation."
+    )
 
 
-class MissingAttachedSourcesError(DraftScriptPersistenceError):
+class MissingAttachedSourcesError(_IngestionJobPersistenceError):
     """Raised when a ready ingestion job has no source attachments.
 
     Parameters
@@ -74,17 +79,9 @@ class MissingAttachedSourcesError(DraftScriptPersistenceError):
         Identifier of the ingestion job retained for diagnostics.
     """
 
-    def __init__(self, ingestion_job_id: uuid.UUID) -> None:
-        """Initialize an error for an ingestion job with no sources.
-
-        Parameters
-        ----------
-        ingestion_job_id : uuid.UUID
-            Identifier of the ready ingestion job without source attachments.
-        """
-        self.ingestion_job_id = ingestion_job_id
-        message = f"Ingestion job {ingestion_job_id} has no attached sources."
-        super().__init__(message)
+    message_template: typ.ClassVar[str] = (
+        "Ingestion job {ingestion_job_id} has no attached sources."
+    )
 
 
 class GenerationSourceUploadNotFoundError(DraftScriptPersistenceError):
