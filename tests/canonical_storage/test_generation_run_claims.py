@@ -1,6 +1,7 @@
 """Generation-run execution-claim SQLAlchemy adapter contract tests."""
 
 import asyncio
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -25,6 +26,16 @@ from tests.canonical_storage._generation_run_support import (
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _ClaimLogContext:
+    """Expected identifiers and lease timestamp for claim logs."""
+
+    pending_run_id: uuid.UUID
+    missing_run_id: uuid.UUID
+    terminal_run_id: uuid.UUID
+    lease_expires_at: dt.datetime
 
 
 async def _manually_fail_expired_run(
@@ -114,6 +125,41 @@ async def _assert_manual_recovery_state(
     assert terminal_events == (), (
         f"terminal recovery must not append events: {terminal_events!r}"
     )
+
+
+def _assert_claim_log_outcomes(
+    events: list[tuple[str, str, dict[str, object]]],
+    context: _ClaimLogContext,
+) -> None:
+    """Assert the ordered structured-log contract for every claim outcome."""
+    observed_event_names = [message for _, message, _ in events]
+    assert observed_event_names == [
+        "sql_generation_run_store.claim_run",
+        "sql_generation_run_store.claim_run_lost",
+        "sql_generation_run_store.claim_run_missing",
+        "sql_generation_run_store.claim_run_terminal",
+    ], events
+    events_by_name = {message: (level, fields) for level, message, fields in events}
+    assert len(events_by_name) == len(events) == 4, events
+    claimed_log = events_by_name["sql_generation_run_store.claim_run"]
+    assert claimed_log[0] == "info", events
+    assert claimed_log[1]["run_id"] == str(context.pending_run_id), events
+    assert claimed_log[1]["current_node"] == "draft", events
+    assert claimed_log[1]["lease_expires_at"] == context.lease_expires_at.isoformat(), (
+        events
+    )
+    assert events_by_name["sql_generation_run_store.claim_run_lost"] == (
+        "info",
+        {"run_id": str(context.pending_run_id), "status": "running"},
+    ), events
+    assert events_by_name["sql_generation_run_store.claim_run_missing"] == (
+        "warning",
+        {"run_id": str(context.missing_run_id)},
+    ), events
+    assert events_by_name["sql_generation_run_store.claim_run_terminal"] == (
+        "warning",
+        {"run_id": str(context.terminal_run_id), "status": "succeeded"},
+    ), events
 
 
 @pytest.mark.asyncio
@@ -241,12 +287,14 @@ async def test_generation_run_store_logs_claim_outcomes(
     pending_run = make_generation_run()
     terminal_run = make_generation_run()
     lease_expires_at = NOW + dt.timedelta(minutes=5)
-    await persist_generation_run_prerequisites(
-        session_factory,
-        pending_run,
-        terminal_run,
+    execution_claim = ExecutionClaim(
+        current_node="draft",
+        started_at=NOW,
+        lease_expires_at=lease_expires_at,
     )
-
+    await persist_generation_run_prerequisites(
+        session_factory, pending_run, terminal_run
+    )
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         await uow.generation_runs.create_run(pending_run)
         await uow.generation_runs.create_run(terminal_run)
@@ -259,31 +307,21 @@ async def test_generation_run_store_logs_claim_outcomes(
             ),
         )
         await uow.commit()
-
     events: list[tuple[str, str, dict[str, object]]] = []
 
     def capture_log_event(level: str, message: str, **fields: object) -> None:
         events.append((level, message, fields))
 
     monkeypatch.setattr(generation_runs_module, "_log_event", capture_log_event)
-
     claimed = await claim_run_in_independent_uow(
         session_factory,
         pending_run.id,
-        ExecutionClaim(
-            current_node="draft",
-            started_at=NOW,
-            lease_expires_at=lease_expires_at,
-        ),
+        execution_claim,
     )
     lost = await claim_run_in_independent_uow(
         session_factory,
         pending_run.id,
-        ExecutionClaim(
-            current_node="draft",
-            started_at=NOW,
-            lease_expires_at=lease_expires_at,
-        ),
+        execution_claim,
     )
 
     missing_run_id = uuid.uuid7()
@@ -291,42 +329,22 @@ async def test_generation_run_store_logs_claim_outcomes(
         await claim_run_in_independent_uow(
             session_factory,
             missing_run_id,
-            ExecutionClaim(
-                current_node="draft",
-                started_at=NOW,
-                lease_expires_at=lease_expires_at,
-            ),
+            execution_claim,
         )
 
     with pytest.raises(RunAlreadyTerminal):
         await claim_run_in_independent_uow(
             session_factory,
             terminal_run.id,
-            ExecutionClaim(
-                current_node="draft",
-                started_at=NOW,
-                lease_expires_at=lease_expires_at,
-            ),
+            execution_claim,
         )
 
     assert claimed is not None, f"expected pending run {pending_run.id} to be claimed"
     assert lost is None, f"expected second claim to lose, got {lost!r}"
-    events_by_name = {message: (level, fields) for level, message, fields in events}
-    assert len(events_by_name) == len(events) == 4, events
-    claimed_log = events_by_name["sql_generation_run_store.claim_run"]
-    assert claimed_log[0] == "info", events
-    assert claimed_log[1]["run_id"] == str(pending_run.id), events
-    assert claimed_log[1]["current_node"] == "draft", events
-    assert claimed_log[1]["lease_expires_at"] == lease_expires_at.isoformat(), events
-    assert events_by_name["sql_generation_run_store.claim_run_lost"] == (
-        "info",
-        {"run_id": str(pending_run.id), "status": "running"},
-    ), events
-    assert events_by_name["sql_generation_run_store.claim_run_missing"] == (
-        "warning",
-        {"run_id": str(missing_run_id)},
-    ), events
-    assert events_by_name["sql_generation_run_store.claim_run_terminal"] == (
-        "warning",
-        {"run_id": str(terminal_run.id), "status": "succeeded"},
-    ), events
+    context = _ClaimLogContext(
+        pending_run_id=pending_run.id,
+        missing_run_id=missing_run_id,
+        terminal_run_id=terminal_run.id,
+        lease_expires_at=lease_expires_at,
+    )
+    _assert_claim_log_outcomes(events, context)
