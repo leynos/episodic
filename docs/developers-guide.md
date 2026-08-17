@@ -1514,7 +1514,7 @@ implicitly; bridge logic belongs in the later orchestration and REST work.
 
 The no-QA path is deliberately a small application service around the
 `GenerationRunLauncher` scheduling seam. `GenerationRunsResource` creates the
-run only after `materialize_episode_from_ingestion` has materialized a ready
+run only after `materialise_episode_from_ingestion` has materialized a ready
 ingestion job into a canonical episode, placeholder TEI header, and source
 documents. It commits that request-scoped unit of work before calling
 `launch(run_id)`. `EpisodeTeiResource` remains the retrieval boundary: it
@@ -1562,18 +1562,21 @@ reference; `drain` waits for all retained tasks; `shutdown` closes admission,
 cancels unfinished tasks, and drains them. Cancellation shields its failure
 recording so the run receives `run.failed` with `launcher.shutdown`. Runtime
 shutdown calls launcher shutdown, then closes the LLM provider, and only then
-disposes the database engine. The launcher emits a `generation_run.execute`
-span and bounded terminal, draft-error, QA-bypass, and latency metrics; the API
-command span and stable failure categories provide the corresponding request
-and outcome trace without unbounded run identifiers in metric labels.
+disposes the database engine. After the drain, shutdown applies a fallback
+cancellation write for each task that was unfinished when cancellation began.
+This covers tasks cancelled before `_run_task` starts; terminal-state guards
+prevent duplicate failure events when the task handled cancellation itself. The
+launcher emits a `generation_run.execute` span and bounded terminal,
+draft-error, QA-bypass, and latency metrics; the API command span and stable
+failure categories provide the corresponding request and outcome trace without
+unbounded run identifiers in metric labels.
 
 ### Manual recovery of expired generation-run leases
 
 Use this procedure when a process restart or worker loss leaves a run in
 `running`. The `started_at` value records when the conditional claim won, and
 `lease_expires_at` is the deadline used to identify an expired lease. Inspect
-both fields with the run status, event log, and stuck-run metric before taking
-action:
+both fields with the run status and event log before taking action:
 
 ```sql
 SELECT id, status, started_at, lease_expires_at,
@@ -1642,7 +1645,9 @@ reassignment remain roadmap item `2.6.2`.
 TEI representation selection is centralized in
 `episodic.api.resources.episode_tei.negotiate_tei_media_type`. Keep JSON as the
 default, raw XML for `application/tei+xml`, and `406` for unsupported types.
-Apply attachment and entity-tag headers only to the raw TEI representation.
+Both serialized representations receive representation-specific strong ETags; a
+matching `If-None-Match` (including `*`) returns `304` with no body. Apply
+`Content-Disposition` only to the raw TEI representation.
 
 The end-to-end contract lives in
 `tests/features/no_qa_generation_slice.feature`. Its steps start Vidai Mock

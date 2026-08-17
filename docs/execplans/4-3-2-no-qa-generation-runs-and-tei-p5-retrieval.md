@@ -4,13 +4,14 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: COMPLETE
+Status: COMPLETE for the core slice; hardening follow-up IN PROGRESS
 
-Current implementation status (completed 2026-07-22): Milestones 0-8 and the
-post-implementation correctness review are complete. The REST resources, TEI
-retrieval route, upload-backed source hydration, presenter resolution,
-idempotent episode materialization, and serialized terminal updates are
-implemented. Roadmap item 4.3.2 is checked complete.
+Current implementation status (core slice completed 2026-07-22): Milestones 0-8
+and the post-implementation correctness review are complete. The REST
+resources, TEI retrieval route, upload-backed source hydration, presenter
+resolution, idempotent episode materialisation, and serialized terminal updates
+are implemented. The current hardening follow-up remains in progress, so
+roadmap item 4.3.2 remains in progress pending that follow-up.
 
 ## Purpose / big picture
 
@@ -58,9 +59,9 @@ to later tasks: human-review checkpoint persistence (2.6.2), the full
 generation-run REST surface including the checkpoint endpoint (2.6.3), the
 QA-gated execution graph and the full draft-generation graph (4.4.1), and an
 automated stuck-run recovery worker (2.6.2). This plan does, however, add the
-*durable hooks and observability* (lease columns, conditional state
-transitions, stuck-run signal) that ADR 009 requires so those later workers
-inherit a recoverable, observable system rather than a silent one.
+durable claim hooks (lease columns and conditional state transitions) and SQL
+claim-outcome logging. Production-wide metrics, lease/recovery, and the later
+worker remain follow-up work.
 
 Three slice-shaping decisions were confirmed with the requester before drafting
 (see `Decision Log`):
@@ -172,11 +173,9 @@ when any of the following is breached.
   high (happens on every deploy overlapping an in-flight run). Mitigation:
   persist `started_at` (indexed) and add `lease_expires_at` and
   `error_category` columns now (additive); make `pending → running` a
-  conditional update; retain the launcher's terminal-state, draft-error,
-  QA-bypass, and draft-latency metrics; document a manual-fail runbook. The
-  automated reaper itself is deferred to 2.6.2, but the recoverable hooks ship
-  now (ADR 009 §Partial-failure recovery and §Observability require this
-  regardless of when the worker lands).
+  conditional update; and document the current manual-failure limitation.
+  Production-wide metrics and automated lease recovery are deferred to later
+  hardening and roadmap item 2.6.2.
 - Risk: idempotency partial failure — the run row is created but task scheduling
   fails, orphaning a `pending` run while the idempotency record is `failed` or
   `complete`. Severity: high. Likelihood: medium. Mitigation: specify the
@@ -436,17 +435,16 @@ when any of the following is breached.
   TEI. Updated `docs/users-guide.md` to state this procedure. No full gates
   were run for this documentation-only change, as requested.
 
-- [ ] (in progress, 2026-08-16) Continuation after rebasing the current
-  revision `f5a3d6e`: the deterministic baseline gates all passed —
-  `make check-fmt`, `make test`, `make typecheck`, `make lint`,
-  `make markdownlint`, `make nixie`, and `make check-migrations`. CodeRabbit
-  review is queued as `fa3b30db` (approximately 1h14m). Required hardening
-  decisions are to add bounded in-process admission before task creation and
-  terminalize overload failures; expose a tracer port with bounded
-  non-sensitive attributes; use a single `CostRecorderPort` under
-  `episodic.cost`; serialize shutdown in launcher → LLM → engine order; retain
-  the SQL conditional update as the claim linearization point; and add
-  property/race proofs.
+- [ ] (in progress, 2026-08-17) Current hardening follow-up across commits
+  `164528c`, `9921083`, `72a5ef0`, and `5c7b8e4`: API/task spans, bounded
+  in-process admission, explicit overload terminalization, and SQL claim
+  outcome logs are implemented. Representation-specific ETags now support
+  conditional `304` responses for JSON and TEI; the concurrent-claim test
+  asserts the successful-claim count before selecting its result; public TEI
+  API documentation is complete; and shutdown has an immediate-cancellation
+  fallback for tasks cancelled before `_run_task` begins. The audit still finds
+  production-wide metrics, lease/recovery, retry metrics, generated durable
+  lifecycle proofs, and in-flight disposal proof outstanding.
 
 ## Surprises & discoveries
 
@@ -854,6 +852,20 @@ when any of the following is breached.
   response uses that representation, so clients can follow the returned run
   resource without inferring the episode identifier. Confirmed on 2026-08-15.
   Date/Author: 2026-08-15, documentation agent.
+- Finding: commit `164528c` makes ETags representation-specific and returns
+  `304 Not Modified` for matching or wildcard `If-None-Match` validators on
+  both JSON and TEI representations. Date/Author: 2026-08-17, implementation
+  agent.
+- Finding: commit `9921083` moves the concurrent-claim test's successful-count
+  assertion before selecting the claimed result, so a mutual-exclusion failure
+  reports the observed count. Date/Author: 2026-08-17, implementation agent.
+- Finding: commit `72a5ef0` completes the public episode-TEI API documentation,
+  including representation selection, conditional requests, and serializer
+  fields. Date/Author: 2026-08-17, implementation agent.
+- Decision: commit `5c7b8e4` adds a post-drain cancellation fallback for tasks
+  cancelled before `_run_task` begins; terminal guards preserve one failure
+  event when cancellation was already handled in the task. Date/Author:
+  2026-08-17, implementation agent.
 
 ## Context and orientation
 
@@ -1125,7 +1137,7 @@ class DraftScriptGenerator(typing.Protocol):
 
 In `episodic/canonical/generation_persistence.py` (new, `application` group):
 
-- `materialize_episode_from_ingestion(...)` creates the episode from the
+- `materialise_episode_from_ingestion(...)` creates the episode from the
   ingestion job's attached sources with a minimal placeholder TEI header
   (reusing `_create_canonical_episode`/`TeiHeader` construction), returning the
   episode id; called before the run is launched.
@@ -1367,7 +1379,7 @@ clock, and the deterministic id factory. Assert the generator emits TEI-P5 that
 `<p>` turns, and reports a stable content hash; add a syrupy snapshot of the
 emitted TEI XML (clock frozen, ids pinned). Add tests for each `LLMError`
 subclass mapping to a typed failure. Add tests for
-`materialize_episode_from_ingestion` (creates episode + placeholder TEI from an
+`materialise_episode_from_ingestion` (creates episode + placeholder TEI from an
 ingestion job) and `persist_draft_script` (episode TEI, revision, hash,
 `qa_status`, `last_generation_run_id`; invalid TEI raises the typed error).
 

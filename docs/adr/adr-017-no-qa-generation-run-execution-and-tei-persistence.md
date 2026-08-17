@@ -33,7 +33,7 @@ implementation. Roadmap item `4.4.1` may replace its one-pass policy with the
 full duration-aware and QA-gated graph without changing the run or launcher
 ports.
 
-Before a run is created, `materialize_episode_from_ingestion` creates the
+Before a run is created, `materialise_episode_from_ingestion` creates the
 canonical episode using the ready ingestion job as both source bundle and
 stable episode identifier. Generated TEI is validated before persistence.
 Episode updates increment `tei_revision`, retain the writing run identifier,
@@ -41,10 +41,11 @@ quality mode, QA status, and content hash, and use optimistic revision checks
 to reject concurrent writers.
 
 The first deployment assumes one API worker owns an in-process run. Durable
-schema hooks make this limitation observable: conditional pending-to-running
-claims, `started_at`, `lease_expires_at`, terminal error category, and a
-stuck-run gauge. Operators may inspect expired leases and manually mark a run
-failed; automatic recovery and reassignment remain roadmap item `2.6.2`.
+schema fields record conditional pending-to-running claims, `started_at`,
+`lease_expires_at`, and terminal error categories; SQL claim outcomes are also
+logged. Lease fields support inspection only: operators may manually mark an
+expired run failed, while automatic lease recovery and reassignment remain
+roadmap item `2.6.2`.
 
 Admission is bounded before task allocation. The launcher admits at most
 `max_concurrency + max_pending_runs` runs (currently four active and sixteen
@@ -57,17 +58,18 @@ Shutdown is serialized across the process boundaries: the launcher is shut down
 first, the LLM provider client is closed second, and the database engine is
 disposed last. A cancelled task shields its terminal failure write, allowing
 the run to receive `run.failed` with `launcher.shutdown` before the database
-becomes unavailable. A process restart still loses the in-memory task registry;
-lease fields support inspection and the documented privileged manual-failure
-procedure only. This slice deliberately provides no automatic reaper, retry, or
-reassignment of expired runs.
+becomes unavailable. After draining, the launcher applies the same failure
+write for tasks cancelled before `_run_task` begins; terminal guards prevent a
+duplicate event when cancellation was already handled. A process restart still
+loses the in-memory task registry; lease fields support inspection and the
+documented privileged manual-failure procedure only. This slice deliberately
+provides no automatic reaper, retry, or reassignment of expired runs.
 
-The API command and launcher execution are traced as separate spans. The
-launcher emits bounded terminal-state, draft-error, QA-bypass, and
-draft-latency metrics, while stable failure categories make outcomes searchable
-without putting run identifiers into metric labels. The structured-log tracer
-records safe span lifecycle metadata and the test tracer remains injectable
-through the same port.
+The API command and launcher execution are traced as separate spans. The SQL
+store logs claim outcomes, and the test tracer remains injectable through the
+same port. Production-wide metrics, lease/recovery metrics, and retry metrics
+remain follow-up work; stable failure categories still make persisted outcomes
+searchable without putting run identifiers into metric labels.
 
 Generation-run creation accepts only `quality_mode=draft_without_qa` in this
 slice. A recognized `qa_gated` request returns `422 Unprocessable Entity`;
@@ -78,8 +80,9 @@ exist.
 `GET /v1/episodes/{episode_id}/tei` uses HTTP content negotiation rather than a
 separate export resource. The default representation is a JSON envelope.
 `Accept: application/tei+xml` returns raw XML with `Content-Disposition`,
-`ETag`, and the TEI media type. Unsupported media types return
-`406 Not Acceptable`.
+`ETag`, and the TEI media type. JSON and XML have representation-specific
+ETags; a matching `If-None-Match` returns `304 Not Modified` without a body.
+Unsupported media types return `406 Not Acceptable`.
 
 ## Consequences
 
@@ -97,8 +100,8 @@ separate export resource. The default representation is a JSON envelope.
 
 - In-process work is not shared across API replicas and cannot survive process
   loss. Deploy this slice with one owning worker until Celery dispatch lands.
-- Automatic stuck-run recovery is not included; operators must use lease and
-  metric evidence for manual intervention.
+- Automatic stuck-run recovery is not included; operators must use lease,
+  status, and event evidence for manual intervention.
 - Episode materialization currently reuses the ingestion-job identifier, which
   couples the first generation route to the intake bundle identity.
 - No-QA output is explicitly a draft and must not be represented as approved.
