@@ -24,6 +24,7 @@ from episodic.canonical.generation_persistence import (
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.ingestion_sources import AttachmentKind, IngestionJobSource
+from episodic.canonical.source_intake_errors import IngestionJobNotFoundError
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptResult
 from episodic.llm import LLMUsage
@@ -216,6 +217,29 @@ async def test_materialise_episode_from_ingestion_creates_placeholder_episode(
         "expected source content hash 'sha256:source', "
         f"got {documents[0].content_hash!r}"
     )
+
+
+@pytest.mark.asyncio
+async def test_materialise_episode_from_ingestion_rejects_unknown_job(
+    session_factory: object,
+) -> None:
+    """Unknown jobs should retain the source-intake not-found contract."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    unknown_job_id = uuid.uuid7()
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        with pytest.raises(IngestionJobNotFoundError) as exc_info:
+            await materialise_episode_from_ingestion(
+                uow,
+                EpisodeMaterialisationRequest(
+                    ingestion_job_id=unknown_job_id,
+                    title="Unknown job",
+                    clock=_clock,
+                    uuid_factory=SequentialUuids(),
+                ),
+            )
+
+    assert str(unknown_job_id) in str(exc_info.value), exc_info.value
 
 
 @pytest.mark.asyncio

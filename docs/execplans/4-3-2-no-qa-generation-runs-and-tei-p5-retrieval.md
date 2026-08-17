@@ -445,6 +445,13 @@ when any of the following is breached.
   fallback for tasks cancelled before `_run_task` begins. The audit still finds
   production-wide metrics, lease/recovery, retry metrics, generated durable
   lifecycle proofs, and in-flight disposal proof outstanding.
+- [x] (recorded, 2026-08-17) Launcher cancellation persistence now has one
+  owner: the cancelled task records it, while shutdown falls back only for a
+  coroutine cancelled before it starts. The no-QA BDD helper drains detached
+  work after each `POST` response because the session-scoped PGlite test server
+  supports one connection at a time. This keeps the REST response assertions
+  while launcher/API tests cover non-blocking scheduling; the hardening
+  follow-up and roadmap item 4.3.2 remain in progress.
 
 - [x] (recorded, 2026-08-17) Current review-remediation decisions: launcher
   composition supplies configuration explicitly; episode materialization locks

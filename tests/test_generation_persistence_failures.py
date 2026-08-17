@@ -5,6 +5,7 @@ import typing as typ
 import uuid
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import IntakeState
 from episodic.canonical.generation_persistence import (
@@ -33,8 +34,11 @@ from tests.test_generation_persistence import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from episodic.canonical.domain import SourceDocument
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 
 
@@ -170,4 +174,86 @@ async def test_persist_draft_script_rejects_mismatched_content_hash(
 
     assert raised.value.expected_hash != raised.value.actual_hash, (
         f"hashes: {raised.value.expected_hash!r}, {raised.value.actual_hash!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_materialise_reraises_unrelated_projection_integrity_error(
+    session_factory: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a source-document duplicate may be recovered as a retry race."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    _, job = await _persist_ready_job(factory)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        original_commit = uow.commit
+        commit_count = 0
+
+        async def fail_projection_commit() -> None:
+            """Raise an integrity error only for the projection transaction."""
+            nonlocal commit_count
+            commit_count += 1
+            if commit_count == 2:
+                error = ValueError("bad FK")
+                raise IntegrityError("", {}, error)
+            await original_commit()
+
+        monkeypatch.setattr(uow, "commit", fail_projection_commit)
+        with pytest.raises(IntegrityError, match="bad FK"):
+            await materialise_episode_from_ingestion(
+                uow,
+                EpisodeMaterialisationRequest(
+                    ingestion_job_id=job.id,
+                    title="Bridgewater Futures",
+                    clock=_clock,
+                    uuid_factory=SequentialUuids(),
+                ),
+            )
+
+    assert commit_count == 2, f"unexpected commit count: {commit_count}"
+
+
+@pytest.mark.asyncio
+async def test_materialise_verifies_duplicate_projection_rows(
+    session_factory: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A duplicate race succeeds only after all deterministic rows are found."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    _, job = await _persist_ready_job(factory)
+    request = EpisodeMaterialisationRequest(
+        ingestion_job_id=job.id,
+        title="Bridgewater Futures",
+        clock=_clock,
+        uuid_factory=SequentialUuids(),
+    )
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        first = await materialise_episode_from_ingestion(uow, request)
+
+    async with SqlAlchemyUnitOfWork(factory) as uow:
+        original_list = uow.source_documents.list_for_job
+        list_count = 0
+
+        async def hide_existing_projection(
+            job_id: uuid.UUID,
+        ) -> cabc.Sequence[SourceDocument]:
+            """Simulate a concurrent transaction's stale pre-insert read."""
+            nonlocal list_count
+            list_count += 1
+            if list_count == 1:
+                return ()
+            return await original_list(job_id)
+
+        monkeypatch.setattr(
+            uow.source_documents,
+            "list_for_job",
+            hide_existing_projection,
+        )
+        second = await materialise_episode_from_ingestion(uow, request)
+
+    assert second.id == first.id, f"duplicate projection episode: {second.id}"
+    assert list_count == 2, (
+        f"expected projection and verification reads, got {list_count}"
     )

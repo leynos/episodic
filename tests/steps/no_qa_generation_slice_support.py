@@ -178,19 +178,15 @@ def configure_vidaimock(context: NoQaGenerationSliceContext, tmp_path: Path) -> 
         ),
         client=context.llm_client,
     )
+    dependencies = build_api_dependencies(context.session_factory)
     context.launcher = InProcessGenerationRunLauncher(
-        uow_factory=lambda: build_api_dependencies(
-            context.session_factory
-        ).uow_factory(),
+        uow_factory=dependencies.uow_factory,
         draft_generator=LLMDraftScriptGenerator(
             llm=context.llm_adapter,
             config=LLMDraftScriptGeneratorConfig(model="valid-draft"),
         ),
     )
-    context.dependencies = dc.replace(
-        build_api_dependencies(context.session_factory),
-        launcher=context.launcher,
-    )
+    context.dependencies = dc.replace(dependencies, launcher=context.launcher)
 
 
 def select_malformed_completion(context: NoQaGenerationSliceContext) -> None:

@@ -42,6 +42,7 @@ from episodic.generation.guest_bios import (
     project_guest_bio_sources,
 )
 from episodic.generation.launcher import (
+    GenerationRunAdmissionError,
     GenerationRunLauncher,
     InProcessGenerationRunLauncher,
 )
@@ -72,6 +73,7 @@ __all__ = [
     "DraftScriptTokenBudgetError",
     "DraftScriptTransientProviderError",
     "DraftTurn",
+    "GenerationRunAdmissionError",
     "GenerationRunLauncher",
     "GuestBioEntry",
     "GuestBioSource",

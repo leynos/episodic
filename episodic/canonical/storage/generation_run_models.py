@@ -30,11 +30,13 @@ class GenerationRunRecord(Base):
     )
     episode_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("episodes.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     source_bundle_id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("ingestion_jobs.id"),
         nullable=False,
     )
     actor: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)

@@ -37,12 +37,15 @@ def _tei_hash(tei_xml: str) -> str:
     return f"sha256:{hashlib.sha256(tei_xml.encode()).hexdigest()}"
 
 
-def _generation_run(episode: CanonicalEpisode) -> GenerationRun:
+def _generation_run(
+    episode: CanonicalEpisode,
+    ingestion_job: IngestionJob,
+) -> GenerationRun:
     """Return a generation run linked to an episode fixture."""
     return GenerationRun(
         id=uuid.uuid7(),
         episode_id=episode.id,
-        source_bundle_id=uuid.uuid7(),
+        source_bundle_id=ingestion_job.id,
         actor="storage-test",
         status=GenerationRunStatus.PENDING,
         current_node=None,
@@ -154,6 +157,18 @@ async def _persist_episode_parents(
         await uow.commit()
 
 
+async def _persist_episode_and_ingestion_job(
+    uow: SqlAlchemyUnitOfWork,
+    episode: CanonicalEpisode,
+    ingestion_job: IngestionJob,
+) -> None:
+    """Persist the generation-run foreign-key parents in dependency order."""
+    await uow.episodes.add(episode)
+    await uow.flush()
+    await uow.ingestion_jobs.add(ingestion_job)
+    await uow.flush()
+
+
 @pytest.mark.asyncio
 async def test_episode_update_tei_records_revision_and_generation_metadata(
     session_factory: async_sessionmaker[AsyncSession],
@@ -166,13 +181,13 @@ async def test_episode_update_tei_records_revision_and_generation_metadata(
     ],
 ) -> None:
     """Updating episode TEI should persist the no-QA generation metadata."""
-    series, header, episode, _, _ = episode_fixture
-    run = _generation_run(episode)
+    series, header, episode, ingestion_job, _ = episode_fixture
+    run = _generation_run(episode, ingestion_job)
     updated_xml = "<TEI><text><body><p>Generated script.</p></body></text></TEI>"
     updated_at = dt.datetime(2026, 6, 24, 12, 0, tzinfo=dt.UTC)
     await _persist_episode_parents(session_factory, series, header)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await uow.episodes.add(episode)
+        await _persist_episode_and_ingestion_job(uow, episode, ingestion_job)
         await uow.generation_runs.create_run(run)
         updated = await uow.episodes.update(
             episode.id,
@@ -240,12 +255,12 @@ async def test_episode_update_tei_keeps_compressed_storage_in_sync(
     ],
 ) -> None:
     """Large updated TEI payloads should refresh compressed storage columns."""
-    series, header, episode, _, _ = episode_fixture
-    run = _generation_run(episode)
+    series, header, episode, ingestion_job, _ = episode_fixture
+    run = _generation_run(episode, ingestion_job)
     updated_xml = "<TEI>" + ("generated episode " * 1200) + "</TEI>"
     await _persist_episode_parents(session_factory, series, header)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await uow.episodes.add(episode)
+        await _persist_episode_and_ingestion_job(uow, episode, ingestion_job)
         await uow.generation_runs.create_run(run)
         await uow.episodes.update(
             episode.id,
@@ -306,11 +321,11 @@ async def test_episode_update_tei_rejects_stale_revision(
     ],
 ) -> None:
     """Updating with a stale expected revision should raise a conflict."""
-    series, header, episode, _, _ = episode_fixture
-    run = _generation_run(episode)
+    series, header, episode, ingestion_job, _ = episode_fixture
+    run = _generation_run(episode, ingestion_job)
     await _persist_episode_parents(session_factory, series, header)
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await uow.episodes.add(episode)
+        await _persist_episode_and_ingestion_job(uow, episode, ingestion_job)
         await uow.generation_runs.create_run(run)
         await uow.commit()
 

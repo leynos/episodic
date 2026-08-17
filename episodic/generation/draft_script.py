@@ -1,20 +1,12 @@
 """Define the port and implementation for one-pass draft script generation.
 
-The immutable ``DraftScriptSource``, ``DraftPresenterProfile``,
-``DraftScriptRequest``, ``DraftTurn``, and ``DraftScriptResult`` types carry
-the source, presenter, episode, and series context projected from canonical
-entities. ``DraftScriptGenerator`` is the public seam for alternate
-implementations; ``LLMDraftScriptGenerator`` is the current implementation
-over the :class:`~episodic.llm.LLMPort`. It sends a deterministic JSON prompt,
-maps provider errors to draft-generation errors, parses the response, and
-emits validated TEI-P5 XML with a content hash and usage metadata.
+The immutable request and result types carry canonical source and presenter
+context. ``DraftScriptGenerator`` is the public seam; its LLM implementation
+maps provider failures, parses deterministic JSON, and emits TEI-P5 XML with
+content hashes and usage metadata.
 
-This module does not load or persist domain entities. The launcher maps
-canonical source documents and reference bindings into a request, while
-``episodic.canonical.generation_persistence`` validates and stores the result
-on the canonical episode. The generation-run API reaches this generator
-indirectly through the launcher, preserving the unit-of-work and persistence
-boundaries.
+The launcher maps canonical documents and bindings into a request; generation
+persistence stores the result on the canonical episode.
 """
 
 import collections.abc as cabc
@@ -85,26 +77,7 @@ class DraftScriptTransientProviderError(DraftScriptGenerationError):
 
 @dc.dataclass(frozen=True, slots=True)
 class DraftScriptSource:
-    """Source material made available to the draft generator.
-
-    Attributes
-    ----------
-    source_id : str
-        Stable identifier for the source document.
-    source_type : str
-        Application-defined kind of source material.
-    source_uri : str
-        URI identifying the source document.
-    content : str
-        Non-empty source text supplied to the prompt.
-    weight : float
-        Relative source weight, constrained to the inclusive range ``[0, 1]``.
-
-    Notes
-    -----
-    All text and identifiers are validated as non-empty strings when the
-    immutable value is constructed.
-    """
+    """Source identity, provenance, prompt text, and relative weight."""
 
     source_id: str
     source_type: str
@@ -125,22 +98,7 @@ class DraftScriptSource:
 
 @dc.dataclass(frozen=True, slots=True)
 class DraftPresenterProfile:
-    """Presenter context made available to the draft generator.
-
-    Attributes
-    ----------
-    display_name : str
-        Name shown for the presenter in generation context.
-    role : str
-        Presenter role supplied to the prompt.
-    source_content : str
-        Non-empty reference text describing the presenter.
-
-    Notes
-    -----
-    The profile is prompt context only; it is not persisted by this module.
-    Each field must be a non-empty string when the value is constructed.
-    """
+    """Presenter identity, role, and reference text for generation context."""
 
     display_name: str
     role: str
@@ -159,28 +117,12 @@ class DraftScriptRequest:
 
     Attributes
     ----------
-    episode_id : uuid.UUID
-        Canonical episode receiving the generated draft.
-    series_profile_id : uuid.UUID
-        Series profile whose generation context is being used.
-    title : str
-        Non-empty working title included in the generation prompt.
-    sources : tuple[DraftScriptSource, ...]
-        Source documents supplied to the generator. At least one source is
-        required.
-    presenter_profiles : tuple[DraftPresenterProfile, ...]
-        Presenter reference context supplied to the generator; it may be
-        empty.
-    clock : DraftClock
-        Callable returning the timestamp included in the deterministic prompt.
-    id_factory : DraftIdFactory
-        Callable that receives a TEI element prefix and returns its XML
-        identifier during output emission.
-
-    Notes
-    -----
-    The launcher creates this request from canonical entities. The generator
-    consumes it without opening a unit of work or persisting domain records.
+    episode_id, series_profile_id, title
+        Canonical context and non-empty working title.
+    sources, presenter_profiles
+        Required sources and optional presenter context.
+    clock, id_factory
+        Deterministic timestamp and TEI-ID seams.
     """
 
     episode_id: uuid.UUID
@@ -201,21 +143,7 @@ class DraftScriptRequest:
 
 @dc.dataclass(frozen=True, slots=True)
 class DraftTurn:
-    """One ordered turn in the generated script.
-
-    Attributes
-    ----------
-    text : str
-        Non-empty spoken text for the turn.
-    speaker : str | None
-        Optional non-empty speaker name. ``None`` emits an un-attributed TEI
-        paragraph rather than a speaker utterance.
-
-    Notes
-    -----
-    Parsed turns preserve the provider's order and are later converted to TEI
-    body blocks by the generator.
-    """
+    """One ordered generated turn with text and an optional speaker."""
 
     text: str
     speaker: str | None = None
@@ -233,25 +161,10 @@ class DraftScriptResult:
 
     Attributes
     ----------
-    tei_xml : str
-        Validated TEI-P5 XML emitted from the parsed draft turns.
-    content_hash : str
-        SHA-256 hash of ``tei_xml`` in the canonical ``sha256:`` form.
-    usage : LLMUsage
-        Normalised token usage returned by the LLM adapter.
-    model : str
-        Provider model identifier used for the response.
-    provider_response_id : str
-        Provider-native identifier for the response.
-    finish_reason : str | None
-        Provider completion reason, when supplied.
-    provider_call_usage : ProviderCallUsage | None
-        Optional provider-specific usage metadata used by cost accounting.
-
-    Notes
-    -----
-    This result is returned to the launcher. Canonical episode persistence and
-    generation-run event recording happen outside this module.
+    tei_xml, content_hash, usage
+        TEI-P5 output, canonical hash, and normalised usage.
+    model, provider_response_id, finish_reason, provider_call_usage
+        Provider metadata for lifecycle and cost recording.
     """
 
     tei_xml: str
@@ -265,26 +178,7 @@ class DraftScriptResult:
 
 @dc.dataclass(frozen=True, slots=True)
 class LLMDraftScriptGeneratorConfig:
-    """Configuration for the single-pass LLM draft generator.
-
-    Attributes
-    ----------
-    model : str
-        Provider model identifier passed to each :class:`LLMRequest`.
-    provider_operation : LLMProviderOperation | str
-        Provider operation shape requested by the LLM adapter. It defaults to
-        ``chat_completions``.
-    token_budget : LLMTokenBudget | None
-        Optional input, output, and total-token limits enforced by the adapter.
-    system_prompt : str
-        System instruction sent with each request. It defaults to the module's
-        deterministic draft-writing prompt.
-
-    Notes
-    -----
-    The configuration controls provider invocation only; request-specific
-    episode, source, and presenter data remains in ``DraftScriptRequest``.
-    """
+    """Provider model, operation, token limits, and system prompt settings."""
 
     model: str
     provider_operation: LLMProviderOperation | str = (
@@ -295,28 +189,25 @@ class LLMDraftScriptGeneratorConfig:
 
 
 class DraftScriptGenerator(typ.Protocol):
-    """Port for draft script generation implementations."""
+    """Protocol implemented by one-pass draft generators."""
 
     async def generate(self, request: DraftScriptRequest) -> DraftScriptResult:
         """Generate one draft script from canonical generation context.
 
         Parameters
         ----------
-        request : DraftScriptRequest
-            Immutable episode, series, source, presenter, clock, and TEI-ID
-            context for the draft.
+        request
+            Immutable canonical generation context.
 
         Returns
         -------
         DraftScriptResult
-            Generated TEI-P5 XML with its content hash and provider metadata.
+            Generated TEI-P5 XML, hash, and provider metadata.
 
         Raises
         ------
         DraftScriptGenerationError
-            If the implementation cannot produce a valid draft. Concrete
-            implementations may expose the more specific subclasses defined
-            by this module.
+            If generation cannot produce a valid draft.
         """
         raise NotImplementedError
 
@@ -331,16 +222,7 @@ class _ParsedDraft:
 
 @dc.dataclass(frozen=True, slots=True)
 class LLMDraftScriptGenerator(DraftScriptGenerator):
-    """Generate draft TEI scripts through an LLM port.
-
-    Attributes
-    ----------
-    llm : LLMPort
-        Provider-neutral LLM adapter used for one request per generation.
-    config : LLMDraftScriptGeneratorConfig
-        Model, operation, token-budget, and system-prompt configuration for
-        the adapter call.
-    """
+    """Generate draft TEI scripts through an LLM port and its configuration."""
 
     llm: LLMPort
     config: LLMDraftScriptGeneratorConfig
@@ -350,33 +232,26 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
 
         Parameters
         ----------
-        request : DraftScriptRequest
-            Episode, series, source, presenter, timing, and TEI-ID context used
-            to build the deterministic JSON prompt.
+        request
+            Canonical context used to build the deterministic prompt.
 
         Returns
         -------
         DraftScriptResult
-            Validated TEI-P5 XML, its ``sha256:`` content hash, and the LLM
-            response's usage and provider metadata.
+            Validated TEI-P5 XML, hash, usage, and provider metadata.
 
         Raises
         ------
         DraftScriptTokenBudgetError
-            If the LLM adapter rejects the request for exceeding its token
-            budget.
+            If the LLM adapter rejects the requested token budget.
         DraftScriptProviderResponseError
-            If the LLM adapter reports a non-retryable provider response error.
+            If the provider returns a non-retryable response error.
         DraftScriptTransientProviderError
-            If transient provider failures remain after adapter retries.
+            If the provider reports a transient failure.
 
         Notes
         -----
-        Provider-layer exceptions are translated to the draft-specific errors
-        above. Response parsing may raise ``DraftScriptResponseFormatError``
-        and TEI emission may raise ``DraftScriptTeiError``. This method does
-        not open a unit of work or persist the result; the caller owns
-        canonical episode and generation-run persistence.
+        Provider errors are translated before parsing and TEI emission.
         """
         llm_request = LLMRequest(
             model=self.config.model,

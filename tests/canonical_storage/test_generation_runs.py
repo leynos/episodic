@@ -30,6 +30,7 @@ from episodic.canonical.storage import (
 )
 from tests.canonical_storage._generation_run_support import (
     NOW,
+    GenerationRunFixture,
     count_records,
     make_generation_run,
     persist_generation_run_prerequisites,
@@ -281,15 +282,21 @@ async def test_generation_run_store_lists_runs_by_episode_status_and_page(
 ) -> None:
     """Run listing should be ordered, paged, and filterable by status."""
     episode_id = uuid.uuid7()
-    first = make_generation_run(episode_id=episode_id, created_at=NOW)
+    first = make_generation_run(
+        GenerationRunFixture(episode_id=episode_id, created_at=NOW)
+    )
     running = dc.replace(
         make_generation_run(
-            episode_id=episode_id,
-            created_at=NOW + dt.timedelta(seconds=1),
+            GenerationRunFixture(
+                episode_id=episode_id,
+                created_at=NOW + dt.timedelta(seconds=1),
+            )
         ),
         status=GenerationRunStatus.RUNNING,
     )
-    other_episode = make_generation_run(created_at=NOW + dt.timedelta(seconds=2))
+    other_episode = make_generation_run(
+        GenerationRunFixture(created_at=NOW + dt.timedelta(seconds=2))
+    )
     await persist_generation_run_prerequisites(
         session_factory,
         first,

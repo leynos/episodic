@@ -14,7 +14,7 @@ import pytest
 from tests.utils import podman_socket_path
 
 ACT_RUNNER_IMAGE = "catthehacker/ubuntu:act-latest"
-_UNSUPPORTED_ARTIFACT_FIELD = r"unknown field \"mime_type\""
+_UNSUPPORTED_ARTIFACT_FIELD = 'unknown field "mime_type"'
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
@@ -233,9 +233,35 @@ def _run_act_subprocess(cmd: list[str], env: dict[str, str]) -> tuple[int, str]:
     return completed.returncode, completed.stdout + "\n" + completed.stderr
 
 
+def _failed_act_steps(logs: str) -> dict[tuple[str, str], list[str]]:
+    """Return structured act error messages grouped by failed job step."""
+    failed_steps: dict[tuple[str, str], list[str]] = {}
+    for line in logs.splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict) or entry.get("level") != "error":
+            continue
+        job = entry.get("job")
+        step = entry.get("step")
+        message = entry.get("msg") or entry.get("message")
+        if not all(isinstance(value, str) for value in (job, step, message)):
+            continue
+        failed_steps.setdefault((job, step), []).append(message)
+    return failed_steps
+
+
 def _has_unsupported_artifact_protocol(logs: str) -> bool:
-    """Return whether act rejected upload-artifact's current request schema."""
-    return _UNSUPPORTED_ARTIFACT_FIELD in logs
+    """Return whether the only failed act step is the artifact protocol error."""
+    failed_steps = _failed_act_steps(logs)
+    if len(failed_steps) != 1:
+        return False
+    return any(
+        _UNSUPPORTED_ARTIFACT_FIELD in message
+        for messages in failed_steps.values()
+        for message in messages
+    )
 
 
 def run_act(

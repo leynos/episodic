@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import pathlib
 import typing as typ
 
 import httpx
@@ -91,10 +92,12 @@ def test_normalize_database_urls_uses_query_port_for_probe() -> None:
 
 @pytest.mark.asyncio
 async def test_build_generation_launcher_wires_cost_recorder(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
 ) -> None:
     """Runtime launcher construction should use the SQL-backed cost ledger."""
     from episodic.api.runtime import (
+        RuntimeConfig,
         _build_generation_launcher,
         _GenerationLauncherRuntime,
     )
@@ -103,11 +106,18 @@ async def test_build_generation_launcher_wires_cost_recorder(
     from episodic.generation import InProcessGenerationRunLauncher
     from episodic.observability import StructuredLogMetrics
 
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
     launcher = _build_generation_launcher(
-        lambda: SqlAlchemyUnitOfWork(factory),
+        lambda: SqlAlchemyUnitOfWork(session_factory),
         _UnusedLLMPort(),
         _GenerationLauncherRuntime(metrics=StructuredLogMetrics()),
+        config=RuntimeConfig(
+            database_url="postgresql+psycopg://unused",
+            source_intake_object_store_root=tmp_path,
+            llm_base_url=None,
+            llm_api_key=None,
+            draft_model="draft-model",
+            pricing_snapshot_directory=pathlib.Path("config/pricing-snapshots"),
+        ),
     )
 
     assert isinstance(launcher, InProcessGenerationRunLauncher), (
@@ -116,7 +126,7 @@ async def test_build_generation_launcher_wires_cost_recorder(
     assert launcher.cost_recorder_factory is not None, (
         "expected a cost recorder factory, got None"
     )
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         recorder = launcher.cost_recorder_factory(uow)
         assert isinstance(recorder, CostRecorder), (
             f"expected CostRecorder, got {type(recorder).__name__}"

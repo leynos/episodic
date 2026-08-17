@@ -1,14 +1,21 @@
 """Concurrency-boundary tests for generation materialization."""
 
+import asyncio
 import typing as typ
 
 import pytest
+import sqlalchemy as sa
 
 from episodic.canonical.generation_persistence import (
     EpisodeMaterialisationRequest,
     materialise_episode_from_ingestion,
 )
-from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.storage import (
+    EpisodeRecord,
+    SourceDocumentRecord,
+    SqlAlchemyUnitOfWork,
+    TeiHeaderRecord,
+)
 from tests.test_generation_persistence import (
     SequentialUuids,
     _clock,
@@ -26,46 +33,46 @@ if typ.TYPE_CHECKING:
 
 
 @pytest.mark.asyncio
-async def test_materialisation_releases_job_lock_before_source_work(
+async def test_materialisation_locks_job_before_source_paging(
     session_factory: object,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Source paging finishes before the materializer locks the job row."""
+    """The materializer locks the job row before it pages attached sources."""
     factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
     _, job = await _persist_ready_job(factory)
-    source_page_loaded = False
+    job_locked = False
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         original_list = uow.ingestion_job_sources.list_for_job_paged
         original_get_for_update = uow.ingestion_jobs.get_for_update
 
-        async def list_sources_before_lock(
+        async def list_sources_after_lock(
             ingestion_job_id: uuid.UUID,
             *,
             limit: int,
             offset: int,
         ) -> cabc.Sequence[IngestionJobSource]:
-            """Record source work performed outside the ingestion-job lock."""
-            nonlocal source_page_loaded
-            source_page_loaded = True
+            """Verify source paging follows the ingestion-job lock."""
+            assert job_locked, "source paging preceded the ingestion-job lock"
             return await original_list(ingestion_job_id, limit=limit, offset=offset)
 
-        async def lock_after_source_paging(
+        async def lock_before_source_paging(
             ingestion_job_id: uuid.UUID,
         ) -> IngestionJob | None:
-            """Verify the short reservation lock follows source paging."""
-            assert source_page_loaded, "ingestion-job lock preceded source paging"
+            """Record that the ingestion job is locked before source paging."""
+            nonlocal job_locked
+            job_locked = True
             return await original_get_for_update(ingestion_job_id)
 
         monkeypatch.setattr(
             uow.ingestion_job_sources,
             "list_for_job_paged",
-            list_sources_before_lock,
+            list_sources_after_lock,
         )
         monkeypatch.setattr(
             uow.ingestion_jobs,
             "get_for_update",
-            lock_after_source_paging,
+            lock_before_source_paging,
         )
         await materialise_episode_from_ingestion(
             uow,
@@ -76,3 +83,47 @@ async def test_materialisation_releases_job_lock_before_source_work(
                 uuid_factory=SequentialUuids(),
             ),
         )
+
+
+@pytest.mark.asyncio
+async def test_materialisation_converges_under_two_session_contention(
+    session_factory: object,
+) -> None:
+    """Concurrent materialisation keeps one durable episode and source projection."""
+    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
+    _, job = await _persist_ready_job(factory)
+    barrier = asyncio.Barrier(2)
+
+    async def materialise_in_independent_unit_of_work() -> uuid.UUID:
+        """Start one materialisation attempt concurrently with its peer."""
+        async with SqlAlchemyUnitOfWork(factory) as uow:
+            await barrier.wait()
+            episode = await materialise_episode_from_ingestion(
+                uow,
+                EpisodeMaterialisationRequest(
+                    ingestion_job_id=job.id,
+                    title="Bridgewater Futures",
+                    clock=_clock,
+                    uuid_factory=SequentialUuids(),
+                ),
+            )
+            return episode.id
+
+    episode_ids = await asyncio.gather(
+        materialise_in_independent_unit_of_work(),
+        materialise_in_independent_unit_of_work(),
+    )
+
+    async with factory() as session:
+        episode_count = await session.scalar(sa.select(sa.func.count(EpisodeRecord.id)))
+        header_count = await session.scalar(
+            sa.select(sa.func.count(TeiHeaderRecord.id))
+        )
+        document_count = await session.scalar(
+            sa.select(sa.func.count(SourceDocumentRecord.id))
+        )
+
+    assert len(set(episode_ids)) == 1, f"materialised episode ids: {episode_ids!r}"
+    assert episode_count == 1, f"episode count: {episode_count}"
+    assert header_count == 1, f"TEI header count: {header_count}"
+    assert document_count == 1, f"source document count: {document_count}"

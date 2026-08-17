@@ -51,8 +51,18 @@ def _create_generation_runs_table() -> None:
     op.create_table(
         "generation_runs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("episode_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("source_bundle_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column(
+            "episode_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("episodes.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "source_bundle_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("ingestion_jobs.id"),
+            nullable=False,
+        ),
         sa.Column("actor", sa.String(length=240), nullable=False),
         sa.Column(
             "status",

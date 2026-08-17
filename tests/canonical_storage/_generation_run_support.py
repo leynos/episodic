@@ -1,5 +1,6 @@
 """Shared generation-run SQL storage test support."""
 
+import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
@@ -27,26 +28,33 @@ if typ.TYPE_CHECKING:
 NOW = dt.datetime(2026, 6, 24, 8, 30, tzinfo=dt.UTC)
 
 
+@dc.dataclass(frozen=True, slots=True)
+class GenerationRunFixture:
+    """Optional durable generation-run values for SQL storage tests."""
+
+    run_id: uuid.UUID | None = None
+    episode_id: uuid.UUID | None = None
+    source_bundle_id: uuid.UUID | None = None
+    status: GenerationRunStatus = GenerationRunStatus.PENDING
+    created_at: dt.datetime = NOW
+
+
 def make_generation_run(
-    *,
-    run_id: uuid.UUID | None = None,
-    episode_id: uuid.UUID | None = None,
-    source_bundle_id: uuid.UUID | None = None,
-    status: GenerationRunStatus = GenerationRunStatus.PENDING,
-    created_at: dt.datetime = NOW,
+    fixture: GenerationRunFixture | None = None,
 ) -> GenerationRun:
     """Build a no-QA generation run for storage tests."""
+    fixture = fixture or GenerationRunFixture()
     return GenerationRun(
-        id=run_id or uuid.uuid7(),
-        episode_id=episode_id or uuid.uuid7(),
-        source_bundle_id=source_bundle_id or uuid.uuid7(),
+        id=fixture.run_id or uuid.uuid7(),
+        episode_id=fixture.episode_id or uuid.uuid7(),
+        source_bundle_id=fixture.source_bundle_id or uuid.uuid7(),
         actor="editor@example.com",
-        status=status,
+        status=fixture.status,
         current_node=None,
         budget_snapshot={"limit_usd": "5.00"},
         configuration={"quality_mode": QualityMode.DRAFT_WITHOUT_QA.value},
-        created_at=created_at,
-        updated_at=created_at,
+        created_at=fixture.created_at,
+        updated_at=fixture.created_at,
         started_at=None,
         ended_at=None,
         error_message=None,
@@ -143,21 +151,27 @@ async def count_records(
         return result.scalar_one()
 
 
+@dc.dataclass(frozen=True, slots=True)
+class ExecutionClaim:
+    """Claim values passed to the durable generation-run adapter."""
+
+    current_node: str | None
+    started_at: dt.datetime
+    lease_expires_at: dt.datetime | None
+
+
 async def claim_run_in_independent_uow(
     session_factory: async_sessionmaker[AsyncSession],
     run_id: uuid.UUID,
-    *,
-    current_node: str | None,
-    started_at: dt.datetime,
-    lease_expires_at: dt.datetime | None,
+    claim: ExecutionClaim,
 ) -> GenerationRun | None:
     """Claim a run within a separately committed unit of work."""
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
         claimed = await uow.generation_runs.claim_run_for_execution(
             run_id,
-            current_node=current_node,
-            started_at=started_at,
-            lease_expires_at=lease_expires_at,
+            current_node=claim.current_node,
+            started_at=claim.started_at,
+            lease_expires_at=claim.lease_expires_at,
         )
         await uow.commit()
         return claimed

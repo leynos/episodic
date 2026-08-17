@@ -133,6 +133,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     )
     _semaphore: asyncio.Semaphore = dc.field(init=False)
     _admitted_run_count: int = dc.field(default=0, init=False)
+    _cancelled_run_ids: set[uuid.UUID] = dc.field(default_factory=set, init=False)
     _is_shutting_down: bool = dc.field(default=False, init=False)
 
     def __post_init__(self) -> None:
@@ -167,18 +168,24 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         while self._tasks:
             await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
 
+    @property
+    def scheduled_run_count(self) -> int:
+        """Return the number of background runs retained by the launcher."""
+        return len(self._tasks)
+
     async def shutdown(self) -> None:
         """Cancel and drain all scheduled generation tasks."""
         self._is_shutting_down = True
-        cancelled_run_ids = tuple(
-            self._task_run_ids[task] for task in self._tasks if not task.done()
+        cancelled_tasks = tuple(
+            (task, self._task_run_ids[task]) for task in self._tasks if not task.done()
         )
-        for task in tuple(self._tasks):
-            if not task.done():
-                task.cancel()
+        for task, _ in cancelled_tasks:
+            task.cancel()
         await self.drain()
-        for run_id in cancelled_run_ids:
-            await self._record_cancellation(run_id)
+        for task, run_id in cancelled_tasks:
+            if task.cancelled() and run_id not in self._cancelled_run_ids:
+                await self._record_cancellation(run_id)
+                self._cancelled_run_ids.add(run_id)
 
     def _discard_task(self, task: asyncio.Task[None]) -> None:
         """Remove finished tasks from the strong-reference registry."""
@@ -220,6 +227,7 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
                 span.set_attribute("outcome", "cancelled")
                 span.set_attribute("failure_category", "launcher.shutdown")
                 await asyncio.shield(self._record_cancellation(run_id))
+                self._cancelled_run_ids.add(run_id)
                 raise
             else:
                 span.set_attribute("outcome", outcome.outcome)

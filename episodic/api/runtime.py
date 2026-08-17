@@ -60,7 +60,6 @@ class _GenerationLauncherRuntime:
 
     metrics: ValueMetricsPort
     object_store: ObjectStorePort | None = None
-    config: RuntimeConfig | None = None
 
 
 _SUPPORTED_POSTGRES_DRIVERS = frozenset({"postgres", "postgresql"})
@@ -235,17 +234,11 @@ def _build_generation_launcher(
     uow_factory: UowFactory,
     llm_port: LLMPort,
     runtime: _GenerationLauncherRuntime,
+    *,
+    config: RuntimeConfig,
 ) -> InProcessGenerationRunLauncher:
     """Build the no-QA generation-run launcher when an LLM port is configured."""
-    draft_model = (
-        _DEFAULT_DRAFT_MODEL if runtime.config is None else runtime.config.draft_model
-    )
-    pricing_directory = (
-        _DEFAULT_PRICING_DIRECTORY
-        if runtime.config is None
-        else runtime.config.pricing_snapshot_directory
-    )
-    pricing_catalogue = FilePricingCatalogue(pricing_directory)
+    pricing_catalogue = FilePricingCatalogue(config.pricing_snapshot_directory)
 
     def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
         return CostRecorder(
@@ -259,7 +252,7 @@ def _build_generation_launcher(
         draft_generator=LLMDraftScriptGenerator(
             llm=llm_port,
             config=LLMDraftScriptGeneratorConfig(
-                model=draft_model,
+                model=config.draft_model,
                 provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
             ),
         ),
@@ -360,8 +353,8 @@ def create_app_from_env() -> asgi.App:
             _GenerationLauncherRuntime(
                 metrics=metrics,
                 object_store=object_store,
-                config=config,
             ),
+            config=config,
         )
 
         async def shutdown_generation() -> None:

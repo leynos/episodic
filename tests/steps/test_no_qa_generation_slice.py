@@ -208,6 +208,8 @@ def _create(
         )
     )
     context.responses.append(response)
+    launcher = require(context.launcher, "generation launcher")
+    context.runner.run(launcher.drain())
     return response
 
 

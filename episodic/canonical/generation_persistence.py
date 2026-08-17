@@ -1,9 +1,6 @@
 """Persist canonical state at the no-QA draft-generation boundaries.
 
-The public request types, :class:`EpisodeMaterialisationRequest` and
-:class:`DraftScriptPersistenceRequest`, and the services
-:func:`materialise_episode_from_ingestion` and :func:`persist_draft_script`
-bridge generation with the canonical domain. Materialization turns a ready
+Materialization turns a ready
 :class:`~episodic.canonical.domain.IngestionJob` and its attached sources into
 a :class:`~episodic.canonical.domain.CanonicalEpisode`, TEI header, and source
 documents with a valid placeholder TEI. Persistence validates the
@@ -11,20 +8,10 @@ documents with a valid placeholder TEI. Persistence validates the
 optimistic :class:`~episodic.canonical.domain.EpisodeTeiUpdate` with explicit
 no-QA provenance, the generation-run identifier, revision, and content hash.
 
-Both services depend on the
-:class:`~episodic.canonical.unit_of_work_protocols.CanonicalUnitOfWork` ports
-and repository interfaces rather than a storage implementation. Materialization
-commits its short ingestion-job reservation and episode-plus-source projection
-so it can release the ingestion-job lock before source work and converge
-concurrent requests. The generation-run API resource uses materialization
-before creating a run, while the detached launcher uses draft persistence after
-generation. Storage adapters therefore remain behind the unit-of-work boundary,
-and the generator remains responsible only for producing the draft result.
+The generation-run API materialises before creating a run; the detached launcher
+persists generated drafts afterwards.
 """
 
-import collections.abc as cabc
-import dataclasses as dc
-import datetime as dt
 import typing as typ
 import uuid
 
@@ -41,118 +28,76 @@ from episodic.canonical.domain import (
     SourceDocument,
     TeiHeader,
 )
+from episodic.canonical.generation_persistence_types import (
+    DraftContentHashMismatchError,
+    DraftScriptPersistenceError,  # noqa: F401  # Re-exported service contract.
+    DraftScriptPersistenceRequest,
+    EpisodeMaterialisationRequest,
+    GenerationSourceUploadNotFoundError,
+    IngestionJobNotReadyError,
+    InvalidDraftTeiError,
+    MissingAttachedSourcesError,
+    SourceDocumentProjectionError,
+    _SourceDocumentProjection,
+)
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.hashing import sha256_text
 from episodic.canonical.source_intake_errors import IngestionJobNotFoundError
 from episodic.canonical.tei import parse_tei_header
 
 if typ.TYPE_CHECKING:
+    import datetime as dt
+
     from episodic.canonical.ingestion_sources import IngestionJobSource
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.canonical.uploads import Upload
     from episodic.generation.draft_script import DraftScriptResult
-
-type Clock = cabc.Callable[[], dt.datetime]
-type UuidFactory = cabc.Callable[[], uuid.UUID]
-
-
-def _utc_now() -> dt.datetime:
-    """Return a timezone-aware UTC timestamp."""
-    return dt.datetime.now(dt.UTC)
-
-
-def _uuid7() -> uuid.UUID:
-    """Return a monotonic storage UUID."""
-    return uuid.uuid7()
-
-
-class DraftScriptPersistenceError(Exception):
-    """Base class for draft persistence failures."""
-
-
-class IngestionJobNotReadyError(DraftScriptPersistenceError):
-    """Raised when materialization is requested before an intake job is ready."""
-
-    def __init__(self, ingestion_job_id: uuid.UUID) -> None:
-        self.ingestion_job_id = ingestion_job_id
-        message = f"Ingestion job {ingestion_job_id} is not ready for generation."
-        super().__init__(message)
-
-
-class MissingAttachedSourcesError(DraftScriptPersistenceError):
-    """Raised when a ready ingestion job has no source attachments."""
-
-    def __init__(self, ingestion_job_id: uuid.UUID) -> None:
-        self.ingestion_job_id = ingestion_job_id
-        message = f"Ingestion job {ingestion_job_id} has no attached sources."
-        super().__init__(message)
-
-
-class GenerationSourceUploadNotFoundError(DraftScriptPersistenceError):
-    """Raised when a generation source refers to an absent upload."""
-
-    def __init__(self, upload_id: uuid.UUID) -> None:
-        self.upload_id = upload_id
-        message = f"Upload {upload_id} was not found for ingestion source."
-        super().__init__(message)
-
-
-class DraftContentHashMismatchError(DraftScriptPersistenceError):
-    """Raised when generated TEI and its declared hash disagree."""
-
-    def __init__(self, expected_hash: str, actual_hash: str) -> None:
-        self.expected_hash = expected_hash
-        self.actual_hash = actual_hash
-        message = "Draft script content_hash does not match tei_xml."
-        super().__init__(message)
-
-
-class InvalidDraftTeiError(DraftScriptPersistenceError, ValueError):
-    """Raised when generated TEI cannot be validated."""
-
-
-@dc.dataclass(frozen=True, slots=True)
-class EpisodeMaterialisationRequest:
-    """Command for materialising an episode from an ingestion job."""
-
-    ingestion_job_id: uuid.UUID
-    title: str
-    clock: Clock = _utc_now
-    uuid_factory: UuidFactory = _uuid7
-
-
-@dc.dataclass(frozen=True, slots=True)
-class DraftScriptPersistenceRequest:
-    """Command for writing generated draft TEI to an episode."""
-
-    episode_id: uuid.UUID
-    generation_run_id: uuid.UUID
-    result: DraftScriptResult
-    expected_revision: int
-    clock: Clock = _utc_now
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _SourceDocumentProjection:
-    source: IngestionJobSource
-    upload: Upload | None
-    episode_id: uuid.UUID
-    document_id: uuid.UUID
-    now: dt.datetime
 
 
 async def materialise_episode_from_ingestion(
     uow: CanonicalUnitOfWork,
     request: EpisodeMaterialisationRequest,
 ) -> CanonicalEpisode:
-    """Create a placeholder canonical episode for a ready ingestion job."""
-    sources = await _list_all_sources(uow, request.ingestion_job_id)
-    if len(sources) == 0:
-        raise MissingAttachedSourcesError(request.ingestion_job_id)
+    """Materialise a ready ingestion job as a placeholder canonical episode.
 
+    The service reserves a target episode identity before source projection.
+    Retries therefore converge on deterministic source-document identifiers.
+
+    Parameters
+    ----------
+    uow
+        Open canonical unit of work. The service commits the reservation and
+        completed source projection, and rolls back only a verified duplicate
+        source-document race.
+    request
+        Materialisation command describing the job and deterministic seams.
+
+    Returns
+    -------
+    CanonicalEpisode
+        Existing or newly created placeholder episode for the ingestion job.
+
+    Raises
+    ------
+    IngestionJobNotReadyError
+        If the job is not ready for generation.
+    MissingAttachedSourcesError
+        If the ready job has no attached sources.
+    IntegrityError
+        If source projection violates an unrelated storage constraint.
+
+    Notes
+    -----
+    The ingestion-job lookup preserves ``IngestionJobNotFoundError``. Source
+    upload and projection failures preserve their typed persistence errors.
+    """
     job = await _get_ingestion_job_for_update(uow, request.ingestion_job_id)
     if job.intake_state is not IntakeState.READY_FOR_GENERATION:
         raise IngestionJobNotReadyError(request.ingestion_job_id)
+
+    sources = await _list_all_sources(uow, request.ingestion_job_id)
+    if len(sources) == 0:
+        raise MissingAttachedSourcesError(request.ingestion_job_id)
 
     episode_id = job.target_episode_id or request.uuid_factory()
     now = request.clock()
@@ -184,8 +129,11 @@ async def materialise_episode_from_ingestion(
     try:
         await _project_source_documents(uow, sources, episode.id, now)
         await uow.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await uow.rollback()
+        if not _is_source_document_duplicate(exc):
+            raise
+        await _require_projected_source_documents(uow, sources, episode.id)
     return episode
 
 
@@ -193,7 +141,31 @@ async def persist_draft_script(
     uow: CanonicalUnitOfWork,
     request: DraftScriptPersistenceRequest,
 ) -> CanonicalEpisode:
-    """Persist generated TEI and no-QA provenance onto an episode."""
+    """Persist generated TEI and no-QA provenance onto an episode.
+
+    Parameters
+    ----------
+    uow
+        Open canonical unit of work that owns the revision-guarded update.
+    request
+        Draft result, episode provenance, expected revision, and clock.
+
+    Returns
+    -------
+    CanonicalEpisode
+        Episode returned by the revision-guarded repository update.
+
+    Raises
+    ------
+    InvalidDraftTeiError
+        If the generated TEI cannot be parsed as a TEI header.
+
+    Notes
+    -----
+    Hash mismatches and revision conflicts retain their typed domain errors.
+    The service does not commit or roll back the unit of work; callers compose
+    its episode update with generation-run events and terminal status writes.
+    """
     _validate_draft_result(request.result)
     try:
         parse_tei_header(request.result.tei_xml)
@@ -271,6 +243,38 @@ async def _project_source_documents(
                 )
             )
         )
+
+
+async def _require_projected_source_documents(
+    uow: CanonicalUnitOfWork,
+    sources: list[IngestionJobSource],
+    episode_id: uuid.UUID,
+) -> None:
+    """Verify a duplicate race left every deterministic projection durable."""
+    projected_ids = {
+        document.id
+        for document in await uow.source_documents.list_for_job(
+            sources[0].ingestion_job_id
+        )
+    }
+    expected_ids = {uuid.uuid5(episode_id, str(source.id)) for source in sources}
+    missing_ids = expected_ids - projected_ids
+    if missing_ids:
+        msg = "Source document projection did not complete after a duplicate race."
+        raise SourceDocumentProjectionError(msg)
+
+
+def _is_source_document_duplicate(error: IntegrityError) -> bool:
+    """Return whether a source-document primary-key race caused ``error``."""
+    original = error.orig
+    constraint_name = getattr(getattr(original, "diag", None), "constraint_name", None)
+    if constraint_name == "source_documents_pkey":
+        return True
+    message = str(original)
+    return (
+        "source_documents_pkey" in message
+        or "UNIQUE constraint failed: source_documents.id" in message
+    )
 
 
 def _build_placeholder_header(

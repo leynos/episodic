@@ -17,7 +17,10 @@ from episodic.canonical.domain import (
 from episodic.canonical.generation_quality import QaStatus
 from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptTransientProviderError
-from episodic.generation.launcher import GenerationRunAdmissionError
+from episodic.generation.launcher import (
+    GenerationRunAdmissionError,
+    InProcessGenerationRunLauncher,
+)
 from episodic.generation.launcher_support import source_from_document
 from episodic.observability import RecordingTracer
 from tests.generation_run_launcher_support import (
@@ -37,8 +40,6 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-    from episodic.generation.launcher import InProcessGenerationRunLauncher
 
 
 async def _uploaded_chunks() -> cabc.AsyncIterator[bytes]:
@@ -83,7 +84,7 @@ class _RecordingMetrics:
 async def _launch_and_load_run(
     factory: async_sessionmaker[AsyncSession],
     run_id: uuid.UUID,
-    run_launcher: "InProcessGenerationRunLauncher",  # noqa: UP037 - type-only import.
+    run_launcher: InProcessGenerationRunLauncher,
 ) -> tuple[GenerationRun, tuple[GenerationEvent, ...]]:
     """Launch a run and return its persisted terminal state and events."""
     await run_launcher.launch(run_id)
@@ -336,6 +337,9 @@ async def test_launcher_shutdown_marks_running_task_failed(
     assert events[-1].payload["error_category"] == "launcher.shutdown", (
         f"run {run_id} final event={events[-1]!r}"
     )
+    assert [event.kind for event in events].count("run.failed") == 1, (
+        f"run {run_id} events={events!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -360,8 +364,9 @@ async def test_launcher_returns_while_concurrency_slot_is_busy(
     with pytest.raises(GenerationRunAdmissionError, match="capacity"):
         await run_launcher.launch(uuid.uuid7())
 
-    assert len(run_launcher._tasks) == 2, (
-        f"expected one running and one pending task, got {run_launcher._tasks!r}"
+    assert run_launcher.scheduled_run_count == 2, (
+        "expected one running and one pending task, got "
+        f"{run_launcher.scheduled_run_count}"
     )
     assert (
         "generation_run_admission_rejected_total",
