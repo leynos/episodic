@@ -446,6 +446,17 @@ when any of the following is breached.
   production-wide metrics, lease/recovery, retry metrics, generated durable
   lifecycle proofs, and in-flight disposal proof outstanding.
 
+- [x] (recorded, 2026-08-17) Current review-remediation decisions: launcher
+  composition supplies configuration explicitly; episode materialization locks
+  and validates the ingestion job before source paging, retaining
+  source-document duplicate recovery only after verification; generation-run
+  `episode_id` and `source_bundle_id` foreign keys remain enforced, so test
+  fixtures must provision the related episode and ingestion-job rows; manual
+  recovery SQL uses a conditional lock and commits the failure event and status
+  atomically; observability logs only safe, allow-listed attributes; and the
+  series-profile `Idempotency-Key` review item is stale because that endpoint
+  has no current idempotency contract.
+
 ## Surprises & discoveries
 
 - Observation: the existing generation-orchestration graph
@@ -1996,3 +2007,10 @@ base `configure-df12-lints`; direct `gh pr edit` was rejected because it
 belongs to a stack. PR #220 is `main <- configure-df12-lints`, and
 `gh stack link --base main 220 141` confirmed that the two-PR stack is already
 up to date. Remote head equals local.
+
+Revised 2026-08-17 to record the current review-remediation decisions for
+explicit launcher configuration, locked and validated ingestion materialization
+with verified duplicate recovery, generation-run foreign keys and fixture
+requirements, atomic manual recovery, allow-listed observability attributes,
+and the stale series-profile `Idempotency-Key` finding. No roadmap status was
+changed.
