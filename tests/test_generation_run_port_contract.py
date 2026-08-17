@@ -8,7 +8,6 @@ adding scenarios for another implementation.
 import asyncio
 import dataclasses as dc
 import datetime as dt
-import typing as typ
 import uuid
 
 import pytest
@@ -287,9 +286,7 @@ class TestCompositeProtocol:
 
     def test_noop_composite_protocol_stub_typechecks(self) -> None:
         """A class implementing every method should satisfy the composite port."""
-        # Static type checkers validate NoopGenerationRunPort against
-        # GenerationRunPort through this assignment.
-        _port: GenerationRunPort = typ.cast(
-            "GenerationRunPort",
-            NoopGenerationRunPort(),
+        noop_port: GenerationRunPort = NoopGenerationRunPort()
+        assert isinstance(noop_port, GenerationRunPort), (
+            f"expected no-op port to satisfy GenerationRunPort: {noop_port!r}"
         )
