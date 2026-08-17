@@ -251,7 +251,25 @@ def serialize_generation_event(event: GenerationEvent) -> dict[str, typ.Any]:
 
 
 def serialize_tei_envelope(episode: CanonicalEpisode) -> dict[str, typ.Any]:
-    """Serialize generated TEI metadata using the public field names."""
+    """Serialize a canonical episode's generated TEI into public JSON fields.
+
+    Parameters
+    ----------
+    episode : CanonicalEpisode
+        Episode containing the generated XML, revision metadata, QA status,
+        and generation provenance.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        JSON-ready envelope mapping ``episode_id`` to ``episode.id``,
+        ``tei_header_id`` to ``episode.tei_header_id``, ``tei_xml`` to the
+        generated XML, ``content_hash`` to its hash, and ``version`` to
+        ``episode.tei_revision``. ``last_generation_run_id`` is the optional
+        generation-run UUID as a string; ``quality_mode`` is the public
+        ``draft_without_qa`` value; ``qa_status`` is its optional public value;
+        and ``updated_at`` is the episode timestamp in ISO 8601 form.
+    """
     return {
         "episode_id": str(episode.id),
         "tei_header_id": str(episode.tei_header_id),

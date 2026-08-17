@@ -21,7 +21,14 @@ _TEI_MEDIA_TYPE = "application/tei+xml"
 
 
 class EpisodeTeiResource:
-    """Return generated episode TEI as metadata or an XML attachment."""
+    """Return generated episode TEI as metadata or an XML attachment.
+
+    Parameters
+    ----------
+    uow_factory : UowFactory
+        Callable dependency retained by the resource and invoked to construct
+        an asynchronous unit of work for each request.
+    """
 
     def __init__(self, uow_factory: UowFactory) -> None:
         self._uow_factory = uow_factory
@@ -32,7 +39,34 @@ class EpisodeTeiResource:
         resp: falcon.Response,
         episode_id: str,
     ) -> None:
-        """Return generated TEI using the requested representation."""
+        """Return generated TEI using the requested representation.
+
+        Parameters
+        ----------
+        req : falcon.Request
+            Request whose ``Accept`` and ``If-None-Match`` headers select and
+            condition the representation.
+        resp : falcon.Response
+            Response to populate with JSON metadata or an XML attachment.
+        episode_id : str
+            Episode UUID from the route path.
+
+        Raises
+        ------
+        falcon.HTTPBadRequest
+            If ``episode_id`` is not a valid UUID (HTTP 400).
+        falcon.HTTPNotFound
+            If the episode is absent or has no generated TEI (HTTP 404).
+        falcon.HTTPNotAcceptable
+            If ``Accept`` excludes both supported media types (HTTP 406).
+
+        Notes
+        -----
+        JSON metadata (``application/json``) is the default representation.
+        ``application/tei+xml`` selects the generated XML attachment. A
+        matching or wildcard ``If-None-Match`` validator returns HTTP 304 with
+        no response body.
+        """  # noqa: DOC501, DOC502  # Indirect exceptions form part of this public contract.
         parsed_episode_id = parse_uuid(episode_id, "episode_id")
         async with self._uow_factory() as uow:
             episode = await uow.episodes.get(parsed_episode_id)
