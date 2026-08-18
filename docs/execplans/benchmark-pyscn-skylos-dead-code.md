@@ -200,7 +200,7 @@ filtering reduced subclass-hook noise but did not solve implicit dataclass,
 framework, export, and interface semantics.
 
 The `make check-fmt`, `make test`, `make typecheck`, `make lint`,
-`make markdownlint`, `make nixie`, and `mbake validate Makefile` checks passed.
+`make markdownlint`, `make nixie`, and `make validate Makefile` checks passed.
 The default merman Mermaid backend timed out on an unchanged large TUI design
 diagram; the supported `mmdc` backend validated the full documentation set
 successfully. The repository scan identified

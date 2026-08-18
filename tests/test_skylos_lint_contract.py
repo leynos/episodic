@@ -92,36 +92,37 @@ def test_skylos_entrypoint_rules_distinguish_methods_from_functions() -> None:
 
 def test_make_lint_runs_local_blocking_dead_code_scan() -> None:
     """Keep the Skylos invocation deterministic and non-interactive."""
-    makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
+    make_executable = shutil.which("make")
+    assert make_executable is not None, "Expected make to be available for the test."
 
-    expected_command = (
-        "$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --category dead_code --gate "
-        "--format concise --no-upload --no-provenance --no-grep-verify"
+    result = subprocess.run(  # noqa: S603 - test executes make without a shell
+        [make_executable, "--no-print-directory", "--dry-run", "lint"],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    assert expected_command in makefile, (
-        "Expected make lint to run the blocking production-only Skylos command."
-    )
-    assert "--config-file pyproject.toml" in makefile, (
-        "Expected the pinned local Skylos command to load pyproject.toml."
-    )
-    production_targets = next(
+
+    assert result.returncode == 0, "Expected make lint dry run to succeed."
+    skylos_commands = [
         line
-        for line in makefile.splitlines()
-        if line.startswith("SKYLOS_PRODUCTION_TARGETS ?=")
+        for line in result.stdout.splitlines()
+        if "skylos --config-file pyproject.toml" in line
+    ]
+    assert len(skylos_commands) == 1, (
+        "Expected make lint to expand exactly one blocking Skylos command."
     )
-    assert (
-        production_targets
-        == "SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py"
-    ), "Expected an explicit production-only Skylos target variable."
-    assert "SKYLOS_PRODUCTION_TARGETS ?= $(PYLINT_TARGETS)" not in makefile, (
-        "Expected the blocking Skylos scan not to reuse Pylint targets."
+    skylos_command = skylos_commands[0]
+    assert "alembic episodic openai_test_types.py" in skylos_command, (
+        "Expected the blocking Skylos command to use production-only targets."
     )
-    assert "tests" not in production_targets, (
+    assert " tests" not in skylos_command, (
         "Expected tests to be excluded from the production Skylos graph."
     )
-    assert "--no-grep-verify" in expected_command, (
-        "Expected test references to be excluded from production liveness checks."
-    )
+    assert (
+        "--category dead_code --gate --format concise --no-upload "
+        "--no-provenance --no-grep-verify" in skylos_command
+    ), "Expected the blocking Skylos command to retain its gate flags."
 
 
 def test_skylos_allow_requires_name_and_reason() -> None:

@@ -26,7 +26,7 @@
   {
     "identifier": "unused-class",
     "path": "symbols.py",
-    "line": 12,
+    "line": 19,
     "lane": "unused-symbol",
     "is_dead": true,
     "rationale": "the private class is never instantiated or exported"
@@ -34,7 +34,7 @@
   {
     "identifier": "directly-used-function",
     "path": "symbols.py",
-    "line": 16,
+    "line": 31,
     "lane": "unused-symbol",
     "is_dead": false,
     "rationale": "the function is called during module execution"
@@ -42,7 +42,7 @@
   {
     "identifier": "unused-local-variable",
     "path": "symbols.py",
-    "line": 17,
+    "line": 44,
     "lane": "unused-symbol",
     "is_dead": true,
     "rationale": "unused_local is assigned but never read"
@@ -50,7 +50,7 @@
   {
     "identifier": "unused-parameter",
     "path": "symbols.py",
-    "line": 23,
+    "line": 50,
     "lane": "unused-symbol",
     "is_dead": true,
     "rationale": "unused_parameter is accepted but never read"
@@ -58,7 +58,7 @@
   {
     "identifier": "instantiated-class",
     "path": "symbols.py",
-    "line": 28,
+    "line": 69,
     "lane": "unused-symbol",
     "is_dead": false,
     "rationale": "UsedClass is instantiated during module execution"
@@ -66,7 +66,7 @@
   {
     "identifier": "exported-function",
     "path": "symbols.py",
-    "line": 33,
+    "line": 83,
     "lane": "unused-symbol",
     "is_dead": false,
     "rationale": "the package imports this function and lists it in __all__"
@@ -82,7 +82,7 @@
   {
     "identifier": "decorator-registered-function",
     "path": "dynamic.py",
-    "line": 22,
+    "line": 50,
     "lane": "unused-symbol",
     "is_dead": false,
     "rationale": "the decorator stores the function and the registry calls it"
@@ -90,7 +90,7 @@
   {
     "identifier": "dynamic-method",
     "path": "dynamic.py",
-    "line": 27,
+    "line": 64,
     "lane": "unused-symbol",
     "is_dead": false,
     "rationale": "getattr resolves and calls invoked_by_name at runtime"
@@ -98,7 +98,7 @@
   {
     "identifier": "dunder-call-method",
     "path": "dynamic.py",
-    "line": 32,
+    "line": 78,
     "lane": "unused-symbol",
     "is_dead": false,
     "rationale": "CallableHandler()() invokes __call__ through Python syntax"
@@ -106,7 +106,7 @@
   {
     "identifier": "after-return",
     "path": "flow.py",
-    "line": 9,
+    "line": 16,
     "lane": "unreachable-statement",
     "is_dead": true,
     "rationale": "a return always exits the function before this assignment"
@@ -114,7 +114,7 @@
   {
     "identifier": "after-raise",
     "path": "flow.py",
-    "line": 14,
+    "line": 28,
     "lane": "unreachable-statement",
     "is_dead": true,
     "rationale": "an unconditional raise exits before this assignment"
@@ -122,7 +122,7 @@
   {
     "identifier": "after-continue",
     "path": "flow.py",
-    "line": 20,
+    "line": 46,
     "lane": "unreachable-statement",
     "is_dead": true,
     "rationale": "continue begins the next iteration before this assignment"
@@ -130,7 +130,7 @@
   {
     "identifier": "after-break",
     "path": "flow.py",
-    "line": 27,
+    "line": 65,
     "lane": "unreachable-statement",
     "is_dead": true,
     "rationale": "break exits the loop before this assignment"
@@ -138,7 +138,7 @@
   {
     "identifier": "constant-false-branch",
     "path": "flow.py",
-    "line": 33,
+    "line": 78,
     "lane": "unreachable-statement",
     "is_dead": true,
     "rationale": "the literal False branch can never execute"
@@ -146,7 +146,7 @@
   {
     "identifier": "conditional-return-fallthrough",
     "path": "flow.py",
-    "line": 40,
+    "line": 97,
     "lane": "unreachable-statement",
     "is_dead": false,
     "rationale": "this assignment executes whenever flag is false"

@@ -42,7 +42,7 @@ SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie spelling spelling-helper-test test typecheck \
-        crosshair check-migrations skylos-allow \
+        crosshair check-migrations skylos-allow validate \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
         $(TOOLS) $(VENV_TOOLS)
 
@@ -99,6 +99,9 @@ fmt: build $(MDFORMAT_ALL) ## Format sources
 check-fmt: build ## Verify formatting
 	$(UV_ENV) $(UV) run ruff format --check
 	# mdformat-all doesn't currently do checking
+
+validate: ## Validate the Makefile
+	mbake validate Makefile
 
 lint: check-architecture ## Run linters
 	$(UV_ENV) $(UV) run ruff check
