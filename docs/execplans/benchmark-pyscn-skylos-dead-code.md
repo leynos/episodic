@@ -351,8 +351,8 @@ Acceptance requires all of the following observable outcomes:
   scanner findings are never silently discarded.
 - The report separates project-authored claims from measurements made in this
   repository.
-- The Episodic scan classifies each reported finding without changing
-  production code.
+- The Episodic benchmark scan classifies each reported finding without itself
+  changing production code.
 - Any scorer tests show recorded red and green evidence, then pass with the
   wider Python gates.
 - `make check-fmt`, `make test`, `make typecheck`, `make lint`,
