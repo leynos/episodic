@@ -41,9 +41,8 @@ class _IngestionJobPersistenceError(DraftScriptPersistenceError):
     def __init__(self, ingestion_job_id: uuid.UUID) -> None:
         """Initialize an ingestion-job persistence error."""
         self.ingestion_job_id = ingestion_job_id
-        super().__init__(
-            self.message_template.format(ingestion_job_id=ingestion_job_id)
-        )
+        message = self.message_template.format(ingestion_job_id=ingestion_job_id)
+        super().__init__(message)
 
 
 class IngestionJobNotReadyError(_IngestionJobPersistenceError):

@@ -102,7 +102,19 @@ class NoQaGenerationSliceContext:
 
 @dc.dataclass(frozen=True, slots=True)
 class ErrorEnvelopeExpectation:
-    """Expected values for one standard API error envelope."""
+    """Expected values for one standard API error envelope.
+
+    Attributes
+    ----------
+    status : int
+        Expected HTTP status code.
+    code : str
+        Expected machine-readable error code.
+    message : str
+        Expected human-readable error message.
+    details : dict[str, object]
+        Expected structured error details.
+    """
 
     status: int
     code: str
@@ -130,7 +142,18 @@ def assert_error_envelope(
     response: httpx.Response,
     expected: ErrorEnvelopeExpectation,
 ) -> None:
-    """Assert the standard API error envelope exactly."""
+    """Assert the standard API error envelope exactly.
+
+    Parameters
+    ----------
+    response : httpx.Response
+        HTTP response containing the error envelope to inspect.
+    expected : ErrorEnvelopeExpectation
+        Expected status and error-envelope field values.
+
+    The error envelope must contain exactly ``code``, ``message``, and
+    ``details``.
+    """
     assert_response_status(response, expected.status)
     payload = response.json()
     assert set(payload) == {"code", "message", "details"}, (

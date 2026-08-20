@@ -107,19 +107,18 @@ async def test_materialise_episode_requires_attached_sources(
 
 @pytest.mark.asyncio
 async def test_materialise_episode_requires_ready_job_before_sources(
-    session_factory: object,
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A non-ready source-free job reports the readiness failure first."""
-    factory = typ.cast("async_sessionmaker[AsyncSession]", session_factory)
     job = _ingestion_job(
         _series_profile().id,
         None,
         intake_state=IntakeState.AWAITING_SOURCES,
     )
 
-    await _persist_materialisation_input(factory, job)
+    await _persist_materialisation_input(session_factory, job)
     with pytest.raises(IngestionJobNotReadyError, match="not ready") as raised:
-        await _materialise(factory, job.id)
+        await _materialise(session_factory, job.id)
 
     assert raised.value.ingestion_job_id == job.id, (
         f"source-free non-ready job id: {raised.value.ingestion_job_id}"
