@@ -1,10 +1,8 @@
 """Persist canonical state at the no-QA draft-generation boundaries.
 
-Materialization turns a ready ingestion job into an episode, TEI header, and
-source documents with placeholder TEI. Persistence validates generator output
-and applies optimistic TEI updates.
-
-The API materialises before launching; the detached launcher persists drafts.
+Materialization turns ready jobs into placeholder episodes and source documents.
+Persistence validates generator output and applies optimistic TEI updates; the
+API materialises before launch, and the detached launcher persists drafts.
 """
 
 import typing as typ
@@ -58,8 +56,7 @@ async def materialise_episode_from_ingestion(
     Parameters
     ----------
     uow
-        Open unit of work; commits the reservation/projection and rolls back
-        duplicate races.
+        Open unit of work; commits reservation/projection and rolls back races.
     request
         Materialisation command describing the job and deterministic seams.
 
@@ -218,6 +215,15 @@ async def _list_all_sources(
         offset += page_size
 
 
+async def _projected_source_document_ids(
+    uow: CanonicalUnitOfWork,
+    ingestion_job_id: uuid.UUID,
+) -> set[uuid.UUID]:
+    """Return persisted source-document IDs for one ingestion job."""
+    documents = await uow.source_documents.list_for_job(ingestion_job_id)
+    return {document.id for document in documents}
+
+
 async def _project_source_documents(
     uow: CanonicalUnitOfWork,
     sources: list[IngestionJobSource],
@@ -225,12 +231,9 @@ async def _project_source_documents(
     now: dt.datetime,
 ) -> None:
     """Persist source projections absent from this episode's job."""
-    existing_document_ids = {
-        document.id
-        for document in await uow.source_documents.list_for_job(
-            sources[0].ingestion_job_id
-        )
-    }
+    existing_document_ids = await _projected_source_document_ids(
+        uow, sources[0].ingestion_job_id
+    )
     for source in sources:
         document_id = uuid.uuid5(episode_id, str(source.id))
         if document_id in existing_document_ids:
@@ -255,12 +258,9 @@ async def _require_projected_source_documents(
     episode_id: uuid.UUID,
 ) -> None:
     """Verify a duplicate race left every deterministic projection durable."""
-    projected_ids = {
-        document.id
-        for document in await uow.source_documents.list_for_job(
-            sources[0].ingestion_job_id
-        )
-    }
+    projected_ids = await _projected_source_document_ids(
+        uow, sources[0].ingestion_job_id
+    )
     expected_ids = {uuid.uuid5(episode_id, str(source.id)) for source in sources}
     missing_ids = expected_ids - projected_ids
     if missing_ids:
