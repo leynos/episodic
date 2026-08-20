@@ -474,6 +474,39 @@ when any of the following is breached.
   episode-reuse helper, preserves source paging before the ingestion-job lock,
   preserves committing the target episode association before projection, and
   leaves duplicate-projection rollback in the public service.
+- [x] (recorded, 2026-08-20) Validated the open CodeScene "Code Duplication"
+  diagnostic on `tests/test_generation_run_port_contract_support.py`: `cs
+  review` (CLI 1.0.33) confirms one clone group of seven
+  `NoopGenerationRunPort` methods (`get_run`, `list_runs`, `list_events`,
+  `get_checkpoint`, `respond_to_checkpoint`, `time_out_checkpoint`,
+  `cancel_checkpoint`), and `cs review` on
+  `episodic/canonical/generation_run_ports.py` confirms a second structural
+  pairing (`GenerationRunRepository.list_runs` with
+  `GenerationEventLog.list_events`). `tests/test_generation_run_port_contract.py`
+  scores 10.00 (no findings). Both findings describe intentional structural
+  similarity in protocol-completeness scaffolding, not shared domain behaviour:
+  (1) the stub's read bodies return the empty value for that contract (`None`
+  vs `()` vs zero), its run mutations raise `RunNotFound`, and its checkpoint
+  mutations raise `CheckpointNotFound`, with per-method signatures, document
+  param/return/Raises sections, and distinct keyword-only parameters, mapping
+  one-to-one onto the `GenerationRunRepository`, `GenerationEventLog`, and
+  `GenerationCheckpointPort` sub-protocols that `GenerationRunPort` composes;
+  (2) the port declarations share only the `raise NotImplementedError` marker
+  body and a `limit`/`offset` paging signature while returning different domain
+  tuples with different filters, and the recorded decision retains distinct
+  `list_runs`/`list_events` contracts. The duplication remedy CodeScene itself
+  prescribes — "extract a shared representation" — is already realized by the
+  protocol definitions in `generation_run_ports.py`; the stub is contract
+  derived state, so extracting generic empty-result, pass-through, or
+  not-found helper methods (or merging run, event-log, and checkpoint
+  operations) would hide protocol conformance and weaken the direct typed
+  assignment `noop_port: GenerationRunPort = NoopGenerationRunPort()` in
+  `TestCompositeProtocol.test_noop_composite_protocol_stub_typechecks` without
+  removing a single maintenance risk. Plain "Code Duplication" is a core
+  CodeScene factor — not a configurable `code-health-rules.json` rule and not
+  suppressible by `@codescene` directives — so the disposition is `no code
+  changes required; suppress diagnostic` on the CodeScene platform, per the
+  2026-08-17 decision. ExecPlan-only change; runtime/test gates unaffected.
 
 ## Surprises & discoveries
 
