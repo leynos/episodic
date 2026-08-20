@@ -2118,4 +2118,6 @@ structural focused run; prior hardening-focused run passed `83`).
 `make nixie`, and
 `make check-migrations` passed; the migration check reported only the
 pre-existing SQLAlchemy cycle warning for `episodes`, `generation_runs`, and
-`ingestion_jobs`. The final candidate is ready for commit and publication.
+`ingestion_jobs`. Commit `ba61dbad5e2fa8ec3a19b381a93a89227681bd46` records the
+hardening work and was pushed to
+`origin/4-3-2-no-qa-generation-runs-and-tei-p5-retrieval`.
