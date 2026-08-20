@@ -68,6 +68,8 @@ async def test_runtime_lifespan_shuts_down_generation_before_database(
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.test/episodic")
     monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path))
+    monkeypatch.setenv("API_AUTHORIZATION_BEARER_TOKEN", "test-token")
+    monkeypatch.setenv("API_AUTHORIZATION_PRINCIPAL_ID", "test-principal")
     events: list[str] = []
 
     async def shutdown_database() -> None:

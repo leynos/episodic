@@ -4,31 +4,25 @@ import dataclasses as dc
 import datetime as dt
 import typing as typ
 import uuid
-from unittest import mock
 
 import httpx
 import pytest
 
 from episodic.api import create_app
+from episodic.observability import RecordingTracer
 from tests.fixtures.api import build_api_dependencies
+from tests.fixtures.generation_run_api import (
+    HeaderPrincipalAuthorization,
+    RecordingLauncher,
+    create_ready_ingestion_job,
+    generation_payload,
+)
 
 if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from episodic.api.types import UowFactory
-
-
-@dc.dataclass(slots=True)
-class RecordingLauncher:
-    """Record generation runs scheduled by the HTTP adapter."""
-
-    run_ids: list[uuid.UUID] = dc.field(default_factory=list)
-    launch: mock.AsyncMock = dc.field(init=False)
-
-    def __post_init__(self) -> None:
-        """Bind the asynchronous launch surface to the run recorder."""
-        self.launch = mock.AsyncMock(side_effect=self.run_ids.append)
 
 
 async def _append_generation_events(
@@ -95,14 +89,15 @@ async def test_generation_run_create_replay_and_poll(
     dependencies = dc.replace(
         build_api_dependencies(session_factory),
         launcher=launcher,
+        tracer=RecordingTracer(),
     )
     transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        ingestion_job_id = await _create_ready_ingestion_job(client)
-        payload = _generation_payload()
+        ingestion_job_id = await create_ready_ingestion_job(client)
+        payload = generation_payload()
         first = await client.post(
             f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
             headers={"Idempotency-Key": "generation-key"},
@@ -149,6 +144,120 @@ async def test_generation_run_create_replay_and_poll(
         f"expected retry delay '1', got {run_response.headers['Retry-After']!r}"
     )
     _assert_generation_event_page(events_response)
+    _assert_trace_span(
+        typ.cast("RecordingTracer", dependencies.tracer),
+        "generation_run.read",
+        {"operation": "generation_run.read", "outcome": "success"},
+    )
+    _assert_trace_span(
+        typ.cast("RecordingTracer", dependencies.tracer),
+        "generation_run.events.list",
+        {
+            "operation": "generation_run.events.list",
+            "pagination": "cursor",
+            "outcome": "success",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_generation_run_get_routes_trace_rejected_and_missing_requests(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Record bounded read-route outcomes without request data or identifiers."""
+    tracer = RecordingTracer()
+    dependencies = dc.replace(build_api_dependencies(session_factory), tracer=tracer)
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        invalid = await client.get("/v1/generation-runs/not-a-uuid")
+        missing = await client.get(f"/v1/generation-runs/{uuid.uuid7()}")
+        invalid_events = await client.get(
+            f"/v1/generation-runs/{uuid.uuid7()}/events",
+            params={"offset": "-1"},
+        )
+
+    assert invalid.status_code == 400, invalid.text
+    assert missing.status_code == 404, missing.text
+    assert invalid_events.status_code == 400, invalid_events.text
+    actual_spans = [span.attributes for span in tracer.spans]
+    expected_spans = [
+        {
+            "operation": "generation_run.read",
+            "outcome": "rejected",
+            "failure_category": "invalid_input",
+        },
+        {
+            "operation": "generation_run.read",
+            "outcome": "not_found",
+            "failure_category": "run.not_found",
+        },
+        {
+            "operation": "generation_run.events.list",
+            "outcome": "rejected",
+            "failure_category": "invalid_input",
+        },
+    ]
+    assert actual_spans == expected_spans, tracer.spans
+
+
+@pytest.mark.asyncio
+async def test_generation_run_resources_enforce_principal_ownership(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Derive run actors from the authenticated principal and hide other runs."""
+    launcher = RecordingLauncher()
+    dependencies = dc.replace(
+        build_api_dependencies(session_factory),
+        authorization=HeaderPrincipalAuthorization(),
+        launcher=launcher,
+    )
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    principal_a = {"Authorization": "Bearer principal-a"}
+    principal_b = {"Authorization": "Bearer principal-b"}
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        ingestion_job_id = await create_ready_ingestion_job(client, principal_a)
+        response = await client.post(
+            f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
+            headers={**principal_a, "Idempotency-Key": "principal-a-run"},
+            json={**generation_payload(), "actor": "spoofed@example.test"},
+        )
+        assert response.status_code == 202, response.text
+        assert response.json()["actor"] == "principal-a", response.json()
+        run_location = response.headers.get("Location", "/missing")
+        response = await client.get(run_location, headers=principal_a)
+        assert response.status_code == 200, response.text
+        response = await client.get(run_location)
+        assert response.status_code == 401, response.text
+        response = await client.post(
+            f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
+            headers={**principal_b, "Idempotency-Key": "principal-b-run"},
+            json=generation_payload(),
+        )
+        assert response.status_code == 404, response.text
+        response = await client.get(run_location, headers=principal_b)
+        assert response.status_code == 404, response.text
+        response = await client.get(
+            f"/v1/generation-runs/{launcher.run_ids[0]}/events",
+            headers=principal_b,
+        )
+        assert response.status_code == 404, response.text
+
+
+def _assert_trace_span(
+    tracer: RecordingTracer,
+    name: str,
+    attributes: dict[str, str],
+) -> None:
+    """Assert one completed trace span with the safe bounded attributes."""
+    span = next(record for record in tracer.spans if record.name == name)
+    assert span.attributes == attributes, span
+    assert span.is_completed, span
 
 
 @pytest.mark.asyncio
@@ -165,17 +274,17 @@ async def test_generation_run_validation_and_idempotency_conflict(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        ingestion_job_id = await _create_ready_ingestion_job(client)
+        ingestion_job_id = await create_ready_ingestion_job(client)
         endpoint = f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs"
         accepted = await client.post(
             endpoint,
             headers={"Idempotency-Key": "conflict-key"},
-            json=_generation_payload(),
+            json=generation_payload(),
         )
         changed = await client.post(
             endpoint,
             headers={"Idempotency-Key": "conflict-key"},
-            json={**_generation_payload(), "skip_qa_rationale": "Changed."},
+            json={**generation_payload(), "skip_qa_rationale": "Changed."},
         )
         missing_rationale = await client.post(
             endpoint,
@@ -185,7 +294,7 @@ async def test_generation_run_validation_and_idempotency_conflict(
         unsupported_mode = await client.post(
             endpoint,
             headers={"Idempotency-Key": "mode-key"},
-            json={**_generation_payload(), "quality_mode": "qa_gated"},
+            json={**generation_payload(), "quality_mode": "qa_gated"},
         )
 
     assert accepted.status_code == 202, accepted.text
@@ -239,7 +348,7 @@ async def test_generation_run_resource_uses_injected_factories(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        ingestion_job_id = uuid.UUID(await _create_ready_ingestion_job(client))
+        ingestion_job_id = uuid.UUID(await create_ready_ingestion_job(client))
 
     ids = tuple(uuid.uuid7() for _ in range(4))
     now = dt.datetime(2026, 7, 22, tzinfo=dt.UTC)
@@ -252,7 +361,7 @@ async def test_generation_run_resource_uses_injected_factories(
     run = await resource._create_run(
         ingestion_job_id,
         _CreateGenerationRun(
-            actor="editor@example.com",
+            actor="anonymous",
             skip_qa_rationale="Deterministic resource construction.",
             configuration={},
             budget_snapshot={},
@@ -267,48 +376,3 @@ async def test_generation_run_resource_uses_injected_factories(
     )
     assert run.created_at == now, f"expected fixed creation time, got {run.created_at}"
     assert run.updated_at == now, f"expected fixed update time, got {run.updated_at}"
-
-
-async def _create_ready_ingestion_job(client: httpx.AsyncClient) -> str:
-    profile = await client.post(
-        "/v1/series-profiles",
-        json={
-            "slug": "generation-api-profile",
-            "title": "Generation API profile",
-            "description": "Generation endpoint fixture.",
-            "configuration": {},
-            "actor": "editor@example.com",
-        },
-    )
-    assert profile.status_code == 201, profile.text
-    job = await client.post(
-        "/v1/ingestion-jobs",
-        headers={"Idempotency-Key": "generation-job-key"},
-        json={"series_profile_id": profile.json()["id"]},
-    )
-    assert job.status_code == 201, job.text
-    source = await client.post(
-        f"/v1/ingestion-jobs/{job.json()['id']}/sources",
-        headers={"Idempotency-Key": "generation-source-key"},
-        json={
-            "type": "source_uri",
-            "source_uri": "https://example.test/source.txt",
-            "source_type": "research_note",
-            "weight": 1.0,
-            "metadata": {"content": "A concise source for the episode."},
-        },
-    )
-    assert source.status_code == 201, source.text
-    return typ.cast("str", job.json()["id"])
-
-
-def _generation_payload() -> dict[str, object]:
-    """Return a valid no-QA generation request body."""
-    return {
-        "quality_mode": "draft_without_qa",
-        "skip_qa_rationale": "Initial editorial draft.",
-        "actor": "editor@example.com",
-        "template_id": "future-template",
-        "prompt_overrides": {"tone": "clear"},
-        "budget_hints": {"max_tokens": 1200},
-    }

@@ -162,6 +162,7 @@ def _ingestion_job_from_record(record: IngestionJobRecord) -> IngestionJob:
         created_at=record.created_at,
         updated_at=record.updated_at,
         intake_state=record.intake_state,
+        owner_principal_id=record.owner_principal_id,
     )
 
 
@@ -179,6 +180,7 @@ def _ingestion_job_to_record(job: IngestionJob) -> IngestionJobRecord:
         intake_state=job.intake_state,
         created_at=job.created_at,
         updated_at=job.updated_at,
+        owner_principal_id=job.owner_principal_id,
     )
 
 

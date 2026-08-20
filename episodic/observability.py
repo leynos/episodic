@@ -13,8 +13,9 @@ services across the codebase wire against:
   parallel hierarchies.
 - :class:`TracerPort` provides synchronous span contexts. The
   :class:`StructuredLogTracer` adapter logs span names and only the safe
-  allow-list of ``operation``, ``outcome``, and ``failure_category``; it drops
-  all other attributes because callers may attach sensitive operation metadata.
+  allow-list of ``operation``, ``outcome``, ``failure_category``,
+  ``representation``, and ``pagination``; it drops all other attributes
+  because callers may attach sensitive operation metadata.
 
 :class:`episodic.metrics_ports.BoundedMetricsPort` is a deliberately narrower
 structural subtype with ``dict[str, str]`` labels, retained because feature-
@@ -252,7 +253,13 @@ class _StructuredLogSink(typ.Protocol):
         """Emit an INFO-level structured event."""
 
 
-_SAFE_SPAN_ATTRIBUTES = frozenset({"operation", "outcome", "failure_category"})
+_SAFE_SPAN_ATTRIBUTES = frozenset({
+    "operation",
+    "outcome",
+    "failure_category",
+    "representation",
+    "pagination",
+})
 
 
 @dc.dataclass(slots=True)

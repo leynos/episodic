@@ -391,6 +391,7 @@ class IngestionJob:
     created_at: dt.datetime
     updated_at: dt.datetime
     intake_state: IntakeState = IntakeState.AWAITING_SOURCES
+    owner_principal_id: str | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -399,6 +400,7 @@ class IngestionJobListFilters:
 
     series_profile_id: uuid.UUID | None
     intake_state: IntakeState | None
+    owner_principal_id: str | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)

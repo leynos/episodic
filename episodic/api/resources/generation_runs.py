@@ -37,6 +37,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from episodic.api.types import JsonPayload, UowFactory
+    from episodic.canonical.domain import IngestionJob
     from episodic.generation.launcher import GenerationRunLauncher
     from episodic.observability import TracerPort
 
@@ -44,6 +45,7 @@ _GENERATION_RUN_OPERATION = "generation_run.create"
 _RETRY_AFTER = "1"
 _MAX_EVENT_LIMIT = 100
 _DEFAULT_EVENT_LIMIT = 20
+_ANONYMOUS_TEST_PRINCIPAL = "anonymous"
 
 type Clock = cabc.Callable[[], dt.datetime]
 type UuidFactory = cabc.Callable[[], uuid.UUID]
@@ -89,6 +91,8 @@ class GenerationRunsResource:
         request = _parse_create_request(payload)
         launcher = self._require_launcher()
         idempotency_key = req.get_header("Idempotency-Key")
+        actor = principal_id(req) or _ANONYMOUS_TEST_PRINCIPAL
+        request = request._replace(actor=actor)
 
         async def work() -> IdempotentResponse:
             run = await self._create_run(
@@ -152,6 +156,9 @@ class GenerationRunsResource:
         idempotency_principal_id: str | None,
     ) -> GenerationRun:
         async with self._uow_factory() as uow:
+            job = await uow.ingestion_jobs.get(source_bundle_id)
+            if job is None or not _owns_ingestion_job(job, request.actor):
+                raise _ingestion_job_not_found(source_bundle_id)
             try:
                 episode = await materialise_episode_from_ingestion(
                     uow,
@@ -231,8 +238,11 @@ def _generation_overloaded() -> falcon.HTTPServiceUnavailable:
 class GenerationRunResource:
     """Return one generation-run polling snapshot."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self, uow_factory: UowFactory, *, tracer: TracerPort | None = None
+    ) -> None:
         self._uow_factory = uow_factory
+        self._tracer = NoopTracer() if tracer is None else tracer
 
     async def on_get(
         self,
@@ -241,23 +251,42 @@ class GenerationRunResource:
         run_id: str,
     ) -> None:
         """Return the current generation-run state."""
-        del req
-        parsed_run_id = parse_uuid(run_id, "run_id")
-        async with self._uow_factory() as uow:
-            run = await uow.generation_runs.get_run(parsed_run_id)
-        if run is None:
-            raise _run_not_found(parsed_run_id)
-        resp.media = serialize_generation_run(run)
-        resp.status = falcon.HTTP_200
-        if not run.status.is_terminal():
-            resp.set_header("Retry-After", _RETRY_AFTER)
+        actor = principal_id(req) or _ANONYMOUS_TEST_PRINCIPAL
+        with self._tracer.start_span(
+            "generation_run.read",
+            attributes={"operation": "generation_run.read"},
+        ) as span:
+            try:
+                parsed_run_id = parse_uuid(run_id, "run_id")
+            except falcon.HTTPError:
+                span.set_attribute("outcome", "rejected")
+                span.set_attribute("failure_category", "invalid_input")
+                raise
+            async with self._uow_factory() as uow:
+                run = await uow.generation_runs.get_run(parsed_run_id)
+            if run is None:
+                span.set_attribute("outcome", "not_found")
+                span.set_attribute("failure_category", "run.not_found")
+                raise _run_not_found(parsed_run_id)
+            if run.actor != actor:
+                span.set_attribute("outcome", "not_found")
+                span.set_attribute("failure_category", "run.not_found")
+                raise _run_not_found(parsed_run_id)
+            resp.media = serialize_generation_run(run)
+            resp.status = falcon.HTTP_200
+            if not run.status.is_terminal():
+                resp.set_header("Retry-After", _RETRY_AFTER)
+            span.set_attribute("outcome", "success")
 
 
 class GenerationRunEventsResource:
     """Return cursor-paginated events for one generation run."""
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self, uow_factory: UowFactory, *, tracer: TracerPort | None = None
+    ) -> None:
         self._uow_factory = uow_factory
+        self._tracer = NoopTracer() if tracer is None else tracer
 
     async def on_get(
         self,
@@ -266,32 +295,53 @@ class GenerationRunEventsResource:
         run_id: str,
     ) -> None:
         """List events after an optional sequence cursor."""
-        parsed_run_id = parse_uuid(run_id, "run_id")
-        after_seq = _parse_optional_positive_int(req, "after_seq")
-        limit = _parse_limit(req)
-        offset = _parse_offset(req)
-        async with self._uow_factory() as uow:
+        actor = principal_id(req) or _ANONYMOUS_TEST_PRINCIPAL
+        with self._tracer.start_span(
+            "generation_run.events.list",
+            attributes={"operation": "generation_run.events.list"},
+        ) as span:
             try:
-                events = await uow.generation_runs.list_events(
-                    parsed_run_id,
-                    after_seq=None if after_seq is None else event_seq(after_seq),
-                    limit=limit,
-                    offset=offset,
-                )
-                total = await uow.generation_runs.count_events(
-                    parsed_run_id,
-                    after_seq=None if after_seq is None else event_seq(after_seq),
-                )
-            except RunNotFound as exc:
-                raise _run_not_found(parsed_run_id) from exc
-        resp.media = {
-            "items": [serialize_generation_event(event) for event in events],
-            "after_seq": after_seq,
-            "limit": limit,
-            "offset": offset,
-            "total": total,
-        }
-        resp.status = falcon.HTTP_200
+                parsed_run_id = parse_uuid(run_id, "run_id")
+                after_seq = _parse_optional_positive_int(req, "after_seq")
+                limit = _parse_limit(req)
+                offset = _parse_offset(req)
+            except falcon.HTTPError:
+                span.set_attribute("outcome", "rejected")
+                span.set_attribute("failure_category", "invalid_input")
+                raise
+            span.set_attribute(
+                "pagination", "cursor" if after_seq is not None else "offset"
+            )
+            async with self._uow_factory() as uow:
+                run = await uow.generation_runs.get_run(parsed_run_id)
+                if run is None or run.actor != actor:
+                    span.set_attribute("outcome", "not_found")
+                    span.set_attribute("failure_category", "run.not_found")
+                    raise _run_not_found(parsed_run_id)
+                try:
+                    events = await uow.generation_runs.list_events(
+                        parsed_run_id,
+                        after_seq=None if after_seq is None else event_seq(after_seq),
+                        limit=limit,
+                        offset=offset,
+                    )
+                    total = await uow.generation_runs.count_events(
+                        parsed_run_id,
+                        after_seq=None if after_seq is None else event_seq(after_seq),
+                    )
+                except RunNotFound as exc:
+                    span.set_attribute("outcome", "not_found")
+                    span.set_attribute("failure_category", "run.not_found")
+                    raise _run_not_found(parsed_run_id) from exc
+            resp.media = {
+                "items": [serialize_generation_event(event) for event in events],
+                "after_seq": after_seq,
+                "limit": limit,
+                "offset": offset,
+                "total": total,
+            }
+            resp.status = falcon.HTTP_200
+            span.set_attribute("outcome", "success")
 
 
 class _CreateGenerationRun(typ.NamedTuple):
@@ -331,7 +381,9 @@ def _parse_create_request(payload: JsonPayload) -> _CreateGenerationRun:
     }
     budget_snapshot = _optional_mapping(payload, "budget_hints")
     return _CreateGenerationRun(
-        actor=require_str(payload, "actor"),
+        # The resource replaces this placeholder with the authenticated
+        # principal before persistence. Client JSON must never choose the actor.
+        actor="authenticated-principal-required",
         skip_qa_rationale=require_str(payload, "skip_qa_rationale"),
         configuration=configuration,
         budget_snapshot=budget_snapshot,
@@ -412,6 +464,28 @@ def _run_not_found(run_id: uuid.UUID) -> falcon.HTTPNotFound:
             code="generation_run_not_found",
             details={"run_id": str(run_id)},
         ),
+    )
+
+
+def _ingestion_job_not_found(ingestion_job_id: uuid.UUID) -> falcon.HTTPNotFound:
+    """Build a non-disclosing response for an inaccessible ingestion job."""
+    return typ.cast(
+        "falcon.HTTPNotFound",
+        http_error(
+            falcon.HTTPNotFound(
+                description=f"Ingestion job not found: {ingestion_job_id}."
+            ),
+            code="ingestion_job_not_found",
+            details={"ingestion_job_id": str(ingestion_job_id)},
+        ),
+    )
+
+
+def _owns_ingestion_job(job: IngestionJob, principal: str | None) -> bool:
+    """Return whether the server-derived principal can use an ingestion job."""
+    actor = principal or _ANONYMOUS_TEST_PRINCIPAL
+    return job.owner_principal_id == actor or (
+        job.owner_principal_id is None and actor == _ANONYMOUS_TEST_PRINCIPAL
     )
 
 

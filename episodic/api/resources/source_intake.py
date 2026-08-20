@@ -32,10 +32,11 @@ from episodic.api.source_intake_support import (
     parse_upload_form,
     require_str,
 )
-from episodic.canonical.domain import IngestionJobListFilters, IntakeState
+from episodic.canonical.domain import IngestionJob, IngestionJobListFilters, IntakeState
 from episodic.canonical.idempotency_service import (
     multipart_request_hash,
 )
+from episodic.canonical.source_intake_errors import IngestionJobNotFoundError
 from episodic.canonical.source_intake_service import (
     CreateIngestionJobRequest,
     SourceIntakeError,
@@ -177,6 +178,7 @@ class IngestionJobsResource:
                         CreateIngestionJobRequest(
                             series_profile_id=series_profile_id,
                             target_episode_id=target_episode_id,
+                            owner_principal_id=principal_id(req) or "anonymous",
                         ),
                     )
                 except SourceIntakeError as exc:
@@ -205,6 +207,7 @@ class IngestionJobsResource:
                 IngestionJobListFilters(
                     series_profile_id=series_profile_id,
                     intake_state=intake_state,
+                    owner_principal_id=principal_id(req) or "anonymous",
                 ),
                 pagination,
             )
@@ -230,11 +233,11 @@ class IngestionJobResource:
         ingestion_job_id: str,
     ) -> None:
         """Return the current intake status for one ingestion job."""
-        del req
         parsed_job_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         async with self._uow_factory() as uow:
             try:
                 job = await get_ingestion_job_status(uow, parsed_job_id)
+                _require_ingestion_job_owner(job, principal_id(req))
             except SourceIntakeError as exc:
                 raise map_source_intake_error(exc) from exc
         next_poll = None
@@ -268,6 +271,8 @@ class IngestionJobSourcesResource:
         async def work() -> IdempotentResponse:
             async with self._uow_factory() as uow:
                 try:
+                    job = await get_ingestion_job_status(uow, parsed_job_id)
+                    _require_ingestion_job_owner(job, principal_id(req))
                     source = await attach_source_to_ingestion_job(uow, attach_request)
                 except SourceIntakeError as exc:
                     raise map_source_intake_error(exc) from exc
@@ -298,6 +303,8 @@ class IngestionJobSourcesResource:
         pagination = parse_pagination(req)
         async with self._uow_factory() as uow:
             try:
+                job = await get_ingestion_job_status(uow, parsed_job_id)
+                _require_ingestion_job_owner(job, principal_id(req))
                 page = await list_ingestion_job_sources(
                     uow,
                     parsed_job_id,
@@ -312,3 +319,16 @@ class IngestionJobSourcesResource:
             "total": page.total,
         }
         resp.status = falcon.HTTP_200
+
+
+def _require_ingestion_job_owner(
+    job: IngestionJob,
+    principal: str | None,
+) -> None:
+    """Hide ingestion jobs that do not belong to the authenticated principal."""
+    actor = principal or "anonymous"
+    if job.owner_principal_id == actor:
+        return
+    if job.owner_principal_id is None and actor == "anonymous":
+        return
+    raise IngestionJobNotFoundError(str(job.id))

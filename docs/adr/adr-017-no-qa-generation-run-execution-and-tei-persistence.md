@@ -71,6 +71,26 @@ same port. Production-wide metrics, lease/recovery metrics, and retry metrics
 remain follow-up work; stable failure categories still make persisted outcomes
 searchable without putting run identifiers into metric labels.
 
+Each generation run has an authenticated principal owner. Production runtime
+configuration requires a bearer credential and principal identifier, and the
+API derives the persisted run actor from that trusted principal rather than the
+request body. Resource reads authorize against that owner and use the same
+not-found response for absent and inaccessible runs, events, ingestion jobs,
+and generated TEI.
+
+The claim transaction commits the conditional status transition and
+`run.started` event before a fresh read unit of work loads canonical episode
+metadata, source-document metadata, and presenter bindings. That read unit of
+work closes before upload content is hydrated, so potentially slow object-store
+I/O neither retains the claim lock nor monopolizes a database connection.
+
+The claim transaction is intentionally short: it conditionally changes a run to
+running, appends `run.started`, and commits before source hydration. A fresh
+unit of work then loads the episode, bounded source content, and presenter
+bindings. The source limits bound count, each uploaded stream, aggregate input,
+and normalized text; an overflow produces the stable `generation.source_limit`
+terminal category without retaining or emitting source content.
+
 Generation-run creation accepts only `quality_mode=draft_without_qa` in this
 slice. A recognized `qa_gated` request returns `422 Unprocessable Entity`;
 malformed or missing required fields return `400 Bad Request`. Episode TEI

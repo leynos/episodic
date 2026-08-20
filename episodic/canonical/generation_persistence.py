@@ -9,7 +9,6 @@ import typing as typ
 import uuid
 
 import tei_rapporteur as tei
-from sqlalchemy.exc import IntegrityError
 
 from episodic.canonical.domain import (
     ApprovalState,
@@ -31,6 +30,7 @@ from episodic.canonical.generation_persistence_types import (
     InvalidDraftTeiError,
     MissingAttachedSourcesError,
     SourceDocumentProjectionError,
+    SourceDocumentProjectionResult,
     _SourceDocumentProjection,
 )
 from episodic.canonical.generation_quality import QaStatus
@@ -56,7 +56,7 @@ async def materialise_episode_from_ingestion(
     Parameters
     ----------
     uow
-        Open unit of work; commits reservation/projection and rolls back races.
+        Open unit of work; commits reservation and projection boundaries.
     request
         Materialisation command describing the job and deterministic seams.
 
@@ -74,8 +74,6 @@ async def materialise_episode_from_ingestion(
         If the job is not ready for generation.
     MissingAttachedSourcesError
         If the ready job has no attached sources.
-    IntegrityError
-        If source projection violates an unrelated storage constraint.
     """
     sources = await _list_all_sources(uow, request.ingestion_job_id)
     if len(sources) == 0:
@@ -93,13 +91,11 @@ async def materialise_episode_from_ingestion(
     now = request.clock()
     episode = await _materialise_or_reuse_episode(uow, job, request, now)
 
-    try:
-        await _project_source_documents(uow, sources, episode.id, now)
-        await uow.commit()
-    except IntegrityError as exc:
-        await uow.rollback()
-        if not _is_source_document_duplicate(exc):
-            raise
+    projection_had_duplicate = await _project_source_documents(
+        uow, sources, episode.id, now
+    )
+    await uow.commit()
+    if projection_had_duplicate:
         await _require_projected_source_documents(uow, sources, episode.id)
     return episode
 
@@ -229,17 +225,18 @@ async def _project_source_documents(
     sources: list[IngestionJobSource],
     episode_id: uuid.UUID,
     now: dt.datetime,
-) -> None:
+) -> bool:
     """Persist source projections absent from this episode's job."""
     existing_document_ids = await _projected_source_document_ids(
         uow, sources[0].ingestion_job_id
     )
+    had_duplicate = False
     for source in sources:
         document_id = uuid.uuid5(episode_id, str(source.id))
         if document_id in existing_document_ids:
             continue
         upload = await _upload_for_source(uow, source)
-        await uow.source_documents.add(
+        result = await uow.source_documents.add_projection(
             _source_document_from_attachment(
                 _SourceDocumentProjection(
                     source=source,
@@ -250,6 +247,8 @@ async def _project_source_documents(
                 )
             )
         )
+        had_duplicate |= result is SourceDocumentProjectionResult.DUPLICATE
+    return had_duplicate
 
 
 async def _require_projected_source_documents(
@@ -265,19 +264,6 @@ async def _require_projected_source_documents(
     missing_ids = expected_ids - projected_ids
     if missing_ids:
         raise SourceDocumentProjectionError(missing_ids)
-
-
-def _is_source_document_duplicate(error: IntegrityError) -> bool:
-    """Return whether a source-document primary-key race caused ``error``."""
-    original = error.orig
-    constraint_name = getattr(getattr(original, "diag", None), "constraint_name", None)
-    if constraint_name == "source_documents_pkey":
-        return True
-    message = str(original)
-    return (
-        "source_documents_pkey" in message
-        or "UNIQUE constraint failed: source_documents.id" in message
-    )
 
 
 def _build_placeholder_header(

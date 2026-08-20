@@ -3,6 +3,7 @@
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
+import enum
 import typing as typ
 import uuid
 
@@ -31,6 +32,13 @@ class DraftScriptPersistenceError(Exception):
     Catch this exception to handle failures raised while materialising an
     episode or persisting its generated draft.
     """
+
+
+class SourceDocumentProjectionResult(enum.StrEnum):
+    """Outcome of one deterministic source-document projection write."""
+
+    ADDED = "added"
+    DUPLICATE = "duplicate"
 
 
 class _IngestionJobPersistenceError(DraftScriptPersistenceError):

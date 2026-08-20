@@ -9,15 +9,19 @@ import falcon
 from episodic.api.errors import http_error
 from episodic.api.helpers import parse_uuid
 from episodic.api.serializers import serialize_tei_envelope
+from episodic.api.source_idempotency import principal_id
+from episodic.observability import NoopTracer
 
 if typ.TYPE_CHECKING:
     import uuid
 
     from episodic.api.types import UowFactory
-    from episodic.canonical.domain import CanonicalEpisode
+    from episodic.canonical.domain import CanonicalEpisode, GenerationRun
+    from episodic.observability import TracerPort
 
 _JSON_MEDIA_TYPE = "application/json"
 _TEI_MEDIA_TYPE = "application/tei+xml"
+_ANONYMOUS_TEST_PRINCIPAL = "anonymous"
 
 
 class EpisodeTeiResource:
@@ -30,8 +34,11 @@ class EpisodeTeiResource:
         an asynchronous unit of work for each request.
     """
 
-    def __init__(self, uow_factory: UowFactory) -> None:
+    def __init__(
+        self, uow_factory: UowFactory, *, tracer: TracerPort | None = None
+    ) -> None:
         self._uow_factory = uow_factory
+        self._tracer = NoopTracer() if tracer is None else tracer
 
     async def on_get(
         self,
@@ -67,17 +74,43 @@ class EpisodeTeiResource:
         matching or wildcard ``If-None-Match`` validator returns HTTP 304 with
         no response body.
         """  # noqa: DOC501, DOC502  # Indirect exceptions form part of this public contract.
-        parsed_episode_id = parse_uuid(episode_id, "episode_id")
-        async with self._uow_factory() as uow:
-            episode = await uow.episodes.get(parsed_episode_id)
-        if episode is None or not _has_generated_draft(episode):
-            raise _tei_not_found(parsed_episode_id)
-
-        media_type = negotiate_tei_media_type(req.accept)
-        if media_type == _TEI_MEDIA_TYPE:
-            _apply_tei_attachment(req, resp, episode)
-            return
-        _apply_tei_json(req, resp, episode)
+        with self._tracer.start_span(
+            "episode_tei.read",
+            attributes={"operation": "episode_tei.read"},
+        ) as span:
+            try:
+                parsed_episode_id = parse_uuid(episode_id, "episode_id")
+            except falcon.HTTPError:
+                span.set_attribute("outcome", "rejected")
+                span.set_attribute("failure_category", "invalid_input")
+                raise
+            async with self._uow_factory() as uow:
+                episode = await uow.episodes.get(parsed_episode_id)
+                run = (
+                    None
+                    if episode is None or episode.last_generation_run_id is None
+                    else await uow.generation_runs.get_run(
+                        episode.last_generation_run_id
+                    )
+                )
+            actor = principal_id(req) or _ANONYMOUS_TEST_PRINCIPAL
+            if not _has_accessible_draft(episode, run, actor):
+                span.set_attribute("outcome", "not_found")
+                span.set_attribute("failure_category", "episode.not_found")
+                raise _tei_not_found(parsed_episode_id)
+            episode = typ.cast("CanonicalEpisode", episode)
+            try:
+                media_type = negotiate_tei_media_type(req.accept)
+            except falcon.HTTPNotAcceptable:
+                span.set_attribute("outcome", "rejected")
+                span.set_attribute("failure_category", "not_acceptable")
+                raise
+            span.set_attribute("representation", media_type)
+            if media_type == _TEI_MEDIA_TYPE:
+                _apply_tei_attachment(req, resp, episode)
+            else:
+                _apply_tei_json(req, resp, episode)
+            span.set_attribute("outcome", "success")
 
 
 def negotiate_tei_media_type(accept: str | None) -> str:
@@ -124,6 +157,20 @@ def _has_generated_draft(episode: CanonicalEpisode) -> bool:
         episode.last_generation_run_id is not None
         and episode.tei_content_hash is not None
         and episode.qa_status is not None
+    )
+
+
+def _has_accessible_draft(
+    episode: CanonicalEpisode | None,
+    run: GenerationRun | None,
+    actor: str,
+) -> bool:
+    """Return whether the requested actor can retrieve this generated draft."""
+    return (
+        episode is not None
+        and _has_generated_draft(episode)
+        and run is not None
+        and run.actor == actor
     )
 
 

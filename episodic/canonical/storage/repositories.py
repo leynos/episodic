@@ -25,6 +25,9 @@ from episodic.canonical.entity_protocols import (
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
+from episodic.canonical.generation_persistence_types import (
+    SourceDocumentProjectionResult,
+)
 
 from .entity_mappers import (
     _approval_event_from_record,
@@ -47,6 +50,10 @@ from .history_repositories import (
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemySeriesProfileHistoryRepository,
 )
+from .integrity_helpers import (
+    insert_with_conflict_translation,
+    is_source_document_duplicate_integrity_error,
+)
 from .profile_models import EpisodeTemplateRecord, SeriesProfileRecord
 from .reference_repositories import (
     SqlAlchemyReferenceBindingRepository,
@@ -59,6 +66,8 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from sqlalchemy.exc import IntegrityError
+
     from episodic.canonical.domain import (
         ApprovalEvent,
         EpisodeTemplate,
@@ -66,6 +75,10 @@ if typ.TYPE_CHECKING:
         SourceDocument,
         TeiHeader,
     )
+
+
+class _DuplicateProjectionError(Exception):
+    """Signal a recognised source-document projection write race."""
 
 
 class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository):
@@ -176,6 +189,27 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
 
         """
         self._session.add(_source_document_to_record(document))
+
+    async def add_projection(
+        self,
+        document: SourceDocument,
+    ) -> SourceDocumentProjectionResult:
+        """Insert one projection in a savepoint and report a duplicate ID race."""
+
+        def _translate(error: IntegrityError) -> BaseException | None:
+            if is_source_document_duplicate_integrity_error(error):
+                return _DuplicateProjectionError()
+            return None
+
+        try:
+            await insert_with_conflict_translation(
+                self._session,
+                _source_document_to_record(document),
+                translate=_translate,
+            )
+        except _DuplicateProjectionError:
+            return SourceDocumentProjectionResult.DUPLICATE
+        return SourceDocumentProjectionResult.ADDED
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:
         """List source documents for an ingestion job.

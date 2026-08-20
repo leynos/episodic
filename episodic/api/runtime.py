@@ -1,8 +1,6 @@
 """Granian runtime composition root for the Falcon ASGI service."""
 
 import dataclasses as dc
-import os
-import pathlib
 import typing as typ
 
 import psycopg
@@ -23,15 +21,20 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
-from episodic.logging import get_logger, log_info, log_warning
 from episodic.observability import StructuredLogMetrics, StructuredLogTracer
 
 from . import create_app
+from .authorization import StaticBearerTokenAuthorization
 from .dependencies import ApiDependencies, ReadinessProbe, ShutdownHook
+from .runtime_config import (
+    RuntimeConfig,
+    _load_runtime_config,
+)
+from .runtime_config import (
+    RuntimeConfigurationError as RuntimeConfigurationError,
+)
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
     from falcon import asgi
 
     from episodic.canonical.object_store import ObjectStorePort
@@ -40,18 +43,6 @@ if typ.TYPE_CHECKING:
     from episodic.observability import MetricsPort, ValueMetricsPort
 
     from .types import UowFactory
-
-
-@dc.dataclass(frozen=True, slots=True)
-class RuntimeConfig:
-    """Runtime configuration required to boot the Falcon HTTP service."""
-
-    database_url: str
-    source_intake_object_store_root: pathlib.Path
-    llm_base_url: str | None
-    llm_api_key: str | None
-    draft_model: str
-    pricing_snapshot_directory: pathlib.Path
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -68,15 +59,7 @@ _DEFAULT_ASYNC_POSTGRES_DRIVER = "psycopg"
 GRANIAN_FACTORY_TARGET = "episodic.api.runtime:create_app_from_env"
 GRANIAN_INTERFACE = "asgi"
 HTTP_BIND_PORT = 8080
-_DEFAULT_DRAFT_MODEL = "gpt-4o-mini"
 _DEFAULT_LLM_PROVIDER_NAME = "openai"
-_REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[2]
-_DEFAULT_PRICING_DIRECTORY = _REPOSITORY_ROOT / "config/pricing-snapshots"
-_PRICING_DIRECTORY_SETTING = "PRICING_SNAPSHOT_DIRECTORY"
-
-
-class RuntimeConfigurationError(RuntimeError):
-    """Raised when required HTTP-runtime configuration is invalid."""
 
 
 class PsycopgConnectKwargs(typ.TypedDict, total=False):
@@ -88,96 +71,6 @@ class PsycopgConnectKwargs(typ.TypedDict, total=False):
     user: str
     password: str
     sslmode: str
-
-
-logger = get_logger(__name__)
-
-
-def _required_setting(
-    environment: cabc.Mapping[str, str],
-    name: str,
-    error_message: str,
-) -> str:
-    """Return a required, non-empty environment setting."""
-    value = environment.get(name, "").strip()
-    if not value:
-        raise RuntimeConfigurationError(error_message)
-    return value
-
-
-def _llm_settings(
-    environment: cabc.Mapping[str, str],
-) -> tuple[str | None, str | None]:
-    """Return the optional, paired OpenAI-compatible provider settings."""
-    base_url = environment.get("OPENAI_BASE_URL", "").strip() or None
-    api_key = environment.get("OPENAI_API_KEY", "").strip() or None
-    if (base_url is None) != (api_key is None):
-        msg = "OPENAI_BASE_URL and OPENAI_API_KEY must be configured together."
-        raise RuntimeConfigurationError(msg)
-    return base_url, api_key
-
-
-def _pricing_snapshot_directory(
-    environment: cabc.Mapping[str, str],
-) -> pathlib.Path:
-    """Return the configured immutable pricing-catalogue directory."""
-    configured = environment.get(_PRICING_DIRECTORY_SETTING, "").strip()
-    candidate = pathlib.Path(configured) if configured else _DEFAULT_PRICING_DIRECTORY
-    directory = candidate if candidate.is_absolute() else _REPOSITORY_ROOT / candidate
-    resolved = directory.resolve()
-    if not resolved.is_dir():
-        msg = f"{_PRICING_DIRECTORY_SETTING} must name an existing directory."
-        raise RuntimeConfigurationError(msg)
-    return resolved
-
-
-def _load_runtime_config(
-    environ: cabc.Mapping[str, str] | None = None,
-) -> RuntimeConfig:
-    """Read and validate runtime configuration from environment variables."""
-    environment = os.environ if environ is None else environ
-    database_url = _required_setting(
-        environment,
-        "DATABASE_URL",
-        "DATABASE_URL must be set before starting the HTTP service.",
-    )
-    try:
-        object_store_root = _required_setting(
-            environment,
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT",
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT must be set before starting "
-            "the HTTP service.",
-        )
-    except RuntimeConfigurationError:
-        log_warning(
-            logger,
-            "runtime_config_missing setting=%s",
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT",
-        )
-        raise
-    llm_base_url, llm_api_key = _llm_settings(environment)
-    draft_model = (
-        _required_setting(
-            environment,
-            "DRAFT_MODEL",
-            "DRAFT_MODEL must be a non-empty string.",
-        )
-        if "DRAFT_MODEL" in environment
-        else _DEFAULT_DRAFT_MODEL
-    )
-    pricing_snapshot_directory = _pricing_snapshot_directory(environment)
-    log_info(
-        logger,
-        "runtime_config_loaded source_intake_object_store_configured",
-    )
-    return RuntimeConfig(
-        database_url=database_url,
-        source_intake_object_store_root=pathlib.Path(object_store_root),
-        llm_base_url=llm_base_url,
-        llm_api_key=llm_api_key,
-        draft_model=draft_model,
-        pricing_snapshot_directory=pricing_snapshot_directory,
-    )
 
 
 def _build_llm_port(config: RuntimeConfig) -> OpenAICompatibleLLMAdapter | None:
@@ -262,6 +155,7 @@ def _build_generation_launcher(
         provider_operation=LLMProviderOperation.CHAT_COMPLETIONS.value,
         metrics=runtime.metrics,
         tracer=StructuredLogTracer(),
+        source_limits=config.generation_source_limits,
     )
 
 
@@ -372,5 +266,9 @@ def create_app_from_env() -> asgi.App:
             llm_port=llm_port,
             launcher=launcher,
             tracer=tracer,
+            authorization=StaticBearerTokenAuthorization(
+                token=config.authorization_bearer_token,
+                principal_id=config.authorization_principal_id,
+            ),
         )
     )

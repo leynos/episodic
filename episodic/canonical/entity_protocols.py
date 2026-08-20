@@ -18,6 +18,7 @@ if typ.TYPE_CHECKING:
         SourceDocument,
         TeiHeader,
     )
+    from .generation_persistence_types import SourceDocumentProjectionResult
 
 
 class SeriesProfileRepository(typ.Protocol):
@@ -146,6 +147,13 @@ class SourceDocumentRepository(typ.Protocol):
 
     async def add(self, document: SourceDocument) -> None:
         """Persist a source document."""
+        raise NotImplementedError
+
+    async def add_projection(
+        self,
+        document: SourceDocument,
+    ) -> SourceDocumentProjectionResult:
+        """Persist a deterministic projection and report a duplicate race."""
         raise NotImplementedError
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:

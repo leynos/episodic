@@ -25,7 +25,7 @@ import dataclasses as dc
 import datetime as dt
 import typing as typ
 
-from episodic.canonical.domain import GenerationRunStatus
+from episodic.canonical.domain import GenerationRun, GenerationRunStatus
 from episodic.canonical.generation_persistence import (
     DraftScriptPersistenceRequest,
     persist_draft_script,
@@ -42,6 +42,8 @@ from episodic.generation.launcher_support import (
     CostRecorderFactory,
     DraftIdFactoryFactory,
     Failure,
+    GenerationSourceLimitError,
+    GenerationSourceLimits,
     PersistedTei,
     ProviderCallRecordRequest,
     SequentialDraftIds,
@@ -67,11 +69,13 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from episodic.canonical.domain import SourceDocument
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.generation.draft_script import (
         DraftScriptGenerator,
         DraftScriptResult,
+        DraftScriptSource,
     )
 
 type TaskSet = set[asyncio.Task[None]]
@@ -123,6 +127,9 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
     max_concurrency: int = _DEFAULT_MAX_CONCURRENCY
     max_pending_runs: int = _DEFAULT_MAX_PENDING_RUNS
     lease_seconds: int = _DEFAULT_LEASE_SECONDS
+    source_limits: GenerationSourceLimits = dc.field(
+        default_factory=GenerationSourceLimits
+    )
     metrics: ValueMetricsPort = dc.field(default_factory=NoopValueMetrics)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
@@ -263,7 +270,36 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
         )
 
     async def _claim(self, run_id: uuid.UUID) -> ClaimedRun | None:
-        """Claim a pending run and load generation input data."""
+        """Claim a pending run, then load its input outside the claim transaction."""
+        run = await self._claim_and_start(run_id)
+        if run is None:
+            return None
+        async with self.uow_factory() as uow:
+            episode = await require_episode(uow, run.episode_id)
+            documents = await uow.source_documents.list_for_job(run.source_bundle_id)
+            if len(documents) > self.source_limits.max_source_count:
+                raise GenerationSourceLimitError.source_count()
+            presenter_profiles = project_presenter_profiles(
+                await resolve_bindings(
+                    uow,
+                    series_profile_id=episode.series_profile_id,
+                    episode_id=episode.id,
+                )
+            )
+        sources = await self._load_sources(documents)
+        self.metrics.increment_counter(
+            _METRIC_QA_BYPASS,
+            labels={"quality_mode": run.quality_mode.value},
+        )
+        return ClaimedRun(
+            run=run,
+            episode=episode,
+            sources=sources,
+            presenter_profiles=presenter_profiles,
+        )
+
+    async def _claim_and_start(self, run_id: uuid.UUID) -> GenerationRun | None:
+        """Linearize a claim and make its started event durable before hydration."""
         async with self.uow_factory() as uow:
             started_at = self.clock()
             run = await uow.generation_runs.claim_run_for_execution(
@@ -275,20 +311,6 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
             if run is None:
                 await uow.rollback()
                 return None
-            episode = await require_episode(uow, run.episode_id)
-            documents = await uow.source_documents.list_for_job(run.source_bundle_id)
-            source_inputs = [
-                await source_from_document(document, self.object_store)
-                for document in documents
-            ]
-            sources = tuple(source_inputs)
-            presenter_profiles = project_presenter_profiles(
-                await resolve_bindings(
-                    uow,
-                    series_profile_id=episode.series_profile_id,
-                    episode_id=episode.id,
-                )
-            )
             await uow.generation_runs.append_event(
                 run.id,
                 kind="run.started",
@@ -296,16 +318,29 @@ class InProcessGenerationRunLauncher(GenerationRunLauncher):
                 occurred_at=started_at,
             )
             await uow.commit()
-        self.metrics.increment_counter(
-            _METRIC_QA_BYPASS,
-            labels={"quality_mode": run.quality_mode.value},
-        )
-        return ClaimedRun(
-            run=run,
-            episode=episode,
-            sources=sources,
-            presenter_profiles=presenter_profiles,
-        )
+        return run
+
+    async def _load_sources(
+        self,
+        documents: list[SourceDocument],
+    ) -> tuple[DraftScriptSource, ...]:
+        """Load bounded source text and reject an aggregate-size overflow."""
+        if len(documents) > self.source_limits.max_source_count:
+            raise GenerationSourceLimitError.source_count()
+        aggregate_bytes = 0
+        sources: list[DraftScriptSource] = []
+        for document in documents:
+            source = await source_from_document(
+                document,
+                self.object_store,
+                self.source_limits,
+                remaining_aggregate_bytes=(
+                    self.source_limits.max_aggregate_source_bytes - aggregate_bytes
+                ),
+            )
+            aggregate_bytes += len(source.content.encode())
+            sources.append(source)
+        return tuple(sources)
 
     async def _generate(self, claimed: ClaimedRun) -> DraftScriptResult:
         """Generate one draft and record latency metrics."""

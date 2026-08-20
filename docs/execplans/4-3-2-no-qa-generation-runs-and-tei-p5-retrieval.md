@@ -457,13 +457,12 @@ when any of the following is breached.
   composition supplies configuration explicitly; episode materialization
   validates attached sources before its short ingestion-job reservation lock,
   retaining source-document duplicate recovery only after verification;
-  generation-run
-  `episode_id` and `source_bundle_id` foreign keys remain enforced, so test
-  fixtures must provision the related episode and ingestion-job rows; manual
-  recovery SQL uses a conditional lock and commits the failure event and status
-  atomically; observability logs only safe, allow-listed attributes; and the
-  series-profile `Idempotency-Key` review item is stale because that endpoint
-  has no current idempotency contract.
+  generation-run `episode_id` and `source_bundle_id` foreign keys remain
+  enforced, so test fixtures must provision the related episode and
+  ingestion-job rows; manual recovery SQL uses a conditional lock and commits
+  the failure event and status atomically; observability logs only safe,
+  allow-listed attributes; and the series-profile `Idempotency-Key` review item
+  is stale because that endpoint has no current idempotency contract.
 - [x] (recorded, 2026-08-17) Current CodeRabbit follow-up decisions: retain
   diagnostic projection IDs, add coverage for cancellation-write shielding and
   admission capacity release, clean up test-only types, and retain distinct
@@ -475,21 +474,22 @@ when any of the following is breached.
   preserves committing the target episode association before projection, and
   leaves duplicate-projection rollback in the public service.
 - [x] (recorded, 2026-08-20) Validated the open CodeScene "Code Duplication"
-  diagnostic on `tests/test_generation_run_port_contract_support.py`: `cs
-  review` (CLI 1.0.33) confirms one clone group of seven
+  diagnostic on `tests/test_generation_run_port_contract_support.py`:
+  `cs review` (CLI 1.0.33) confirms one clone group of seven
   `NoopGenerationRunPort` methods (`get_run`, `list_runs`, `list_events`,
   `get_checkpoint`, `respond_to_checkpoint`, `time_out_checkpoint`,
   `cancel_checkpoint`), and `cs review` on
   `episodic/canonical/generation_run_ports.py` confirms a second structural
   pairing (`GenerationRunRepository.list_runs` with
-  `GenerationEventLog.list_events`). `tests/test_generation_run_port_contract.py`
-  scores 10.00 (no findings). Both findings describe intentional structural
-  similarity in protocol-completeness scaffolding, not shared domain behaviour:
-  (1) the stub's read bodies return the empty value for that contract (`None`
-  vs `()` vs zero), its run mutations raise `RunNotFound`, and its checkpoint
-  mutations raise `CheckpointNotFound`, with per-method signatures, document
-  param/return/Raises sections, and distinct keyword-only parameters, mapping
-  one-to-one onto the `GenerationRunRepository`, `GenerationEventLog`, and
+  `GenerationEventLog.list_events`).
+  `tests/test_generation_run_port_contract.py` scores 10.00 (no findings). Both
+  findings describe intentional structural similarity in protocol-completeness
+  scaffolding, not shared domain behaviour: (1) the stub's read bodies return
+  the empty value for that contract (`None` vs `()` vs zero), its run mutations
+  raise `RunNotFound`, and its checkpoint mutations raise `CheckpointNotFound`,
+  with per-method signatures, document param/return/Raises sections, and
+  distinct keyword-only parameters, mapping one-to-one onto the
+  `GenerationRunRepository`, `GenerationEventLog`, and
   `GenerationCheckpointPort` sub-protocols that `GenerationRunPort` composes;
   (2) the port declarations share only the `raise NotImplementedError` marker
   body and a `limit`/`offset` paging signature while returning different domain
@@ -497,16 +497,17 @@ when any of the following is breached.
   `list_runs`/`list_events` contracts. The duplication remedy CodeScene itself
   prescribes — "extract a shared representation" — is already realized by the
   protocol definitions in `generation_run_ports.py`; the stub is contract
-  derived state, so extracting generic empty-result, pass-through, or
-  not-found helper methods (or merging run, event-log, and checkpoint
-  operations) would hide protocol conformance and weaken the direct typed
-  assignment `noop_port: GenerationRunPort = NoopGenerationRunPort()` in
+  derived state, so extracting generic empty-result, pass-through, or not-found
+  helper methods (or merging run, event-log, and checkpoint operations) would
+  hide protocol conformance and weaken the direct typed assignment
+  `noop_port: GenerationRunPort = NoopGenerationRunPort()` in
   `TestCompositeProtocol.test_noop_composite_protocol_stub_typechecks` without
   removing a single maintenance risk. Plain "Code Duplication" is a core
   CodeScene factor — not a configurable `code-health-rules.json` rule and not
-  suppressible by `@codescene` directives — so the disposition is `no code
-  changes required; suppress diagnostic` on the CodeScene platform, per the
-  2026-08-17 decision. ExecPlan-only change; runtime/test gates unaffected.
+  suppressible by `@codescene` directives — so the disposition is
+  `no code changes required; suppress diagnostic` on the CodeScene platform,
+  per the 2026-08-17 decision. ExecPlan-only change; runtime/test gates
+  unaffected.
 
 ## Surprises & discoveries
 
@@ -2066,3 +2067,55 @@ with verified duplicate recovery, generation-run foreign keys and fixture
 requirements, atomic manual recovery, allow-listed observability attributes,
 and the stale series-profile `Idempotency-Key` finding. No roadmap status was
 changed.
+
+Hardening progress, 2026-08-20: production runtime now requires an explicitly
+configured bearer authorization adapter and assigns ingestion-job ownership and
+generation-run actors from the trusted principal. Generation-run, event, and
+TEI reads use non-disclosing owner checks and bounded request spans. Source
+projection duplicate detection moved from the application service into the
+SQLAlchemy adapter's savepoint boundary, returning a typed duplicate result so
+the service retains deterministic post-race verification. The launcher commits
+its claim and `run.started` event before a brief metadata-read unit of work;
+upload hydration begins only after that unit of work closes. Source input has
+configured count, per-source, aggregate, and normalized-text bounds. Focused
+persistence, API tracing, runtime, and launcher tests pass; broader property
+and end-to-end validation remains in progress.
+
+Hardening progress, 2026-08-20 (continued): source hydration now starts only
+after the read unit of work has closed, and a barrier test proves a separate
+unit of work can append to the claimed run while object hydration is blocked.
+Bounded SQL Hypothesis tests now cover event sequences, paging,
+principal-scoped idempotency, claim races, and lease recovery. Launcher
+lifecycle generation covers successful completion, provider failure, and
+shutdown cancellation. Full repository validation remains pending.
+
+Hardening completed, 2026-08-20: the remaining PR #141 review findings are
+implemented without suppressions. The production composition root now requires
+`API_AUTHORIZATION_BEARER_TOKEN` and `API_AUTHORIZATION_PRINCIPAL_ID`, injects
+`StaticBearerTokenAuthorization`, persists the trusted principal as the
+ingestion-job owner and generation-run actor, and returns the existing
+non-disclosing denial response for cross-principal job, run, event, and TEI
+access. The application persistence service no longer imports SQLAlchemy or
+interprets driver errors: the source-document repository uses a savepoint to
+return `SourceDocumentProjectionResult.DUPLICATE` only for its recognized
+constraint, while unrelated integrity failures continue to escape unchanged.
+
+GET resources now emit one bounded `RecordingTracer`-testable span per request:
+`generation_run.read`, `generation_run.events.list`, and `episode_tei.read`.
+They record only operation, outcome, representation, pagination presence, and
+stable failure categories. Launcher source material is bounded by configurable
+maximum count, per-source bytes, aggregate bytes, and normalized text bytes;
+uploaded streams short-circuit on limit breaches, and filesystem reads are
+offloaded with `asyncio.to_thread`. The claim linearization transaction commits
+the running transition and `run.started` before all metadata and object-store
+hydration, proven with a synchronized independent-unit-of-work test.
+
+Validation evidence, 2026-08-20: focused API, runtime, SQL property, source
+limit, persistence, and launcher suites passed (`36 passed` for the final
+structural focused run; prior hardening-focused run passed `83`).
+`make check-fmt`, `make typecheck`, and `make lint` passed. `make test` passed
+`1,171` tests with one skipped test and 49 snapshots. `make markdownlint`,
+`make nixie`, and
+`make check-migrations` passed; the migration check reported only the
+pre-existing SQLAlchemy cycle warning for `episodes`, `generation_runs`, and
+`ingestion_jobs`. The final candidate is ready for commit and publication.

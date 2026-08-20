@@ -46,6 +46,7 @@ from episodic.generation.launcher import (
     GenerationRunLauncher,
     InProcessGenerationRunLauncher,
 )
+from episodic.generation.launcher_support import GenerationSourceLimits
 from episodic.generation.show_notes import (
     ShowNotesEntry,
     ShowNotesGenerator,
@@ -75,6 +76,7 @@ __all__ = [
     "DraftTurn",
     "GenerationRunAdmissionError",
     "GenerationRunLauncher",
+    "GenerationSourceLimits",
     "GuestBioEntry",
     "GuestBioSource",
     "GuestBiosEnrichmentRequest",

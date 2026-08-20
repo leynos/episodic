@@ -243,6 +243,7 @@ async def create_ingestion_job(
         created_at=now,
         updated_at=now,
         intake_state=IntakeState.AWAITING_SOURCES,
+        owner_principal_id=request.owner_principal_id,
     )
     await uow.ingestion_jobs.add(job)
     await uow.commit()

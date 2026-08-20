@@ -56,13 +56,11 @@ class TeiHeaderRecord(Base):
     )
     title: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)
     payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
-        postgresql.JSONB,
-        nullable=False,
+        postgresql.JSONB, nullable=False
     )
     raw_xml: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     raw_xml_zstd: orm.Mapped[bytes | None] = orm.mapped_column(
-        postgresql.BYTEA,
-        nullable=True,
+        postgresql.BYTEA, nullable=True
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
@@ -246,6 +244,9 @@ class IngestionJobRecord(Base):
         nullable=False,
         server_default=IntakeState.AWAITING_SOURCES.value,
     )
+    owner_principal_id: orm.Mapped[str | None] = orm.mapped_column(
+        sa.String(240), nullable=True
+    )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
@@ -389,9 +390,7 @@ class ApprovalEventRecord(Base):
     )
     note: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
     payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
-        postgresql.JSONB,
-        default=dict,
-        nullable=False,
+        postgresql.JSONB, default=dict, nullable=False
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),

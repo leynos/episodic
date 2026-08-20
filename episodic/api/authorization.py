@@ -60,6 +60,26 @@ class PermitAll:
         return AuthorizationResult(AuthorizationDecision.PERMIT)
 
 
+@dc.dataclass(frozen=True, slots=True)
+class StaticBearerTokenAuthorization:
+    """Authorize one configured bearer token as one configured principal."""
+
+    token: str
+    principal_id: str
+
+    async def decide(
+        self,
+        context: AuthorizationContext,
+    ) -> AuthorizationResult:
+        """Return the configured principal for a matching bearer token."""
+        if context.authorization_header != f"Bearer {self.token}":
+            return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
+        return AuthorizationResult(
+            AuthorizationDecision.PERMIT,
+            principal_id=self.principal_id,
+        )
+
+
 class AuthorizationMiddleware:
     """Falcon middleware that short-circuits unauthorized `/v1` requests."""
 

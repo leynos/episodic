@@ -339,8 +339,10 @@ Authorization scaffold:
   dispatch. Health checks remain operator endpoints and are not authorized by
   this scaffold.
 - `ApiDependencies.authorization` accepts an `AuthorizationPort`; production
-  wiring currently defaults to `PermitAll`, so existing clients do not need an
-  `Authorization` header yet.
+  wiring uses `StaticBearerTokenAuthorization`, configured by the required
+  `API_AUTHORIZATION_BEARER_TOKEN` and `API_AUTHORIZATION_PRINCIPAL_ID`
+  settings. Test composition may use `PermitAll` deliberately, but it is not a
+  production default.
 - Authorization adapters receive an `AuthorizationContext` containing the HTTP
   method, request path, and raw `Authorization` header. The port is async, so
   future policy adapters can call external identity or permission services.
@@ -349,6 +351,10 @@ Authorization scaffold:
   the Falcon request context before resource dispatch; source-intake
   idempotency scopes keys from that trusted context rather than from
   client-controlled principal headers.
+- Generation-run creation records that trusted principal as the run actor and
+  ignores the request body's actor value. Ingestion jobs retain their owner so
+  creation, run polling, event listing, and TEI retrieval can return the same
+  not-found response for absent and inaccessible resources.
 - Non-permit decisions short-circuit with the canonical error envelope:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
@@ -1547,6 +1553,24 @@ selected for the run, then records usage with a run-scoped idempotency key.
 repository root, and startup rejects a path that is not an existing directory.
 The runtime constructs `FilePricingCatalogue` from the validated directory, so
 the same pricing source is used when costs are recorded.
+
+Generation input is bounded before it reaches the draft provider. The optional
+`GENERATION_MAX_SOURCE_COUNT`, `GENERATION_MAX_SOURCE_BYTES`,
+`GENERATION_MAX_AGGREGATE_SOURCE_BYTES`, and
+`GENERATION_MAX_NORMALIZED_SOURCE_BYTES` settings must be positive integers.
+The launcher rejects a source as soon as its stream or normalized text exceeds
+one of these limits and records the stable `generation.source_limit` failure
+category without logging source text. The claim transaction commits the
+conditional claim and `run.started` event before a separate read unit of work
+loads episodes, source-document metadata, and presenter bindings. That unit of
+work closes before upload bytes are hydrated, so external object-store reads do
+not retain a generation-run row lock or database connection.
+
+Generation-run polling, event listing, and TEI retrieval emit the bounded
+`generation_run.read`, `generation_run.events.list`, and `episode_tei.read`
+spans. Their only route attributes are operation, outcome, representation,
+pagination mode, and stable failure category; they never include content,
+principal identifiers, idempotency keys, or run identifiers.
 
 Admission is bounded before task allocation. The default capacity is four
 running tasks plus sixteen admitted pending tasks; exhaustion raises

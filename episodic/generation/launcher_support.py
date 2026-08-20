@@ -67,6 +67,52 @@ if typ.TYPE_CHECKING:
 type Clock = cabc.Callable[[], dt.datetime]
 type DraftIdFactoryFactory = cabc.Callable[[], cabc.Callable[[str], str]]
 
+_DEFAULT_MAX_SOURCE_COUNT = 32
+_DEFAULT_MAX_SOURCE_BYTES = 2 * 1024 * 1024
+_DEFAULT_MAX_AGGREGATE_SOURCE_BYTES = 8 * 1024 * 1024
+_DEFAULT_MAX_NORMALIZED_SOURCE_BYTES = 2 * 1024 * 1024
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationSourceLimits:
+    """Validated bounds applied while building one draft's source input."""
+
+    max_source_count: int = _DEFAULT_MAX_SOURCE_COUNT
+    max_source_bytes: int = _DEFAULT_MAX_SOURCE_BYTES
+    max_aggregate_source_bytes: int = _DEFAULT_MAX_AGGREGATE_SOURCE_BYTES
+    max_normalized_source_bytes: int = _DEFAULT_MAX_NORMALIZED_SOURCE_BYTES
+
+    def __post_init__(self) -> None:
+        """Reject non-positive limits before a launcher begins work."""
+        for name, value in dc.asdict(self).items():
+            if value < 1:
+                msg = f"{name} must be at least 1."
+                raise ValueError(msg)
+
+
+class GenerationSourceLimitError(DraftScriptGenerationError):
+    """Raised when bounded generation source input exceeds a configured limit."""
+
+    @classmethod
+    def source_count(cls) -> GenerationSourceLimitError:
+        """Build the stable source-count rejection."""
+        return cls("Generation source count exceeds limit.")
+
+    @classmethod
+    def source_bytes(cls) -> GenerationSourceLimitError:
+        """Build the stable per-source byte rejection."""
+        return cls("Generation source exceeds byte limit.")
+
+    @classmethod
+    def aggregate_bytes(cls) -> GenerationSourceLimitError:
+        """Build the stable aggregate-byte rejection."""
+        return cls("Generation source aggregate exceeds byte limit.")
+
+    @classmethod
+    def normalized_bytes(cls) -> GenerationSourceLimitError:
+        """Build the stable normalized-text rejection."""
+        return cls("Generation source exceeds normalized limit.")
+
 
 class CostRecorderFactory(typ.Protocol):
     """Factory that binds a cost recorder to a unit of work."""
@@ -141,15 +187,27 @@ async def require_episode(
 async def source_from_document(
     document: SourceDocument,
     object_store: ObjectStorePort | None,
+    limits: GenerationSourceLimits | None = None,
+    *,
+    remaining_aggregate_bytes: int | None = None,
 ) -> DraftScriptSource:
     """Build generator source input from canonical source provenance."""
+    limits = GenerationSourceLimits() if limits is None else limits
     metadata_content = document.metadata.get("content")
     if isinstance(metadata_content, str) and metadata_content.strip():
         content = metadata_content.strip()
     elif document.source_uri.startswith("upload:"):
-        content = await _read_uploaded_source(document.source_uri, object_store)
+        content = await _read_uploaded_source(
+            document.source_uri,
+            object_store,
+            limits,
+            remaining_aggregate_bytes=remaining_aggregate_bytes,
+        )
     else:
         content = document.source_uri
+    _require_source_byte_limit(content, limits.max_source_bytes)
+    _require_aggregate_byte_limit(content, remaining_aggregate_bytes)
+    _require_source_size(content, limits.max_normalized_source_bytes)
     return DraftScriptSource(
         source_id=str(document.id),
         source_type=document.source_type,
@@ -162,6 +220,9 @@ async def source_from_document(
 async def _read_uploaded_source(
     source_uri: str,
     object_store: ObjectStorePort | None,
+    limits: GenerationSourceLimits,
+    *,
+    remaining_aggregate_bytes: int | None,
 ) -> str:
     """Read and normalize UTF-8 source text from an upload provenance URI."""
     if object_store is None:
@@ -169,7 +230,17 @@ async def _read_uploaded_source(
         raise DraftScriptGenerationError(msg)
     key = source_uri.removeprefix("upload:")
     async with object_store.open(key) as chunks:
-        payload = b"".join([chunk async for chunk in chunks])
+        payload = bytearray()
+        async for chunk in chunks:
+            size = len(payload) + len(chunk)
+            if size > limits.max_source_bytes:
+                raise GenerationSourceLimitError.source_bytes()
+            if (
+                remaining_aggregate_bytes is not None
+                and size > remaining_aggregate_bytes
+            ):
+                raise GenerationSourceLimitError.aggregate_bytes()
+            payload.extend(chunk)
     try:
         content = payload.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
@@ -179,7 +250,32 @@ async def _read_uploaded_source(
     if not normalized:
         msg = f"Uploaded source {key!r} contains no text."
         raise DraftScriptGenerationError(msg)
+    _require_source_size(normalized, limits.max_normalized_source_bytes)
     return normalized
+
+
+def _require_source_size(content: str, maximum: int) -> None:
+    """Reject normalized source text whose UTF-8 representation is too large."""
+    if len(content.encode()) > maximum:
+        raise GenerationSourceLimitError.normalized_bytes()
+
+
+def _require_source_byte_limit(content: str, maximum: int) -> None:
+    """Reject source content above the configured per-source byte limit."""
+    if len(content.encode()) > maximum:
+        raise GenerationSourceLimitError.source_bytes()
+
+
+def _require_aggregate_byte_limit(
+    content: str,
+    remaining_aggregate_bytes: int | None,
+) -> None:
+    """Reject source content that exceeds the remaining aggregate budget."""
+    if (
+        remaining_aggregate_bytes is not None
+        and len(content.encode()) > remaining_aggregate_bytes
+    ):
+        raise GenerationSourceLimitError.aggregate_bytes()
 
 
 def draft_request(
@@ -303,6 +399,7 @@ _FAILURE_CATEGORIES: tuple[
 ] = (
     (EpisodeRevisionConflictError, "episode.persistence_conflict", False),
     (EpisodeNotFoundError, "episode.not_found", False),
+    (GenerationSourceLimitError, "generation.source_limit", False),
     ((InvalidDraftTeiError, DraftScriptTeiError), "tei.invalid", True),
     (DraftScriptTransientProviderError, "provider.transient", False),
     (DraftScriptProviderResponseError, "provider.response", False),

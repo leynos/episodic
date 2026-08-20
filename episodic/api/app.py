@@ -178,18 +178,22 @@ def _register_generation_run_routes(
     )
     app.add_route(
         "/v1/generation-runs/{run_id}",
-        GenerationRunResource(uow_factory),
+        GenerationRunResource(uow_factory, tracer=dependencies.tracer),
     )
     app.add_route(
         "/v1/generation-runs/{run_id}/events",
-        GenerationRunEventsResource(uow_factory),
+        GenerationRunEventsResource(uow_factory, tracer=dependencies.tracer),
     )
 
 
-def _register_episode_tei_routes(app: asgi.App, uow_factory: UowFactory) -> None:
+def _register_episode_tei_routes(
+    app: asgi.App,
+    uow_factory: UowFactory,
+    dependencies: ApiDependencies,
+) -> None:
     app.add_route(
         "/v1/episodes/{episode_id}/tei",
-        EpisodeTeiResource(uow_factory),
+        EpisodeTeiResource(uow_factory, tracer=dependencies.tracer),
     )
 
 
@@ -214,6 +218,6 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     _register_reference_binding_routes(app, uow_factory)
     _register_intake_routes(app, uow_factory, dependencies)
     _register_generation_run_routes(app, uow_factory, dependencies)
-    _register_episode_tei_routes(app, uow_factory)
+    _register_episode_tei_routes(app, uow_factory, dependencies)
 
     return app

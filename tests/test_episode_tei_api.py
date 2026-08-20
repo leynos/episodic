@@ -14,8 +14,12 @@ from episodic.api import create_app
 from episodic.api.resources.episode_tei import negotiate_tei_media_type
 from episodic.canonical.domain import EpisodeTeiUpdate
 from episodic.canonical.generation_quality import QaStatus
+from episodic.observability import RecordingTracer
 from tests.fixtures.api import build_api_dependencies
-from tests.test_generation_run_api import RecordingLauncher
+from tests.fixtures.generation_run_api import (
+    HeaderPrincipalAuthorization,
+    RecordingLauncher,
+)
 
 if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
@@ -58,13 +62,16 @@ async def test_episode_tei_json_and_xml_retrieval(
 ) -> None:
     """Return metadata by default and a TEI attachment when requested."""
     launcher = RecordingLauncher()
+    tracer = RecordingTracer()
     dependencies = dc.replace(
         build_api_dependencies(session_factory),
         launcher=launcher,
+        tracer=tracer,
     )
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
     async with httpx.AsyncClient(
-        transport=transport,
+        transport=httpx.ASGITransport(
+            app=typ.cast("_ASGIApp", create_app(dependencies))
+        ),
         base_url="http://testserver",
     ) as client:
         episode_id = await _create_generation_run(client)
@@ -112,6 +119,84 @@ async def test_episode_tei_json_and_xml_retrieval(
     assert json_response.headers["ETag"] != xml_response.headers["ETag"], (
         "expected representation-specific ETags for JSON metadata and TEI XML"
     )
+    expected_tei_spans = [
+        {
+            "operation": "episode_tei.read",
+            "outcome": "not_found",
+            "failure_category": "episode.not_found",
+        },
+        {
+            "operation": "episode_tei.read",
+            "representation": "application/json",
+            "outcome": "success",
+        },
+        {
+            "operation": "episode_tei.read",
+            "representation": "application/tei+xml",
+            "outcome": "success",
+        },
+        {
+            "operation": "episode_tei.read",
+            "outcome": "rejected",
+            "failure_category": "not_acceptable",
+        },
+    ]
+    assert [
+        span.attributes for span in tracer.spans if span.name == "episode_tei.read"
+    ] == expected_tei_spans, tracer.spans
+
+
+@pytest.mark.asyncio
+async def test_episode_tei_trace_records_invalid_identifier(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Record invalid TEI reads without including the raw route value."""
+    tracer = RecordingTracer()
+    dependencies = dc.replace(build_api_dependencies(session_factory), tracer=tracer)
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get("/v1/episodes/not-a-uuid/tei")
+
+    assert response.status_code == 400, response.text
+    assert tracer.spans[0].name == "episode_tei.read", tracer.spans
+    assert tracer.spans[0].attributes == {
+        "operation": "episode_tei.read",
+        "outcome": "rejected",
+        "failure_category": "invalid_input",
+    }, tracer.spans
+
+
+@pytest.mark.asyncio
+async def test_episode_tei_retrieval_enforces_principal_ownership(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Hide generated TEI from other and unauthenticated principals."""
+    launcher = RecordingLauncher()
+    dependencies = dc.replace(
+        build_api_dependencies(session_factory),
+        authorization=HeaderPrincipalAuthorization(),
+        launcher=launcher,
+    )
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    principal_a = {"Authorization": "Bearer principal-a"}
+    principal_b = {"Authorization": "Bearer principal-b"}
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        episode_id = await _create_generation_run(client, headers=principal_a)
+        await _persist_generated_tei(dependencies, episode_id, launcher.run_ids[0])
+        endpoint = f"/v1/episodes/{episode_id}/tei"
+        allowed = await client.get(endpoint, headers=principal_a)
+        unauthenticated = await client.get(endpoint)
+        cross_principal = await client.get(endpoint, headers=principal_b)
+
+    assert allowed.status_code == 200, allowed.text
+    assert unauthenticated.status_code == 401, unauthenticated.text
+    assert cross_principal.status_code == 404, cross_principal.text
 
 
 @pytest.mark.asyncio
@@ -252,9 +337,16 @@ def _response_etag(response: httpx.Response) -> str:
     return f'"{hashlib.sha256(response.content).hexdigest()}"'
 
 
-async def _create_generation_run(client: httpx.AsyncClient) -> uuid.UUID:
+async def _create_generation_run(
+    client: httpx.AsyncClient,
+    *,
+    headers: dict[str, str] | None = None,
+) -> uuid.UUID:
+    """Create a ready generation run owned by the supplied test principal."""
+    request_headers = {} if headers is None else headers
     profile = await client.post(
         "/v1/series-profiles",
+        headers={**request_headers, "Idempotency-Key": "tei-profile-key"},
         json={
             "slug": "tei-retrieval-profile",
             "title": "TEI retrieval profile",
@@ -265,12 +357,12 @@ async def _create_generation_run(client: httpx.AsyncClient) -> uuid.UUID:
     )
     job = await client.post(
         "/v1/ingestion-jobs",
-        headers={"Idempotency-Key": "tei-job-key"},
+        headers={**request_headers, "Idempotency-Key": "tei-job-key"},
         json={"series_profile_id": profile.json()["id"]},
     )
     source = await client.post(
         f"/v1/ingestion-jobs/{job.json()['id']}/sources",
-        headers={"Idempotency-Key": "tei-source-key"},
+        headers={**request_headers, "Idempotency-Key": "tei-source-key"},
         json={
             "type": "source_uri",
             "source_uri": "https://example.test/source.txt",
@@ -284,7 +376,7 @@ async def _create_generation_run(client: httpx.AsyncClient) -> uuid.UUID:
     assert source.status_code == 201, source.text
     run = await client.post(
         f"/v1/ingestion-jobs/{job.json()['id']}/generation-runs",
-        headers={"Idempotency-Key": "tei-generation-key"},
+        headers={**request_headers, "Idempotency-Key": "tei-generation-key"},
         json={
             "quality_mode": "draft_without_qa",
             "skip_qa_rationale": "TEI retrieval test.",

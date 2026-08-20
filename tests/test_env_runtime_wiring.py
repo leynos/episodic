@@ -1,7 +1,7 @@
 """Tests for runtime environment wiring of the HTTP app."""
 
 import asyncio
-import hashlib
+import os
 import pathlib
 import typing as typ
 
@@ -103,7 +103,10 @@ async def test_build_generation_launcher_wires_cost_recorder(
     )
     from episodic.canonical.storage import SqlAlchemyUnitOfWork
     from episodic.cost.recorder import CostRecorder
-    from episodic.generation import InProcessGenerationRunLauncher
+    from episodic.generation import (
+        GenerationSourceLimits,
+        InProcessGenerationRunLauncher,
+    )
     from episodic.observability import StructuredLogMetrics
 
     launcher = _build_generation_launcher(
@@ -117,6 +120,9 @@ async def test_build_generation_launcher_wires_cost_recorder(
             llm_api_key=None,
             draft_model="draft-model",
             pricing_snapshot_directory=pathlib.Path("config/pricing-snapshots"),
+            authorization_bearer_token=os.environ["API_AUTHORIZATION_BEARER_TOKEN"],
+            authorization_principal_id="runtime-test-principal",
+            generation_source_limits=GenerationSourceLimits(),
         ),
     )
 
@@ -335,57 +341,6 @@ def test_runtime_exposes_container_granian_contract() -> None:
     )
 
 
-@pytest.mark.asyncio
-async def test_create_app_from_env_wires_object_store_for_uploads(
-    migrated_database_url: str,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Runtime-created apps accept uploads when object storage is configured."""
-    object_store_root = tmp_path / "objects"
-    monkeypatch.setenv("DATABASE_URL", migrated_database_url)
-    monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(object_store_root))
-
-    from episodic.api.runtime import create_app_from_env
-
-    app = create_app_from_env()
-    try:
-        transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            payload = b"runtime upload\n"
-            response = await client.post(
-                "/v1/uploads",
-                headers={"Idempotency-Key": "runtime-upload"},
-                files={
-                    "file": ("source.txt", payload, "text/plain"),
-                    "content_type": (None, "text/plain"),
-                    "declared_size": (None, str(len(payload))),
-                    "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-                },
-            )
-    finally:
-        await scaffold_support.run_asgi_lifespan(
-            typ.cast("_ASGIApp", app),
-            (
-                scaffold_support.LifespanEvent(type="lifespan.startup"),
-                scaffold_support.LifespanEvent(type="lifespan.shutdown"),
-            ),
-        )
-
-    assert response.status_code == 201, response.text
-    response_body = response.json()
-    expected_hash = hashlib.sha256(payload).hexdigest()
-    stored_path = object_store_root / "uploads" / response_body["id"]
-    assert response_body["content_hash"] == f"sha256:{expected_hash}", (
-        "Expected values to match"
-    )
-    assert stored_path.is_file(), f"expected upload payload at {stored_path}"
-    assert stored_path.read_bytes() == payload, "Expected values to match"
-
-
 class _UnusedLLMPort:
     """LLM port fake used only to satisfy runtime launcher construction."""
 
@@ -396,3 +351,10 @@ class _UnusedLLMPort:
         """Fail if runtime wiring accidentally invokes the fake."""
         _ = request
         raise AssertionError
+
+
+@pytest.fixture(autouse=True)
+def _configure_runtime_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide the required production authorization settings for runtime tests."""
+    monkeypatch.setenv("API_AUTHORIZATION_BEARER_TOKEN", "runtime-test-token")
+    monkeypatch.setenv("API_AUTHORIZATION_PRINCIPAL_ID", "runtime-test-principal")

@@ -23,6 +23,8 @@ async def test_create_app_from_env_shares_production_metrics_sink(
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.test/episodic")
     monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path))
+    monkeypatch.setenv("API_AUTHORIZATION_BEARER_TOKEN", "runtime-test-token")
+    monkeypatch.setenv("API_AUTHORIZATION_PRINCIPAL_ID", "runtime-test-principal")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.test/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     captured_dependencies: ApiDependencies | None = None

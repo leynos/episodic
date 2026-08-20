@@ -127,4 +127,8 @@ def _ingestion_job_filter_clause(
         )
     if filters.intake_state is not None:
         clauses.append(IngestionJobRecord.intake_state == filters.intake_state)
+    if filters.owner_principal_id is not None:
+        clauses.append(
+            IngestionJobRecord.owner_principal_id == filters.owner_principal_id
+        )
     return sa.and_(*clauses) if clauses else sa.true()
