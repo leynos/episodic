@@ -333,6 +333,14 @@ Run all commands from the repository root.
    Each command must exit zero. Inspect `git status --short` after gates for
    regenerated tracked artefacts.
 
+   Run the additional Makefile validation separately:
+
+   ```bash
+   make validate Makefile
+   ```
+
+   This command must also exit zero.
+
 ## Validation and acceptance
 
 Acceptance requires all of the following observable outcomes:
@@ -349,6 +357,7 @@ Acceptance requires all of the following observable outcomes:
   wider Python gates.
 - `make check-fmt`, `make test`, `make typecheck`, `make lint`,
   `make markdownlint`, and `make nixie` all pass sequentially.
+- The additional `make validate Makefile` check exits zero.
 - The final Git worktree is clean and the plan status is `COMPLETE`.
 
 Performance observations are descriptive wall-clock measurements from this
