@@ -152,7 +152,8 @@ def assert_error_envelope(
         Expected status and error-envelope field values.
 
     The error envelope must contain exactly ``code``, ``message``, and
-    ``details``.
+    ``details``, with each value exactly matching ``expected.code``,
+    ``expected.message``, and ``expected.details``, respectively.
     """
     assert_response_status(response, expected.status)
     payload = response.json()
