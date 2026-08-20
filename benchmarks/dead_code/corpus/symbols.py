@@ -69,7 +69,7 @@ def _function_with_unused_parameter(
 class UsedClass:
     """Provide a method used by the benchmark fixture."""
 
-    def value(self) -> int:  # noqa: PLR6301
+    def value(self) -> int:  # noqa: PLR6301 - instance call retains the instantiated-class fixture.
         """Return the class fixture's constant value.
 
         Returns
