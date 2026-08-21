@@ -108,7 +108,7 @@ async def test_episode_tei_json_and_xml_retrieval(
     assert json_response.headers["ETag"] != xml_response.headers["ETag"], (
         "expected representation-specific ETags for JSON metadata and TEI XML"
     )
-    _assert_episode_tei_read_trace(tracer)
+    _assert_tei_read_spans(tracer)
 
 
 @pytest.mark.asyncio
@@ -297,8 +297,8 @@ def _assert_tei_xml_response(
     )
 
 
-def _assert_episode_tei_read_trace(tracer: RecordingTracer) -> None:
-    """Assert TEI retrieval records every negotiated representation outcome."""
+def _assert_tei_read_spans(tracer: RecordingTracer) -> None:
+    """Assert the TEI retrieval trace sequence."""
     expected_tei_spans = [
         {
             "operation": "episode_tei.read",
