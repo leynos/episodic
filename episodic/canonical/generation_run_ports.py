@@ -108,7 +108,9 @@ class GenerationEventLog(typ.Protocol):
 
     `list_events` returns records ordered ascending by `seq`. When
     `after_seq` is supplied, the result range is half-open `(after_seq, ...]`;
-    otherwise it starts from sequence 1. `limit` is a hard cap.
+    otherwise it starts from sequence 1. `offset` skips records within the
+    range selected by `after_seq`, and `limit` is a hard cap. Callers must use
+    either `after_seq` or `offset`, not both.
     """
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
