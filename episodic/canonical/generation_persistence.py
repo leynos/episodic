@@ -1,8 +1,15 @@
-"""Persist canonical state at the no-QA draft-generation boundaries.
+"""Persist canonical state at no-QA draft-generation boundaries.
 
-Materialization turns ready jobs into placeholder episodes and source documents.
-Persistence validates generator output and applies optimistic TEI updates; the
-API materialises before launch, and the detached launcher persists drafts.
+Services: ``materialise_episode_from_ingestion`` and ``persist_draft_script``.
+Related request types and typed persistence errors are also exported; callers
+supply a ``CanonicalUnitOfWork``, which this module never creates or disposes. A
+ready :class:`IngestionJob`
+becomes a placeholder episode with deterministic source documents: pages load
+before locking, reservation commits before projection, and repository results
+verify duplicates; materialisation commits both boundaries.
+``persist_draft_script`` validates a :class:`DraftScriptResult`,
+carries :class:`GenerationRun` provenance through :class:`EpisodeTeiUpdate`, and
+applies an optimistic TEI revision without commit or rollback.
 """
 
 import typing as typ
