@@ -68,25 +68,25 @@ async def materialise_episode_from_ingestion(
 
     Raises
     ------
-    IngestionJobNotFoundError
-        If no ingestion job exists for the requested identifier.
-    IngestionJobNotReadyError
-        If the job is not ready for generation.
     MissingAttachedSourcesError
         If the ready job has no attached sources.
+
+    Notes
+    -----
+    Propagates :class:`IngestionJobNotFoundError` if no ingestion job exists,
+    and :class:`IngestionJobNotReadyError` if the job is not ready for
+    generation.
     """
     sources = await _list_all_sources(uow, request.ingestion_job_id)
     if len(sources) == 0:
-        job = await uow.ingestion_jobs.get(request.ingestion_job_id)
-        if job is None:
-            raise IngestionJobNotFoundError(str(request.ingestion_job_id))
-        if job.intake_state is not IntakeState.READY_FOR_GENERATION:
-            raise IngestionJobNotReadyError(request.ingestion_job_id)
+        await _load_ready_ingestion_job(
+            uow, request.ingestion_job_id, should_lock=False
+        )
         raise MissingAttachedSourcesError(request.ingestion_job_id)
 
-    job = await _get_ingestion_job_for_update(uow, request.ingestion_job_id)
-    if job.intake_state is not IntakeState.READY_FOR_GENERATION:
-        raise IngestionJobNotReadyError(request.ingestion_job_id)
+    job = await _load_ready_ingestion_job(
+        uow, request.ingestion_job_id, should_lock=True
+    )
 
     now = request.clock()
     episode = await _materialise_or_reuse_episode(uow, job, request, now)
@@ -180,14 +180,21 @@ async def persist_draft_script(
     )
 
 
-async def _get_ingestion_job_for_update(
+async def _load_ready_ingestion_job(
     uow: CanonicalUnitOfWork,
     ingestion_job_id: uuid.UUID,
+    *,
+    should_lock: bool,
 ) -> IngestionJob:
-    """Return and lock one ingestion job or raise a not-found error."""
-    job = await uow.ingestion_jobs.get_for_update(ingestion_job_id)
+    """Load a ready ingestion job, optionally retaining its row lock."""
+    if should_lock:
+        job = await uow.ingestion_jobs.get_for_update(ingestion_job_id)
+    else:
+        job = await uow.ingestion_jobs.get(ingestion_job_id)
     if job is None:
         raise IngestionJobNotFoundError(str(ingestion_job_id))
+    if job.intake_state is not IntakeState.READY_FOR_GENERATION:
+        raise IngestionJobNotReadyError(ingestion_job_id)
     return job
 
 
