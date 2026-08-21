@@ -1500,6 +1500,13 @@ The port surface is intentionally split:
 - `GenerationRunRepository` creates, fetches, lists, and updates run state.
 - `GenerationEventLog` appends events and allocates per-run `EventSeq` values
   inside the adapter.
+- `GenerationRunEventStore` composes the run repository and event log for
+  durable generation-run storage. `CanonicalUnitOfWork.generation_runs` exposes
+  this port; `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunStore` to
+  its session, so callers use the same unit of work and own its commit or
+  rollback. `GenerationRunStorageRuntime` supplies the adapter's clock and UUID
+  providers, with production defaults and deterministic injection available to
+  tests.
 - `GenerationCheckpointPort` creates checkpoints and records reviewer
   responses through the `Checkpoint.respond(...)` domain transition.
 - `GenerationRunPort` composes the three sub-ports for callers that need the
@@ -1539,12 +1546,18 @@ immutable command.
 
 `persist_draft_script` is the persistence boundary. It validates the generated
 TEI, applies the expected `tei_revision` check, and updates the episode with
-the TEI, content hash, generation-run identifier, and `QaStatus.SKIPPED`.
-Materialization and persistence use `CanonicalUnitOfWork` repository ports and
-leave commit or rollback to their caller. The launcher therefore uses detached
-units of work: one to claim and load inputs, another for `draft.generated`, and
-another to persist TEI, cost records, ordered terminal events, and status. A
-request-scoped unit of work must never be captured by a background task.
+the TEI, content hash, generation-run identifier, and `QaStatus.SKIPPED`. The
+`EpisodeTeiUpdate` command carries that TEI, QA status, generation-run
+provenance, timestamp, and expected revision as one immutable update. The SQL
+episode repository updates only when the stored revision equals
+`expected_revision`, then increments the revision; a lost compare-and-set is
+reported as an episode revision conflict. The surrounding unit of work still
+controls commit or rollback. Materialization and persistence use
+`CanonicalUnitOfWork` repository ports and leave commit or rollback to their
+caller. The launcher therefore uses detached units of work: one to claim and
+load inputs, another for `draft.generated`, and another to persist TEI, cost
+records, ordered terminal events, and status. A request-scoped unit of work
+must never be captured by a background task.
 
 When configured, `CostRecorder` records the provider call and final run roll-up
 in the persistence unit of work. It first pins the immutable provider pricing
@@ -1562,10 +1575,11 @@ Generation input is bounded before it reaches the draft provider. The optional
 The launcher rejects a source as soon as its stream or normalized text exceeds
 one of these limits and records the stable `generation.source_limit` failure
 category without logging source text. The claim transaction commits the
-conditional claim and `run.started` event before a separate read unit of work
-loads the episode, source-document metadata, and presenter bindings. That unit
-of work closes before the launcher hydrates upload bytes from object storage, so
-external object-store reads do not retain a generation-run row lock or database
+conditional claim and `run.started` event. A detached read unit of work then
+loads the episode, source-document metadata, and presenter bindings and closes
+before bounded object-store or filesystem streaming starts. Hydration and text
+normalization therefore happen after the metadata read unit of work has closed,
+so external reads do not retain a generation-run row lock or database
 connection.
 
 Generation-run polling, event listing, and TEI retrieval emit the bounded

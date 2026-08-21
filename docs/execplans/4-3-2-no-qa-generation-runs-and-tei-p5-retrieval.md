@@ -4,14 +4,15 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: COMPLETE for the core slice; hardening follow-up IN PROGRESS
+Status: COMPLETE for the core slice and the scoped PR #141 hardening follow-up
 
 Current implementation status (core slice completed 2026-07-22): Milestones 0-8
 and the post-implementation correctness review are complete. The REST
 resources, TEI retrieval route, upload-backed source hydration, presenter
 resolution, idempotent episode materialization, and serialized terminal updates
-are implemented. The current hardening follow-up remains in progress, but
-roadmap item 4.3.2 is complete for the delivered core slice.
+are implemented. The scoped hardening follow-up completed on 2026-08-20;
+roadmap item 4.3.2 is complete for the delivered core slice. Automated
+stuck-run recovery and broader operational follow-up remain outside this plan.
 
 ## Purpose / big picture
 
@@ -435,23 +436,22 @@ when any of the following is breached.
   TEI. Updated `docs/users-guide.md` to state this procedure. No full gates
   were run for this documentation-only change, as requested.
 
-- [ ] (in progress, 2026-08-17) Current hardening follow-up across commits
-  `164528c`, `9921083`, `72a5ef0`, and `5c7b8e4`: API/task spans, bounded
-  in-process admission, explicit overload terminalization, and SQL claim
-  outcome logs are implemented. Representation-specific ETags now support
-  conditional `304` responses for JSON and TEI; the concurrent-claim test
-  asserts the successful-claim count before selecting its result; public TEI
-  API documentation is complete; and shutdown has an immediate-cancellation
-  fallback for tasks cancelled before `_run_task` begins. The audit still finds
-  production-wide metrics, lease/recovery, retry metrics, generated durable
-  lifecycle proofs, and in-flight disposal proof outstanding.
+- [x] (completed, 2026-08-20) Scoped PR #141 hardening follow-up across
+  the hardening commits: API/task spans, bounded in-process admission, explicit
+  overload terminalization, SQL claim outcome logs, representation-specific
+  ETags, cancellation fallback, trusted-principal ownership checks, typed
+  duplicate projection handling, bounded source hydration, and claim
+  linearization are implemented and validated. Production-wide metrics,
+  automated lease/recovery, retry metrics, generated durable lifecycle proofs,
+  and in-flight disposal proof remain deferred operational work.
 - [x] (recorded, 2026-08-17) Launcher cancellation persistence now has one
   owner: the cancelled task records it, while shutdown falls back only for a
   coroutine cancelled before it starts. The no-QA BDD helper drains detached
   work after each `POST` response because the session-scoped PGlite test server
   supports one connection at a time. This keeps the REST response assertions
   while launcher/API tests cover non-blocking scheduling; the hardening
-  follow-up remains in progress while roadmap item 4.3.2 is complete.
+  follow-up was still in progress at that point; the scoped work was completed
+  on 2026-08-20 while roadmap item 4.3.2 remained complete.
 
 - [x] (recorded, 2026-08-17) Current review-remediation decisions: launcher
   composition supplies configuration explicitly; episode materialization
@@ -1900,15 +1900,15 @@ generation graph remain assigned to 2.6.2, 2.6.3, and 4.4.1.
 
 ## Current progress and decision
 
-As of `eaea7c9` (2026-08-17), the in-process launcher hardening is present:
+As of `eaea7c9` (2026-08-17), the in-process launcher hardening was present:
 admission is bounded before task allocation, overload is persisted as
 `launcher.overloaded`, launcher/provider/database shutdown is serialized, and
-tracing plus bounded production metrics are injectable. This entry records
-current implementation progress and the associated operational decision; it
-does not mark the hardening follow-up complete. Roadmap item 4.3.2 is complete
-for the delivered core slice. Documentation synchronization and the explicitly
-deferred automatic recovery and QA-gated successor remain separate follow-up
-work.
+tracing plus bounded production metrics are injectable. This entry records the
+interim implementation progress and associated operational decision; the scoped
+hardening follow-up was completed on 2026-08-20, as recorded below. Roadmap
+item 4.3.2 is complete for the delivered core slice. Documentation
+synchronization and the explicitly deferred automatic recovery and QA-gated
+successor remain separate follow-up work.
 
 Implementation progress across `fde42bc`, `eaea7c9`, and `b4dc700` also covers
 the unified cost-recorder protocol and a shorter materialization lock scope:
