@@ -45,7 +45,6 @@ _GENERATION_RUN_OPERATION = "generation_run.create"
 _RETRY_AFTER = "1"
 _MAX_EVENT_LIMIT = 100
 _DEFAULT_EVENT_LIMIT = 20
-_ANONYMOUS_TEST_PRINCIPAL = "anonymous"
 
 type Clock = cabc.Callable[[], dt.datetime]
 type UuidFactory = cabc.Callable[[], uuid.UUID]
@@ -91,15 +90,16 @@ class GenerationRunsResource:
         request = _parse_create_request(payload)
         launcher = self._require_launcher()
         idempotency_key = req.get_header("Idempotency-Key")
-        actor = principal_id(req) or _ANONYMOUS_TEST_PRINCIPAL
-        request = request._replace(actor=actor)
+        actor = principal_id(req)
+        if actor is None:
+            raise _ingestion_job_not_found(source_bundle_id)
 
         async def work() -> IdempotentResponse:
             run = await self._create_run(
                 source_bundle_id,
                 request,
+                actor=actor,
                 idempotency_key=idempotency_key,
-                idempotency_principal_id=principal_id(req),
             )
             span.set_attribute("run_id", str(run.id))
             try:
@@ -152,12 +152,12 @@ class GenerationRunsResource:
         source_bundle_id: uuid.UUID,
         request: _CreateGenerationRun,
         *,
+        actor: str,
         idempotency_key: str | None,
-        idempotency_principal_id: str | None,
     ) -> GenerationRun:
         async with self._uow_factory() as uow:
             job = await uow.ingestion_jobs.get(source_bundle_id)
-            if job is None or not _owns_ingestion_job(job, request.actor):
+            if job is None or not _owns_ingestion_job(job, actor):
                 raise _ingestion_job_not_found(source_bundle_id)
             try:
                 episode = await materialise_episode_from_ingestion(
@@ -178,7 +178,7 @@ class GenerationRunsResource:
                 id=self._uuid_factory(),
                 episode_id=episode.id,
                 source_bundle_id=source_bundle_id,
-                actor=request.actor,
+                actor=actor,
                 status=GenerationRunStatus.PENDING,
                 current_node=None,
                 budget_snapshot=request.budget_snapshot,
@@ -195,7 +195,7 @@ class GenerationRunsResource:
             run = await uow.generation_runs.create_run(
                 run,
                 idempotency_key=idempotency_key,
-                idempotency_principal_id=idempotency_principal_id,
+                idempotency_principal_id=actor,
             )
             await uow.commit()
             return run
@@ -251,7 +251,6 @@ class GenerationRunResource:
         run_id: str,
     ) -> None:
         """Return the current generation-run state."""
-        actor = principal_id(req) or _ANONYMOUS_TEST_PRINCIPAL
         with self._tracer.start_span(
             "generation_run.read",
             attributes={"operation": "generation_run.read"},
@@ -262,6 +261,11 @@ class GenerationRunResource:
                 span.set_attribute("outcome", "rejected")
                 span.set_attribute("failure_category", "invalid_input")
                 raise
+            actor = principal_id(req)
+            if actor is None:
+                span.set_attribute("outcome", "not_found")
+                span.set_attribute("failure_category", "run.not_found")
+                raise _run_not_found(parsed_run_id)
             async with self._uow_factory() as uow:
                 run = await uow.generation_runs.get_run(parsed_run_id)
             if run is None:
@@ -295,7 +299,6 @@ class GenerationRunEventsResource:
         run_id: str,
     ) -> None:
         """List events after an optional sequence cursor."""
-        actor = principal_id(req) or _ANONYMOUS_TEST_PRINCIPAL
         with self._tracer.start_span(
             "generation_run.events.list",
             attributes={"operation": "generation_run.events.list"},
@@ -312,6 +315,11 @@ class GenerationRunEventsResource:
             span.set_attribute(
                 "pagination", "cursor" if after_seq is not None else "offset"
             )
+            actor = principal_id(req)
+            if actor is None:
+                span.set_attribute("outcome", "not_found")
+                span.set_attribute("failure_category", "run.not_found")
+                raise _run_not_found(parsed_run_id)
             async with self._uow_factory() as uow:
                 run = await uow.generation_runs.get_run(parsed_run_id)
                 if run is None or run.actor != actor:
@@ -345,7 +353,6 @@ class GenerationRunEventsResource:
 
 
 class _CreateGenerationRun(typ.NamedTuple):
-    actor: str
     skip_qa_rationale: str
     configuration: JsonPayload
     budget_snapshot: JsonPayload
@@ -381,9 +388,6 @@ def _parse_create_request(payload: JsonPayload) -> _CreateGenerationRun:
     }
     budget_snapshot = _optional_mapping(payload, "budget_hints")
     return _CreateGenerationRun(
-        # The resource replaces this placeholder with the authenticated
-        # principal before persistence. Client JSON must never choose the actor.
-        actor="authenticated-principal-required",
         skip_qa_rationale=require_str(payload, "skip_qa_rationale"),
         configuration=configuration,
         budget_snapshot=budget_snapshot,
@@ -483,10 +487,7 @@ def _ingestion_job_not_found(ingestion_job_id: uuid.UUID) -> falcon.HTTPNotFound
 
 def _owns_ingestion_job(job: IngestionJob, principal: str | None) -> bool:
     """Return whether the server-derived principal can use an ingestion job."""
-    actor = principal or _ANONYMOUS_TEST_PRINCIPAL
-    return job.owner_principal_id == actor or (
-        job.owner_principal_id is None and actor == _ANONYMOUS_TEST_PRINCIPAL
-    )
+    return principal is not None and job.owner_principal_id == principal
 
 
 def _generation_input_error(message: str) -> falcon.HTTPUnprocessableEntity:

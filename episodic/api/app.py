@@ -16,6 +16,8 @@ import typing as typ
 
 from falcon import asgi
 
+from episodic.logging import get_logger, log_error
+
 from .authorization import AuthorizationMiddleware
 from .errors import serialize_http_error
 from .resources import (
@@ -52,6 +54,9 @@ if typ.TYPE_CHECKING:
     from .types import UowFactory
 
 
+logger = get_logger(__name__)
+
+
 class _ShutdownHooksMiddleware:
     """Run injected async cleanup hooks during the ASGI shutdown phase."""
 
@@ -65,8 +70,16 @@ class _ShutdownHooksMiddleware:
     ) -> None:
         """Release runtime-managed resources before the process exits."""
         del scope, event
+        first_failure: Exception | None = None
         for shutdown_hook in self._shutdown_hooks:
-            await shutdown_hook()
+            try:
+                await shutdown_hook()
+            except Exception as exc:  # noqa: BLE001 - cleanup must attempt every hook.
+                log_error(logger, "ASGI shutdown hook failed.", exc_info=True)
+                if first_failure is None:
+                    first_failure = exc
+        if first_failure is not None:
+            raise first_failure
 
 
 def _register_health_routes(app: asgi.App, dependencies: ApiDependencies) -> None:

@@ -16,8 +16,14 @@ def upgrade() -> None:
         "ingestion_jobs",
         sa.Column("owner_principal_id", sa.String(length=240), nullable=True),
     )
+    op.create_index(
+        "ix_ij_owner_created",
+        "ingestion_jobs",
+        ["owner_principal_id", "created_at", "id"],
+    )
 
 
 def downgrade() -> None:
     """Remove ingestion-job ownership."""
+    op.drop_index("ix_ij_owner_created", "ingestion_jobs")
     op.drop_column("ingestion_jobs", "owner_principal_id")

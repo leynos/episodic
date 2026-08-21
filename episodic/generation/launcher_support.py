@@ -75,7 +75,24 @@ _DEFAULT_MAX_NORMALIZED_SOURCE_BYTES = 2 * 1024 * 1024
 
 @dc.dataclass(frozen=True, slots=True)
 class GenerationSourceLimits:
-    """Validated bounds applied while building one draft's source input."""
+    """Validated bounds applied while building one draft's source input.
+
+    Attributes
+    ----------
+    max_source_count : int
+        Maximum number of source documents accepted for one draft.
+    max_source_bytes : int
+        Maximum bytes retained from one source document.
+    max_aggregate_source_bytes : int
+        Maximum bytes retained across all source documents.
+    max_normalized_source_bytes : int
+        Maximum UTF-8 bytes after source-text normalisation.
+
+    Raises
+    ------
+    ValueError
+        If any configured bound is less than one.
+    """
 
     max_source_count: int = _DEFAULT_MAX_SOURCE_COUNT
     max_source_bytes: int = _DEFAULT_MAX_SOURCE_BYTES
@@ -91,27 +108,35 @@ class GenerationSourceLimits:
 
 
 class GenerationSourceLimitError(DraftScriptGenerationError):
-    """Raised when bounded generation source input exceeds a configured limit."""
+    """Raised when bounded generation source input exceeds a configured limit.
+
+    This translated generation error keeps limit rejections stable and free of
+    source content, identifiers, and byte counts.
+    """
 
     @classmethod
     def source_count(cls) -> GenerationSourceLimitError:
         """Build the stable source-count rejection."""
-        return cls("Generation source count exceeds limit.")
+        message = "Generation source count exceeds limit."
+        return cls(message)
 
     @classmethod
     def source_bytes(cls) -> GenerationSourceLimitError:
         """Build the stable per-source byte rejection."""
-        return cls("Generation source exceeds byte limit.")
+        message = "Generation source exceeds byte limit."
+        return cls(message)
 
     @classmethod
     def aggregate_bytes(cls) -> GenerationSourceLimitError:
         """Build the stable aggregate-byte rejection."""
-        return cls("Generation source aggregate exceeds byte limit.")
+        message = "Generation source aggregate exceeds byte limit."
+        return cls(message)
 
     @classmethod
     def normalized_bytes(cls) -> GenerationSourceLimitError:
         """Build the stable normalized-text rejection."""
-        return cls("Generation source exceeds normalized limit.")
+        message = "Generation source exceeds normalized limit."
+        return cls(message)
 
 
 class CostRecorderFactory(typ.Protocol):

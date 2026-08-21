@@ -16,7 +16,7 @@ _REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _DEFAULT_PRICING_DIRECTORY = _REPOSITORY_ROOT / "config/pricing-snapshots"
 _PRICING_DIRECTORY_SETTING = "PRICING_SNAPSHOT_DIRECTORY"
 
-logger = get_logger("episodic.api.runtime")
+logger = get_logger(__name__)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -26,10 +26,10 @@ class RuntimeConfig:
     database_url: str
     source_intake_object_store_root: pathlib.Path
     llm_base_url: str | None
-    llm_api_key: str | None
+    llm_api_key: str | None = dc.field(repr=False)
     draft_model: str
     pricing_snapshot_directory: pathlib.Path
-    authorization_bearer_token: str
+    authorization_bearer_token: str = dc.field(repr=False)
     authorization_principal_id: str
     generation_source_limits: GenerationSourceLimits
 

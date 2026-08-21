@@ -8,6 +8,7 @@ import typing as typ
 import httpx
 
 from episodic.api import create_app
+from episodic.api.authorization import StaticBearerTokenAuthorization
 from episodic.generation import InProcessGenerationRunLauncher
 from episodic.generation.draft_script import (
     LLMDraftScriptGenerator,
@@ -39,6 +40,8 @@ _VALID_DRAFT = json.dumps({
         {"speaker": "guest", "text": "The source supports this discussion."},
     ],
 })
+_AUTHORIZATION_TOKEN = "-".join(("no", "qa", "slice", "token"))
+_AUTHORIZATION_HEADER = {"Authorization": f"Bearer {_AUTHORIZATION_TOKEN}"}
 
 
 @dc.dataclass(slots=True)
@@ -73,11 +76,19 @@ class NoQaGenerationSliceContext:
         transport = httpx.ASGITransport(
             app=typ.cast("typ.Any", create_app(dependencies))
         )
+        request_headers = _AUTHORIZATION_HEADER | (
+            {} if headers is None else dict(headers)
+        )
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://testserver",
         ) as client:
-            return await client.request(method, path, headers=headers, json=json)
+            return await client.request(
+                method,
+                path,
+                headers=request_headers,
+                json=json,
+            )
 
     async def close(self) -> None:
         """Release asynchronous resources owned by the scenario."""
@@ -212,7 +223,13 @@ def configure_vidaimock(context: NoQaGenerationSliceContext, tmp_path: Path) -> 
         ),
         client=context.llm_client,
     )
-    dependencies = build_api_dependencies(context.session_factory)
+    dependencies = build_api_dependencies(
+        context.session_factory,
+        authorization=StaticBearerTokenAuthorization(
+            token=_AUTHORIZATION_TOKEN,
+            principal_id="no-qa-slice-principal",
+        ),
+    )
     context.launcher = InProcessGenerationRunLauncher(
         uow_factory=dependencies.uow_factory,
         draft_generator=LLMDraftScriptGenerator(

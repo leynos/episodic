@@ -57,6 +57,31 @@ async def test_create_app_runs_shutdown_hooks_during_asgi_shutdown() -> None:
 
 
 @pytest.mark.asyncio
+async def test_shutdown_runs_remaining_hooks_after_failure() -> None:
+    """Attempt all ordered shutdown hooks before surfacing the first failure."""
+    from episodic.api.app import _ShutdownHooksMiddleware
+
+    calls: list[str] = []
+
+    async def failing_hook() -> None:
+        await asyncio.sleep(0)
+        calls.append("failing")
+        msg = "first hook failed"
+        raise RuntimeError(msg)
+
+    async def later_hook() -> None:
+        await asyncio.sleep(0)
+        calls.append("later")
+
+    middleware = _ShutdownHooksMiddleware((failing_hook, later_hook))
+
+    with pytest.raises(RuntimeError, match="first hook failed"):
+        await middleware.process_shutdown({}, {})
+
+    assert calls == ["failing", "later"], calls
+
+
+@pytest.mark.asyncio
 async def test_runtime_lifespan_shuts_down_generation_before_database(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

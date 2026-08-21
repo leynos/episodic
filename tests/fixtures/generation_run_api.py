@@ -1,4 +1,8 @@
-"""Shared fakes and setup helpers for generation-run REST integration tests."""
+"""Public fixtures for authenticated generation-run REST integration tests.
+
+The helpers create principal-owned ready ingestion jobs, provide valid no-QA
+request bodies, and expose deterministic launcher and authorization fakes.
+"""
 
 import dataclasses as dc
 import typing as typ
@@ -18,7 +22,13 @@ if typ.TYPE_CHECKING:
 
 @dc.dataclass(slots=True)
 class RecordingLauncher:
-    """Record generation runs scheduled by the HTTP adapter."""
+    """Record generation runs scheduled by the HTTP adapter.
+
+    Attributes
+    ----------
+    run_ids : list[uuid.UUID]
+        Run identifiers recorded in launch order.
+    """
 
     run_ids: list[uuid.UUID] = dc.field(default_factory=list)
     launch: mock.AsyncMock = dc.field(init=False)
@@ -29,7 +39,11 @@ class RecordingLauncher:
 
 
 class HeaderPrincipalAuthorization:
-    """Authenticate test principals from fixed bearer-token values."""
+    """Authenticate test principals from fixed bearer-token values.
+
+    The adapter permits ``Bearer principal-a`` and ``Bearer principal-b`` and
+    rejects every other credential.
+    """
 
     @staticmethod
     async def decide(
@@ -50,7 +64,20 @@ async def create_ready_ingestion_job(
     client: httpx.AsyncClient,
     headers: dict[str, str] | None = None,
 ) -> str:
-    """Create a ready source bundle owned by the supplied test principal."""
+    """Create a ready source bundle owned by the supplied test principal.
+
+    Parameters
+    ----------
+    client : httpx.AsyncClient
+        ASGI client used to create the profile, ingestion job, and source.
+    headers : dict[str, str] | None, optional
+        Authorization headers determining the persisted job owner.
+
+    Returns
+    -------
+    str
+        Persisted ingestion-job identifier ready for draft generation.
+    """
     request_headers = {} if headers is None else headers
     profile = await client.post(
         "/v1/series-profiles",
@@ -86,7 +113,14 @@ async def create_ready_ingestion_job(
 
 
 def generation_payload() -> dict[str, object]:
-    """Return a valid no-QA generation request body."""
+    """Return a valid no-QA generation request body.
+
+    Returns
+    -------
+    dict[str, object]
+        Payload accepted by the generation-run endpoint; its client actor is
+        deliberately ignored in favour of the authenticated principal.
+    """
     return {
         "quality_mode": "draft_without_qa",
         "skip_qa_rationale": "Initial editorial draft.",

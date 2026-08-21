@@ -153,7 +153,29 @@ class SourceDocumentRepository(typ.Protocol):
         self,
         document: SourceDocument,
     ) -> SourceDocumentProjectionResult:
-        """Persist a deterministic projection and report a duplicate race."""
+        """Persist a deterministic projection and report duplicate races.
+
+        Parameters
+        ----------
+        document : SourceDocument
+            Deterministically identified source document to persist.
+
+        Returns
+        -------
+        SourceDocumentProjectionResult
+            ``CREATED`` when inserted or ``DUPLICATE`` when an equivalent
+            projection won a concurrent insertion race.
+
+        Raises
+        ------
+        Exception
+            Propagates unrecognised persistence failures.
+
+        Examples
+        --------
+        ``await repository.add_projection(document)`` returns ``DUPLICATE``
+        when the deterministic projection is already durable.
+        """
         raise NotImplementedError
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:

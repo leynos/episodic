@@ -65,27 +65,33 @@ async def test_episode_tei_json_and_xml_retrieval(
     tracer = RecordingTracer()
     dependencies = dc.replace(
         build_api_dependencies(session_factory),
+        authorization=HeaderPrincipalAuthorization(),
         launcher=launcher,
         tracer=tracer,
     )
+    headers = {"Authorization": "Bearer principal-a"}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(
             app=typ.cast("_ASGIApp", create_app(dependencies))
         ),
         base_url="http://testserver",
     ) as client:
-        episode_id = await _create_generation_run(client)
-        before_draft = await client.get(f"/v1/episodes/{episode_id}/tei")
+        episode_id = await _create_generation_run(client, headers=headers)
+        before_draft = await client.get(
+            f"/v1/episodes/{episode_id}/tei", headers=headers
+        )
         tei_xml = "<TEI><text><body><p>Generated script.</p></body></text></TEI>"
         await _persist_generated_tei(dependencies, episode_id, launcher.run_ids[0])
-        json_response = await client.get(f"/v1/episodes/{episode_id}/tei")
+        json_response = await client.get(
+            f"/v1/episodes/{episode_id}/tei", headers=headers
+        )
         xml_response = await client.get(
             f"/v1/episodes/{episode_id}/tei",
-            headers={"Accept": "application/tei+xml"},
+            headers={**headers, "Accept": "application/tei+xml"},
         )
         unacceptable = await client.get(
             f"/v1/episodes/{episode_id}/tei",
-            headers={"Accept": "text/plain"},
+            headers={**headers, "Accept": "text/plain"},
         )
 
     assert before_draft.status_code == 404, (
@@ -185,16 +191,22 @@ async def test_episode_tei_honours_conditional_get_validators(
     launcher = RecordingLauncher()
     dependencies = dc.replace(
         build_api_dependencies(session_factory),
+        authorization=HeaderPrincipalAuthorization(),
         launcher=launcher,
     )
+    principal_headers = {"Authorization": "Bearer principal-a"}
     transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        episode_id = await _create_generation_run(client)
+        episode_id = await _create_generation_run(client, headers=principal_headers)
         await _persist_generated_tei(dependencies, episode_id, launcher.run_ids[0])
-        headers = {} if accept is None else {"Accept": accept}
+        headers = (
+            principal_headers
+            if accept is None
+            else principal_headers | {"Accept": accept}
+        )
         initial_response = await client.get(
             f"/v1/episodes/{episode_id}/tei", headers=headers
         )

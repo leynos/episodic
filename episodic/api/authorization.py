@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import enum
+import hmac
 import typing as typ
 
 import falcon
@@ -72,7 +73,15 @@ class StaticBearerTokenAuthorization:
         context: AuthorizationContext,
     ) -> AuthorizationResult:
         """Return the configured principal for a matching bearer token."""
-        if context.authorization_header != f"Bearer {self.token}":
+        header = context.authorization_header
+        if header is None:
+            return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
+        scheme, separator, token = header.partition(" ")
+        if not separator or not token:
+            return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
+        if scheme.casefold() != "bearer":
+            return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
+        if not hmac.compare_digest(token, self.token):
             return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
         return AuthorizationResult(
             AuthorizationDecision.PERMIT,

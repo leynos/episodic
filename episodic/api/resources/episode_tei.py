@@ -21,7 +21,6 @@ if typ.TYPE_CHECKING:
 
 _JSON_MEDIA_TYPE = "application/json"
 _TEI_MEDIA_TYPE = "application/tei+xml"
-_ANONYMOUS_TEST_PRINCIPAL = "anonymous"
 
 
 class EpisodeTeiResource:
@@ -93,7 +92,11 @@ class EpisodeTeiResource:
                         episode.last_generation_run_id
                     )
                 )
-            actor = principal_id(req) or _ANONYMOUS_TEST_PRINCIPAL
+            actor = principal_id(req)
+            if actor is None:
+                span.set_attribute("outcome", "not_found")
+                span.set_attribute("failure_category", "episode.not_found")
+                raise _tei_not_found(parsed_episode_id)
             if not _has_accessible_draft(episode, run, actor):
                 span.set_attribute("outcome", "not_found")
                 span.set_attribute("failure_category", "episode.not_found")

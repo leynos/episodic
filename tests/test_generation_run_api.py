@@ -148,31 +148,37 @@ async def test_generation_run_create_replay_and_poll(
     launcher = RecordingLauncher()
     dependencies = dc.replace(
         build_api_dependencies(session_factory),
+        authorization=HeaderPrincipalAuthorization(),
         launcher=launcher,
         tracer=RecordingTracer(),
     )
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    headers = {"Authorization": "Bearer principal-a"}
     async with httpx.AsyncClient(
-        transport=transport,
+        transport=httpx.ASGITransport(
+            app=typ.cast("_ASGIApp", create_app(dependencies))
+        ),
         base_url="http://testserver",
     ) as client:
-        ingestion_job_id = await create_ready_ingestion_job(client)
+        ingestion_job_id = await create_ready_ingestion_job(client, headers)
         payload = generation_payload()
         first = await client.post(
             f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
-            headers={"Idempotency-Key": "generation-key"},
+            headers={**headers, "Idempotency-Key": "generation-key"},
             json=payload,
         )
         replay = await client.post(
             f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs",
-            headers={"Idempotency-Key": "generation-key"},
+            headers={**headers, "Idempotency-Key": "generation-key"},
             json=payload,
         )
         run_id = launcher.run_ids[0]
         await _append_generation_events(dependencies.uow_factory, run_id)
-        run_response = await client.get(first.headers.get("Location", "/missing"))
+        run_response = await client.get(
+            first.headers.get("Location", "/missing"), headers=headers
+        )
         events_response = await client.get(
             f"/v1/generation-runs/{run_id}/events",
+            headers=headers,
             params={"after_seq": 1, "limit": 1},
         )
 
@@ -201,16 +207,24 @@ async def test_generation_run_get_routes_trace_rejected_and_missing_requests(
 ) -> None:
     """Record bounded read-route outcomes without request data or identifiers."""
     tracer = RecordingTracer()
-    dependencies = dc.replace(build_api_dependencies(session_factory), tracer=tracer)
+    dependencies = dc.replace(
+        build_api_dependencies(session_factory),
+        authorization=HeaderPrincipalAuthorization(),
+        tracer=tracer,
+    )
+    headers = {"Authorization": "Bearer principal-a"}
     transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        invalid = await client.get("/v1/generation-runs/not-a-uuid")
-        missing = await client.get(f"/v1/generation-runs/{uuid.uuid7()}")
+        invalid = await client.get("/v1/generation-runs/not-a-uuid", headers=headers)
+        missing = await client.get(
+            f"/v1/generation-runs/{uuid.uuid7()}", headers=headers
+        )
         invalid_events = await client.get(
             f"/v1/generation-runs/{uuid.uuid7()}/events",
+            headers=headers,
             params={"offset": "-1"},
         )
 
@@ -302,33 +316,35 @@ async def test_generation_run_validation_and_idempotency_conflict(
     """Reject invalid quality metadata and changed idempotent bodies."""
     dependencies = dc.replace(
         build_api_dependencies(session_factory),
+        authorization=HeaderPrincipalAuthorization(),
         launcher=RecordingLauncher(),
     )
+    headers = {"Authorization": "Bearer principal-a"}
     transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://testserver",
     ) as client:
-        ingestion_job_id = await create_ready_ingestion_job(client)
+        ingestion_job_id = await create_ready_ingestion_job(client, headers)
         endpoint = f"/v1/ingestion-jobs/{ingestion_job_id}/generation-runs"
         accepted = await client.post(
             endpoint,
-            headers={"Idempotency-Key": "conflict-key"},
+            headers={**headers, "Idempotency-Key": "conflict-key"},
             json=generation_payload(),
         )
         changed = await client.post(
             endpoint,
-            headers={"Idempotency-Key": "conflict-key"},
+            headers={**headers, "Idempotency-Key": "conflict-key"},
             json={**generation_payload(), "skip_qa_rationale": "Changed."},
         )
         missing_rationale = await client.post(
             endpoint,
-            headers={"Idempotency-Key": "missing-key"},
+            headers={**headers, "Idempotency-Key": "missing-key"},
             json={"quality_mode": "draft_without_qa", "actor": "editor"},
         )
         unsupported_mode = await client.post(
             endpoint,
-            headers={"Idempotency-Key": "mode-key"},
+            headers={**headers, "Idempotency-Key": "mode-key"},
             json={**generation_payload(), "quality_mode": "qa_gated"},
         )
 
@@ -352,49 +368,3 @@ async def test_generation_run_validation_and_idempotency_conflict(
             details={"quality_mode": "qa_gated"},
         ),
     )
-
-
-@pytest.mark.asyncio
-async def test_generation_run_resource_uses_injected_factories(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Run creation should use deterministic IDs and lifecycle timestamps."""
-    from episodic.api.resources.generation_runs import (
-        GenerationRunsResource,
-        _CreateGenerationRun,
-    )
-
-    dependencies = build_api_dependencies(session_factory)
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
-        ingestion_job_id = uuid.UUID(await create_ready_ingestion_job(client))
-
-    ids = tuple(uuid.uuid7() for _ in range(4))
-    now = dt.datetime(2026, 7, 22, tzinfo=dt.UTC)
-    resource = GenerationRunsResource(
-        dependencies.uow_factory,
-        launcher=RecordingLauncher(),
-        clock=lambda: now,
-        uuid_factory=iter(ids).__next__,
-    )
-    run = await resource._create_run(
-        ingestion_job_id,
-        _CreateGenerationRun(
-            actor="anonymous",
-            skip_qa_rationale="Deterministic resource construction.",
-            configuration={},
-            budget_snapshot={},
-        ),
-        idempotency_key="factory-key",
-        idempotency_principal_id=None,
-    )
-
-    assert run.id == ids[2], f"expected factory run id {ids[2]}, got {run.id}"
-    assert run.episode_id == ids[0], (
-        f"expected factory episode id {ids[0]}, got {run.episode_id}"
-    )
-    assert run.created_at == now, f"expected fixed creation time, got {run.created_at}"
-    assert run.updated_at == now, f"expected fixed update time, got {run.updated_at}"

@@ -266,6 +266,7 @@ class IngestionJobRecord(Base):
             "intake_state",
             sa.desc("created_at"),
         ),
+        sa.Index("ix_ij_owner_created", "owner_principal_id", "created_at", "id"),
     )
 
 
