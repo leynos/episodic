@@ -536,6 +536,8 @@ full_name = [
     "episodic.observability.NoopValueMetrics.observe_value.labels",
     "episodic.observability.NoopTracer.start_span.name",
     "episodic.observability.NoopTracer.start_span.attributes",
+    "episodic.observability._NoopSpan.set_attribute.name",
+    "episodic.observability._NoopSpan.set_attribute.value",
 ]
 reason = "No-op metrics and tracing adapters intentionally retain their runtime-selected protocol signatures."
 
@@ -606,9 +608,12 @@ full_name = [
     "episodic.concurrent_interpreters._PerfCounterCpuTaskExecutorClock.monotonic_seconds",
     "episodic.observability.NoopMetrics.increment_counter",
     "episodic.observability.NoopMetrics.observe_latency_ms",
+    "episodic.observability.NoopValueMetrics.observe_value",
+    "episodic.observability.NoopTracer.start_span",
+    "episodic.observability.RecordingTracer.start_span",
     "episodic.observability.PerfCounterClock.monotonic_seconds",
 ]
-reason = "Clock and no-op metrics implementations satisfy runtime-selected protocol interfaces."
+reason = "Clock, no-op, and recording adapters satisfy runtime-selected protocol interfaces."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -672,8 +677,8 @@ full_name = [
     "episodic.api.runtime._psycopg_connection_kwargs",
     "episodic.api.runtime._build_llm_port",
     "episodic.api.runtime._build_generation_launcher",
-    "episodic.api.runtime._cost_recorder",
-    "episodic.api.runtime.shutdown_generation",
+    "episodic.api.runtime._build_generation_launcher._cost_recorder",
+    "episodic.api.runtime.create_app_from_env.shutdown_generation",
 ]
 reason = "The Granian application factory calls this runtime composition and shutdown helper chain."
 
