@@ -3,7 +3,6 @@
 import collections.abc as cabc
 import dataclasses as dc
 import datetime as dt
-import enum
 import typing as typ
 import uuid
 
@@ -32,13 +31,6 @@ class DraftScriptPersistenceError(Exception):
     Catch this exception to handle failures raised while materialising an
     episode or persisting its generated draft.
     """
-
-
-class SourceDocumentProjectionResult(enum.StrEnum):
-    """Outcome of one deterministic source-document projection write."""
-
-    ADDED = "added"
-    DUPLICATE = "duplicate"
 
 
 class _IngestionJobPersistenceError(DraftScriptPersistenceError):
@@ -88,6 +80,14 @@ class MissingAttachedSourcesError(_IngestionJobPersistenceError):
 
     message_template: typ.ClassVar[str] = (
         "Ingestion job {ingestion_job_id} has no attached sources."
+    )
+
+
+class SourceCountLimitExceededError(_IngestionJobPersistenceError):
+    """Raised when an ingestion job exceeds its configured source limit."""
+
+    message_template: typ.ClassVar[str] = (
+        "Ingestion job {ingestion_job_id} exceeds the generation source limit."
     )
 
 
@@ -210,12 +210,15 @@ class EpisodeMaterialisationRequest:
         UTC clock used for durable placeholder timestamps.
     uuid_factory
         Identifier factory used only when the job has no target episode.
+    max_source_count
+        Maximum attached sources materialised for one generation run.
     """
 
     ingestion_job_id: uuid.UUID
     title: str
     clock: Clock = _utc_now
     uuid_factory: UuidFactory = _uuid7
+    max_source_count: int = 32
 
 
 @dc.dataclass(frozen=True, slots=True)

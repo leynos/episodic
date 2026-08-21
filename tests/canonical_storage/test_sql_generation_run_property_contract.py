@@ -4,11 +4,12 @@ import asyncio
 import dataclasses as dc
 import datetime as dt
 import typing as typ
+import uuid
 
 import hypothesis.strategies as st
 import pytest
 import sqlalchemy as sa
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate, event_seq
@@ -25,35 +26,17 @@ from tests.canonical_storage._generation_run_support import (
 )
 
 if typ.TYPE_CHECKING:
-    import uuid
-
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    type SessionFactory = async_sessionmaker[AsyncSession]
+else:
+    type SessionFactory = object
 
 _EVENT_KINDS = st.lists(
     st.text(alphabet="abc", min_size=1, max_size=8),
     min_size=1,
     max_size=6,
 )
-
-_session_factory: async_sessionmaker[AsyncSession] | None = None
-
-
-@pytest.fixture(autouse=True)
-def _configure_session_factory(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Make the isolated SQL test factory available to generated examples."""
-    global _session_factory
-    _session_factory = session_factory
-
-
-def _current_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Return the function-scoped SQL factory configured for this test."""
-    if _session_factory is None:
-        msg = "SQL property-test session factory was not configured."
-        raise RuntimeError(msg)
-    return _session_factory
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -67,17 +50,16 @@ class _PageRequest:
 
 
 async def _recover_expired_lease(
-    session_factory: async_sessionmaker[AsyncSession],
-    run_id: object,
+    session_factory: SessionFactory,
+    run_id: uuid.UUID,
 ) -> bool:
     """Apply the documented recovery transition only to an expired running run."""
-    parsed_run_id = typ.cast("uuid.UUID", run_id)
     async with session_factory() as session:
         record = await session.scalar(
             sa
             .select(GenerationRunRecord)
             .where(
-                GenerationRunRecord.id == parsed_run_id,
+                GenerationRunRecord.id == run_id,
                 GenerationRunRecord.status == GenerationRunStatus.RUNNING,
                 GenerationRunRecord.lease_expires_at.is_not(None),
                 GenerationRunRecord.lease_expires_at <= NOW,
@@ -89,13 +71,13 @@ async def _recover_expired_lease(
             return False
         store = SqlAlchemyGenerationRunStore(session)
         await store.append_event(
-            parsed_run_id,
+            run_id,
             kind="run.failed",
             payload={"error_category": "launcher.lease_expired"},
             occurred_at=NOW,
         )
         await store.update_run_status(
-            parsed_run_id,
+            run_id,
             update=GenerationRunStatusUpdate(
                 status=GenerationRunStatus.FAILED,
                 current_node="failed",
@@ -112,14 +94,16 @@ async def _recover_expired_lease(
 @settings(
     max_examples=6,
     deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @pytest.mark.asyncio
 async def test_sql_event_batches_are_gap_free_and_isolated(
+    session_factory: SessionFactory,
     first_kinds: list[str],
     second_kinds: list[str],
 ) -> None:
     """Persisted event batches keep contiguous sequence spaces per run."""
-    factory = _current_session_factory()
+    factory = session_factory
     first_run = make_generation_run()
     second_run = make_generation_run()
     await persist_generation_run_prerequisites(factory, first_run, second_run)
@@ -158,15 +142,15 @@ async def test_sql_event_batches_are_gap_free_and_isolated(
 @settings(
     max_examples=6,
     deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @pytest.mark.asyncio
 async def test_sql_pages_match_creation_and_cursor_reference_slices(
+    session_factory: SessionFactory,
     request: _PageRequest,
 ) -> None:
     """Run and event pages match their independently calculated durable slices."""
-    import uuid
-
-    factory = _current_session_factory()
+    factory = session_factory
     episode_id = uuid.uuid7()
     runs = [
         make_generation_run(
@@ -190,6 +174,7 @@ async def test_sql_pages_match_creation_and_cursor_reference_slices(
         await uow.commit()
 
     cursor = min(request.after_seq, request.run_count)
+    event_offset = 0 if cursor else request.offset
     async with SqlAlchemyUnitOfWork(factory) as uow:
         run_page = await uow.generation_runs.list_runs(
             episode_id,
@@ -200,7 +185,7 @@ async def test_sql_pages_match_creation_and_cursor_reference_slices(
             runs[0].id,
             after_seq=event_seq(cursor) if cursor else None,
             limit=request.limit,
-            offset=request.offset,
+            offset=event_offset,
         )
 
     assert run_page == tuple(runs[request.offset : request.offset + request.limit]), (
@@ -208,8 +193,8 @@ async def test_sql_pages_match_creation_and_cursor_reference_slices(
         f"offset={request.offset}, limit={request.limit}: {run_page!r}"
     )
     expected_event_indexes = range(
-        cursor + request.offset,
-        min(request.run_count, cursor + request.offset + request.limit),
+        cursor + event_offset,
+        min(request.run_count, cursor + event_offset + request.limit),
     )
     assert [event.kind for event in event_page] == [
         f"event-{index}" for index in expected_event_indexes
@@ -220,13 +205,15 @@ async def test_sql_pages_match_creation_and_cursor_reference_slices(
 @settings(
     max_examples=6,
     deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @pytest.mark.asyncio
 async def test_sql_idempotency_keys_are_scoped_to_principals(
+    session_factory: SessionFactory,
     key: str,
 ) -> None:
     """The same key replays per principal while remaining independent across actors."""
-    factory = _current_session_factory()
+    factory = session_factory
     first_run = make_generation_run()
     replay_run = make_generation_run()
     other_principal_run = make_generation_run()
@@ -267,15 +254,17 @@ async def test_sql_idempotency_keys_are_scoped_to_principals(
 @settings(
     max_examples=5,
     deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @pytest.mark.asyncio
 async def test_sql_claim_races_and_lease_recovery_preserve_one_terminal_path(
+    session_factory: SessionFactory,
     first_node: str,
     second_node: str,
     lease_offset_seconds: int,
 ) -> None:
     """A pending run has one claimant and recovery acts only on expired leases."""
-    factory = _current_session_factory()
+    factory = session_factory
     run = make_generation_run()
     await persist_generation_run_prerequisites(factory, run)
     async with SqlAlchemyUnitOfWork(factory) as uow:

@@ -124,7 +124,12 @@ def _assert_polled_generation_run(
 
 def _assert_generation_run_conflict(response: httpx.Response) -> None:
     """Assert an idempotency conflict retains the original record identifier."""
-    changed_details = response.json()["details"]
+    assert response.status_code == 409, response.text
+    payload = response.json()
+    assert set(payload) == {"code", "message", "details"}, payload
+    assert payload["code"] == "idempotency_conflict", payload
+    assert payload["message"] == "Idempotency key body mismatch.", payload
+    changed_details = payload["details"]
     assert isinstance(changed_details, dict), changed_details
     record_id = changed_details.get("record_id")
     assert isinstance(record_id, str), changed_details
@@ -225,7 +230,7 @@ async def test_generation_run_get_routes_trace_rejected_and_missing_requests(
         invalid_events = await client.get(
             f"/v1/generation-runs/{uuid.uuid7()}/events",
             headers=headers,
-            params={"offset": "-1"},
+            params={"after_seq": "1", "offset": "1"},
         )
 
     assert invalid.status_code == 400, invalid.text

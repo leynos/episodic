@@ -6,7 +6,7 @@ import typing as typ
 
 import hypothesis.strategies as st
 import pytest
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 
 from episodic.canonical.domain import CanonicalEpisode, EpisodeTeiUpdate, GenerationRun
 from episodic.canonical.episode_errors import EpisodeRevisionConflictError
@@ -24,28 +24,12 @@ if typ.TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    type SessionFactory = async_sessionmaker[AsyncSession]
+else:
+    type SessionFactory = object
 
 _TEI_BODIES = st.text(alphabet="abc", min_size=1, max_size=8)
-_REVISION_OFFSETS = st.integers(min_value=0, max_value=3)
 _UPDATED_AT = dt.datetime(2026, 7, 24, tzinfo=dt.UTC)
-_session_factory: async_sessionmaker[AsyncSession] | None = None
-
-
-@pytest.fixture(autouse=True)
-def _configure_session_factory(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Make the isolated SQL test factory available to generated examples."""
-    global _session_factory
-    _session_factory = session_factory
-
-
-def _current_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Return the function-scoped SQL factory configured for this test."""
-    if _session_factory is None:
-        msg = "SQL TEI property-test session factory was not configured."
-        raise RuntimeError(msg)
-    return _session_factory
 
 
 def _tei_xml(body: str) -> str:
@@ -54,7 +38,7 @@ def _tei_xml(body: str) -> str:
 
 
 async def _persist_run(
-    factory: async_sessionmaker[AsyncSession],
+    factory: SessionFactory,
 ) -> GenerationRun:
     """Persist one run and its episode/source-bundle prerequisites."""
     run = make_generation_run()
@@ -66,7 +50,7 @@ async def _persist_run(
 
 
 async def _assert_single_winning_update(
-    factory: async_sessionmaker[AsyncSession],
+    factory: SessionFactory,
     episode_id: uuid.UUID,
     outcomes: tuple[CanonicalEpisode | EpisodeRevisionConflictError, ...],
 ) -> None:
@@ -118,38 +102,56 @@ def _tei_update(
     )
 
 
-@given(body=_TEI_BODIES, revision_offset=_REVISION_OFFSETS)
-@settings(max_examples=5, deadline=None)
+@given(body=_TEI_BODIES)
+@settings(
+    max_examples=5,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @pytest.mark.asyncio
-async def test_sql_tei_updates_preserve_revision_preconditions(
+async def test_sql_tei_updates_matching_revision_increment_once(
+    session_factory: SessionFactory,
+    body: str,
+) -> None:
+    """Generated matching revisions persist one TEI revision increment."""
+    run = await _persist_run(session_factory)
+    tei_xml = _tei_xml(body)
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        updated = await uow.episodes.update(
+            run.episode_id,
+            update=_tei_update(tei_xml, run.id, 1),
+        )
+        await uow.commit()
+
+    assert updated.tei_revision == 2, f"revision: {updated.tei_revision}"
+    assert updated.tei_content_hash == sha256_text(tei_xml), (
+        f"content hash: {updated.tei_content_hash!r}"
+    )
+    assert updated.qa_status is QaStatus.SKIPPED, f"QA status: {updated.qa_status}"
+    assert updated.last_generation_run_id == run.id, (
+        f"provenance: {updated.last_generation_run_id}"
+    )
+
+
+@given(body=_TEI_BODIES, revision_offset=st.integers(min_value=1, max_value=3))
+@settings(
+    max_examples=5,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@pytest.mark.asyncio
+async def test_sql_tei_updates_stale_revision_preserves_state(
+    session_factory: SessionFactory,
     body: str,
     revision_offset: int,
 ) -> None:
-    """Generated matching revisions update once; stale revisions preserve state."""
-    factory = _current_session_factory()
-    run = await _persist_run(factory)
+    """Generated stale revisions leave durable TEI state unchanged."""
+    run = await _persist_run(session_factory)
     expected_revision = 1 + revision_offset
     tei_xml = _tei_xml(body)
 
-    if revision_offset == 0:
-        async with SqlAlchemyUnitOfWork(factory) as uow:
-            updated = await uow.episodes.update(
-                run.episode_id,
-                update=_tei_update(tei_xml, run.id, expected_revision),
-            )
-            await uow.commit()
-
-        assert updated.tei_revision == 2, f"revision: {updated.tei_revision}"
-        assert updated.tei_content_hash == sha256_text(tei_xml), (
-            f"content hash: {updated.tei_content_hash!r}"
-        )
-        assert updated.qa_status is QaStatus.SKIPPED, f"QA status: {updated.qa_status}"
-        assert updated.last_generation_run_id == run.id, (
-            f"provenance: {updated.last_generation_run_id}"
-        )
-        return
-
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         with pytest.raises(EpisodeRevisionConflictError) as raised:
             await uow.episodes.update(
                 run.episode_id,
@@ -160,7 +162,7 @@ async def test_sql_tei_updates_preserve_revision_preconditions(
     assert raised.value.expected_revision == expected_revision, (
         f"conflict revision: {raised.value.expected_revision}"
     )
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         stored = await uow.episodes.get(run.episode_id)
     assert stored is not None, f"episode {run.episode_id} was not persisted"
     assert stored.tei_revision == 1, f"stale update revision: {stored.tei_revision}"
@@ -175,14 +177,19 @@ async def test_sql_tei_updates_preserve_revision_preconditions(
 
 
 @given(first_body=_TEI_BODIES, second_body=_TEI_BODIES)
-@settings(max_examples=4, deadline=None)
+@settings(
+    max_examples=4,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
 @pytest.mark.asyncio
 async def test_sql_tei_update_race_has_one_winner(
+    session_factory: SessionFactory,
     first_body: str,
     second_body: str,
 ) -> None:
     """Two sessions using one revision precondition admit exactly one update."""
-    factory = _current_session_factory()
+    factory = session_factory
     first_run = make_generation_run()
     second_run = make_generation_run(
         GenerationRunFixture(episode_id=first_run.episode_id)

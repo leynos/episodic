@@ -63,6 +63,7 @@ class HeaderPrincipalAuthorization:
 async def create_ready_ingestion_job(
     client: httpx.AsyncClient,
     headers: dict[str, str] | None = None,
+    key_prefix: str = "generation",
 ) -> str:
     """Create a ready source bundle owned by the supplied test principal.
 
@@ -72,6 +73,8 @@ async def create_ready_ingestion_job(
         ASGI client used to create the profile, ingestion job, and source.
     headers : dict[str, str] | None, optional
         Authorization headers determining the persisted job owner.
+    key_prefix : str, default="generation"
+        Prefix used to isolate the fixture's idempotency keys.
 
     Returns
     -------
@@ -81,7 +84,7 @@ async def create_ready_ingestion_job(
     request_headers = {} if headers is None else headers
     profile = await client.post(
         "/v1/series-profiles",
-        headers={**request_headers, "Idempotency-Key": "generation-profile-key"},
+        headers={**request_headers, "Idempotency-Key": f"{key_prefix}-profile-key"},
         json={
             "slug": "generation-api-profile",
             "title": "Generation API profile",
@@ -93,13 +96,13 @@ async def create_ready_ingestion_job(
     assert profile.status_code == 201, profile.text
     job = await client.post(
         "/v1/ingestion-jobs",
-        headers={**request_headers, "Idempotency-Key": "generation-job-key"},
+        headers={**request_headers, "Idempotency-Key": f"{key_prefix}-job-key"},
         json={"series_profile_id": profile.json()["id"]},
     )
     assert job.status_code == 201, job.text
     source = await client.post(
         f"/v1/ingestion-jobs/{job.json()['id']}/sources",
-        headers={**request_headers, "Idempotency-Key": "generation-source-key"},
+        headers={**request_headers, "Idempotency-Key": f"{key_prefix}-source-key"},
         json={
             "type": "source_uri",
             "source_uri": "https://example.test/source.txt",

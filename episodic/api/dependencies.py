@@ -17,7 +17,7 @@ from .authorization import AuthorizationPort, PermitAll
 if typ.TYPE_CHECKING:
     from episodic.canonical.health import HealthObserver
     from episodic.canonical.object_store import ObjectStorePort
-    from episodic.generation import GenerationRunLauncher
+    from episodic.generation import GenerationRunLauncher, GenerationSourceLimits
     from episodic.llm import LLMPort
     from episodic.observability import TracerPort
 
@@ -102,6 +102,7 @@ class ApiDependencies:
     shutdown_hooks: tuple[ShutdownHook, ...] = ()
     llm_port: LLMPort | None = None
     launcher: GenerationRunLauncher | None = None
+    generation_source_limits: GenerationSourceLimits | None = None
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
 

@@ -70,12 +70,14 @@ class GenerationRunsResource:
         launcher: GenerationRunLauncher | None,
         clock: Clock = _utc_now,
         uuid_factory: UuidFactory = _uuid7,
+        max_source_count: int | None = None,
         tracer: TracerPort | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._launcher = launcher
         self._clock = clock
         self._uuid_factory = uuid_factory
+        self._max_source_count = max_source_count
         self._tracer = NoopTracer() if tracer is None else tracer
 
     async def on_post(
@@ -167,6 +169,11 @@ class GenerationRunsResource:
                         title=f"Episode {source_bundle_id}",
                         clock=self._clock,
                         uuid_factory=self._uuid_factory,
+                        max_source_count=(
+                            32
+                            if self._max_source_count is None
+                            else self._max_source_count
+                        ),
                     ),
                 )
             except SourceIntakeError as exc:
@@ -308,6 +315,13 @@ class GenerationRunEventsResource:
                 after_seq = _parse_optional_positive_int(req, "after_seq")
                 limit = _parse_limit(req)
                 offset = _parse_offset(req)
+                if after_seq is not None and offset != 0:
+                    message = "after_seq and offset cannot be combined."
+                    raise validation_error(
+                        message,
+                        field="offset",
+                        constraint="exclusive_with_after_seq",
+                    )
             except falcon.HTTPError:
                 span.set_attribute("outcome", "rejected")
                 span.set_attribute("failure_category", "invalid_input")

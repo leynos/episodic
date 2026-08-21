@@ -1,5 +1,6 @@
 """Repository protocols for core canonical entities."""
 
+import enum
 import typing as typ
 
 if typ.TYPE_CHECKING:
@@ -18,7 +19,13 @@ if typ.TYPE_CHECKING:
         SourceDocument,
         TeiHeader,
     )
-    from .generation_persistence_types import SourceDocumentProjectionResult
+
+
+class SourceDocumentProjectionResult(enum.StrEnum):
+    """Outcome of a deterministic source-document projection write."""
+
+    ADDED = "added"
+    DUPLICATE = "duplicate"
 
 
 class SeriesProfileRepository(typ.Protocol):
@@ -163,13 +170,13 @@ class SourceDocumentRepository(typ.Protocol):
         Returns
         -------
         SourceDocumentProjectionResult
-            ``CREATED`` when inserted or ``DUPLICATE`` when an equivalent
+            ``ADDED`` when inserted or ``DUPLICATE`` when an equivalent
             projection won a concurrent insertion race.
 
         Raises
         ------
-        Exception
-            Propagates unrecognised persistence failures.
+        sqlalchemy.exc.IntegrityError
+            Unrecognised persistence failures propagate unchanged.
 
         Examples
         --------

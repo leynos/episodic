@@ -1,6 +1,7 @@
 """Transaction-boundary tests for generation-run claim hydration."""
 
 import asyncio
+import contextlib
 import datetime as dt
 import typing as typ
 
@@ -58,25 +59,33 @@ async def test_claim_commits_before_blocked_hydration(
         RecordingDraftGenerator(draft_result("<TEI/>")),
     )
     claim_task = asyncio.create_task(run_launcher._claim(run_id))
-    await asyncio.wait_for(hydration_started.wait(), timeout=1)
+    try:
+        await asyncio.wait_for(hydration_started.wait(), timeout=1)
 
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        claimed_run = await uow.generation_runs.get_run(run_id)
-        assert claimed_run is not None, f"expected claimed run {run_id} to persist"
-        assert claimed_run.status is GenerationRunStatus.RUNNING, (
-            f"expected run {run_id} to be running before hydration, "
-            f"got {claimed_run.status.value}"
-        )
-        await uow.generation_runs.append_event(
-            run_id,
-            kind="hydration.observed",
-            payload={},
-            occurred_at=dt.datetime(2026, 8, 20, tzinfo=dt.UTC),
-        )
-        await uow.commit()
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            claimed_run = await uow.generation_runs.get_run(run_id)
+            assert claimed_run is not None, f"expected claimed run {run_id} to persist"
+            assert claimed_run.status is GenerationRunStatus.RUNNING, (
+                f"expected run {run_id} to be running before hydration, "
+                f"got {claimed_run.status.value}"
+            )
+            await uow.generation_runs.append_event(
+                run_id,
+                kind="hydration.observed",
+                payload={},
+                occurred_at=dt.datetime(2026, 8, 20, tzinfo=dt.UTC),
+            )
+            await uow.commit()
 
-    release_hydration.set()
-    claimed = await claim_task
+        release_hydration.set()
+        claimed = await claim_task
+    finally:
+        if not release_hydration.is_set():
+            release_hydration.set()
+        if not claim_task.done():
+            claim_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await claim_task
 
     assert claimed is not None, f"expected claimed run {run_id} after hydration"
     async with SqlAlchemyUnitOfWork(session_factory) as uow:

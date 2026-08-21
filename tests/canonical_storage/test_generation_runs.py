@@ -164,6 +164,13 @@ async def test_generation_events_allocate_gap_free_sequences_per_run(
     assert after_first == (second_event,), (
         f"expected event after sequence 1 to be {second_event!r}, got {after_first!r}"
     )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(ValueError, match="after_seq and offset cannot be combined"):
+            await uow.generation_runs.list_events(
+                first_run.id,
+                after_seq=event_seq(1),
+                offset=1,
+            )
     assert first_events == (first_event, second_event), (
         f"unexpected first-run events: {first_events!r}"
     )

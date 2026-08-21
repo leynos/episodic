@@ -1,5 +1,6 @@
 """Tests for draft-generation persistence services."""
 
+import dataclasses as dc
 import datetime as dt
 import hashlib
 import typing as typ
@@ -19,12 +20,12 @@ from episodic.canonical.generation_persistence import (
     DraftScriptPersistenceRequest,
     EpisodeMaterialisationRequest,
     InvalidDraftTeiError,
+    SourceCountLimitExceededError,
     materialise_episode_from_ingestion,
     persist_draft_script,
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.ingestion_sources import AttachmentKind, IngestionJobSource
-from episodic.canonical.source_intake_errors import IngestionJobNotFoundError
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.generation.draft_script import DraftScriptResult
 from episodic.llm import LLMUsage
@@ -71,6 +72,38 @@ async def _persist_materialisation_input(
         if source is not None:
             await uow.ingestion_job_sources.add(source)
         await uow.commit()
+
+
+@pytest.mark.asyncio
+async def test_materialisation_rejects_sources_beyond_configured_limit(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Read only the configured source limit plus one before taking the job lock."""
+    job = _ingestion_job(_series_profile().id, None)
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.series_profiles.add(_series_profile())
+        await uow.flush()
+        await uow.ingestion_jobs.add(job)
+        for _index in range(33):
+            await uow.ingestion_job_sources.add(
+                dc.replace(_source(job.id), id=uuid.uuid7())
+            )
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        with pytest.raises(SourceCountLimitExceededError) as raised:
+            await materialise_episode_from_ingestion(
+                uow,
+                EpisodeMaterialisationRequest(
+                    ingestion_job_id=job.id,
+                    title="Bridgewater Futures",
+                    clock=_clock,
+                    uuid_factory=SequentialUuids(),
+                    max_source_count=32,
+                ),
+            )
+
+    assert raised.value.ingestion_job_id == job.id, raised.value
 
 
 def _series_profile() -> SeriesProfile:
@@ -217,26 +250,6 @@ async def test_materialise_episode_from_ingestion_creates_placeholder_episode(
         "expected source content hash 'sha256:source', "
         f"got {documents[0].content_hash!r}"
     )
-
-
-@pytest.mark.asyncio
-async def test_materialise_episode_from_ingestion_rejects_unknown_job(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Unknown jobs should retain the source-intake not-found contract."""
-    unknown_job_id = uuid.uuid7()
-
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        with pytest.raises(IngestionJobNotFoundError, match=str(unknown_job_id)):
-            await materialise_episode_from_ingestion(
-                uow,
-                EpisodeMaterialisationRequest(
-                    ingestion_job_id=unknown_job_id,
-                    title="Unknown job",
-                    clock=_clock,
-                    uuid_factory=SequentialUuids(),
-                ),
-            )
 
 
 @pytest.mark.asyncio

@@ -1,12 +1,13 @@
 """Generated lifecycle invariants for the in-process generation launcher."""
 
 import datetime as dt
+import enum
 import typing as typ
 import uuid
 
 import hypothesis.strategies as st
 import pytest
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus, SourceDocument
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
@@ -30,29 +31,21 @@ from tests.generation_run_launcher_support import (
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-
-_session_factory: async_sessionmaker[AsyncSession] | None = None
-
-
-@pytest.fixture(autouse=True)
-def _configure_session_factory(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Make the isolated SQL test factory available to generated examples."""
-    global _session_factory
-    _session_factory = session_factory
+    type SessionFactory = async_sessionmaker[AsyncSession]
+else:
+    type SessionFactory = object
 
 
-def _current_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Return the function-scoped SQL factory configured for this test."""
-    if _session_factory is None:
-        msg = "Launcher property-test session factory was not configured."
-        raise RuntimeError(msg)
-    return _session_factory
+class _Outcome(enum.StrEnum):
+    """Generated terminal launcher lifecycle outcomes."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    CANCELLED = "cancelled"
 
 
 async def _persist_generated_lifecycle_run(
-    factory: async_sessionmaker[AsyncSession],
+    factory: SessionFactory,
 ) -> GenerationRun:
     """Persist one launchable run with its generated-lifecycle source."""
     run = make_generation_run()
@@ -77,67 +70,69 @@ async def _persist_generated_lifecycle_run(
     return run
 
 
-def _generator_for_outcome(outcome: str) -> DraftScriptGenerator:
+def _generator_for_outcome(outcome: _Outcome) -> DraftScriptGenerator:
     """Return the draft-generator double for one lifecycle outcome."""
     match outcome:
-        case "success":
+        case _Outcome.SUCCESS:
             return RecordingDraftGenerator(draft_result(valid_tei()))
-        case "failure":
+        case _Outcome.FAILURE:
             return FailingDraftGenerator(DraftScriptTransientProviderError("retry"))
-        case _:
+        case _Outcome.CANCELLED:
             return BlockingDraftGenerator()
 
 
 def _assert_terminal_event_kinds(event_kinds: tuple[str, ...]) -> None:
     """Assert that the lifecycle begins and ends with its expected events."""
-    assert event_kinds[-1] in {"run.succeeded", "run.failed"}, event_kinds
+    assert event_kinds, "expected lifecycle events"
     assert event_kinds[0] == "run.started", event_kinds
+    assert event_kinds[-1] in {"run.succeeded", "run.failed"}, event_kinds
 
 
-def _assert_outcome(run: GenerationRun, outcome: str) -> None:
+def _assert_outcome(run: GenerationRun, outcome: _Outcome) -> None:
     """Assert the persisted terminal state for one generated lifecycle."""
     match outcome:
-        case "success":
+        case _Outcome.SUCCESS:
             assert run.status is GenerationRunStatus.SUCCEEDED, (
                 f"expected successful run {run.id}, got {run.status.value}"
             )
             assert run.error_category is None, run.error_category
-        case "failure":
+        case _Outcome.FAILURE:
             assert run.status is GenerationRunStatus.FAILED, (
                 f"expected failed run {run.id}, got {run.status.value}"
             )
             assert run.error_category == "provider.transient", run.error_category
-        case _:
+        case _Outcome.CANCELLED:
             assert run.status is GenerationRunStatus.FAILED, (
                 f"expected cancelled run {run.id}, got {run.status.value}"
             )
             assert run.error_category == "launcher.shutdown", run.error_category
 
 
-@given(outcome=st.sampled_from(("success", "failure", "cancelled")))
+@given(outcome=st.sampled_from(_Outcome))
 @settings(
     max_examples=3,
     deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @pytest.mark.asyncio
 async def test_launcher_generated_lifecycles_end_with_one_terminal_event(
-    outcome: str,
+    session_factory: SessionFactory,
+    outcome: _Outcome,
 ) -> None:
     """Success, provider failure, and shutdown cancellation reach one terminal state."""
-    factory = _current_session_factory()
-    run = await _persist_generated_lifecycle_run(factory)
+    run = await _persist_generated_lifecycle_run(session_factory)
     generator = _generator_for_outcome(outcome)
-    run_launcher = launcher(factory, generator)
+    run_launcher = launcher(session_factory, generator)
 
     await run_launcher.launch(run.id)
     match outcome:
-        case "cancelled":
+        case _Outcome.CANCELLED:
             await typ.cast("BlockingDraftGenerator", generator).started.wait()
             await run_launcher.shutdown()
         case _:
             await run_launcher.drain()
 
-    async with SqlAlchemyUnitOfWork(factory) as uow:
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
         persisted_run = await uow.generation_runs.get_run(run.id)
         events = await uow.generation_runs.list_events(run.id)
 

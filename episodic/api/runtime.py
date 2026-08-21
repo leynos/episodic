@@ -16,7 +16,7 @@ from episodic.generation import (
     LLMDraftScriptGenerator,
     LLMDraftScriptGeneratorConfig,
 )
-from episodic.llm import LLMProviderOperation
+from episodic.llm import LLMProviderOperation, LLMTokenBudget
 from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
@@ -60,6 +60,7 @@ GRANIAN_FACTORY_TARGET = "episodic.api.runtime:create_app_from_env"
 GRANIAN_INTERFACE = "asgi"
 HTTP_BIND_PORT = 8080
 _DEFAULT_LLM_PROVIDER_NAME = "openai"
+_DRAFT_MAX_INPUT_TOKENS = 32_768
 
 
 class PsycopgConnectKwargs(typ.TypedDict, total=False):
@@ -147,6 +148,14 @@ def _build_generation_launcher(
             config=LLMDraftScriptGeneratorConfig(
                 model=config.draft_model,
                 provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
+                token_budget=LLMTokenBudget(
+                    max_input_tokens=_DRAFT_MAX_INPUT_TOKENS,
+                    max_output_tokens=config.generation_max_output_tokens,
+                    max_total_tokens=(
+                        _DRAFT_MAX_INPUT_TOKENS + config.generation_max_output_tokens
+                    ),
+                ),
+                max_response_bytes=config.generation_max_response_bytes,
             ),
         ),
         object_store=runtime.object_store,
@@ -253,8 +262,10 @@ def create_app_from_env() -> asgi.App:
 
         async def shutdown_generation() -> None:
             """Stop generation work before closing its provider client."""
-            await launcher.shutdown()
-            await llm_port.aclose()
+            try:
+                await launcher.shutdown()
+            finally:
+                await llm_port.aclose()
 
         shutdown_hooks = (shutdown_generation, shutdown_hook)
     return create_app(
@@ -265,6 +276,7 @@ def create_app_from_env() -> asgi.App:
             shutdown_hooks=shutdown_hooks,
             llm_port=llm_port,
             launcher=launcher,
+            generation_source_limits=config.generation_source_limits,
             tracer=tracer,
             authorization=StaticBearerTokenAuthorization(
                 token=config.authorization_bearer_token,

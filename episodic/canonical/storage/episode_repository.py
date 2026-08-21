@@ -1,6 +1,5 @@
 """SQLAlchemy repository for canonical episodes."""
 
-import datetime as dt
 import typing as typ
 
 import sqlalchemy as sa
@@ -24,11 +23,6 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
 
     from episodic.canonical.domain import CanonicalEpisode, EpisodeTeiUpdate
-
-
-def _utc_now() -> dt.datetime:
-    """Return a timezone-aware UTC timestamp for repository updates."""
-    return dt.datetime.now(dt.UTC)
 
 
 class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
@@ -74,7 +68,6 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
     ) -> CanonicalEpisode:
         """Update episode TEI when the expected revision still matches."""
         stored_tei_xml, tei_xml_zstd = encode_text_for_storage(update.tei_xml)
-        now = update.updated_at or _utc_now()
         result = await self._session.execute(
             sa
             .update(EpisodeRecord)
@@ -89,7 +82,7 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
                 tei_content_hash=sha256_text(update.tei_xml),
                 qa_status=update.qa_status,
                 last_generation_run_id=update.last_generation_run_id,
-                updated_at=now,
+                updated_at=update.updated_at,
             )
         )
         cursor_result = typ.cast("CursorResult[typ.Any]", result)

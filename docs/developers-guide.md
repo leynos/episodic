@@ -271,10 +271,15 @@ Runtime environment:
   prevents startup.
 - `DRAFT_MODEL` defaults to `gpt-4o-mini`. When set explicitly, it must be a
   non-empty string after whitespace is trimmed.
+- `GENERATION_MAX_OUTPUT_TOKENS` and `GENERATION_MAX_RESPONSE_BYTES` are
+  optional positive-integer settings. They default to `4096` and `1048576`,
+  respectively. The token setting becomes the output-token cap passed to the
+  LLM request; the byte setting is enforced against the UTF-8 provider response
+  before the generated JSON is parsed.
 - When the OpenAI settings are configured, startup builds an
   `OpenAICompatibleLLMAdapter` and an `InProcessGenerationRunLauncher`. When
-  they are not configured, generation-run creation returns `503 Service
-  Unavailable` because no launcher is available.
+  they are not configured, generation-run creation returns
+  `503 Service Unavailable` because no launcher is available.
 - During shutdown, the runtime shuts down the launcher (cancelling and
   draining its scheduled tasks) before closing the provider client.
 
@@ -339,8 +344,8 @@ Authorization scaffold:
   dispatch. Health checks remain operator endpoints and are not authorized by
   this scaffold.
 - `ApiDependencies.authorization` accepts an `AuthorizationPort`. Production
-  requests must carry `Authorization: Bearer <token>` and production wiring
-  uses `StaticBearerTokenAuthorization`, configured by the required
+  requests must carry `Authorization: Bearer <token>` and production wiring uses
+  `StaticBearerTokenAuthorization`, configured by the required
   `API_AUTHORIZATION_BEARER_TOKEN` and `API_AUTHORIZATION_PRINCIPAL_ID`
   settings. Test composition may use `PermitAll` deliberately; it is not part
   of the production runtime.
@@ -1628,10 +1633,10 @@ WHERE id = :run_id;
 
 Proceed only when the status is `running`, `lease_expires_at` is non-null and
 earlier than the current UTC time, and the owning process is no longer able to
-finish the run. A worker claim is itself conditional on
-`status = 'pending'`; a claim that updates zero rows has lost the race or found
-a terminal run. Do not reset an expired `running` row to `pending` or launch a
-replacement: this slice has no automatic reaper or reassignment path.
+finish the run. A worker claim is itself conditional on `status = 'pending'`; a
+claim that updates zero rows has lost the race or found a terminal run. Do not
+reset an expired `running` row to `pending` or launch a replacement: this slice
+has no automatic reaper or reassignment path.
 
 To fail the run manually, use a privileged database transaction. The locking
 query below selects only a running run with a non-null expired lease. If it

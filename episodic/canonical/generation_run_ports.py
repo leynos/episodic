@@ -133,7 +133,14 @@ class GenerationEventLog(typ.Protocol):
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
-        """List events for a run."""
+        """List events for a run.
+
+        Raises
+        ------
+        ValueError
+            If ``after_seq`` is supplied with a non-zero ``offset``. These
+            pagination mechanisms are mutually exclusive.
+        """
         raise NotImplementedError
 
     async def count_events(

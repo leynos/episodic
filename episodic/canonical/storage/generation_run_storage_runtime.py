@@ -20,9 +20,9 @@ class GenerationRunStorageRuntime:
 
     Attributes
     ----------
-    clock
+    clock : Clock
         UTC timestamp provider for adapter-owned lifecycle writes.
-    uuid_factory
+    uuid_factory : UuidFactory
         Identifier provider for appended durable events.
     """
 
@@ -33,7 +33,19 @@ class GenerationRunStorageRuntime:
 def generation_run_storage_runtime(
     runtime: GenerationRunStorageRuntime | None,
 ) -> GenerationRunStorageRuntime:
-    """Return generation-run providers with production defaults."""
+    """Return generation-run providers with production defaults.
+
+    Parameters
+    ----------
+    runtime
+        Optional injected providers. When omitted, production UTC-clock and
+        UUIDv7 providers are created.
+
+    Returns
+    -------
+    GenerationRunStorageRuntime
+        The supplied runtime, or the production-default provider bundle.
+    """
     if runtime is not None:
         return runtime
     return GenerationRunStorageRuntime(

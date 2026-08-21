@@ -312,6 +312,9 @@ class SqlAlchemyGenerationRunStore:
         if limit < 0 or offset < 0:
             msg = "limit and offset must be non-negative."
             raise ValueError(msg)
+        if after_seq is not None and offset != 0:
+            msg = "after_seq and offset cannot be combined."
+            raise ValueError(msg)
         if await self._get_record(run_id) is None:
             raise RunNotFound(run_id)
         minimum_seq = int(after_seq) if after_seq is not None else 0

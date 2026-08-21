@@ -58,10 +58,11 @@ class RaisingAuthorization:
         ("Basic configured-token", AuthorizationDecision.UNAUTHORIZED),
         ("Bearer", AuthorizationDecision.UNAUTHORIZED),
         ("Bearer wrong-token", AuthorizationDecision.UNAUTHORIZED),
+        (None, AuthorizationDecision.UNAUTHORIZED),
     ],
 )
 async def test_static_bearer_authorization_parses_scheme_and_token(
-    header: str,
+    header: str | None,
     expected: AuthorizationDecision,
 ) -> None:
     """Accept case-insensitive Bearer schemes and reject malformed credentials."""
@@ -81,6 +82,8 @@ async def test_static_bearer_authorization_parses_scheme_and_token(
     assert result.decision is expected, result
     if expected is AuthorizationDecision.PERMIT:
         assert result.principal_id == "configured-principal", result
+    else:
+        assert result.principal_id is None, result
 
 
 def _build_client(

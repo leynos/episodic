@@ -75,6 +75,7 @@ class UploadsResource:
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Create one ready upload from multipart form data."""
+        owner_principal_id = _require_principal(req)
         object_store = self._config.object_store
         if object_store is None:
             raise http_error(
@@ -109,7 +110,7 @@ class UploadsResource:
                     self._uow_factory,
                     object_store,
                     UploadBytesRequest(
-                        owner_principal_id=principal_id(req),
+                        owner_principal_id=owner_principal_id,
                         content_type=parsed.content_type,
                         declared_size=parsed.declared_size,
                         declared_sha256=parsed.declared_sha256,
@@ -166,6 +167,7 @@ class IngestionJobsResource:
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Create one intake-stage ingestion job."""
+        owner_principal_id = _require_principal(req)
         payload = require_payload_dict(await req.get_media())
         body_hash = json_body_hash(payload)
         series_profile_id = parse_uuid(
@@ -189,7 +191,7 @@ class IngestionJobsResource:
                         CreateIngestionJobRequest(
                             series_profile_id=series_profile_id,
                             target_episode_id=target_episode_id,
-                            owner_principal_id=principal_id(req),
+                            owner_principal_id=owner_principal_id,
                         ),
                     )
                 except SourceIntakeError as exc:
@@ -209,6 +211,7 @@ class IngestionJobsResource:
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """List intake-stage ingestion jobs."""
+        owner_principal_id = _require_principal(req)
         pagination = parse_pagination(req)
         series_profile_id = parse_optional_uuid_param(req, "series_profile_id")
         intake_state = parse_enum_param(req, "intake_state", IntakeState)
@@ -218,7 +221,7 @@ class IngestionJobsResource:
                 IngestionJobListFilters(
                     series_profile_id=series_profile_id,
                     intake_state=intake_state,
-                    owner_principal_id=principal_id(req) or "anonymous",
+                    owner_principal_id=owner_principal_id,
                 ),
                 pagination,
             )
@@ -337,10 +340,7 @@ def _require_ingestion_job_owner(
     principal: str | None,
 ) -> None:
     """Hide ingestion jobs that do not belong to the authenticated principal."""
-    actor = principal or "anonymous"
-    if job.owner_principal_id == actor:
-        return
-    if job.owner_principal_id is None and actor == "anonymous":
+    if principal is not None and job.owner_principal_id == principal:
         return
     raise IngestionJobNotFoundError(str(job.id))
 
@@ -349,6 +349,17 @@ def _require_upload_owner(
     owner_principal_id: str | None, principal: str | None
 ) -> None:
     """Hide uploads that do not belong to the authenticated principal."""
-    if principal is None or owner_principal_id == principal:
+    if principal is not None and owner_principal_id == principal:
         return
     raise UploadNotFoundError("upload")
+
+
+def _require_principal(req: falcon.Request) -> str:
+    """Return the authenticated principal required for collection access."""
+    principal = principal_id(req)
+    if principal is not None:
+        return principal
+    raise http_error(
+        falcon.HTTPUnauthorized(description="Authorization is required."),
+        code="unauthorized",
+    )

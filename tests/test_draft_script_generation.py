@@ -1,5 +1,6 @@
 """Tests for single-pass draft script generation."""
 
+import dataclasses as dc
 import datetime as dt
 import hashlib
 import json
@@ -264,4 +265,22 @@ async def test_draft_script_generator_rejects_malformed_completion() -> None:
     )
 
     with pytest.raises(DraftScriptResponseFormatError, match="text"):
+        await generator.generate(_request())
+
+
+@pytest.mark.asyncio
+async def test_draft_script_generator_rejects_oversized_completion() -> None:
+    """Response-size limits must apply before JSON parsing."""
+    generator = LLMDraftScriptGenerator(
+        llm=FakeLLMPort(dc.replace(_valid_response(), text="x" * 10)),
+        config=LLMDraftScriptGeneratorConfig(
+            model="vidai-mock",
+            max_response_bytes=9,
+        ),
+    )
+
+    with pytest.raises(
+        DraftScriptResponseFormatError,
+        match="LLM response exceeds the configured maximum size",
+    ):
         await generator.generate(_request())

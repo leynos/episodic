@@ -138,6 +138,7 @@ def test_episode_tei_update_rejects_invalid_domain_values(
         "qa_status": QaStatus.SKIPPED,
         "last_generation_run_id": uuid.uuid7(),
         "expected_revision": 1,
+        "updated_at": dt.datetime(2026, 6, 24, tzinfo=dt.UTC),
     }
     values.update(overrides)
 
@@ -269,6 +270,7 @@ async def test_episode_update_tei_keeps_compressed_storage_in_sync(
                 qa_status=QaStatus.SKIPPED,
                 last_generation_run_id=run.id,
                 expected_revision=1,
+                updated_at=dt.datetime(2026, 6, 24, tzinfo=dt.UTC),
             ),
         )
         await uow.commit()
@@ -338,5 +340,6 @@ async def test_episode_update_tei_rejects_stale_revision(
                     qa_status=QaStatus.SKIPPED,
                     last_generation_run_id=run.id,
                     expected_revision=2,
+                    updated_at=dt.datetime(2026, 6, 24, tzinfo=dt.UTC),
                 ),
             )

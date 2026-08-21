@@ -22,11 +22,9 @@ from episodic.canonical.entity_protocols import (
     ApprovalEventRepository,
     EpisodeTemplateRepository,
     SeriesProfileRepository,
+    SourceDocumentProjectionResult,
     SourceDocumentRepository,
     TeiHeaderRepository,
-)
-from episodic.canonical.generation_persistence_types import (
-    SourceDocumentProjectionResult,
 )
 
 from .entity_mappers import (
@@ -194,7 +192,23 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
         self,
         document: SourceDocument,
     ) -> SourceDocumentProjectionResult:
-        """Insert one projection in a savepoint and report a duplicate ID race."""
+        """Insert one projection in a savepoint and report a duplicate ID race.
+
+        Parameters
+        ----------
+        document : SourceDocument
+            Deterministically identified source document to persist.
+
+        Returns
+        -------
+        SourceDocumentProjectionResult
+            ``ADDED`` after insertion or ``DUPLICATE`` when a concurrent
+            projection with the same deterministic identifier already exists.
+
+        Notes
+        -----
+        Unrecognised ``IntegrityError`` failures propagate unchanged.
+        """
 
         def _translate(error: IntegrityError) -> BaseException | None:
             if is_source_document_duplicate_integrity_error(error):

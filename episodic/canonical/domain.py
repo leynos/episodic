@@ -366,7 +366,7 @@ class EpisodeTeiUpdate:
     qa_status: QaStatus
     last_generation_run_id: uuid.UUID
     expected_revision: int
-    updated_at: dt.datetime | None = None
+    updated_at: dt.datetime
 
     def __post_init__(self) -> None:
         """Validate optimistic TEI update invariants."""

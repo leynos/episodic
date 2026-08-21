@@ -12,6 +12,8 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 _DEFAULT_DRAFT_MODEL = "gpt-4o-mini"
+_DEFAULT_GENERATION_MAX_OUTPUT_TOKENS = 4_096
+_DEFAULT_GENERATION_MAX_RESPONSE_BYTES = 1_048_576
 _REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _DEFAULT_PRICING_DIRECTORY = _REPOSITORY_ROOT / "config/pricing-snapshots"
 _PRICING_DIRECTORY_SETTING = "PRICING_SNAPSHOT_DIRECTORY"
@@ -23,7 +25,7 @@ logger = get_logger(__name__)
 class RuntimeConfig:
     """Runtime configuration required to boot the Falcon HTTP service."""
 
-    database_url: str
+    database_url: str = dc.field(repr=False)
     source_intake_object_store_root: pathlib.Path
     llm_base_url: str | None
     llm_api_key: str | None = dc.field(repr=False)
@@ -32,6 +34,8 @@ class RuntimeConfig:
     authorization_bearer_token: str = dc.field(repr=False)
     authorization_principal_id: str
     generation_source_limits: GenerationSourceLimits
+    generation_max_output_tokens: int = _DEFAULT_GENERATION_MAX_OUTPUT_TOKENS
+    generation_max_response_bytes: int = _DEFAULT_GENERATION_MAX_RESPONSE_BYTES
 
 
 class RuntimeConfigurationError(RuntimeError):
@@ -75,6 +79,74 @@ def _generation_source_limits(
             environment,
             "GENERATION_MAX_NORMALIZED_SOURCE_BYTES",
             defaults.max_normalized_source_bytes,
+        ),
+    )
+
+
+def _generation_output_limits(
+    environment: cabc.Mapping[str, str],
+) -> tuple[int, int]:
+    """Read positive provider output-token and response-byte limits."""
+    return (
+        _optional_positive_int(
+            environment,
+            "GENERATION_MAX_OUTPUT_TOKENS",
+            _DEFAULT_GENERATION_MAX_OUTPUT_TOKENS,
+        ),
+        _optional_positive_int(
+            environment,
+            "GENERATION_MAX_RESPONSE_BYTES",
+            _DEFAULT_GENERATION_MAX_RESPONSE_BYTES,
+        ),
+    )
+
+
+def _draft_model(environment: cabc.Mapping[str, str]) -> str:
+    """Return the configured draft model or the production default."""
+    if "DRAFT_MODEL" not in environment:
+        return _DEFAULT_DRAFT_MODEL
+    return _required_setting(
+        environment,
+        "DRAFT_MODEL",
+        "DRAFT_MODEL must be a non-empty string.",
+    )
+
+
+def _source_intake_object_store_root(
+    environment: cabc.Mapping[str, str],
+) -> pathlib.Path:
+    """Return the required source-intake object-store root."""
+    try:
+        value = _required_setting(
+            environment,
+            "SOURCE_INTAKE_OBJECT_STORE_ROOT",
+            "SOURCE_INTAKE_OBJECT_STORE_ROOT must be set before starting "
+            "the HTTP service.",
+        )
+    except RuntimeConfigurationError:
+        log_warning(
+            logger,
+            "runtime_config_missing setting=%s",
+            "SOURCE_INTAKE_OBJECT_STORE_ROOT",
+        )
+        raise
+    return pathlib.Path(value)
+
+
+def _authorization_settings(environment: cabc.Mapping[str, str]) -> tuple[str, str]:
+    """Return the required production bearer token and principal identifier."""
+    return (
+        _required_setting(
+            environment,
+            "API_AUTHORIZATION_BEARER_TOKEN",
+            "API_AUTHORIZATION_BEARER_TOKEN must be set before starting "
+            "the HTTP service.",
+        ),
+        _required_setting(
+            environment,
+            "API_AUTHORIZATION_PRINCIPAL_ID",
+            "API_AUTHORIZATION_PRINCIPAL_ID must be set before starting "
+            "the HTTP service.",
         ),
     )
 
@@ -130,59 +202,28 @@ def _load_runtime_config(
 ) -> RuntimeConfig:
     """Read and validate runtime configuration from environment variables."""
     environment = os.environ if environ is None else environ
-    database_url = _required_setting(
-        environment,
-        "DATABASE_URL",
-        "DATABASE_URL must be set before starting the HTTP service.",
-    )
-    try:
-        object_store_root = _required_setting(
-            environment,
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT",
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT must be set before starting "
-            "the HTTP service.",
-        )
-    except RuntimeConfigurationError:
-        log_warning(
-            logger,
-            "runtime_config_missing setting=%s",
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT",
-        )
-        raise
-    llm_base_url, llm_api_key = _llm_settings(environment)
-    draft_model = (
-        _required_setting(
-            environment,
-            "DRAFT_MODEL",
-            "DRAFT_MODEL must be a non-empty string.",
-        )
-        if "DRAFT_MODEL" in environment
-        else _DEFAULT_DRAFT_MODEL
-    )
+    llm_settings = _llm_settings(environment)
     pricing_snapshot_directory = _pricing_snapshot_directory(environment)
-    authorization_bearer_token = _required_setting(
-        environment,
-        "API_AUTHORIZATION_BEARER_TOKEN",
-        "API_AUTHORIZATION_BEARER_TOKEN must be set before starting the HTTP service.",
-    )
-    authorization_principal_id = _required_setting(
-        environment,
-        "API_AUTHORIZATION_PRINCIPAL_ID",
-        "API_AUTHORIZATION_PRINCIPAL_ID must be set before starting the HTTP service.",
-    )
-    generation_source_limits = _generation_source_limits(environment)
+    authorization = _authorization_settings(environment)
+    output_limits = _generation_output_limits(environment)
     log_info(
         logger,
         "runtime_config_loaded source_intake_object_store_configured",
     )
     return RuntimeConfig(
-        database_url=database_url,
-        source_intake_object_store_root=pathlib.Path(object_store_root),
-        llm_base_url=llm_base_url,
-        llm_api_key=llm_api_key,
-        draft_model=draft_model,
+        database_url=_required_setting(
+            environment,
+            "DATABASE_URL",
+            "DATABASE_URL must be set before starting the HTTP service.",
+        ),
+        source_intake_object_store_root=_source_intake_object_store_root(environment),
+        llm_base_url=llm_settings[0],
+        llm_api_key=llm_settings[1],
+        draft_model=_draft_model(environment),
         pricing_snapshot_directory=pricing_snapshot_directory,
-        authorization_bearer_token=authorization_bearer_token,
-        authorization_principal_id=authorization_principal_id,
-        generation_source_limits=generation_source_limits,
+        authorization_bearer_token=authorization[0],
+        authorization_principal_id=authorization[1],
+        generation_source_limits=_generation_source_limits(environment),
+        generation_max_output_tokens=output_limits[0],
+        generation_max_response_bytes=output_limits[1],
     )

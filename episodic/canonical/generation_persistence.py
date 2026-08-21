@@ -1,15 +1,13 @@
 """Persist canonical state at no-QA draft-generation boundaries.
 
-Services: ``materialise_episode_from_ingestion`` and ``persist_draft_script``.
-Related request types and typed persistence errors are also exported; callers
-supply a ``CanonicalUnitOfWork``, which this module never creates or disposes. A
-ready :class:`IngestionJob`
-becomes a placeholder episode with deterministic source documents: pages load
-before locking, reservation commits before projection, and repository results
-verify duplicates; materialisation commits both boundaries.
-``persist_draft_script`` validates a :class:`DraftScriptResult`,
+Services ``materialise_episode_from_ingestion`` and ``persist_draft_script``,
+their request types, and typed persistence errors are exported. Callers provide
+a ``CanonicalUnitOfWork``; this module never creates or disposes one. A ready
+:class:`IngestionJob` becomes a deterministic placeholder: pages load before
+locking, reservation commits before projection, and repository results verify
+duplicates. ``persist_draft_script`` validates a :class:`DraftScriptResult`,
 carries :class:`GenerationRun` provenance through :class:`EpisodeTeiUpdate`, and
-applies an optimistic TEI revision without commit or rollback.
+persists an optimistic TEI revision without commit or rollback.
 """
 
 import typing as typ
@@ -27,6 +25,7 @@ from episodic.canonical.domain import (
     SourceDocument,
     TeiHeader,
 )
+from episodic.canonical.entity_protocols import SourceDocumentProjectionResult
 from episodic.canonical.generation_persistence_types import (
     DraftContentHashMismatchError,
     DraftScriptPersistenceError,  # noqa: F401  # Re-exported service contract.
@@ -36,8 +35,8 @@ from episodic.canonical.generation_persistence_types import (
     IngestionJobNotReadyError,
     InvalidDraftTeiError,
     MissingAttachedSourcesError,
+    SourceCountLimitExceededError,
     SourceDocumentProjectionError,
-    SourceDocumentProjectionResult,
     _SourceDocumentProjection,
 )
 from episodic.canonical.generation_quality import QaStatus
@@ -84,7 +83,11 @@ async def materialise_episode_from_ingestion(
     and :class:`IngestionJobNotReadyError` if the job is not ready for
     generation.
     """
-    sources = await _list_all_sources(uow, request.ingestion_job_id)
+    sources = await _list_all_sources(
+        uow,
+        request.ingestion_job_id,
+        max_source_count=request.max_source_count,
+    )
     if len(sources) == 0:
         await _load_ready_ingestion_job(
             uow, request.ingestion_job_id, should_lock=False
@@ -98,11 +101,9 @@ async def materialise_episode_from_ingestion(
     now = request.clock()
     episode = await _materialise_or_reuse_episode(uow, job, request, now)
 
-    projection_had_duplicate = await _project_source_documents(
-        uow, sources, episode.id, now
-    )
+    has_duplicate = await _project_source_documents(uow, sources, episode.id, now)
     await uow.commit()
-    if projection_had_duplicate:
+    if has_duplicate:
         await _require_projected_source_documents(uow, sources, episode.id)
     return episode
 
@@ -208,21 +209,20 @@ async def _load_ready_ingestion_job(
 async def _list_all_sources(
     uow: CanonicalUnitOfWork,
     ingestion_job_id: uuid.UUID,
+    *,
+    max_source_count: int,
 ) -> list[IngestionJobSource]:
-    """List all attached sources for an ingestion job."""
-    sources: list[IngestionJobSource] = []
-    offset = 0
-    page_size = 100
-    while True:
-        page = await uow.ingestion_job_sources.list_for_job_paged(
+    """Read at most one more source than the configured materialisation limit."""
+    sources = list(
+        await uow.ingestion_job_sources.list_for_job_paged(
             ingestion_job_id,
-            limit=page_size,
-            offset=offset,
+            limit=max_source_count + 1,
+            offset=0,
         )
-        sources.extend(page)
-        if len(page) < page_size:
-            return sources
-        offset += page_size
+    )
+    if len(sources) > max_source_count:
+        raise SourceCountLimitExceededError(ingestion_job_id)
+    return sources
 
 
 async def _projected_source_document_ids(

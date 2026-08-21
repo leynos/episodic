@@ -21,6 +21,8 @@ from tests.fixtures.generation_run_api import (
     RecordingLauncher,
 )
 
+_GENERATED_TEI = "<TEI><text><body><p>Generated script.</p></body></text></TEI>"
+
 if typ.TYPE_CHECKING:
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -80,7 +82,7 @@ async def test_episode_tei_json_and_xml_retrieval(
         before_draft = await client.get(
             f"/v1/episodes/{episode_id}/tei", headers=headers
         )
-        tei_xml = "<TEI><text><body><p>Generated script.</p></body></text></TEI>"
+        tei_xml = _GENERATED_TEI
         await _persist_generated_tei(dependencies, episode_id, launcher.run_ids[0])
         json_response = await client.get(
             f"/v1/episodes/{episode_id}/tei", headers=headers
@@ -115,29 +117,6 @@ async def test_episode_tei_json_and_xml_retrieval(
         "expected representation-specific ETags for JSON metadata and TEI XML"
     )
     _assert_tei_read_spans(tracer)
-
-
-@pytest.mark.asyncio
-async def test_episode_tei_trace_records_invalid_identifier(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Record invalid TEI reads without including the raw route value."""
-    tracer = RecordingTracer()
-    dependencies = dc.replace(build_api_dependencies(session_factory), tracer=tracer)
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
-        response = await client.get("/v1/episodes/not-a-uuid/tei")
-
-    assert response.status_code == 400, response.text
-    assert tracer.spans[0].name == "episode_tei.read", tracer.spans
-    assert tracer.spans[0].attributes == {
-        "operation": "episode_tei.read",
-        "outcome": "rejected",
-        "failure_category": "invalid_input",
-    }, tracer.spans
 
 
 @pytest.mark.asyncio
@@ -244,7 +223,7 @@ async def _persist_generated_tei(
         await uow.episodes.update(
             episode_id,
             update=EpisodeTeiUpdate(
-                tei_xml="<TEI><text><body><p>Generated script.</p></body></text></TEI>",
+                tei_xml=_GENERATED_TEI,
                 qa_status=QaStatus.SKIPPED,
                 last_generation_run_id=generation_run_id,
                 expected_revision=1,

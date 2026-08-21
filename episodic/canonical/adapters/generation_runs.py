@@ -346,6 +346,9 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
         if limit < 0 or offset < 0:
             msg = "limit and offset must be non-negative."
             raise ValueError(msg)
+        if after_seq is not None and offset != 0:
+            msg = "after_seq and offset cannot be combined."
+            raise ValueError(msg)
         async with self._lock:
             if run_id not in self._runs:
                 raise RunNotFound(run_id)

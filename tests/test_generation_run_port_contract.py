@@ -270,6 +270,8 @@ class TestGenerationEventLog:
         assert await store.list_events(run.id, after_seq=event_seq(1)) == (second,), (
             "list_events after seq 1 should return only the second event"
         )
+        with pytest.raises(ValueError, match="after_seq and offset cannot be combined"):
+            await store.list_events(run.id, after_seq=event_seq(1), offset=1)
 
     @pytest.mark.asyncio
     async def test_append_event_rejects_unknown_run(

@@ -2114,9 +2114,16 @@ limit, persistence, and launcher suites passed (`36 passed` for the final
 structural focused run; prior hardening-focused run passed `83`).
 `make check-fmt`, `make typecheck`, and `make lint` passed. `make test` passed
 `1,171` tests with one skipped test and 49 snapshots. `make markdownlint`,
-`make nixie`, and
-`make check-migrations` passed; the migration check reported only the
-pre-existing SQLAlchemy cycle warning for `episodes`, `generation_runs`, and
-`ingestion_jobs`. Commit `ba61dbad5e2fa8ec3a19b381a93a89227681bd46` records the
-hardening work and was pushed to
-`origin/4-3-2-no-qa-generation-runs-and-tei-p5-retrieval`.
+`make nixie`, and `make check-migrations` passed; the migration check reported
+only the pre-existing SQLAlchemy cycle warning for `episodes`,
+`generation_runs`, and `ingestion_jobs`. Commit
+`ba61dbad5e2fa8ec3a19b381a93a89227681bd46` records the hardening work and was
+pushed to `origin/4-3-2-no-qa-generation-runs-and-tei-p5-retrieval`.
+
+Post-review maintenance, 2026-08-22: split cohesive source-intake, TEI tracing,
+idempotency, and persistence test concerns into focused modules so every module
+remains within the 400-line repository limit. The persistence module retains
+its public-boundary documentation and behaviour. Validation passed:
+`make check-fmt`, `make lint`, `make typecheck`, `make markdownlint`, and
+`make nixie`; focused extracted suites passed 42 tests; and `make test` passed
+1,214 tests with one skipped test and 49 snapshots.

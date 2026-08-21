@@ -152,6 +152,14 @@ Chapter markers currently use the configured execution model. A dedicated
 `chapter_marker_model` setting is planned for a future release, but is not a
 live configuration option yet.
 
+The HTTP runtime also accepts these optional environment settings for generated
+draft output. Each value must be a positive integer:
+
+- `GENERATION_MAX_OUTPUT_TOKENS` defaults to `4096` and caps the output tokens
+  passed to the LLM request.
+- `GENERATION_MAX_RESPONSE_BYTES` defaults to `1048576` and caps the UTF-8
+  response before generated JSON parsing.
+
 #### Resumable orchestration
 
 Generation workflows now persist an internal checkpoint before a suspendable

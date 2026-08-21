@@ -178,7 +178,23 @@ class DraftScriptResult:
 
 @dc.dataclass(frozen=True, slots=True)
 class LLMDraftScriptGeneratorConfig:
-    """Provider model, operation, token limits, and system prompt settings."""
+    """Configuration for one-pass draft-script generation.
+
+    Attributes
+    ----------
+    model : str
+        Provider model identifier.
+    provider_operation : LLMProviderOperation | str
+        Provider operation shape used for the request.
+    token_budget : LLMTokenBudget | None
+        Token budget constraints for the request, or ``None`` for no token
+        budget.
+    system_prompt : str
+        System prompt sent with the draft-generation request.
+    max_response_bytes : int
+        Positive maximum UTF-8 response size in bytes. The cap is checked
+        before the generated JSON is parsed.
+    """
 
     model: str
     provider_operation: LLMProviderOperation | str = (
@@ -186,6 +202,13 @@ class LLMDraftScriptGeneratorConfig:
     )
     token_budget: LLMTokenBudget | None = None
     system_prompt: str = _DEFAULT_SYSTEM_PROMPT
+    max_response_bytes: int = 1_048_576
+
+    def __post_init__(self) -> None:
+        """Reject non-positive response-size limits."""
+        if self.max_response_bytes < 1:
+            msg = "max_response_bytes must be positive."
+            raise ValueError(msg)
 
 
 class DraftScriptGenerator(typ.Protocol):
@@ -273,6 +296,7 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
         except LLMTransientProviderError as exc:
             raise DraftScriptTransientProviderError(str(exc)) from exc
 
+        _require_response_size(response.text, self.config.max_response_bytes)
         parsed = _parse_response(response)
         tei_xml = _emit_tei(parsed, request.id_factory)
         return DraftScriptResult(
@@ -309,6 +333,13 @@ def _build_prompt(request: DraftScriptRequest) -> str:
         ],
     }
     return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def _require_response_size(response_text: str, maximum_bytes: int) -> None:
+    """Reject provider responses that exceed the configured byte limit."""
+    if len(response_text.encode("utf-8")) > maximum_bytes:
+        msg = "LLM response exceeds the configured maximum size."
+        raise DraftScriptResponseFormatError(msg)
 
 
 def _parse_response(response: LLMResponse) -> _ParsedDraft:
