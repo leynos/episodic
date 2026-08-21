@@ -51,7 +51,7 @@ def _current_session_factory() -> async_sessionmaker[AsyncSession]:
     return _session_factory
 
 
-async def _create_pending_run(
+async def _persist_generated_lifecycle_run(
     factory: async_sessionmaker[AsyncSession],
 ) -> GenerationRun:
     """Persist one launchable run with its generated-lifecycle source."""
@@ -125,7 +125,7 @@ async def test_launcher_generated_lifecycles_end_with_one_terminal_event(
 ) -> None:
     """Success, provider failure, and shutdown cancellation reach one terminal state."""
     factory = _current_session_factory()
-    run = await _create_pending_run(factory)
+    run = await _persist_generated_lifecycle_run(factory)
     generator = _generator_for_outcome(outcome)
     run_launcher = launcher(factory, generator)
 
