@@ -1898,7 +1898,6 @@ user guides record the operational limits and successor work. Automated
 stuck-run recovery, the broader checkpoint REST surface, and the full QA-bypass
 generation graph remain assigned to 2.6.2, 2.6.3, and 4.4.1.
 
-
 ## Current progress and decision
 
 As of `eaea7c9` (2026-08-17), the in-process launcher hardening is present:
