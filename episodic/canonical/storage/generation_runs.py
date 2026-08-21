@@ -1,8 +1,6 @@
 """SQLAlchemy adapter for durable generation runs and event logs."""
 
-import datetime as dt
 import typing as typ
-import uuid
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
@@ -23,8 +21,12 @@ from .generation_run_mappers import (
     run_to_record,
 )
 from .generation_run_models import GenerationEventRecord, GenerationRunRecord
+from .generation_run_storage_runtime import generation_run_storage_runtime
 
 if typ.TYPE_CHECKING:
+    import datetime as dt
+    import uuid
+
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,11 +34,9 @@ if typ.TYPE_CHECKING:
         EventSeq,
         GenerationRunStatusUpdate,
     )
-
-
-def _now() -> dt.datetime:
-    """Return a timezone-aware timestamp for adapter-owned updates."""
-    return dt.datetime.now(dt.UTC)
+    from episodic.canonical.storage.generation_run_storage_runtime import (
+        GenerationRunStorageRuntime,
+    )
 
 
 class SqlAlchemyGenerationRunStore:
@@ -45,8 +45,11 @@ class SqlAlchemyGenerationRunStore:
     def __init__(
         self,
         session: "AsyncSession",  # noqa: UP037  # Imported only during type checking.
+        *,
+        runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:
         self._session = session
+        self._runtime = generation_run_storage_runtime(runtime)
 
     async def _get_record(self, run_id: uuid.UUID) -> GenerationRunRecord | None:
         """Return the storage record for a run id."""
@@ -182,7 +185,7 @@ class SqlAlchemyGenerationRunStore:
         record.ended_at = update.ended_at
         record.error_message = update.error_message
         record.error_category = update.error_category
-        record.updated_at = _now()
+        record.updated_at = self._runtime.clock()
         await self._session.flush()
         await self._session.refresh(record)
         _log_event(
@@ -203,7 +206,7 @@ class SqlAlchemyGenerationRunStore:
         lease_expires_at: dt.datetime | None,
     ) -> GenerationRun | None:
         """Atomically move a pending run to running, or return None if lost."""
-        now = _now()
+        now = self._runtime.clock()
         result = await self._session.execute(
             sa
             .update(GenerationRunRecord)
@@ -269,14 +272,14 @@ class SqlAlchemyGenerationRunStore:
     ) -> GenerationEvent:
         """Append an event with an adapter-allocated sequence."""
         await self._require_mutable_run(run_id, lock=True)
-        now = _now()
+        now = self._runtime.clock()
         max_seq = await self._session.scalar(
             sa.select(sa.func.max(GenerationEventRecord.seq)).where(
                 GenerationEventRecord.generation_run_id == run_id
             )
         )
         record = GenerationEventRecord(
-            id=uuid.uuid7(),
+            id=self._runtime.uuid_factory(),
             generation_run_id=run_id,
             seq=(max_seq or 0) + 1,
             kind=kind,

@@ -261,7 +261,11 @@ async def attach_source_to_ingestion_job(
     if job is None:
         raise IngestionJobNotFoundError(str(request.ingestion_job_id))
     if request.attachment_kind is AttachmentKind.UPLOAD:
-        await _require_ready_upload(uow, request.upload_id)
+        await _require_ready_upload(
+            uow,
+            request.upload_id,
+            owner_principal_id=job.owner_principal_id,
+        )
         source_uri = None
     else:
         source_uri = request.source_uri
@@ -346,12 +350,16 @@ async def list_ingestion_job_sources(
 async def _require_ready_upload(
     uow: CanonicalUnitOfWork,
     upload_id: uuid.UUID | None,
+    *,
+    owner_principal_id: str | None,
 ) -> Upload:
     """Return a ready upload or raise the correct source-intake error."""
     if upload_id is None:
         raise UploadNotFoundError(_UPLOAD_ID_MISSING)
     upload = await uow.uploads.get(upload_id)
     if upload is None:
+        raise UploadNotFoundError(str(upload_id))
+    if upload.owner_principal_id != owner_principal_id:
         raise UploadNotFoundError(str(upload_id))
     if upload.state is not UploadState.READY:
         raise UploadNotReadyError(str(upload_id))

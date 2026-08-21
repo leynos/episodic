@@ -36,7 +36,10 @@ from episodic.canonical.domain import IngestionJob, IngestionJobListFilters, Int
 from episodic.canonical.idempotency_service import (
     multipart_request_hash,
 )
-from episodic.canonical.source_intake_errors import IngestionJobNotFoundError
+from episodic.canonical.source_intake_errors import (
+    IngestionJobNotFoundError,
+    UploadNotFoundError,
+)
 from episodic.canonical.source_intake_service import (
     CreateIngestionJobRequest,
     SourceIntakeError,
@@ -144,11 +147,11 @@ class UploadResource:
         upload_id: str,
     ) -> None:
         """Return one upload metadata envelope."""
-        del req
         parsed_upload_id = parse_uuid(upload_id, "upload_id")
         async with self._uow_factory() as uow:
             try:
                 upload = await get_upload(uow, parsed_upload_id)
+                _require_upload_owner(upload.owner_principal_id, principal_id(req))
             except SourceIntakeError as exc:
                 raise map_source_intake_error(exc) from exc
         resp.media = serialize_upload(upload)
@@ -169,6 +172,14 @@ class IngestionJobsResource:
             require_str(payload, "series_profile_id"), "series_profile_id"
         )
         target_episode_id = parse_optional_payload_uuid(payload, "target_episode_id")
+        if target_episode_id is not None:
+            raise http_error(
+                falcon.HTTPBadRequest(
+                    description="target_episode_id is not accepted by this endpoint."
+                ),
+                code="validation_error",
+                details={"field": "target_episode_id", "constraint": "unsupported"},
+            )
 
         async def work() -> IdempotentResponse:
             async with self._uow_factory() as uow:
@@ -178,7 +189,7 @@ class IngestionJobsResource:
                         CreateIngestionJobRequest(
                             series_profile_id=series_profile_id,
                             target_episode_id=target_episode_id,
-                            owner_principal_id=principal_id(req) or "anonymous",
+                            owner_principal_id=principal_id(req),
                         ),
                     )
                 except SourceIntakeError as exc:
@@ -332,3 +343,13 @@ def _require_ingestion_job_owner(
     if job.owner_principal_id is None and actor == "anonymous":
         return
     raise IngestionJobNotFoundError(str(job.id))
+
+
+def _require_upload_owner(
+    owner_principal_id: str | None, principal: str | None
+) -> None:
+    """Hide uploads that do not belong to the authenticated principal."""
+    actor = principal or "anonymous"
+    if owner_principal_id == actor:
+        return
+    raise UploadNotFoundError("upload")

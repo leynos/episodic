@@ -174,6 +174,53 @@ async def test_draft_script_generator_emits_valid_stable_tei(
     assert result.tei_xml == snapshot, "generated TEI must match the approved snapshot"
 
 
+@pytest.mark.asyncio
+async def test_draft_script_generator_serializes_deterministic_prompt() -> None:
+    """Generator should send the complete deterministic draft context to the LLM."""
+    fake_llm = FakeLLMPort(_valid_response())
+    generator = LLMDraftScriptGenerator(
+        llm=fake_llm,
+        config=LLMDraftScriptGeneratorConfig(model="vidai-mock"),
+    )
+
+    await generator.generate(_request())
+
+    expected_prompt = {
+        "episode_id": "00000000-0000-0000-0000-000000000001",
+        "presenter_profiles": [
+            {
+                "display_name": "Host",
+                "role": "host",
+                "source_content": "Experienced technical presenter.",
+            },
+            {
+                "display_name": "Guest",
+                "role": "guest",
+                "source_content": "Product lead for the launch.",
+            },
+        ],
+        "requested_at": "2026-06-24T12:00:00+00:00",
+        "series_profile_id": "00000000-0000-0000-0000-000000000002",
+        "sources": [
+            {
+                "content": "Bridgewater is preparing a new product launch.",
+                "source_id": "source-1",
+                "source_type": "research_brief",
+                "source_uri": "https://example.test/source",
+                "weight": 1.0,
+            }
+        ],
+        "title": "Bridgewater Futures",
+    }
+    prompt = fake_llm.requests[0].prompt
+    assert json.loads(prompt) == expected_prompt, (
+        f"expected complete draft prompt payload, got {prompt!r}"
+    )
+    assert prompt == json.dumps(expected_prompt, indent=2, sort_keys=True), (
+        "expected stable, sorted JSON prompt serialization"
+    )
+
+
 @pytest.mark.parametrize(
     ("llm_error", "expected_error"),
     [

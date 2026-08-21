@@ -49,6 +49,8 @@ if typ.TYPE_CHECKING:
 
     from episodic.observability import MetricsPort, MonotonicClockPort
 
+    from .generation_run_storage_runtime import GenerationRunStorageRuntime
+
 logger = get_logger(__name__)
 
 
@@ -104,10 +106,12 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         *,
         metrics: MetricsPort | None = None,
         clock: MonotonicClockPort | None = None,
+        generation_run_runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._metrics = metrics
         self._clock = clock
+        self._generation_run_runtime = generation_run_runtime
         self._session: AsyncSession | None = None
 
     async def __aenter__(self) -> SqlAlchemyUnitOfWork:
@@ -149,7 +153,10 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
                 monotonic_clock=self._clock,
             ),
         )
-        self.generation_runs = SqlAlchemyGenerationRunStore(self._session)
+        self.generation_runs = SqlAlchemyGenerationRunStore(
+            self._session,
+            runtime=self._generation_run_runtime,
+        )
         self.cost_ledger = SqlAlchemyCostLedgerStore(self._session)
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
             self._session,
