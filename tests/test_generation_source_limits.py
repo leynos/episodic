@@ -146,7 +146,10 @@ async def test_uploaded_source_rejects_invalid_text(
             _source_document(source_uri="upload:uploads/source"),
             typ.cast("ObjectStorePort", _ChunkStore(chunks)),
         )
-    assert str(raised.value) == expected_message
+    assert str(raised.value) == expected_message, (
+        f"expected malformed upload diagnostic {expected_message!r}, "
+        f"got {str(raised.value)!r}"
+    )
 
 
 @pytest.mark.asyncio
