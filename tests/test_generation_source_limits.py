@@ -121,33 +121,32 @@ async def test_uploaded_source_stops_before_retaining_over_limit_chunk() -> None
 
 
 @pytest.mark.asyncio
-async def test_uploaded_source_rejects_invalid_utf8() -> None:
-    """Report invalid upload text with the stable source-key diagnostic."""
+@pytest.mark.parametrize(
+    ("chunks", "expected_message"),
+    [
+        pytest.param(
+            (b"\xff",),
+            "Uploaded source 'uploads/source' is not valid UTF-8 text.",
+            id="invalid_utf8",
+        ),
+        pytest.param(
+            (b" \n\t ",),
+            "Uploaded source 'uploads/source' contains no text.",
+            id="whitespace_only",
+        ),
+    ],
+)
+async def test_uploaded_source_rejects_invalid_text(
+    chunks: tuple[bytes, ...],
+    expected_message: str,
+) -> None:
+    """Report stable diagnostics for invalid uploaded source text."""
     with pytest.raises(DraftScriptGenerationError) as raised:
         await source_from_document(
             _source_document(source_uri="upload:uploads/source"),
-            typ.cast("ObjectStorePort", _ChunkStore((b"\xff",))),
+            typ.cast("ObjectStorePort", _ChunkStore(chunks)),
         )
-    assert (
-        str(raised.value) == "Uploaded source 'uploads/source' is not valid UTF-8 text."
-    ), (
-        "expected invalid UTF-8 diagnostic for 'uploads/source', "
-        f"got {str(raised.value)!r}"
-    )
-
-
-@pytest.mark.asyncio
-async def test_uploaded_source_rejects_whitespace_only_text() -> None:
-    """Report whitespace-only upload text with the stable source-key diagnostic."""
-    with pytest.raises(DraftScriptGenerationError) as raised:
-        await source_from_document(
-            _source_document(source_uri="upload:uploads/source"),
-            typ.cast("ObjectStorePort", _ChunkStore((b" \n\t ",))),
-        )
-    assert str(raised.value) == "Uploaded source 'uploads/source' contains no text.", (
-        "expected empty-text diagnostic for 'uploads/source', "
-        f"got {str(raised.value)!r}"
-    )
+    assert str(raised.value) == expected_message
 
 
 @pytest.mark.asyncio
