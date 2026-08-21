@@ -12,6 +12,7 @@ from episodic.canonical.generation_persistence import (
 )
 from episodic.canonical.storage import (
     EpisodeRecord,
+    IngestionJobRecord,
     SourceDocumentRecord,
     SqlAlchemyUnitOfWork,
     TeiHeaderRecord,
@@ -111,8 +112,14 @@ async def test_materialisation_converges_under_two_session_contention(
         materialise_in_independent_unit_of_work(),
         materialise_in_independent_unit_of_work(),
     )
+    episode_id_set = set(episode_ids)
+    assert len(episode_id_set) == 1, f"materialised episode ids: {episode_ids!r}"
+    expected_episode_id = episode_id_set.pop()
 
     async with session_factory() as session:
+        persisted_job = await session.scalar(
+            sa.select(IngestionJobRecord).where(IngestionJobRecord.id == job.id)
+        )
         episode_count = await session.scalar(sa.select(sa.func.count(EpisodeRecord.id)))
         header_count = await session.scalar(
             sa.select(sa.func.count(TeiHeaderRecord.id))
@@ -121,7 +128,11 @@ async def test_materialisation_converges_under_two_session_contention(
             sa.select(sa.func.count(SourceDocumentRecord.id))
         )
 
-    assert len(set(episode_ids)) == 1, f"materialised episode ids: {episode_ids!r}"
+    assert persisted_job is not None, f"ingestion job not found: {job.id}"
+    assert persisted_job.target_episode_id == expected_episode_id, (
+        f"target episode id: {persisted_job.target_episode_id}; "
+        f"expected: {expected_episode_id}"
+    )
     assert episode_count == 1, f"episode count: {episode_count}"
     assert header_count == 1, f"TEI header count: {header_count}"
     assert document_count == 1, f"source document count: {document_count}"
