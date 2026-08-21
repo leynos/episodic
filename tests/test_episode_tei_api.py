@@ -77,18 +77,7 @@ async def test_episode_tei_json_and_xml_retrieval(
         episode_id = await _create_generation_run(client)
         before_draft = await client.get(f"/v1/episodes/{episode_id}/tei")
         tei_xml = "<TEI><text><body><p>Generated script.</p></body></text></TEI>"
-        async with dependencies.uow_factory() as uow:
-            await uow.episodes.update(
-                episode_id,
-                update=EpisodeTeiUpdate(
-                    tei_xml=tei_xml,
-                    qa_status=QaStatus.SKIPPED,
-                    last_generation_run_id=launcher.run_ids[0],
-                    expected_revision=1,
-                    updated_at=dt.datetime(2026, 7, 22, 12, 0, tzinfo=dt.UTC),
-                ),
-            )
-            await uow.commit()
+        await _persist_generated_tei(dependencies, episode_id, launcher.run_ids[0])
         json_response = await client.get(f"/v1/episodes/{episode_id}/tei")
         xml_response = await client.get(
             f"/v1/episodes/{episode_id}/tei",
@@ -119,31 +108,7 @@ async def test_episode_tei_json_and_xml_retrieval(
     assert json_response.headers["ETag"] != xml_response.headers["ETag"], (
         "expected representation-specific ETags for JSON metadata and TEI XML"
     )
-    expected_tei_spans = [
-        {
-            "operation": "episode_tei.read",
-            "outcome": "not_found",
-            "failure_category": "episode.not_found",
-        },
-        {
-            "operation": "episode_tei.read",
-            "representation": "application/json",
-            "outcome": "success",
-        },
-        {
-            "operation": "episode_tei.read",
-            "representation": "application/tei+xml",
-            "outcome": "success",
-        },
-        {
-            "operation": "episode_tei.read",
-            "outcome": "rejected",
-            "failure_category": "not_acceptable",
-        },
-    ]
-    assert [
-        span.attributes for span in tracer.spans if span.name == "episode_tei.read"
-    ] == expected_tei_spans, tracer.spans
+    _assert_episode_tei_read_trace(tracer)
 
 
 @pytest.mark.asyncio
@@ -330,6 +295,35 @@ def _assert_tei_xml_response(
     assert response.headers["ETag"] == _response_etag(response), (
         f"expected ETag for generated TEI, got {response.headers['ETag']!r}"
     )
+
+
+def _assert_episode_tei_read_trace(tracer: RecordingTracer) -> None:
+    """Assert TEI retrieval records every negotiated representation outcome."""
+    expected_tei_spans = [
+        {
+            "operation": "episode_tei.read",
+            "outcome": "not_found",
+            "failure_category": "episode.not_found",
+        },
+        {
+            "operation": "episode_tei.read",
+            "representation": "application/json",
+            "outcome": "success",
+        },
+        {
+            "operation": "episode_tei.read",
+            "representation": "application/tei+xml",
+            "outcome": "success",
+        },
+        {
+            "operation": "episode_tei.read",
+            "outcome": "rejected",
+            "failure_category": "not_acceptable",
+        },
+    ]
+    assert [
+        span.attributes for span in tracer.spans if span.name == "episode_tei.read"
+    ] == expected_tei_spans, tracer.spans
 
 
 def _response_etag(response: httpx.Response) -> str:

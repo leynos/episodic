@@ -80,6 +80,48 @@ def _assert_error_envelope(
     assert payload["details"] == expected.details, payload
 
 
+def _assert_generation_run_replay(
+    first: httpx.Response,
+    replay: httpx.Response,
+    launcher: RecordingLauncher,
+) -> None:
+    """Assert a replay returns the accepted generation-run response."""
+    assert first.status_code == 202, first.text
+    assert replay.status_code == 202, replay.text
+    assert replay.json() == first.json(), (
+        f"expected replay payload {first.json()!r}, got {replay.json()!r}"
+    )
+    assert replay.headers["Location"] == first.headers["Location"], (
+        f"expected replay location {first.headers['Location']!r}, "
+        f"got {replay.headers['Location']!r}"
+    )
+    assert replay.headers["Retry-After"] == first.headers["Retry-After"], (
+        f"expected retry delay {first.headers['Retry-After']!r}, "
+        f"got {replay.headers['Retry-After']!r}"
+    )
+    assert len(launcher.run_ids) == 1, (
+        f"expected one launched run, got {launcher.run_ids!r}"
+    )
+
+
+def _assert_generation_run_conflict(response: httpx.Response) -> None:
+    """Assert an idempotency conflict retains the original record identifier."""
+    changed_details = response.json()["details"]
+    assert isinstance(changed_details, dict), changed_details
+    record_id = changed_details.get("record_id")
+    assert isinstance(record_id, str), changed_details
+    uuid.UUID(record_id)
+    _assert_error_envelope(
+        response,
+        _ExpectedError(
+            status=409,
+            code="idempotency_conflict",
+            message="Idempotency key body mismatch.",
+            details={"record_id": record_id},
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_generation_run_create_replay_and_poll(
     session_factory: async_sessionmaker[AsyncSession],
@@ -116,22 +158,7 @@ async def test_generation_run_create_replay_and_poll(
             params={"after_seq": 1, "limit": 1},
         )
 
-    assert first.status_code == 202, first.text
-    assert replay.status_code == 202, replay.text
-    assert replay.json() == first.json(), (
-        f"expected replay payload {first.json()!r}, got {replay.json()!r}"
-    )
-    assert replay.headers["Location"] == first.headers["Location"], (
-        f"expected replay location {first.headers['Location']!r}, "
-        f"got {replay.headers['Location']!r}"
-    )
-    assert replay.headers["Retry-After"] == first.headers["Retry-After"], (
-        f"expected retry delay {first.headers['Retry-After']!r}, "
-        f"got {replay.headers['Retry-After']!r}"
-    )
-    assert len(launcher.run_ids) == 1, (
-        f"expected one launched run, got {launcher.run_ids!r}"
-    )
+    _assert_generation_run_replay(first, replay, launcher)
     assert run_response.status_code == 200, run_response.text
     assert run_response.json()["qa_status"] == "skipped", (
         f"expected skipped QA status, got {run_response.json()['qa_status']!r}"
@@ -298,20 +325,7 @@ async def test_generation_run_validation_and_idempotency_conflict(
         )
 
     assert accepted.status_code == 202, accepted.text
-    changed_details = changed.json()["details"]
-    assert isinstance(changed_details, dict), changed_details
-    record_id = changed_details.get("record_id")
-    assert isinstance(record_id, str), changed_details
-    uuid.UUID(record_id)
-    _assert_error_envelope(
-        changed,
-        _ExpectedError(
-            status=409,
-            code="idempotency_conflict",
-            message="Idempotency key body mismatch.",
-            details={"record_id": record_id},
-        ),
-    )
+    _assert_generation_run_conflict(changed)
     _assert_error_envelope(
         missing_rationale,
         _ExpectedError(
