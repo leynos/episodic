@@ -176,10 +176,7 @@ class StructuredLogMetrics:
         labels: cabc.Mapping[str, str],
     ) -> None:
         """Emit one bounded latency observation."""
-        self.logger.info(
-            "metric_latency",
-            extra={"metric_name": name, "value": str(value), **labels},
-        )
+        self._emit_value("metric_latency", name, value, labels=labels)
 
     def observe_value(
         self,
@@ -189,8 +186,19 @@ class StructuredLogMetrics:
         labels: cabc.Mapping[str, str],
     ) -> None:
         """Emit one bounded scalar observation."""
+        self._emit_value("metric_value", name, value, labels=labels)
+
+    def _emit_value(
+        self,
+        event_name: str,
+        name: str,
+        value: float,
+        *,
+        labels: cabc.Mapping[str, str],
+    ) -> None:
+        """Emit a structured scalar metric event."""
         self.logger.info(
-            "metric_value",
+            event_name,
             extra={"metric_name": name, "value": str(value), **labels},
         )
 

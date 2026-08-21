@@ -3,7 +3,12 @@
 import dataclasses as dc
 import typing as typ
 
-from episodic.observability import NoopTracer, RecordingTracer, StructuredLogTracer
+from episodic.observability import (
+    NoopTracer,
+    RecordingTracer,
+    StructuredLogMetrics,
+    StructuredLogTracer,
+)
 
 if typ.TYPE_CHECKING:
     from collections import abc as cabc
@@ -71,6 +76,45 @@ def test_structured_log_tracer_allows_bounded_operation_attributes() -> None:
         ),
     ]
     assert logger.events == expected_events, logger.events
+
+
+def test_structured_log_metrics_emits_latency_and_value_events() -> None:
+    """Structured metrics retain their event names and payload fields."""
+    logger = _RecordingLogger()
+    metrics = StructuredLogMetrics(logger=logger)
+    labels = {"operation": "generation_run.execute"}
+
+    metrics.observe_latency_ms(
+        "generation_run.duration_ms",
+        123.45,
+        labels=labels,
+    )
+    metrics.observe_value(
+        "generation_run.queue_depth",
+        2.0,
+        labels=labels,
+    )
+
+    expected_latency_event = (
+        "metric_latency",
+        {
+            "metric_name": "generation_run.duration_ms",
+            "value": "123.45",
+            "operation": "generation_run.execute",
+        },
+    )
+    expected_value_event = (
+        "metric_value",
+        {
+            "metric_name": "generation_run.queue_depth",
+            "value": "2.0",
+            "operation": "generation_run.execute",
+        },
+    )
+
+    assert logger.events == [expected_latency_event, expected_value_event], (
+        logger.events
+    )
 
 
 def test_noop_tracer_supports_synchronous_span_contexts() -> None:

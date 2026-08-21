@@ -8,9 +8,12 @@ import hypothesis.strategies as st
 import pytest
 from hypothesis import given, settings
 
-from episodic.canonical.domain import GenerationRunStatus, SourceDocument
+from episodic.canonical.domain import GenerationRun, GenerationRunStatus, SourceDocument
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
-from episodic.generation.draft_script import DraftScriptTransientProviderError
+from episodic.generation.draft_script import (
+    DraftScriptGenerator,
+    DraftScriptTransientProviderError,
+)
 from tests.canonical_storage._generation_run_support import (
     make_generation_run,
     persist_generation_run_prerequisites,
@@ -48,17 +51,10 @@ def _current_session_factory() -> async_sessionmaker[AsyncSession]:
     return _session_factory
 
 
-@given(outcome=st.sampled_from(("success", "failure", "cancelled")))
-@settings(
-    max_examples=3,
-    deadline=None,
-)
-@pytest.mark.asyncio
-async def test_launcher_generated_lifecycles_end_with_one_terminal_event(
-    outcome: str,
-) -> None:
-    """Success, provider failure, and shutdown cancellation reach one terminal state."""
-    factory = _current_session_factory()
+async def _create_pending_run(
+    factory: async_sessionmaker[AsyncSession],
+) -> GenerationRun:
+    """Persist one launchable run with its generated-lifecycle source."""
     run = make_generation_run()
     await persist_generation_run_prerequisites(factory, run)
     async with SqlAlchemyUnitOfWork(factory) as uow:
@@ -78,15 +74,59 @@ async def test_launcher_generated_lifecycles_end_with_one_terminal_event(
             )
         )
         await uow.commit()
+    return run
+
+
+def _generator_for_outcome(outcome: str) -> DraftScriptGenerator:
+    """Return the draft-generator double for one lifecycle outcome."""
     match outcome:
         case "success":
-            generator = RecordingDraftGenerator(draft_result(valid_tei()))
+            return RecordingDraftGenerator(draft_result(valid_tei()))
         case "failure":
-            generator = FailingDraftGenerator(
-                DraftScriptTransientProviderError("retry")
-            )
+            return FailingDraftGenerator(DraftScriptTransientProviderError("retry"))
         case _:
-            generator = BlockingDraftGenerator()
+            return BlockingDraftGenerator()
+
+
+def _assert_terminal_event_kinds(event_kinds: tuple[str, ...]) -> None:
+    """Assert that the lifecycle begins and ends with its expected events."""
+    assert event_kinds[-1] in {"run.succeeded", "run.failed"}, event_kinds
+    assert event_kinds[0] == "run.started", event_kinds
+
+
+def _assert_outcome(run: GenerationRun, outcome: str) -> None:
+    """Assert the persisted terminal state for one generated lifecycle."""
+    match outcome:
+        case "success":
+            assert run.status is GenerationRunStatus.SUCCEEDED, (
+                f"expected successful run {run.id}, got {run.status.value}"
+            )
+            assert run.error_category is None, run.error_category
+        case "failure":
+            assert run.status is GenerationRunStatus.FAILED, (
+                f"expected failed run {run.id}, got {run.status.value}"
+            )
+            assert run.error_category == "provider.transient", run.error_category
+        case _:
+            assert run.status is GenerationRunStatus.FAILED, (
+                f"expected cancelled run {run.id}, got {run.status.value}"
+            )
+            assert run.error_category == "launcher.shutdown", run.error_category
+
+
+@given(outcome=st.sampled_from(("success", "failure", "cancelled")))
+@settings(
+    max_examples=3,
+    deadline=None,
+)
+@pytest.mark.asyncio
+async def test_launcher_generated_lifecycles_end_with_one_terminal_event(
+    outcome: str,
+) -> None:
+    """Success, provider failure, and shutdown cancellation reach one terminal state."""
+    factory = _current_session_factory()
+    run = await _create_pending_run(factory)
+    generator = _generator_for_outcome(outcome)
     run_launcher = launcher(factory, generator)
 
     await run_launcher.launch(run.id)
@@ -105,26 +145,5 @@ async def test_launcher_generated_lifecycles_end_with_one_terminal_event(
     assert persisted_run.status.is_terminal(), (
         f"expected terminal run {run.id}, got {persisted_run.status.value}"
     )
-    event_kinds = tuple(event.kind for event in events)
-    assert event_kinds[-1] in {"run.succeeded", "run.failed"}, event_kinds
-    assert event_kinds[0] == "run.started", event_kinds
-    match outcome:
-        case "success":
-            assert persisted_run.status is GenerationRunStatus.SUCCEEDED, (
-                f"expected successful run {run.id}, got {persisted_run.status.value}"
-            )
-            assert persisted_run.error_category is None, persisted_run.error_category
-        case "failure":
-            assert persisted_run.status is GenerationRunStatus.FAILED, (
-                f"expected failed run {run.id}, got {persisted_run.status.value}"
-            )
-            assert persisted_run.error_category == "provider.transient", (
-                persisted_run.error_category
-            )
-        case _:
-            assert persisted_run.status is GenerationRunStatus.FAILED, (
-                f"expected cancelled run {run.id}, got {persisted_run.status.value}"
-            )
-            assert persisted_run.error_category == "launcher.shutdown", (
-                persisted_run.error_category
-            )
+    _assert_terminal_event_kinds(tuple(event.kind for event in events))
+    _assert_outcome(persisted_run, outcome)
