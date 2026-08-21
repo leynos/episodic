@@ -229,12 +229,49 @@ async def _read_uploaded_source(
         msg = "An object store is required to load uploaded source content."
         raise DraftScriptGenerationError(msg)
     key = source_uri.removeprefix("upload:")
+    payload = await _read_limited_upload_bytes(
+        object_store,
+        key,
+        limits,
+        remaining_aggregate_bytes=remaining_aggregate_bytes,
+    )
+    return _decode_and_normalize_uploaded_source(
+        payload,
+        key,
+        maximum_normalized_bytes=limits.max_normalized_source_bytes,
+    )
+
+
+async def _read_limited_upload_bytes(
+    object_store: ObjectStorePort,
+    key: str,
+    limits: GenerationSourceLimits,
+    *,
+    remaining_aggregate_bytes: int | None,
+) -> bytearray:
+    """Read one uploaded object without retaining bytes beyond configured limits."""
+    payload = bytearray()
     async with object_store.open(key) as chunks:
-        payload = await _read_bounded_upload_payload(
-            chunks,
-            limits,
-            remaining_aggregate_bytes=remaining_aggregate_bytes,
-        )
+        async for chunk in chunks:
+            size = len(payload) + len(chunk)
+            if size > limits.max_source_bytes:
+                raise GenerationSourceLimitError.source_bytes()
+            if (
+                remaining_aggregate_bytes is not None
+                and size > remaining_aggregate_bytes
+            ):
+                raise GenerationSourceLimitError.aggregate_bytes()
+            payload.extend(chunk)
+    return payload
+
+
+def _decode_and_normalize_uploaded_source(
+    payload: bytearray,
+    key: str,
+    *,
+    maximum_normalized_bytes: int,
+) -> str:
+    """Convert bounded uploaded bytes to normalized source text."""
     try:
         content = payload.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
@@ -244,26 +281,8 @@ async def _read_uploaded_source(
     if not normalized:
         msg = f"Uploaded source {key!r} contains no text."
         raise DraftScriptGenerationError(msg)
-    _require_source_size(normalized, limits.max_normalized_source_bytes)
+    _require_source_size(normalized, maximum_normalized_bytes)
     return normalized
-
-
-async def _read_bounded_upload_payload(
-    chunks: cabc.AsyncIterator[bytes],
-    limits: GenerationSourceLimits,
-    *,
-    remaining_aggregate_bytes: int | None,
-) -> bytearray:
-    """Read upload chunks without retaining bytes beyond source limits."""
-    payload = bytearray()
-    async for chunk in chunks:
-        size = len(payload) + len(chunk)
-        if size > limits.max_source_bytes:
-            raise GenerationSourceLimitError.source_bytes()
-        if remaining_aggregate_bytes is not None and size > remaining_aggregate_bytes:
-            raise GenerationSourceLimitError.aggregate_bytes()
-        payload.extend(chunk)
-    return payload
 
 
 def _require_source_size(content: str, maximum: int) -> None:

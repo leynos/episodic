@@ -11,6 +11,7 @@ import pytest
 
 from episodic.canonical.domain import SourceDocument
 from episodic.canonical.storage.filesystem_object_store import FilesystemObjectStore
+from episodic.generation.draft_script import DraftScriptGenerationError
 from episodic.generation.launcher import InProcessGenerationRunLauncher
 from episodic.generation.launcher_support import (
     GenerationSourceLimitError,
@@ -117,6 +118,36 @@ async def test_uploaded_source_stops_before_retaining_over_limit_chunk() -> None
         )
 
     assert store.yielded_chunks == 2, store.yielded_chunks
+
+
+@pytest.mark.asyncio
+async def test_uploaded_source_rejects_invalid_utf8() -> None:
+    """Report invalid upload text with the stable source-key diagnostic."""
+    with pytest.raises(DraftScriptGenerationError) as raised:
+        await source_from_document(
+            _source_document(source_uri="upload:uploads/source"),
+            typ.cast("ObjectStorePort", _ChunkStore((b"\xff",))),
+        )
+    assert (
+        str(raised.value) == "Uploaded source 'uploads/source' is not valid UTF-8 text."
+    ), (
+        "expected invalid UTF-8 diagnostic for 'uploads/source', "
+        f"got {str(raised.value)!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_uploaded_source_rejects_whitespace_only_text() -> None:
+    """Report whitespace-only upload text with the stable source-key diagnostic."""
+    with pytest.raises(DraftScriptGenerationError) as raised:
+        await source_from_document(
+            _source_document(source_uri="upload:uploads/source"),
+            typ.cast("ObjectStorePort", _ChunkStore((b" \n\t ",))),
+        )
+    assert str(raised.value) == "Uploaded source 'uploads/source' contains no text.", (
+        "expected empty-text diagnostic for 'uploads/source', "
+        f"got {str(raised.value)!r}"
+    )
 
 
 @pytest.mark.asyncio
