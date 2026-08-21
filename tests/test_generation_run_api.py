@@ -85,7 +85,7 @@ def _assert_generation_run_replay(
     replay: httpx.Response,
     launcher: RecordingLauncher,
 ) -> None:
-    """Assert a replay returns the accepted generation-run response."""
+    """Assert idempotent replay preserves the accepted response contract."""
     assert first.status_code == 202, first.text
     assert replay.status_code == 202, replay.text
     assert replay.json() == first.json(), (
@@ -101,6 +101,24 @@ def _assert_generation_run_replay(
     )
     assert len(launcher.run_ids) == 1, (
         f"expected one launched run, got {launcher.run_ids!r}"
+    )
+
+
+def _assert_polled_generation_run(
+    response: httpx.Response,
+    payload: dict[str, object],
+) -> None:
+    """Assert the pending generation-run polling response contract."""
+    assert response.status_code == 200, response.text
+    assert response.json()["qa_status"] == "skipped", (
+        f"expected skipped QA status, got {response.json()['qa_status']!r}"
+    )
+    assert response.json()["skip_qa_rationale"] == payload["skip_qa_rationale"], (
+        f"expected rationale {payload['skip_qa_rationale']!r}, "
+        f"got {response.json()['skip_qa_rationale']!r}"
+    )
+    assert response.headers["Retry-After"] == "1", (
+        f"expected retry delay '1', got {response.headers['Retry-After']!r}"
     )
 
 
@@ -159,17 +177,7 @@ async def test_generation_run_create_replay_and_poll(
         )
 
     _assert_generation_run_replay(first, replay, launcher)
-    assert run_response.status_code == 200, run_response.text
-    assert run_response.json()["qa_status"] == "skipped", (
-        f"expected skipped QA status, got {run_response.json()['qa_status']!r}"
-    )
-    assert run_response.json()["skip_qa_rationale"] == payload["skip_qa_rationale"], (
-        f"expected rationale {payload['skip_qa_rationale']!r}, "
-        f"got {run_response.json()['skip_qa_rationale']!r}"
-    )
-    assert run_response.headers["Retry-After"] == "1", (
-        f"expected retry delay '1', got {run_response.headers['Retry-After']!r}"
-    )
+    _assert_polled_generation_run(run_response, payload)
     _assert_generation_event_page(events_response)
     _assert_trace_span(
         typ.cast("RecordingTracer", dependencies.tracer),
