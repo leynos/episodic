@@ -338,11 +338,12 @@ Authorization scaffold:
 - Every `/v1` request passes through `AuthorizationMiddleware` before resource
   dispatch. Health checks remain operator endpoints and are not authorized by
   this scaffold.
-- `ApiDependencies.authorization` accepts an `AuthorizationPort`; production
-  wiring uses `StaticBearerTokenAuthorization`, configured by the required
+- `ApiDependencies.authorization` accepts an `AuthorizationPort`. Production
+  requests must carry `Authorization: Bearer <token>` and production wiring
+  uses `StaticBearerTokenAuthorization`, configured by the required
   `API_AUTHORIZATION_BEARER_TOKEN` and `API_AUTHORIZATION_PRINCIPAL_ID`
-  settings. Test composition may use `PermitAll` deliberately, but it is not a
-  production default.
+  settings. Test composition may use `PermitAll` deliberately; it is not part
+  of the production runtime.
 - Authorization adapters receive an `AuthorizationContext` containing the HTTP
   method, request path, and raw `Authorization` header. The port is async, so
   future policy adapters can call external identity or permission services.
@@ -359,8 +360,8 @@ Authorization scaffold:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
   `503`, so policy-backend outages are not reported as resource failures.
-- Roadmap item `5.1` is expected to replace the default permit-all adapter with
-  policy-backed role or scope checks.
+- Roadmap item `5.1` is expected to add policy-backed role or scope checks
+  behind the authorization port.
 
 Testing guidance:
 
@@ -1562,9 +1563,10 @@ The launcher rejects a source as soon as its stream or normalized text exceeds
 one of these limits and records the stable `generation.source_limit` failure
 category without logging source text. The claim transaction commits the
 conditional claim and `run.started` event before a separate read unit of work
-loads episodes, source-document metadata, and presenter bindings. That unit of
-work closes before upload bytes are hydrated, so external object-store reads do
-not retain a generation-run row lock or database connection.
+loads the episode, source-document metadata, and presenter bindings. That unit
+of work closes before the launcher hydrates upload bytes from object storage, so
+external object-store reads do not retain a generation-run row lock or database
+connection.
 
 Generation-run polling, event listing, and TEI retrieval emit the bounded
 `generation_run.read`, `generation_run.events.list`, and `episode_tei.read`

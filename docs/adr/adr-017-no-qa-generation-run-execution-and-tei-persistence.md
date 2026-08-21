@@ -79,17 +79,15 @@ not-found response for absent and inaccessible runs, events, ingestion jobs,
 and generated TEI.
 
 The claim transaction commits the conditional status transition and
-`run.started` event before a fresh read unit of work loads canonical episode
-metadata, source-document metadata, and presenter bindings. That read unit of
-work closes before upload content is hydrated, so potentially slow object-store
-I/O neither retains the claim lock nor monopolizes a database connection.
-
-The claim transaction is intentionally short: it conditionally changes a run to
-running, appends `run.started`, and commits before source hydration. A fresh
-unit of work then loads the episode, bounded source content, and presenter
-bindings. The source limits bound count, each uploaded stream, aggregate input,
-and normalized text; an overflow produces the stable `generation.source_limit`
-terminal category without retaining or emitting source content.
+`run.started` event before a fresh read unit of work loads the episode,
+source-document metadata, and presenter bindings. That unit of work closes
+before upload content is hydrated. The launcher then hydrates bounded source
+content from object storage outside the database unit of work, so potentially
+slow object-store I/O neither retains the claim lock nor monopolizes a database
+connection. The source limits bound count, each uploaded stream, aggregate
+input, and normalized text; an overflow produces the stable
+`generation.source_limit` terminal category without retaining or emitting
+source content.
 
 Generation-run creation accepts only `quality_mode=draft_without_qa` in this
 slice. A recognized `qa_gated` request returns `422 Unprocessable Entity`;

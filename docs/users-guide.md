@@ -95,7 +95,8 @@ schema migrations during startup.
 Create a draft run for a ready ingestion job with
 `POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs`. Supply an
 `Idempotency-Key` and a JSON body containing `quality_mode` set to
-`draft_without_qa`, `skip_qa_rationale`, and `actor`. The server returns
+`draft_without_qa` and `skip_qa_rationale`. The server derives the run actor
+from the authenticated principal rather than the request body. It returns
 `202 Accepted`, a `Location` header for the run, and `Retry-After` guidance.
 
 Poll the `Location` resource until its status is `succeeded` or `failed`. The
@@ -323,6 +324,22 @@ Required environment:
   `postgresql://...` and normalizes it to the supported async driver
   automatically. Driver-qualified URLs such as `postgresql+asyncpg://...` and
   `postgresql+psycopg://...` are also accepted.
+- `API_AUTHORIZATION_BEARER_TOKEN` is the bearer token accepted for production
+  `/v1` requests.
+- `API_AUTHORIZATION_PRINCIPAL_ID` identifies the principal associated with
+  that token. Both authorization settings are required before the service
+  starts.
+
+Production clients must include the configured token on every `/v1` request:
+
+```http
+Authorization: Bearer <token>
+```
+
+The authenticated principal owns the ingestion jobs and generation runs it can
+access. Requests for resources owned by another principal use the same
+not-found response as requests for resources that do not exist. Health
+endpoints are not covered by this `/v1` authorization requirement.
 
 Health endpoints:
 
