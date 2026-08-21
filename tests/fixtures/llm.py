@@ -57,7 +57,7 @@ def openai_log_spy() -> cabc.Generator[_OpenAILogSpy]:
     Yields
     ------
     _OpenAILogSpy
-        Structured OpenAI adapter error log spy.
+        The log spy produced for the current fixture iteration.
     """
     from episodic.llm.openai_api import utils as openai_utils
 

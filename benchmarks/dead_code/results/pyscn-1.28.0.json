@@ -1,0 +1,330 @@
+{
+  "dead_code": {
+    "files": [
+      {
+        "file_path": "flow.py",
+        "functions": [
+          {
+            "name": "after_return",
+            "file_path": "flow.py",
+            "findings": [
+              {
+                "location": {
+                  "file_path": "flow.py",
+                  "start_line": 16,
+                  "end_line": 16,
+                  "start_column": 0,
+                  "end_column": 0
+                },
+                "function_name": "after_return",
+                "code": "assignment",
+                "reason": "unreachable_after_return",
+                "severity": "critical",
+                "description": "Code appears after a return statement and will never be executed",
+                "block_id": "bb3"
+              }
+            ],
+            "total_blocks": 4,
+            "dead_blocks": 1,
+            "reachable_ratio": 0.75,
+            "critical_count": 1,
+            "warning_count": 0,
+            "info_count": 0
+          },
+          {
+            "name": "after_raise",
+            "file_path": "flow.py",
+            "findings": [
+              {
+                "location": {
+                  "file_path": "flow.py",
+                  "start_line": 28,
+                  "end_line": 28,
+                  "start_column": 0,
+                  "end_column": 0
+                },
+                "function_name": "after_raise",
+                "code": "assignment",
+                "reason": "unreachable_after_raise",
+                "severity": "critical",
+                "description": "Code appears after a raise statement and will never be executed",
+                "block_id": "bb3"
+              }
+            ],
+            "total_blocks": 4,
+            "dead_blocks": 1,
+            "reachable_ratio": 0.75,
+            "critical_count": 1,
+            "warning_count": 0,
+            "info_count": 0
+          },
+          {
+            "name": "after_continue",
+            "file_path": "flow.py",
+            "findings": [
+              {
+                "location": {
+                  "file_path": "flow.py",
+                  "start_line": 46,
+                  "end_line": 46,
+                  "start_column": 0,
+                  "end_column": 0
+                },
+                "function_name": "after_continue",
+                "code": "assignment",
+                "reason": "unreachable_after_continue",
+                "severity": "critical",
+                "description": "Code appears after a continue statement and will never be executed",
+                "block_id": "bb6"
+              }
+            ],
+            "total_blocks": 8,
+            "dead_blocks": 1,
+            "reachable_ratio": 0.75,
+            "critical_count": 1,
+            "warning_count": 0,
+            "info_count": 0
+          },
+          {
+            "name": "after_break",
+            "file_path": "flow.py",
+            "findings": [
+              {
+                "location": {
+                  "file_path": "flow.py",
+                  "start_line": 65,
+                  "end_line": 65,
+                  "start_column": 0,
+                  "end_column": 0
+                },
+                "function_name": "after_break",
+                "code": "assignment",
+                "reason": "unreachable_after_break",
+                "severity": "critical",
+                "description": "Code appears after a break statement and will never be executed",
+                "block_id": "bb6"
+              }
+            ],
+            "total_blocks": 8,
+            "dead_blocks": 1,
+            "reachable_ratio": 0.75,
+            "critical_count": 1,
+            "warning_count": 0,
+            "info_count": 0
+          }
+        ],
+        "total_findings": 4,
+        "total_functions": 6,
+        "affected_functions": 4,
+        "dead_code_ratio": 0.16666666666666666
+      }
+    ],
+    "summary": {
+      "total_files": 4,
+      "total_functions": 6,
+      "total_findings": 4,
+      "files_with_dead_code": 1,
+      "functions_with_dead_code": 4,
+      "critical_findings": 4,
+      "warning_findings": 0,
+      "info_findings": 0,
+      "findings_by_reason": {
+        "unreachable_after_break": 1,
+        "unreachable_after_continue": 1,
+        "unreachable_after_raise": 1,
+        "unreachable_after_return": 1
+      },
+      "total_blocks": 24,
+      "dead_blocks": 4,
+      "overall_dead_ratio": 0.16666666666666666
+    },
+    "warnings": null,
+    "errors": null,
+    "generated_at": "2026-07-27T02:47:28+02:00",
+    "version": "1.28.0",
+    "config": {
+      "context_lines": 3,
+      "detect_after_break": true,
+      "detect_after_continue": true,
+      "detect_after_raise": true,
+      "detect_after_return": true,
+      "detect_unreachable_branches": true,
+      "exclude_patterns": [
+        "test_*.py",
+        "*_test.py",
+        "**/tests/**",
+        "**/test/**",
+        "**/testing/**",
+        "**/migrations/**"
+      ],
+      "ignore_patterns": [],
+      "include_patterns": [
+        "**/*.py"
+      ],
+      "min_severity": "info",
+      "show_context": false,
+      "sort_by": "severity"
+    },
+    "request": {
+      "Paths": [
+        "__init__.py",
+        "dynamic.py",
+        "flow.py",
+        "symbols.py"
+      ],
+      "OutputFormat": "json",
+      "OutputWriter": {},
+      "OutputPath": "",
+      "NoOpen": false,
+      "ShowContext": false,
+      "ContextLines": 3,
+      "MinSeverity": "info",
+      "SortBy": "severity",
+      "Recursive": true,
+      "IncludePatterns": [
+        "**/*.py"
+      ],
+      "ExcludePatterns": [
+        "test_*.py",
+        "*_test.py",
+        "**/tests/**",
+        "**/test/**",
+        "**/testing/**",
+        "**/migrations/**"
+      ],
+      "IgnorePatterns": [],
+      "ConfigPath": "",
+      "DetectAfterReturn": true,
+      "DetectAfterBreak": true,
+      "DetectAfterContinue": true,
+      "DetectAfterRaise": true,
+      "DetectUnreachableBranches": true
+    }
+  },
+  "suggestions": [
+    {
+      "category": "dead_code",
+      "severity": "critical",
+      "effort": "moderate",
+      "title": "Remove dead code after unreachable_after_return in 'after_return'",
+      "description": "Code appears after a return statement and will never be executed",
+      "steps": [
+        "Delete lines 16-16 in flow.py",
+        "Verify no side effects are lost (logging, cleanup, assignments)",
+        "Run tests to confirm no regressions"
+      ],
+      "file_path": "flow.py",
+      "function": "after_return",
+      "start_line": 16
+    },
+    {
+      "category": "dead_code",
+      "severity": "critical",
+      "effort": "moderate",
+      "title": "Remove dead code after unreachable_after_raise in 'after_raise'",
+      "description": "Code appears after a raise statement and will never be executed",
+      "steps": [
+        "Delete lines 28-28 in flow.py",
+        "Verify no side effects are lost (logging, cleanup, assignments)",
+        "Run tests to confirm no regressions"
+      ],
+      "file_path": "flow.py",
+      "function": "after_raise",
+      "start_line": 28
+    },
+    {
+      "category": "dead_code",
+      "severity": "critical",
+      "effort": "moderate",
+      "title": "Remove dead code after unreachable_after_continue in 'after_continue'",
+      "description": "Code appears after a continue statement and will never be executed",
+      "steps": [
+        "Delete lines 46-46 in flow.py",
+        "Verify no side effects are lost (logging, cleanup, assignments)",
+        "Run tests to confirm no regressions"
+      ],
+      "file_path": "flow.py",
+      "function": "after_continue",
+      "start_line": 46
+    },
+    {
+      "category": "dead_code",
+      "severity": "critical",
+      "effort": "moderate",
+      "title": "Remove dead code after unreachable_after_break in 'after_break'",
+      "description": "Code appears after a break statement and will never be executed",
+      "steps": [
+        "Delete lines 65-65 in flow.py",
+        "Verify no side effects are lost (logging, cleanup, assignments)",
+        "Run tests to confirm no regressions"
+      ],
+      "file_path": "flow.py",
+      "function": "after_break",
+      "start_line": 65
+    }
+  ],
+  "summary": {
+    "total_files": 0,
+    "analyzed_files": 0,
+    "skipped_files": 0,
+    "complexity_enabled": false,
+    "dead_code_enabled": true,
+    "clone_enabled": false,
+    "cbo_enabled": false,
+    "mock_data_enabled": false,
+    "deps_enabled": false,
+    "arch_enabled": false,
+    "communities_enabled": false,
+    "deps_total_modules": 0,
+    "deps_modules_in_cycles": 0,
+    "deps_max_depth": 0,
+    "deps_main_sequence_deviation": 0,
+    "arch_compliance": 0,
+    "community_count": 0,
+    "community_modularity": 0,
+    "community_bridge_modules": 0,
+    "community_internal_edges": 0,
+    "community_cross_edges": 0,
+    "total_functions": 0,
+    "functions_parsed": 0,
+    "average_complexity": 0,
+    "average_cognitive_complexity": 0,
+    "average_nesting_depth": 0,
+    "high_complexity_count": 0,
+    "dead_code_count": 4,
+    "critical_dead_code": 4,
+    "warning_dead_code": 0,
+    "info_dead_code": 0,
+    "total_clones": 0,
+    "clone_pairs": 0,
+    "clone_groups": 0,
+    "code_duplication_percentage": 0,
+    "cbo_classes": 0,
+    "high_coupling_classes": 0,
+    "medium_coupling_classes": 0,
+    "average_coupling": 0,
+    "lcom_enabled": false,
+    "lcom_classes": 0,
+    "high_lcom_classes": 0,
+    "medium_lcom_classes": 0,
+    "average_lcom": 0,
+    "mock_data_count": 0,
+    "mock_data_error_count": 0,
+    "mock_data_warning_count": 0,
+    "mock_data_info_count": 0,
+    "health_score": 96,
+    "grade": "A",
+    "complexity_score": 100,
+    "dead_code_score": 80,
+    "duplication_score": 100,
+    "coupling_score": 100,
+    "cohesion_score": 100,
+    "dependency_score": 100,
+    "architecture_score": 0,
+    "community_score": 100,
+    "community_risk_score": 0
+  },
+  "generated_at": "2026-07-27T02:47:28.052866913+02:00",
+  "duration_ms": 1,
+  "version": "1.28.0"
+}

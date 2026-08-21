@@ -60,8 +60,9 @@ The target runs this repository-wide pipeline, in order:
 2. Ruff formatting-independent lint checks;
 3. the focused built-in Pylint 4 rules under managed PyPy;
 4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
-   separate future-annotations pass; and
-5. `ambrleaks` over Syrupy snapshots under `tests`.
+   separate future-annotations pass;
+5. `ambrleaks` over Syrupy snapshots under `tests`; and
+6. a blocking Skylos dead-code scan.
 
 The built-in Pylint pass is invoked through `uv tool run --python pypy` with
 the pinned `pylint-pypy-shim` wrapper from
@@ -84,8 +85,8 @@ hiding other diagnostics from files that PyPy can analyse.
 The lint target therefore runs the `df12-python-lints` Pylint plug-in
 separately under CPython 3.14. This pass uses the project's actual syntax and
 Astroid runtime, while the PyPy pass retains its compatibility shim for the
-built-in Pylint checks. The project environment hard-pins the plug-in version
-in `pyproject.toml`. The equivalent df12 command is:
+built-in Pylint checks. The project environment hard-pins the plug-in version in
+`pyproject.toml`. The equivalent df12 command is:
 
 ```shell
 uv run --python 3.14 pylint --disable=all \
@@ -107,11 +108,10 @@ uv run --python 3.14 pylint --disable=all \
   alembic episodic openai_test_types.py tests
 ```
 
-Existing pytest-bdd step modules under `tests/steps/` match
-`test_*_steps.py` and retain postponed annotations because pytest-bdd
-evaluates step annotations at runtime. The anchored path expression in the
-separate C9112 pass exempts only those modules; every other df12 check still
-covers them.
+Existing pytest-bdd step modules under `tests/steps/` match `test_*_steps.py`
+and retain postponed annotations because pytest-bdd evaluates step annotations
+at runtime. The anchored path expression in the separate C9112 pass exempts
+only those modules; every other df12 check still covers them.
 
 `ambrleaks`, provided by the same `df12-python-lints` package and run under the
 same CPython 3.14 interpreter, checks Syrupy snapshot files under `tests` for
@@ -126,11 +126,50 @@ uv tool run --python 3.14 \
 ```
 
 The two commands intentionally provision the package differently:
-`pyproject.toml` pins `df12-python-lints` at `v0.2.0` for the project-environment
-Pylint pass, while `DF12_PYTHON_LINTS_REF` controls the separately provisioned
-`ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for both commands.
-Maintainers must update both package pins together and validate the complete
-`make lint` pipeline.
+`pyproject.toml` pins `df12-python-lints` at `v0.2.0` for the
+project-environment Pylint pass, while `DF12_PYTHON_LINTS_REF` controls the
+separately provisioned `ambrleaks` tool. `DF12_PYTHON` selects CPython 3.14 for
+both commands. Maintainers must update both package pins together and validate
+the complete `make lint` pipeline.
+
+Skylos is separately provisioned by the Makefile at exact release `4.33.2` and
+runs locally with concise, non-interactive output. The lint command disables
+uploads and provenance collection, selects only dead-code analysis, and fails
+when an unexplained finding remains. It does not invoke cloud or Large Language
+Model (LLM) analysis and never modifies source files.
+
+Treat every new finding as dead code until its runtime caller is verified.
+Remove genuine dead code. For framework callbacks, protocol implementations, or
+dataclass validation hooks that static analysis cannot see, prefer a precise
+entry-point rule in `[tool.skylos.dead_code]`. Match the symbol's actual kind
+and fully qualified name, and explain the verified runtime caller. In
+particular, use `type = "method"` for instance methods rather than
+`type = "function"`.
+
+```toml
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = ["episodic.api.app._ShutdownHooksMiddleware.process_shutdown"]
+reason = "Falcon invokes this middleware lifecycle callback through its ASGI protocol."
+```
+
+Use `make skylos-allow` only for a narrow named exception when an entry-point
+rule cannot describe the boundary. Its reason must include who or what calls
+the symbol and how that was verified. Add one with:
+
+```shell
+make skylos-allow NAME=registered_handler \
+  REASON="Loaded by the plugin registry; verified in the registry contract test"
+```
+
+The target refuses empty `NAME` and `REASON` values and stores the explanation
+under `[tool.skylos.whitelist.documented]`; it does not create entry-point
+rules. Do not generate baselines, scrape reports into configuration, or add
+bulk unexplained exceptions. Use inline suppression only when neither an
+entry-point rule nor a named exception can describe the boundary, and keep its
+reason beside the suppression. Temporary exceptions must name an owner,
+tracking reference, and expiry condition. Remove exception entries when the
+dynamic boundary disappears.
 
 ## Spelling policy
 
@@ -1013,9 +1052,9 @@ which is how the unit of work threads its configured observability ports
 through to the repositories.
 
 Tests inject deterministic providers instead of patching module state. The
-source-intake repository tests build a `SourceIntakeStorageRuntime` with a
-fixed `clock`, a fixed `uuid_factory`, and test doubles for the observability
-ports, then assert on the exact persisted timestamps and identifiers.
+source-intake repository tests build a `SourceIntakeStorageRuntime` with a fixed
+`clock`, a fixed `uuid_factory`, and test doubles for the observability ports,
+then assert on the exact persisted timestamps and identifiers.
 
 ### Prompt scaffolding for generators
 

@@ -88,7 +88,15 @@
   - **Testing:** Passes all relevant unit and behavioural tests (`make test`).
   - **Linting:** Passes the complete `make lint` pipeline: Hecate, Ruff, the
     built-in Pylint rules under managed PyPy, `df12-python-lints` under CPython
-    3.14, and `ambrleaks` snapshot scanning.
+    3.14, `ambrleaks` snapshot scanning, and the blocking Skylos dead-code
+    scan. Investigate every finding and remove genuine dead code. After
+    verifying a false positive, prefer a precise, typed entry-point rule in
+    `[tool.skylos.dead_code]` with its fully qualified symbol and a reason that
+    names the verified runtime caller. Match methods as `type = "method"`,
+    rather than `"function"`. Use the named allow-list target only when an
+    entry-point rule cannot describe the boundary: run
+    `make skylos-allow NAME=handler REASON="Loaded by plugin registry"`
+    with the verified caller in the reason.
   - **Formatting:** Adheres to formatting standards (`make check-fmt`; use
     `make fmt` to apply fixes).
   - **Typechecking:** Passes type checking (`make typecheck`).

@@ -47,7 +47,7 @@ def _make_reference_document(**overrides: object) -> ReferenceDocument:
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
         "updated_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # ty: ignore[invalid-argument-type]  # The fixture builder intentionally accepts heterogeneous typed overrides.
+    defaults.update(overrides)
     return ReferenceDocument(**defaults)
 
 
@@ -64,7 +64,7 @@ def _make_reference_document_revision(
         "change_note": "Test change",
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # ty: ignore[invalid-argument-type]  # The fixture builder intentionally accepts heterogeneous typed overrides.
+    defaults.update(overrides)
     return ReferenceDocumentRevision(**defaults)
 
 
@@ -80,7 +80,7 @@ def _make_reference_binding(**overrides: object) -> ReferenceBinding:
         "effective_from_episode_id": None,
         "created_at": dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
     }
-    defaults.update(overrides)  # ty: ignore[invalid-argument-type]  # The fixture builder intentionally accepts heterogeneous typed overrides.
+    defaults.update(overrides)
     return ReferenceBinding(**defaults)
 
 

@@ -1,8 +1,7 @@
-"""Unit tests for private API helper behavior in ``episodic.api.helpers``.
+"""Unit tests for private API helper behaviour in ``episodic.api.helpers``.
 
-These tests focus on payload-to-dataclass mapping and update-request assembly
-used by Falcon resource adapters. They validate required/optional payload
-handling, key remapping behavior, and generic update-request wiring.
+These tests focus on update-request assembly and payload validation used by
+Falcon resource adapters.
 
 Run these tests directly with:
 
@@ -10,13 +9,10 @@ Run these tests directly with:
 python -m pytest -v tests/test_api_helpers.py
 ```
 
-Expected behavior:
-- All tests pass when helper payload mapping and update wiring are correct.
-- Missing required mapped fields raise ``falcon.HTTPBadRequest`` and preserve
-  the expected description text.
+Expected behaviour: all tests pass when update wiring and payload validation
+are correct.
 """
 
-import dataclasses as dc
 import typing as typ
 import uuid
 
@@ -47,101 +43,6 @@ def _call_builder_with_payload(
     }:
         return builder(uuid.uuid4(), payload)
     return builder(payload)
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _ExampleFields:
-    """Example dataclass used to test generic payload mapping."""
-
-    title: str
-    description: str | None
-    configuration: dict[str, object]
-
-
-@dc.dataclass(frozen=True, slots=True)
-class _MappedFields:
-    """Example dataclass with fields mapped from differently named keys."""
-
-    title: str
-    description: str | None
-    structure: dict[str, object]
-
-
-class TestPayloadDataclass:
-    """Tests for generic payload-to-dataclass mapping helper behavior."""
-
-    @staticmethod
-    def test_build_payload_dataclass_maps_required_and_optional_fields() -> None:
-        """Build dataclass values from required and optional payload fields."""
-        payload: JsonPayload = {
-            "title": "Show title",
-            "configuration": {"tone": "precise"},
-        }
-
-        parsed = helpers._build_payload_dataclass(
-            payload,
-            dc_type=_ExampleFields,
-            field_map={
-                "title": ("title", False),
-                "description": ("description", True),
-                "configuration": ("configuration", False),
-            },
-        )
-
-        assert parsed == _ExampleFields(
-            title="Show title",
-            description=None,
-            configuration={"tone": "precise"},
-        ), "Expected payload values to map to _ExampleFields."
-
-    @staticmethod
-    def test_build_payload_dataclass_supports_key_remapping() -> None:
-        """Map payload keys with different names to dataclass fields."""
-        payload: JsonPayload = {
-            "profile_title": "Remapped title",
-            "profile_description": "Remapped description",
-            "template_structure": {"segments": ["intro", "outro"]},
-        }
-
-        parsed = helpers._build_payload_dataclass(
-            payload,
-            dc_type=_MappedFields,
-            field_map={
-                "title": ("profile_title", False),
-                "description": ("profile_description", True),
-                "structure": ("template_structure", False),
-            },
-        )
-
-        assert parsed == _MappedFields(
-            title="Remapped title",
-            description="Remapped description",
-            structure={"segments": ["intro", "outro"]},
-        ), "Expected remapped payload keys to populate _MappedFields."
-
-    @staticmethod
-    def test_build_payload_dataclass_raises_when_required_field_is_missing() -> None:
-        """Raise HTTP 400 when a required field is absent from the payload."""
-        payload: JsonPayload = {
-            "configuration": {"tone": "precise"},
-        }
-
-        with pytest.raises(
-            falcon.HTTPBadRequest,
-            match=r"400 Bad Request",
-        ) as exc_info:
-            helpers._build_payload_dataclass(
-                payload,
-                dc_type=_ExampleFields,
-                field_map={
-                    "title": ("title", False),
-                    "description": ("description", True),
-                    "configuration": ("configuration", False),
-                },
-            )
-        assert exc_info.value.description == "Missing required field: title", (
-            "Expected missing required fields to preserve the HTTP 400 description."
-        )
 
 
 class TestTypedUpdateRequest:

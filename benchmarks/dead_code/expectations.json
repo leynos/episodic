@@ -1,0 +1,154 @@
+[
+  {
+    "identifier": "unused-import",
+    "path": "symbols.py",
+    "line": 4,
+    "lane": "unused-symbol",
+    "is_dead": true,
+    "rationale": "math is imported but never referenced"
+  },
+  {
+    "identifier": "used-import",
+    "path": "symbols.py",
+    "line": 5,
+    "lane": "unused-symbol",
+    "is_dead": false,
+    "rationale": "statistics.mean is called by _used_function"
+  },
+  {
+    "identifier": "unused-function",
+    "path": "symbols.py",
+    "line": 8,
+    "lane": "unused-symbol",
+    "is_dead": true,
+    "rationale": "the private function has no references or registration"
+  },
+  {
+    "identifier": "unused-class",
+    "path": "symbols.py",
+    "line": 19,
+    "lane": "unused-symbol",
+    "is_dead": true,
+    "rationale": "the private class is never instantiated or exported"
+  },
+  {
+    "identifier": "directly-used-function",
+    "path": "symbols.py",
+    "line": 31,
+    "lane": "unused-symbol",
+    "is_dead": false,
+    "rationale": "the function is called during module execution"
+  },
+  {
+    "identifier": "unused-local-variable",
+    "path": "symbols.py",
+    "line": 44,
+    "lane": "unused-symbol",
+    "is_dead": true,
+    "rationale": "unused_local is assigned but never read"
+  },
+  {
+    "identifier": "unused-parameter",
+    "path": "symbols.py",
+    "line": 50,
+    "lane": "unused-symbol",
+    "is_dead": true,
+    "rationale": "unused_parameter is accepted but never read"
+  },
+  {
+    "identifier": "instantiated-class",
+    "path": "symbols.py",
+    "line": 69,
+    "lane": "unused-symbol",
+    "is_dead": false,
+    "rationale": "UsedClass is instantiated during module execution"
+  },
+  {
+    "identifier": "exported-function",
+    "path": "symbols.py",
+    "line": 83,
+    "lane": "unused-symbol",
+    "is_dead": false,
+    "rationale": "the package imports this function and lists it in __all__"
+  },
+  {
+    "identifier": "package-export-import",
+    "path": "__init__.py",
+    "line": 3,
+    "lane": "unused-symbol",
+    "is_dead": false,
+    "rationale": "the import defines the package's declared public surface"
+  },
+  {
+    "identifier": "decorator-registered-function",
+    "path": "dynamic.py",
+    "line": 50,
+    "lane": "unused-symbol",
+    "is_dead": false,
+    "rationale": "the decorator stores the function and the registry calls it"
+  },
+  {
+    "identifier": "dynamic-method",
+    "path": "dynamic.py",
+    "line": 64,
+    "lane": "unused-symbol",
+    "is_dead": false,
+    "rationale": "getattr resolves and calls invoked_by_name at runtime"
+  },
+  {
+    "identifier": "dunder-call-method",
+    "path": "dynamic.py",
+    "line": 78,
+    "lane": "unused-symbol",
+    "is_dead": false,
+    "rationale": "CallableHandler()() invokes __call__ through Python syntax"
+  },
+  {
+    "identifier": "after-return",
+    "path": "flow.py",
+    "line": 16,
+    "lane": "unreachable-statement",
+    "is_dead": true,
+    "rationale": "a return always exits the function before this assignment"
+  },
+  {
+    "identifier": "after-raise",
+    "path": "flow.py",
+    "line": 28,
+    "lane": "unreachable-statement",
+    "is_dead": true,
+    "rationale": "an unconditional raise exits before this assignment"
+  },
+  {
+    "identifier": "after-continue",
+    "path": "flow.py",
+    "line": 46,
+    "lane": "unreachable-statement",
+    "is_dead": true,
+    "rationale": "continue begins the next iteration before this assignment"
+  },
+  {
+    "identifier": "after-break",
+    "path": "flow.py",
+    "line": 65,
+    "lane": "unreachable-statement",
+    "is_dead": true,
+    "rationale": "break exits the loop before this assignment"
+  },
+  {
+    "identifier": "constant-false-branch",
+    "path": "flow.py",
+    "line": 78,
+    "lane": "unreachable-statement",
+    "is_dead": true,
+    "rationale": "the literal False branch can never execute"
+  },
+  {
+    "identifier": "conditional-return-fallthrough",
+    "path": "flow.py",
+    "line": 97,
+    "lane": "unreachable-statement",
+    "is_dead": false,
+    "rationale": "this assignment executes whenever flag is false"
+  }
+]
