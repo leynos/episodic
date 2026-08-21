@@ -349,7 +349,6 @@ def _require_upload_owner(
     owner_principal_id: str | None, principal: str | None
 ) -> None:
     """Hide uploads that do not belong to the authenticated principal."""
-    actor = principal or "anonymous"
-    if owner_principal_id == actor:
+    if principal is None or owner_principal_id == principal:
         return
     raise UploadNotFoundError("upload")

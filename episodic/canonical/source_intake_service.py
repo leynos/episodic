@@ -359,7 +359,10 @@ async def _require_ready_upload(
     upload = await uow.uploads.get(upload_id)
     if upload is None:
         raise UploadNotFoundError(str(upload_id))
-    if upload.owner_principal_id != owner_principal_id:
+    if (
+        owner_principal_id is not None
+        and upload.owner_principal_id != owner_principal_id
+    ):
         raise UploadNotFoundError(str(upload_id))
     if upload.state is not UploadState.READY:
         raise UploadNotReadyError(str(upload_id))
