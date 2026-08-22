@@ -59,6 +59,10 @@ __all__ = [
 ]
 
 _GENERATION_RUN_OPERATION = "generation_run.create"
+_RETRY_AFTER = "1"
+_MAX_EVENT_LIMIT = 100
+_DEFAULT_EVENT_LIMIT = 20
+_DEFAULT_MAX_SOURCE_COUNT = 32
 
 type Clock = cabc.Callable[[], dt.datetime]
 type UuidFactory = cabc.Callable[[], uuid.UUID]
@@ -78,9 +82,12 @@ class GenerationRunsResource:
     """Create no-QA generation runs for authenticated ingestion-job owners.
 
     The resource materialises the caller-owned ready ingestion job, persists a
-    durable generation-run checkpoint, and schedules detached execution. The
-    authenticated principal becomes the durable run actor; request payloads
-    cannot select another actor.
+    durable generation-run checkpoint, and schedules detached execution.
+
+    Notes
+    -----
+    The authenticated principal becomes the durable run actor; request
+    payloads cannot select another actor.
     """
 
     # Pylint reports the finding the Ruff noqa below already accepts; the
@@ -128,7 +135,11 @@ class GenerationRunsResource:
 
         Notes
         -----
-        ``Idempotency-Key`` is required. Replaying the same key for the same
+        The coroutine returns nothing; the response is populated on
+        ``resp``. A successful request produces HTTP 202 Accepted with the
+        serialized generation run as the body, a ``Location`` header
+        pointing at the run resource, and a ``Retry-After`` header
+        (``"1"``). ``Idempotency-Key`` is required. Replaying the same key for the same
         authenticated principal returns the original accepted response.
         Malformed input, unknown or inaccessible jobs, invalid source
         materialisation, unavailable launcher configuration, idempotency
@@ -227,7 +238,7 @@ class GenerationRunsResource:
                         clock=self._clock,
                         uuid_factory=self._uuid_factory,
                         max_source_count=(
-                            32
+                            _DEFAULT_MAX_SOURCE_COUNT
                             if self._max_source_count is None
                             else self._max_source_count
                         ),

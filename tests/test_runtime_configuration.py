@@ -4,24 +4,32 @@ import typing as typ
 
 import pytest
 
+from episodic.api.runtime import RuntimeConfigurationError, _load_runtime_config
+from episodic.generation import GenerationSourceLimits
+
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_load_runtime_config_uses_configured_pricing_directory(
-    tmp_path: "Path",  # noqa: UP037  # Imported only during type checking.
-) -> None:
-    """Pricing snapshots should be loaded from a validated configured directory."""
-    from episodic.api.runtime import _load_runtime_config
-
+def _base_environment(tmp_path: Path) -> dict[str, str]:
+    """Return the minimal environment that boots the runtime configuration."""
     pricing_directory = tmp_path / "pricing"
-    pricing_directory.mkdir()
-    config = _load_runtime_config({
+    pricing_directory.mkdir(exist_ok=True)
+    return {
         "DATABASE_URL": "postgresql://example.test/episodic",
         "SOURCE_INTAKE_OBJECT_STORE_ROOT": str(tmp_path / "objects"),
         "PRICING_SNAPSHOT_DIRECTORY": str(pricing_directory),
         "API_AUTHORIZATION_BEARER_TOKEN": "test-token",
         "API_AUTHORIZATION_PRINCIPAL_ID": "test-principal",
+    }
+
+
+def test_load_runtime_config_uses_configured_pricing_directory(
+    tmp_path: Path,
+) -> None:
+    """Pricing snapshots should be loaded from a validated configured directory."""
+    config = _load_runtime_config({
+        **_base_environment(tmp_path),
         "GENERATION_MAX_SOURCE_COUNT": "3",
         "GENERATION_MAX_SOURCE_BYTES": "400",
         "GENERATION_MAX_AGGREGATE_SOURCE_BYTES": "800",
@@ -30,7 +38,7 @@ def test_load_runtime_config_uses_configured_pricing_directory(
         "GENERATION_MAX_RESPONSE_BYTES": "4096",
     })
 
-    assert config.pricing_snapshot_directory == pricing_directory.resolve(), (
+    assert config.pricing_snapshot_directory == (tmp_path / "pricing").resolve(), (
         f"expected configured pricing path, got {config.pricing_snapshot_directory}"
     )
     assert config.generation_source_limits.max_source_count == 3, (
@@ -59,26 +67,58 @@ def test_load_runtime_config_uses_configured_pricing_directory(
     )
 
 
+def test_load_runtime_config_applies_declared_defaults(tmp_path: Path) -> None:
+    """Optional provider and limit settings fall back to declared defaults."""
+    config = _load_runtime_config(_base_environment(tmp_path))
+
+    assert config.draft_model == "gpt-4o-mini", (
+        f"expected the default draft model, got {config.draft_model!r}"
+    )
+    assert config.llm_base_url is None, (
+        f"expected no provider base URL by default, got {config.llm_base_url!r}"
+    )
+    assert config.llm_api_key is None, "expected no provider API key by default"
+    defaults = GenerationSourceLimits()
+    assert config.generation_source_limits == defaults, (
+        f"expected declared source-limit defaults {defaults!r}, got "
+        f"{config.generation_source_limits!r}"
+    )
+    assert config.generation_max_output_tokens == 4_096, (
+        "expected the declared default output-token limit, got "
+        f"{config.generation_max_output_tokens}"
+    )
+    assert config.generation_max_response_bytes == 1_048_576, (
+        "expected the declared default response-byte limit, got "
+        f"{config.generation_max_response_bytes}"
+    )
+
+
+def test_load_runtime_config_rejects_unpaired_openai_base_url(
+    tmp_path: Path,
+) -> None:
+    """A provider base URL without an API key must fail configuration."""
+    with pytest.raises(
+        RuntimeConfigurationError,
+        match="OPENAI_BASE_URL and OPENAI_API_KEY must be configured together",
+    ):
+        _load_runtime_config({
+            **_base_environment(tmp_path),
+            "OPENAI_BASE_URL": "https://api.openai.example/v1",
+        })
+
+
 @pytest.mark.parametrize("value", ["0", "-1", "not-an-integer"])
 def test_load_runtime_config_rejects_invalid_generation_source_limit(
-    tmp_path: "Path",  # noqa: UP037  # Imported only during type checking.
+    tmp_path: Path,
     value: str,
 ) -> None:
     """Generation source limits must be positive integer runtime settings."""
-    from episodic.api.runtime import RuntimeConfigurationError, _load_runtime_config
-
-    pricing_directory = tmp_path / "pricing"
-    pricing_directory.mkdir()
     with pytest.raises(
         RuntimeConfigurationError,
         match="GENERATION_MAX_SOURCE_COUNT must be a positive integer",
     ):
         _load_runtime_config({
-            "DATABASE_URL": "postgresql://example.test/episodic",
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT": str(tmp_path / "objects"),
-            "PRICING_SNAPSHOT_DIRECTORY": str(pricing_directory),
-            "API_AUTHORIZATION_BEARER_TOKEN": "test-token",
-            "API_AUTHORIZATION_PRINCIPAL_ID": "test-principal",
+            **_base_environment(tmp_path),
             "GENERATION_MAX_SOURCE_COUNT": value,
         })
 
@@ -88,37 +128,51 @@ def test_load_runtime_config_rejects_invalid_generation_source_limit(
     ["GENERATION_MAX_OUTPUT_TOKENS", "GENERATION_MAX_RESPONSE_BYTES"],
 )
 def test_load_runtime_config_rejects_invalid_generation_output_limit(
-    tmp_path: "Path",  # noqa: UP037  # Imported only during type checking.
+    tmp_path: Path,
     setting: str,
 ) -> None:
     """Generation output limits must be positive integer runtime settings."""
-    from episodic.api.runtime import RuntimeConfigurationError, _load_runtime_config
-
-    pricing_directory = tmp_path / "pricing"
-    pricing_directory.mkdir()
     with pytest.raises(
         RuntimeConfigurationError,
         match=f"{setting} must be a positive integer",
     ):
         _load_runtime_config({
-            "DATABASE_URL": "postgresql://example.test/episodic",
-            "SOURCE_INTAKE_OBJECT_STORE_ROOT": str(tmp_path / "objects"),
-            "PRICING_SNAPSHOT_DIRECTORY": str(pricing_directory),
-            "API_AUTHORIZATION_BEARER_TOKEN": "test-token",
-            "API_AUTHORIZATION_PRINCIPAL_ID": "test-principal",
+            **_base_environment(tmp_path),
             setting: "0",
         })
 
 
 def test_load_runtime_config_rejects_missing_pricing_directory(
-    tmp_path: "Path",  # noqa: UP037  # Imported only during type checking.
+    tmp_path: Path,
 ) -> None:
     """Pricing configuration should fail before launcher construction."""
-    from episodic.api.runtime import RuntimeConfigurationError, _load_runtime_config
-
     with pytest.raises(RuntimeConfigurationError, match="PRICING_SNAPSHOT_DIRECTORY"):
         _load_runtime_config({
             "DATABASE_URL": "postgresql://example.test/episodic",
             "SOURCE_INTAKE_OBJECT_STORE_ROOT": str(tmp_path / "objects"),
             "PRICING_SNAPSHOT_DIRECTORY": str(tmp_path / "missing"),
         })
+
+
+@pytest.mark.parametrize(
+    "missing_setting",
+    ["DATABASE_URL", "SOURCE_INTAKE_OBJECT_STORE_ROOT"],
+)
+def test_load_runtime_config_failure_does_not_log_success(
+    tmp_path: Path,
+    missing_setting: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed load must not emit the runtime_config_loaded success line."""
+    environment = _base_environment(tmp_path)
+    del environment[missing_setting]
+
+    with (
+        caplog.at_level("INFO"),
+        pytest.raises(RuntimeConfigurationError, match=missing_setting),
+    ):
+        _load_runtime_config(environment)
+
+    assert "runtime_config_loaded" not in caplog.text, (
+        "the success log line must not be emitted for invalid configuration"
+    )

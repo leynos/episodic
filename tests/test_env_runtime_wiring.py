@@ -107,12 +107,15 @@ async def test_build_generation_launcher_wires_cost_recorder(
         GenerationSourceLimits,
         InProcessGenerationRunLauncher,
     )
-    from episodic.observability import StructuredLogMetrics
+    from episodic.observability import StructuredLogMetrics, StructuredLogTracer
 
     launcher = _build_generation_launcher(
         lambda: SqlAlchemyUnitOfWork(session_factory),
         _UnusedLLMPort(),
-        _GenerationLauncherRuntime(metrics=StructuredLogMetrics()),
+        _GenerationLauncherRuntime(
+            metrics=StructuredLogMetrics(),
+            tracer=StructuredLogTracer(),
+        ),
         config=RuntimeConfig(
             database_url="postgresql+psycopg://unused",
             source_intake_object_store_root=tmp_path,
