@@ -19,6 +19,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 _DEFAULT_DRAFT_MODEL = "gpt-4o-mini"
+_DEFAULT_LLM_TIMEOUT_SECONDS = 30.0
 _DEFAULT_GENERATION_MAX_OUTPUT_TOKENS = 4_096
 _DEFAULT_GENERATION_MAX_RESPONSE_BYTES = 1_048_576
 _REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -73,6 +74,10 @@ class RuntimeConfig:
     generation_source_limits: GenerationSourceLimits
     generation_max_output_tokens: int = _DEFAULT_GENERATION_MAX_OUTPUT_TOKENS
     generation_max_response_bytes: int = _DEFAULT_GENERATION_MAX_RESPONSE_BYTES
+    llm_reasoning_effort: str | None = None
+    llm_service_tier: str | None = None
+    llm_token_limit_param: str = "max_tokens"  # noqa: S105 - parameter name, not a secret.
+    llm_timeout_seconds: float = _DEFAULT_LLM_TIMEOUT_SECONDS
 
 
 class RuntimeConfigurationError(RuntimeError):
@@ -226,6 +231,37 @@ def _llm_settings(
     return base_url, api_key
 
 
+def _llm_request_options(
+    environment: cabc.Mapping[str, str],
+) -> tuple[str | None, str | None, str]:
+    """Return optional provider request options for outbound generation."""
+    reasoning_effort = environment.get("OPENAI_REASONING_EFFORT", "").strip() or None
+    service_tier = environment.get("OPENAI_SERVICE_TIER", "").strip() or None
+    token_limit_param = (
+        environment.get("OPENAI_TOKEN_LIMIT_PARAM", "").strip() or "max_tokens"
+    )
+    if token_limit_param not in {"max_tokens", "max_completion_tokens"}:
+        msg = "OPENAI_TOKEN_LIMIT_PARAM must be max_tokens or max_completion_tokens."
+        raise RuntimeConfigurationError(msg)
+    return reasoning_effort, service_tier, token_limit_param
+
+
+def _llm_timeout_seconds(environment: cabc.Mapping[str, str]) -> float:
+    """Read the optional positive provider HTTP timeout in seconds."""
+    raw = environment.get("OPENAI_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        return _DEFAULT_LLM_TIMEOUT_SECONDS
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        msg = "OPENAI_TIMEOUT_SECONDS must be a positive number."
+        raise RuntimeConfigurationError(msg) from exc
+    if value <= 0:
+        msg = "OPENAI_TIMEOUT_SECONDS must be a positive number."
+        raise RuntimeConfigurationError(msg)
+    return value
+
+
 def _pricing_snapshot_directory(
     environment: cabc.Mapping[str, str],
 ) -> pathlib.Path:
@@ -246,6 +282,7 @@ def _load_runtime_config(
     """Read and validate runtime configuration from environment variables."""
     environment = os.environ if environ is None else environ
     llm_settings = _llm_settings(environment)
+    llm_request_options = _llm_request_options(environment)
     pricing_snapshot_directory = _pricing_snapshot_directory(environment)
     authorization = _authorization_settings(environment)
     output_limits = _generation_output_limits(environment)
@@ -262,6 +299,10 @@ def _load_runtime_config(
         source_intake_object_store_root=_source_intake_object_store_root(environment),
         llm_base_url=llm_settings[0],
         llm_api_key=llm_settings[1],
+        llm_reasoning_effort=llm_request_options[0],
+        llm_service_tier=llm_request_options[1],
+        llm_token_limit_param=llm_request_options[2],
+        llm_timeout_seconds=_llm_timeout_seconds(environment),
         draft_model=_draft_model(environment),
         pricing_snapshot_directory=pricing_snapshot_directory,
         authorization_bearer_token=authorization[0],

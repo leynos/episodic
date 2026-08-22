@@ -111,6 +111,10 @@ class LLMRequest:
     system_prompt: str | None = None
     provider_operation: LLMProviderOperation | str | None = None
     token_budget: LLMTokenBudget | None = None
+    # Request a provider-enforced JSON object response. Callers that parse
+    # the response as JSON should set this so providers cannot wrap the
+    # payload in markdown fences or prose.
+    json_response: bool = False
 
 
 class LLMError(Exception):

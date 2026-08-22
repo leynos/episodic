@@ -83,6 +83,10 @@ def _build_llm_port(config: RuntimeConfig) -> OpenAICompatibleLLMAdapter | None:
             base_url=config.llm_base_url,
             api_key=config.llm_api_key,
             provider_operation=LLMProviderOperation.CHAT_COMPLETIONS,
+            reasoning_effort=config.llm_reasoning_effort,
+            service_tier=config.llm_service_tier,
+            token_limit_param=config.llm_token_limit_param,
+            timeout_seconds=config.llm_timeout_seconds,
         )
     )
 
