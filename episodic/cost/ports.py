@@ -218,6 +218,16 @@ class RunPricingKey:
 class CostLedgerPort(typ.Protocol):
     """Port for append-only cost ledger persistence."""
 
+    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
+        """Persist an immutable pricing snapshot; reuse an existing row.
+
+        Run pricing pins and ledger entries reference snapshots by
+        identifier, so the snapshot must be persisted before it is pinned.
+        Snapshots are immutable: repeated calls with the same identifier
+        must leave the stored row unchanged.
+        """
+        raise NotImplementedError
+
     async def pin_run_pricing(
         self,
         key: RunPricingKey,
