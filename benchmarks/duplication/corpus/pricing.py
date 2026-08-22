@@ -47,6 +47,8 @@ def recent_error_messages(
     list[str]
         Non-empty messages from error-level events.
     """
+    if limit <= 0:
+        return []
     messages: list[str] = []
     for event in events:
         if event.get("level") != "error":

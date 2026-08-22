@@ -38,6 +38,17 @@ Accepted design decisions relevant to current implementation work:
 - The build backend is `uv_build` (`>=0.11.32,<0.12.0`), declared in the
   `[build-system]` table of `pyproject.toml`.
 
+The transport-free validators in `episodic.canonical.validation` belong to the
+canonical domain layer. They provide dependency-free, side-effect-free
+argument-shape checks that adapters may call at their boundaries; domain-
+specific validation remains with the domain type it guards. In particular,
+`validate_async_callable(callback, attribute_name)` requires a callable whose
+invocation returns an awaitable and raises `TypeError` otherwise. The health
+port uses it in `ProbeHealthObserver.from_checks`, while the API dependency
+boundary uses it for readiness probes, authorization decisions, and shutdown
+hooks. Keep this module free of adapter imports so the dependency direction
+remains inward.
+
 The `Makefile` prepends `$(HOME)/.local/bin` and `$(HOME)/.bun/bin` to `PATH`
 so that tools installed via `uv` and Bun are discoverable by all Make targets
 without requiring manual shell `PATH` configuration.
@@ -137,10 +148,12 @@ both commands. Maintainers must update both package pins together and validate
 the complete `make lint` pipeline.
 
 Skylos is separately provisioned by the Makefile at exact release `4.33.2` and
-runs locally with concise, non-interactive output. The lint command disables
-uploads and provenance collection, selects only dead-code analysis, and fails
-when an unexplained finding remains. It does not invoke cloud or Large Language
-Model (LLM) analysis and never modifies source files.
+runs locally with concise, non-interactive output under CPython 3.14. Keep this
+interpreter requirement: Skylos's runtime `ast` parser must understand the
+project's Python 3.14 syntax. The lint command disables uploads and provenance
+collection, selects only dead-code analysis, and fails when an unexplained
+finding remains. It does not invoke cloud or Large Language Model (LLM)
+analysis and never modifies source files.
 
 Treat every new finding as dead code until its runtime caller is verified.
 Remove genuine dead code. For framework callbacks, protocol implementations, or
@@ -174,7 +187,6 @@ entry-point rule nor a named exception can describe the boundary, and keep its
 reason beside the suppression. Temporary exceptions must name an owner,
 tracking reference, and expiry condition. Remove exception entries when the
 dynamic boundary disappears.
-
 
 ## Code-duplication gate
 

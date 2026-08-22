@@ -156,14 +156,15 @@ def _log_at(
     method_name = logging.getLevelName(level).lower()
     try:
         method = getattr(typ.cast("_SupportsConvenienceLog", logger), method_name)
-        method(message, exc_info=exc_info, stack_info=False)
-    except (AttributeError, TypeError):  # fmt: skip
+    except AttributeError:
         typ.cast("_SupportsLogMethod", logger).log(
             level,
             message,
             exc_info=exc_info,
             stack_info=False,
         )
+    else:
+        method(message, exc_info=exc_info, stack_info=False)
 
 
 def log_info(

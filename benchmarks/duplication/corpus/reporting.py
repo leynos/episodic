@@ -49,6 +49,8 @@ def latest_alert_titles(
         Non-empty titles from error-level alerts.
     """
     # Type-2 clone: identifiers renamed from pricing.recent_error_messages.
+    if maximum <= 0:
+        return []
     titles: list[str] = []
     for record in records:
         if record.get("level") != "error":

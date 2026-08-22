@@ -84,6 +84,9 @@ jobs:
       - name: Run lint
         run: make lint
 
+      - name: Run duplication gate tests
+        run: make duplication-test
+
       - name: Check spelling
         run: make spelling
 

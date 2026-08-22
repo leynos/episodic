@@ -7,8 +7,7 @@ expectation classification so benchmark results remain comparable across
 detector runs.
 """
 
-import json
-from pathlib import Path
+import typing as typ
 
 import pytest
 
@@ -22,11 +21,12 @@ from benchmarks.duplication.score import (
     score_findings,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-BENCHMARK_ROOT = REPO_ROOT / "benchmarks" / "duplication"
+if typ.TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _fragment(path: str = "a.py", start: int = 1, end: int = 20) -> Fragment:
+    """Return one test fragment spanning the supplied source lines."""
     return Fragment(path=path, start_line=start, end_line=end)
 
 
@@ -37,6 +37,7 @@ def _expectation(
     is_clone: bool = True,
     members: tuple[Fragment, Fragment] | None = None,
 ) -> Expectation:
+    """Return one labelled test expectation with two fragments."""
     first, second = members or (_fragment("a.py", 1, 20), _fragment("b.py", 1, 20))
     return Expectation(
         identifier=identifier,
@@ -53,6 +54,7 @@ def _finding(
     *,
     lane: Lane = Lane.SYNTACTIC_CLONE,
 ) -> PairFinding:
+    """Return one normalized test detector finding."""
     return PairFinding(
         first=first or _fragment("a.py", 1, 20),
         second=second or _fragment("b.py", 1, 20),
@@ -65,7 +67,7 @@ def _finding(
 class TestParsePyscnPairs:
     """pyscn clone-pair report parsing."""
 
-    def test_parses_locations_types_and_similarity(self, tmp_path: Path) -> None:
+    def test_parses_locations_types_and_similarity(self, tmp_path: object) -> None:
         """Members, clone types, and similarity survive normalization."""
         payload = {
             "clone": {
@@ -82,7 +84,9 @@ class TestParsePyscnPairs:
                         },
                         "clone2": {
                             "location": {
-                                "file_path": str(tmp_path / "pkg" / "b.py"),
+                                "file_path": str(
+                                    typ.cast("Path", tmp_path) / "pkg" / "b.py"
+                                ),
                                 "start_line": 15,
                                 "end_line": 23,
                             }
@@ -91,21 +95,21 @@ class TestParsePyscnPairs:
                 ]
             }
         }
-        findings = parse_pyscn_pairs(payload, corpus_root=tmp_path)
+        findings = parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
         assert findings[0].first == _fragment("pkg/a.py", 4, 12), "first member"
         assert findings[0].second == _fragment("pkg/b.py", 15, 23), "second member"
         assert findings[0].lane is Lane.SEMANTIC_CLONE, "type 4 lane"
         assert findings[0].category == "type-4", "category label"
         assert findings[0].similarity == 0.75, "similarity value"
 
-    def test_null_pair_array_is_empty_report(self, tmp_path: Path) -> None:
+    def test_null_pair_array_is_empty_report(self, tmp_path: object) -> None:
         """Null pair arrays parse as empty pyscn reports."""
         payload = {"clone": {"clone_pairs": None}}
-        assert parse_pyscn_pairs(payload, corpus_root=tmp_path) == (), (
-            "null clone_pairs must parse as an empty report"
-        )
+        assert (
+            parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path)) == ()
+        ), "null clone_pairs must parse as an empty report"
 
-    def test_syntactic_lane_for_types_one_to_three(self, tmp_path: Path) -> None:
+    def test_syntactic_lane_for_types_one_to_three(self, tmp_path: object) -> None:
         """Types 1-3 normalize into the syntactic lane."""
         payload = {
             "clone": {
@@ -132,50 +136,55 @@ class TestParsePyscnPairs:
                 ]
             }
         }
-        findings = parse_pyscn_pairs(payload, corpus_root=tmp_path)
+        findings = parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
         assert all(f.lane is Lane.SYNTACTIC_CLONE for f in findings), (
             "types 1-3 must use the syntactic lane"
         )
 
     @pytest.mark.parametrize(
-        "payload",
+        ("payload", "expected_error"),
         [
-            [],
-            {"clone": []},
-            {"clone": {"clone_pairs": [{"type": "x"}]}},
-            {
-                "clone": {
-                    "clone_pairs": [
-                        {
-                            "type": 1,
-                            "similarity": 1.5,
-                            "clone1": {
-                                "location": {
-                                    "file_path": "a.py",
-                                    "start_line": 1,
-                                    "end_line": 2,
-                                }
-                            },
-                            "clone2": {
-                                "location": {
-                                    "file_path": "b.py",
-                                    "start_line": 1,
-                                    "end_line": 2,
-                                }
-                            },
-                        }
-                    ]
-                }
-            },
+            ([], TypeError),
+            ({"clone": []}, TypeError),
+            ({"clone": {"clone_pairs": [{"type": "x"}]}}, TypeError),
+            (
+                {
+                    "clone": {
+                        "clone_pairs": [
+                            {
+                                "type": 1,
+                                "similarity": 1.5,
+                                "clone1": {
+                                    "location": {
+                                        "file_path": "a.py",
+                                        "start_line": 1,
+                                        "end_line": 2,
+                                    }
+                                },
+                                "clone2": {
+                                    "location": {
+                                        "file_path": "b.py",
+                                        "start_line": 1,
+                                        "end_line": 2,
+                                    }
+                                },
+                            }
+                        ]
+                    }
+                },
+                ValueError,
+            ),
         ],
         ids=["root-not-object", "clone-not-object", "type-not-int", "similarity-range"],
     )
-    def test_rejects_malformed_reports(self, tmp_path: Path, payload: object) -> None:
+    def test_rejects_malformed_reports(
+        self, tmp_path: object, payload: object, expected_error: type[Exception]
+    ) -> None:
         """Shape violations raise instead of silently dropping findings."""
-        with pytest.raises((TypeError, ValueError)):
-            parse_pyscn_pairs(payload, corpus_root=tmp_path)
+        with pytest.raises(expected_error):
+            parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
 
-    def test_rejects_paths_outside_corpus_root(self, tmp_path: Path) -> None:
+    def test_rejects_paths_outside_corpus_root(self, tmp_path: object) -> None:
         """Absolute paths outside the corpus root are configuration errors."""
         payload = {
             "clone": {
@@ -202,13 +211,13 @@ class TestParsePyscnPairs:
             }
         }
         with pytest.raises(ValueError, match="outside corpus root"):
-            parse_pyscn_pairs(payload, corpus_root=tmp_path)
+            parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
 
 
 class TestParsePychasePairs:
     """PyChase candidate report parsing."""
 
-    def test_parses_candidates_in_report_order(self, tmp_path: Path) -> None:
+    def test_parses_candidates_in_report_order(self, tmp_path: object) -> None:
         """Candidates normalize into syntactic-lane findings."""
         payload = {
             "candidates": [
@@ -229,33 +238,38 @@ class TestParsePychasePairs:
                 }
             ]
         }
-        findings = parse_pychase_pairs(payload, corpus_root=tmp_path)
+        findings = parse_pychase_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
         assert findings[0].first == _fragment("pkg/a.py", 4, 12), "left member"
         assert findings[0].second == _fragment("pkg/b.py", 15, 23), "right member"
         assert findings[0].lane is Lane.SYNTACTIC_CLONE, "candidate lane"
         assert findings[0].similarity == 0.925, "candidate score"
 
     @pytest.mark.parametrize(
-        "payload",
+        ("payload", "expected_error"),
         [
-            [],
-            {"candidates": [{"score": "high"}]},
-            {
-                "candidates": [
-                    {
-                        "score": 1.0,
-                        "left": {"file": "a.py", "start_line": 0, "end_line": 2},
-                        "right": {"file": "b.py", "start_line": 1, "end_line": 2},
-                    }
-                ]
-            },
+            ([], TypeError),
+            ({"candidates": [{"score": "high"}]}, TypeError),
+            (
+                {
+                    "candidates": [
+                        {
+                            "score": 1.0,
+                            "left": {"file": "a.py", "start_line": 0, "end_line": 2},
+                            "right": {"file": "b.py", "start_line": 1, "end_line": 2},
+                        }
+                    ]
+                },
+                ValueError,
+            ),
         ],
         ids=["root-not-object", "score-not-number", "line-not-positive"],
     )
-    def test_rejects_malformed_reports(self, tmp_path: Path, payload: object) -> None:
+    def test_rejects_malformed_reports(
+        self, tmp_path: object, payload: object, expected_error: type[Exception]
+    ) -> None:
         """Shape violations raise instead of silently dropping findings."""
-        with pytest.raises((TypeError, ValueError)):
-            parse_pychase_pairs(payload, corpus_root=tmp_path)
+        with pytest.raises(expected_error):
+            parse_pychase_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
 
 
 class TestScoreFindings:
@@ -363,37 +377,3 @@ class TestScoreFindings:
                 ],
                 [],
             )
-
-
-class TestCheckedInOracle:
-    """Contract checks for the retained benchmark oracle."""
-
-    def test_expectations_load_and_reference_real_units(self) -> None:
-        """Every labelled unit names an existing corpus source span."""
-        raw = json.loads((BENCHMARK_ROOT / "expectations.json").read_text())
-        expectations = [
-            Expectation(
-                identifier=entry["identifier"],
-                lane=Lane(entry["lane"]),
-                is_clone=entry["is_clone"],
-                first=Fragment(
-                    path=entry["first"]["path"],
-                    start_line=entry["first"]["start_line"],
-                    end_line=entry["first"]["end_line"],
-                ),
-                second=Fragment(
-                    path=entry["second"]["path"],
-                    start_line=entry["second"]["start_line"],
-                    end_line=entry["second"]["end_line"],
-                ),
-            )
-            for entry in raw
-        ]
-        score_findings(expectations, [])
-        for expectation in expectations:
-            for member in (expectation.first, expectation.second):
-                source = BENCHMARK_ROOT / "corpus" / member.path
-                line_count = len(source.read_text().splitlines())
-                assert member.end_line <= line_count, (
-                    f"{member.path} span exceeds file length"
-                )

@@ -22,10 +22,14 @@ reason so exceptions stay reviewable in version control.
 from __future__ import annotations
 
 import dataclasses as dc
+import fcntl
 import os
 import sys
+import tempfile
 import tomllib
 import typing as typ
+from collections import abc as cabc
+from contextlib import contextmanager
 from pathlib import Path
 
 import cyclopts
@@ -38,15 +42,28 @@ from pychase.engine import (  # ty: ignore[unresolved-import]  # pychase install
     find,
 )
 
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
 app = cyclopts.App(help="Run or configure the code-duplication gate.")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
+_PAIR_MEMBER_COUNT = 2
 
-type FindingPayload = dict[str, typ.Any]
+
+class _DetectorMemberPayload(typ.TypedDict):
+    """Validated PyChase location and qualified-name payload."""
+
+    file: str
+    qualname: str
+    start_line: int
+    end_line: int
+
+
+class _DetectorPairPayload(typ.TypedDict):
+    """Validated PyChase duplicate-pair payload."""
+
+    left: _DetectorMemberPayload
+    right: _DetectorMemberPayload
+    score: float
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -97,28 +114,92 @@ class Finding:
     score: float
 
 
-class GateConfigError(RuntimeError):
+class GateConfigError(ValueError):
     """Raised when the gate configuration is malformed."""
 
 
-def _unit_key(member: FindingPayload) -> str:
+def _unit_key(member: _DetectorMemberPayload) -> str:
     """Build the ``path::qualname`` key for one reported member."""
     return f"{Path(member['file']).as_posix()}::{member['qualname']}"
 
 
-def _location(member: FindingPayload) -> str:
+def _location(member: _DetectorMemberPayload) -> str:
     """Build the ``path:start-end`` span for one reported member."""
     path = Path(member["file"]).as_posix()
     return f"{path}:{member['start_line']}-{member['end_line']}"
 
 
-def normalize_findings(pairs: cabc.Iterable[FindingPayload]) -> list[Finding]:
+def _detector_mapping(value: object, *, context: str) -> cabc.Mapping[str, object]:
+    """Validate one object supplied by the PyChase report."""
+    if not isinstance(value, cabc.Mapping) or not all(
+        isinstance(key, str) for key in value
+    ):
+        msg = f"{context} must be an object with string keys"
+        raise TypeError(msg)
+    return typ.cast("cabc.Mapping[str, object]", value)
+
+
+def _detector_member(value: object, *, context: str) -> _DetectorMemberPayload:
+    """Validate one PyChase member before it enters gate logic."""
+    member = _detector_mapping(value, context=context)
+    file = member.get("file")
+    qualname = member.get("qualname")
+    start_line = member.get("start_line")
+    end_line = member.get("end_line")
+    if not isinstance(file, str) or not file:
+        msg = f"{context}.file must be a non-empty string"
+        raise ValueError(msg)
+    if not isinstance(qualname, str) or not qualname:
+        msg = f"{context}.qualname must be a non-empty string"
+        raise ValueError(msg)
+    if not isinstance(start_line, int) or isinstance(start_line, bool):
+        msg = f"{context}.start_line must be a positive integer"
+        raise TypeError(msg)
+    if start_line < 1:
+        msg = f"{context}.start_line must be a positive integer"
+        raise ValueError(msg)
+    if not isinstance(end_line, int) or isinstance(end_line, bool):
+        msg = f"{context}.end_line must not precede start_line"
+        raise TypeError(msg)
+    if end_line < start_line:
+        msg = f"{context}.end_line must not precede start_line"
+        raise ValueError(msg)
+    return {
+        "file": file,
+        "qualname": qualname,
+        "start_line": start_line,
+        "end_line": end_line,
+    }
+
+
+def _detector_pairs(value: object) -> tuple[_DetectorPairPayload, ...]:
+    """Validate the PyChase pair collection at the detector boundary."""
+    if not isinstance(value, cabc.Sequence) or isinstance(value, (str, bytes)):
+        msg = "PyChase report pairs must be an array"
+        raise TypeError(msg)
+    pairs: list[_DetectorPairPayload] = []
+    for index, raw_pair in enumerate(value):
+        context = f"PyChase report pairs[{index}]"
+        pair = _detector_mapping(raw_pair, context=context)
+        score = pair.get("score")
+        if isinstance(score, bool) or not isinstance(score, (int, float)):
+            msg = f"{context}.score must be a number"
+            raise TypeError(msg)
+        pairs.append({
+            "left": _detector_member(pair.get("left"), context=f"{context}.left"),
+            "right": _detector_member(pair.get("right"), context=f"{context}.right"),
+            "score": float(score),
+        })
+    return tuple(pairs)
+
+
+def normalize_findings(pairs: cabc.Iterable[_DetectorPairPayload]) -> list[Finding]:
     """Convert raw PyChase pairs into gate findings.
 
     Parameters
     ----------
-    pairs : collections.abc.Iterable[dict]
-        Raw pair payloads from the PyChase engine.
+    pairs : collections.abc.Iterable[_DetectorPairPayload]
+        Validated pair payloads from the PyChase engine.
 
     Returns
     -------
@@ -159,18 +240,44 @@ def load_allowlist(pyproject_path: Path) -> tuple[AllowEntry, ...]:
     """
     with pyproject_path.open("rb") as handle:
         data = tomllib.load(handle)
-    table = data.get("tool", {}).get("duplication_gate", {})
-    entries: list[AllowEntry] = []
-    for index, raw in enumerate(table.get("allow", [])):
-        reason = raw.get("reason", "")
-        if not isinstance(reason, str) or not reason.strip():
-            msg = f"duplication_gate.allow[{index}] requires a non-empty reason"
-            raise GateConfigError(msg)
-        entries.append(AllowEntry(units=_entry_units(raw, index), reason=reason))
-    return tuple(entries)
+    root = _config_mapping(data, context="pyproject")
+    tool = _config_mapping(root.get("tool", {}), context="pyproject.tool")
+    table = _config_mapping(
+        tool.get("duplication_gate", {}),
+        context="pyproject.tool.duplication_gate",
+    )
+    raw_entries = table.get("allow", ())
+    if not isinstance(raw_entries, cabc.Sequence) or isinstance(
+        raw_entries, (str, bytes)
+    ):
+        msg = "duplication_gate.allow must be an array"
+        raise GateConfigError(msg)
+    return tuple(
+        _allow_entry(raw, index=index) for index, raw in enumerate(raw_entries)
+    )
 
 
-def _entry_units(raw: dict[str, typ.Any], index: int) -> tuple[str, ...]:
+def _config_mapping(value: object, *, context: str) -> cabc.Mapping[str, object]:
+    """Validate one TOML table before configuration logic consumes it."""
+    if not isinstance(value, cabc.Mapping) or not all(
+        isinstance(key, str) for key in value
+    ):
+        msg = f"{context} must be a table with string keys"
+        raise GateConfigError(msg)
+    return typ.cast("cabc.Mapping[str, object]", value)
+
+
+def _allow_entry(raw: object, *, index: int) -> AllowEntry:
+    """Validate and normalize one reasoned TOML allow entry."""
+    table = _config_mapping(raw, context=f"duplication_gate.allow[{index}]")
+    reason = table.get("reason", "")
+    if not isinstance(reason, str) or not reason.strip():
+        msg = f"duplication_gate.allow[{index}] requires a non-empty reason"
+        raise GateConfigError(msg)
+    return AllowEntry(units=_entry_units(table, index), reason=reason)
+
+
+def _entry_units(raw: cabc.Mapping[str, object], index: int) -> tuple[str, ...]:
     """Extract and validate the unit keys named by one allow entry."""
     unit = raw.get("unit")
     pair = raw.get("pair")
@@ -228,8 +335,8 @@ def run_detector() -> list[Finding]:
     """Run PyChase with the repository configuration and normalize output."""
     config = Config.from_pyproject(str(PYPROJECT))
     files = _collect_files(config.paths, config.exclude)
-    result = find(files, config)
-    return normalize_findings(result["pairs"])
+    report = _detector_mapping(find(files, config), context="PyChase report")
+    return normalize_findings(_detector_pairs(report.get("pairs")))
 
 
 def _report(
@@ -329,18 +436,65 @@ def append_allow_entry(
     reason : str
         Reviewable justification recorded with the entry.
     """
-    document = tomlkit.parse(pyproject_path.read_text(encoding="utf-8"))
-    tool = document.setdefault("tool", tomlkit.table(is_super_table=True))
-    gate = tool.setdefault("duplication_gate", tomlkit.table())
-    entries = gate.setdefault("allow", tomlkit.aot())
-    entry = tomlkit.table()
-    if second is None:
-        entry["unit"] = first
-    else:
-        entry["pair"] = [first, second]
-    entry["reason"] = reason
-    entries.append(entry)
-    pyproject_path.write_text(tomlkit.dumps(document), encoding="utf-8")
+    units = (first,) if second is None else (first, second)
+    with _locked_file(pyproject_path):
+        document = tomlkit.parse(pyproject_path.read_text(encoding="utf-8"))
+        tool = document.setdefault("tool", tomlkit.table(is_super_table=True))
+        gate = tool.setdefault("duplication_gate", tomlkit.table())
+        entries = gate.setdefault("allow", tomlkit.aot())
+        for index, raw_entry in enumerate(entries):
+            existing = _allow_entry(raw_entry, index=index)
+            if _same_allow_target(existing.units, units):
+                raw_entry["reason"] = reason
+                _atomic_write(pyproject_path, tomlkit.dumps(document))
+                return
+        entry = tomlkit.table()
+        if second is None:
+            entry["unit"] = first
+        else:
+            entry["pair"] = [first, second]
+        entry["reason"] = reason
+        entries.append(entry)
+        _atomic_write(pyproject_path, tomlkit.dumps(document))
+
+
+def _same_allow_target(left: tuple[str, ...], right: tuple[str, ...]) -> bool:
+    """Report whether two unit or unordered-pair entries name the same target."""
+    return left == right or (
+        len(left) == len(right) == _PAIR_MEMBER_COUNT and set(left) == set(right)
+    )
+
+
+@contextmanager
+def _locked_file(path: Path) -> cabc.Iterator[None]:
+    """Hold an advisory cross-process lock while replacing ``path``."""
+    lock_path = path.with_name(f".{path.name}.duplication-gate.lock")
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    """Replace ``path`` only after writing and syncing a temporary sibling."""
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        text=True,
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        temporary_path.chmod(path.stat().st_mode)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def _ensure_deterministic_hashing() -> None:

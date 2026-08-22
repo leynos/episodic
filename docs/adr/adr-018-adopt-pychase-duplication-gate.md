@@ -9,7 +9,7 @@
 In the context of keeping copy-paste duplication out of Episodic, facing the
 benchmark result that PyChase 0.1.0 detects Type 1-3 clones with perfect corpus
 precision while pyscn 1.29.1 cannot separate true semantic clones from false
-ones, we decided for a local, blocking PyChase scan driven by
+ones, the decision is to use a local, blocking PyChase scan driven by
 `scripts/duplication_gate.py` in `make lint`, with tuned thresholds and
 documented declarative-module exclusions in `[tool.pychase]`, and reasoned unit
 or pair exceptions in `[tool.duplication_gate]`, and against an advisory-only

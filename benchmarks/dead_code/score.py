@@ -26,11 +26,31 @@ Public data shapes, finding order, source locations, validation behaviour, and
 scoring semantics are stable inputs to the benchmark evidence.
 """
 
+from __future__ import annotations
+
 import dataclasses as dc
 import enum
 import typing as typ
-from collections import abc as cabc
-from pathlib import Path
+
+from benchmarks.score_support import (
+    mapping as _mapping,
+)
+
+if typ.TYPE_CHECKING:
+    from collections import abc as cabc
+    from pathlib import Path
+from benchmarks.score_support import (
+    positive_line as _positive_line,
+)
+from benchmarks.score_support import (
+    relative_source_path,
+)
+from benchmarks.score_support import (
+    sequence as _sequence,
+)
+from benchmarks.score_support import (
+    string as _string,
+)
 
 
 class Lane(enum.StrEnum):
@@ -112,58 +132,6 @@ class LaneScore:
     unmatched_findings: int
 
 
-def _mapping(value: object, *, context: str) -> cabc.Mapping[str, object]:
-    """Validate and return a string-keyed mapping."""
-    if not isinstance(value, cabc.Mapping):
-        msg = f"{context} must be a JSON object"
-        raise TypeError(msg)
-    if not all(isinstance(key, str) for key in value):
-        msg = f"{context} keys must be strings"
-        raise TypeError(msg)
-    return typ.cast("cabc.Mapping[str, object]", value)
-
-
-def _sequence(value: object, *, context: str) -> cabc.Sequence[object]:
-    """Validate and return a non-string sequence."""
-    if not isinstance(value, cabc.Sequence) or isinstance(value, (str, bytes)):
-        msg = f"{context} must be a JSON array"
-        raise TypeError(msg)
-    return value
-
-
-def _string(value: object, *, context: str) -> str:
-    """Validate and return a string value."""
-    if not isinstance(value, str):
-        msg = f"{context} must be a string"
-        raise TypeError(msg)
-    return value
-
-
-def _positive_line(value: object, *, context: str) -> int:
-    """Validate and return a positive, non-boolean line number."""
-    if not isinstance(value, int) or isinstance(value, bool):
-        msg = f"{context} must be a positive integer"
-        raise TypeError(msg)
-    if value < 1:
-        msg = f"{context} must be positive"
-        raise ValueError(msg)
-    return value
-
-
-def _relative_source_path(raw_path: object, corpus_root: Path) -> str:
-    """Normalize a finding path relative to the corpus root."""
-    root = corpus_root.resolve()
-    path = Path(_string(raw_path, context="finding path"))
-    if not path.is_absolute():
-        path = root / path
-    path = path.resolve()
-    try:
-        return path.relative_to(root).as_posix()
-    except ValueError as error:
-        msg = f"finding path {path} is outside corpus root {root}"
-        raise ValueError(msg) from error
-
-
 def parse_pyscn_findings(
     payload: object,
     *,
@@ -238,7 +206,11 @@ def _parse_pyscn_finding(
         context=f"pyscn findings[{finding_index}].location",
     )
     return Finding(
-        path=_relative_source_path(location.get("file_path"), corpus_root),
+        path=relative_source_path(
+            location.get("file_path"),
+            corpus_root,
+            subject="finding",
+        ),
         line=_positive_line(
             location.get("start_line"),
             context="pyscn finding start_line",
@@ -296,7 +268,11 @@ def parse_skylos_findings(
             )
             findings.append(
                 Finding(
-                    path=_relative_source_path(finding.get("file"), corpus_root),
+                    path=relative_source_path(
+                        finding.get("file"),
+                        corpus_root,
+                        subject="finding",
+                    ),
                     line=_positive_line(
                         finding.get("line"),
                         context=f"Skylos {category} line",

@@ -40,7 +40,7 @@ The checked-in corpus labels ten unit pairs fixed before either scan:
 
 - five clone pairs: one Type-1 copy, one Type-2 rename, one Type-3
   modification, one Type-4 semantic rewrite, and one Type-2 method clone across
-  two classes; and
+  two classes.
 - five non-clone controls: parser, builder, and scanner pairs that share only
   idiomatic structure, plus two numeric folds whose merging would conflate
   distinct semantics.
@@ -69,7 +69,7 @@ pair at similarity 0.77, but it scored the `longest_valid_streak` and
 `count_state_changes` control pair — two different algorithms — at 0.93, and
 emitted fourteen unlabelled cross-pairs between unrelated corpus functions at
 0.73-0.81. No threshold accepts the true semantic clone while rejecting the
-false one, because the false positive scores higher. PyChase assigned the
+false one because the false positive scores higher. PyChase assigned the
 renamed Type-2 clones similarity 1.0 and reported no control pair at any
 threshold down to 0.6.
 
