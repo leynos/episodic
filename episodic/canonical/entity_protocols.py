@@ -133,6 +133,11 @@ class IngestionJobRepository(typ.Protocol):
         updated_at
             Timestamp supplied by the caller for the durable job update.
 
+        Returns
+        -------
+        None
+            The operation completes without a return value.
+
         Notes
         -----
         The caller owns transaction boundaries. Unknown ``job_id`` values

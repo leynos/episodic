@@ -68,8 +68,10 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
 
         Notes
         -----
-        The caller owns transaction boundaries. The SQL ``UPDATE`` does not
-        validate rowcount, so an unknown ``job_id`` affects zero rows.
+        The operation returns ``None`` and completes without a return
+        value. The caller owns transaction boundaries. The SQL ``UPDATE``
+        does not validate rowcount, so an unknown ``job_id`` affects zero
+        rows.
         """
         await self._session.execute(
             sa
