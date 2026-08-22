@@ -1,7 +1,10 @@
-"""Content generation services package.
+"""Draft-generation, launch, source-limit, and TEI-enrichment services.
 
-This package contains services for enriching canonical TEI content with generated
-metadata: show notes, chapter markers, guest biographies, and sponsor reads.
+``DraftScriptGenerator`` turns bounded canonical sources and presenter context
+into a TEI-P5 draft. ``InProcessGenerationRunLauncher`` owns its detached
+generation lifecycle and enforces ``GenerationSourceLimits`` before invoking a
+provider. The package also exports TEI enrichment services for show notes,
+chapter markers, and guest biographies that operate on persisted canonical TEI.
 """
 
 from episodic.generation.chapter_markers import (
@@ -11,6 +14,22 @@ from episodic.generation.chapter_markers import (
     ChapterMarkersResponseFormatError,
     ChapterMarkersResult,
     enrich_tei_with_chapter_markers,
+)
+from episodic.generation.draft_script import (
+    DraftPresenterProfile,
+    DraftScriptGenerationError,
+    DraftScriptGenerator,
+    DraftScriptProviderResponseError,
+    DraftScriptRequest,
+    DraftScriptResponseFormatError,
+    DraftScriptResult,
+    DraftScriptSource,
+    DraftScriptTeiError,
+    DraftScriptTokenBudgetError,
+    DraftScriptTransientProviderError,
+    DraftTurn,
+    LLMDraftScriptGenerator,
+    LLMDraftScriptGeneratorConfig,
 )
 from episodic.generation.guest_bios import (
     GuestBioEntry,
@@ -25,6 +44,12 @@ from episodic.generation.guest_bios import (
     generate_guest_bios_from_reference_bindings,
     project_guest_bio_sources,
 )
+from episodic.generation.launcher import (
+    GenerationRunAdmissionError,
+    GenerationRunLauncher,
+    InProcessGenerationRunLauncher,
+)
+from episodic.generation.launcher_support import GenerationSourceLimits
 from episodic.generation.show_notes import (
     ShowNotesEntry,
     ShowNotesGenerator,
@@ -40,6 +65,21 @@ __all__ = [
     "ChapterMarkersGeneratorConfig",
     "ChapterMarkersResponseFormatError",
     "ChapterMarkersResult",
+    "DraftPresenterProfile",
+    "DraftScriptGenerationError",
+    "DraftScriptGenerator",
+    "DraftScriptProviderResponseError",
+    "DraftScriptRequest",
+    "DraftScriptResponseFormatError",
+    "DraftScriptResult",
+    "DraftScriptSource",
+    "DraftScriptTeiError",
+    "DraftScriptTokenBudgetError",
+    "DraftScriptTransientProviderError",
+    "DraftTurn",
+    "GenerationRunAdmissionError",
+    "GenerationRunLauncher",
+    "GenerationSourceLimits",
     "GuestBioEntry",
     "GuestBioSource",
     "GuestBiosEnrichmentRequest",
@@ -48,6 +88,9 @@ __all__ = [
     "GuestBiosGeneratorConfig",
     "GuestBiosResponseFormatError",
     "GuestBiosResult",
+    "InProcessGenerationRunLauncher",
+    "LLMDraftScriptGenerator",
+    "LLMDraftScriptGeneratorConfig",
     "ShowNotesEntry",
     "ShowNotesGenerator",
     "ShowNotesGeneratorConfig",

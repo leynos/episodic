@@ -13,12 +13,16 @@ from episodic.canonical.domain import (  # SQLAlchemy evaluates annotations at r
     IngestionStatus,
     IntakeState,
 )
+from episodic.canonical.generation_quality import (  # noqa: TC001  # SQLAlchemy evaluates annotations at runtime.
+    QaStatus,
+)
 
 from .models_base import (
     APPROVAL_STATE,
     EPISODE_STATUS,
     INGESTION_STATUS,
     INTAKE_STATE,
+    QA_STATUS,
     Base,
 )
 
@@ -52,13 +56,11 @@ class TeiHeaderRecord(Base):
     )
     title: orm.Mapped[str] = orm.mapped_column(sa.String(240), nullable=False)
     payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
-        postgresql.JSONB,
-        nullable=False,
+        postgresql.JSONB, nullable=False
     )
     raw_xml: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     raw_xml_zstd: orm.Mapped[bytes | None] = orm.mapped_column(
-        postgresql.BYTEA,
-        nullable=True,
+        postgresql.BYTEA, nullable=True
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
@@ -90,6 +92,14 @@ class EpisodeRecord(Base):
         Raw TEI XML associated with the episode.
     tei_xml_zstd : bytes | None
         Zstandard-compressed TEI XML associated with the episode.
+    tei_revision : int
+        Monotonic TEI revision number for the episode.
+    tei_content_hash : str | None
+        Content hash for the current TEI payload, when available.
+    qa_status : QaStatus | None
+        Quality-assurance status for the current episode content.
+    last_generation_run_id : uuid.UUID | None
+        Most recent generation run associated with the episode.
     status : EpisodeStatus
         Episode status enum.
     approval_state : ApprovalState
@@ -101,6 +111,12 @@ class EpisodeRecord(Base):
     """
 
     __tablename__ = "episodes"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "tei_revision >= 1",
+            name="ck_episodes_tei_revision_positive",
+        ),
+    )
 
     id: orm.Mapped[uuid.UUID] = orm.mapped_column(
         postgresql.UUID(as_uuid=True),
@@ -121,6 +137,24 @@ class EpisodeRecord(Base):
     tei_xml: orm.Mapped[str] = orm.mapped_column(sa.Text, nullable=False)
     tei_xml_zstd: orm.Mapped[bytes | None] = orm.mapped_column(
         postgresql.BYTEA,
+        nullable=True,
+    )
+    tei_revision: orm.Mapped[int] = orm.mapped_column(
+        sa.Integer,
+        nullable=False,
+        server_default="1",
+    )
+    tei_content_hash: orm.Mapped[str | None] = orm.mapped_column(
+        sa.String(128),
+        nullable=True,
+    )
+    qa_status: orm.Mapped[QaStatus | None] = orm.mapped_column(
+        QA_STATUS,
+        nullable=True,
+    )
+    last_generation_run_id: orm.Mapped[uuid.UUID | None] = orm.mapped_column(
+        postgresql.UUID(as_uuid=True),
+        sa.ForeignKey("generation_runs.id", ondelete="SET NULL"),
         nullable=True,
     )
     status: orm.Mapped[EpisodeStatus] = orm.mapped_column(
@@ -210,6 +244,9 @@ class IngestionJobRecord(Base):
         nullable=False,
         server_default=IntakeState.AWAITING_SOURCES.value,
     )
+    owner_principal_id: orm.Mapped[str | None] = orm.mapped_column(
+        sa.String(240), nullable=True
+    )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
@@ -229,6 +266,7 @@ class IngestionJobRecord(Base):
             "intake_state",
             sa.desc("created_at"),
         ),
+        sa.Index("ix_ij_owner_created", "owner_principal_id", "created_at", "id"),
     )
 
 
@@ -353,9 +391,7 @@ class ApprovalEventRecord(Base):
     )
     note: orm.Mapped[str | None] = orm.mapped_column(sa.Text, nullable=True)
     payload: orm.Mapped[dict[str, object]] = orm.mapped_column(
-        postgresql.JSONB,
-        default=dict,
-        nullable=False,
+        postgresql.JSONB, default=dict, nullable=False
     )
     created_at: orm.Mapped[dt.datetime] = orm.mapped_column(
         sa.DateTime(timezone=True),

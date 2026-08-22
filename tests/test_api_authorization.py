@@ -10,6 +10,8 @@ from episodic.api.authorization import (
     AuthorizationContext,
     AuthorizationDecision,
     AuthorizationPort,
+    AuthorizationResult,
+    StaticBearerTokenAuthorization,
 )
 from tests.fixtures.api import build_api_dependencies
 
@@ -44,6 +46,44 @@ class RaisingAuthorization:
         del context
         msg = "authorization backend unavailable"
         raise RuntimeError(msg)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [
+        ("Bearer configured-token", AuthorizationDecision.PERMIT),
+        ("bearer configured-token", AuthorizationDecision.PERMIT),
+        ("BEARER configured-token", AuthorizationDecision.PERMIT),
+        ("Basic configured-token", AuthorizationDecision.UNAUTHORIZED),
+        ("Bearer", AuthorizationDecision.UNAUTHORIZED),
+        ("Bearer wrong-token", AuthorizationDecision.UNAUTHORIZED),
+        (None, AuthorizationDecision.UNAUTHORIZED),
+    ],
+)
+async def test_static_bearer_authorization_parses_scheme_and_token(
+    header: str | None,
+    expected: AuthorizationDecision,
+) -> None:
+    """Accept case-insensitive Bearer schemes and reject malformed credentials."""
+    configured_credential = "".join(("configured", "-token"))
+    authorization = StaticBearerTokenAuthorization(
+        token=configured_credential,
+        principal_id="configured-principal",
+    )
+
+    result = await authorization.decide(
+        AuthorizationContext(
+            method="GET", path="/v1/example", authorization_header=header
+        )
+    )
+
+    assert isinstance(result, AuthorizationResult), result
+    assert result.decision is expected, result
+    if expected is AuthorizationDecision.PERMIT:
+        assert result.principal_id == "configured-principal", result
+    else:
+        assert result.principal_id is None, result
 
 
 def _build_client(

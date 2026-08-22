@@ -10,12 +10,16 @@ import dataclasses as dc
 import inspect
 import typing as typ
 
+from episodic.observability import NoopMetrics, NoopTracer, PerfCounterClock
+
 from .authorization import AuthorizationPort, PermitAll
 
 if typ.TYPE_CHECKING:
     from episodic.canonical.health import HealthObserver
     from episodic.canonical.object_store import ObjectStorePort
+    from episodic.generation import GenerationRunLauncher, GenerationSourceLimits
     from episodic.llm import LLMPort
+    from episodic.observability import MetricsPort, MonotonicClockPort, TracerPort
 
     from .types import UowFactory
 
@@ -97,6 +101,11 @@ class ApiDependencies:
     health_observer: HealthObserver | None = None
     shutdown_hooks: tuple[ShutdownHook, ...] = ()
     llm_port: LLMPort | None = None
+    launcher: GenerationRunLauncher | None = None
+    generation_source_limits: GenerationSourceLimits | None = None
+    metrics: MetricsPort = dc.field(default_factory=NoopMetrics)
+    monotonic_clock: MonotonicClockPort = dc.field(default_factory=PerfCounterClock)
+    tracer: TracerPort = dc.field(default_factory=NoopTracer)
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
 
     def __post_init__(self) -> None:

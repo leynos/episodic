@@ -1,9 +1,4 @@
-"""In-memory generation-run port adapter.
-
-This module provides a reference implementation of the generation-run port
-protocols for tests and local development. It is ephemeral, single-process
-storage and is not a production persistence layer.
-"""
+"""Ephemeral in-memory generation-run adapter for tests and local development."""
 
 import asyncio
 import bisect
@@ -14,20 +9,23 @@ import uuid
 
 from episodic.canonical.domain import (
     Checkpoint,
-    CheckpointResponse,
     GenerationEvent,
     GenerationRun,
     GenerationRunStatus,
     JsonMapping,
 )
 from episodic.canonical.generation_run_errors import (
-    CheckpointAlreadyTerminal,
-    CheckpointNotFound,
     RunAlreadyTerminal,
     RunNotFound,
 )
-from episodic.canonical.generation_run_ports import EventSeq, event_seq
+from episodic.canonical.generation_run_ports import (
+    EventSeq,
+    GenerationRunStatusUpdate,
+    event_seq,
+)
 from episodic.orchestration._types import _log_event
+
+from .generation_checkpoints import InMemoryGenerationCheckpointMixin
 
 type TimeProvider = cabc.Callable[[], dt.datetime]
 
@@ -42,17 +40,24 @@ def _default_time_provider() -> TimeProvider:
     return _now_utc
 
 
-@dc.dataclass(frozen=True, slots=True)
-class _CheckpointTransitionSpec:
-    """Logging specification for a checkpoint domain transition."""
-
-    missing_event: str
-    done_event: str
-    extra_fields: dict[str, str] = dc.field(default_factory=dict)
+def _event_page_minimum_seq(
+    *,
+    after_seq: EventSeq | None,
+    limit: int,
+    offset: int,
+) -> int:
+    """Validate event-page arguments and return the cursor boundary."""
+    if limit < 0 or offset < 0:
+        msg = "limit and offset must be non-negative."
+        raise ValueError(msg)
+    if after_seq is not None and offset != 0:
+        msg = "after_seq and offset cannot be combined."
+        raise ValueError(msg)
+    return int(after_seq) if after_seq is not None else 0
 
 
 @dc.dataclass(slots=True)
-class InMemoryGenerationRunStore:
+class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
     """In-memory reference adapter for the composite generation-run port."""
 
     time_provider: TimeProvider = dc.field(default_factory=_default_time_provider)
@@ -62,8 +67,27 @@ class InMemoryGenerationRunStore:
     )
     _events: dict[uuid.UUID, list[GenerationEvent]] = dc.field(default_factory=dict)
     _checkpoints: dict[uuid.UUID, Checkpoint] = dc.field(default_factory=dict)
-    _idempotency_keys: dict[str, uuid.UUID] = dc.field(default_factory=dict)
+    _idempotency_keys: dict[tuple[str | None, str], uuid.UUID] = dc.field(
+        default_factory=dict
+    )
     _lock: asyncio.Lock = dc.field(default_factory=asyncio.Lock)
+
+    def _require_mutable_run(
+        self,
+        run_id: uuid.UUID,
+        *,
+        on_missing: cabc.Callable[[], None],
+        on_terminal: cabc.Callable[[GenerationRun], None],
+    ) -> GenerationRun:
+        """Return a run that may still accept lifecycle mutations."""
+        run = self._runs.get(run_id)
+        if run is None:
+            on_missing()
+            raise RunNotFound(run_id)
+        if run.status.is_terminal():
+            on_terminal(run)
+            raise RunAlreadyTerminal(run_id)
+        return run
 
     def _runs_for_episode(
         self,
@@ -74,6 +98,8 @@ class InMemoryGenerationRunStore:
         offset: int,
     ) -> tuple[GenerationRun, ...]:
         """Return indexed runs for one episode without scanning all runs."""
+        if limit == 0:
+            return ()
         indexed_ids = self._run_ids_by_episode.get(episode_id, [])
         if status is None:
             selected_ids = indexed_ids[offset : offset + limit]
@@ -92,11 +118,28 @@ class InMemoryGenerationRunStore:
                 break
         return tuple(selected)
 
+    def _event_page_for_run(
+        self,
+        run_id: uuid.UUID,
+        *,
+        minimum_seq: int,
+        limit: int,
+        offset: int,
+    ) -> tuple[GenerationEvent, ...]:
+        """Return one in-memory event page for an existing run."""
+        if run_id not in self._runs:
+            raise RunNotFound(run_id)
+        events = tuple(
+            event for event in self._events.get(run_id, []) if event.seq > minimum_seq
+        )
+        return events[offset : offset + limit]
+
     async def create_run(
         self,
         run: GenerationRun,
         *,
         idempotency_key: str | None = None,
+        idempotency_principal_id: str | None = None,
     ) -> GenerationRun:
         """Create a run, preserving first-write-wins idempotency.
 
@@ -108,7 +151,8 @@ class InMemoryGenerationRunStore:
         """
         async with self._lock:
             if idempotency_key is not None:
-                existing_id = self._idempotency_keys.get(idempotency_key)
+                scope = (idempotency_principal_id, idempotency_key)
+                existing_id = self._idempotency_keys.get(scope)
                 if existing_id is not None:
                     _log_event(
                         "info",
@@ -125,7 +169,7 @@ class InMemoryGenerationRunStore:
             )
             self._events.setdefault(run.id, [])
             if idempotency_key is not None:
-                self._idempotency_keys[idempotency_key] = run.id
+                self._idempotency_keys[scope] = run.id
             _log_event(
                 "info",
                 "generation_run_store.create_run",
@@ -162,40 +206,37 @@ class InMemoryGenerationRunStore:
                 offset=offset,
             )
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def update_run_status(
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
         async with self._lock:
-            run = self._runs.get(run_id)
-            if run is None:
-                _log_event(
+            run = self._require_mutable_run(
+                run_id,
+                on_missing=lambda: _log_event(
                     "warning",
                     "generation_run_store.update_run_missing",
                     run_id=str(run_id),
-                    status=status.value,
-                )
-                raise RunNotFound(run_id)
-            if run.status.is_terminal():
-                _log_event(
+                    status=update.status.value,
+                ),
+                on_terminal=lambda run: _log_event(
                     "warning",
                     "generation_run_store.update_run_terminal",
                     run_id=str(run_id),
                     current_status=run.status.value,
-                    requested_status=status.value,
-                )
-                raise RunAlreadyTerminal(run_id)
+                    requested_status=update.status.value,
+                ),
+            )
             updated = dc.replace(
                 run,
-                status=status,
-                current_node=current_node,
-                ended_at=ended_at,
+                status=update.status,
+                current_node=update.current_node,
+                ended_at=update.ended_at,
+                error_message=update.error_message,
+                error_category=update.error_category,
                 updated_at=self.time_provider(),
             )
             self._runs[run_id] = updated
@@ -204,8 +245,70 @@ class InMemoryGenerationRunStore:
                 "generation_run_store.update_run_status",
                 run_id=str(run_id),
                 previous_status=run.status.value,
-                status=status.value,
+                status=update.status.value,
+                current_node=update.current_node,
+            )
+            return updated
+
+    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
+    async def claim_run_for_execution(
+        self,
+        run_id: uuid.UUID,
+        *,
+        current_node: str | None,
+        started_at: dt.datetime,
+        lease_expires_at: dt.datetime | None,
+    ) -> GenerationRun | None:
+        """Atomically claim a pending run for execution.
+
+        The reference adapter logs ``lease_expires_at`` for protocol parity but
+        does not retain it: ``GenerationRun`` has no lease field and no
+        in-memory consumer reads lease state.
+
+        Returns
+        -------
+        GenerationRun | None
+            The claimed run, or ``None`` when another claimant already won.
+        """
+        async with self._lock:
+            run = self._require_mutable_run(
+                run_id,
+                on_missing=lambda: _log_event(
+                    "warning",
+                    "generation_run_store.claim_run_missing",
+                    run_id=str(run_id),
+                ),
+                on_terminal=lambda run: _log_event(
+                    "warning",
+                    "generation_run_store.claim_run_terminal",
+                    run_id=str(run_id),
+                    status=run.status.value,
+                ),
+            )
+            if run.status is not GenerationRunStatus.PENDING:
+                _log_event(
+                    "info",
+                    "generation_run_store.claim_run_lost",
+                    run_id=str(run_id),
+                    status=run.status.value,
+                )
+                return None
+            updated = dc.replace(
+                run,
+                status=GenerationRunStatus.RUNNING,
                 current_node=current_node,
+                started_at=started_at,
+                updated_at=self.time_provider(),
+            )
+            self._runs[run_id] = updated
+            _log_event(
+                "info",
+                "generation_run_store.claim_run",
+                run_id=str(run_id),
+                current_node=current_node,
+                lease_expires_at=lease_expires_at.isoformat()
+                if lease_expires_at is not None
+                else None,
             )
             return updated
 
@@ -220,24 +323,22 @@ class InMemoryGenerationRunStore:
     ) -> GenerationEvent:
         """Append an event with an adapter-allocated sequence."""
         async with self._lock:
-            run = self._runs.get(run_id)
-            if run is None:
-                _log_event(
+            self._require_mutable_run(
+                run_id,
+                on_missing=lambda: _log_event(
                     "warning",
                     "generation_run_store.append_event_missing_run",
                     run_id=str(run_id),
                     kind=kind,
-                )
-                raise RunNotFound(run_id)
-            if run.status.is_terminal():
-                _log_event(
+                ),
+                on_terminal=lambda run: _log_event(
                     "warning",
                     "generation_run_store.append_event_terminal_run",
                     run_id=str(run_id),
                     status=run.status.value,
                     kind=kind,
-                )
-                raise RunAlreadyTerminal(run_id)
+                ),
+            )
             events = self._events.setdefault(run_id, [])
             now = self.time_provider()
             event = GenerationEvent(
@@ -266,136 +367,33 @@ class InMemoryGenerationRunStore:
         *,
         after_seq: EventSeq | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run after an optional sequence cursor."""
-        if limit < 0:
-            msg = "limit must be non-negative."
-            raise ValueError(msg)
+        minimum_seq = _event_page_minimum_seq(
+            after_seq=after_seq,
+            limit=limit,
+            offset=offset,
+        )
+        async with self._lock:
+            return self._event_page_for_run(
+                run_id,
+                minimum_seq=minimum_seq,
+                limit=limit,
+                offset=offset,
+            )
+
+    async def count_events(
+        self,
+        run_id: uuid.UUID,
+        *,
+        after_seq: EventSeq | None = None,
+    ) -> int:
+        """Count events for a run after an optional sequence cursor."""
         async with self._lock:
             if run_id not in self._runs:
                 raise RunNotFound(run_id)
             minimum_seq = int(after_seq) if after_seq is not None else 0
-            events = [
-                event
-                for event in self._events.get(run_id, [])
-                if event.seq > minimum_seq
-            ]
-            return tuple(events[:limit])
-
-    async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
-        """Persist a checkpoint."""
-        async with self._lock:
-            if checkpoint.generation_run_id not in self._runs:
-                _log_event(
-                    "warning",
-                    "generation_run_store.create_checkpoint_missing_run",
-                    checkpoint_id=str(checkpoint.id),
-                    run_id=str(checkpoint.generation_run_id),
-                )
-                raise RunNotFound(checkpoint.generation_run_id)
-            self._checkpoints[checkpoint.id] = checkpoint
-            _log_event(
-                "info",
-                "generation_run_store.create_checkpoint",
-                checkpoint_id=str(checkpoint.id),
-                run_id=str(checkpoint.generation_run_id),
-                status=checkpoint.status.value,
+            return sum(
+                event.seq > minimum_seq for event in self._events.get(run_id, [])
             )
-            return checkpoint
-
-    async def get_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-    ) -> Checkpoint | None:
-        """Return a checkpoint by identifier."""
-        async with self._lock:
-            return self._checkpoints.get(checkpoint_id)
-
-    async def _apply_checkpoint_transition(
-        self,
-        checkpoint_id: uuid.UUID,
-        transition: cabc.Callable[[Checkpoint], Checkpoint],
-        spec: _CheckpointTransitionSpec,
-    ) -> Checkpoint:
-        """Apply a domain transition to a stored checkpoint under the lock."""
-        async with self._lock:
-            checkpoint = self._checkpoints.get(checkpoint_id)
-            if checkpoint is None:
-                _log_event(
-                    "warning",
-                    spec.missing_event,
-                    checkpoint_id=str(checkpoint_id),
-                    **spec.extra_fields,
-                )
-                raise CheckpointNotFound(checkpoint_id)
-            try:
-                updated = transition(checkpoint)
-            except CheckpointAlreadyTerminal:
-                _log_event(
-                    "warning",
-                    f"{spec.done_event}_already_terminal",
-                    checkpoint_id=str(checkpoint_id),
-                    run_id=str(checkpoint.generation_run_id),
-                    status=checkpoint.status.value,
-                    **spec.extra_fields,
-                )
-                raise
-            self._checkpoints[checkpoint_id] = updated
-            _log_event(
-                "info",
-                spec.done_event,
-                checkpoint_id=str(checkpoint_id),
-                run_id=str(updated.generation_run_id),
-                status=updated.status.value,
-                **spec.extra_fields,
-            )
-            return updated
-
-    async def respond_to_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        response: CheckpointResponse,
-    ) -> Checkpoint:
-        """Record a reviewer response using the checkpoint domain transition."""
-        return await self._apply_checkpoint_transition(
-            checkpoint_id,
-            lambda cp: cp.respond(response),
-            _CheckpointTransitionSpec(
-                missing_event="generation_run_store.respond_checkpoint_missing",
-                done_event="generation_run_store.respond_checkpoint",
-                extra_fields={"action": response.action.value},
-            ),
-        )
-
-    async def time_out_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        at: dt.datetime,
-    ) -> Checkpoint:
-        """Record a checkpoint timeout using the domain transition."""
-        return await self._apply_checkpoint_transition(
-            checkpoint_id,
-            lambda cp: cp.time_out(at),
-            _CheckpointTransitionSpec(
-                missing_event="generation_run_store.timeout_checkpoint_missing",
-                done_event="generation_run_store.timeout_checkpoint",
-            ),
-        )
-
-    async def cancel_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        at: dt.datetime,
-    ) -> Checkpoint:
-        """Record checkpoint cancellation using the domain transition."""
-        return await self._apply_checkpoint_transition(
-            checkpoint_id,
-            lambda cp: cp.cancel(at),
-            _CheckpointTransitionSpec(
-                missing_event="generation_run_store.cancel_checkpoint_missing",
-                done_event="generation_run_store.cancel_checkpoint",
-            ),
-        )

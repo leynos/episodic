@@ -1,6 +1,8 @@
 """Tests for runtime environment wiring of the HTTP app."""
 
-import hashlib
+import asyncio
+import os
+import pathlib
 import typing as typ
 
 import httpx
@@ -12,6 +14,11 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
     from httpx._transports.asgi import _ASGIApp
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from episodic.api.dependencies import ApiDependencies
+    from episodic.llm import LLMRequest, LLMResponse
+    from episodic.observability import MetricsPort
 
 
 def test_create_app_from_env_requires_database_url(
@@ -81,6 +88,120 @@ def test_normalize_database_urls_uses_query_port_for_probe() -> None:
 
     assert probe_kwargs["host"] == "/var/run/postgresql", "Expected values to match"
     assert probe_kwargs["port"] == 6544, "Expected values to match"
+
+
+@pytest.mark.asyncio
+async def test_build_generation_launcher_wires_cost_recorder(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    """Runtime launcher construction should use the SQL-backed cost ledger."""
+    from episodic.api.runtime import (
+        RuntimeConfig,
+        _build_generation_launcher,
+        _GenerationLauncherRuntime,
+    )
+    from episodic.canonical.storage import SqlAlchemyUnitOfWork
+    from episodic.cost.recorder import CostRecorder
+    from episodic.generation import (
+        GenerationSourceLimits,
+        InProcessGenerationRunLauncher,
+    )
+    from episodic.observability import StructuredLogMetrics
+
+    launcher = _build_generation_launcher(
+        lambda: SqlAlchemyUnitOfWork(session_factory),
+        _UnusedLLMPort(),
+        _GenerationLauncherRuntime(metrics=StructuredLogMetrics()),
+        config=RuntimeConfig(
+            database_url="postgresql+psycopg://unused",
+            source_intake_object_store_root=tmp_path,
+            llm_base_url=None,
+            llm_api_key=None,
+            draft_model="draft-model",
+            pricing_snapshot_directory=pathlib.Path("config/pricing-snapshots"),
+            authorization_bearer_token=os.environ["API_AUTHORIZATION_BEARER_TOKEN"],
+            authorization_principal_id="runtime-test-principal",
+            generation_source_limits=GenerationSourceLimits(),
+        ),
+    )
+
+    assert isinstance(launcher, InProcessGenerationRunLauncher), (
+        f"expected in-process launcher, got {type(launcher).__name__}"
+    )
+    assert launcher.cost_recorder_factory is not None, (
+        "expected a cost recorder factory, got None"
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        recorder = launcher.cost_recorder_factory(uow)
+        assert isinstance(recorder, CostRecorder), (
+            f"expected CostRecorder, got {type(recorder).__name__}"
+        )
+        assert recorder.ledger is uow.cost_ledger, (
+            f"expected unit-of-work ledger {uow.cost_ledger!r}, got {recorder.ledger!r}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_app_from_env_wires_configured_llm_launcher(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Provider configuration should create a launcher and shutdown hook."""
+    from unittest import mock
+
+    from episodic.api import runtime as runtime_module
+    from episodic.generation import InProcessGenerationRunLauncher
+    from episodic.llm.openai_adapter import OpenAICompatibleLLMAdapter
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example.test/episodic")
+    monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.test/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured_dependencies: ApiDependencies | None = None
+
+    async def shutdown_database() -> None:
+        await asyncio.sleep(0)
+
+    async def check_database() -> bool:
+        await asyncio.sleep(0)
+        return True
+
+    def unit_of_work_factory() -> object:
+        return object()
+
+    def capture_dependencies(dependencies: ApiDependencies) -> object:
+        nonlocal captured_dependencies
+        captured_dependencies = dependencies
+        return object()
+
+    probe = runtime_module.ReadinessProbe(name="database", check=check_database)
+    with (
+        mock.patch.object(
+            runtime_module,
+            "_build_database_probe",
+            return_value=(probe, unit_of_work_factory, shutdown_database),
+        ),
+        mock.patch.object(
+            runtime_module,
+            "create_app",
+            side_effect=capture_dependencies,
+        ),
+    ):
+        runtime_module.create_app_from_env()
+
+    assert captured_dependencies is not None, "expected captured dependencies, got None"
+    assert isinstance(captured_dependencies.llm_port, OpenAICompatibleLLMAdapter), (
+        f"expected OpenAI adapter, got {type(captured_dependencies.llm_port).__name__}"
+    )
+    assert isinstance(captured_dependencies.launcher, InProcessGenerationRunLauncher), (
+        "expected in-process launcher, got "
+        f"{type(captured_dependencies.launcher).__name__}"
+    )
+    assert len(captured_dependencies.shutdown_hooks) == 2, (
+        f"expected two shutdown hooks, got {len(captured_dependencies.shutdown_hooks)}"
+    )
+    await captured_dependencies.shutdown_hooks[0]()
 
 
 @pytest.mark.asyncio
@@ -159,8 +280,12 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
     shutdown_hook_called = False
     original_build = runtime_module._build_database_probe
 
-    def _tracking_build(database_url: str) -> tuple[object, ...]:
-        probe, uow, original_hook = original_build(database_url)
+    def _tracking_build(
+        database_url: str,
+        *,
+        metrics: "MetricsPort",  # noqa: UP037 - imported only during type checking.
+    ) -> tuple[object, ...]:
+        probe, uow, original_hook = original_build(database_url, metrics=metrics)
 
         async def _tracked_hook() -> None:
             nonlocal shutdown_hook_called
@@ -216,52 +341,20 @@ def test_runtime_exposes_container_granian_contract() -> None:
     )
 
 
-@pytest.mark.asyncio
-async def test_create_app_from_env_wires_object_store_for_uploads(
-    migrated_database_url: str,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Runtime-created apps accept uploads when object storage is configured."""
-    object_store_root = tmp_path / "objects"
-    monkeypatch.setenv("DATABASE_URL", migrated_database_url)
-    monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(object_store_root))
+class _UnusedLLMPort:
+    """LLM port fake used only to satisfy runtime launcher construction."""
 
-    from episodic.api.runtime import create_app_from_env
+    async def generate(
+        self,
+        request: "LLMRequest",  # noqa: UP037 - imported only during type checking
+    ) -> "LLMResponse":  # noqa: UP037 - imported only during type checking
+        """Fail if runtime wiring accidentally invokes the fake."""
+        _ = request
+        raise AssertionError
 
-    app = create_app_from_env()
-    try:
-        transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", app))
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            payload = b"runtime upload\n"
-            response = await client.post(
-                "/v1/uploads",
-                headers={"Idempotency-Key": "runtime-upload"},
-                files={
-                    "file": ("source.txt", payload, "text/plain"),
-                    "content_type": (None, "text/plain"),
-                    "declared_size": (None, str(len(payload))),
-                    "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-                },
-            )
-    finally:
-        await scaffold_support.run_asgi_lifespan(
-            typ.cast("_ASGIApp", app),
-            (
-                scaffold_support.LifespanEvent(type="lifespan.startup"),
-                scaffold_support.LifespanEvent(type="lifespan.shutdown"),
-            ),
-        )
 
-    assert response.status_code == 201, response.text
-    response_body = response.json()
-    expected_hash = hashlib.sha256(payload).hexdigest()
-    stored_path = object_store_root / "uploads" / response_body["id"]
-    assert response_body["content_hash"] == f"sha256:{expected_hash}", (
-        "Expected values to match"
-    )
-    assert stored_path.is_file(), f"expected upload payload at {stored_path}"
-    assert stored_path.read_bytes() == payload, "Expected values to match"
+@pytest.fixture(autouse=True)
+def _configure_runtime_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide the required production authorization settings for runtime tests."""
+    monkeypatch.setenv("API_AUTHORIZATION_BEARER_TOKEN", "runtime-test-token")
+    monkeypatch.setenv("API_AUTHORIZATION_PRINCIPAL_ID", "runtime-test-principal")

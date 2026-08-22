@@ -63,7 +63,7 @@ if typ.TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
-    from episodic.cost import BillingPeriodKey
+    from episodic.cost import BillingPeriodKey, CostRecorderPort
     from episodic.orchestration import _dto as dto
     from episodic.orchestration import _protocols as protocols
 else:
@@ -95,7 +95,7 @@ class GenerationGraphExtensions:
     finish_callback: cabc.Callable[[dto.GenerationOrchestrationResult], None] | None = (
         None
     )
-    cost_recorder: protocols.CostRecorderPort | None = None
+    cost_recorder: CostRecorderPort | None = None
 
 
 async def _plan_node(
@@ -280,7 +280,7 @@ def _invoke_finish_callback(
 
 
 async def _record_planner_cost_if_available(
-    cost_recorder: protocols.CostRecorderPort,
+    cost_recorder: CostRecorderPort,
     *,
     workflow_run_id: str,
     planner_result: dto.PlannerResult,
@@ -305,7 +305,7 @@ async def _record_planner_cost_if_available(
 
 
 async def _record_action_costs_from_results(
-    cost_recorder: protocols.CostRecorderPort,
+    cost_recorder: CostRecorderPort,
     *,
     workflow_run_id: str,
     action_results: tuple[dto.ActionExecutionResult, ...],
@@ -333,7 +333,7 @@ async def _record_action_costs_from_results(
 async def _record_costs_from_finished_state(
     state: GenerationGraphState,
     *,
-    cost_recorder: protocols.CostRecorderPort | None,
+    cost_recorder: CostRecorderPort | None,
 ) -> None:
     """Record graph provider-call costs from the finished direct path."""
     if cost_recorder is None:

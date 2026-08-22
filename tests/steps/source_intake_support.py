@@ -10,6 +10,7 @@ import httpx
 from episodic.api import create_app
 from episodic.canonical.storage import FilesystemObjectStore
 from tests.fixtures.api import build_api_dependencies
+from tests.fixtures.generation_run_api import HeaderPrincipalAuthorization
 from tests.steps.source_intake_api_helpers import (
     create_ingestion_job,
     create_ingestion_job_response,
@@ -271,6 +272,7 @@ def _run_source_intake_call(
     async def _run_workflow() -> None:
         dependencies = build_api_dependencies(
             config.session_factory,
+            authorization=HeaderPrincipalAuthorization(),
             object_store=FilesystemObjectStore(config.tmp_path / "bdd-objects"),
             upload_max_bytes=config.upload_max_bytes,
         )
@@ -280,6 +282,7 @@ def _run_source_intake_call(
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://testserver",
+            headers={"Authorization": "Bearer principal-a"},
         ) as client:
             await action(client, context)
 

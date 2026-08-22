@@ -1,14 +1,17 @@
 """Repository protocols for core canonical entities."""
 
+import enum
 import typing as typ
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import datetime as dt
     import uuid
 
     from .domain import (
         ApprovalEvent,
         CanonicalEpisode,
+        EpisodeTeiUpdate,
         EpisodeTemplate,
         IngestionJob,
         IngestionJobListFilters,
@@ -17,6 +20,13 @@ if typ.TYPE_CHECKING:
         SourceDocument,
         TeiHeader,
     )
+
+
+class SourceDocumentProjectionResult(enum.StrEnum):
+    """Outcome of a deterministic source-document projection write."""
+
+    ADDED = "added"
+    DUPLICATE = "duplicate"
 
 
 class SeriesProfileRepository(typ.Protocol):
@@ -72,6 +82,23 @@ class EpisodeRepository(typ.Protocol):
         """Fetch canonical episodes by identifiers."""
         raise NotImplementedError
 
+    async def update(
+        self,
+        episode_id: uuid.UUID,
+        *,
+        update: EpisodeTeiUpdate,
+    ) -> CanonicalEpisode:
+        """Update episode TEI with an optimistic revision precondition.
+
+        Raises
+        ------
+        EpisodeNotFoundError
+            If no episode exists for ``episode_id``.
+        EpisodeRevisionConflictError
+            If ``update.expected_revision`` differs from the stored revision.
+        """
+        raise NotImplementedError
+
 
 class IngestionJobRepository(typ.Protocol):
     """Persistence interface for ingestion jobs."""
@@ -82,6 +109,35 @@ class IngestionJobRepository(typ.Protocol):
 
     async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
         """Fetch an ingestion job by identifier."""
+        raise NotImplementedError
+
+    async def get_for_update(self, job_id: uuid.UUID) -> IngestionJob | None:
+        """Fetch and lock an ingestion job for transactional mutation."""
+        raise NotImplementedError
+
+    async def set_target_episode(
+        self,
+        job_id: uuid.UUID,
+        *,
+        episode_id: uuid.UUID,
+        updated_at: dt.datetime,
+    ) -> None:
+        """Associate an ingestion job with its materialised episode.
+
+        Parameters
+        ----------
+        job_id
+            Ingestion-job identifier to update.
+        episode_id
+            Canonical episode identifier reserved for the job.
+        updated_at
+            Timestamp supplied by the caller for the durable job update.
+
+        Notes
+        -----
+        The caller owns transaction boundaries. Unknown ``job_id`` values
+        affect zero rows and do not raise.
+        """
         raise NotImplementedError
 
     async def list_paged(
@@ -117,6 +173,35 @@ class SourceDocumentRepository(typ.Protocol):
 
     async def add(self, document: SourceDocument) -> None:
         """Persist a source document."""
+        raise NotImplementedError
+
+    async def add_projection(
+        self,
+        document: SourceDocument,
+    ) -> SourceDocumentProjectionResult:
+        """Persist a deterministic projection and report duplicate races.
+
+        Parameters
+        ----------
+        document : SourceDocument
+            Deterministically identified source document to persist.
+
+        Returns
+        -------
+        SourceDocumentProjectionResult
+            ``ADDED`` when inserted or ``DUPLICATE`` when an equivalent
+            projection won a concurrent insertion race.
+
+        Raises
+        ------
+        sqlalchemy.exc.IntegrityError
+            Unrecognised persistence failures propagate unchanged.
+
+        Examples
+        --------
+        ``await repository.add_projection(document)`` returns ``DUPLICATE``
+        when the deterministic projection is already durable.
+        """
         raise NotImplementedError
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:

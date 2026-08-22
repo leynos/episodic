@@ -68,9 +68,10 @@ def _resolve_sha256(
 class FilesystemObjectStore(ObjectStorePort):
     """Store object bytes under a configured filesystem root.
 
-    This local adapter intentionally uses blocking filesystem calls inside its
-    async port methods because it is the development and CI object store. A
-    production network adapter should provide non-blocking I/O at this port.
+    The async ``open`` path offloads filesystem open, read, and close calls to
+    worker threads so source hydration does not block the event loop. This
+    adapter remains intended for development and CI; production deployments may
+    use a network-backed adapter through the same port.
     """
 
     def __init__(self, root: pathlib.Path) -> None:
@@ -116,10 +117,19 @@ class FilesystemObjectStore(ObjectStorePort):
         path = self._resolve_under_root(validate_object_key(key))
 
         async def _chunks() -> cabc.AsyncIterator[bytes]:
-            with path.open("rb") as file_handle:
-                while chunk := file_handle.read(_OBJECT_STORE_READ_CHUNK_BYTES):
+            file_handle = typ.cast(
+                "typ.BinaryIO",
+                await asyncio.to_thread(path.open, "rb"),
+            )
+            try:
+                while chunk := await asyncio.to_thread(
+                    file_handle.read,
+                    _OBJECT_STORE_READ_CHUNK_BYTES,
+                ):
                     await _yield_checkpoint()
                     yield chunk
+            finally:
+                await asyncio.to_thread(file_handle.close)
 
         yield _chunks()
 

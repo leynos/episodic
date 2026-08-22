@@ -20,10 +20,9 @@ import sqlalchemy as sa
 
 from episodic.canonical.entity_protocols import (
     ApprovalEventRepository,
-    EpisodeRepository,
     EpisodeTemplateRepository,
-    IngestionJobRepository,
     SeriesProfileRepository,
+    SourceDocumentProjectionResult,
     SourceDocumentRepository,
     TeiHeaderRepository,
 )
@@ -31,12 +30,8 @@ from episodic.canonical.entity_protocols import (
 from .entity_mappers import (
     _approval_event_from_record,
     _approval_event_to_record,
-    _episode_from_record,
     _episode_template_from_record,
     _episode_template_to_record,
-    _episode_to_record,
-    _ingestion_job_from_record,
-    _ingestion_job_to_record,
     _series_profile_from_record,
     _series_profile_to_record,
     _source_document_from_record,
@@ -46,14 +41,16 @@ from .entity_mappers import (
 )
 from .entity_models import (
     ApprovalEventRecord,
-    EpisodeRecord,
-    IngestionJobRecord,
     SourceDocumentRecord,
     TeiHeaderRecord,
 )
 from .history_repositories import (
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemySeriesProfileHistoryRepository,
+)
+from .integrity_helpers import (
+    insert_with_conflict_translation,
+    is_source_document_duplicate_integrity_error,
 )
 from .profile_models import EpisodeTemplateRecord, SeriesProfileRecord
 from .reference_repositories import (
@@ -67,15 +64,19 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import uuid
 
+    from sqlalchemy.exc import IntegrityError
+
     from episodic.canonical.domain import (
         ApprovalEvent,
-        CanonicalEpisode,
         EpisodeTemplate,
-        IngestionJob,
         SeriesProfile,
         SourceDocument,
         TeiHeader,
     )
+
+
+class _DuplicateProjectionError(Exception):
+    """Signal a recognised source-document projection write race."""
 
 
 class SqlAlchemySeriesProfileRepository(_RepositoryBase, SeriesProfileRepository):
@@ -173,65 +174,6 @@ class SqlAlchemyTeiHeaderRepository(_RepositoryBase, TeiHeaderRepository):
         )
 
 
-class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
-    """Persist canonical episodes using SQLAlchemy."""
-
-    async def add(self, episode: CanonicalEpisode) -> None:
-        """Add a canonical episode record.
-
-        Parameters
-        ----------
-        episode : CanonicalEpisode
-            Canonical episode domain entity to persist.
-
-        """
-        self._session.add(_episode_to_record(episode))
-
-    async def get(self, episode_id: uuid.UUID) -> CanonicalEpisode | None:
-        """Fetch a canonical episode by identifier."""
-        return await self._get_one_or_none(
-            EpisodeRecord,
-            EpisodeRecord.id == episode_id,
-            _episode_from_record,
-        )
-
-    async def list_by_ids(
-        self, episode_ids: cabc.Collection[uuid.UUID]
-    ) -> list[CanonicalEpisode]:
-        """Fetch canonical episodes by identifiers."""
-        if not episode_ids:
-            return []
-
-        return await self._get_many(
-            EpisodeRecord,
-            EpisodeRecord.id.in_(episode_ids),
-            _episode_from_record,
-        )
-
-
-class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
-    """Persist ingestion jobs using SQLAlchemy."""
-
-    async def add(self, job: IngestionJob) -> None:
-        """Add an ingestion job record.
-
-        Parameters
-        ----------
-        job : IngestionJob
-            Ingestion job domain entity to persist.
-
-        """
-        self._session.add(_ingestion_job_to_record(job))
-
-    async def get(self, job_id: uuid.UUID) -> IngestionJob | None:
-        """Fetch an ingestion job by identifier."""
-        return await self._get_one_or_none(
-            IngestionJobRecord,
-            IngestionJobRecord.id == job_id,
-            _ingestion_job_from_record,
-        )
-
-
 class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentRepository):
     """Persist source documents using SQLAlchemy."""
 
@@ -245,6 +187,43 @@ class SqlAlchemySourceDocumentRepository(_RepositoryBase, SourceDocumentReposito
 
         """
         self._session.add(_source_document_to_record(document))
+
+    async def add_projection(
+        self,
+        document: SourceDocument,
+    ) -> SourceDocumentProjectionResult:
+        """Insert one projection in a savepoint and report a duplicate ID race.
+
+        Parameters
+        ----------
+        document : SourceDocument
+            Deterministically identified source document to persist.
+
+        Returns
+        -------
+        SourceDocumentProjectionResult
+            ``ADDED`` after insertion or ``DUPLICATE`` when a concurrent
+            projection with the same deterministic identifier already exists.
+
+        Notes
+        -----
+        Unrecognised ``IntegrityError`` failures propagate unchanged.
+        """
+
+        def _translate(error: IntegrityError) -> BaseException | None:
+            if is_source_document_duplicate_integrity_error(error):
+                return _DuplicateProjectionError()
+            return None
+
+        try:
+            await insert_with_conflict_translation(
+                self._session,
+                _source_document_to_record(document),
+                translate=_translate,
+            )
+        except _DuplicateProjectionError:
+            return SourceDocumentProjectionResult.DUPLICATE
+        return SourceDocumentProjectionResult.ADDED
 
     async def list_for_job(self, job_id: uuid.UUID) -> list[SourceDocument]:
         """List source documents for an ingestion job.
@@ -382,10 +361,8 @@ class SqlAlchemyEpisodeTemplateRepository(_RepositoryBase, EpisodeTemplateReposi
 
 __all__ = (
     "SqlAlchemyApprovalEventRepository",
-    "SqlAlchemyEpisodeRepository",
     "SqlAlchemyEpisodeTemplateHistoryRepository",
     "SqlAlchemyEpisodeTemplateRepository",
-    "SqlAlchemyIngestionJobRepository",
     "SqlAlchemyReferenceBindingRepository",
     "SqlAlchemyReferenceDocumentRepository",
     "SqlAlchemyReferenceDocumentRevisionRepository",

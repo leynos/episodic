@@ -31,6 +31,7 @@ class CreateIngestionJobRequest:
 
     series_profile_id: uuid.UUID
     target_episode_id: uuid.UUID | None
+    owner_principal_id: str | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)

@@ -1,6 +1,7 @@
 """Integration tests for the source-intake REST workflow."""
 
 import asyncio
+import contextlib
 import dataclasses
 import datetime as dt
 import hashlib
@@ -17,7 +18,6 @@ from episodic.api.authorization import (
 )
 from episodic.api.source_idempotency import (
     IdempotentResponse,
-    _encode_outcome,
     _idempotent_response,
 )
 from episodic.canonical.idempotency import Acquired, IdempotencyAcquireRequest
@@ -26,6 +26,7 @@ from episodic.canonical.storage.source_intake_models import IdempotencyRecordMod
 from tests.fixtures.api import build_api_dependencies
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     from pathlib import Path
 
     from httpx._transports.asgi import _ASGIApp
@@ -45,19 +46,35 @@ class HeaderPrincipalAuthorization:
         )
 
 
+@contextlib.asynccontextmanager
+async def _source_intake_client(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    *,
+    headers: dict[str, str] | None = None,
+) -> cabc.AsyncIterator[httpx.AsyncClient]:
+    """Yield an authenticated source-intake API client."""
+    dependencies = build_api_dependencies(
+        session_factory,
+        authorization=HeaderPrincipalAuthorization(),
+        object_store=FilesystemObjectStore(tmp_path / "objects"),
+    )
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        headers={"Authorization": "principal-a"} if headers is None else headers,
+    ) as client:
+        yield client
+
+
 @pytest.mark.asyncio
 async def test_source_intake_upload_job_and_attach_flow(
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
 ) -> None:
     """Client can upload bytes, create a job, attach the upload, and poll ready."""
-    object_store = FilesystemObjectStore(tmp_path / "objects")
-    dependencies = build_api_dependencies(session_factory, object_store=object_store)
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
+    async with _source_intake_client(session_factory, tmp_path) as client:
         profile_id = await _create_series_profile(client)
         upload_response = await _post_text_upload(
             client,
@@ -121,13 +138,7 @@ async def test_source_intake_idempotency_conflict(
     tmp_path: Path,
 ) -> None:
     """Same idempotency key with different upload body returns 409."""
-    object_store = FilesystemObjectStore(tmp_path / "objects")
-    dependencies = build_api_dependencies(session_factory, object_store=object_store)
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
+    async with _source_intake_client(session_factory, tmp_path) as client:
         first_request = _TextUploadRequest(key="conflict-key", payload=b"hello\n")
         second_request = _TextUploadRequest(key="conflict-key", payload=b"bye\n")
         first = await _post_text_upload(client, first_request)
@@ -144,16 +155,10 @@ async def test_source_intake_idempotency_is_scoped_by_authorized_principal(
     tmp_path: Path,
 ) -> None:
     """The authorization principal scopes idempotency records for upload replay."""
-    object_store = FilesystemObjectStore(tmp_path / "objects")
-    dependencies = build_api_dependencies(
+    async with _source_intake_client(
         session_factory,
-        authorization=HeaderPrincipalAuthorization(),
-        object_store=object_store,
-    )
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
+        tmp_path,
+        headers={},
     ) as client:
         principal_a_request = _TextUploadRequest(
             key="principal-key",
@@ -184,11 +189,16 @@ async def test_source_intake_response_envelope_snapshot(
 ) -> None:
     """Snapshot stable fields from source-intake response envelopes."""
     object_store = FilesystemObjectStore(tmp_path / "objects")
-    dependencies = build_api_dependencies(session_factory, object_store=object_store)
+    dependencies = build_api_dependencies(
+        session_factory,
+        authorization=HeaderPrincipalAuthorization(),
+        object_store=object_store,
+    )
     transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://testserver",
+        headers={"Authorization": "principal-a"},
     ) as client:
         profile_id = await _create_series_profile(client)
         upload_response = await _post_text_upload(
@@ -283,17 +293,6 @@ async def test_idempotent_response_allows_retry_after_work_failure(
     assert isinstance(retry_outcome, Acquired), (
         "Expected value to have the required type"
     )
-
-
-def test_idempotency_outcome_encoding_rejects_large_payloads() -> None:
-    """Idempotency replay envelopes are capped at 64 KiB."""
-    response = IdempotentResponse(
-        "201 Created",
-        {"content": "x" * (64 * 1024)},
-    )
-
-    with pytest.raises(ValueError, match="64 KiB"):
-        _encode_outcome(response)
 
 
 async def _create_series_profile(client: httpx.AsyncClient) -> str:

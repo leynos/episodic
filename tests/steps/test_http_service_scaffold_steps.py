@@ -209,6 +209,8 @@ def given_granian_service_running(
         "SOURCE_INTAKE_OBJECT_STORE_ROOT": str(
             http_service_scaffold_context.object_store_root
         ),
+        "API_AUTHORIZATION_BEARER_TOKEN": "http-service-test-token",
+        "API_AUTHORIZATION_PRINCIPAL_ID": "http-service-test-principal",
     }
     from episodic.api import runtime
 

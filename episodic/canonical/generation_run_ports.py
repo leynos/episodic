@@ -12,6 +12,7 @@ async def use_runs(port: GenerationRunPort) -> None:
 ```
 """
 
+import dataclasses as dc
 import typing as typ
 
 if typ.TYPE_CHECKING:
@@ -28,6 +29,32 @@ if typ.TYPE_CHECKING:
     )
 
 EventSeq = typ.NewType("EventSeq", int)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class GenerationRunStatusUpdate:
+    """Lifecycle fields to apply to a generation run.
+
+    Attributes
+    ----------
+    status : GenerationRunStatus
+        New durable lifecycle status.
+    current_node : str | None
+        Current launcher node, or ``None`` for a terminal run.
+    ended_at : dt.datetime | None
+        Terminal timestamp, when the lifecycle transition ends a run.
+    error_message : str | None
+        Failure detail. An omitted value clears the persisted field.
+    error_category : str | None
+        Stable failure classification. An omitted value clears the persisted
+        field.
+    """
+
+    status: GenerationRunStatus
+    current_node: str | None
+    ended_at: dt.datetime | None
+    error_message: str | None = None
+    error_category: str | None = None
 
 
 def event_seq(value: int) -> EventSeq:
@@ -47,8 +74,9 @@ class GenerationRunRepository(typ.Protocol):
         run: GenerationRun,
         *,
         idempotency_key: str | None = None,
+        idempotency_principal_id: str | None = None,
     ) -> GenerationRun:
-        """Create a run or return the first run for an idempotency key."""
+        """Create a run or return the first run for a principal-scoped key."""
         raise NotImplementedError
 
     async def get_run(self, run_id: uuid.UUID) -> GenerationRun | None:
@@ -67,16 +95,25 @@ class GenerationRunRepository(typ.Protocol):
         """List runs for an episode, ordered by creation time."""
         raise NotImplementedError
 
-    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
     async def update_run_status(
         self,
         run_id: uuid.UUID,
         *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
+        update: GenerationRunStatusUpdate,
     ) -> GenerationRun:
         """Update the run lifecycle state and return the stored run."""
+        raise NotImplementedError
+
+    # pylint: disable-next=too-many-arguments  # Port signature is fixed.
+    async def claim_run_for_execution(
+        self,
+        run_id: uuid.UUID,
+        *,
+        current_node: str | None,
+        started_at: dt.datetime,
+        lease_expires_at: dt.datetime | None,
+    ) -> GenerationRun | None:
+        """Atomically move a pending run to running, or return None if lost."""
         raise NotImplementedError
 
 
@@ -86,7 +123,9 @@ class GenerationEventLog(typ.Protocol):
 
     `list_events` returns records ordered ascending by `seq`. When
     `after_seq` is supplied, the result range is half-open `(after_seq, ...]`;
-    otherwise it starts from sequence 1. `limit` is a hard cap.
+    otherwise it starts from sequence 1. `offset` skips records within the
+    range selected by `after_seq`, and `limit` is a hard cap. Callers must use
+    either `after_seq` or `offset`, not both.
     """
 
     # pylint: disable-next=too-many-arguments  # Port signature is fixed.
@@ -107,9 +146,35 @@ class GenerationEventLog(typ.Protocol):
         *,
         after_seq: EventSeq | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
-        """List events for a run."""
+        """List events for a run.
+
+        Raises
+        ------
+        ValueError
+            If ``after_seq`` is supplied with a non-zero ``offset``. These
+            pagination mechanisms are mutually exclusive.
+        """
         raise NotImplementedError
+
+    async def count_events(
+        self,
+        run_id: uuid.UUID,
+        *,
+        after_seq: EventSeq | None = None,
+    ) -> int:
+        """Count events for a run after an optional sequence cursor."""
+        raise NotImplementedError
+
+
+@typ.runtime_checkable
+class GenerationRunEventStore(
+    GenerationRunRepository,
+    GenerationEventLog,
+    typ.Protocol,
+):
+    """Composite port for run persistence plus append-only event logging."""
 
 
 @typ.runtime_checkable

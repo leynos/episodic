@@ -531,8 +531,15 @@ full_name = [
     "episodic.observability.NoopMetrics.observe_latency_ms.name",
     "episodic.observability.NoopMetrics.observe_latency_ms.value",
     "episodic.observability.NoopMetrics.observe_latency_ms.labels",
+    "episodic.observability.NoopValueMetrics.observe_value.name",
+    "episodic.observability.NoopValueMetrics.observe_value.value",
+    "episodic.observability.NoopValueMetrics.observe_value.labels",
+    "episodic.observability.NoopTracer.start_span.name",
+    "episodic.observability.NoopTracer.start_span.attributes",
+    "episodic.observability._NoopSpan.set_attribute.name",
+    "episodic.observability._NoopSpan.set_attribute.value",
 ]
-reason = "No-op metrics adapters intentionally retain the production metrics protocol signatures."
+reason = "No-op metrics and tracing adapters intentionally retain their runtime-selected protocol signatures."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -544,6 +551,9 @@ full_name = [
     "alembic.versions.20260610_000009_add_source_intake_tables._drop_uploads_table",
     "alembic.versions.20260610_000009_add_source_intake_tables._drop_ingestion_job_sources_table",
     "alembic.versions.20260610_000009_add_source_intake_tables._drop_idempotency_records_table",
+    "alembic.versions.20260624_000010_add_generation_run_tables._drop_enums",
+    "alembic.versions.20260624_000010_add_generation_run_tables._drop_generation_runs_table",
+    "alembic.versions.20260624_000010_add_generation_run_tables._drop_generation_events_table",
 ]
 reason = "Alembic invokes these downgrade helpers when an operator rolls migration revisions back."
 
@@ -562,8 +572,28 @@ type = "method"
 full_name = [
     "episodic.api.app._ShutdownHooksMiddleware.process_shutdown",
     "episodic.api.authorization.AuthorizationMiddleware.process_request",
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_request",
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_response",
 ]
-reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI request and shutdown protocols."
+reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI request, response, and shutdown protocols."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_request.resp",
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_response.resource",
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_response.req_succeeded",
+]
+reason = "Falcon supplies these required middleware callback parameters although bounded metrics do not inspect them."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.app._generation_route_operation",
+    "episodic.api.app._response_outcome",
+    "episodic.canonical.adapters.generation_runs._event_page_minimum_seq",
+]
+reason = "Falcon middleware and the in-memory event-list adapter call these private helpers through registered protocol callbacks."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -576,6 +606,8 @@ full_name = [
     "episodic.canonical.ingestion_sources._validate_weight",
     "episodic.canonical.uploads._require_non_negative",
     "episodic.canonical.uploads._require_non_negative_if_present",
+    "episodic.canonical.domain._require_positive_integer",
+    "episodic.canonical.domain._validate_draft_without_qa_metadata",
 ]
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
 
@@ -596,9 +628,12 @@ full_name = [
     "episodic.concurrent_interpreters._PerfCounterCpuTaskExecutorClock.monotonic_seconds",
     "episodic.observability.NoopMetrics.increment_counter",
     "episodic.observability.NoopMetrics.observe_latency_ms",
+    "episodic.observability.NoopValueMetrics.observe_value",
+    "episodic.observability.NoopTracer.start_span",
+    "episodic.observability.RecordingTracer.start_span",
     "episodic.observability.PerfCounterClock.monotonic_seconds",
 ]
-reason = "Clock and no-op metrics implementations satisfy runtime-selected protocol interfaces."
+reason = "Clock, no-op, and recording adapters satisfy runtime-selected protocol interfaces."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"
@@ -660,8 +695,19 @@ full_name = [
     "episodic.api.runtime._normalize_database_urls",
     "episodic.api.runtime._apply_query_connect_overrides",
     "episodic.api.runtime._psycopg_connection_kwargs",
+    "episodic.api.runtime._build_llm_port",
+    "episodic.api.runtime._build_generation_launcher",
+    "episodic.api.runtime._build_generation_launcher._cost_recorder",
+    "episodic.api.runtime.create_app_from_env.shutdown_generation",
 ]
-reason = "The Granian application factory and its database readiness composition call this runtime helper chain."
+reason = "The Granian application factory calls this runtime composition and shutdown helper chain."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.api.authorization.StaticBearerTokenAuthorization.decide",
+]
+reason = "Authorization middleware dispatches to this production AuthorizationPort implementation."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "method"
@@ -675,11 +721,32 @@ reason = "Health observers invoke these methods through the readiness callback a
 [[tool.skylos.dead_code.entrypoints]]
 type = "class"
 full_name = [
-    "episodic.canonical.adapters.generation_runs._CheckpointTransitionSpec",
+    "episodic.canonical.adapters.generation_checkpoints._CheckpointTransitionSpec",
     "episodic.canonical.adapters.generation_runs.InMemoryGenerationRunStore",
     "episodic.cost.recorder.CostRecorder",
 ]
 reason = "These documented public adapters are instantiated by application composition and local-development consumers."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "class"
+full_name = [
+    "episodic.api.runtime._GenerationLauncherRuntime",
+    "episodic.observability._StructuredLogSpan",
+    "episodic.observability._RecordingSpan",
+    "episodic.observability.RecordingTracer",
+]
+reason = "Runtime composition and observability adapters instantiate these supporting types through protocol-facing entry points."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "episodic.observability.StructuredLogMetrics.increment_counter",
+    "episodic.observability.StructuredLogMetrics.observe_latency_ms",
+    "episodic.observability.StructuredLogMetrics.observe_value",
+    "episodic.observability.StructuredLogMetrics._emit_value",
+    "episodic.observability.StructuredLogTracer.start_span",
+]
+reason = "Metrics and tracing adapters implement runtime-selected observability protocols and their bounded emission path."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "variable"
@@ -738,8 +805,11 @@ prefixes = [
     "episodic.canonical.ingestion",
     "episodic.canonical.ingestion_ports",
     "episodic.canonical.entity_protocols",
+    "episodic.canonical.episode_errors",
+    "episodic.canonical.generation_quality",
     "episodic.canonical.history_protocols",
     "episodic.canonical.health",
+    "episodic.canonical.hashing",
     "episodic.canonical.idempotency",
     "episodic.canonical.ingestion_sources",
     "episodic.canonical.object_store",
@@ -762,6 +832,7 @@ prefixes = [
     "episodic.canonical.services",
     "episodic.canonical.ingestion_service",
     "episodic.canonical.idempotency_service",
+    "episodic.canonical.generation_persistence",
     "episodic.canonical.source_intake_service",
     "episodic.canonical.profile_templates",
     "episodic.canonical.reference_documents",

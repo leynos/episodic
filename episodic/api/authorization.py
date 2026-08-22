@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import enum
+import hmac
 import typing as typ
 
 import falcon
@@ -58,6 +59,34 @@ class PermitAll:
         """Permit the request."""
         del context
         return AuthorizationResult(AuthorizationDecision.PERMIT)
+
+
+@dc.dataclass(frozen=True, slots=True)
+class StaticBearerTokenAuthorization:
+    """Authorize one configured bearer token as one configured principal."""
+
+    token: str
+    principal_id: str
+
+    async def decide(
+        self,
+        context: AuthorizationContext,
+    ) -> AuthorizationResult:
+        """Return the configured principal for a matching bearer token."""
+        header = context.authorization_header
+        if header is None:
+            return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
+        scheme, separator, token = header.partition(" ")
+        if not separator or not token:
+            return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
+        if scheme.casefold() != "bearer":
+            return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
+        if not hmac.compare_digest(token, self.token):
+            return AuthorizationResult(AuthorizationDecision.UNAUTHORIZED)
+        return AuthorizationResult(
+            AuthorizationDecision.PERMIT,
+            principal_id=self.principal_id,
+        )
 
 
 class AuthorizationMiddleware:
