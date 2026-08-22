@@ -17,8 +17,16 @@ def test_expectations_load_and_reference_real_units() -> None:
             identifier=entry["identifier"],
             lane=Lane(entry["lane"]),
             is_clone=entry["is_clone"],
-            first=Fragment(**entry["first"]),
-            second=Fragment(**entry["second"]),
+            first=Fragment(
+                path=entry["first"]["path"],
+                start_line=entry["first"]["start_line"],
+                end_line=entry["first"]["end_line"],
+            ),
+            second=Fragment(
+                path=entry["second"]["path"],
+                start_line=entry["second"]["start_line"],
+                end_line=entry["second"]["end_line"],
+            ),
         )
         for entry in raw
     ]
