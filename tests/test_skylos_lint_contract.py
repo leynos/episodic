@@ -144,7 +144,9 @@ def test_skylos_allow_requires_name_and_reason() -> None:
     assert not missing_fragments, (
         f"Expected skylos-allow target requirements; missing {missing_fragments!r}."
     )
-    command = '$(SKYLOS) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"'
+    # The whitelist subcommand must run without the --config-file prefix that
+    # $(SKYLOS) carries; global options stop Skylos dispatching the subcommand.
+    command = '$(SKYLOS_CLI) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"'
     assert makefile.count(command) == 1, (
         "Expected exactly one safely quoted Skylos whitelist command."
     )
@@ -172,7 +174,7 @@ def test_skylos_allow_preserves_metacharacters_as_arguments(tmp_path: Path) -> N
             "skylos-allow",
             f"NAME={name}",
             f"REASON={reason}",
-            f"SKYLOS={recorder}",
+            f"SKYLOS_CLI={recorder}",
         ],
         cwd=REPOSITORY_ROOT,
         env={**os.environ, "SKYLOS_CAPTURE": str(capture)},
@@ -226,7 +228,7 @@ def test_skylos_allow_rejects_missing_required_value(
             "--no-print-directory",
             "skylos-allow",
             provided_assignment,
-            f"SKYLOS={recorder}",
+            f"SKYLOS_CLI={recorder}",
         ],
         cwd=REPOSITORY_ROOT,
         env={**os.environ, "SKYLOS_CAPTURE": str(capture)},

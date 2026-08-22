@@ -38,8 +38,9 @@ AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 SKYLOS_VERSION = 4.33.2
 # Pin the tool interpreter: Skylos parses sources with its own runtime `ast`,
 # so an older default Python misreads the project's 3.14 syntax.
-SKYLOS = $(UV_ENV) $(UV) tool run --python 3.14 \
-	--from 'skylos==$(SKYLOS_VERSION)' skylos \
+SKYLOS_CLI = $(UV_ENV) $(UV) tool run --python 3.14 \
+	--from 'skylos==$(SKYLOS_VERSION)' skylos
+SKYLOS = $(SKYLOS_CLI) \
 	--config-file pyproject.toml
 SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
 DUPLICATION_GATE = $(UV_ENV) $(UV) run scripts/duplication_gate.py
@@ -147,7 +148,9 @@ skylos-allow: export SKYLOS_REASON = $(call cli_value,REASON)
 skylos-allow: ## Document one named Skylos exception, not an entry point
 	@test -n "$${SKYLOS_NAME}" || { printf "Error: NAME is required for a named whitelist exception\\n" >&2; exit 2; }
 	@test -n "$${SKYLOS_REASON}" || { printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2; }
-	$(SKYLOS) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"
+	# The whitelist subcommand must be skylos's first argument; global
+	# options such as --config-file make the main parser treat it as a path.
+	$(SKYLOS_CLI) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run hecate check
