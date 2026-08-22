@@ -61,7 +61,13 @@ def _uuid7() -> uuid.UUID:
 
 
 class GenerationRunsResource:
-    """Create no-QA generation runs for ready ingestion jobs."""
+    """Create no-QA generation runs for authenticated ingestion-job owners.
+
+    The resource materialises the caller-owned ready ingestion job, persists a
+    durable generation-run checkpoint, and schedules detached execution. The
+    authenticated principal becomes the durable run actor; request payloads
+    cannot select another actor.
+    """
 
     def __init__(  # noqa: PLR0913  # HTTP composition requires independent test seams.
         self,
@@ -86,7 +92,32 @@ class GenerationRunsResource:
         resp: falcon.Response,
         ingestion_job_id: str,
     ) -> None:
-        """Materialize an episode and schedule its draft generation run."""
+        """Materialise and schedule a no-QA generation run.
+
+        Parameters
+        ----------
+        ingestion_job_id
+            Path identifier for the ready ingestion job owned by the
+            authenticated principal.
+        req
+            Falcon request containing the no-QA command and idempotency key.
+        resp
+            Falcon response populated with the accepted run representation.
+
+        Raises
+        ------
+        _ingestion_job_not_found
+            If the caller has no access to the requested ingestion job.
+
+        Notes
+        -----
+        ``Idempotency-Key`` is required. Replaying the same key for the same
+        authenticated principal returns the original accepted response.
+        Malformed input, unknown or inaccessible jobs, invalid source
+        materialisation, unavailable launcher configuration, idempotency
+        conflicts, and bounded-admission rejection use canonical HTTP error
+        responses.
+        """
         source_bundle_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         payload = require_payload_dict(await req.get_media())
         request = _parse_create_request(payload)
@@ -236,9 +267,10 @@ class GenerationRunsResource:
                         error_category=error_category,
                     ),
                 )
-                await uow.commit()
             except RunAlreadyTerminal, RunNotFound:
                 await uow.rollback()
+            else:
+                await uow.commit()
 
 
 def _generation_overloaded() -> falcon.HTTPServiceUnavailable:

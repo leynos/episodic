@@ -55,7 +55,22 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
         episode_id: uuid.UUID,
         updated_at: dt.datetime,
     ) -> None:
-        """Associate an ingestion job with its materialized episode."""
+        """Associate an ingestion job with its materialised episode.
+
+        Parameters
+        ----------
+        job_id
+            Ingestion-job identifier for the SQL ``UPDATE``.
+        episode_id
+            Canonical episode identifier to persist.
+        updated_at
+            Caller-supplied durable update timestamp.
+
+        Notes
+        -----
+        The caller owns transaction boundaries. The SQL ``UPDATE`` does not
+        validate rowcount, so an unknown ``job_id`` affects zero rows.
+        """
         await self._session.execute(
             sa
             .update(IngestionJobRecord)

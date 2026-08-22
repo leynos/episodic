@@ -998,7 +998,7 @@ post-merge `source_documents`. The first implementation serves only
 `POST /v1/uploads`; resumable upload initialization and direct byte `PUT`
 routes are deferred until a concrete S3-compatible adapter lands.
 
-ADR 016 records the implemented second task. A process-local launcher claims a
+ADR 017 records the implemented second task. A process-local launcher claims a
 pending run, resolves series-level host and guest profiles, invokes the
 single-pass draft generator, and writes validated TEI through an optimistic
 episode revision update. Run status and append-only events are durable even

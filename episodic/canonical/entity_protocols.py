@@ -122,7 +122,22 @@ class IngestionJobRepository(typ.Protocol):
         episode_id: uuid.UUID,
         updated_at: dt.datetime,
     ) -> None:
-        """Associate an ingestion job with its materialized episode."""
+        """Associate an ingestion job with its materialised episode.
+
+        Parameters
+        ----------
+        job_id
+            Ingestion-job identifier to update.
+        episode_id
+            Canonical episode identifier reserved for the job.
+        updated_at
+            Timestamp supplied by the caller for the durable job update.
+
+        Notes
+        -----
+        The caller owns transaction boundaries. Unknown ``job_id`` values
+        affect zero rows and do not raise.
+        """
         raise NotImplementedError
 
     async def list_paged(
@@ -179,7 +194,7 @@ class SourceDocumentRepository(typ.Protocol):
 
         Raises
         ------
-        Exception
+        sqlalchemy.exc.IntegrityError
             Unrecognised persistence failures propagate unchanged.
 
         Examples

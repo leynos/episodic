@@ -4,8 +4,8 @@ Services ``materialise_episode_from_ingestion`` and ``persist_draft_script``,
 their request types, and typed persistence errors are exported. Callers provide
 a ``CanonicalUnitOfWork``; this module never creates or disposes one. A ready
 :class:`IngestionJob` becomes a deterministic placeholder: pages load before
-locking, reservation commits before projection, and repository results verify
-duplicates. ``persist_draft_script`` validates a :class:`DraftScriptResult`,
+locking, reservation and projection commit atomically, and repository results
+verify duplicates. ``persist_draft_script`` validates a :class:`DraftScriptResult`,
 carries :class:`GenerationRun` provenance through :class:`EpisodeTeiUpdate`,
 and persists an optimistic TEI revision without commit or rollback.
 """
@@ -64,15 +64,14 @@ async def materialise_episode_from_ingestion(
     Parameters
     ----------
     uow
-        Open unit of work; commits reservation and projection boundaries.
+        Open unit of work; commits a successful reservation and projection.
     request
         Materialisation command describing the job and deterministic seams.
 
     Returns
     -------
     CanonicalEpisode
-        Placeholder episode reserved before source projection, so retries
-        converge on deterministic source-document identifiers.
+        Placeholder episode and its deterministic source projections.
 
     Raises
     ------
@@ -110,9 +109,9 @@ async def materialise_episode_from_ingestion(
     episode = await _materialise_or_reuse_episode(uow, job, request, now)
 
     has_duplicate = await _project_source_documents(uow, sources, episode.id, now)
-    await uow.commit()
     if has_duplicate:
         await _require_projected_source_documents(uow, sources, episode.id)
+    await uow.commit()
     return episode
 
 
@@ -126,7 +125,6 @@ async def _materialise_or_reuse_episode(
     episode_id = job.target_episode_id or request.uuid_factory()
     existing_episode = await uow.episodes.get(episode_id)
     if existing_episode is not None:
-        await uow.commit()
         return existing_episode
 
     header = _build_placeholder_header(
@@ -149,8 +147,6 @@ async def _materialise_or_reuse_episode(
         episode_id=episode.id,
         updated_at=now,
     )
-    # Commit before source projection to limit the ingestion-job row lock.
-    await uow.commit()
     return episode
 
 

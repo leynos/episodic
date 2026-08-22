@@ -313,7 +313,7 @@ when any of the following is breached.
   reviewed the staged milestone, including both BDD modules, and reported zero
   findings.
 - [x] (completed, 2026-07-22) M8: Documentation, roadmap update, and final
-  gates. ADR 016, system/user/developer guidance, repository indexes, and the
+  gates. ADR 017, system/user/developer guidance, repository indexes, and the
   completed roadmap checkbox are present. Markdown and Mermaid gates passed,
   and final CodeRabbit review reported zero findings.
 - [x] (completed, 2026-07-22) Post-implementation correctness review:
@@ -1721,11 +1721,10 @@ checking then.
   and clobbering if a future reaper re-launches.
 - If the service restarts mid-run, the run may remain `running` (no automated
   reaper in this slice). The `started_at`/`lease_expires_at` columns support
-  manual recovery; the manual-fail runbook (in ADR 016 / developers' guide) The
-  previously identified documentation gap is now addressed by the developers'
-  guide runbook, which describes how to inspect expiry, conditionally fail a
-  stuck run, append its failure event, and preserve its idempotency record. The
-  automated reaper is a 2.6.2 follow-up.
+  manual recovery; the manual-fail runbook in ADR 017 and the developers' guide
+  describes how to inspect expiry, conditionally fail a stuck run, append its
+  failure event, and preserve its idempotency record. The automated reaper is a
+  2.6.2 follow-up.
 - Known limitation: a `pending`/`running` run that outlives the 24h idempotency
   TTL could let a replayed key create a second run; documented for the 2.6.2
   recovery work.
@@ -1893,7 +1892,7 @@ downloadable TEI representations. Upload-backed sources are hydrated from
 object storage before generation, repeated materialization converges on the
 ingestion job's persisted episode, and terminal status updates are serialized.
 Full deterministic gates pass with `1078 passed, 1 skipped`; CodeRabbit's final
-complete-branch review reported zero findings. ADR 016 and the maintainer and
+complete-branch review reported zero findings. ADR 017 and the maintainer and
 user guides record the operational limits and successor work. Automated
 stuck-run recovery, the broader checkpoint REST surface, and the full QA-bypass
 generation graph remain assigned to 2.6.2, 2.6.3, and 4.4.1.

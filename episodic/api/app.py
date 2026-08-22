@@ -12,7 +12,6 @@ dependencies = ApiDependencies(uow_factory=uow_factory)
 app = create_app(dependencies)  # Returns a Falcon ASGI app with API routes.
 """
 
-import time
 import typing as typ
 
 from falcon import asgi
@@ -51,7 +50,7 @@ from .resources import (
 from .source_intake_support import UploadResourceConfig
 
 if typ.TYPE_CHECKING:
-    from episodic.observability import MetricsPort
+    from episodic.observability import MetricsPort, MonotonicClockPort
 
     from .dependencies import ApiDependencies, ShutdownHook
     from .types import UowFactory
@@ -81,9 +80,13 @@ def _generation_route_operation(path: str) -> str | None:
 class _GenerationRouteMetricsMiddleware:
     """Emit bounded generation-route outcome and latency observations."""
 
-    def __init__(self, metrics: MetricsPort) -> None:
+    def __init__(
+        self,
+        metrics: MetricsPort,
+        monotonic_clock: MonotonicClockPort,
+    ) -> None:
         self._metrics = metrics
-        self._monotonic = time.perf_counter
+        self._monotonic_clock = monotonic_clock
 
     async def process_request(
         self,
@@ -96,7 +99,7 @@ class _GenerationRouteMetricsMiddleware:
         if operation is not None:
             req.context["generation_api_metrics"] = (
                 operation,
-                self._monotonic(),
+                self._monotonic_clock.monotonic_seconds(),
             )
 
     async def process_response(
@@ -122,7 +125,7 @@ class _GenerationRouteMetricsMiddleware:
         self._metrics.increment_counter(_GENERATION_REQUEST_TOTAL, labels=labels)
         self._metrics.observe_latency_ms(
             _GENERATION_REQUEST_LATENCY,
-            (self._monotonic() - started_at) * 1_000,
+            (self._monotonic_clock.monotonic_seconds() - started_at) * 1_000,
             labels=labels,
         )
 
@@ -301,7 +304,12 @@ def create_app(dependencies: ApiDependencies) -> asgi.App:
     """Build and return Falcon ASGI application for canonical APIs."""
     app = asgi.App()
     app.add_middleware(AuthorizationMiddleware(dependencies.authorization))
-    app.add_middleware(_GenerationRouteMetricsMiddleware(dependencies.metrics))
+    app.add_middleware(
+        _GenerationRouteMetricsMiddleware(
+            dependencies.metrics,
+            dependencies.monotonic_clock,
+        )
+    )
     if dependencies.shutdown_hooks:
         # Falcon supports lifespan middleware at runtime, but its exported
         # middleware type union does not model process_shutdown-only hooks.

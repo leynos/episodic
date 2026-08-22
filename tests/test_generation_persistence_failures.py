@@ -3,6 +3,7 @@
 import dataclasses as dc
 import typing as typ
 import uuid
+from unittest import mock
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +23,7 @@ from episodic.canonical.generation_persistence import (
 )
 from episodic.canonical.ingestion_sources import AttachmentKind
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
+from episodic.canonical.uploads import Upload, UploadState
 from tests.test_generation_persistence import (
     SequentialUuids,
     _clock,
@@ -170,6 +172,75 @@ async def test_source_upload_resolution_rejects_missing_upload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_materialise_rolls_back_reservation_for_missing_upload(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing upload does not leave a reusable placeholder episode behind."""
+    job = _ingestion_job(_series_profile().id, None)
+    upload_id = uuid.UUID("00000000-0000-0000-0000-000000000601")
+    source = dc.replace(
+        _source(job.id),
+        attachment_kind=AttachmentKind.UPLOAD,
+        upload_id=upload_id,
+        source_uri=None,
+    )
+    upload = Upload(
+        id=upload_id,
+        owner_principal_id=None,
+        content_type="text/plain",
+        declared_size=1,
+        actual_size=1,
+        declared_sha256=None,
+        content_hash="sha256:upload",
+        storage_key="uploads/missing-after-reservation",
+        state=UploadState.READY,
+        metadata={},
+        created_at=_clock(),
+        updated_at=_clock(),
+    )
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        await uow.series_profiles.add(_series_profile())
+        await uow.flush()
+        await uow.ingestion_jobs.add(job)
+        await uow.flush()
+        await uow.uploads.add(upload)
+        await uow.flush()
+        await uow.ingestion_job_sources.add(source)
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        missing_upload = mock.AsyncMock(return_value=None)
+        monkeypatch.setattr(uow.uploads, "get", missing_upload)
+        with pytest.raises(GenerationSourceUploadNotFoundError):
+            await materialise_episode_from_ingestion(
+                uow,
+                EpisodeMaterialisationRequest(
+                    ingestion_job_id=job.id,
+                    title="Bridgewater Futures",
+                    clock=_clock,
+                    uuid_factory=SequentialUuids(),
+                ),
+            )
+
+    async with SqlAlchemyUnitOfWork(session_factory) as uow:
+        persisted_job = await uow.ingestion_jobs.get(job.id)
+        episode = await uow.episodes.get(
+            uuid.UUID("00000000-0000-0000-0000-000000000101")
+        )
+        header = await uow.tei_headers.get(
+            uuid.UUID("00000000-0000-0000-0000-000000000102")
+        )
+        documents = await uow.source_documents.list_for_job(job.id)
+
+    assert persisted_job is not None, f"missing ingestion job {job.id}"
+    assert persisted_job.target_episode_id is None, persisted_job
+    assert episode is None, f"unexpected placeholder episode: {episode}"
+    assert header is None, f"unexpected placeholder header: {header}"
+    assert documents == [], f"unexpected projections: {documents}"
+
+
+@pytest.mark.asyncio
 async def test_persist_draft_script_rejects_mismatched_content_hash(
     session_factory: object,
 ) -> None:
@@ -221,19 +292,9 @@ async def test_materialise_reraises_unrelated_projection_integrity_error(
     _, job = await _persist_ready_job(session_factory)
 
     async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        original_commit = uow.commit
-        commit_count = 0
-
-        async def fail_projection_commit() -> None:
-            """Raise an integrity error only for the projection transaction."""
-            nonlocal commit_count
-            commit_count += 1
-            if commit_count == 2:
-                error = ValueError("bad FK")
-                raise IntegrityError("", {}, error)
-            await original_commit()
-
-        monkeypatch.setattr(uow, "commit", fail_projection_commit)
+        error = ValueError("bad FK")
+        fail_projection = mock.AsyncMock(side_effect=IntegrityError("", {}, error))
+        monkeypatch.setattr(uow.source_documents, "add_projection", fail_projection)
         with pytest.raises(IntegrityError, match="bad FK"):
             await materialise_episode_from_ingestion(
                 uow,
@@ -244,8 +305,6 @@ async def test_materialise_reraises_unrelated_projection_integrity_error(
                     uuid_factory=SequentialUuids(),
                 ),
             )
-
-    assert commit_count == 2, f"unexpected commit count: {commit_count}"
 
 
 @pytest.mark.asyncio
