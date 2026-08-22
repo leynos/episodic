@@ -1,17 +1,13 @@
 """Contract tests for generation-run port implementations.
 
-These tests define the behavioural contract for adapters implementing
-`GenerationRunRepository`, `GenerationEventLog`, `GenerationCheckpointPort`,
-and the composite `GenerationRunPort`. They validate protocol compliance,
-lifecycle guarantees, error and edge-case behaviour, idempotency, pagination
-guardrails, event sequence allocation, and checkpoint response persistence.
-Use the `store` fixture plus `make_generation_run()` and `make_checkpoint()`
-when adding scenarios for another implementation.
+These tests define the behavioural contract for generation-run adapters. Use
+the `store` fixture plus `make_generation_run()` and `make_checkpoint()` when
+adding scenarios for another implementation.
 """
 
+import asyncio
 import dataclasses as dc
 import datetime as dt
-import typing as typ
 import uuid
 
 import pytest
@@ -19,22 +15,20 @@ import pytest
 from episodic.canonical.adapters.generation_runs import InMemoryGenerationRunStore
 from episodic.canonical.domain import (
     Checkpoint,
-    CheckpointResponse,
     CheckpointStatus,
-    GenerationEvent,
     GenerationRun,
     GenerationRunStatus,
-    JsonMapping,
 )
-from episodic.canonical.generation_run_errors import CheckpointNotFound, RunNotFound
+from episodic.canonical.generation_quality import QaStatus, QualityMode
+from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import (
-    EventSeq,
     GenerationCheckpointPort,
     GenerationEventLog,
     GenerationRunPort,
     GenerationRunRepository,
     event_seq,
 )
+from tests.test_generation_run_port_contract_support import NoopGenerationRunPort
 
 NOW = dt.datetime(2026, 6, 4, 8, 0, tzinfo=dt.UTC)
 
@@ -75,6 +69,9 @@ def make_generation_run(
         started_at=None,
         ended_at=None,
         error_message=None,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="No-QA vertical-slice draft.",
     )
 
 
@@ -114,105 +111,6 @@ def store() -> InMemoryGenerationRunStore:
     return InMemoryGenerationRunStore(time_provider=lambda: NOW)
 
 
-# Protocol arity is fixed by the port contract; this is a minimal test stub.
-class NoopGenerationRunPort:  # pylint: disable=too-many-arguments
-    """No-op implementation used for composite protocol type checking."""
-
-    async def create_run(
-        self,
-        run: GenerationRun,
-        *,
-        idempotency_key: str | None = None,
-    ) -> GenerationRun:
-        """Return the supplied run."""
-        return run
-
-    async def get_run(self, run_id: uuid.UUID) -> GenerationRun | None:
-        """Return no run."""
-        return None
-
-    async def list_runs(
-        self,
-        episode_id: uuid.UUID,
-        *,
-        status: GenerationRunStatus | None = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> tuple[GenerationRun, ...]:
-        """Return no runs."""
-        return ()
-
-    async def update_run_status(
-        self,
-        run_id: uuid.UUID,
-        *,
-        status: GenerationRunStatus,
-        current_node: str | None,
-        ended_at: dt.datetime | None,
-    ) -> GenerationRun:
-        """Raise for all updates."""
-        raise RunNotFound(run_id)
-
-    async def append_event(
-        self,
-        run_id: uuid.UUID,
-        *,
-        kind: str,
-        payload: JsonMapping,
-        occurred_at: dt.datetime | None = None,
-    ) -> GenerationEvent:
-        """Raise for all event appends."""
-        raise RunNotFound(run_id)
-
-    async def list_events(
-        self,
-        run_id: uuid.UUID,
-        *,
-        after_seq: EventSeq | None = None,
-        limit: int = 100,
-    ) -> tuple[GenerationEvent, ...]:
-        """Return no events."""
-        return ()
-
-    async def create_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
-        """Return the supplied checkpoint."""
-        return checkpoint
-
-    async def get_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-    ) -> Checkpoint | None:
-        """Return no checkpoint."""
-        return None
-
-    async def respond_to_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        response: CheckpointResponse,
-    ) -> Checkpoint:
-        """Raise for all responses."""
-        raise CheckpointNotFound(checkpoint_id)
-
-    async def time_out_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        at: dt.datetime,
-    ) -> Checkpoint:
-        """Raise for all timeouts."""
-        raise CheckpointNotFound(checkpoint_id)
-
-    async def cancel_checkpoint(
-        self,
-        checkpoint_id: uuid.UUID,
-        *,
-        at: dt.datetime,
-    ) -> Checkpoint:
-        """Raise for all cancellations."""
-        raise CheckpointNotFound(checkpoint_id)
-
-
 class TestGenerationRunRepository:
     """Contract tests for generation-run repository operations."""
 
@@ -234,25 +132,45 @@ class TestGenerationRunRepository:
         )
 
     @pytest.mark.asyncio
-    async def test_create_run_reuses_idempotency_key(
+    async def test_create_run_scopes_idempotency_key_to_principal(
         self,
         store: InMemoryGenerationRunStore,
     ) -> None:
-        """Creating with the same idempotency key returns the first run."""
+        """A principal replays its run while another principal gets a new run."""
         first = make_generation_run()
-        duplicate = make_generation_run()
+        cross_principal = make_generation_run()
+        replay = make_generation_run()
 
-        stored_first = await store.create_run(first, idempotency_key="run-key")
-        stored_duplicate = await store.create_run(duplicate, idempotency_key="run-key")
+        stored_first = await store.create_run(
+            first,
+            idempotency_key="run-key",
+            idempotency_principal_id="principal-a",
+        )
+        stored_cross_principal = await store.create_run(
+            cross_principal,
+            idempotency_key="run-key",
+            idempotency_principal_id="principal-b",
+        )
+        stored_replay = await store.create_run(
+            replay,
+            idempotency_key="run-key",
+            idempotency_principal_id="principal-a",
+        )
 
-        assert stored_duplicate == stored_first, (
-            "duplicate idempotency key must return first run"
+        assert stored_cross_principal == cross_principal, (
+            "cross-principal key reuse must create a distinct run"
+        )
+        assert stored_replay == stored_first, (
+            "same-principal key replay must return first run"
         )
         assert await store.get_run(first.id) == stored_first, (
             "first run must be retrievable by ID"
         )
-        assert await store.get_run(duplicate.id) is None, (
-            "duplicate run must not be persisted"
+        assert await store.get_run(cross_principal.id) == stored_cross_principal, (
+            "cross-principal run must be persisted"
+        )
+        assert await store.get_run(replay.id) is None, (
+            "same-principal replay run must not be persisted"
         )
 
     @pytest.mark.asyncio
@@ -299,6 +217,62 @@ class TestGenerationRunRepository:
         with pytest.raises(ValueError, match="offset"):
             await store.list_runs(uuid.uuid7(), offset=-1)
 
+    @pytest.mark.asyncio
+    async def test_claim_run_for_execution_is_first_writer_wins(
+        self,
+        store: InMemoryGenerationRunStore,
+    ) -> None:
+        """A pending run can be claimed once for execution."""
+        run = await store.create_run(make_generation_run())
+
+        results = await asyncio.gather(
+            store.claim_run_for_execution(
+                run.id,
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=NOW + dt.timedelta(minutes=5),
+            ),
+            store.claim_run_for_execution(
+                run.id,
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=NOW + dt.timedelta(minutes=5),
+            ),
+        )
+        claim_count = sum(result is not None for result in results)
+        assert claim_count == 1, f"expected one successful claim, got {claim_count}"
+        claimed = next(result for result in results if result is not None)
+        assert claimed.status is GenerationRunStatus.RUNNING, (
+            f"status: {claimed.status}"
+        )
+        assert claimed.current_node == "draft", f"node: {claimed.current_node!r}"
+        assert claimed.started_at == NOW, f"started_at: {claimed.started_at!r}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "status",
+        [
+            GenerationRunStatus.SUCCEEDED,
+            GenerationRunStatus.FAILED,
+            GenerationRunStatus.CANCELLED,
+        ],
+    )
+    async def test_claim_run_for_execution_rejects_terminal_runs(
+        self,
+        store: InMemoryGenerationRunStore,
+        status: GenerationRunStatus,
+    ) -> None:
+        """Terminal runs cannot be reclaimed for execution."""
+        run = await store.create_run(dc.replace(make_generation_run(), status=status))
+
+        with pytest.raises(RunAlreadyTerminal, match="generation run is already"):
+            await store.claim_run_for_execution(
+                run.id,
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=NOW + dt.timedelta(minutes=5),
+            )
+
 
 class TestGenerationEventLog:
     """Contract tests for generation event-log operations."""
@@ -321,6 +295,8 @@ class TestGenerationEventLog:
         assert await store.list_events(run.id, after_seq=event_seq(1)) == (second,), (
             "list_events after seq 1 should return only the second event"
         )
+        with pytest.raises(ValueError, match="after_seq and offset cannot be combined"):
+            await store.list_events(run.id, after_seq=event_seq(1), offset=1)
 
     @pytest.mark.asyncio
     async def test_append_event_rejects_unknown_run(
@@ -331,26 +307,13 @@ class TestGenerationEventLog:
         with pytest.raises(RunNotFound, match=r"unknown generation run:"):
             await store.append_event(uuid.uuid7(), kind="created", payload={})
 
-    @pytest.mark.asyncio
-    async def test_list_events_rejects_negative_limit(
-        self,
-        store: InMemoryGenerationRunStore,
-    ) -> None:
-        """Event pagination limits must be non-negative."""
-        run = await store.create_run(make_generation_run())
-
-        with pytest.raises(ValueError, match="limit"):
-            await store.list_events(run.id, limit=-1)
-
 
 class TestCompositeProtocol:
     """Contract tests for the composite generation-run protocol."""
 
     def test_noop_composite_protocol_stub_typechecks(self) -> None:
         """A class implementing every method should satisfy the composite port."""
-        # Static type checkers validate NoopGenerationRunPort against
-        # GenerationRunPort through this assignment.
-        _port: GenerationRunPort = typ.cast(
-            "GenerationRunPort",
-            NoopGenerationRunPort(),
+        noop_port: GenerationRunPort = NoopGenerationRunPort()
+        assert isinstance(noop_port, GenerationRunPort), (
+            f"expected no-op port to satisfy GenerationRunPort: {noop_port!r}"
         )

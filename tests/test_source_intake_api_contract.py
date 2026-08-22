@@ -1,25 +1,48 @@
 """Contract tests for source-intake REST error paths and read endpoints."""
 
-import contextlib
-import datetime as dt
+import dataclasses as dc
 import hashlib
 import typing as typ
 import uuid
 
 import httpx
 import pytest
+import sqlalchemy as sa
 
 from episodic.api import create_app
-from episodic.canonical.storage import FilesystemObjectStore, SqlAlchemyUnitOfWork
-from episodic.canonical.uploads import Upload, UploadState
+from episodic.canonical.storage import (
+    FilesystemObjectStore,
+    IngestionJobRecord,
+)
 from tests.fixtures.api import build_api_dependencies
+from tests.test_source_intake_api_contract_support import (
+    _create_ingestion_job,
+    _create_pending_upload,
+    _create_profile_and_job,
+    _create_ready_upload,
+    _create_series_profile,
+    _post_attach_source,
+    _post_text_upload,
+    _source_intake_client,
+    _source_uri_payload,
+    _upload_payload,
+)
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     from pathlib import Path
 
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _InvalidUploadExpectation:
+    """Expected result for a rejected source-upload attachment."""
+
+    create_pending_upload: bool
+    idempotency_key: str
+    status_code: int
+    code: str
 
 
 def _assert_api_error(
@@ -122,40 +145,53 @@ async def test_attach_source_reports_missing_ingestion_job(
 
 
 @pytest.mark.asyncio
-async def test_attach_upload_reports_missing_upload(
+@pytest.mark.parametrize(
+    "expected",
+    [
+        pytest.param(
+            _InvalidUploadExpectation(
+                create_pending_upload=False,
+                idempotency_key="missing-upload",
+                status_code=404,
+                code="upload_not_found",
+            ),
+            id="missing_upload",
+        ),
+        pytest.param(
+            _InvalidUploadExpectation(
+                create_pending_upload=True,
+                idempotency_key="pending-upload",
+                status_code=409,
+                code="upload_not_ready",
+            ),
+            id="not_ready_upload",
+        ),
+    ],
+)
+async def test_attach_upload_reports_invalid_upload(
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
+    expected: _InvalidUploadExpectation,
 ) -> None:
-    """Attaching an unknown upload to a known job returns upload_not_found."""
+    """Upload attachment rejects missing and non-ready uploads."""
     job_id = await _create_profile_and_job(session_factory, tmp_path)
+    if expected.create_pending_upload:
+        upload_id = await _create_pending_upload(session_factory)
+    else:
+        upload_id = uuid.uuid4()
     async with _source_intake_client(session_factory, tmp_path) as client:
         response = await _post_attach_source(
             client,
             job_id,
-            idempotency_key="missing-upload",
-            payload=_upload_payload(str(uuid.uuid4())),
-        )
-
-    _assert_api_error(response, status_code=404, code="upload_not_found")
-
-
-@pytest.mark.asyncio
-async def test_attach_upload_reports_not_ready_upload(
-    session_factory: async_sessionmaker[AsyncSession],
-    tmp_path: Path,
-) -> None:
-    """Attaching a pending upload returns upload_not_ready."""
-    job_id = await _create_profile_and_job(session_factory, tmp_path)
-    upload_id = await _create_pending_upload(session_factory)
-    async with _source_intake_client(session_factory, tmp_path) as client:
-        response = await _post_attach_source(
-            client,
-            job_id,
-            idempotency_key="pending-upload",
+            idempotency_key=expected.idempotency_key,
             payload=_upload_payload(str(upload_id)),
         )
 
-    _assert_api_error(response, status_code=409, code="upload_not_ready")
+    _assert_api_error(
+        response,
+        status_code=expected.status_code,
+        code=expected.code,
+    )
 
 
 @pytest.mark.asyncio
@@ -212,6 +248,99 @@ async def test_upload_get_endpoint_reports_missing_upload(
 
 
 @pytest.mark.asyncio
+async def test_source_intake_hides_other_principals_resources(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    """A different principal cannot read or attach another owner's intake data."""
+    async with _source_intake_client(session_factory, tmp_path) as owner:
+        profile_id = await _create_series_profile(owner)
+        upload = await _post_text_upload(owner, key="owned-upload", payload=b"x")
+        job_id = await _create_ingestion_job(owner, profile_id)
+        attached = await _post_attach_source(
+            owner,
+            job_id,
+            idempotency_key="owned-source",
+            payload=_upload_payload(typ.cast("str", upload.json()["id"])),
+        )
+        assert attached.status_code == 201, attached.text
+
+    async with _source_intake_client(
+        session_factory,
+        tmp_path,
+        principal="principal-b",
+    ) as other:
+        upload_response = await other.get(f"/v1/uploads/{upload.json()['id']}")
+        job_response = await other.get(f"/v1/ingestion-jobs/{job_id}")
+        sources_response = await other.get(f"/v1/ingestion-jobs/{job_id}/sources")
+        attach_response = await _post_attach_source(
+            other,
+            job_id,
+            idempotency_key="other-source",
+            payload=_source_uri_payload(),
+        )
+        listing_response = await other.get("/v1/ingestion-jobs")
+
+    for response, code in (
+        (upload_response, "upload_not_found"),
+        (job_response, "ingestion_job_not_found"),
+        (sources_response, "ingestion_job_not_found"),
+        (attach_response, "ingestion_job_not_found"),
+    ):
+        _assert_api_error(response, status_code=404, code=code)
+    assert listing_response.status_code == 200, listing_response.text
+    assert listing_response.json()["items"] == [], listing_response.json()
+
+
+@pytest.mark.asyncio
+async def test_source_intake_rejects_client_target_episode_id(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    """Client-selected episode identifiers do not create ingestion jobs."""
+    async with _source_intake_client(session_factory, tmp_path) as client:
+        profile_id = await _create_series_profile(client)
+        response = await client.post(
+            "/v1/ingestion-jobs",
+            headers={"Idempotency-Key": "client-target"},
+            json={
+                "series_profile_id": profile_id,
+                "target_episode_id": str(uuid.uuid7()),
+            },
+        )
+
+    _assert_api_error(response, status_code=400, code="validation_error")
+    assert response.json()["details"] == {
+        "field": "target_episode_id",
+        "constraint": "unsupported",
+    }, response.text
+    async with session_factory() as session:
+        count = await session.scalar(sa.select(sa.func.count(IngestionJobRecord.id)))
+    assert count == 0, f"ingestion jobs created after rejected request: {count}"
+
+
+@pytest.mark.asyncio
+async def test_permit_all_composition_hides_named_upload_without_principal(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    """A missing principal cannot read a named upload under PermitAll tests."""
+    upload_id = await _create_ready_upload(session_factory, owner="principal-a")
+    dependencies = build_api_dependencies(
+        session_factory,
+        object_store=FilesystemObjectStore(tmp_path / "objects"),
+    )
+    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(f"/v1/uploads/{upload_id}")
+
+    _assert_api_error(response, status_code=404, code="upload_not_found")
+
+
+@pytest.mark.asyncio
 async def test_ingestion_job_sources_get_endpoint_lists_sources(
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
@@ -250,146 +379,3 @@ async def test_ingestion_job_sources_get_reports_missing_job(
         status_code=404,
         code="ingestion_job_not_found",
     )
-
-
-@contextlib.asynccontextmanager
-async def _source_intake_client(
-    session_factory: async_sessionmaker[AsyncSession],
-    tmp_path: Path,
-    *,
-    upload_max_bytes: int | None = None,
-) -> cabc.AsyncIterator[httpx.AsyncClient]:
-    """Yield an async client with source-intake object storage configured."""
-    object_store = FilesystemObjectStore(tmp_path / "objects")
-    dependencies = build_api_dependencies(
-        session_factory,
-        object_store=object_store,
-        upload_max_bytes=upload_max_bytes,
-    )
-    transport = httpx.ASGITransport(app=typ.cast("_ASGIApp", create_app(dependencies)))
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-    ) as client:
-        yield client
-
-
-async def _create_series_profile(client: httpx.AsyncClient) -> str:
-    """Create a series profile through the public API and return its id."""
-    response = await client.post(
-        "/v1/series-profiles",
-        json={
-            "slug": f"source-intake-{uuid.uuid4()}",
-            "title": "Source Intake",
-            "description": "Created for intake contract tests.",
-            "configuration": {"tone": "clear"},
-            "guardrails": {"instruction": "Keep claims sourced."},
-            "actor": "api-user@example.com",
-            "note": "Initial profile",
-        },
-    )
-    assert response.status_code == 201, response.text
-    return typ.cast("str", response.json()["id"])
-
-
-async def _create_ingestion_job(client: httpx.AsyncClient, profile_id: str) -> str:
-    """Create an ingestion job through the public API and return its id."""
-    response = await client.post(
-        "/v1/ingestion-jobs",
-        headers={"Idempotency-Key": f"job-{uuid.uuid4()}"},
-        json={"series_profile_id": profile_id, "target_episode_id": None},
-    )
-    assert response.status_code == 201, response.text
-    return typ.cast("str", response.json()["id"])
-
-
-async def _create_profile_and_job(
-    session_factory: async_sessionmaker[AsyncSession],
-    tmp_path: Path,
-) -> str:
-    """Create a series profile and an ingestion job; return the job id."""
-    async with _source_intake_client(session_factory, tmp_path) as client:
-        profile_id = await _create_series_profile(client)
-        return await _create_ingestion_job(client, profile_id)
-
-
-async def _create_pending_upload(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> uuid.UUID:
-    """Persist one pending upload for not-ready attach tests."""
-    now = dt.datetime.now(dt.UTC)
-    upload = Upload(
-        id=uuid.uuid4(),
-        owner_principal_id="api-user",
-        content_type="text/plain",
-        declared_size=1,
-        actual_size=None,
-        declared_sha256=None,
-        content_hash=None,
-        storage_key=f"uploads/{uuid.uuid4()}",
-        state=UploadState.PENDING,
-        metadata={},
-        created_at=now,
-        updated_at=now,
-    )
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await uow.uploads.add(upload)
-        await uow.commit()
-    return upload.id
-
-
-async def _post_attach_source(
-    client: httpx.AsyncClient,
-    job_id: str,
-    *,
-    idempotency_key: str,
-    payload: dict[str, object],
-) -> httpx.Response:
-    """POST a source attachment to an ingestion job and return the response."""
-    return await client.post(
-        f"/v1/ingestion-jobs/{job_id}/sources",
-        headers={"Idempotency-Key": idempotency_key},
-        json=payload,
-    )
-
-
-async def _post_text_upload(
-    client: httpx.AsyncClient,
-    *,
-    key: str,
-    payload: bytes,
-    content_type: str = "text/plain",
-) -> httpx.Response:
-    """Post a deterministic text upload multipart request."""
-    return await client.post(
-        "/v1/uploads",
-        headers={"Idempotency-Key": key},
-        files={
-            "file": ("source.txt", payload, "text/plain"),
-            "content_type": (None, content_type),
-            "declared_size": (None, str(len(payload))),
-            "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),
-        },
-    )
-
-
-def _upload_payload(upload_id: str) -> dict[str, object]:
-    """Return a valid upload-source attachment payload."""
-    return {
-        "type": "upload",
-        "upload_id": upload_id,
-        "source_type": "research_paper",
-        "weight": 1.0,
-        "metadata": {"language": "en"},
-    }
-
-
-def _source_uri_payload() -> dict[str, object]:
-    """Return a valid URI-source attachment payload."""
-    return {
-        "type": "source_uri",
-        "source_uri": "https://example.test/source.txt",
-        "source_type": "research_paper",
-        "weight": 1.0,
-        "metadata": {"language": "en"},
-    }

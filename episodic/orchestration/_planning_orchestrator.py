@@ -21,6 +21,7 @@ from ._usage import build_generation_result
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from episodic.cost import CostRecorderPort
     from episodic.llm import ProviderCallUsage
 
     from ._dto import (
@@ -31,7 +32,7 @@ if typ.TYPE_CHECKING:
         PlannedAction,
         PlannerResult,
     )
-    from ._protocols import CostRecorderPort, PlannerPort, ToolExecutorPort
+    from ._protocols import PlannerPort, ToolExecutorPort
 
 
 _DEFAULT_PROVIDER_NAME = "openai"

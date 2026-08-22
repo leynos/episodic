@@ -86,6 +86,44 @@ different canonical body returns `409 Conflict`. The resumable
 `POST /v1/uploads/init` flow remains a future extension for an object-store
 adapter that can use pre-signed upload URLs.
 
+#### Generate and download a no-QA draft
+
+Before using these endpoints, apply the latest Alembic migrations to the
+service database with `alembic upgrade head`. The application does not apply
+schema migrations during startup.
+
+Create a draft run for a ready ingestion job with
+`POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs`. Supply an
+`Idempotency-Key` and a JSON body containing `quality_mode` set to
+`draft_without_qa` and `skip_qa_rationale`. The server derives the run actor
+from the authenticated principal rather than the request body. It returns
+`202 Accepted`, a `Location` header for the run, and `Retry-After` guidance.
+
+Poll the `Location` resource until its status is `succeeded` or `failed`. The
+`202 Accepted` representation includes `episode_id`, and the polled run
+resource returns it as well. Read `episode_id` from the polled run resource
+before requesting the episode TEI. Lifecycle details are available from
+`GET /v1/generation-runs/{run_id}/events`. This endpoint uses the `after_seq`
+cursor and a `limit` cap; it returns `items`, `after_seq`, `limit`, `offset`,
+and `total`. Do not combine a non-zero `offset` with `after_seq`: that request
+is rejected as invalid. This cursor contract is distinct from the general
+offset-pagination guidance. Replaying the original request with the same key
+and body returns the same run and polling headers; changing the body under that
+key returns `409 Conflict`.
+
+Generation applies four positive source limits before a draft-provider request:
+`GENERATION_MAX_SOURCE_COUNT` (default 32), `GENERATION_MAX_SOURCE_BYTES`
+(default 1 MiB), `GENERATION_MAX_AGGREGATE_SOURCE_BYTES` (default 8 MiB), and
+`GENERATION_MAX_NORMALIZED_SOURCE_BYTES` (default 1 MiB). A source exceeding a
+limit fails its run with the stable `generation.source_limit` category; source
+content is never included in the response or logs.
+
+After success, request `GET /v1/episodes/{episode_id}/tei` for the JSON
+metadata envelope, or add `Accept: application/tei+xml` to download the raw TEI
+file. The response includes an entity tag and attachment filename. This path
+deliberately bypasses QA: the run and TEI revision are marked `skipped`, and
+the output remains an editorial draft until a later review and approval flow.
+
 #### Show notes and chapter markers
 
 Show notes are the episode summaries and topic lists that appear alongside a
@@ -124,6 +162,14 @@ provider.
 Chapter markers currently use the configured execution model. A dedicated
 `chapter_marker_model` setting is planned for a future release, but is not a
 live configuration option yet.
+
+The HTTP runtime also accepts these optional environment settings for generated
+draft output. Each value must be a positive integer:
+
+- `GENERATION_MAX_OUTPUT_TOKENS` defaults to `4096` and caps the output tokens
+  passed to the LLM request.
+- `GENERATION_MAX_RESPONSE_BYTES` defaults to `1048576` and caps the UTF-8
+  response before generated JSON parsing.
 
 #### Resumable orchestration
 
@@ -297,6 +343,29 @@ Required environment:
   `postgresql://...` and normalizes it to the supported async driver
   automatically. Driver-qualified URLs such as `postgresql+asyncpg://...` and
   `postgresql+psycopg://...` are also accepted.
+- `API_AUTHORIZATION_BEARER_TOKEN` is the bearer token accepted for production
+  `/v1` requests.
+- `API_AUTHORIZATION_PRINCIPAL_ID` identifies the principal associated with
+  that token. Both authorization settings are required before the service
+  starts.
+
+Production clients must include the configured token on every `/v1` request:
+
+```http
+Authorization: Bearer <token>
+```
+
+The authenticated principal owns the ingestion jobs and generation runs it can
+access. Requests for resources owned by another principal use the same
+not-found response as requests for resources that do not exist. Health
+endpoints are not covered by this `/v1` authorization requirement.
+
+### Migration note for the next minor release
+
+Before upgrading to the next minor release, apply the new Alembic revisions.
+Production API clients must configure the bearer token and principal settings
+above, send the bearer header on every `/v1` request, and adopt the generation
+source limits and event cursor contract described in this guide.
 
 Health endpoints:
 

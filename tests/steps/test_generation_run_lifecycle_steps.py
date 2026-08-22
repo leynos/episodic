@@ -20,6 +20,7 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
 )
+from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.generation_run_errors import CheckpointAlreadyTerminal
 
 if typ.TYPE_CHECKING:
@@ -66,6 +67,9 @@ def _run() -> GenerationRun:
         started_at=None,
         ended_at=None,
         error_message=None,
+        quality_mode=QualityMode.DRAFT_WITHOUT_QA,
+        qa_status=QaStatus.SKIPPED,
+        skip_qa_rationale="No-QA vertical-slice draft.",
     )
 
 

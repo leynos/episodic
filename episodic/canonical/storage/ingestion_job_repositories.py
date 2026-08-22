@@ -12,6 +12,7 @@ from .repository_base import _RepositoryBase
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import datetime as dt
     import uuid
 
     from episodic.canonical.domain import (
@@ -34,6 +35,32 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
             IngestionJobRecord,
             IngestionJobRecord.id == job_id,
             _ingestion_job_from_record,
+        )
+
+    async def get_for_update(self, job_id: uuid.UUID) -> IngestionJob | None:
+        """Fetch and lock an ingestion job for transactional mutation."""
+        result = await self._session.execute(
+            sa
+            .select(IngestionJobRecord)
+            .where(IngestionJobRecord.id == job_id)
+            .with_for_update()
+        )
+        record = result.scalar_one_or_none()
+        return None if record is None else _ingestion_job_from_record(record)
+
+    async def set_target_episode(
+        self,
+        job_id: uuid.UUID,
+        *,
+        episode_id: uuid.UUID,
+        updated_at: dt.datetime,
+    ) -> None:
+        """Associate an ingestion job with its materialized episode."""
+        await self._session.execute(
+            sa
+            .update(IngestionJobRecord)
+            .where(IngestionJobRecord.id == job_id)
+            .values(target_episode_id=episode_id, updated_at=updated_at)
         )
 
     async def list_paged(
@@ -102,4 +129,8 @@ def _ingestion_job_filter_clause(
         )
     if filters.intake_state is not None:
         clauses.append(IngestionJobRecord.intake_state == filters.intake_state)
+    if filters.owner_principal_id is not None:
+        clauses.append(
+            IngestionJobRecord.owner_principal_id == filters.owner_principal_id
+        )
     return sa.and_(*clauses) if clauses else sa.true()

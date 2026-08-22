@@ -31,10 +31,16 @@ Examples
 """
 
 from .base import _GetHistoryResourceBase, _GetResourceBase
+from .episode_tei import EpisodeTeiResource
 from .episode_templates import (
     EpisodeTemplateHistoryResource,
     EpisodeTemplateResource,
     EpisodeTemplatesResource,
+)
+from .generation_runs import (
+    GenerationRunEventsResource,
+    GenerationRunResource,
+    GenerationRunsResource,
 )
 from .health import HealthLiveResource, HealthReadyResource
 from .reference_bindings import ReferenceBindingResource, ReferenceBindingsResource
@@ -60,9 +66,13 @@ from .source_intake import (
 )
 
 __all__ = [
+    "EpisodeTeiResource",
     "EpisodeTemplateHistoryResource",
     "EpisodeTemplateResource",
     "EpisodeTemplatesResource",
+    "GenerationRunEventsResource",
+    "GenerationRunResource",
+    "GenerationRunsResource",
     "HealthLiveResource",
     "HealthReadyResource",
     "IngestionJobResource",

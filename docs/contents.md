@@ -101,11 +101,19 @@ or delivery planning.
   - source-intake upload storage and idempotency port decisions.
 - [ADR 016: Adopt Skylos dead-code detection](adr/adr-016-adopt-skylos-dead-code-detection.md)
   - blocking static dead-code detection and exception policy.
+- [ADR 017: No-QA generation execution and TEI persistence][adr-017]
+  - generation launcher, draft persistence, recovery, and TEI retrieval
+    decisions.
+
+[adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 
 ## Execution plans
 
 - [Benchmark pyscn and Skylos dead-code detection](execplans/benchmark-pyscn-skylos-dead-code.md)
   - comparative evaluation plan for the two Python dead-code scanners.
+- [No-QA generation runs and TEI-P5 retrieval](
+  execplans/4-3-2-no-qa-generation-runs-and-tei-p5-retrieval.md)
+  - implementation plan for roadmap task 4.3.2.
 - [Reference binding resolution](execplans/1-4-3-reference-binding-resolution.md)
   - implementation plan for roadmap task 1.4.3.
 - [Scaffold Falcon HTTP services on Granian](execplans/1-5-1-scaffold-falcon-http-services-on-granian.md)

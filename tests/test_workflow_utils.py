@@ -14,7 +14,7 @@ import pytest
 from tests.utils import podman_socket_path
 
 ACT_RUNNER_IMAGE = "catthehacker/ubuntu:act-latest"
-
+_UNSUPPORTED_ARTIFACT_FIELD = 'unknown field "mime_type"'
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
@@ -233,6 +233,45 @@ def _run_act_subprocess(cmd: list[str], env: dict[str, str]) -> tuple[int, str]:
     return completed.returncode, completed.stdout + "\n" + completed.stderr
 
 
+def _failed_act_steps(logs: str) -> dict[tuple[str, str], list[str]]:
+    """Return structured act error messages grouped by failed job step."""
+    failed_steps: dict[tuple[str, str], list[str]] = {}
+    for line in logs.splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        match entry:
+            case {
+                "level": "error",
+                "job": str() as job,
+                "step": str() as step,
+                **fields,
+            }:
+                match fields.get("msg"):
+                    case str() as message if message:
+                        failed_steps.setdefault((job, step), []).append(message)
+                    case value if value:
+                        continue
+                    case _:
+                        match fields.get("message"):
+                            case str() as message:
+                                failed_steps.setdefault((job, step), []).append(message)
+    return failed_steps
+
+
+def _has_unsupported_artifact_protocol(logs: str) -> bool:
+    """Return whether the only failed act step is the artifact protocol error."""
+    failed_steps = _failed_act_steps(logs)
+    if len(failed_steps) != 1:
+        return False
+    return any(
+        _UNSUPPORTED_ARTIFACT_FIELD in message
+        for messages in failed_steps.values()
+        for message in messages
+    )
+
+
 def run_act(
     *,
     job_name: str,
@@ -268,7 +307,13 @@ def run_act(
     ]
     env = os.environ.copy()
     env["DOCKER_HOST"] = socket_uri
-    return _run_act_subprocess(cmd, env)
+    returncode, logs = _run_act_subprocess(cmd, env)
+    if returncode != 0 and _has_unsupported_artifact_protocol(logs):
+        pytest.skip(
+            "installed act artifact server does not support "
+            "actions/upload-artifact's current request schema."
+        )
+    return returncode, logs
 
 
 def _find_in_zips(

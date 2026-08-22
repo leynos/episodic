@@ -45,6 +45,7 @@ async def create_series_profile(client: httpx.AsyncClient) -> str:
     """Create a series profile through the public API and return its id."""
     response = await client.post(
         "/v1/series-profiles",
+        headers={"Idempotency-Key": f"bdd-profile-{uuid.uuid4()}"},
         json={
             "slug": f"bdd-source-intake-{uuid.uuid4()}",
             "title": "BDD Source Intake",
@@ -90,7 +91,7 @@ async def create_pending_upload(
     now = dt.datetime.now(dt.UTC)
     upload = Upload(
         id=uuid.uuid4(),
-        owner_principal_id="api-user",
+        owner_principal_id="principal-a",
         content_type="text/plain",
         declared_size=1,
         actual_size=None,

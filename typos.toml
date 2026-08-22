@@ -34,6 +34,7 @@ extend-ignore-re = [
     "--artifact-server-path\\b",
     "<artifact-name>",
     "\\bact-artifacts\\b",
+    "\\bmaterialise_episode_from_ingestion\\b",
     "\\brust-analyzer\\b",
     "\\bserialised_outcome\\b",
     "\\bspeech_render_artifacts\\b",

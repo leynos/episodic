@@ -69,6 +69,35 @@ class CostProviderOperation:
     operation: str
 
 
+@typ.runtime_checkable
+class CostRecorderPort(typ.Protocol):
+    """Application port for recording the costs of one workflow run."""
+
+    async def pin_run_pricing(
+        self,
+        workflow_run_id: str,
+        providers: tuple[CostProviderOperation, ...],
+        billing_period_key: BillingPeriodKey,
+    ) -> None:
+        """Pin pricing snapshots before recording provider calls."""
+        raise NotImplementedError
+
+    async def record_provider_call(
+        self,
+        record: ProviderCallRecord,
+    ) -> CostLedgerEntryId:
+        """Record one priced provider call and return its ledger entry id."""
+        raise NotImplementedError
+
+    async def finalize_run(
+        self,
+        workflow_run_id: str,
+        workflow_node: str | None,
+    ) -> CostLedgerEntryId:
+        """Write the final run roll-up and return its ledger entry id."""
+        raise NotImplementedError
+
+
 @dc.dataclass(frozen=True, slots=True)
 class CostRecorder:
     """Coordinate pricing and ledger writes for orchestration code."""

@@ -4,6 +4,7 @@ import dataclasses as dc
 import enum
 import typing as typ
 
+from .generation_quality import QaStatus, QualityMode
 from .generation_run_errors import CheckpointAlreadyTerminal
 
 if typ.TYPE_CHECKING:
@@ -147,12 +148,22 @@ class GenerationRun:
     started_at: dt.datetime | None
     ended_at: dt.datetime | None
     error_message: str | None
+    error_category: str | None = None
+    quality_mode: QualityMode = QualityMode.DRAFT_WITHOUT_QA
+    qa_status: QaStatus | None = None
+    skip_qa_rationale: str | None = None
 
     def __post_init__(self) -> None:
         """Validate generation-run invariants."""
         _validate_non_empty_text(self.actor, "actor")
         _validate_optional_text(self.current_node, "current_node")
         _validate_optional_text(self.error_message, "error_message")
+        _validate_optional_text(self.error_category, "error_category")
+        _validate_draft_without_qa_metadata(
+            quality_mode=self.quality_mode,
+            qa_status=self.qa_status,
+            skip_qa_rationale=self.skip_qa_rationale,
+        )
         _copy_json_mapping(self, "budget_snapshot")
         _copy_json_mapping(self, "configuration")
 
@@ -305,6 +316,20 @@ class TeiHeader:
     updated_at: dt.datetime
 
 
+def _require_positive_integer(value: object, field_name: str) -> None:
+    """Require an exact positive integer, excluding boolean values."""
+    if type(value) is not int or value < 1:
+        msg = f"{field_name} must be a positive integer."
+        raise ValueError(msg)
+
+
+def _require_value(value: object, field_name: str) -> None:
+    """Require a non-null provenance value."""
+    if value is None:
+        msg = f"{field_name} must be set."
+        raise ValueError(msg)
+
+
 @dc.dataclass(frozen=True, slots=True)
 class CanonicalEpisode:
     """Canonical episode representation."""
@@ -318,6 +343,37 @@ class CanonicalEpisode:
     approval_state: ApprovalState
     created_at: dt.datetime
     updated_at: dt.datetime
+    tei_revision: int = 1
+    tei_content_hash: str | None = None
+    qa_status: QaStatus | None = None
+    last_generation_run_id: uuid.UUID | None = None
+
+    def __post_init__(self) -> None:
+        """Validate TEI revision metadata."""
+        _validate_non_empty_text(self.tei_xml, "tei_xml")
+        _require_positive_integer(self.tei_revision, "tei_revision")
+        _validate_optional_text(
+            self.tei_content_hash,
+            "tei_content_hash",
+        )
+
+
+@dc.dataclass(frozen=True, slots=True)
+class EpisodeTeiUpdate:
+    """Optimistic TEI update request for a canonical episode."""
+
+    tei_xml: str
+    qa_status: QaStatus
+    last_generation_run_id: uuid.UUID
+    expected_revision: int
+    updated_at: dt.datetime
+
+    def __post_init__(self) -> None:
+        """Validate optimistic TEI update invariants."""
+        _validate_non_empty_text(self.tei_xml, "tei_xml")
+        _require_value(self.qa_status, "qa_status")
+        _require_value(self.last_generation_run_id, "last_generation_run_id")
+        _require_positive_integer(self.expected_revision, "expected_revision")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -335,6 +391,7 @@ class IngestionJob:
     created_at: dt.datetime
     updated_at: dt.datetime
     intake_state: IntakeState = IntakeState.AWAITING_SOURCES
+    owner_principal_id: str | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -343,6 +400,7 @@ class IngestionJobListFilters:
 
     series_profile_id: uuid.UUID | None
     intake_state: IntakeState | None
+    owner_principal_id: str | None = None
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -616,6 +674,25 @@ def _validate_optional_text(value: str | None, field_name: str) -> None:
     """Validate an optional string field when present."""
     if value is not None:
         _validate_non_empty_text(value, field_name)
+
+
+def _validate_draft_without_qa_metadata(
+    *,
+    quality_mode: QualityMode,
+    qa_status: QaStatus | None,
+    skip_qa_rationale: str | None,
+) -> None:
+    """Validate the no-QA slice's required audit metadata."""
+    if quality_mode is not QualityMode.DRAFT_WITHOUT_QA:
+        msg = f"Unsupported quality_mode: {quality_mode!s}."
+        raise ValueError(msg)
+    if qa_status is not QaStatus.SKIPPED:
+        msg = "qa_status must be skipped for draft_without_qa runs."
+        raise ValueError(msg)
+    if skip_qa_rationale is None:
+        msg = "skip_qa_rationale must be a non-empty string."
+        raise ValueError(msg)
+    _validate_non_empty_text(skip_qa_rationale, "skip_qa_rationale")
 
 
 def _copy_json_mapping(owner: object, field_name: str) -> None:

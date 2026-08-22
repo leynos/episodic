@@ -15,12 +15,14 @@ Commit work in a single unit-of-work:
 import typing as typ
 
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
+from episodic.cost.storage import SqlAlchemyCostLedgerStore
 from episodic.logging import get_logger
 
+from .episode_repository import SqlAlchemyEpisodeRepository
+from .generation_runs import SqlAlchemyGenerationRunStore
 from .ingestion_job_repositories import SqlAlchemyIngestionJobRepository
 from .repositories import (
     SqlAlchemyApprovalEventRepository,
-    SqlAlchemyEpisodeRepository,
     SqlAlchemyEpisodeTemplateHistoryRepository,
     SqlAlchemyEpisodeTemplateRepository,
     SqlAlchemyReferenceBindingRepository,
@@ -46,6 +48,8 @@ if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from episodic.observability import MetricsPort, MonotonicClockPort
+
+    from .generation_run_storage_runtime import GenerationRunStorageRuntime
 
 logger = get_logger(__name__)
 
@@ -90,6 +94,10 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Repository for immutable reusable reference document revisions.
     reference_bindings : SqlAlchemyReferenceBindingRepository
         Repository for reusable reference binding persistence.
+    generation_runs : SqlAlchemyGenerationRunStore
+        Repository and event log for durable generation runs.
+    cost_ledger : SqlAlchemyCostLedgerStore
+        Cost ledger adapter bound to the same session.
     """
 
     def __init__(
@@ -98,10 +106,12 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         *,
         metrics: MetricsPort | None = None,
         clock: MonotonicClockPort | None = None,
+        generation_run_runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._metrics = metrics
         self._clock = clock
+        self._generation_run_runtime = generation_run_runtime
         self._session: AsyncSession | None = None
 
     async def __aenter__(self) -> SqlAlchemyUnitOfWork:
@@ -143,6 +153,11 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
                 monotonic_clock=self._clock,
             ),
         )
+        self.generation_runs = SqlAlchemyGenerationRunStore(
+            self._session,
+            runtime=self._generation_run_runtime,
+        )
+        self.cost_ledger = SqlAlchemyCostLedgerStore(self._session)
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
             self._session,
             metrics=self._metrics,

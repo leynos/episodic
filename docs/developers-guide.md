@@ -22,7 +22,10 @@ Accepted design decisions relevant to current implementation work:
 - [`adr-014-hexagonal-architecture-enforcement.md`](adr/adr-014-hexagonal-architecture-enforcement.md)
 - [`adr-015-generation-run-port-split.md`](adr/adr-015-generation-run-port-split.md)
 - [`adr-015-upload-and-idempotency-ports.md`](adr/adr-015-upload-and-idempotency-ports.md)
+- [`adr-017-no-qa-generation-run-execution-and-tei-persistence.md`][adr-017]
 - [`episodic-podcast-generation-system-design.md`](episodic-podcast-generation-system-design.md)
+
+[adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 
 ## Local development
 
@@ -263,6 +266,22 @@ Runtime environment:
   `FilesystemObjectStore` for source-intake upload bytes. The runtime fails
   fast when the value is missing, because `POST /v1/uploads` cannot accept
   payloads without an object-store adapter.
+- `OPENAI_BASE_URL` and `OPENAI_API_KEY` are optional paired settings. Set both
+  to configure the OpenAI-compatible provider; setting only one is invalid and
+  prevents startup.
+- `DRAFT_MODEL` defaults to `gpt-4o-mini`. When set explicitly, it must be a
+  non-empty string after whitespace is trimmed.
+- `GENERATION_MAX_OUTPUT_TOKENS` and `GENERATION_MAX_RESPONSE_BYTES` are
+  optional positive-integer settings. They default to `4096` and `1048576`,
+  respectively. The token setting becomes the output-token cap passed to the
+  LLM request; the byte setting is enforced against the UTF-8 provider response
+  before the generated JSON is parsed.
+- When the OpenAI settings are configured, startup builds an
+  `OpenAICompatibleLLMAdapter` and an `InProcessGenerationRunLauncher`. When
+  they are not configured, generation-run creation returns
+  `503 Service Unavailable` because no launcher is available.
+- During shutdown, the runtime shuts down the launcher (cancelling and
+  draining its scheduled tasks) before closing the provider client.
 
 Health contract:
 
@@ -324,9 +343,12 @@ Authorization scaffold:
 - Every `/v1` request passes through `AuthorizationMiddleware` before resource
   dispatch. Health checks remain operator endpoints and are not authorized by
   this scaffold.
-- `ApiDependencies.authorization` accepts an `AuthorizationPort`; production
-  wiring currently defaults to `PermitAll`, so existing clients do not need an
-  `Authorization` header yet.
+- `ApiDependencies.authorization` accepts an `AuthorizationPort`. Production
+  requests must carry `Authorization: Bearer <token>` and production wiring uses
+  `StaticBearerTokenAuthorization`, configured by the required
+  `API_AUTHORIZATION_BEARER_TOKEN` and `API_AUTHORIZATION_PRINCIPAL_ID`
+  settings. Test composition may use `PermitAll` deliberately; it is not part
+  of the production runtime.
 - Authorization adapters receive an `AuthorizationContext` containing the HTTP
   method, request path, and raw `Authorization` header. The port is async, so
   future policy adapters can call external identity or permission services.
@@ -335,12 +357,16 @@ Authorization scaffold:
   the Falcon request context before resource dispatch; source-intake
   idempotency scopes keys from that trusted context rather than from
   client-controlled principal headers.
+- Generation-run creation records that trusted principal as the run actor and
+  ignores the request body's actor value. Ingestion jobs retain their owner so
+  creation, run polling, event listing, and TEI retrieval can return the same
+  not-found response for absent and inaccessible resources.
 - Non-permit decisions short-circuit with the canonical error envelope:
   `unauthorized` returns `401`, and `forbidden` returns `403`.
 - Authorization adapter failures short-circuit with `service_unavailable` and
   `503`, so policy-backend outages are not reported as resource failures.
-- Roadmap item `5.1` is expected to replace the default permit-all adapter with
-  policy-backed role or scope checks.
+- Roadmap item `5.1` is expected to add policy-backed role or scope checks
+  behind the authorization port.
 
 Testing guidance:
 
@@ -1479,6 +1505,13 @@ The port surface is intentionally split:
 - `GenerationRunRepository` creates, fetches, lists, and updates run state.
 - `GenerationEventLog` appends events and allocates per-run `EventSeq` values
   inside the adapter.
+- `GenerationRunEventStore` composes the run repository and event log for
+  durable generation-run storage. `CanonicalUnitOfWork.generation_runs` exposes
+  this port; `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunStore` to
+  its session, so callers use the same unit of work and own its commit or
+  rollback. `GenerationRunStorageRuntime` supplies the adapter's clock and UUID
+  providers, with production defaults and deterministic injection available to
+  tests.
 - `GenerationCheckpointPort` creates checkpoints and records reviewer
   responses through the `Checkpoint.respond(...)` domain transition.
 - `GenerationRunPort` composes the three sub-ports for callers that need the
@@ -1495,6 +1528,202 @@ review checkpoint attached to a generation run. It is not the same as
 `episodic.orchestration.WorkflowCheckpoint`, which stores internal LangGraph
 suspend/resume state through `CheckpointPort`. Do not convert between the two
 implicitly; bridge logic belongs in the later orchestration and REST work.
+
+### No-QA launcher and TEI retrieval
+
+The no-QA path is deliberately a small application service around the
+`GenerationRunLauncher` scheduling seam. `GenerationRunsResource` creates the
+run only after `materialise_episode_from_ingestion` has materialized a ready
+ingestion job into a canonical episode, placeholder TEI header, and source
+documents. It commits that request-scoped unit of work before calling
+`launch(run_id)`. `EpisodeTeiResource` remains the retrieval boundary: it
+serves the persisted episode TEI as JSON by default or raw
+`application/tei+xml` with content negotiation.
+
+`DraftScriptGenerator` is the generation seam. The launcher projects canonical
+source documents and resolved host or guest reference-document revisions into
+`DraftScriptRequest`; `LLMDraftScriptGenerator` is the current single-pass
+`LLMPort` implementation. The generator returns `DraftScriptResult`, but does
+not open a unit of work or persist domain entities. Lifecycle repositories
+receive the frozen, slotted `GenerationRunStatusUpdate` value object so status,
+current node, terminal time, and optional failure details travel as one
+immutable command.
+
+`persist_draft_script` is the persistence boundary. It validates the generated
+TEI, applies the expected `tei_revision` check, and updates the episode with
+the TEI, content hash, generation-run identifier, and `QaStatus.SKIPPED`. The
+`EpisodeTeiUpdate` command carries that TEI, QA status, generation-run
+provenance, timestamp, and expected revision as one immutable update. The SQL
+episode repository updates only when the stored revision equals
+`expected_revision`, then increments the revision; a lost compare-and-set is
+reported as an episode revision conflict. The surrounding unit of work still
+controls commit or rollback. Materialization and persistence use
+`CanonicalUnitOfWork` repository ports and leave commit or rollback to their
+caller. The launcher therefore uses detached units of work: one to claim and
+load inputs, another for `draft.generated`, and another to persist TEI, cost
+records, ordered terminal events, and status. A request-scoped unit of work
+must never be captured by a background task.
+
+When configured, `CostRecorder` records the provider call and final run roll-up
+in the persistence unit of work. It first pins the immutable provider pricing
+selected for the run, then records usage with a run-scoped idempotency key.
+`PRICING_SNAPSHOT_DIRECTORY` is optional: its default is
+`config/pricing-snapshots`; a configured relative path is resolved from the
+repository root, and startup rejects a path that is not an existing directory.
+The runtime constructs `FilePricingCatalogue` from the validated directory, so
+the same pricing source is used when costs are recorded.
+
+Generation input is bounded before it reaches the draft provider. The optional
+`GENERATION_MAX_SOURCE_COUNT`, `GENERATION_MAX_SOURCE_BYTES`,
+`GENERATION_MAX_AGGREGATE_SOURCE_BYTES`, and
+`GENERATION_MAX_NORMALIZED_SOURCE_BYTES` settings must be positive integers.
+The launcher rejects a source as soon as its stream or normalized text exceeds
+one of these limits and records the stable `generation.source_limit` failure
+category without logging source text. The claim transaction commits the
+conditional claim and `run.started` event. A detached read unit of work then
+loads the episode, source-document metadata, and presenter bindings and closes
+before bounded object-store or filesystem streaming starts. Hydration and text
+normalization therefore happen after the metadata read unit of work has closed,
+so external reads do not retain a generation-run row lock or database
+connection.
+
+Generation-run polling, event listing, and TEI retrieval emit the bounded
+`generation_run.read`, `generation_run.events.list`, and `episode_tei.read`
+spans. Their only route attributes are operation, outcome, representation,
+pagination mode, and stable failure category; they never include content,
+principal identifiers, idempotency keys, or run identifiers.
+
+The API composition root emits `generation_api_request_total` and
+`generation_api_request_latency_ms` for generation creation, polling, event
+listing, and TEI retrieval. Their only labels are `operation` and the bounded
+`outcome` (`success`, `rejected`, `failed`, or `not_modified` for TEI cache
+responses); they contain no request data or principal identity.
+
+`GET /v1/generation-runs/{run_id}/events` returns append-only events after an
+optional `after_seq` cursor, with `items`, `after_seq`, `limit`, `offset`, and
+`total` in its response envelope. It orders by sequence and treats `after_seq`
+as an exclusive lower bound. Cursor pagination is distinct from the general
+offset-pagination convention: callers may use `after_seq` or a non-zero
+`offset`, but not both; the API rejects that combination before the event store
+is queried.
+
+Admission is bounded before task allocation. The default capacity is four
+running tasks plus sixteen admitted pending tasks; exhaustion raises
+`GenerationRunAdmissionError`, and the API records `launcher.overloaded` on the
+run before returning `503 Service Unavailable`. Claims remain conditional
+`pending -> running` transitions with a lease. A process restart does not
+recover the in-memory task registry: inspect an expired lease and use the
+documented manual-failure procedure, because this slice has no automatic
+reaper, retry, or reassignment path.
+
+The lifecycle ordering is part of the contract. `launch` retains a strong task
+reference; `drain` waits for all retained tasks; `shutdown` closes admission,
+cancels unfinished tasks, and drains them. Cancellation shields its failure
+recording so the run receives `run.failed` with `launcher.shutdown`. Runtime
+shutdown calls launcher shutdown, then closes the LLM provider, and only then
+disposes the database engine. After the drain, shutdown applies a fallback
+cancellation write for each task that was unfinished when cancellation began.
+This covers tasks cancelled before `_run_task` starts; terminal-state guards
+prevent duplicate failure events when the task handled cancellation itself. The
+launcher emits a `generation_run.execute` span and bounded terminal,
+draft-error, QA-bypass, and latency metrics; the API command span and stable
+failure categories provide the corresponding request and outcome trace without
+unbounded run identifiers in metric labels.
+
+### Manual recovery of expired generation-run leases
+
+Use this procedure when a process restart or worker loss leaves a run in
+`running`. The `started_at` value records when the conditional claim won, and
+`lease_expires_at` is the deadline used to identify an expired lease. Inspect
+both fields with the run status and event log before taking action:
+
+```sql
+SELECT id, status, started_at, lease_expires_at,
+       idempotency_principal_id, idempotency_key,
+       error_category, error_message
+FROM generation_runs
+WHERE id = :run_id;
+```
+
+Proceed only when the status is `running`, `lease_expires_at` is non-null and
+earlier than the current UTC time, and the owning process is no longer able to
+finish the run. A worker claim is itself conditional on `status = 'pending'`; a
+claim that updates zero rows has lost the race or found a terminal run. Do not
+reset an expired `running` row to `pending` or launch a replacement: this slice
+has no automatic reaper or reassignment path.
+
+To fail the run manually, use a privileged database transaction. The locking
+query below selects only a running run with a non-null expired lease. If it
+returns no row, execute `ROLLBACK` and stop: this is an explicit no-op, and the
+event and status update must not be executed. If it returns the requested run,
+keep the transaction open, append the failure event, update the terminal state,
+and then commit both writes together.
+
+```sql
+BEGIN;
+
+SELECT id
+FROM generation_runs
+WHERE id = :run_id
+  AND status = 'running'
+  AND lease_expires_at IS NOT NULL
+  AND lease_expires_at <= CURRENT_TIMESTAMP
+FOR UPDATE;
+
+-- If no row is returned, execute ROLLBACK and stop. Do not execute the
+-- statements below.
+
+-- After the qualifying row is locked, append run.failed with the same
+-- error_category and error_message, using the next per-run event sequence.
+INSERT INTO generation_events
+    (id, generation_run_id, seq, kind, payload, occurred_at, created_at)
+SELECT :event_id, :run_id,
+       (SELECT COALESCE(MAX(seq), 0) + 1
+        FROM generation_events
+        WHERE generation_run_id = :run_id),
+       'run.failed',
+       jsonb_build_object(
+           'error_category', 'launcher.lease_expired',
+           'error_message', 'Generation lease expired; failed manually.'
+       ), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP;
+
+UPDATE generation_runs
+SET status = 'failed',
+    current_node = 'failed',
+    ended_at = CURRENT_TIMESTAMP,
+    error_message = 'Generation lease expired; failed manually.',
+    error_category = 'launcher.lease_expired',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = :run_id
+RETURNING id;
+
+COMMIT;
+```
+
+The resulting semantics are compare-and-act: only the qualifying row is locked,
+and a missing row causes an explicit rollback with no persisted event or status
+change. The `run.failed` event and `failed` terminal update are committed
+atomically after that lock succeeds.
+
+Keep `idempotency_principal_id` and `idempotency_key` unchanged. They remain
+attached to the failed generation run so a replay is tied to the existing
+record rather than creating an untracked replacement. Automatic recovery and
+reassignment remain roadmap item `2.6.2`.
+
+TEI representation selection is centralized in
+`episodic.api.resources.episode_tei.negotiate_tei_media_type`. Keep JSON as the
+default, raw XML for `application/tei+xml`, and `406` for unsupported types.
+Both serialized representations receive representation-specific strong ETags; a
+matching `If-None-Match` (including `*`) returns `304` with no body. Apply
+`Content-Disposition` only to the raw TEI representation.
+
+The end-to-end contract lives in
+`tests/features/no_qa_generation_slice.feature`. Its steps start Vidai Mock
+through the shared process helper, configure deterministic valid and invalid
+draft completions, inject provider failure with `X-Vidai-Chaos-Drop`, and drive
+the real Falcon, SQLAlchemy, launcher, and LLM adapter stack. CI installs the
+pinned Vidai Mock binary before tests; local runs skip only when the binary is
+absent.
 
 ### Maintainer rules
 

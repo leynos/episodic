@@ -38,11 +38,13 @@ from episodic.cost.ports import (
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.cost.recorder import CostRecorderPort
 
 __all__ = [
     "BillingPeriodKey",
     "CostLedgerEntryId",
     "CostLedgerPort",
+    "CostRecorderPort",
     "CurrencyCode",
     "IdempotencyKey",
     "LedgerScope",

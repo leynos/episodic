@@ -95,6 +95,13 @@ def is_revision_conflict_integrity_error(
     )
 
 
+def is_source_document_duplicate_integrity_error(exc: IntegrityError) -> bool:
+    """Return whether ``exc`` is the deterministic source-document ID conflict."""
+    if constraint_name(exc) == "source_documents_pkey":
+        return True
+    return "UNIQUE constraint failed: source_documents.id" in str(exc.orig)
+
+
 async def insert_with_conflict_translation(
     session: AsyncSession,
     record: object,

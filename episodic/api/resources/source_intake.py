@@ -32,9 +32,13 @@ from episodic.api.source_intake_support import (
     parse_upload_form,
     require_str,
 )
-from episodic.canonical.domain import IngestionJobListFilters, IntakeState
+from episodic.canonical.domain import IngestionJob, IngestionJobListFilters, IntakeState
 from episodic.canonical.idempotency_service import (
     multipart_request_hash,
+)
+from episodic.canonical.source_intake_errors import (
+    IngestionJobNotFoundError,
+    UploadNotFoundError,
 )
 from episodic.canonical.source_intake_service import (
     CreateIngestionJobRequest,
@@ -71,6 +75,7 @@ class UploadsResource:
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Create one ready upload from multipart form data."""
+        owner_principal_id = _require_principal(req)
         object_store = self._config.object_store
         if object_store is None:
             raise http_error(
@@ -105,7 +110,7 @@ class UploadsResource:
                     self._uow_factory,
                     object_store,
                     UploadBytesRequest(
-                        owner_principal_id=principal_id(req),
+                        owner_principal_id=owner_principal_id,
                         content_type=parsed.content_type,
                         declared_size=parsed.declared_size,
                         declared_sha256=parsed.declared_sha256,
@@ -143,11 +148,11 @@ class UploadResource:
         upload_id: str,
     ) -> None:
         """Return one upload metadata envelope."""
-        del req
         parsed_upload_id = parse_uuid(upload_id, "upload_id")
         async with self._uow_factory() as uow:
             try:
                 upload = await get_upload(uow, parsed_upload_id)
+                _require_upload_owner(upload.owner_principal_id, principal_id(req))
             except SourceIntakeError as exc:
                 raise map_source_intake_error(exc) from exc
         resp.media = serialize_upload(upload)
@@ -162,12 +167,21 @@ class IngestionJobsResource:
 
     async def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Create one intake-stage ingestion job."""
+        owner_principal_id = _require_principal(req)
         payload = require_payload_dict(await req.get_media())
         body_hash = json_body_hash(payload)
         series_profile_id = parse_uuid(
             require_str(payload, "series_profile_id"), "series_profile_id"
         )
         target_episode_id = parse_optional_payload_uuid(payload, "target_episode_id")
+        if target_episode_id is not None:
+            raise http_error(
+                falcon.HTTPBadRequest(
+                    description="target_episode_id is not accepted by this endpoint."
+                ),
+                code="validation_error",
+                details={"field": "target_episode_id", "constraint": "unsupported"},
+            )
 
         async def work() -> IdempotentResponse:
             async with self._uow_factory() as uow:
@@ -177,6 +191,7 @@ class IngestionJobsResource:
                         CreateIngestionJobRequest(
                             series_profile_id=series_profile_id,
                             target_episode_id=target_episode_id,
+                            owner_principal_id=owner_principal_id,
                         ),
                     )
                 except SourceIntakeError as exc:
@@ -196,6 +211,7 @@ class IngestionJobsResource:
 
     async def on_get(self, req: falcon.Request, resp: falcon.Response) -> None:
         """List intake-stage ingestion jobs."""
+        owner_principal_id = _require_principal(req)
         pagination = parse_pagination(req)
         series_profile_id = parse_optional_uuid_param(req, "series_profile_id")
         intake_state = parse_enum_param(req, "intake_state", IntakeState)
@@ -205,6 +221,7 @@ class IngestionJobsResource:
                 IngestionJobListFilters(
                     series_profile_id=series_profile_id,
                     intake_state=intake_state,
+                    owner_principal_id=owner_principal_id,
                 ),
                 pagination,
             )
@@ -227,14 +244,14 @@ class IngestionJobResource:
         self,
         req: falcon.Request,
         resp: falcon.Response,
-        job_id: str,
+        ingestion_job_id: str,
     ) -> None:
         """Return the current intake status for one ingestion job."""
-        del req
-        parsed_job_id = parse_uuid(job_id, "job_id")
+        parsed_job_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         async with self._uow_factory() as uow:
             try:
                 job = await get_ingestion_job_status(uow, parsed_job_id)
+                _require_ingestion_job_owner(job, principal_id(req))
             except SourceIntakeError as exc:
                 raise map_source_intake_error(exc) from exc
         next_poll = None
@@ -257,10 +274,10 @@ class IngestionJobSourcesResource:
         self,
         req: falcon.Request,
         resp: falcon.Response,
-        job_id: str,
+        ingestion_job_id: str,
     ) -> None:
         """Attach one upload or remote URI source to an ingestion job."""
-        parsed_job_id = parse_uuid(job_id, "job_id")
+        parsed_job_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         payload = require_payload_dict(await req.get_media())
         body_hash = json_body_hash(payload)
         attach_request = build_attach_source_request(parsed_job_id, payload)
@@ -268,6 +285,8 @@ class IngestionJobSourcesResource:
         async def work() -> IdempotentResponse:
             async with self._uow_factory() as uow:
                 try:
+                    job = await get_ingestion_job_status(uow, parsed_job_id)
+                    _require_ingestion_job_owner(job, principal_id(req))
                     source = await attach_source_to_ingestion_job(uow, attach_request)
                 except SourceIntakeError as exc:
                     raise map_source_intake_error(exc) from exc
@@ -291,13 +310,15 @@ class IngestionJobSourcesResource:
         self,
         req: falcon.Request,
         resp: falcon.Response,
-        job_id: str,
+        ingestion_job_id: str,
     ) -> None:
         """List source attachments for one ingestion job."""
-        parsed_job_id = parse_uuid(job_id, "job_id")
+        parsed_job_id = parse_uuid(ingestion_job_id, "ingestion_job_id")
         pagination = parse_pagination(req)
         async with self._uow_factory() as uow:
             try:
+                job = await get_ingestion_job_status(uow, parsed_job_id)
+                _require_ingestion_job_owner(job, principal_id(req))
                 page = await list_ingestion_job_sources(
                     uow,
                     parsed_job_id,
@@ -312,3 +333,33 @@ class IngestionJobSourcesResource:
             "total": page.total,
         }
         resp.status = falcon.HTTP_200
+
+
+def _require_ingestion_job_owner(
+    job: IngestionJob,
+    principal: str | None,
+) -> None:
+    """Hide ingestion jobs that do not belong to the authenticated principal."""
+    if principal is not None and job.owner_principal_id == principal:
+        return
+    raise IngestionJobNotFoundError(str(job.id))
+
+
+def _require_upload_owner(
+    owner_principal_id: str | None, principal: str | None
+) -> None:
+    """Hide uploads that do not belong to the authenticated principal."""
+    if principal is not None and owner_principal_id == principal:
+        return
+    raise UploadNotFoundError("upload")
+
+
+def _require_principal(req: falcon.Request) -> str:
+    """Return the authenticated principal required for collection access."""
+    principal = principal_id(req)
+    if principal is not None:
+        return principal
+    raise http_error(
+        falcon.HTTPUnauthorized(description="Authorization is required."),
+        code="unauthorized",
+    )
