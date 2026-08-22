@@ -39,10 +39,12 @@ SKYLOS_VERSION = 4.33.2
 SKYLOS = $(UV_ENV) $(UV) tool run --from 'skylos==$(SKYLOS_VERSION)' skylos \
 	--config-file pyproject.toml
 SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
+DUPLICATION_GATE = $(UV_ENV) $(UV) run scripts/duplication_gate.py
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie spelling spelling-helper-test test typecheck \
         crosshair check-migrations skylos-allow validate \
+        duplication duplication-test duplication-allow \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
         $(TOOLS) $(VENV_TOOLS)
 
@@ -110,9 +112,35 @@ lint: check-architecture ## Run linters
 	$(DF12_FUTURE_ANNOTATIONS) $(PYLINT_TARGETS)
 	$(AMBRLEAKS) tests
 	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
+	$(DUPLICATION_GATE) check
 
-skylos-allow: export SKYLOS_NAME = $(value NAME)
-skylos-allow: export SKYLOS_REASON = $(value REASON)
+duplication: ## Run the blocking code-duplication gate
+	$(DUPLICATION_GATE) check
+
+duplication-test: ## Run the duplication-gate helper tests
+	@$(UV_ENV) $(UV) run --no-project --python 3.13 \
+		--with pytest==9.0.2 --with cyclopts --with 'pychase==0.1.0' \
+		--with tomlkit \
+		python -m pytest -c /dev/null --rootdir=. -p no:cacheprovider \
+		scripts/tests/test_duplication_gate.py
+
+# Accept FIRST/SECOND/REASON (and skylos NAME) only from the make command
+# line: `$(value ...)` alone would silently pick up unrelated environment
+# variables such as a host's exported NAME.
+cli_value = $(if $(filter command line,$(origin $(1))),$(value $(1)))
+
+duplication-allow: export DUPLICATION_FIRST = $(call cli_value,FIRST)
+duplication-allow: export DUPLICATION_SECOND = $(call cli_value,SECOND)
+duplication-allow: export DUPLICATION_REASON = $(call cli_value,REASON)
+duplication-allow: ## Record one reasoned duplication exception
+	@test -n "$${DUPLICATION_FIRST}" || { printf "Error: FIRST is required (path::qualname)\\n" >&2; exit 2; }
+	@test -n "$${DUPLICATION_REASON}" || { printf "Error: REASON is required for a duplication exception\\n" >&2; exit 2; }
+	$(DUPLICATION_GATE) allow --first "$${DUPLICATION_FIRST}" \
+		$(if $(call cli_value,SECOND),--second "$${DUPLICATION_SECOND}",) \
+		--reason "$${DUPLICATION_REASON}"
+
+skylos-allow: export SKYLOS_NAME = $(call cli_value,NAME)
+skylos-allow: export SKYLOS_REASON = $(call cli_value,REASON)
 skylos-allow: ## Document one named Skylos exception, not an entry point
 	@test -n "$${SKYLOS_NAME}" || { printf "Error: NAME is required for a named whitelist exception\\n" >&2; exit 2; }
 	@test -n "$${SKYLOS_REASON}" || { printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2; }

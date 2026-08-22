@@ -782,6 +782,126 @@ names = []
 "StaleEventSequence" = "Reserved generation-run port error required by the accepted lifecycle contract."
 "UploadInitRequest" = "Reserved source-intake request DTO required by the accepted upload contract."
 
+# PyChase settings for the blocking duplication gate (scripts/duplication_gate.py).
+# The thresholds follow the tuned benchmark configuration recorded in
+# docs/pychase-pyscn-duplication-head-to-head.md. The excluded modules are
+# declarative by convention: identifier and literal normalization makes
+# schema-shaped declarations (models, mappers, protocol interfaces, typed
+# request/response modules) structurally identical without any copy-paste.
+[tool.pychase]
+paths = ["episodic", "openai_test_types.py"]
+threshold = 0.9
+min-lines = 13
+min-nodes = 50
+exclude = [
+    "*/storage/*models.py", # SQLAlchemy record declarations
+    "*_mappers.py",         # field-by-field record/domain constructors
+    "*_protocols.py",       # repository Protocol interfaces
+    "types.py",             # typed request/response and enum declarations
+]
+
+# Reasoned exceptions for the duplication gate. A `unit` entry silences every
+# pair that unit participates in; a `pair` entry silences one unordered pair.
+# Record entries with `make duplication-allow FIRST=... [SECOND=...] REASON=...`
+# and remove them when the gate reports them as stale.
+[tool.duplication_gate]
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/api/app.py::_register_series_profile_routes", "episodic/api/app.py::_register_reference_document_routes"]
+reason = "Route registration is a repetitive list of literal URL-to-resource bindings; merging would hide the route table behind indirection."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/api/helpers.py::build_profile_update_request", "episodic/api/helpers.py::build_template_update_request"]
+reason = "Typed facades over the shared _build_typed_update_request helper; the residue binds each concrete request type."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/api/resources/episode_templates.py::EpisodeTemplateResource", "episodic/api/resources/series_profiles.py::SeriesProfileResource"]
+reason = "Template Method subclasses whose bodies are per-domain configuration overrides; the shared logic lives in the resource base classes."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/api/resources/episode_templates.py::EpisodeTemplateHistoryResource", "episodic/api/resources/series_profiles.py::SeriesProfileHistoryResource"]
+reason = "History resources only bind domain identifiers and serializers to the shared history base class."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/api/resources/reference_bindings.py::ReferenceBindingResource.on_get", "episodic/api/resources/reference_documents.py::ReferenceDocumentResource.on_get"]
+reason = "Falcon single-entity GET handlers share the unit-of-work and error-mapping envelope while differing in path parameters, service call, and serializer."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/api/resources/reference_documents.py::ReferenceDocumentResource.on_patch", "episodic/api/resources/reference_documents.py::ReferenceDocumentsResource.on_post"]
+reason = "Create and update handlers share a validate-then-serialize envelope but encode different HTTP semantics and optimistic-locking rules."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/api/serializers.py::serialize_series_profile", "episodic/api/serializers.py::serialize_episode_template"]
+reason = "Wire-format serializers are literal response-schema declarations for distinct API resources."
+
+[[tool.duplication_gate.allow]]
+unit = "episodic/api/serializers.py::serialize_ingestion_job_source"
+reason = "Response-schema dict literal sharing only the UUID and timestamp conversion idiom with the other serializers."
+
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/domain.py::EpisodeTemplate"
+reason = "Frozen dataclass domain entity whose declaration shape is inherently repetitive; the differing fields are the point."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/canonical/domain.py::EpisodeTemplateHistoryEntry", "episodic/canonical/domain.py::SeriesProfileHistoryEntry"]
+reason = "History entries differ only in the parent foreign-key field that the storage layer keys on; a generic base would erase it."
+
+[[tool.duplication_gate.allow]]
+unit = "episodic/canonical/idempotency.py::IdempotencyAcquireRequest"
+reason = "Distinct bounded-context DTO coinciding with the upload DTOs only in the frozen-dataclass __post_init__ guard-call idiom."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/canonical/profile_templates/_brief_loaders.py::_load_revisions_by_id", "episodic/canonical/profile_templates/_brief_loaders.py::_load_documents_by_id"]
+reason = "Two-call-site loader idiom whose shared logic already lives in _raise_if_missing_ids; the residue is type-specific attribute access."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/canonical/profile_templates/services/_typed.py::update_series_profile", "episodic/canonical/profile_templates/services/_typed.py::update_episode_template"]
+reason = "Typed facades over the shared _update_versioned_entity helper; the duplicated text is per-entity configuration and docstrings."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/canonical/storage/history_repositories.py::SqlAlchemySeriesProfileHistoryRepository", "episodic/canonical/storage/history_repositories.py::SqlAlchemyEpisodeTemplateHistoryRepository"]
+reason = "Protocol-conforming naming shims over the shared _HistoryRepositoryBase; only method names and generic parameters differ."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/canonical/storage/repositories.py::SqlAlchemyTeiHeaderRepository", "episodic/canonical/storage/repositories.py::SqlAlchemyIngestionJobRepository"]
+reason = "Two-method adapters whose shared query logic lives in _RepositoryBase; the remainder binds record type and mapper."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/canonical/storage/repositories.py::SqlAlchemySourceDocumentRepository", "episodic/canonical/storage/repositories.py::SqlAlchemyApprovalEventRepository"]
+reason = "Per-aggregate adapters delegating to _RepositoryBase._list_where; the duplication is protocol naming and column bindings."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/generation/guest_bios.py::_parse_entry", "episodic/generation/show_notes.py::_parse_entry"]
+reason = "Schema-specific strict-JSON parsers for distinct DTOs; the shared shape is the validate-then-construct idiom."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/generation/guest_bios.py::enrich_tei_with_guest_bios", "episodic/generation/show_notes.py::enrich_tei_with_show_notes"]
+reason = "Accepted debt: guest bios re-implements tei_payload helpers; consolidating onto episodic/generation/tei_payload.py is tracked as a follow-up refactor."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/llm/openai_validation.py::_normalize_chat_provider_call_usage", "episodic/llm/openai_validation.py::_normalize_responses_provider_call_usage"]
+reason = "Usage normalizers for two independently versioned OpenAI payload schemas; a shared field map would couple them."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/orchestration/_guest_bios_executor.py::_handle_generator_error", "episodic/orchestration/_show_notes_executor.py::_handle_generator_error"]
+reason = "Per-tool error-translation dispatchers; each binds its own domain exception pair and tool label at the point of use."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/orchestration/_guest_bios_executor.py::GuestBiosToolExecutor.__post_init__", "episodic/orchestration/_show_notes_executor.py::ShowNotesToolExecutor.__post_init__"]
+reason = "Frozen-dataclass lazy-default injection required by frozen=True; each executor builds a different generator configuration."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/worker/tasks.py::IoDiagnosticRequest", "episodic/worker/tasks.py::CpuDiagnosticRequest"]
+reason = "Separate Celery wire contracts; the repeated shape is field declaration plus JSON codec boilerplate."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/worker/tasks.py::IoDiagnosticResult", "episodic/worker/tasks.py::CpuDiagnosticResult"]
+reason = "Separate Celery wire contracts; the repeated shape is field declaration plus JSON codec boilerplate."
+
+[[tool.duplication_gate.allow]]
+pair = ["episodic/asyncio_tasks.py::create_task", "episodic/asyncio_tasks.py::create_task_in_group"]
+reason = "Thin public wrappers over one task-creation path differing only in the create_task callable; kept explicit for API ergonomics and typing."
+
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"

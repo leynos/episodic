@@ -64,8 +64,9 @@ The target runs this repository-wide pipeline, in order:
 3. the focused built-in Pylint 4 rules under managed PyPy;
 4. the `df12-python-lints` Pylint plug-in under CPython 3.14, including its
    separate future-annotations pass;
-5. `ambrleaks` over Syrupy snapshots under `tests`; and
-6. a blocking Skylos dead-code scan.
+5. `ambrleaks` over Syrupy snapshots under `tests`;
+6. a blocking Skylos dead-code scan; and
+7. a blocking PyChase code-duplication gate.
 
 The built-in Pylint pass is invoked through `uv tool run --python pypy` with
 the pinned `pylint-pypy-shim` wrapper from
@@ -173,6 +174,42 @@ entry-point rule nor a named exception can describe the boundary, and keep its
 reason beside the suppression. Temporary exceptions must name an owner,
 tracking reference, and expiry condition. Remove exception entries when the
 dynamic boundary disappears.
+
+
+## Code-duplication gate
+
+`make lint` (and the standalone `make duplication` target) runs
+`scripts/duplication_gate.py check`, which drives the pinned PyChase 0.1.0
+detector with the `[tool.pychase]` settings in `pyproject.toml` and fails while
+unsuppressed duplicate pairs remain. Findings name both members as
+`path:lines ~ path:lines` spans with `path::qualname` unit keys, so a finding
+can be pasted directly into a refactoring task or coding-agent prompt. The tool
+choice, thresholds, and module exclusions follow ADR-018 and
+[the duplication head-to-head](pychase-pyscn-duplication-head-to-head.md).
+
+Treat every new finding as copy-paste until proven otherwise: prefer extracting
+the shared logic over suppressing the report. When the parallel structure is
+intentional — wire-format declarations, Template Method subclasses over a
+shared base, or independently versioned schemas — record a reasoned exception:
+
+```shell
+make duplication-allow FIRST='episodic/api/serializers.py::serialize_series_profile' \
+  SECOND='episodic/api/serializers.py::serialize_episode_template' \
+  REASON="Wire-format serializers are literal response-schema declarations for distinct resources"
+```
+
+Omit `SECOND` to silence every pair one unit participates in. The target
+refuses empty keys or reasons and stores entries under
+`[tool.duplication_gate]`. The gate reports entries whose duplication has been
+resolved as stale; remove them in the same change. Declarative module patterns
+(storage record models, record/domain mappers, repository protocols, typed
+request modules) are excluded in `[tool.pychase]` with documented reasons
+rather than per-pair entries.
+
+The gate runs its own Python 3.13 environment because PyChase 0.1.0 imports
+`ast` aliases removed in Python 3.14, and it re-executes itself with
+`PYTHONHASHSEED=0` so LSH bucketing stays deterministic. Its helper tests run
+through `make duplication-test`.
 
 ## Spelling policy
 

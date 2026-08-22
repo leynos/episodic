@@ -131,8 +131,8 @@ def test_skylos_allow_requires_name_and_reason() -> None:
 
     required_fragments = (
         "skylos-allow: ## Document one named Skylos exception, not an entry point",
-        "skylos-allow: export SKYLOS_NAME = $(value NAME)",
-        "skylos-allow: export SKYLOS_REASON = $(value REASON)",
+        "skylos-allow: export SKYLOS_NAME = $(call cli_value,NAME)",
+        "skylos-allow: export SKYLOS_REASON = $(call cli_value,REASON)",
         'test -n "$${SKYLOS_NAME}"',
         'test -n "$${SKYLOS_REASON}"',
         "NAME is required for a named whitelist exception",

@@ -97,6 +97,11 @@
     entry-point rule cannot describe the boundary: run
     `make skylos-allow NAME=handler REASON="Loaded by plugin registry"`
     with the verified caller in the reason.
+    The lint pipeline ends with the blocking PyChase duplication gate.
+    Prefer extracting shared logic over suppressing a finding; when parallel
+    structure is intentional, record a reasoned exception with
+    `make duplication-allow FIRST='path::qualname' [SECOND='path::qualname']
+    REASON="why this stays"`, and remove entries the gate reports as stale.
   - **Formatting:** Adheres to formatting standards (`make check-fmt`; use
     `make fmt` to apply fixes).
   - **Typechecking:** Passes type checking (`make typecheck`).
