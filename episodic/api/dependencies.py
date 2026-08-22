@@ -10,7 +10,7 @@ import dataclasses as dc
 import inspect
 import typing as typ
 
-from episodic.observability import NoopTracer
+from episodic.observability import NoopMetrics, NoopTracer
 
 from .authorization import AuthorizationPort, PermitAll
 
@@ -19,7 +19,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.generation import GenerationRunLauncher, GenerationSourceLimits
     from episodic.llm import LLMPort
-    from episodic.observability import TracerPort
+    from episodic.observability import MetricsPort, TracerPort
 
     from .types import UowFactory
 
@@ -103,6 +103,7 @@ class ApiDependencies:
     llm_port: LLMPort | None = None
     launcher: GenerationRunLauncher | None = None
     generation_source_limits: GenerationSourceLimits | None = None
+    metrics: MetricsPort = dc.field(default_factory=NoopMetrics)
     tracer: TracerPort = dc.field(default_factory=NoopTracer)
     authorization: AuthorizationPort = dc.field(default_factory=PermitAll)
 

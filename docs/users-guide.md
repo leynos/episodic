@@ -103,9 +103,20 @@ Poll the `Location` resource until its status is `succeeded` or `failed`. The
 `202 Accepted` representation includes `episode_id`, and the polled run
 resource returns it as well. Read `episode_id` from the polled run resource
 before requesting the episode TEI. Lifecycle details are available from
-`GET /v1/generation-runs/{run_id}/events`. Replaying the original request with
-the same key and body returns the same run and polling headers; changing the
-body under that key returns `409 Conflict`.
+`GET /v1/generation-runs/{run_id}/events`. This endpoint uses the `after_seq`
+cursor and a `limit` cap; it returns `items`, `after_seq`, `limit`, `offset`,
+and `total`. Do not combine a non-zero `offset` with `after_seq`: that request
+is rejected as invalid. This cursor contract is distinct from the general
+offset-pagination guidance. Replaying the original request with the same key
+and body returns the same run and polling headers; changing the body under that
+key returns `409 Conflict`.
+
+Generation applies four positive source limits before a draft-provider request:
+`GENERATION_MAX_SOURCE_COUNT` (default 32), `GENERATION_MAX_SOURCE_BYTES`
+(default 1 MiB), `GENERATION_MAX_AGGREGATE_SOURCE_BYTES` (default 8 MiB), and
+`GENERATION_MAX_NORMALIZED_SOURCE_BYTES` (default 1 MiB). A source exceeding a
+limit fails its run with the stable `generation.source_limit` category; source
+content is never included in the response or logs.
 
 After success, request `GET /v1/episodes/{episode_id}/tei` for the JSON
 metadata envelope, or add `Accept: application/tei+xml` to download the raw TEI
@@ -348,6 +359,13 @@ The authenticated principal owns the ingestion jobs and generation runs it can
 access. Requests for resources owned by another principal use the same
 not-found response as requests for resources that do not exist. Health
 endpoints are not covered by this `/v1` authorization requirement.
+
+### Migration note for the next minor release
+
+Before upgrading to the next minor release, apply the new Alembic revisions.
+Production API clients must configure the bearer token and principal settings
+above, send the bearer header on every `/v1` request, and adopt the generation
+source limits and event cursor contract described in this guide.
 
 Health endpoints:
 

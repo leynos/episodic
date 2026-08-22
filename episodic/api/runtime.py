@@ -277,6 +277,7 @@ def create_app_from_env() -> asgi.App:
             llm_port=llm_port,
             launcher=launcher,
             generation_source_limits=config.generation_source_limits,
+            metrics=metrics,
             tracer=tracer,
             authorization=StaticBearerTokenAuthorization(
                 token=config.authorization_bearer_token,

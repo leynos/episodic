@@ -20,7 +20,7 @@ from episodic.canonical.domain import (
     GenerationRunStatus,
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
-from episodic.canonical.generation_run_errors import RunNotFound
+from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import (
     GenerationCheckpointPort,
     GenerationEventLog,
@@ -247,6 +247,31 @@ class TestGenerationRunRepository:
         )
         assert claimed.current_node == "draft", f"node: {claimed.current_node!r}"
         assert claimed.started_at == NOW, f"started_at: {claimed.started_at!r}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "status",
+        [
+            GenerationRunStatus.SUCCEEDED,
+            GenerationRunStatus.FAILED,
+            GenerationRunStatus.CANCELLED,
+        ],
+    )
+    async def test_claim_run_for_execution_rejects_terminal_runs(
+        self,
+        store: InMemoryGenerationRunStore,
+        status: GenerationRunStatus,
+    ) -> None:
+        """Terminal runs cannot be reclaimed for execution."""
+        run = await store.create_run(dc.replace(make_generation_run(), status=status))
+
+        with pytest.raises(RunAlreadyTerminal, match="generation run is already"):
+            await store.claim_run_for_execution(
+                run.id,
+                current_node="draft",
+                started_at=NOW,
+                lease_expires_at=NOW + dt.timedelta(minutes=5),
+            )
 
 
 class TestGenerationEventLog:

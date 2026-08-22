@@ -27,7 +27,7 @@ from episodic.canonical.generation_persistence import (
     materialise_episode_from_ingestion,
 )
 from episodic.canonical.generation_quality import QaStatus, QualityMode
-from episodic.canonical.generation_run_errors import RunNotFound
+from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
 from episodic.canonical.generation_run_ports import GenerationRunStatusUpdate, event_seq
 from episodic.canonical.source_intake_service import SourceIntakeError
 from episodic.generation.launcher import GenerationRunAdmissionError
@@ -115,6 +115,15 @@ class GenerationRunsResource:
                     error_category="launcher.overloaded",
                 )
                 raise _generation_overloaded() from exc
+            except Exception as exc:
+                span.set_attribute("outcome", "failed")
+                span.set_attribute("failure_category", "launcher.scheduling")
+                await self._mark_launch_failed(
+                    run.id,
+                    error_message=str(exc),
+                    error_category="launcher.scheduling",
+                )
+                raise
             location = f"/v1/generation-runs/{run.id}"
             return IdempotentResponse(
                 falcon.HTTP_202,
@@ -216,17 +225,20 @@ class GenerationRunsResource:
     ) -> None:
         now = self._clock()
         async with self._uow_factory() as uow:
-            await uow.generation_runs.update_run_status(
-                run_id,
-                update=GenerationRunStatusUpdate(
-                    status=GenerationRunStatus.FAILED,
-                    current_node=None,
-                    ended_at=now,
-                    error_message=error_message,
-                    error_category=error_category,
-                ),
-            )
-            await uow.commit()
+            try:
+                await uow.generation_runs.update_run_status(
+                    run_id,
+                    update=GenerationRunStatusUpdate(
+                        status=GenerationRunStatus.FAILED,
+                        current_node=None,
+                        ended_at=now,
+                        error_message=error_message,
+                        error_category=error_category,
+                    ),
+                )
+                await uow.commit()
+            except RunAlreadyTerminal, RunNotFound:
+                await uow.rollback()
 
 
 def _generation_overloaded() -> falcon.HTTPServiceUnavailable:

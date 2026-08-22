@@ -1,6 +1,7 @@
 """Support fixtures for source-intake API contract tests."""
 
 import contextlib
+import dataclasses as dc
 import datetime as dt
 import hashlib
 import typing as typ
@@ -20,6 +21,15 @@ if typ.TYPE_CHECKING:
 
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _UploadFixtureState:
+    """Storage values that distinguish pending and ready upload fixtures."""
+
+    state: UploadState
+    actual_size: int | None
+    content_hash: str | None
 
 
 @contextlib.asynccontextmanager
@@ -92,17 +102,35 @@ async def _create_pending_upload(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> uuid.UUID:
     """Persist one pending upload for not-ready attach tests."""
+    return await _create_upload(
+        session_factory,
+        owner="principal-a",
+        expected=_UploadFixtureState(
+            state=UploadState.PENDING,
+            actual_size=None,
+            content_hash=None,
+        ),
+    )
+
+
+async def _create_upload(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    owner: str,
+    expected: _UploadFixtureState,
+) -> uuid.UUID:
+    """Persist one upload fixture and return its identifier."""
     now = dt.datetime.now(dt.UTC)
     upload = Upload(
         id=uuid.uuid4(),
-        owner_principal_id="principal-a",
+        owner_principal_id=owner,
         content_type="text/plain",
         declared_size=1,
-        actual_size=None,
+        actual_size=expected.actual_size,
         declared_sha256=None,
-        content_hash=None,
+        content_hash=expected.content_hash,
         storage_key=f"uploads/{uuid.uuid4()}",
-        state=UploadState.PENDING,
+        state=expected.state,
         metadata={},
         created_at=now,
         updated_at=now,
@@ -119,25 +147,15 @@ async def _create_ready_upload(
     owner: str,
 ) -> uuid.UUID:
     """Persist one owner-bound upload for metadata access checks."""
-    now = dt.datetime.now(dt.UTC)
-    upload = Upload(
-        id=uuid.uuid4(),
-        owner_principal_id=owner,
-        content_type="text/plain",
-        declared_size=1,
-        actual_size=1,
-        declared_sha256=None,
-        content_hash="sha256:upload",
-        storage_key=f"uploads/{uuid.uuid4()}",
-        state=UploadState.READY,
-        metadata={},
-        created_at=now,
-        updated_at=now,
+    return await _create_upload(
+        session_factory,
+        owner=owner,
+        expected=_UploadFixtureState(
+            state=UploadState.READY,
+            actual_size=1,
+            content_hash="sha256:upload",
+        ),
     )
-    async with SqlAlchemyUnitOfWork(session_factory) as uow:
-        await uow.uploads.add(upload)
-        await uow.commit()
-    return upload.id
 
 
 async def _post_attach_source(
@@ -167,7 +185,7 @@ async def _post_text_upload(
         "/v1/uploads",
         headers={"Idempotency-Key": key},
         files={
-            "file": ("source.txt", payload, "text/plain"),
+            "file": ("source.txt", payload, content_type),
             "content_type": (None, content_type),
             "declared_size": (None, str(len(payload))),
             "declared_sha256": (None, hashlib.sha256(payload).hexdigest()),

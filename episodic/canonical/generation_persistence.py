@@ -6,8 +6,8 @@ a ``CanonicalUnitOfWork``; this module never creates or disposes one. A ready
 :class:`IngestionJob` becomes a deterministic placeholder: pages load before
 locking, reservation commits before projection, and repository results verify
 duplicates. ``persist_draft_script`` validates a :class:`DraftScriptResult`,
-carries :class:`GenerationRun` provenance through :class:`EpisodeTeiUpdate`, and
-persists an optimistic TEI revision without commit or rollback.
+carries :class:`GenerationRun` provenance through :class:`EpisodeTeiUpdate`,
+and persists an optimistic TEI revision without commit or rollback.
 """
 
 import typing as typ
@@ -22,10 +22,12 @@ from episodic.canonical.domain import (
     EpisodeTeiUpdate,
     IngestionJob,
     IntakeState,
-    SourceDocument,
     TeiHeader,
 )
 from episodic.canonical.entity_protocols import SourceDocumentProjectionResult
+from episodic.canonical.generation_persistence_projection import (
+    source_document_from_attachment,
+)
 from episodic.canonical.generation_persistence_types import (
     DraftContentHashMismatchError,
     DraftScriptPersistenceError,  # noqa: F401  # Re-exported service contract.
@@ -76,13 +78,19 @@ async def materialise_episode_from_ingestion(
     ------
     MissingAttachedSourcesError
         If the ready job has no attached sources.
+    SourceCountLimitExceededError
+        If attached sources exceed ``request.max_source_count``.
+    GenerationSourceUploadNotFoundError
+        If a source projection references an unavailable upload.
+    SourceDocumentProjectionError
+        If a duplicate projection cannot be verified after persistence.
 
     Notes
     -----
     Propagates :class:`IngestionJobNotFoundError` if no ingestion job exists,
     and :class:`IngestionJobNotReadyError` if the job is not ready for
     generation.
-    """
+    """  # noqa: DOC502  # Typed projection failures propagate through helpers.
     sources = await _list_all_sources(
         uow,
         request.ingestion_job_id,
@@ -136,7 +144,11 @@ async def _materialise_or_reuse_episode(
     await uow.flush()
     await uow.episodes.add(episode)
     await uow.flush()
-    await uow.ingestion_jobs.set_target_episode(job.id, episode_id=episode.id)
+    await uow.ingestion_jobs.set_target_episode(
+        job.id,
+        episode_id=episode.id,
+        updated_at=now,
+    )
     # Commit before source projection to limit the ingestion-job row lock.
     await uow.commit()
     return episode
@@ -251,7 +263,7 @@ async def _project_source_documents(
             continue
         upload = await _upload_for_source(uow, source)
         result = await uow.source_documents.add_projection(
-            _source_document_from_attachment(
+            source_document_from_attachment(
                 _SourceDocumentProjection(
                     source=source,
                     upload=upload,
@@ -354,43 +366,6 @@ async def _upload_for_source(
     if upload is None:
         raise GenerationSourceUploadNotFoundError(source.upload_id)
     return upload
-
-
-def _source_document_from_attachment(
-    projection: _SourceDocumentProjection,
-) -> SourceDocument:
-    """Project an intake source attachment into canonical source metadata."""
-    return SourceDocument(
-        id=projection.document_id,
-        ingestion_job_id=projection.source.ingestion_job_id,
-        canonical_episode_id=projection.episode_id,
-        reference_document_revision_id=None,
-        source_type=projection.source.source_type,
-        source_uri=_source_uri(projection.source, projection.upload),
-        weight=projection.source.weight,
-        content_hash=_source_content_hash(projection.source, projection.upload),
-        metadata=projection.source.metadata,
-        created_at=projection.now,
-    )
-
-
-def _source_uri(source: IngestionJobSource, upload: Upload | None) -> str:
-    """Return a stable source URI for canonical provenance."""
-    if source.source_uri is not None:
-        return source.source_uri
-    if upload is not None:
-        return f"upload:{upload.storage_key}"
-    return f"upload:{source.upload_id}"
-
-
-def _source_content_hash(source: IngestionJobSource, upload: Upload | None) -> str:
-    """Return the best available source content hash."""
-    match source.metadata.get("content_hash"):
-        case str() as metadata_hash if metadata_hash.strip():
-            return metadata_hash
-    if upload is not None and upload.content_hash:
-        return upload.content_hash
-    return sha256_text(f"{source.source_type}:{_source_uri(source, upload)}")
 
 
 def _validate_draft_result(result: DraftScriptResult) -> None:

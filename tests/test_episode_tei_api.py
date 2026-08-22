@@ -340,11 +340,13 @@ async def _create_generation_run(
             "actor": "editor@example.com",
         },
     )
+    assert profile.status_code == 201, profile.text
     job = await client.post(
         "/v1/ingestion-jobs",
         headers={**request_headers, "Idempotency-Key": "tei-job-key"},
         json={"series_profile_id": profile.json()["id"]},
     )
+    assert job.status_code == 201, job.text
     source = await client.post(
         f"/v1/ingestion-jobs/{job.json()['id']}/sources",
         headers={**request_headers, "Idempotency-Key": "tei-source-key"},
@@ -356,8 +358,6 @@ async def _create_generation_run(
             "metadata": {"content": "Source text."},
         },
     )
-    assert profile.status_code == 201, profile.text
-    assert job.status_code == 201, job.text
     assert source.status_code == 201, source.text
     run = await client.post(
         f"/v1/ingestion-jobs/{job.json()['id']}/generation-runs",

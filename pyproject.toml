@@ -572,8 +572,28 @@ type = "method"
 full_name = [
     "episodic.api.app._ShutdownHooksMiddleware.process_shutdown",
     "episodic.api.authorization.AuthorizationMiddleware.process_request",
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_request",
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_response",
 ]
-reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI request and shutdown protocols."
+reason = "Falcon invokes these middleware lifecycle callbacks through its ASGI request, response, and shutdown protocols."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "parameter"
+full_name = [
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_request.resp",
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_response.resource",
+    "episodic.api.app._GenerationRouteMetricsMiddleware.process_response.req_succeeded",
+]
+reason = "Falcon supplies these required middleware callback parameters although bounded metrics do not inspect them."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = [
+    "episodic.api.app._generation_route_operation",
+    "episodic.api.app._response_outcome",
+    "episodic.canonical.adapters.generation_runs._event_page_minimum_seq",
+]
+reason = "Falcon middleware and the in-memory event-list adapter call these private helpers through registered protocol callbacks."
 
 [[tool.skylos.dead_code.entrypoints]]
 type = "function"

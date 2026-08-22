@@ -127,7 +127,7 @@ vertical-slice tasks:
 The first task owns upload resources, ingestion-job source attachment, and
 presenter-profile use through existing reusable reference-document semantics.
 The second task depends on the first task and owns the generation-run contract,
-the explicit no-QA quality mode, run polling, and TEI retrieval. ADR 016
+the explicit no-QA quality mode, run polling, and TEI retrieval. ADR 017
 records its execution, persistence, recovery-hook, and content-negotiation
 decisions.
 

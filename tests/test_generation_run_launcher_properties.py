@@ -5,9 +5,7 @@ import enum
 import typing as typ
 import uuid
 
-import hypothesis.strategies as st
 import pytest
-from hypothesis import HealthCheck, given, settings
 
 from episodic.canonical.domain import GenerationRun, GenerationRunStatus, SourceDocument
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
@@ -108,13 +106,8 @@ def _assert_outcome(run: GenerationRun, outcome: _Outcome) -> None:
             assert run.error_category == "launcher.shutdown", run.error_category
 
 
-@given(outcome=st.sampled_from(_Outcome))
-@settings(
-    max_examples=3,
-    deadline=None,
-    suppress_health_check=[HealthCheck.function_scoped_fixture],
-)
 @pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", list(_Outcome))
 async def test_launcher_generated_lifecycles_end_with_one_terminal_event(
     session_factory: SessionFactory,
     outcome: _Outcome,

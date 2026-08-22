@@ -39,6 +39,22 @@ if typ.TYPE_CHECKING:
     )
 
 
+def _minimum_event_sequence(
+    after_seq: EventSeq | None,
+    *,
+    limit: int,
+    offset: int,
+) -> int:
+    """Validate event-page arguments and return the exclusive sequence bound."""
+    if limit < 0 or offset < 0:
+        msg = "limit and offset must be non-negative."
+        raise ValueError(msg)
+    if after_seq is not None and offset != 0:
+        msg = "after_seq and offset cannot be combined."
+        raise ValueError(msg)
+    return int(after_seq) if after_seq is not None else 0
+
+
 class SqlAlchemyGenerationRunStore:
     """Durable generation-run repository and event-log adapter."""
 
@@ -309,15 +325,13 @@ class SqlAlchemyGenerationRunStore:
         offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run after an optional sequence cursor."""
-        if limit < 0 or offset < 0:
-            msg = "limit and offset must be non-negative."
-            raise ValueError(msg)
-        if after_seq is not None and offset != 0:
-            msg = "after_seq and offset cannot be combined."
-            raise ValueError(msg)
+        minimum_seq = _minimum_event_sequence(
+            after_seq,
+            limit=limit,
+            offset=offset,
+        )
         if await self._get_record(run_id) is None:
             raise RunNotFound(run_id)
-        minimum_seq = int(after_seq) if after_seq is not None else 0
         result = await self._session.execute(
             sa
             .select(GenerationEventRecord)

@@ -236,12 +236,16 @@ async def test_materialise_episode_from_ingestion_creates_placeholder_episode(
 
     async with SqlAlchemyUnitOfWork(factory) as uow:
         fetched = await uow.episodes.get(episode_id)
+        persisted_job = await uow.ingestion_jobs.get(job.id)
         documents = await uow.source_documents.list_for_job(job.id)
 
     assert fetched is not None, f"expected persisted episode {episode_id}, got None"
     assert fetched.tei_header_id == episode.tei_header_id, (
         f"expected TEI header {episode.tei_header_id}, got {fetched.tei_header_id}"
     )
+    assert persisted_job is not None, f"expected persisted job {job.id}"
+    assert persisted_job.target_episode_id == episode_id, persisted_job
+    assert persisted_job.updated_at == NOW, persisted_job
     document_episode_ids = [document.canonical_episode_id for document in documents]
     assert document_episode_ids == [episode_id], (
         f"source episodes: {document_episode_ids}"

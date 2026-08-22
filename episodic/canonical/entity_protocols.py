@@ -5,6 +5,7 @@ import typing as typ
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import datetime as dt
     import uuid
 
     from .domain import (
@@ -91,6 +92,8 @@ class EpisodeRepository(typ.Protocol):
 
         Raises
         ------
+        EpisodeNotFoundError
+            If no episode exists for ``episode_id``.
         EpisodeRevisionConflictError
             If ``update.expected_revision`` differs from the stored revision.
         """
@@ -117,6 +120,7 @@ class IngestionJobRepository(typ.Protocol):
         job_id: uuid.UUID,
         *,
         episode_id: uuid.UUID,
+        updated_at: dt.datetime,
     ) -> None:
         """Associate an ingestion job with its materialized episode."""
         raise NotImplementedError
@@ -175,7 +179,7 @@ class SourceDocumentRepository(typ.Protocol):
 
         Raises
         ------
-        sqlalchemy.exc.IntegrityError
+        Exception
             Unrecognised persistence failures propagate unchanged.
 
         Examples

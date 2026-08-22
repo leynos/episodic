@@ -1,5 +1,6 @@
 """Contract tests for source-intake REST error paths and read endpoints."""
 
+import dataclasses as dc
 import hashlib
 import typing as typ
 import uuid
@@ -32,6 +33,16 @@ if typ.TYPE_CHECKING:
 
     from httpx._transports.asgi import _ASGIApp
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@dc.dataclass(frozen=True, slots=True)
+class _InvalidUploadExpectation:
+    """Expected result for a rejected source-upload attachment."""
+
+    create_pending_upload: bool
+    idempotency_key: str
+    status_code: int
+    code: str
 
 
 def _assert_api_error(
@@ -134,40 +145,53 @@ async def test_attach_source_reports_missing_ingestion_job(
 
 
 @pytest.mark.asyncio
-async def test_attach_upload_reports_missing_upload(
+@pytest.mark.parametrize(
+    "expected",
+    [
+        pytest.param(
+            _InvalidUploadExpectation(
+                create_pending_upload=False,
+                idempotency_key="missing-upload",
+                status_code=404,
+                code="upload_not_found",
+            ),
+            id="missing_upload",
+        ),
+        pytest.param(
+            _InvalidUploadExpectation(
+                create_pending_upload=True,
+                idempotency_key="pending-upload",
+                status_code=409,
+                code="upload_not_ready",
+            ),
+            id="not_ready_upload",
+        ),
+    ],
+)
+async def test_attach_upload_reports_invalid_upload(
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
+    expected: _InvalidUploadExpectation,
 ) -> None:
-    """Attaching an unknown upload to a known job returns upload_not_found."""
+    """Upload attachment rejects missing and non-ready uploads."""
     job_id = await _create_profile_and_job(session_factory, tmp_path)
+    if expected.create_pending_upload:
+        upload_id = await _create_pending_upload(session_factory)
+    else:
+        upload_id = uuid.uuid4()
     async with _source_intake_client(session_factory, tmp_path) as client:
         response = await _post_attach_source(
             client,
             job_id,
-            idempotency_key="missing-upload",
-            payload=_upload_payload(str(uuid.uuid4())),
-        )
-
-    _assert_api_error(response, status_code=404, code="upload_not_found")
-
-
-@pytest.mark.asyncio
-async def test_attach_upload_reports_not_ready_upload(
-    session_factory: async_sessionmaker[AsyncSession],
-    tmp_path: Path,
-) -> None:
-    """Attaching a pending upload returns upload_not_ready."""
-    job_id = await _create_profile_and_job(session_factory, tmp_path)
-    upload_id = await _create_pending_upload(session_factory)
-    async with _source_intake_client(session_factory, tmp_path) as client:
-        response = await _post_attach_source(
-            client,
-            job_id,
-            idempotency_key="pending-upload",
+            idempotency_key=expected.idempotency_key,
             payload=_upload_payload(str(upload_id)),
         )
 
-    _assert_api_error(response, status_code=409, code="upload_not_ready")
+    _assert_api_error(
+        response,
+        status_code=expected.status_code,
+        code=expected.code,
+    )
 
 
 @pytest.mark.asyncio

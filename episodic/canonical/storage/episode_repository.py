@@ -66,7 +66,27 @@ class SqlAlchemyEpisodeRepository(_RepositoryBase, EpisodeRepository):
         *,
         update: EpisodeTeiUpdate,
     ) -> CanonicalEpisode:
-        """Update episode TEI when the expected revision still matches."""
+        """Update episode TEI when the expected revision still matches.
+
+        Parameters
+        ----------
+        episode_id : uuid.UUID
+            Identifier of the episode to update.
+        update : EpisodeTeiUpdate
+            TEI content, provenance, QA metadata, and required revision.
+
+        Returns
+        -------
+        CanonicalEpisode
+            The stored episode after its revision increases by one.
+
+        Raises
+        ------
+        EpisodeNotFoundError
+            If no episode exists for ``episode_id``.
+        EpisodeRevisionConflictError
+            If the stored revision differs from ``update.expected_revision``.
+        """
         stored_tei_xml, tei_xml_zstd = encode_text_for_storage(update.tei_xml)
         result = await self._session.execute(
             sa

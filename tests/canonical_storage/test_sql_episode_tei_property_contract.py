@@ -55,14 +55,14 @@ async def _assert_single_winning_update(
     outcomes: tuple[CanonicalEpisode | EpisodeRevisionConflictError, ...],
 ) -> None:
     """Assert a concurrent optimistic update produced one durable winner."""
-    winners = tuple(
-        result for result in outcomes if isinstance(result, CanonicalEpisode)
-    )
-    conflicts = tuple(
-        result
-        for result in outcomes
-        if isinstance(result, EpisodeRevisionConflictError)
-    )
+    winners: list[CanonicalEpisode] = []
+    conflicts: list[EpisodeRevisionConflictError] = []
+    for outcome in outcomes:
+        match outcome:
+            case CanonicalEpisode() as winner:
+                winners.append(winner)
+            case EpisodeRevisionConflictError() as conflict:
+                conflicts.append(conflict)
     assert len(winners) == 1, f"winning updates: {outcomes!r}"
     assert len(conflicts) == 1, f"revision conflicts: {outcomes!r}"
 

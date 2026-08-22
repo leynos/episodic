@@ -1,9 +1,4 @@
-"""In-memory generation-run port adapter.
-
-This module provides a reference implementation of the generation-run port
-protocols for tests and local development. It is ephemeral, single-process
-storage and is not a production persistence layer.
-"""
+"""Ephemeral in-memory generation-run adapter for tests and local development."""
 
 import asyncio
 import bisect
@@ -43,6 +38,22 @@ def _now_utc() -> dt.datetime:
 def _default_time_provider() -> TimeProvider:
     """Return the default in-memory timestamp provider."""
     return _now_utc
+
+
+def _event_page_minimum_seq(
+    *,
+    after_seq: EventSeq | None,
+    limit: int,
+    offset: int,
+) -> int:
+    """Validate event-page arguments and return the cursor boundary."""
+    if limit < 0 or offset < 0:
+        msg = "limit and offset must be non-negative."
+        raise ValueError(msg)
+    if after_seq is not None and offset != 0:
+        msg = "after_seq and offset cannot be combined."
+        raise ValueError(msg)
+    return int(after_seq) if after_seq is not None else 0
 
 
 @dc.dataclass(slots=True)
@@ -106,6 +117,22 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
             if len(selected) == limit:
                 break
         return tuple(selected)
+
+    def _event_page_for_run(
+        self,
+        run_id: uuid.UUID,
+        *,
+        minimum_seq: int,
+        limit: int,
+        offset: int,
+    ) -> tuple[GenerationEvent, ...]:
+        """Return one in-memory event page for an existing run."""
+        if run_id not in self._runs:
+            raise RunNotFound(run_id)
+        events = tuple(
+            event for event in self._events.get(run_id, []) if event.seq > minimum_seq
+        )
+        return events[offset : offset + limit]
 
     async def create_run(
         self,
@@ -343,22 +370,18 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
         offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run after an optional sequence cursor."""
-        if limit < 0 or offset < 0:
-            msg = "limit and offset must be non-negative."
-            raise ValueError(msg)
-        if after_seq is not None and offset != 0:
-            msg = "after_seq and offset cannot be combined."
-            raise ValueError(msg)
+        minimum_seq = _event_page_minimum_seq(
+            after_seq=after_seq,
+            limit=limit,
+            offset=offset,
+        )
         async with self._lock:
-            if run_id not in self._runs:
-                raise RunNotFound(run_id)
-            minimum_seq = int(after_seq) if after_seq is not None else 0
-            events = [
-                event
-                for event in self._events.get(run_id, [])
-                if event.seq > minimum_seq
-            ]
-            return tuple(events[offset : offset + limit])
+            return self._event_page_for_run(
+                run_id,
+                minimum_seq=minimum_seq,
+                limit=limit,
+                offset=offset,
+            )
 
     async def count_events(
         self,

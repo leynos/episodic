@@ -12,6 +12,7 @@ from .repository_base import _RepositoryBase
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import datetime as dt
     import uuid
 
     from episodic.canonical.domain import (
@@ -52,13 +53,14 @@ class SqlAlchemyIngestionJobRepository(_RepositoryBase, IngestionJobRepository):
         job_id: uuid.UUID,
         *,
         episode_id: uuid.UUID,
+        updated_at: dt.datetime,
     ) -> None:
         """Associate an ingestion job with its materialized episode."""
         await self._session.execute(
             sa
             .update(IngestionJobRecord)
             .where(IngestionJobRecord.id == job_id)
-            .values(target_episode_id=episode_id, updated_at=sa.func.now())
+            .values(target_episode_id=episode_id, updated_at=updated_at)
         )
 
     async def list_paged(

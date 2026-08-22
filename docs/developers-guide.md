@@ -1593,6 +1593,20 @@ spans. Their only route attributes are operation, outcome, representation,
 pagination mode, and stable failure category; they never include content,
 principal identifiers, idempotency keys, or run identifiers.
 
+The API composition root emits `generation_api_request_total` and
+`generation_api_request_latency_ms` for generation creation, polling, event
+listing, and TEI retrieval. Their only labels are `operation` and the bounded
+`outcome` (`success`, `rejected`, `failed`, or `not_modified` for TEI cache
+responses); they contain no request data or principal identity.
+
+`GET /v1/generation-runs/{run_id}/events` returns append-only events after an
+optional `after_seq` cursor, with `items`, `after_seq`, `limit`, `offset`, and
+`total` in its response envelope. It orders by sequence and treats `after_seq`
+as an exclusive lower bound. Cursor pagination is distinct from the general
+offset-pagination convention: callers may use `after_seq` or a non-zero
+`offset`, but not both; the API rejects that combination before the event store
+is queried.
+
 Admission is bounded before task allocation. The default capacity is four
 running tasks plus sixteen admitted pending tasks; exhaustion raises
 `GenerationRunAdmissionError`, and the API records `launcher.overloaded` on the

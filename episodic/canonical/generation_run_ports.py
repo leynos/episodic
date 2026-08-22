@@ -33,7 +33,22 @@ EventSeq = typ.NewType("EventSeq", int)
 
 @dc.dataclass(frozen=True, slots=True)
 class GenerationRunStatusUpdate:
-    """Lifecycle fields to apply to a generation run."""
+    """Lifecycle fields to apply to a generation run.
+
+    Attributes
+    ----------
+    status : GenerationRunStatus
+        New durable lifecycle status.
+    current_node : str | None
+        Current launcher node, or ``None`` for a terminal run.
+    ended_at : dt.datetime | None
+        Terminal timestamp, when the lifecycle transition ends a run.
+    error_message : str | None
+        Failure detail. An omitted value clears the persisted field.
+    error_category : str | None
+        Stable failure classification. An omitted value clears the persisted
+        field.
+    """
 
     status: GenerationRunStatus
     current_node: str | None

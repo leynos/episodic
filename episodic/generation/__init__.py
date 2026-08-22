@@ -1,7 +1,10 @@
-"""Content generation services package.
+"""Draft-generation, launch, source-limit, and TEI-enrichment services.
 
-This package contains services for enriching canonical TEI content with generated
-metadata: show notes, chapter markers, guest biographies, and sponsor reads.
+``DraftScriptGenerator`` turns bounded canonical sources and presenter context
+into a TEI-P5 draft. ``InProcessGenerationRunLauncher`` owns its detached
+generation lifecycle and enforces ``GenerationSourceLimits`` before invoking a
+provider. The package also exports TEI enrichment services for show notes,
+chapter markers, and guest biographies that operate on persisted canonical TEI.
 """
 
 from episodic.generation.chapter_markers import (

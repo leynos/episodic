@@ -14,7 +14,10 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
 )
-from episodic.canonical.episode_errors import EpisodeRevisionConflictError
+from episodic.canonical.episode_errors import (
+    EpisodeNotFoundError,
+    EpisodeRevisionConflictError,
+)
 from episodic.canonical.generation_quality import QaStatus, QualityMode
 from episodic.canonical.storage import SqlAlchemyUnitOfWork
 from episodic.canonical.storage.entity_mappers import _episode_to_record
@@ -343,3 +346,24 @@ async def test_episode_update_tei_rejects_stale_revision(
                     updated_at=dt.datetime(2026, 6, 24, tzinfo=dt.UTC),
                 ),
             )
+
+
+@pytest.mark.asyncio
+async def test_episode_update_tei_rejects_unknown_episode(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Updating an absent episode retains the canonical not-found error."""
+    with pytest.raises(EpisodeNotFoundError) as raised:
+        async with SqlAlchemyUnitOfWork(session_factory) as uow:
+            await uow.episodes.update(
+                uuid.uuid7(),
+                update=EpisodeTeiUpdate(
+                    tei_xml="<TEI>missing</TEI>",
+                    qa_status=QaStatus.SKIPPED,
+                    last_generation_run_id=uuid.uuid7(),
+                    expected_revision=1,
+                    updated_at=dt.datetime(2026, 6, 24, tzinfo=dt.UTC),
+                ),
+            )
+
+    assert isinstance(raised.value, EpisodeNotFoundError), raised.value

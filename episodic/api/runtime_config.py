@@ -1,4 +1,11 @@
-"""Environment configuration for the Falcon runtime composition root."""
+"""Load validated environment configuration for the Falcon composition root.
+
+``RuntimeConfig`` is the immutable result consumed by runtime wiring. Use
+``_load_runtime_config`` at process startup to turn environment settings into
+validated paths, credentials, source limits, and provider limits; invalid
+configuration raises ``RuntimeConfigurationError`` before the application
+starts serving requests.
+"""
 
 import dataclasses as dc
 import os
@@ -23,7 +30,37 @@ logger = get_logger(__name__)
 
 @dc.dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    """Runtime configuration required to boot the Falcon HTTP service."""
+    """Runtime configuration required to boot the Falcon HTTP service.
+
+    Attributes
+    ----------
+    database_url : str
+        SQLAlchemy connection URL for canonical persistence.
+    source_intake_object_store_root : pathlib.Path
+        Root directory for accepted uploaded source objects.
+    llm_base_url : str | None
+        Optional OpenAI-compatible provider endpoint.
+    llm_api_key : str | None
+        Secret provider credential, excluded from representations.
+    draft_model : str
+        Model identifier used for no-QA draft generation.
+    pricing_snapshot_directory : pathlib.Path
+        Validated immutable YAML pricing catalogue directory.
+    authorization_bearer_token : str
+        Secret production bearer token, excluded from representations.
+    authorization_principal_id : str
+        Principal assigned to authenticated bearer requests.
+    generation_source_limits : GenerationSourceLimits
+        Source-count and byte limits applied before provider requests.
+    generation_max_output_tokens : int
+        Maximum provider output-token budget.
+    generation_max_response_bytes : int
+        Maximum provider response size before parsing.
+
+    Examples
+    --------
+    ``config = _load_runtime_config(os.environ)`` validates startup settings.
+    """
 
     database_url: str = dc.field(repr=False)
     source_intake_object_store_root: pathlib.Path
@@ -39,7 +76,13 @@ class RuntimeConfig:
 
 
 class RuntimeConfigurationError(RuntimeError):
-    """Raised when required HTTP-runtime configuration is invalid."""
+    """Raised when HTTP-runtime configuration cannot be validated.
+
+    Examples
+    --------
+    Missing required settings cause ``_load_runtime_config`` to raise this
+    error before application construction.
+    """
 
 
 def _required_setting(

@@ -250,6 +250,7 @@ class LLMDraftScriptGenerator(DraftScriptGenerator):
     llm: LLMPort
     config: LLMDraftScriptGeneratorConfig
 
+    @typ.override
     async def generate(self, request: DraftScriptRequest) -> DraftScriptResult:
         """Generate and validate one TEI-P5 draft script.
 
