@@ -36,7 +36,10 @@ DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
 AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
 SKYLOS_VERSION = 4.33.2
-SKYLOS = $(UV_ENV) $(UV) tool run --from 'skylos==$(SKYLOS_VERSION)' skylos \
+# Pin the tool interpreter: Skylos parses sources with its own runtime `ast`,
+# so an older default Python misreads the project's 3.14 syntax.
+SKYLOS = $(UV_ENV) $(UV) tool run --python 3.14 \
+	--from 'skylos==$(SKYLOS_VERSION)' skylos \
 	--config-file pyproject.toml
 SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
 DUPLICATION_GATE = $(UV_ENV) $(UV) run scripts/duplication_gate.py
