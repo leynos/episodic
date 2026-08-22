@@ -107,6 +107,12 @@ podDisruptionBudget:
   minAvailable: 1
   # maxUnavailable: 1  # Use this OR minAvailable, not both.
 
+# Extra pod volumes and container volume mounts, passed through verbatim.
+# The container runs with readOnlyRootFilesystem, so any writable path
+# (for example, the source-intake object store root) needs a volume here.
+volumes: []
+volumeMounts: []
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
