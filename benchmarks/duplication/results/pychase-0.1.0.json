@@ -1,0 +1,191 @@
+{
+  "candidates": [
+    {
+      "score": 1.0,
+      "left": {
+        "file": "pricing.py",
+        "start_line": 5,
+        "end_line": 29,
+        "qualname": "order_total_price",
+        "nodes": 96
+      },
+      "right": {
+        "file": "reporting.py",
+        "start_line": 5,
+        "end_line": 30,
+        "qualname": "order_total_price_copy",
+        "nodes": 96
+      }
+    },
+    {
+      "score": 1.0,
+      "left": {
+        "file": "pricing.py",
+        "start_line": 32,
+        "end_line": 60,
+        "qualname": "recent_error_messages",
+        "nodes": 96
+      },
+      "right": {
+        "file": "reporting.py",
+        "start_line": 33,
+        "end_line": 62,
+        "qualname": "latest_alert_titles",
+        "nodes": 96
+      }
+    },
+    {
+      "score": 0.75,
+      "left": {
+        "file": "pricing.py",
+        "start_line": 63,
+        "end_line": 87,
+        "qualname": "summarize_latencies",
+        "nodes": 107
+      },
+      "right": {
+        "file": "reporting.py",
+        "start_line": 65,
+        "end_line": 97,
+        "qualname": "summarize_throughput",
+        "nodes": 120
+      }
+    },
+    {
+      "score": 1.0,
+      "left": {
+        "file": "pricing.py",
+        "start_line": 116,
+        "end_line": 143,
+        "qualname": "OrderExporter",
+        "nodes": 116
+      },
+      "right": {
+        "file": "reporting.py",
+        "start_line": 125,
+        "end_line": 153,
+        "qualname": "InvoiceExporter",
+        "nodes": 116
+      }
+    },
+    {
+      "score": 1.0,
+      "left": {
+        "file": "pricing.py",
+        "start_line": 119,
+        "end_line": 143,
+        "qualname": "OrderExporter.validate",
+        "nodes": 113
+      },
+      "right": {
+        "file": "reporting.py",
+        "start_line": 128,
+        "end_line": 153,
+        "qualname": "InvoiceExporter.validate",
+        "nodes": 113
+      }
+    }
+  ],
+  "groups": [
+    {
+      "score": 1.0,
+      "locations": [
+        {
+          "file": "pricing.py",
+          "start_line": 5,
+          "end_line": 29,
+          "qualname": "order_total_price",
+          "nodes": 96
+        },
+        {
+          "file": "reporting.py",
+          "start_line": 5,
+          "end_line": 30,
+          "qualname": "order_total_price_copy",
+          "nodes": 96
+        }
+      ],
+      "pairs": 1
+    },
+    {
+      "score": 1.0,
+      "locations": [
+        {
+          "file": "pricing.py",
+          "start_line": 32,
+          "end_line": 60,
+          "qualname": "recent_error_messages",
+          "nodes": 96
+        },
+        {
+          "file": "reporting.py",
+          "start_line": 33,
+          "end_line": 62,
+          "qualname": "latest_alert_titles",
+          "nodes": 96
+        }
+      ],
+      "pairs": 1
+    },
+    {
+      "score": 0.75,
+      "locations": [
+        {
+          "file": "pricing.py",
+          "start_line": 63,
+          "end_line": 87,
+          "qualname": "summarize_latencies",
+          "nodes": 107
+        },
+        {
+          "file": "reporting.py",
+          "start_line": 65,
+          "end_line": 97,
+          "qualname": "summarize_throughput",
+          "nodes": 120
+        }
+      ],
+      "pairs": 1
+    },
+    {
+      "score": 1.0,
+      "locations": [
+        {
+          "file": "pricing.py",
+          "start_line": 116,
+          "end_line": 143,
+          "qualname": "OrderExporter",
+          "nodes": 116
+        },
+        {
+          "file": "reporting.py",
+          "start_line": 125,
+          "end_line": 153,
+          "qualname": "InvoiceExporter",
+          "nodes": 116
+        }
+      ],
+      "pairs": 1
+    },
+    {
+      "score": 1.0,
+      "locations": [
+        {
+          "file": "pricing.py",
+          "start_line": 119,
+          "end_line": 143,
+          "qualname": "OrderExporter.validate",
+          "nodes": 113
+        },
+        {
+          "file": "reporting.py",
+          "start_line": 128,
+          "end_line": 153,
+          "qualname": "InvoiceExporter.validate",
+          "nodes": 113
+        }
+      ],
+      "pairs": 1
+    }
+  ]
+}

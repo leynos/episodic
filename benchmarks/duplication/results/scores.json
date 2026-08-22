@@ -1,0 +1,63 @@
+{
+  "date": "2026-08-22",
+  "oracle_expectations": 10,
+  "tools": {
+    "pyscn": {
+      "version": "1.29.1",
+      "raw_findings": 20,
+      "lanes": {
+        "syntactic-clone": {
+          "tp": 4,
+          "fp": 1,
+          "fn": 0,
+          "tn": 2,
+          "unmatched_findings": 0,
+          "precision": 0.8,
+          "recall": 1.0,
+          "f1": 0.888888888888889
+        },
+        "semantic-clone": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "tn": 2,
+          "unmatched_findings": 14,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        }
+      },
+      "corpus_elapsed_ms": 230,
+      "episodic_elapsed_ms": 1000
+    },
+    "pychase": {
+      "version": "0.1.0",
+      "raw_findings": 5,
+      "lanes": {
+        "syntactic-clone": {
+          "tp": 4,
+          "fp": 0,
+          "fn": 0,
+          "tn": 3,
+          "unmatched_findings": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "semantic-clone": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "tn": 2,
+          "unmatched_findings": 0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": null
+        }
+      },
+      "corpus_elapsed_ms": 140,
+      "episodic_elapsed_ms": 4800
+    }
+  },
+  "notes": "Corpus runs used the permissive capability settings recorded in the benchmark README. Elapsed times are single wall-clock observations, not performance benchmarks."
+}

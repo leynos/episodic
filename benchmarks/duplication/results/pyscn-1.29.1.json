@@ -1,0 +1,1379 @@
+{
+  "clone": {
+    "clones": [
+      {
+        "id": 3,
+        "type": 0,
+        "location": {
+          "file_path": "controls.py",
+          "start_line": 45,
+          "end_line": 80,
+          "start_col": 0,
+          "end_col": 16
+        },
+        "content": "def parse_ratio(text: str) -\u003e float:\n    \"\"\"Parse a ratio such as ``\"3:4\"`` or ``\"80%\"`` into a fraction.\n\n    Parameters\n    ----------\n    text : str\n        Percentage, colon-separated ratio, or bare fraction.\n\n    Returns\n    -------\n    float\n        Ratio as a non-negative fraction.\n\n    Raises\n    ------\n    ValueError\n        If the text is empty, negative, or divides by zero.\n    \"\"\"\n    cleaned = text.strip()\n    if not cleaned:\n        msg = \"ratio must not be empty\"\n        raise ValueError(msg)\n    if cleaned.endswith(\"%\"):\n        return float(cleaned[:-1]) / PERCENT_SCALE\n    if \":\" in cleaned:\n        left, _, right = cleaned.partition(\":\")\n        denominator = float(right)\n        if not denominator:\n            msg = \"ratio denominator must not be zero\"\n            raise ValueError(msg)\n        return float(left) / denominator\n    value = float(cleaned)\n    if value \u003c 0:\n        msg = \"ratio must not be negative\"\n        raise ValueError(msg)\n    return value",
+        "hash": "df35542bb28d8a4b",
+        "size": 91,
+        "line_count": 36,
+        "complexity": 0
+      },
+      {
+        "id": 5,
+        "type": 0,
+        "location": {
+          "file_path": "controls.py",
+          "start_line": 83,
+          "end_line": 106,
+          "start_col": 0,
+          "end_col": 19
+        },
+        "content": "def build_export_manifest(name: str, entries: list[str]) -\u003e dict[str, object]:\n    \"\"\"Build the manifest describing one export bundle.\n\n    Parameters\n    ----------\n    name : str\n        Bundle name recorded in the manifest.\n    entries : list[str]\n        Relative paths included in the bundle.\n\n    Returns\n    -------\n    dict[str, object]\n        Manifest with the bundle name, sorted entries, and totals.\n    \"\"\"\n    unique_entries = sorted(set(entries))\n    manifest: dict[str, object] = {\n        \"bundle\": name.strip(),\n        \"entries\": unique_entries,\n        \"entry_count\": len(unique_entries),\n    }\n    if len(unique_entries) != len(entries):\n        manifest[\"deduplicated\"] = True\n    return manifest",
+        "hash": "812b0f465b91100c",
+        "size": 71,
+        "line_count": 24,
+        "complexity": 0
+      },
+      {
+        "id": 6,
+        "type": 0,
+        "location": {
+          "file_path": "controls.py",
+          "start_line": 109,
+          "end_line": 132,
+          "start_col": 0,
+          "end_col": 17
+        },
+        "content": "def build_retention_policy(days: int, tiers: list[str]) -\u003e dict[str, object]:\n    \"\"\"Build the retention policy for archived episodes.\n\n    Parameters\n    ----------\n    days : int\n        Retention window in days; non-positive means indefinite.\n    tiers : list[str]\n        Storage tiers the policy cascades through, cheapest last.\n\n    Returns\n    -------\n    dict[str, object]\n        Policy with the window, cascade order, and expiry flag.\n    \"\"\"\n    cascade = [tier.strip().lower() for tier in tiers if tier.strip()]\n    policy: dict[str, object] = {\n        \"window_days\": max(days, 0),\n        \"cascade\": cascade,\n        \"expires\": days \u003e 0,\n    }\n    if not cascade:\n        policy[\"cascade\"] = [\"standard\"]\n    return policy",
+        "hash": "7480c2c7d52aea57",
+        "size": 76,
+        "line_count": 24,
+        "complexity": 0
+      },
+      {
+        "id": 7,
+        "type": 0,
+        "location": {
+          "file_path": "controls.py",
+          "start_line": 135,
+          "end_line": 156,
+          "start_col": 0,
+          "end_col": 18
+        },
+        "content": "def longest_valid_streak(flags: list[bool]) -\u003e int:\n    \"\"\"Measure the longest run of consecutive valid flags.\n\n    Parameters\n    ----------\n    flags : list[bool]\n        Validity flags in observation order.\n\n    Returns\n    -------\n    int\n        Length of the longest unbroken run of ``True`` values.\n    \"\"\"\n    longest = 0\n    current = 0\n    for flag in flags:\n        if flag:\n            current += 1\n            longest = max(longest, current)\n        else:\n            current = 0\n    return longest",
+        "hash": "f098bd92815387c7",
+        "size": 39,
+        "line_count": 22,
+        "complexity": 0
+      },
+      {
+        "id": 10,
+        "type": 0,
+        "location": {
+          "file_path": "controls.py",
+          "start_line": 159,
+          "end_line": 178,
+          "start_col": 0,
+          "end_col": 18
+        },
+        "content": "def count_state_changes(states: list[str]) -\u003e int:\n    \"\"\"Count how many times the observed state changes.\n\n    Parameters\n    ----------\n    states : list[str]\n        Observed states in observation order.\n\n    Returns\n    -------\n    int\n        Number of adjacent pairs with differing states.\n    \"\"\"\n    changes = 0\n    previous: str | None = None\n    for state in states:\n        if previous is not None and state != previous:\n            changes += 1\n        previous = state\n    return changes",
+        "hash": "853f2860c0528969",
+        "size": 42,
+        "line_count": 20,
+        "complexity": 0
+      },
+      {
+        "id": 11,
+        "type": 0,
+        "location": {
+          "file_path": "pricing.py",
+          "start_line": 5,
+          "end_line": 29,
+          "start_col": 0,
+          "end_col": 26
+        },
+        "content": "def order_total_price(items: list[dict[str, float]]) -\u003e float:\n    \"\"\"Sum taxable order lines into a rounded total.\n\n    Parameters\n    ----------\n    items : list[dict[str, float]]\n        Order lines with ``price``, ``quantity``, and optional ``taxable``\n        and ``discount`` entries.\n\n    Returns\n    -------\n    float\n        Rounded, non-negative order total.\n    \"\"\"\n    total = 0.0\n    for item in items:\n        line_price = item[\"price\"] * item[\"quantity\"]\n        if item.get(\"taxable\"):\n            line_price *= 1.2\n        if item.get(\"discount\"):\n            line_price -= item[\"discount\"]\n        total += line_price\n    if total \u003c 0:\n        total = 0.0\n    return round(total, 2)",
+        "hash": "8fba7e04f95f6684",
+        "size": 70,
+        "line_count": 25,
+        "complexity": 0
+      },
+      {
+        "id": 13,
+        "type": 0,
+        "location": {
+          "file_path": "pricing.py",
+          "start_line": 32,
+          "end_line": 60,
+          "start_col": 0,
+          "end_col": 19
+        },
+        "content": "def recent_error_messages(\n    events: list[dict[str, object]],\n    limit: int,\n) -\u003e list[str]:\n    \"\"\"Collect the newest error messages up to a limit.\n\n    Parameters\n    ----------\n    events : list[dict[str, object]]\n        Event records ordered from newest to oldest.\n    limit : int\n        Maximum number of messages to collect.\n\n    Returns\n    -------\n    list[str]\n        Non-empty messages from error-level events.\n    \"\"\"\n    messages: list[str] = []\n    for event in events:\n        if event.get(\"level\") != \"error\":\n            continue\n        text = str(event.get(\"message\", \"\"))\n        if not text:\n            continue\n        messages.append(text)\n        if len(messages) \u003e= limit:\n            break\n    return messages",
+        "hash": "c3a002abcb35b813",
+        "size": 80,
+        "line_count": 29,
+        "complexity": 0
+      },
+      {
+        "id": 15,
+        "type": 0,
+        "location": {
+          "file_path": "pricing.py",
+          "start_line": 63,
+          "end_line": 87,
+          "start_col": 0,
+          "end_col": 81
+        },
+        "content": "def summarize_latencies(samples: list[float]) -\u003e dict[str, float]:\n    \"\"\"Summarize latency samples with bounds and a mean.\n\n    Parameters\n    ----------\n    samples : list[float]\n        Observed latency samples in milliseconds.\n\n    Returns\n    -------\n    dict[str, float]\n        Mapping with ``minimum``, ``maximum``, and ``mean`` entries.\n    \"\"\"\n    if not samples:\n        return {\"minimum\": 0.0, \"maximum\": 0.0, \"mean\": 0.0}\n    minimum = samples[0]\n    maximum = samples[0]\n    total = 0.0\n    for sample in samples:\n        if sample \u003c minimum:  # noqa: PLR1730 - retain the copied bounds-tracking fixture.\n            minimum = sample\n        if sample \u003e maximum:  # noqa: PLR1730 - retain the copied bounds-tracking fixture.\n            maximum = sample\n        total += sample\n    return {\"minimum\": minimum, \"maximum\": maximum, \"mean\": total / len(samples)}",
+        "hash": "772b6585164605b1",
+        "size": 79,
+        "line_count": 25,
+        "complexity": 0
+      },
+      {
+        "id": 17,
+        "type": 0,
+        "location": {
+          "file_path": "pricing.py",
+          "start_line": 90,
+          "end_line": 113,
+          "start_col": 0,
+          "end_col": 38
+        },
+        "content": "def weighted_average_score(rows: list[dict[str, float]]) -\u003e float:\n    \"\"\"Average valid row scores weighted by their sample size.\n\n    Parameters\n    ----------\n    rows : list[dict[str, float]]\n        Rows with ``score``, optional ``weight``, and a ``valid`` marker.\n\n    Returns\n    -------\n    float\n        Weighted mean score, or zero when no row is valid.\n    \"\"\"\n    weighted_total = 0.0\n    weight_sum = 0.0\n    for row in rows:\n        if not row.get(\"valid\"):\n            continue\n        weight = row.get(\"weight\", 1.0)\n        weighted_total += row[\"score\"] * weight\n        weight_sum += weight\n    if weight_sum == 0.0:\n        return 0.0\n    return weighted_total / weight_sum",
+        "hash": "bcc9f0dcbc803396",
+        "size": 66,
+        "line_count": 24,
+        "complexity": 0
+      },
+      {
+        "id": 19,
+        "type": 0,
+        "location": {
+          "file_path": "pricing.py",
+          "start_line": 116,
+          "end_line": 143,
+          "start_col": 0,
+          "end_col": 23
+        },
+        "content": "class OrderExporter:\n    \"\"\"Export orders after structural validation.\"\"\"\n\n    def validate(  # noqa: PLR6301 - the method-clone fixture requires instance methods.\n        self, payload: dict[str, object]\n    ) -\u003e list[str]:\n        \"\"\"Return the validation problems for an order payload.\n\n        Parameters\n        ----------\n        payload : dict[str, object]\n            Candidate order payload.\n\n        Returns\n        -------\n        list[str]\n            Human-readable validation problems; empty when valid.\n        \"\"\"\n        problems: list[str] = []\n        for field in (\"identifier\", \"customer\", \"total\"):\n            if field not in payload:\n                problems.append(f\"missing field: {field}\")  # noqa: PERF401 - retain the copied guard-loop fixture.\n        raw_total = payload.get(\"total\")\n        if isinstance(raw_total, int | float) and raw_total \u003c 0:\n            problems.append(\"total must not be negative\")\n        if not payload.get(\"lines\"):\n            problems.append(\"at least one line is required\")\n        return problems",
+        "hash": "cd9ba282f4165c21",
+        "size": 87,
+        "line_count": 28,
+        "complexity": 0
+      },
+      {
+        "id": 21,
+        "type": 0,
+        "location": {
+          "file_path": "reporting.py",
+          "start_line": 5,
+          "end_line": 30,
+          "start_col": 0,
+          "end_col": 26
+        },
+        "content": "def order_total_price_copy(items: list[dict[str, float]]) -\u003e float:\n    \"\"\"Sum taxable order lines into a rounded total for a report.\n\n    Parameters\n    ----------\n    items : list[dict[str, float]]\n        Order lines with ``price``, ``quantity``, and optional ``taxable``\n        and ``discount`` entries.\n\n    Returns\n    -------\n    float\n        Rounded, non-negative order total.\n    \"\"\"\n    # Type-1 clone: statements match pricing.order_total_price exactly.\n    total = 0.0\n    for item in items:\n        line_price = item[\"price\"] * item[\"quantity\"]\n        if item.get(\"taxable\"):\n            line_price *= 1.2\n        if item.get(\"discount\"):\n            line_price -= item[\"discount\"]\n        total += line_price\n    if total \u003c 0:\n        total = 0.0\n    return round(total, 2)",
+        "hash": "3127400b0a7e04ee",
+        "size": 70,
+        "line_count": 26,
+        "complexity": 0
+      },
+      {
+        "id": 23,
+        "type": 0,
+        "location": {
+          "file_path": "reporting.py",
+          "start_line": 33,
+          "end_line": 62,
+          "start_col": 0,
+          "end_col": 17
+        },
+        "content": "def latest_alert_titles(\n    records: list[dict[str, object]],\n    maximum: int,\n) -\u003e list[str]:\n    \"\"\"Collect the newest alert titles up to a maximum.\n\n    Parameters\n    ----------\n    records : list[dict[str, object]]\n        Alert records ordered from newest to oldest.\n    maximum : int\n        Maximum number of titles to collect.\n\n    Returns\n    -------\n    list[str]\n        Non-empty titles from error-level alerts.\n    \"\"\"\n    # Type-2 clone: identifiers renamed from pricing.recent_error_messages.\n    titles: list[str] = []\n    for record in records:\n        if record.get(\"level\") != \"error\":\n            continue\n        label = str(record.get(\"message\", \"\"))\n        if not label:\n            continue\n        titles.append(label)\n        if len(titles) \u003e= maximum:\n            break\n    return titles",
+        "hash": "e4f15bd97a8390a8",
+        "size": 80,
+        "line_count": 30,
+        "complexity": 0
+      },
+      {
+        "id": 25,
+        "type": 0,
+        "location": {
+          "file_path": "reporting.py",
+          "start_line": 65,
+          "end_line": 97,
+          "start_col": 0,
+          "end_col": 5
+        },
+        "content": "def summarize_throughput(readings: list[float]) -\u003e dict[str, float]:\n    \"\"\"Summarize throughput readings with bounds, a mean, and a count.\n\n    Parameters\n    ----------\n    readings : list[float]\n        Observed throughput readings per interval.\n\n    Returns\n    -------\n    dict[str, float]\n        Mapping with ``minimum``, ``maximum``, ``mean``, and ``count``\n        entries.\n    \"\"\"\n    # Type-3 clone: pricing.summarize_latencies with small modifications.\n    if not readings:\n        return {\"minimum\": 0.0, \"maximum\": 0.0, \"mean\": 0.0, \"count\": 0.0}\n    minimum = readings[0]\n    maximum = readings[0]\n    total = 0.0\n    for reading in readings:\n        if reading \u003c minimum:  # noqa: PLR1730 - retain the copied bounds-tracking fixture.\n            minimum = reading\n        if reading \u003e maximum:  # noqa: PLR1730 - retain the copied bounds-tracking fixture.\n            maximum = reading\n        total += reading\n    count = float(len(readings))\n    return {\n        \"minimum\": minimum,\n        \"maximum\": maximum,\n        \"mean\": total / count,\n        \"count\": count,\n    }",
+        "hash": "c643879f2970038e",
+        "size": 88,
+        "line_count": 33,
+        "complexity": 0
+      },
+      {
+        "id": 27,
+        "type": 0,
+        "location": {
+          "file_path": "reporting.py",
+          "start_line": 100,
+          "end_line": 122,
+          "start_col": 0,
+          "end_col": 39
+        },
+        "content": "def mean_weighted_rating(entries: list[dict[str, float]]) -\u003e float:\n    \"\"\"Average valid entry ratings weighted by their sample size.\n\n    Parameters\n    ----------\n    entries : list[dict[str, float]]\n        Entries with ``score``, optional ``weight``, and a ``valid`` marker.\n\n    Returns\n    -------\n    float\n        Weighted mean rating, or zero when no entry is valid.\n    \"\"\"\n    # Type-4 clone: pricing.weighted_average_score via comprehensions.\n    weights = [entry.get(\"weight\", 1.0) for entry in entries if entry.get(\"valid\")]\n    weighted = [\n        entry[\"score\"] * entry.get(\"weight\", 1.0)\n        for entry in entries\n        if entry.get(\"valid\")\n    ]\n    if not weights:\n        return 0.0\n    return sum(weighted) / sum(weights)",
+        "hash": "0350058c0ceb64d2",
+        "size": 70,
+        "line_count": 23,
+        "complexity": 0
+      },
+      {
+        "id": 28,
+        "type": 0,
+        "location": {
+          "file_path": "reporting.py",
+          "start_line": 125,
+          "end_line": 153,
+          "start_col": 0,
+          "end_col": 21
+        },
+        "content": "class InvoiceExporter:\n    \"\"\"Export invoices after structural validation.\"\"\"\n\n    def validate(  # noqa: PLR6301 - the method-clone fixture requires instance methods.\n        self, document: dict[str, object]\n    ) -\u003e list[str]:\n        \"\"\"Return the validation problems for an invoice document.\n\n        Parameters\n        ----------\n        document : dict[str, object]\n            Candidate invoice document.\n\n        Returns\n        -------\n        list[str]\n            Human-readable validation problems; empty when valid.\n        \"\"\"\n        # Type-2 method clone of pricing.OrderExporter.validate.\n        faults: list[str] = []\n        for field in (\"identifier\", \"customer\", \"total\"):\n            if field not in document:\n                faults.append(f\"missing field: {field}\")  # noqa: PERF401 - retain the copied guard-loop fixture.\n        raw_amount = document.get(\"total\")\n        if isinstance(raw_amount, int | float) and raw_amount \u003c 0:\n            faults.append(\"total must not be negative\")\n        if not document.get(\"lines\"):\n            faults.append(\"at least one line is required\")\n        return faults",
+        "hash": "2ef9baa88015cfa1",
+        "size": 87,
+        "line_count": 29,
+        "complexity": 0
+      }
+    ],
+    "clone_pairs": [
+      {
+        "id": 1,
+        "clone1": {
+          "id": 7,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 135,
+            "end_line": 156,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "f098bd92815387c7",
+          "size": 39,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "similarity": 0.9282037686867012,
+        "distance": 27.8,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 2,
+        "clone1": {
+          "id": 13,
+          "type": 2,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 32,
+            "end_line": 60,
+            "start_col": 0,
+            "end_col": 19
+          },
+          "hash": "c3a002abcb35b813",
+          "size": 80,
+          "line_count": 29,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 23,
+          "type": 2,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 33,
+            "end_line": 62,
+            "start_col": 0,
+            "end_col": 17
+          },
+          "hash": "e4f15bd97a8390a8",
+          "size": 80,
+          "line_count": 30,
+          "complexity": 0
+        },
+        "similarity": 0.8499999999999999,
+        "distance": 10.799999999999999,
+        "type": 2,
+        "confidence": 0.95
+      },
+      {
+        "id": 3,
+        "clone1": {
+          "id": 19,
+          "type": 2,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 116,
+            "end_line": 143,
+            "start_col": 0,
+            "end_col": 23
+          },
+          "hash": "cd9ba282f4165c21",
+          "size": 87,
+          "line_count": 28,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 28,
+          "type": 2,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 125,
+            "end_line": 153,
+            "start_col": 0,
+            "end_col": 21
+          },
+          "hash": "2ef9baa88015cfa1",
+          "size": 87,
+          "line_count": 29,
+          "complexity": 0
+        },
+        "similarity": 0.8499999999999999,
+        "distance": 9.399999999999999,
+        "type": 2,
+        "confidence": 0.95
+      },
+      {
+        "id": 4,
+        "clone1": {
+          "id": 11,
+          "type": 2,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 5,
+            "end_line": 29,
+            "start_col": 0,
+            "end_col": 26
+          },
+          "hash": "8fba7e04f95f6684",
+          "size": 70,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 21,
+          "type": 2,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 5,
+            "end_line": 30,
+            "start_col": 0,
+            "end_col": 26
+          },
+          "hash": "3127400b0a7e04ee",
+          "size": 70,
+          "line_count": 26,
+          "complexity": 0
+        },
+        "similarity": 0.8499999999999999,
+        "distance": 1,
+        "type": 2,
+        "confidence": 0.95
+      },
+      {
+        "id": 5,
+        "clone1": {
+          "id": 6,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 109,
+            "end_line": 132,
+            "start_col": 0,
+            "end_col": 17
+          },
+          "hash": "7480c2c7d52aea57",
+          "size": 76,
+          "line_count": 24,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 7,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 135,
+            "end_line": 156,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "f098bd92815387c7",
+          "size": 39,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "similarity": 0.8114455263465279,
+        "distance": 61.5,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 6,
+        "clone1": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 17,
+          "type": 4,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 90,
+            "end_line": 113,
+            "start_col": 0,
+            "end_col": 38
+          },
+          "hash": "bcc9f0dcbc803396",
+          "size": 66,
+          "line_count": 24,
+          "complexity": 0
+        },
+        "similarity": 0.8092288833943493,
+        "distance": 51.39999999999999,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 7,
+        "clone1": {
+          "id": 7,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 135,
+            "end_line": 156,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "f098bd92815387c7",
+          "size": 39,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 17,
+          "type": 4,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 90,
+            "end_line": 113,
+            "start_col": 0,
+            "end_col": 38
+          },
+          "hash": "bcc9f0dcbc803396",
+          "size": 66,
+          "line_count": 24,
+          "complexity": 0
+        },
+        "similarity": 0.8074381874326104,
+        "distance": 47.09999999999999,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 8,
+        "clone1": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 11,
+          "type": 4,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 5,
+            "end_line": 29,
+            "start_col": 0,
+            "end_col": 26
+          },
+          "hash": "8fba7e04f95f6684",
+          "size": 70,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "similarity": 0.7794341383952682,
+        "distance": 53.599999999999994,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 9,
+        "clone1": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 21,
+          "type": 4,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 5,
+            "end_line": 30,
+            "start_col": 0,
+            "end_col": 26
+          },
+          "hash": "3127400b0a7e04ee",
+          "size": 70,
+          "line_count": 26,
+          "complexity": 0
+        },
+        "similarity": 0.7794341383952682,
+        "distance": 53.599999999999994,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 10,
+        "clone1": {
+          "id": 17,
+          "type": 4,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 90,
+            "end_line": 113,
+            "start_col": 0,
+            "end_col": 38
+          },
+          "hash": "bcc9f0dcbc803396",
+          "size": 66,
+          "line_count": 24,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 27,
+          "type": 4,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 100,
+            "end_line": 122,
+            "start_col": 0,
+            "end_col": 39
+          },
+          "hash": "0350058c0ceb64d2",
+          "size": 70,
+          "line_count": 23,
+          "complexity": 0
+        },
+        "similarity": 0.7679606223973743,
+        "distance": 44.29999999999999,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 11,
+        "clone1": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 15,
+          "type": 4,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 63,
+            "end_line": 87,
+            "start_col": 0,
+            "end_col": 81
+          },
+          "hash": "772b6585164605b1",
+          "size": 79,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "similarity": 0.7537612237710818,
+        "distance": 62.300000000000004,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 12,
+        "clone1": {
+          "id": 7,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 135,
+            "end_line": 156,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "f098bd92815387c7",
+          "size": 39,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 21,
+          "type": 4,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 5,
+            "end_line": 30,
+            "start_col": 0,
+            "end_col": 26
+          },
+          "hash": "3127400b0a7e04ee",
+          "size": 70,
+          "line_count": 26,
+          "complexity": 0
+        },
+        "similarity": 0.7513549389220567,
+        "distance": 52.69999999999999,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 13,
+        "clone1": {
+          "id": 7,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 135,
+            "end_line": 156,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "f098bd92815387c7",
+          "size": 39,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 11,
+          "type": 4,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 5,
+            "end_line": 29,
+            "start_col": 0,
+            "end_col": 26
+          },
+          "hash": "8fba7e04f95f6684",
+          "size": 70,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "similarity": 0.7513549389220567,
+        "distance": 52.69999999999999,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 14,
+        "clone1": {
+          "id": 5,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 83,
+            "end_line": 106,
+            "start_col": 0,
+            "end_col": 19
+          },
+          "hash": "812b0f465b91100c",
+          "size": 71,
+          "line_count": 24,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "similarity": 0.7499527130953416,
+        "distance": 55.69999999999998,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 15,
+        "clone1": {
+          "id": 15,
+          "type": 3,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 63,
+            "end_line": 87,
+            "start_col": 0,
+            "end_col": 81
+          },
+          "hash": "772b6585164605b1",
+          "size": 79,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 25,
+          "type": 3,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 65,
+            "end_line": 97,
+            "start_col": 0,
+            "end_col": 5
+          },
+          "hash": "c643879f2970038e",
+          "size": 88,
+          "line_count": 33,
+          "complexity": 0
+        },
+        "similarity": 0.7494252873563219,
+        "distance": 21.8,
+        "type": 3,
+        "confidence": 0.95
+      },
+      {
+        "id": 16,
+        "clone1": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 13,
+          "type": 4,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 32,
+            "end_line": 60,
+            "start_col": 0,
+            "end_col": 19
+          },
+          "hash": "c3a002abcb35b813",
+          "size": 80,
+          "line_count": 29,
+          "complexity": 0
+        },
+        "similarity": 0.7476270227041109,
+        "distance": 61.3,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 17,
+        "clone1": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 23,
+          "type": 4,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 33,
+            "end_line": 62,
+            "start_col": 0,
+            "end_col": 17
+          },
+          "hash": "e4f15bd97a8390a8",
+          "size": 80,
+          "line_count": 30,
+          "complexity": 0
+        },
+        "similarity": 0.7476270227041109,
+        "distance": 61.3,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 18,
+        "clone1": {
+          "id": 10,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 159,
+            "end_line": 178,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "853f2860c0528969",
+          "size": 42,
+          "line_count": 20,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 25,
+          "type": 4,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 65,
+            "end_line": 97,
+            "start_col": 0,
+            "end_col": 5
+          },
+          "hash": "c643879f2970038e",
+          "size": 88,
+          "line_count": 33,
+          "complexity": 0
+        },
+        "similarity": 0.7389456946956141,
+        "distance": 71.10000000000001,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 19,
+        "clone1": {
+          "id": 7,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 135,
+            "end_line": 156,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "f098bd92815387c7",
+          "size": 39,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 25,
+          "type": 4,
+          "location": {
+            "file_path": "reporting.py",
+            "start_line": 65,
+            "end_line": 97,
+            "start_col": 0,
+            "end_col": 5
+          },
+          "hash": "c643879f2970038e",
+          "size": 88,
+          "line_count": 33,
+          "complexity": 0
+        },
+        "similarity": 0.7376745343231736,
+        "distance": 70.69999999999999,
+        "type": 4,
+        "confidence": 0.85
+      },
+      {
+        "id": 20,
+        "clone1": {
+          "id": 7,
+          "type": 4,
+          "location": {
+            "file_path": "controls.py",
+            "start_line": 135,
+            "end_line": 156,
+            "start_col": 0,
+            "end_col": 18
+          },
+          "hash": "f098bd92815387c7",
+          "size": 39,
+          "line_count": 22,
+          "complexity": 0
+        },
+        "clone2": {
+          "id": 15,
+          "type": 4,
+          "location": {
+            "file_path": "pricing.py",
+            "start_line": 63,
+            "end_line": 87,
+            "start_col": 0,
+            "end_col": 81
+          },
+          "hash": "772b6585164605b1",
+          "size": 79,
+          "line_count": 25,
+          "complexity": 0
+        },
+        "similarity": 0.7335768532709321,
+        "distance": 61.900000000000006,
+        "type": 4,
+        "confidence": 0.85
+      }
+    ],
+    "clone_groups": [
+      {
+        "id": 0,
+        "clones": [
+          {
+            "id": 3,
+            "type": 4,
+            "location": {
+              "file_path": "controls.py",
+              "start_line": 45,
+              "end_line": 80,
+              "start_col": 0,
+              "end_col": 16
+            },
+            "hash": "df35542bb28d8a4b",
+            "size": 91,
+            "line_count": 36,
+            "complexity": 0
+          },
+          {
+            "id": 5,
+            "type": 4,
+            "location": {
+              "file_path": "controls.py",
+              "start_line": 83,
+              "end_line": 106,
+              "start_col": 0,
+              "end_col": 19
+            },
+            "hash": "812b0f465b91100c",
+            "size": 71,
+            "line_count": 24,
+            "complexity": 0
+          },
+          {
+            "id": 6,
+            "type": 4,
+            "location": {
+              "file_path": "controls.py",
+              "start_line": 109,
+              "end_line": 132,
+              "start_col": 0,
+              "end_col": 17
+            },
+            "hash": "7480c2c7d52aea57",
+            "size": 76,
+            "line_count": 24,
+            "complexity": 0
+          },
+          {
+            "id": 7,
+            "type": 4,
+            "location": {
+              "file_path": "controls.py",
+              "start_line": 135,
+              "end_line": 156,
+              "start_col": 0,
+              "end_col": 18
+            },
+            "hash": "f098bd92815387c7",
+            "size": 39,
+            "line_count": 22,
+            "complexity": 0
+          },
+          {
+            "id": 10,
+            "type": 4,
+            "location": {
+              "file_path": "controls.py",
+              "start_line": 159,
+              "end_line": 178,
+              "start_col": 0,
+              "end_col": 18
+            },
+            "hash": "853f2860c0528969",
+            "size": 42,
+            "line_count": 20,
+            "complexity": 0
+          },
+          {
+            "id": 11,
+            "type": 4,
+            "location": {
+              "file_path": "pricing.py",
+              "start_line": 5,
+              "end_line": 29,
+              "start_col": 0,
+              "end_col": 26
+            },
+            "hash": "8fba7e04f95f6684",
+            "size": 70,
+            "line_count": 25,
+            "complexity": 0
+          },
+          {
+            "id": 13,
+            "type": 4,
+            "location": {
+              "file_path": "pricing.py",
+              "start_line": 32,
+              "end_line": 60,
+              "start_col": 0,
+              "end_col": 19
+            },
+            "hash": "c3a002abcb35b813",
+            "size": 80,
+            "line_count": 29,
+            "complexity": 0
+          },
+          {
+            "id": 15,
+            "type": 4,
+            "location": {
+              "file_path": "pricing.py",
+              "start_line": 63,
+              "end_line": 87,
+              "start_col": 0,
+              "end_col": 81
+            },
+            "hash": "772b6585164605b1",
+            "size": 79,
+            "line_count": 25,
+            "complexity": 0
+          },
+          {
+            "id": 17,
+            "type": 4,
+            "location": {
+              "file_path": "pricing.py",
+              "start_line": 90,
+              "end_line": 113,
+              "start_col": 0,
+              "end_col": 38
+            },
+            "hash": "bcc9f0dcbc803396",
+            "size": 66,
+            "line_count": 24,
+            "complexity": 0
+          },
+          {
+            "id": 19,
+            "type": 4,
+            "location": {
+              "file_path": "pricing.py",
+              "start_line": 116,
+              "end_line": 143,
+              "start_col": 0,
+              "end_col": 23
+            },
+            "hash": "cd9ba282f4165c21",
+            "size": 87,
+            "line_count": 28,
+            "complexity": 0
+          },
+          {
+            "id": 21,
+            "type": 4,
+            "location": {
+              "file_path": "reporting.py",
+              "start_line": 5,
+              "end_line": 30,
+              "start_col": 0,
+              "end_col": 26
+            },
+            "hash": "3127400b0a7e04ee",
+            "size": 70,
+            "line_count": 26,
+            "complexity": 0
+          },
+          {
+            "id": 23,
+            "type": 4,
+            "location": {
+              "file_path": "reporting.py",
+              "start_line": 33,
+              "end_line": 62,
+              "start_col": 0,
+              "end_col": 17
+            },
+            "hash": "e4f15bd97a8390a8",
+            "size": 80,
+            "line_count": 30,
+            "complexity": 0
+          },
+          {
+            "id": 25,
+            "type": 4,
+            "location": {
+              "file_path": "reporting.py",
+              "start_line": 65,
+              "end_line": 97,
+              "start_col": 0,
+              "end_col": 5
+            },
+            "hash": "c643879f2970038e",
+            "size": 88,
+            "line_count": 33,
+            "complexity": 0
+          },
+          {
+            "id": 27,
+            "type": 4,
+            "location": {
+              "file_path": "reporting.py",
+              "start_line": 100,
+              "end_line": 122,
+              "start_col": 0,
+              "end_col": 39
+            },
+            "hash": "0350058c0ceb64d2",
+            "size": 70,
+            "line_count": 23,
+            "complexity": 0
+          },
+          {
+            "id": 28,
+            "type": 4,
+            "location": {
+              "file_path": "reporting.py",
+              "start_line": 125,
+              "end_line": 153,
+              "start_col": 0,
+              "end_col": 21
+            },
+            "hash": "2ef9baa88015cfa1",
+            "size": 87,
+            "line_count": 29,
+            "complexity": 0
+          }
+        ],
+        "type": 4,
+        "similarity": 0.7847222747406449,
+        "size": 15
+      }
+    ],
+    "statistics": {
+      "total_fragments": 29,
+      "total_clones": 15,
+      "total_clone_pairs": 20,
+      "total_clone_groups": 1,
+      "clones_by_type": {
+        "Type-2": 3,
+        "Type-3": 1,
+        "Type-4": 16
+      },
+      "average_similarity": 0.784722274740645,
+      "lines_analyzed": 483,
+      "nodes_analyzed": 1194,
+      "files_analyzed": 4
+    },
+    "request": {
+      "paths": [
+        "__init__.py",
+        "controls.py",
+        "pricing.py",
+        "reporting.py"
+      ],
+      "recursive": true,
+      "include_patterns": [
+        "**/*.py"
+      ],
+      "exclude_patterns": [
+        "test_*.py",
+        "*_test.py",
+        "**/tests/**",
+        "**/test/**",
+        "**/testing/**",
+        "**/migrations/**"
+      ],
+      "min_lines": 5,
+      "min_nodes": 10,
+      "similarity_threshold": 0.65,
+      "max_edit_distance": 50,
+      "ignore_literals": false,
+      "ignore_identifiers": false,
+      "skip_docstrings": true,
+      "type1_threshold": 0.85,
+      "type2_threshold": 0.75,
+      "type3_threshold": 0.7,
+      "type4_threshold": 0.65,
+      "enable_dfa": true,
+      "output_format": "json",
+      "output_path": "",
+      "no_open": false,
+      "show_details": false,
+      "show_content": false,
+      "sort_by": "similarity",
+      "group_clones": true,
+      "group_mode": "connected",
+      "group_threshold": 0.65,
+      "k_core_k": 2,
+      "min_similarity": 0,
+      "max_similarity": 1,
+      "clone_types": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "config_path": "../configs/pyscn-permissive.toml",
+      "timeout": 0,
+      "lsh_enabled": "auto",
+      "lsh_auto_threshold": 500,
+      "lsh_similarity_threshold": 0.5,
+      "lsh_bands": 32,
+      "lsh_rows": 4,
+      "lsh_hashes": 128
+    },
+    "duration_ms": 88,
+    "success": true
+  },
+  "suggestions": [
+    {
+      "category": "clone",
+      "severity": "critical",
+      "effort": "hard",
+      "title": "Extract duplicated code (Type-4 semantic, 15 fragments)",
+      "description": "Semantically similar code with different structure. Evaluate whether a common abstraction is appropriate.",
+      "steps": [
+        "Analyze whether the 15 fragments serve the same purpose",
+        "If so, design a common abstraction (base class, strategy pattern, or utility)",
+        "Refactor incrementally — start with 2 fragments, then extend"
+      ],
+      "file_path": "controls.py",
+      "start_line": 45,
+      "metric_value": "78% similarity"
+    }
+  ],
+  "summary": {
+    "total_files": 0,
+    "analyzed_files": 0,
+    "skipped_files": 0,
+    "complexity_enabled": false,
+    "dead_code_enabled": false,
+    "clone_enabled": true,
+    "cbo_enabled": false,
+    "mock_data_enabled": false,
+    "deps_enabled": false,
+    "arch_enabled": false,
+    "communities_enabled": false,
+    "deps_total_modules": 0,
+    "deps_modules_in_cycles": 0,
+    "deps_max_depth": 0,
+    "deps_main_sequence_deviation": 0,
+    "arch_compliance": 0,
+    "community_count": 0,
+    "community_modularity": 0,
+    "community_bridge_modules": 0,
+    "community_internal_edges": 0,
+    "community_cross_edges": 0,
+    "total_functions": 0,
+    "functions_parsed": 0,
+    "average_complexity": 0,
+    "average_cognitive_complexity": 0,
+    "average_nesting_depth": 0,
+    "high_complexity_count": 0,
+    "dead_code_count": 0,
+    "critical_dead_code": 0,
+    "warning_dead_code": 0,
+    "info_dead_code": 0,
+    "total_clones": 15,
+    "clone_pairs": 20,
+    "clone_groups": 1,
+    "code_duplication_percentage": 30,
+    "cbo_classes": 0,
+    "high_coupling_classes": 0,
+    "medium_coupling_classes": 0,
+    "average_coupling": 0,
+    "lcom_enabled": false,
+    "lcom_classes": 0,
+    "high_lcom_classes": 0,
+    "medium_lcom_classes": 0,
+    "average_lcom": 0,
+    "mock_data_count": 0,
+    "mock_data_error_count": 0,
+    "mock_data_warning_count": 0,
+    "mock_data_info_count": 0,
+    "health_score": 80,
+    "grade": "B",
+    "complexity_score": 100,
+    "dead_code_score": 100,
+    "duplication_score": 0,
+    "coupling_score": 100,
+    "cohesion_score": 100,
+    "dependency_score": 100,
+    "architecture_score": 0,
+    "community_score": 100,
+    "community_risk_score": 0
+  },
+  "generated_at": "2026-08-22T16:11:00.145653727+01:00",
+  "duration_ms": 89,
+  "version": "1.29.1"
+}

@@ -1,0 +1,6 @@
+# Permissive capability-measurement settings for the corpus comparison.
+# The floors match the PyChase permissive run; all clone types are enabled.
+[clones]
+min_lines = 5
+min_nodes = 10
+enabled_clone_types = ["type1", "type2", "type3", "type4"]
