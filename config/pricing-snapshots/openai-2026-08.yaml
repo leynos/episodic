@@ -9,7 +9,6 @@ rates_minor_per_metric:
   input_tokens: 200
   output_tokens: 1000
   cached_input_tokens: 20
-  reasoning_tokens: 1000
 source_metadata:
   source_url: https://developers.openai.com/api/docs/pricing
 retrieved_at: "2026-08-22T00:00:00Z"

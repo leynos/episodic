@@ -16,6 +16,7 @@ import uuid
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 
 from episodic.cost._time import parse_instant
 from episodic.cost.ports import (
@@ -26,6 +27,7 @@ from episodic.cost.ports import (
     MeteringCounterKey,
     PricingModel,
     PricingSnapshot,
+    PricingSnapshotCollisionError,
     PricingSnapshotId,
     ProviderCallLedgerEntry,
     RunPricingKey,
@@ -118,7 +120,27 @@ class SqlAlchemyCostLedgerStore:
         self._session = session
 
     async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
-        """Persist an immutable pricing snapshot; reuse an existing row."""
+        """Persist an immutable pricing snapshot; reuse an existing row.
+
+        Persists the snapshot identifier, provider name, model, operation,
+        source kind, currency, billing period, rates, source metadata,
+        content hash, and retrieved-at timestamp. If a row with the same
+        ``id`` already exists, the insert is a no-op via
+        ``ON CONFLICT DO NOTHING``, leaving the stored row unchanged.
+
+        Raises
+        ------
+        PricingSnapshotCollisionError
+            If ``snapshot.content_hash`` is already stored under a
+            different snapshot identifier.
+        sqlalchemy.exc.IntegrityError
+            If the insert violates a constraint other than the identifier
+            or content-hash uniqueness.
+        ValueError
+            If ``snapshot.retrieved_at`` lacks timezone information, via
+            ``parse_instant``'s ``"timestamp must include timezone
+            information."`` error.
+        """  # noqa: DOC502  # parse_instant raises on the adapter's behalf.
         statement = (
             insert(PricingSnapshotRecord)
             .values(
@@ -136,10 +158,31 @@ class SqlAlchemyCostLedgerStore:
                     snapshot.retrieved_at,
                     error_message="timestamp must include timezone information.",
                 ),
+                effective_from=(
+                    None
+                    if snapshot.effective_from is None
+                    else parse_instant(
+                        snapshot.effective_from,
+                        error_message=("timestamp must include timezone information."),
+                    )
+                ),
             )
             .on_conflict_do_nothing(index_elements=["id"])
         )
-        await self._session.execute(statement)
+        try:
+            await self._session.execute(statement)
+        except IntegrityError as exc:
+            # The id conflict target does not cover the unique content
+            # hash; a duplicate hash under a different identifier is a
+            # catalogue defect, not a transient storage failure.
+            if "content_hash" in str(exc.orig):
+                msg = (
+                    "pricing snapshot content hash "
+                    f"{snapshot.content_hash!r} is already stored under a "
+                    "different snapshot identifier"
+                )
+                raise PricingSnapshotCollisionError(msg) from exc
+            raise
 
     async def pin_run_pricing(
         self,

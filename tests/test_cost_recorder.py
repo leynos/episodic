@@ -60,7 +60,7 @@ def _snapshot(
 class _PinnedLedger:
     """Ledger fake that exposes one existing run pricing pin."""
 
-    pinned_snapshot_id: PricingSnapshotId
+    pinned_snapshot_id: PricingSnapshotId | None
     recorded_call: ProviderCallLedgerEntry | None = None
     ensured_snapshots: list[PricingSnapshot] = dc.field(default_factory=list)
 
@@ -172,4 +172,47 @@ async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None
     ), "recorder must use the pinned snapshot identifier"
     assert ledger.recorded_call.computed_cost_minor == 3, (
         "cost must be computed from the pinned 1_000_000 rate, not drifted rates"
+    )
+    assert not ledger.ensured_snapshots, (
+        "pinned calls must skip snapshot persistence; the pin's foreign key "
+        "already guarantees the stored row exists"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> None:
+    """Unpinned calls persist the resolved snapshot before the ledger row."""
+    latest_snapshot = _snapshot("snapshot:new", input_token_rate=1_000_000)
+    ledger = _PinnedLedger(pinned_snapshot_id=None)
+    recorder = CostRecorder(
+        ledger=ledger,
+        pricing_catalogue=_DriftingCatalogue(
+            pinned_snapshot=latest_snapshot,
+            latest_snapshot=latest_snapshot,
+        ),
+        pricing_engine=PricingEngine(),
+    )
+
+    await recorder.record_provider_call(
+        ProviderCallRecord(
+            idempotency_key=IdempotencyKey("run:abc:node:planner:call:2:attempt:0"),
+            parent_cost_entry_id=None,
+            provider_type="llm",
+            provider_name="openai",
+            model="gpt-4o-mini",
+            workflow_node="planner",
+            operation="chat_completions",
+            usage={"input_tokens": 3},
+            usage_source=UsageSource.PROVIDER,
+            usage_complete=True,
+            pricing_model=PricingModel.PAYG,
+            retry_attempt=0,
+            billing_period_key=BillingPeriodKey("2026-06"),
+            workflow_run_id="run-abc",
+            recorded_at="2026-06-04T00:00:00Z",
+        ),
+    )
+
+    assert ledger.ensured_snapshots == [latest_snapshot], (
+        "unpinned calls must persist the resolved snapshot before recording"
     )

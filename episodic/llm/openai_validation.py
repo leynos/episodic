@@ -211,49 +211,46 @@ def _normalize_chat_provider_call_usage(
     usage_payload: cabc.Mapping[str, object] | None,
     finish_reason: str | None,
 ) -> ProviderCallUsage | None:
-    """Convert OpenAI chat usage details into canonical cost metrics."""
+    """Convert OpenAI chat usage details into canonical cost metrics.
+
+    The provider reports cached and audio counts as subsets of the prompt
+    and completion totals, so the canonical metrics are made mutually
+    exclusive: subset counts are subtracted from their parent totals and
+    priced under their own rates. Reasoning tokens are billed at the
+    output rate and stay inside ``output_tokens`` rather than becoming a
+    separately priced metric.
+
+    Returns
+    -------
+    ProviderCallUsage | None
+        Canonical usage metadata, or ``None`` without a usage payload.
+    """
     if usage_payload is None:
         return None
+    prompt_tokens = _extract_token_count(usage_payload, "prompt_tokens")
+    completion_tokens = _extract_token_count(usage_payload, "completion_tokens")
+    cached_input = _extract_nested_token_count(
+        usage_payload,
+        "prompt_tokens_details",
+        "cached_tokens",
+    )
+    audio_input = _extract_nested_token_count(
+        usage_payload,
+        "prompt_tokens_details",
+        "audio_tokens",
+    )
+    audio_output = _extract_nested_token_count(
+        usage_payload,
+        "completion_tokens_details",
+        "audio_tokens",
+    )
     metrics = {
-        "input_tokens": _extract_token_count(usage_payload, "prompt_tokens"),
-        "output_tokens": _extract_token_count(usage_payload, "completion_tokens"),
+        "input_tokens": prompt_tokens - (cached_input or 0) - (audio_input or 0),
+        "output_tokens": completion_tokens - (audio_output or 0),
     }
-    _add_metric_if_present(
-        metrics,
-        "cached_input_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "prompt_tokens_details",
-            "cached_tokens",
-        ),
-    )
-    _add_metric_if_present(
-        metrics,
-        "audio_input_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "prompt_tokens_details",
-            "audio_tokens",
-        ),
-    )
-    _add_metric_if_present(
-        metrics,
-        "reasoning_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "completion_tokens_details",
-            "reasoning_tokens",
-        ),
-    )
-    _add_metric_if_present(
-        metrics,
-        "audio_output_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "completion_tokens_details",
-            "audio_tokens",
-        ),
-    )
+    _add_metric_if_present(metrics, "cached_input_tokens", cached_input)
+    _add_metric_if_present(metrics, "audio_input_tokens", audio_input)
+    _add_metric_if_present(metrics, "audio_output_tokens", audio_output)
     return ProviderCallUsage(
         usage_metrics=metrics,
         usage_source=UsageSource.PROVIDER,
@@ -270,39 +267,40 @@ def _normalize_responses_provider_call_usage(
     usage_payload: cabc.Mapping[str, object] | None,
     finish_reason: str | None,
 ) -> ProviderCallUsage | None:
-    """Convert OpenAI Responses usage details into canonical cost metrics."""
+    """Convert OpenAI Responses usage details into canonical cost metrics.
+
+    Cached input tokens are a subset of the input total, so they are
+    subtracted from ``input_tokens`` and priced under their own rate.
+    Reasoning tokens are billed at the output rate and stay inside
+    ``output_tokens`` rather than becoming a separately priced metric.
+
+    Returns
+    -------
+    ProviderCallUsage | None
+        Canonical usage metadata, or ``None`` without a usage payload.
+    """
     if usage_payload is None:
         return None
+    input_tokens = _extract_token_count(
+        usage_payload,
+        "input_tokens",
+        error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
+    )
+    output_tokens = _extract_token_count(
+        usage_payload,
+        "output_tokens",
+        error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
+    )
+    cached_input = _extract_nested_token_count(
+        usage_payload,
+        "input_tokens_details",
+        "cached_tokens",
+    )
     metrics = {
-        "input_tokens": _extract_token_count(
-            usage_payload,
-            "input_tokens",
-            error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
-        ),
-        "output_tokens": _extract_token_count(
-            usage_payload,
-            "output_tokens",
-            error_message=_INVALID_RESPONSES_PAYLOAD_MESSAGE,
-        ),
+        "input_tokens": input_tokens - (cached_input or 0),
+        "output_tokens": output_tokens,
     }
-    _add_metric_if_present(
-        metrics,
-        "cached_input_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "input_tokens_details",
-            "cached_tokens",
-        ),
-    )
-    _add_metric_if_present(
-        metrics,
-        "reasoning_tokens",
-        _extract_nested_token_count(
-            usage_payload,
-            "output_tokens_details",
-            "reasoning_tokens",
-        ),
-    )
+    _add_metric_if_present(metrics, "cached_input_tokens", cached_input)
     return ProviderCallUsage(
         usage_metrics=metrics,
         usage_source=UsageSource.PROVIDER,

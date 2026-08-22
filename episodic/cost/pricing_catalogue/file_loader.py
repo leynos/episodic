@@ -254,5 +254,8 @@ class FilePricingCatalogue:
             source_metadata=_optional_string_mapping(data, "source_metadata", path),
             content_hash=hashlib.sha256(raw_bytes).hexdigest(),
             retrieved_at=_require_string(data, "retrieved_at", path),
+            effective_from=(
+                effective_from_value if isinstance(effective_from_value, str) else None
+            ),
         )
         return _LoadedSnapshot(snapshot=snapshot, effective_from=effective_from)
