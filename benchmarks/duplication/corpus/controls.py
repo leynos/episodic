@@ -65,19 +65,20 @@ def parse_ratio(text: str) -> float:
         msg = "ratio must not be empty"
         raise ValueError(msg)
     if cleaned.endswith("%"):
-        return float(cleaned[:-1]) / PERCENT_SCALE
-    if ":" in cleaned:
+        fraction = float(cleaned[:-1]) / PERCENT_SCALE
+    elif ":" in cleaned:
         left, _, right = cleaned.partition(":")
         denominator = float(right)
         if not denominator:
             msg = "ratio denominator must not be zero"
             raise ValueError(msg)
-        return float(left) / denominator
-    value = float(cleaned)
-    if value < 0:
+        fraction = float(left) / denominator
+    else:
+        fraction = float(cleaned)
+    if fraction < 0:
         msg = "ratio must not be negative"
         raise ValueError(msg)
-    return value
+    return fraction
 
 
 def build_export_manifest(name: str, entries: list[str]) -> dict[str, object]:
