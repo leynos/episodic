@@ -62,6 +62,12 @@ class _PinnedLedger:
 
     pinned_snapshot_id: PricingSnapshotId
     recorded_call: ProviderCallLedgerEntry | None = None
+    ensured_snapshots: list[PricingSnapshot] = dc.field(default_factory=list)
+
+    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
+        """Capture snapshots the recorder persists, mirroring idempotency."""
+        if snapshot not in self.ensured_snapshots:
+            self.ensured_snapshots.append(snapshot)
 
     async def pin_run_pricing(
         self,

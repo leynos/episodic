@@ -25,6 +25,7 @@ from episodic.cost.ports import (
     LedgerScope,
     MeteringCounterKey,
     PricingModel,
+    PricingSnapshot,
     PricingSnapshotId,
     ProviderCallLedgerEntry,
     RunPricingKey,
@@ -36,6 +37,7 @@ from .models import (
     CostLedgerEntryRecord,
     MeteringCounterEventRecord,
     MeteringCounterRecord,
+    PricingSnapshotRecord,
     RunPricingPinRecord,
 )
 
@@ -114,6 +116,30 @@ class SqlAlchemyCostLedgerStore:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
+        """Persist an immutable pricing snapshot; reuse an existing row."""
+        statement = (
+            insert(PricingSnapshotRecord)
+            .values(
+                id=uuid.UUID(str(snapshot.pricing_snapshot_id)),
+                provider_name=snapshot.provider_name,
+                model=snapshot.model,
+                operation=snapshot.operation,
+                source_kind=str(snapshot.source_kind),
+                currency=str(snapshot.currency),
+                billing_period_key=str(snapshot.billing_period_key),
+                rates_minor_per_metric=dict(snapshot.rates_minor_per_metric),
+                source_metadata=dict(snapshot.source_metadata),
+                content_hash=snapshot.content_hash,
+                retrieved_at=parse_instant(
+                    snapshot.retrieved_at,
+                    error_message="timestamp must include timezone information.",
+                ),
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+        await self._session.execute(statement)
 
     async def pin_run_pricing(
         self,

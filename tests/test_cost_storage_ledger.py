@@ -13,7 +13,9 @@ from episodic.cost import (
     IdempotencyKey,
     LedgerScope,
     PricingModel,
+    PricingSnapshot,
     PricingSnapshotId,
+    PricingSourceKind,
     ProviderCallLedgerEntry,
     RunPricingKey,
     TaskRollupLedgerEntry,
@@ -230,3 +232,62 @@ def test_recorded_at_fixture_is_timezone_aware() -> None:
     parsed = dt.datetime.fromisoformat("2026-06-04T10:00:00+00:00")
 
     assert parsed.tzinfo is not None, "expected parsed datetime to be timezone-aware"
+
+
+def _pricing_snapshot(snapshot_id: str) -> PricingSnapshot:
+    """Build a domain pricing snapshot for persistence tests."""
+    return PricingSnapshot(
+        pricing_snapshot_id=PricingSnapshotId(snapshot_id),
+        provider_name="openai",
+        model="gpt-4o-mini",
+        operation="chat_completions",
+        source_kind=PricingSourceKind.PROVIDER_RATE_CARD,
+        currency=CurrencyCode("USD"),
+        billing_period_key=BillingPeriodKey("2026-06"),
+        rates_minor_per_metric={"input_tokens": 100, "output_tokens": 200},
+        source_metadata={"source_url": "https://example.test/pricing"},
+        content_hash="ensure-hash",
+        retrieved_at="2026-06-04T09:00:00Z",
+    )
+
+
+@pytest.mark.asyncio
+async def test_ensure_snapshot_persists_once_and_satisfies_pins(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Ensuring a snapshot inserts one row that run pricing pins can reference."""
+    snapshot_id = "018f15f8-8c12-7c3a-9e9f-9f8f8f8f8f90"
+    snapshot = _pricing_snapshot(snapshot_id)
+    async with session_factory() as session:
+        store = SqlAlchemyCostLedgerStore(session)
+        await store.ensure_snapshot(snapshot)
+        await store.ensure_snapshot(snapshot)
+        await store.pin_run_pricing(
+            RunPricingKey(
+                workflow_run_id="workflow-run-ensure",
+                provider_name="openai",
+                model="gpt-4o-mini",
+                operation="chat_completions",
+                billing_period_key=BillingPeriodKey("2026-06"),
+            ),
+            PricingSnapshotId(snapshot_id),
+            "2026-06-04T10:00:00Z",
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        stored = (
+            await session.execute(
+                sa.select(sa.func.count(PricingSnapshotRecord.id)).where(
+                    PricingSnapshotRecord.id == uuid.UUID(snapshot_id)
+                )
+            )
+        ).scalar_one()
+        pins = (
+            await session.execute(
+                sa.select(sa.func.count(RunPricingPinRecord.workflow_run_id))
+            )
+        ).scalar_one()
+
+    assert stored == 1, "ensure_snapshot must persist exactly one snapshot row"
+    assert pins == 1, "the pinned snapshot must satisfy the foreign key"

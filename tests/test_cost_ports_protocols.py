@@ -57,6 +57,10 @@ def _make_snapshot(
 
 
 class _InMemoryCostLedger:
+    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
+        """Accept a fake snapshot persistence request."""
+        _ = snapshot
+
     async def pin_run_pricing(
         self,
         key: RunPricingKey,

@@ -171,6 +171,7 @@ class CostRecorder:
                 provider.operation,
                 billing_period_key,
             )
+            await self.ledger.ensure_snapshot(snapshot)
             await self.ledger.pin_run_pricing(
                 key,
                 snapshot.pricing_snapshot_id,
@@ -250,6 +251,7 @@ class CostRecorder:
             If pricing or ledger validation fails.
         """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
         snapshot = await self._resolve_snapshot_for_record(record)
+        await self.ledger.ensure_snapshot(snapshot)
         priced_call = self.pricing_engine.price(
             snapshot,
             PricingRequest(
