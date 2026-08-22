@@ -90,7 +90,17 @@ adapter that can use pre-signed upload URLs.
 
 Before using these endpoints, apply the latest Alembic migrations to the
 service database with `alembic upgrade head`. The application does not apply
-schema migrations during startup.
+schema migrations during startup, and no deployment hook applies them for you.
+
+Against the local Kubernetes preview, run the migrations from the host through
+a port-forward to the preview Postgres Service:
+
+```shell
+kubectl --context kind-episodic-preview --namespace episodic \
+  port-forward svc/postgres 15432:5432 &
+DATABASE_URL=postgresql+asyncpg://episodic:episodic@127.0.0.1:15432/episodic \
+  uv run alembic upgrade head
+```
 
 Create a draft run for a ready ingestion job with
 `POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs`. Supply an
@@ -411,6 +421,15 @@ kubectl --context kind-episodic-preview --namespace episodic \
 
 Kind does not install the `traefik` ingress controller used by the local chart
 values, so the preview URL is reached through the printed port-forward command.
+
+The preview stores uploaded source blobs in an `emptyDir` volume mounted at the
+configured `SOURCE_INTAKE_OBJECT_STORE_ROOT`. An `emptyDir` lives and dies with
+its pod: the Postgres StatefulSet keeps upload rows on a persistent volume, but
+the blobs they point at vanish whenever the application pod is replaced (for
+example, after `kubectl rollout restart` or a redeploy). A generation run that
+references pre-restart uploads then fails with a missing-file error. After any
+application pod restart, re-upload the source documents and attach the fresh
+uploads before starting a generation run.
 
 If a cluster with the configured name already exists, `local-k8s-up` reuses it
 only when its ingress port matches the requested port. `local-k8s-status` and
