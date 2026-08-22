@@ -145,6 +145,27 @@ def _format_message(template: str, args: tuple[object, ...]) -> str:
     return template % args if args else template
 
 
+def _log_at(
+    logger: _CompatibleLogger,
+    level: int,
+    message: str,
+    *,
+    exc_info: object | None,
+) -> None:
+    """Dispatch to a convenience method with a stdlib ``log()`` fallback."""
+    method_name = logging.getLevelName(level).lower()
+    try:
+        method = getattr(typ.cast("_SupportsConvenienceLog", logger), method_name)
+        method(message, exc_info=exc_info, stack_info=False)
+    except (AttributeError, TypeError):  # fmt: skip
+        typ.cast("_SupportsLogMethod", logger).log(
+            level,
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
+
+
 def log_info(
     logger: _CompatibleLogger,
     template: str,
@@ -165,20 +186,7 @@ def log_info(
     exc_info : object | None, optional
         Exception info to attach to the log record.
     """
-    message = _format_message(template, args)
-    try:
-        typ.cast("_SupportsConvenienceLog", logger).info(
-            message,
-            exc_info=exc_info,
-            stack_info=False,
-        )
-    except (AttributeError, TypeError):  # fmt: skip
-        typ.cast("_SupportsLogMethod", logger).log(
-            logging.INFO,
-            message,
-            exc_info=exc_info,
-            stack_info=False,
-        )
+    _log_at(logger, logging.INFO, _format_message(template, args), exc_info=exc_info)
 
 
 def log_warning(
@@ -201,20 +209,7 @@ def log_warning(
     exc_info : object | None, optional
         Exception info to attach to the log record.
     """
-    message = _format_message(template, args)
-    try:
-        typ.cast("_SupportsConvenienceLog", logger).warning(
-            message,
-            exc_info=exc_info,
-            stack_info=False,
-        )
-    except (AttributeError, TypeError):  # fmt: skip
-        typ.cast("_SupportsLogMethod", logger).log(
-            logging.WARNING,
-            message,
-            exc_info=exc_info,
-            stack_info=False,
-        )
+    _log_at(logger, logging.WARNING, _format_message(template, args), exc_info=exc_info)
 
 
 def log_error(
@@ -237,20 +232,7 @@ def log_error(
     exc_info : object | None, optional
         Exception info to attach to the log record.
     """
-    message = _format_message(template, args)
-    try:
-        typ.cast("_SupportsConvenienceLog", logger).error(
-            message,
-            exc_info=exc_info,
-            stack_info=False,
-        )
-    except (AttributeError, TypeError):  # fmt: skip
-        typ.cast("_SupportsLogMethod", logger).log(
-            logging.ERROR,
-            message,
-            exc_info=exc_info,
-            stack_info=False,
-        )
+    _log_at(logger, logging.ERROR, _format_message(template, args), exc_info=exc_info)
 
 
 __all__ = (
