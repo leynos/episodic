@@ -598,6 +598,7 @@ full_name = [
     "episodic.canonical.uploads._require_non_negative",
     "episodic.canonical.uploads._require_non_negative_if_present",
     "episodic.canonical.domain_validation._require_positive_integer",
+    "episodic.canonical.domain_validation._require_value",
     "episodic.canonical.domain_validation._validate_draft_without_qa_metadata",
 ]
 reason = "Canonical value objects call these validators from dataclass post-initialization hooks."
