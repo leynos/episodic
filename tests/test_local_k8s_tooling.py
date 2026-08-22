@@ -90,6 +90,42 @@ def test_kubectl_secret_command_renders_database_url_literal() -> None:
     ), "Expected collection to contain the value"
 
 
+def test_kubectl_secret_command_renders_bearer_token_literal() -> None:
+    """Create the app Secret with the local authorization bearer token."""
+    config = PreviewConfig(api_bearer_token="alpha-token")  # noqa: S106 - local-only test token.
+
+    command = commands.kubectl_secret_command(config)
+
+    assert "--from-literal=api-bearer-token=alpha-token" in command, (
+        "the preview secret must include the local bearer token"
+    )
+
+
+def test_kubectl_secret_command_omits_openai_pair_without_key() -> None:
+    """Omit the OpenAI literals when no key is configured."""
+    config = PreviewConfig(openai_api_key="")
+
+    command = commands.kubectl_secret_command(config)
+
+    assert not any("openai" in part for part in command), (
+        "the preview secret must omit OpenAI literals without a key"
+    )
+
+
+def test_kubectl_secret_command_renders_openai_pair_with_key() -> None:
+    """Write the OpenAI base URL and key together when a key is configured."""
+    config = PreviewConfig(openai_api_key="sk-local-test")
+
+    command = commands.kubectl_secret_command(config)
+
+    assert "--from-literal=openai-api-key=sk-local-test" in command, (
+        "the preview secret must include the configured OpenAI key"
+    )
+    assert f"--from-literal=openai-base-url={config.openai_base_url}" in command, (
+        "the preview secret must pair the base URL with the key"
+    )
+
+
 def test_loopback_port_validation_reports_occupied_port() -> None:
     """Reject a local ingress port that is already bound."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
