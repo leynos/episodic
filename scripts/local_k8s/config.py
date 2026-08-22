@@ -14,7 +14,20 @@ type ClusterProvider = typ.Literal["k3d", "kind"]
 
 @dc.dataclass(frozen=True, slots=True)
 class PreviewConfig:
-    """User-adjustable local preview settings."""
+    """User-adjustable local preview settings.
+
+    Defaults target a local k3d cluster and Docker engine, the ``episodic``
+    namespace and Helm release, and the repository's own chart and
+    ``values.local.yaml`` overlay. ``openai_api_key`` is read from the
+    ``OPENAI_API_KEY`` environment variable at construction time, so setting
+    it before running ``make local-k8s-up`` wires generation without
+    committing a credential anywhere.
+
+    The Kubernetes Secret generated for the preview always writes
+    ``api-bearer-token``. The ``openai-base-url``/``openai-api-key`` pair is
+    written only when ``openai_api_key`` is non-empty (that is, when
+    ``OPENAI_API_KEY`` was set).
+    """
 
     cluster_name: str = "episodic-preview"
     namespace: str = "episodic"

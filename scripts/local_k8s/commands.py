@@ -261,26 +261,37 @@ def kubectl_apply_command(config: PreviewConfig) -> list[str]:
     return [*_kubectl_cmd(config), "apply", "-f", "-"]
 
 
-def kubectl_secret_command(config: PreviewConfig) -> list[str]:
-    """Build the idempotent application Secret creation command."""
-    command = [
-        *_kubectl_ns_cmd(config),
-        "create",
-        "secret",
-        "generic",
-        config.secret_name,
-        f"--from-literal=database-url={config.database_url}",
-        f"--from-literal=api-bearer-token={config.api_bearer_token}",
+def secret_manifest(config: PreviewConfig) -> str:
+    """Build the application Secret manifest for one stdin apply.
+
+    The manifest carries the credentials in ``stringData`` so secret
+    values never appear in command arguments, which the runner prints in
+    dry-run mode and which failed commands may echo to stderr.
+
+    Returns
+    -------
+    str
+        Secret manifest YAML for ``kubectl apply -f -`` on stdin.
+    """
+    lines = [
+        "apiVersion: v1",
+        "kind: Secret",
+        "metadata:",
+        f"  name: {config.secret_name}",
+        f"  namespace: {config.namespace}",
+        "type: Opaque",
+        "stringData:",
+        f"  database-url: {_yaml_string(config.database_url)}",
+        f"  api-bearer-token: {_yaml_string(config.api_bearer_token)}",
     ]
     if config.openai_api_key:
         # The runtime requires the base URL and key together, so the
         # preview secret only ever writes the pair.
-        command.extend([
-            f"--from-literal=openai-base-url={config.openai_base_url}",
-            f"--from-literal=openai-api-key={config.openai_api_key}",
+        lines.extend([
+            f"  openai-base-url: {_yaml_string(config.openai_base_url)}",
+            f"  openai-api-key: {_yaml_string(config.openai_api_key)}",
         ])
-    command.extend(["--dry-run=client", "-o", "yaml"])
-    return command
+    return "\n".join(lines) + "\n"
 
 
 def _yaml_string(value: str) -> str:
