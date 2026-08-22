@@ -219,12 +219,17 @@ class CostRecorder:
         )
         pinned_snapshot_id = await self.ledger.get_run_pricing_pin(key)
         if pinned_snapshot_id is None:
-            return await self._resolve_pricing_snapshot(
+            snapshot = await self._resolve_pricing_snapshot(
                 record.provider_name,
                 record.model,
                 record.operation,
                 record.billing_period_key,
             )
+            # Unpinned calls must persist the snapshot before the ledger row
+            # references it; pinned calls skip this because the pin's foreign
+            # key already guarantees the stored row exists.
+            await self.ledger.ensure_snapshot(snapshot)
+            return snapshot
         return await self.pricing_catalogue.get_snapshot(pinned_snapshot_id)
 
     async def record_provider_call(
@@ -251,7 +256,6 @@ class CostRecorder:
             If pricing or ledger validation fails.
         """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
         snapshot = await self._resolve_snapshot_for_record(record)
-        await self.ledger.ensure_snapshot(snapshot)
         priced_call = self.pricing_engine.price(
             snapshot,
             PricingRequest(

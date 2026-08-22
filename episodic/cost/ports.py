@@ -11,13 +11,8 @@ The core Protocols are `CostLedgerPort` for append-only ledger persistence,
 module are frozen dataclasses or `NewType` aliases that carry immutable
 snapshot, priced-call, and ledger-entry data.
 
-Tests can use small in-memory fakes that structurally satisfy the Protocols:
-
-```python
-class FakeLedger:
-    async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
-        return CostLedgerEntryId(str(entry.idempotency_key))
-```
+Tests can use small in-memory fakes that structurally satisfy the
+Protocols; see ``tests/test_cost_ports_protocols.py`` for an example.
 """
 
 import dataclasses as dc
@@ -87,6 +82,10 @@ class BillingPeriodMismatchError(CostAccountingError):
     """Raised when a pricing snapshot is used for the wrong billing period."""
 
 
+class PricingSnapshotCollisionError(CostAccountingError):
+    """Raised when one content hash maps to two snapshot identifiers."""
+
+
 def _validate_currency_code(currency: CurrencyCode) -> None:
     """Validate an ISO 4217-style currency code."""
     currency_value = str(currency)
@@ -122,6 +121,7 @@ class PricingSnapshot:
     source_metadata: cabc.Mapping[str, str]
     content_hash: str
     retrieved_at: str
+    effective_from: str | None = None
 
     def __post_init__(self) -> None:
         """Validate value-object invariants."""
@@ -202,10 +202,7 @@ class TaskRollupLedgerEntry:
 
 @dc.dataclass(frozen=True, slots=True)
 class RunPricingKey:
-    """Composite key identifying a pricing pin.
-
-    The key identifies one provider operation within a run.
-    """
+    """Composite key identifying one provider operation's pricing pin."""
 
     workflow_run_id: str
     provider_name: str
@@ -223,8 +220,17 @@ class CostLedgerPort(typ.Protocol):
 
         Run pricing pins and ledger entries reference snapshots by
         identifier, so the snapshot must be persisted before it is pinned.
-        Snapshots are immutable: repeated calls with the same identifier
-        must leave the stored row unchanged.
+
+        Parameters
+        ----------
+        snapshot : PricingSnapshot
+            Immutable snapshot to persist.
+
+        Examples
+        --------
+        ``await ledger.ensure_snapshot(snapshot)`` twice with one
+        ``pricing_snapshot_id`` is idempotent: the repeat call reuses
+        the persisted row.
         """
         raise NotImplementedError
 
