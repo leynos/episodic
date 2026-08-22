@@ -128,9 +128,9 @@ duplication-test: ## Run the duplication-gate helper tests
 		python -m pytest -c /dev/null --rootdir=. -p no:cacheprovider \
 		scripts/tests/test_duplication_gate.py
 
-# Accept FIRST/SECOND/REASON (and skylos NAME) only from the make command
-# line: `$(value ...)` alone would silently pick up unrelated environment
-# variables such as a host's exported NAME.
+# Accept FIRST/SECOND/REASON (and skylos SYMBOL) only from the make command
+# line. `NAME` is ambient under WSL, which injects the hostname there, so the
+# Skylos interface deliberately uses the otherwise-unset `SYMBOL` variable.
 cli_value = $(if $(filter command line,$(origin $(1))),$(value $(1)))
 
 duplication-allow: export DUPLICATION_FIRST = $(call cli_value,FIRST)
@@ -143,14 +143,14 @@ duplication-allow: ## Record one reasoned duplication exception
 		$(if $(call cli_value,SECOND),--second "$${DUPLICATION_SECOND}",) \
 		--reason "$${DUPLICATION_REASON}"
 
-skylos-allow: export SKYLOS_NAME = $(call cli_value,NAME)
+skylos-allow: export SKYLOS_SYMBOL = $(call cli_value,SYMBOL)
 skylos-allow: export SKYLOS_REASON = $(call cli_value,REASON)
 skylos-allow: ## Document one named Skylos exception, not an entry point
-	@test -n "$${SKYLOS_NAME}" || { printf "Error: NAME is required for a named whitelist exception\\n" >&2; exit 2; }
+	@test -n "$${SKYLOS_SYMBOL}" || { printf "Error: SYMBOL is required for a named whitelist exception\\n" >&2; exit 2; }
 	@test -n "$${SKYLOS_REASON}" || { printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2; }
 	# The whitelist subcommand must be skylos's first argument; global
 	# options such as --config-file make the main parser treat it as a path.
-	$(SKYLOS_CLI) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"
+	$(SKYLOS_CLI) whitelist "$${SKYLOS_SYMBOL}" --reason "$${SKYLOS_REASON}"
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run hecate check

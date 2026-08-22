@@ -21,7 +21,7 @@ maintainers must remove when they become stale.
 - `make lint` runs Skylos locally with concise output and fails while
   unsuppressed dead-code findings remain.
 - Contributors remove genuine dead code and use
-  `make skylos-allow NAME=... REASON=...` only for intentional named
+  `make skylos-allow SYMBOL=... REASON=...` only for intentional named
   exceptions; the target rejects missing names or reasons.
 - Framework callbacks, protocol implementations, and compatibility re-exports
   remain live through precise, reasoned configuration rather than bulk

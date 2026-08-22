@@ -175,18 +175,18 @@ rule cannot describe the boundary. Its reason must include who or what calls
 the symbol and how that was verified. Add one with:
 
 ```shell
-make skylos-allow NAME=registered_handler \
+make skylos-allow SYMBOL=registered_handler \
   REASON="Loaded by the plugin registry; verified in the registry contract test"
 ```
 
-The target refuses empty `NAME` and `REASON` values and stores the explanation
-under `[tool.skylos.whitelist.documented]`; it does not create entry-point
-rules. Do not generate baselines, scrape reports into configuration, or add
-bulk unexplained exceptions. Use inline suppression only when neither an
-entry-point rule nor a named exception can describe the boundary, and keep its
-reason beside the suppression. Temporary exceptions must name an owner,
-tracking reference, and expiry condition. Remove exception entries when the
-dynamic boundary disappears.
+The target refuses empty `SYMBOL` and `REASON` values and stores the
+explanation under `[tool.skylos.whitelist.documented]`; it does not create
+entry-point rules. Do not generate baselines, scrape reports into
+configuration, or add bulk unexplained exceptions. Use inline suppression only
+when neither an entry-point rule nor a named exception can describe the
+boundary, and keep its reason beside the suppression. Temporary exceptions must
+name an owner, tracking reference, and expiry condition. Remove exception
+entries when the dynamic boundary disappears.
 
 ## Code-duplication gate
 

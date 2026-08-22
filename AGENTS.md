@@ -95,7 +95,7 @@
     names the verified runtime caller. Match methods as `type = "method"`,
     rather than `"function"`. Use the named allow-list target only when an
     entry-point rule cannot describe the boundary: run
-    `make skylos-allow NAME=handler REASON="Loaded by plugin registry"`
+    `make skylos-allow SYMBOL=handler REASON="Loaded by plugin registry"`
     with the verified caller in the reason.
     The lint pipeline ends with the blocking PyChase duplication gate.
     Prefer extracting shared logic over suppressing a finding; when parallel
