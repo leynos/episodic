@@ -40,7 +40,7 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.object_store import ObjectStorePort
     from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
     from episodic.llm import LLMPort
-    from episodic.observability import MetricsPort, ValueMetricsPort
+    from episodic.observability import MetricsPort, TracerPort, ValueMetricsPort
 
     from .types import UowFactory
 
@@ -50,6 +50,7 @@ class _GenerationLauncherRuntime:
     """Composition inputs for the in-process generation launcher."""
 
     metrics: ValueMetricsPort
+    tracer: TracerPort
     object_store: ObjectStorePort | None = None
 
 
@@ -135,7 +136,7 @@ def _build_generation_launcher(
     *,
     config: RuntimeConfig,
 ) -> InProcessGenerationRunLauncher:
-    """Build the no-QA generation-run launcher when an LLM port is configured."""
+    """Build the no-QA generation-run launcher from configured runtime inputs."""
     pricing_catalogue = FilePricingCatalogue(config.pricing_snapshot_directory)
 
     def _cost_recorder(uow: CanonicalUnitOfWork) -> CostRecorder:
@@ -167,7 +168,7 @@ def _build_generation_launcher(
         provider_name=_DEFAULT_LLM_PROVIDER_NAME,
         provider_operation=LLMProviderOperation.CHAT_COMPLETIONS.value,
         metrics=runtime.metrics,
-        tracer=StructuredLogTracer(),
+        tracer=runtime.tracer,
         source_limits=config.generation_source_limits,
     )
 
@@ -259,6 +260,7 @@ def create_app_from_env() -> asgi.App:
             llm_port,
             _GenerationLauncherRuntime(
                 metrics=metrics,
+                tracer=tracer,
                 object_store=object_store,
             ),
             config=config,
