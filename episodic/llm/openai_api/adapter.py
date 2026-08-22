@@ -25,6 +25,7 @@ from tenacity import (
 )
 
 from episodic.llm.openai_api.request import (
+    OpenAIPayloadOptions,
     _build_payload,
     _coerce_operation,
     _path_for_operation,
@@ -96,6 +97,10 @@ class OpenAICompatibleLLMConfig:
     retry_delay_seconds: float = 0.5
     timeout_seconds: float = 30.0
     chars_per_token: float = 4.0
+    # Optional provider-specific request options; see OpenAIPayloadOptions.
+    reasoning_effort: str | None = None
+    service_tier: str | None = None
+    token_limit_param: str = "max_tokens"  # noqa: S105 - parameter name, not a secret.
 
     __post_init__ = _validate_llm_config
 
@@ -138,6 +143,12 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         self._retry_delay_seconds = config.retry_delay_seconds
         self._timeout_seconds = config.timeout_seconds
         self._chars_per_token = config.chars_per_token
+        # OpenAIPayloadOptions validates token_limit_param at construction.
+        self._payload_options = OpenAIPayloadOptions(
+            reasoning_effort=config.reasoning_effort,
+            service_tier=config.service_tier,
+            token_limit_param=config.token_limit_param,
+        )
 
     async def __aenter__(self) -> OpenAICompatibleLLMAdapter:
         """Return the adapter for use as an async context manager.
@@ -208,7 +219,7 @@ class OpenAICompatibleLLMAdapter(LLMPort):
         )
         response_payload = await self._send_with_retries(
             path=_path_for_operation(operation),
-            payload=_build_payload(request, operation),
+            payload=_build_payload(request, operation, options=self._payload_options),
         )
         if token_budget is not None:
             _require_concrete_usage_counts(response_payload, operation)
