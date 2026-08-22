@@ -219,3 +219,15 @@ never an option on this host; the documented rootless-Podman guidance (use
   crash times and free space on the drive holding the VHDX. Moving
   podman's `graphroot` off the distro VHDX onto the separate `/data`
   disk would also take the build I/O out of the blast radius.
+- **Success.** With all fixes deployed (JSON response mode,
+  `max_completion_tokens`, 600 s timeout, snapshot persistence,
+  zero-metric suppression, and the `emptyDir` mount under a read-only
+  root filesystem), the full workflow completed end to end: series
+  profile → host reference documents and bindings → source document and
+  show specification uploads → ingestion job → source attachment →
+  `draft_without_qa` generation run → `run.succeeded` → TEI P5 download
+  via `Accept: application/tei+xml`. The `gpt-5.6-sol` draft consumed
+  13,803 input and 2,476 output tokens (≈ USD 0.05 at the pinned
+  2026-08 rates) and produced a 10 kB, 39-turn TEI document whose
+  dialogue follows the show specification's host personas and the
+  source document's narrative arc.
