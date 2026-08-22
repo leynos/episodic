@@ -8,6 +8,7 @@ starts serving requests.
 """
 
 import dataclasses as dc
+import math
 import os
 import pathlib
 import typing as typ
@@ -57,6 +58,21 @@ class RuntimeConfig:
         Maximum provider output-token budget.
     generation_max_response_bytes : int
         Maximum provider response size before parsing.
+    llm_reasoning_effort : str | None
+        Optional reasoning-effort request parameter forwarded to the
+        provider, read from ``OPENAI_REASONING_EFFORT``. Unset (``None``)
+        by default, in which case the parameter is omitted from requests.
+    llm_service_tier : str | None
+        Optional service-tier request parameter forwarded to the provider,
+        read from ``OPENAI_SERVICE_TIER``. Unset (``None``) by default, in
+        which case the parameter is omitted from requests.
+    llm_token_limit_param : str
+        Name of the output-token-limit request parameter, read from
+        ``OPENAI_TOKEN_LIMIT_PARAM`` and restricted to ``"max_tokens"`` or
+        ``"max_completion_tokens"``. Defaults to ``"max_tokens"``.
+    llm_timeout_seconds : float
+        Positive HTTP timeout, in seconds, applied to provider requests,
+        read from ``OPENAI_TIMEOUT_SECONDS``. Defaults to 30.0.
 
     Examples
     --------
@@ -256,7 +272,7 @@ def _llm_timeout_seconds(environment: cabc.Mapping[str, str]) -> float:
     except ValueError as exc:
         msg = "OPENAI_TIMEOUT_SECONDS must be a positive number."
         raise RuntimeConfigurationError(msg) from exc
-    if value <= 0:
+    if not math.isfinite(value) or value <= 0:
         msg = "OPENAI_TIMEOUT_SECONDS must be a positive number."
         raise RuntimeConfigurationError(msg)
     return value
@@ -286,11 +302,7 @@ def _load_runtime_config(
     pricing_snapshot_directory = _pricing_snapshot_directory(environment)
     authorization = _authorization_settings(environment)
     output_limits = _generation_output_limits(environment)
-    log_info(
-        logger,
-        "runtime_config_loaded source_intake_object_store_configured",
-    )
-    return RuntimeConfig(
+    config = RuntimeConfig(
         database_url=_required_setting(
             environment,
             "DATABASE_URL",
@@ -311,3 +323,8 @@ def _load_runtime_config(
         generation_max_output_tokens=output_limits[0],
         generation_max_response_bytes=output_limits[1],
     )
+    log_info(
+        logger,
+        "runtime_config_loaded source_intake_object_store_configured",
+    )
+    return config

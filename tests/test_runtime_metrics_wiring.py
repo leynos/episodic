@@ -143,3 +143,49 @@ async def test_generation_route_metrics_use_injected_monotonic_clock() -> None:
     assert metrics.latencies == [
         ("generation_api_request_latency_ms", 250.0, expected_labels)
     ], metrics.latencies
+
+
+@pytest.mark.asyncio
+async def test_create_app_from_env_shares_composition_root_tracer(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The launcher must receive the same tracer instance as ApiDependencies."""
+    from episodic.api import runtime as runtime_module
+    from episodic.generation import InProcessGenerationRunLauncher
+    from episodic.observability import StructuredLogTracer
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example.test/episodic")
+    monkeypatch.setenv("SOURCE_INTAKE_OBJECT_STORE_ROOT", str(tmp_path))
+    monkeypatch.setenv("API_AUTHORIZATION_BEARER_TOKEN", "runtime-test-token")
+    monkeypatch.setenv("API_AUTHORIZATION_PRINCIPAL_ID", "runtime-test-principal")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.example.test/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured_dependencies: ApiDependencies | None = None
+
+    def capture_dependencies(dependencies: ApiDependencies) -> object:
+        nonlocal captured_dependencies
+        captured_dependencies = dependencies
+        return object()
+
+    with mock.patch.object(
+        runtime_module,
+        "create_app",
+        side_effect=capture_dependencies,
+    ):
+        runtime_module.create_app_from_env()
+
+    assert captured_dependencies is not None, "expected captured dependencies, got None"
+    assert isinstance(captured_dependencies.launcher, InProcessGenerationRunLauncher), (
+        "expected an in-process launcher, got "
+        f"{type(captured_dependencies.launcher).__name__}"
+    )
+    assert isinstance(captured_dependencies.tracer, StructuredLogTracer), (
+        f"expected a structured-log tracer, got "
+        f"{type(captured_dependencies.tracer).__name__}"
+    )
+    assert captured_dependencies.launcher.tracer is captured_dependencies.tracer, (
+        "the launcher must share the composition root's tracer instance"
+    )
+
+    await captured_dependencies.shutdown_hooks[0]()
