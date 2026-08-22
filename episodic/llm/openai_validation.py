@@ -196,8 +196,13 @@ def _add_metric_if_present(
     key: str,
     value: int | None,
 ) -> None:
-    """Add a canonical usage metric when the provider reported it."""
-    if value is not None:
+    """Add a canonical usage metric when the provider reported a nonzero count.
+
+    Zero-valued optional metrics carry no cost information, and recording
+    them would require every pricing snapshot to price every modality the
+    provider happens to mention in its usage details.
+    """
+    if value:
         metrics[key] = value
 
 
