@@ -2,6 +2,7 @@
 
 import dataclasses as dc
 import subprocess
+import sys
 import typing as typ
 import urllib.parse as urlparse
 
@@ -44,13 +45,22 @@ class CommandRunner:
                 stdout="",
                 stderr="",
             )
-        return subprocess.run(  # noqa: S603 - commands are constructed internally.
-            args,
-            input=input_text,
-            check=check,
-            text=True,
-            capture_output=True,
-        )
+        try:
+            return subprocess.run(  # noqa: S603 - commands are constructed internally.
+                args,
+                input=input_text,
+                check=check,
+                text=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            # Captured output would otherwise vanish into the traceback,
+            # leaving the operator with no diagnostic from the failed tool.
+            if exc.stdout:
+                print(exc.stdout, end="", file=sys.stderr)
+            if exc.stderr:
+                print(exc.stderr, end="", file=sys.stderr)
+            raise
 
 
 def k3d_cluster_create_command(config: PreviewConfig) -> list[str]:
@@ -253,17 +263,24 @@ def kubectl_apply_command(config: PreviewConfig) -> list[str]:
 
 def kubectl_secret_command(config: PreviewConfig) -> list[str]:
     """Build the idempotent application Secret creation command."""
-    return [
+    command = [
         *_kubectl_ns_cmd(config),
         "create",
         "secret",
         "generic",
         config.secret_name,
         f"--from-literal=database-url={config.database_url}",
-        "--dry-run=client",
-        "-o",
-        "yaml",
+        f"--from-literal=api-bearer-token={config.api_bearer_token}",
     ]
+    if config.openai_api_key:
+        # The runtime requires the base URL and key together, so the
+        # preview secret only ever writes the pair.
+        command.extend([
+            f"--from-literal=openai-base-url={config.openai_base_url}",
+            f"--from-literal=openai-api-key={config.openai_api_key}",
+        ])
+    command.extend(["--dry-run=client", "-o", "yaml"])
+    return command
 
 
 def _yaml_string(value: str) -> str:
