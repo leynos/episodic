@@ -13,6 +13,19 @@ REPOSITORY_ROOT = pl.Path(__file__).resolve().parents[1]
 CHART_PATH = REPOSITORY_ROOT / "charts" / "episodic"
 LOCAL_VALUES_PATH = CHART_PATH / "values.local.yaml"
 
+# The boot-required runtime settings the local preview ConfigMap must carry.
+_EXPECTED_LOCAL_CONFIGMAP_DATA = {
+    "EPISODIC_ENV": "local",
+    "SOURCE_INTAKE_OBJECT_STORE_ROOT": "/tmp/episodic-object-store",  # noqa: S108 - pod-local preview path.
+    "PRICING_SNAPSHOT_DIRECTORY": "/app/config/pricing-snapshots",
+    "API_AUTHORIZATION_PRINCIPAL_ID": "local-preview",
+    "DRAFT_MODEL": "gpt-5.6-sol",
+    "OPENAI_REASONING_EFFORT": "low",
+    "OPENAI_TOKEN_LIMIT_PARAM": "max_completion_tokens",
+    "OPENAI_TIMEOUT_SECONDS": "600",
+    "GENERATION_MAX_OUTPUT_TOKENS": "32768",
+}
+
 
 class _Metadata(typ.TypedDict):
     name: str
@@ -268,8 +281,8 @@ def test_helm_local_configmap_carries_the_preview_environment(
     assert config_map["metadata"]["name"] == "episodic", (
         f"the local ConfigMap must be named episodic; got {config_map['metadata']}"
     )
-    assert config_map["data"] == {"EPISODIC_ENV": "local"}, (
-        f"the local ConfigMap must expose only EPISODIC_ENV=local; "
+    assert config_map["data"] == _EXPECTED_LOCAL_CONFIGMAP_DATA, (
+        f"the local ConfigMap must expose the boot-required runtime settings; "
         f"got {config_map['data']}"
     )
 
@@ -293,19 +306,30 @@ def test_helm_local_deployment_wires_the_preview_image_and_secret(
     assert container["envFrom"] == [{"configMapRef": {"name": "episodic"}}], (
         f"the container must source configuration from the ConfigMap; got {container}"
     )
-    assert [variable["name"] for variable in container["env"]] == ["DATABASE_URL"], (
-        f"the container must declare only DATABASE_URL; got {container['env']}"
-    )
-    secret_ref = container["env"][0]["valueFrom"]["secretKeyRef"]
-    assert secret_ref["name"] == "episodic-local", (
-        f"DATABASE_URL must come from the local secret; got {secret_ref}"
-    )
-    assert secret_ref["key"] == "database-url", (
-        f"DATABASE_URL must read the database-url secret key; got {secret_ref}"
-    )
-    assert secret_ref["optional"] is False, (
-        f"DATABASE_URL must be a required secret key; got {secret_ref}"
-    )
+    env_by_name = {variable["name"]: variable for variable in container["env"]}
+    assert set(env_by_name) == {
+        "DATABASE_URL",
+        "API_AUTHORIZATION_BEARER_TOKEN",
+        "OPENAI_BASE_URL",
+        "OPENAI_API_KEY",
+    }, f"the container must declare the local secret env keys; got {container['env']}"
+    expected_secret_keys = {
+        "DATABASE_URL": ("database-url", False),
+        "API_AUTHORIZATION_BEARER_TOKEN": ("api-bearer-token", False),
+        "OPENAI_BASE_URL": ("openai-base-url", True),
+        "OPENAI_API_KEY": ("openai-api-key", True),
+    }
+    for env_name, (secret_key, optional) in expected_secret_keys.items():
+        secret_ref = env_by_name[env_name]["valueFrom"]["secretKeyRef"]
+        assert secret_ref["name"] == "episodic-local", (
+            f"{env_name} must come from the local secret; got {secret_ref}"
+        )
+        assert secret_ref["key"] == secret_key, (
+            f"{env_name} must read the {secret_key} secret key; got {secret_ref}"
+        )
+        assert secret_ref["optional"] is optional, (
+            f"{env_name} optionality must be {optional}; got {secret_ref}"
+        )
 
 
 def test_helm_local_deployment_hardens_the_container(
@@ -320,10 +344,26 @@ def test_helm_local_deployment_hardens_the_container(
         f"the pod must refuse to run as root; got {pod_security}"
     )
     assert container_security["readOnlyRootFilesystem"] is True, (
-        f"the container root filesystem must be read only; got {container_security}"
+        f"the local container must keep the chart's read-only root filesystem; "
+        f"got {container_security}"
     )
     assert container_security["allowPrivilegeEscalation"] is False, (
         f"the container must not allow privilege escalation; got {container_security}"
+    )
+    pod_spec = _string_key_mapping(
+        typ.cast("object", deployment["spec"]["template"]["spec"]),
+        "Deployment pod spec",
+    )
+    assert pod_spec.get("volumes") == [{"name": "tmp", "emptyDir": {}}], (
+        f"the local pod must carry the tmp emptyDir volume; got {pod_spec}"
+    )
+    container_mounts = _string_key_mapping(
+        typ.cast("object", _container(deployment)),
+        "container",
+    ).get("volumeMounts")
+    assert container_mounts == [{"name": "tmp", "mountPath": "/tmp"}], (  # noqa: S108 - pod-local emptyDir mount path.
+        f"the container must mount the tmp emptyDir at /tmp for the "
+        f"source-intake object store; got {container_mounts}"
     )
 
 
