@@ -22,6 +22,8 @@ cluster, and record what it took.
 | `kubectl`   | v1.36.4 | Binary download from `dl.k8s.io` into `~/.local/bin`     |
 | `e2fsprogs` | 1.47.3  | `sudo dnf install e2fsprogs` (superblock checks)         |
 
+*Table 1: Tools installed to run the local podman/kind preview.*
+
 Neither `kind` nor `kubectl` was present, although the users' guide preview
 workflow requires both. `k3d` was also absent, so the k3d default provider was
 never an option on this host; the documented rootless-Podman guidance (use
@@ -231,3 +233,25 @@ never an option on this host; the documented rootless-Podman guidance (use
   2026-08 rates) and produced a 10 kB, 39-turn TEI document whose
   dialogue follows the show specification's host personas and the
   source document's narrative arc.
+- **Moved rootless podman's `graphroot` off the distro VHDX.** Following
+  the storage post-mortem, container storage now lives at
+  `/data/leynos/containers/storage` on the separate xfs disk
+  (`ftype=1`, so overlayfs is supported) instead of
+  `~/.local/share/containers/storage` inside the WSL distro's ext4
+  VHDX. Procedure: stop all containers, `rsync -aHX --numeric-ids` the
+  74 GiB storage tree, point `~/.config/containers/storage.conf` at the
+  new `graphroot`, and verify images and containers are visible. Two
+  traps: the copy must run under `podman unshare` (a plain rsync
+  silently skips every subuid-owned file with permission errors while
+  masking them behind a nonzero exit code), and podman's SQLite state
+  database (`db.sql` at the storage root) records absolute paths, so
+  after the move its `DBConfig` row needs updating
+  (`StaticDir`/`GraphRoot`/`VolumeDir`) or podman refuses to start with
+  "database configuration mismatch". All containers except `qdrant`
+  (whose data is a bind mount to `/data/qdrant`, outside container
+  storage) were pruned before the move, shrinking the copy from 74 GiB.
+  A smoke `podman run` on the new graphroot succeeded. This takes
+  image-build I/O — the load implicated in all three VM crashes — off
+  the VHDX entirely. The old storage tree is left in place as a
+  fallback until the new location has proven itself; delete
+  `~/.local/share/containers/storage` to reclaim the space.

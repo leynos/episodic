@@ -93,10 +93,14 @@ service database with `alembic upgrade head`. The application does not apply
 schema migrations during startup, and no deployment hook applies them for you.
 
 Against the local Kubernetes preview, run the migrations from the host through
-a port-forward to the preview Postgres Service:
+a port-forward to the preview Postgres Service. The `kubectl` context depends
+on the chosen local Kubernetes provider: the default k3d provider registers
+`k3d-episodic-preview`, while the optional rootless-Podman kind provider
+(`LOCAL_K8S_PROVIDER=kind`, described later in this guide) registers
+`kind-episodic-preview` instead.
 
 ```shell
-kubectl --context kind-episodic-preview --namespace episodic \
+kubectl --context k3d-episodic-preview --namespace episodic \
   port-forward svc/postgres 15432:5432 &
 DATABASE_URL=postgresql+asyncpg://episodic:episodic@127.0.0.1:15432/episodic \
   uv run alembic upgrade head
@@ -180,6 +184,19 @@ draft output. Each value must be a positive integer:
   passed to the LLM request.
 - `GENERATION_MAX_RESPONSE_BYTES` defaults to `1048576` and caps the UTF-8
   response before generated JSON parsing.
+
+The HTTP runtime also accepts these optional settings for the OpenAI-compatible
+provider request:
+
+- `OPENAI_REASONING_EFFORT` is forwarded to the provider as a reasoning-effort
+  hint. It is unset by default.
+- `OPENAI_SERVICE_TIER` selects the provider service tier. It is unset by
+  default.
+- `OPENAI_TOKEN_LIMIT_PARAM` selects the request field used to cap output
+  tokens: `max_tokens` (the default) or `max_completion_tokens`, which
+  reasoning models require instead. Any other value is rejected at boot.
+- `OPENAI_TIMEOUT_SECONDS` sets the provider HTTP timeout in seconds. It must
+  be a positive number and defaults to `30`.
 
 #### Resumable orchestration
 

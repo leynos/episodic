@@ -136,9 +136,13 @@ both commands. Maintainers must update both package pins together and validate
 the complete `make lint` pipeline.
 
 Skylos is separately provisioned by the Makefile at exact release `4.33.2` and
-runs locally with concise, non-interactive output. The lint command disables
-uploads and provenance collection, selects only dead-code analysis, and fails
-when an unexplained finding remains. It does not invoke cloud or Large Language
+runs locally with concise, non-interactive output. The `SKYLOS_CLI` and
+`SKYLOS` Makefile macros invoke it through `uv tool run --python 3.14`,
+because Skylos parses source files with its own interpreter's `ast` module and
+must therefore run under the CPython 3.14 the project targets. The lint
+command disables uploads and provenance collection, selects only dead-code
+analysis, and fails when an unexplained finding remains. It does not invoke
+cloud or Large Language
 Model (LLM) analysis and never modifies source files.
 
 Treat every new finding as dead code until its runtime caller is verified.
@@ -563,8 +567,8 @@ When adding new worker tasks:
 
 ## Observability port abstractions
 
-Two canonical observability ports live in `episodic/observability.py` and must
-be the default when adding new operational instrumentation:
+Three canonical observability ports live in `episodic/observability.py` and
+must be the default when adding new operational instrumentation:
 
 - `MetricsPort` is the canonical bounded-cardinality metrics interface. Its
   `labels` parameters are typed as `collections.abc.Mapping[str, str]` so
@@ -574,6 +578,18 @@ be the default when adding new operational instrumentation:
   operation time. Feature modules (for example `episodic.qa.chrono`) must reuse
   this port rather than declaring parallel hierarchies. The matching default
   adapter `PerfCounterClock` is exported from the same module.
+- `TracerPort` is the canonical tracing interface. `start_span(name,
+  attributes=...)` returns a `SpanHandle`, a context manager that bounds an
+  operation with `set_attribute(name, value)` calls recorded as the span
+  completes.
+
+`StructuredLogTracer` is the production tracer adapter; it logs the span
+name and completion outcome as structured log lines. It only records
+attributes whose name is in a fixed allow-list (`operation`, `outcome`,
+`failure_category`, `representation`, `pagination`) and silently drops any
+other attribute, so spans cannot leak request payloads, identifiers, or other
+sensitive operation metadata into logs. `NoopTracer` is the default no-op
+adapter used when no tracing backend is wired.
 
 `episodic/metrics_ports.py` retains the narrower `BoundedMetricsPort` and
 `BoundedValueMetricsPort` protocols, whose `labels` parameters are typed as
@@ -586,7 +602,10 @@ Adapters that satisfy `MetricsPort` also satisfy `BoundedMetricsPort` for
 callers that construct their label dictionaries as concrete `dict` instances.
 Tests should reuse `episodic.observability.NoopMetrics` and `PerfCounterClock`
 (or the feature-specific noops, such as the private `_NoopChronoMetrics`) as
-default test doubles for the boundary.
+default test doubles for the boundary. For tracing, tests should reuse
+`episodic.observability.RecordingTracer`, which records each started span as
+a `RecordedSpan` (with its attributes and completion state) for deterministic
+assertions.
 
 ## Database migrations
 
@@ -1565,9 +1584,15 @@ records, ordered terminal events, and status. A request-scoped unit of work
 must never be captured by a background task.
 
 When configured, `CostRecorder` records the provider call and final run roll-up
-in the persistence unit of work. It first pins the immutable provider pricing
-selected for the run, then records usage with a run-scoped idempotency key.
-`PRICING_SNAPSHOT_DIRECTORY` is optional: its default is
+in the persistence unit of work. It first calls `CostLedgerPort.ensure_snapshot`
+to persist the resolved pricing snapshot idempotently, either before pinning
+it to the run or before recording an unpinned provider call; repeated calls
+with the same snapshot identifier reuse the stored row. Pricing snapshots are
+immutable and content-addressed, so a content-hash collision against another
+identifier raises `PricingSnapshotCollisionError` rather than silently
+overwriting the stored snapshot. `CostRecorder` then records usage with a
+run-scoped idempotency key. `PRICING_SNAPSHOT_DIRECTORY` is optional: its
+default is
 `config/pricing-snapshots`; a configured relative path is resolved from the
 repository root, and startup rejects a path that is not an existing directory.
 The runtime constructs `FilePricingCatalogue` from the validated directory, so
@@ -1784,7 +1809,8 @@ absent.
 `episodic.llm` now owns a richer outbound contract:
 
 - `LLMRequest` carries the prompt text, optional system prompt, target model,
-  provider operation (`chat_completions` or `responses`), and token budget.
+  provider operation (`chat_completions` or `responses`), token budget, and
+  the provider-neutral `json_response` flag.
 - `OpenAICompatibleLLMAdapter` implements `LLMPort` over explicit
   OpenAI-compatible HTTP calls, so OpenRouter-style chat completions and OpenAI
   Responses stay behind the same port.
@@ -1799,6 +1825,19 @@ absent.
   target model and prompt shape.
 - Persisted `guardrails` belong to canonical profile/template state and are
   composed before the adapter call, not inside the vendor transport layer.
+- `LLMRequest.json_response` asks the provider to enforce a JSON object
+  response so it cannot wrap the payload in markdown fences or prose. The
+  adapter maps the flag onto the operation-specific provider shape:
+  `response_format={"type": "json_object"}` for chat completions, and
+  `text.format={"type": "json_object"}` for the Responses API.
+- `OpenAIPayloadOptions` carries provider-specific request options applied to
+  outbound payloads: `reasoning_effort` (read from
+  `OPENAI_REASONING_EFFORT`), `service_tier` (read from
+  `OPENAI_SERVICE_TIER`), and `token_limit_param` (read from
+  `OPENAI_TOKEN_LIMIT_PARAM`, one of `max_tokens` or
+  `max_completion_tokens`, defaulting to `max_tokens`). `OPENAI_TIMEOUT_SECONDS`
+  sets the adapter's HTTP timeout and defaults to `30.0`. All four are wired
+  from runtime settings in `episodic.api.runtime_config`.
 
 ### OpenAI-compatible adapter package layout
 
@@ -1822,6 +1861,17 @@ module remains responsible for HTTP lifecycle and retry orchestration.
 - `__init__.py` is a package namespace for these internal helpers; depend on
   the facade or the `LLMPort` contract rather than importing helper functions
   directly.
+
+`episodic.llm.openai_validation` normalizes raw provider usage into the
+canonical `ProviderCallUsage.usage_metrics` used for cost accounting. Cached
+and audio token counts are subsets of the prompt and completion totals, so
+they are made mutually exclusive with the parent metric: subset counts are
+subtracted from `input_tokens`/`output_tokens` and priced under their own
+rates (`cached_input_tokens`, `audio_input_tokens`, `audio_output_tokens`).
+Reasoning tokens remain inside `output_tokens` and are never priced as a
+separate metric. A zero-valued optional metric is omitted entirely, so a
+pricing snapshot never needs a rate for a modality the provider did not
+report.
 
 ## Multi-source ingestion
 
