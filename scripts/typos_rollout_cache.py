@@ -2,6 +2,7 @@
 
 import collections.abc as cabc
 import dataclasses as dc
+import os
 import pathlib
 import tempfile
 import typing as typ
@@ -34,15 +35,45 @@ class RemoteResponse(typ.Protocol):
         ...
 
 
-def atomic_write(path: pathlib.Path, content: bytes) -> None:
-    """Write content beside a path and atomically replace the destination."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+def atomic_write(
+    path: pathlib.Path,
+    content: bytes,
+    *,
+    create_parents: bool = True,
+    preserve_mode: bool = False,
+    sync_file: bool = False,
+) -> None:
+    """Atomically replace a path after writing a temporary sibling.
+
+    Parameters
+    ----------
+    path : pathlib.Path
+        Destination to replace.
+    content : bytes
+        Complete replacement contents.
+    create_parents : bool
+        Whether to create missing destination directories.
+    preserve_mode : bool
+        Whether an existing destination's permission mode is copied to the
+        temporary replacement before it is installed.
+    sync_file : bool
+        Whether to fsync the temporary replacement before atomically replacing
+        the destination.
+    """
+    if create_parents:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    mode = path.stat().st_mode if preserve_mode else None
     with tempfile.NamedTemporaryFile(
         delete=False, dir=path.parent, prefix=f".{path.name}."
     ) as stream:
         stream.write(content)
+        stream.flush()
+        if sync_file:
+            os.fsync(stream.fileno())
         temporary = pathlib.Path(stream.name)
     try:
+        if mode is not None:
+            temporary.chmod(mode)
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)

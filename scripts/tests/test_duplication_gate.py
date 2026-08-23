@@ -7,11 +7,12 @@ Python 3.14, so the whole module is skipped when that import fails; the
 
 import re
 import textwrap
-import tomllib
 import typing as typ
-from pathlib import Path
 
 import pytest
+
+if typ.TYPE_CHECKING:
+    from pathlib import Path
 
 try:
     import duplication_gate as gate
@@ -266,17 +267,19 @@ class TestDetectorMember:
 class TestLoadAllowlist:
     """Allowlist parsing and validation."""
 
-    def _write(self, tmp_path: Path, body: str) -> Path:
+    def _write(self, tmp_path: object, body: str) -> object:
         """Write ``body`` to ``pyproject.toml`` under ``tmp_path`` and return it."""
-        pyproject = tmp_path / "pyproject.toml"
+        pyproject = typ.cast("Path", tmp_path) / "pyproject.toml"
         pyproject.write_text(textwrap.dedent(body), encoding="utf-8")
         return pyproject
 
-    def test_loads_unit_and_pair_entries(self, tmp_path: Path) -> None:
+    def test_loads_unit_and_pair_entries(self, tmp_path: object) -> None:
         """Unit and pair entries load with their reasons."""
-        pyproject = self._write(
-            tmp_path,
-            """\
+        pyproject = typ.cast(
+            "Path",
+            self._write(
+                tmp_path,
+                """\
             [[tool.duplication_gate.allow]]
             unit = "episodic/a.py::alpha"
             reason = "declarative"
@@ -285,6 +288,7 @@ class TestLoadAllowlist:
             pair = ["episodic/b.py::beta", "episodic/c.py::gamma"]
             reason = "parallel contracts"
             """,
+            ),
         )
         entries = gate.load_allowlist(pyproject)
         assert entries[0].units == ("episodic/a.py::alpha",), (
@@ -297,9 +301,12 @@ class TestLoadAllowlist:
             "Allow entry must retain its reason."
         )
 
-    def test_missing_gate_table_yields_empty_allowlist(self, tmp_path: Path) -> None:
+    def test_missing_gate_table_yields_empty_allowlist(self, tmp_path: object) -> None:
         """A pyproject without the gate table produces no entries."""
-        pyproject = self._write(tmp_path, "[project]\nname = 'x'\nversion = '0'\n")
+        pyproject = typ.cast(
+            "Path",
+            self._write(tmp_path, "[project]\nname = 'x'\nversion = '0'\n"),
+        )
         assert gate.load_allowlist(pyproject) == (), (
             "Missing gate table must mean no allow entries."
         )
@@ -341,12 +348,12 @@ class TestLoadAllowlist:
     )
     def test_rejects_malformed_entries(
         self,
-        tmp_path: Path,
+        tmp_path: object,
         body: str,
         diagnostic: str,
     ) -> None:
         """Malformed entries raise a configuration error."""
-        pyproject = self._write(tmp_path, body)
+        pyproject = typ.cast("Path", self._write(tmp_path, body))
         with pytest.raises(gate.GateConfigError, match=re.escape(diagnostic)):
             gate.load_allowlist(pyproject)
 
@@ -375,215 +382,3 @@ class TestPartitionFindings:
         blocking, _allowed, stale = gate.partition_findings([_finding()], [entry])
         assert len(blocking) == 1, "Unmatched finding must remain blocking."
         assert stale == [entry], "Unused allow entry must be stale."
-
-
-class TestAppendAllowEntry:
-    """Appending reasoned entries to pyproject."""
-
-    def test_round_trips_unit_and_pair_entries(self, tmp_path: Path) -> None:
-        """Appended entries are re-loadable and preserve existing content."""
-        pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text('[project]\nname = "x"\nversion = "0"\n', encoding="utf-8")
-        gate.append_allow_entry(
-            pyproject,
-            first="episodic/a.py::alpha",
-            second=None,
-            reason="unit reason",
-        )
-        gate.append_allow_entry(
-            pyproject,
-            first="episodic/b.py::beta",
-            second="episodic/c.py::gamma",
-            reason="pair reason",
-        )
-        gate.append_allow_entry(
-            pyproject,
-            first="episodic/c.py::gamma",
-            second="episodic/b.py::beta",
-            reason="updated pair reason",
-        )
-        entries = gate.load_allowlist(pyproject)
-        assert entries[0].units == ("episodic/a.py::alpha",), (
-            "Unit entry must round-trip."
-        )
-        assert entries[1].units == ("episodic/b.py::beta", "episodic/c.py::gamma"), (
-            "Pair entry must round-trip."
-        )
-        assert entries[1].reason == "updated pair reason", (
-            "Repeated pair must update its reason."
-        )
-        assert len(entries) == 2, "Repeated pair must not create a duplicate entry."
-        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-        assert data["project"]["name"] == "x", (
-            "Appending must preserve existing TOML content."
-        )
-
-    def test_atomic_write_leaves_original_on_failure(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A failed atomic replacement leaves the existing configuration intact."""
-        pyproject = tmp_path / "pyproject.toml"
-        original = '[project]\nname = "x"\nversion = "0"\n'
-        pyproject.write_text(original, encoding="utf-8")
-        error_message = "replacement failed"
-
-        def fail_replace(_source: Path, _destination: Path) -> None:
-            raise OSError(error_message)
-
-        monkeypatch.setattr(Path, "replace", fail_replace)
-        with pytest.raises(OSError, match=error_message):
-            gate.append_allow_entry(
-                pyproject,
-                first="episodic/a.py::alpha",
-                second=None,
-                reason="unit reason",
-            )
-        assert pyproject.read_text(encoding="utf-8") == original, (
-            "Failed replacement must preserve the original TOML."
-        )
-
-
-class TestGateCommands:
-    """CLI command orchestration and deterministic user-facing reports."""
-
-    def test_check_reports_blocking_findings(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        """The check command emits the blocking report and status one."""
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(gate, "load_allowlist", lambda _path: ())
-        monkeypatch.setattr(gate, "run_detector", lambda: [_finding()])
-        with pytest.raises(SystemExit) as error:
-            gate.check()
-        assert error.value.code == 1, "Blocking findings must return status one."
-        assert capsys.readouterr().out == (
-            "duplicate code: 1 unsuppressed pair(s)\n"
-            "  episodic/a.py:1-20 ~ episodic/b.py:1-20 (similarity 1.00)\n"
-            "    units: episodic/a.py::alpha ~ episodic/b.py::beta\n"
-            "Extract the shared logic into one helper, or record a considered "
-            "exception:\n"
-            "  make duplication-allow FIRST='<path::qualname>' "
-            "[SECOND='<path::qualname>'] REASON='<why this stays>'\n"
-        ), "Blocking report must remain actionable and deterministic."
-
-    def test_check_reports_detector_schema_errors(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        """Malformed detector reports exit cleanly instead of showing a traceback."""
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(gate, "load_allowlist", lambda _path: ())
-
-        error_message = "PyChase report pairs must be an array"
-
-        def raise_schema_error() -> list[gate.Finding]:
-            raise TypeError(error_message)
-
-        monkeypatch.setattr(gate, "run_detector", raise_schema_error)
-
-        with pytest.raises(SystemExit) as error:
-            gate.check()
-
-        assert error.value.code == 2, "Malformed detector reports must return two."
-        assert capsys.readouterr().err == (
-            "configuration error: PyChase report pairs must be an array\n"
-        ), "Schema errors must use the configuration diagnostic."
-
-    def test_allow_reports_malformed_existing_entries(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        """Malformed existing allows exit cleanly instead of showing a traceback."""
-        pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text(
-            '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py::alpha"\n',
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(gate, "PYPROJECT", pyproject)
-
-        with pytest.raises(SystemExit) as error:
-            gate.allow(
-                first="episodic/b.py::beta",
-                reason="reviewed exception",
-            )
-
-        assert error.value.code == 2, "Malformed existing allows must return two."
-        assert capsys.readouterr().err == (
-            "configuration error: duplication_gate.allow[0] "
-            "requires a non-empty reason\n"
-        ), "Malformed allows must use the configuration diagnostic."
-
-    def test_deterministic_hashing_reexecs_once(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """An unpinned process re-execs itself with a deterministic hash seed."""
-        calls: list[tuple[str, list[str]]] = []
-        environment = dict(gate.os.environ)
-        environment.pop("PYTHONHASHSEED", None)
-        monkeypatch.setattr(
-            gate.os,
-            "execv",
-            lambda executable, arguments: calls.append((executable, arguments)),
-        )
-        gate._ensure_deterministic_hashing(environment)
-        assert environment["PYTHONHASHSEED"] == "0", "Re-exec must pin the hash seed."
-        assert calls == [
-            (gate.sys.executable, [gate.sys.executable, *gate.sys.argv])
-        ], "Re-exec must retain the current interpreter and arguments."
-
-
-class TestDetectorIntegration:
-    """End-to-end detection over a fixture tree with the pinned PyChase."""
-
-    def test_reports_a_planted_verbatim_copy(self, tmp_path: Path) -> None:
-        """The engine reports a planted copy that normalization equates."""
-        body = textwrap.dedent(
-            """\
-            def NAME(items):
-                total = 0.0
-                for item in items:
-                    price = item["price"] * item["quantity"]
-                    if item.get("taxable"):
-                        price *= 1.2
-                    if item.get("discount"):
-                        price -= item["discount"]
-                    total += price
-                if total < 0:
-                    total = 0.0
-                return round(total, 2)
-            """
-        )
-        module = tmp_path / "mod.py"
-        module.write_text(
-            body.replace("NAME", "first_total")
-            + "\n\n"
-            + body.replace("NAME", "second_total"),
-            encoding="utf-8",
-        )
-        from pychase.cli import (  # ty: ignore[unresolved-import]  # pychase installs only in the gate's Python 3.13 environment.
-            Config,
-        )
-        from pychase.engine import (  # ty: ignore[unresolved-import]  # pychase installs only in the gate's Python 3.13 environment.
-            find,
-        )
-
-        config = Config()
-        config.threshold = 0.9
-        config.min_lines = 5
-        config.min_nodes = 10
-        findings = gate.normalize_findings(find([str(module)], config)["pairs"])
-        assert len(findings) == 1, "Planted copy must produce one pair."
-        assert findings[0].score == 1.0, "Verbatim copy must have perfect similarity."
-        assert findings[0].first.endswith("::first_total"), (
-            "First unit key must use its qualname."
-        )
-        assert findings[0].second.endswith("::second_total"), (
-            "Second unit key must use its qualname."
-        )

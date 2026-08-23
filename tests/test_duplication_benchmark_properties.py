@@ -1,5 +1,7 @@
 """Boundary and property checks for the duplication benchmark."""
 
+import typing as typ
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -40,6 +42,35 @@ def test_message_collectors_reject_non_positive_limits(limit: int) -> None:
     )
     assert not latest_alert_titles(events, limit), (
         "Reporting collector must reject non-positive limits."
+    )
+
+
+@given(
+    events=st.lists(
+        st.fixed_dictionaries({
+            "level": st.sampled_from(("error", "info", "warning")),
+            "message": st.text(max_size=20),
+        }),
+        max_size=30,
+    ),
+    limit=st.integers(min_value=-5, max_value=35),
+)
+def test_message_collectors_preserve_error_order_and_limit(
+    events: list[dict[str, str]],
+    limit: int,
+) -> None:
+    """Aligned collectors return the same bounded ordered error messages."""
+    expected = [
+        event["message"]
+        for event in events
+        if event["level"] == "error" and event["message"]
+    ][: max(limit, 0)]
+    object_events = typ.cast("list[dict[str, object]]", events)
+    assert recent_error_messages(object_events, limit) == expected, (
+        "Pricing collector must retain the requested ordered error messages."
+    )
+    assert latest_alert_titles(object_events, limit) == expected, (
+        "Reporting collector must retain the requested ordered error messages."
     )
 
 

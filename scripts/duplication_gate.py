@@ -25,7 +25,6 @@ import dataclasses as dc
 import fcntl
 import os
 import sys
-import tempfile
 import tomllib
 import typing as typ
 from collections import abc as cabc
@@ -44,6 +43,7 @@ from pychase.cli import (  # ty: ignore[unresolved-import]  # pychase installs o
 from pychase.engine import (  # ty: ignore[unresolved-import]  # pychase installs only in this script's Python 3.13 environment.
     find,
 )
+from typos_rollout_cache import atomic_write
 
 app = cyclopts.App(help="Run or configure the code-duplication gate.")
 
@@ -117,8 +117,16 @@ class Finding:
     score: float
 
 
+type AllowlistReader = cabc.Callable[[Path], tuple[AllowEntry, ...]]
+type FindingDetector = cabc.Callable[[], list[Finding]]
+
+
 class GateConfigError(ValueError):
     """Raised when the gate configuration is malformed."""
+
+
+class GateExecutionError(GateConfigError):
+    """Raised when required local configuration or detector access fails."""
 
 
 def _unit_key(member: _DetectorMemberPayload) -> str:
@@ -390,14 +398,41 @@ def _report(
     )
 
 
+def _check_inputs(
+    *,
+    allowlist_reader: AllowlistReader,
+    detector: FindingDetector,
+) -> tuple[tuple[AllowEntry, ...], list[Finding]]:
+    """Load the gate inputs with explicit local-environment failures."""
+    try:
+        allowlist = allowlist_reader(PYPROJECT)
+    except GateConfigError:
+        raise
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        msg = f"cannot load duplication allowlist: {error}"
+        raise GateExecutionError(msg) from error
+    try:
+        findings = detector()
+    except GateConfigError:
+        raise
+    except (OSError, RuntimeError) as error:
+        msg = f"PyChase detector failed: {error}"
+        raise GateExecutionError(msg) from error
+    except (TypeError, ValueError) as error:
+        raise GateConfigError(str(error)) from error
+    return allowlist, findings
+
+
 @app.command
 def check() -> None:
     """Run the blocking duplication gate and exit non-zero on findings."""
     os.chdir(REPO_ROOT)
     try:
-        allowlist = load_allowlist(PYPROJECT)
-        findings = run_detector()
-    except (GateConfigError, TypeError, ValueError) as error:
+        allowlist, findings = _check_inputs(
+            allowlist_reader=load_allowlist,
+            detector=run_detector,
+        )
+    except GateConfigError as error:
         print(f"configuration error: {error}", file=sys.stderr)
         raise SystemExit(2) from error
     blocking, allowed, stale = partition_findings(findings, allowlist)
@@ -476,7 +511,13 @@ def append_allow_entry(
             existing = _allow_entry(raw_entry, index=index)
             if _same_allow_target(existing.units, units):
                 raw_entry["reason"] = reason
-                _atomic_write(pyproject_path, tomlkit.dumps(document))
+                atomic_write(
+                    pyproject_path,
+                    tomlkit.dumps(document).encode("utf-8"),
+                    create_parents=False,
+                    preserve_mode=True,
+                    sync_file=True,
+                )
                 return
         entry = tomlkit.table()
         if second is None:
@@ -485,7 +526,13 @@ def append_allow_entry(
             entry["pair"] = [first, second]
         entry["reason"] = reason
         entries.append(entry)
-        _atomic_write(pyproject_path, tomlkit.dumps(document))
+        atomic_write(
+            pyproject_path,
+            tomlkit.dumps(document).encode("utf-8"),
+            create_parents=False,
+            preserve_mode=True,
+            sync_file=True,
+        )
 
 
 def _same_allow_target(left: tuple[str, ...], right: tuple[str, ...]) -> bool:
@@ -505,26 +552,6 @@ def _locked_file(path: Path) -> cabc.Iterator[None]:
             yield
         finally:
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
-
-
-def _atomic_write(path: Path, content: str) -> None:
-    """Replace ``path`` only after writing and syncing a temporary sibling."""
-    descriptor, temporary_name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        text=True,
-    )
-    temporary_path = Path(temporary_name)
-    try:
-        temporary_path.chmod(path.stat().st_mode)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temporary_path.replace(path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
 
 
 def _ensure_deterministic_hashing(

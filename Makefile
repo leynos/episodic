@@ -124,9 +124,9 @@ duplication: ## Run the blocking code-duplication gate
 duplication-test: ## Run the duplication-gate helper tests
 	@$(UV_ENV) $(UV) run --no-project --python 3.13 \
 		--with pytest==9.0.2 --with cyclopts --with 'pychase==0.1.0' \
-		--with tomlkit \
+		--with tomlkit --with 'hypothesis[asyncio]==6.165.6' \
 		python -m pytest -c /dev/null --rootdir=. -p no:cacheprovider \
-		scripts/tests/test_duplication_gate.py
+		scripts/tests
 
 # Accept FIRST/SECOND/REASON (and skylos SYMBOL) only from the make command
 # line. `NAME` is ambient under WSL, which injects the hostname there, so the

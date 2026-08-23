@@ -218,6 +218,13 @@ resolved as stale; remove them in the same change. Declarative module patterns
 request modules) are excluded in `[tool.pychase]` with documented reasons
 rather than per-pair entries.
 
+Allowlist updates take an advisory cross-process lock, so a concurrent writer
+waits until the current update completes. If a writer is cancelled or
+interrupted, closing its lock descriptor releases the lock. Each successful
+update fsyncs a temporary sibling before atomically replacing `pyproject.toml`
+with the destination file's mode preserved. This prevents concurrent
+allowlist updates from overwriting one another.
+
 The gate runs its own Python 3.13 environment because PyChase 0.1.0 imports
 `ast` aliases removed in Python 3.14, and it re-executes itself with
 `PYTHONHASHSEED=0` so LSH bucketing stays deterministic. Its helper tests run
