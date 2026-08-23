@@ -8,6 +8,7 @@ Python 3.14, so the whole module is skipped when that import fails; the
 import sys
 import textwrap
 import tomllib
+import typing as typ
 from pathlib import Path
 
 import pytest
@@ -121,6 +122,96 @@ class TestNormalizeFindings:
         assert findings[0].location_first == "episodic/a.py:5-25", (
             "Normalized location must retain source lines."
         )
+
+
+class TestDetectorMember:
+    """PyChase member payload validation."""
+
+    _VALID_PAYLOAD: typ.ClassVar[dict[str, object]] = {
+        "file": "episodic/a.py",
+        "qualname": "module.function",
+        "start_line": 10,
+        "end_line": 20,
+    }
+    _MISSING = object()
+
+    def test_accepts_a_valid_payload(self) -> None:
+        """A complete PyChase member retains its original field values."""
+        assert (
+            gate._detector_member(self._VALID_PAYLOAD, context="member")
+            == self._VALID_PAYLOAD
+        ), "Valid PyChase member payloads must round-trip."
+
+    @pytest.mark.parametrize(
+        ("field", "invalid_value", "expected_error", "message"),
+        [
+            (
+                "file",
+                _MISSING,
+                ValueError,
+                "member.file must be a non-empty string",
+            ),
+            ("file", "", ValueError, "member.file must be a non-empty string"),
+            (
+                "qualname",
+                _MISSING,
+                ValueError,
+                "member.qualname must be a non-empty string",
+            ),
+            (
+                "qualname",
+                "",
+                ValueError,
+                "member.qualname must be a non-empty string",
+            ),
+            (
+                "start_line",
+                True,
+                TypeError,
+                "member.start_line must be a positive integer",
+            ),
+            (
+                "end_line",
+                False,
+                TypeError,
+                "member.end_line must not precede start_line",
+            ),
+            (
+                "start_line",
+                0,
+                ValueError,
+                "member.start_line must be a positive integer",
+            ),
+            ("end_line", 9, ValueError, "member.end_line must not precede start_line"),
+        ],
+        ids=[
+            "missing-file",
+            "empty-file",
+            "missing-qualname",
+            "empty-qualname",
+            "boolean-start-line",
+            "boolean-end-line",
+            "zero-start-line",
+            "inverted-lines",
+        ],
+    )
+    def test_rejects_invalid_field_values(
+        self,
+        field: str,
+        invalid_value: object,
+        expected_error: type[Exception],
+        message: str,
+    ) -> None:
+        """Invalid fields preserve PyChase's exception types and messages."""
+        payload: dict[str, object] = self._VALID_PAYLOAD.copy()
+        if invalid_value is self._MISSING:
+            del payload[field]
+        else:
+            payload[field] = invalid_value
+        with pytest.raises(expected_error) as error:
+            gate._detector_member(payload, context="member")
+        assert type(error.value) is expected_error, "Exception type must remain exact."
+        assert str(error.value) == message, "Validation message must remain exact."
 
 
 class TestLoadAllowlist:
