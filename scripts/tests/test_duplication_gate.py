@@ -5,7 +5,7 @@ Python 3.14, so the whole module is skipped when that import fails; the
 ``make duplication-test`` target runs these tests on Python 3.13.
 """
 
-import sys
+import re
 import textwrap
 import tomllib
 import typing as typ
@@ -13,17 +13,16 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_DIRECTORY = Path(__file__).resolve().parents[1]
-if str(SCRIPT_DIRECTORY) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIRECTORY))
-
-# A tuple constant keeps the handler parseable on Python 3.13, where the
-# repository formatter's PEP 758 style (`except A, B:`) is a syntax error.
-_GATE_IMPORT_ERRORS = (ImportError, AttributeError)
-
 try:
     import duplication_gate as gate
-except _GATE_IMPORT_ERRORS:  # pragma: no cover - Python 3.14 path
+except ImportError:  # pragma: no cover - Python 3.14 path
+    pytest.skip(
+        "duplication_gate requires PyChase, which needs Python < 3.14",
+        allow_module_level=True,
+    )
+except AttributeError as error:  # pragma: no cover - Python 3.14 path
+    if str(error) != "module 'ast' has no attribute 'Str'":
+        raise
     pytest.skip(
         "duplication_gate requires PyChase, which needs Python < 3.14",
         allow_module_level=True,
@@ -212,6 +211,12 @@ class TestDetectorMember:
                 TypeError,
                 "member.end_line must not precede start_line",
             ),
+            (
+                "end_line",
+                _MISSING,
+                TypeError,
+                "member.end_line must not precede start_line",
+            ),
             ("end_line", 9, ValueError, "member.end_line must not precede start_line"),
         ],
         ids=[
@@ -227,6 +232,7 @@ class TestDetectorMember:
             "zero-start-line",
             "negative-start-line",
             "non-integer-end-line",
+            "missing-end-line",
             "inverted-lines",
         ],
     )
@@ -248,11 +254,20 @@ class TestDetectorMember:
         assert type(error.value) is expected_error, "Exception type must remain exact."
         assert str(error.value) == message, "Validation message must remain exact."
 
+    def test_rejects_non_mapping_payload(self) -> None:
+        """Non-object PyChase members fail at the detector boundary."""
+        with pytest.raises(
+            TypeError,
+            match=re.escape("member must be an object with string keys"),
+        ):
+            gate._detector_member([], context="member")
+
 
 class TestLoadAllowlist:
     """Allowlist parsing and validation."""
 
     def _write(self, tmp_path: Path, body: str) -> Path:
+        """Write ``body`` to ``pyproject.toml`` under ``tmp_path`` and return it."""
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(textwrap.dedent(body), encoding="utf-8")
         return pyproject
@@ -290,15 +305,30 @@ class TestLoadAllowlist:
         )
 
     @pytest.mark.parametrize(
-        "body",
+        ("body", "diagnostic"),
         [
-            '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py::alpha"\n',
-            '[[tool.duplication_gate.allow]]\nunit = "a"\nreason = "r"\n',
-            '[[tool.duplication_gate.allow]]\npair = ["a.py::x"]\nreason = "r"\n',
-            '[[tool.duplication_gate.allow]]\nreason = "r"\n',
             (
-                '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py::x"\n'
-                'pair = ["episodic/a.py::x", "episodic/b.py::y"]\nreason = "r"\n'
+                '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py::alpha"\n',
+                "requires a non-empty reason",
+            ),
+            (
+                '[[tool.duplication_gate.allow]]\nunit = "a"\nreason = "r"\n',
+                "unit must be a 'path::qualname' string",
+            ),
+            (
+                '[[tool.duplication_gate.allow]]\npair = ["a.py::x"]\nreason = "r"\n',
+                "pair must be two 'path::qualname' strings",
+            ),
+            (
+                '[[tool.duplication_gate.allow]]\nreason = "r"\n',
+                "must set exactly one of 'unit' or 'pair'",
+            ),
+            (
+                (
+                    '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py::x"\n'
+                    'pair = ["episodic/a.py::x", "episodic/b.py::y"]\nreason = "r"\n'
+                ),
+                "must set exactly one of 'unit' or 'pair'",
             ),
         ],
         ids=[
@@ -309,10 +339,15 @@ class TestLoadAllowlist:
             "both-kinds",
         ],
     )
-    def test_rejects_malformed_entries(self, tmp_path: Path, body: str) -> None:
+    def test_rejects_malformed_entries(
+        self,
+        tmp_path: Path,
+        body: str,
+        diagnostic: str,
+    ) -> None:
         """Malformed entries raise a configuration error."""
         pyproject = self._write(tmp_path, body)
-        with pytest.raises(gate.GateConfigError):
+        with pytest.raises(gate.GateConfigError, match=re.escape(diagnostic)):
             gate.load_allowlist(pyproject)
 
 
@@ -412,9 +447,13 @@ class TestGateCommands:
     """CLI command orchestration and deterministic user-facing reports."""
 
     def test_check_reports_blocking_findings(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """The check command emits the blocking report and status one."""
+        monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(gate, "load_allowlist", lambda _path: ())
         monkeypatch.setattr(gate, "run_detector", lambda: [_finding()])
         with pytest.raises(SystemExit) as error:
@@ -430,21 +469,71 @@ class TestGateCommands:
             "[SECOND='<path::qualname>'] REASON='<why this stays>'\n"
         ), "Blocking report must remain actionable and deterministic."
 
+    def test_check_reports_detector_schema_errors(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Malformed detector reports exit cleanly instead of showing a traceback."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(gate, "load_allowlist", lambda _path: ())
+
+        error_message = "PyChase report pairs must be an array"
+
+        def raise_schema_error() -> list[gate.Finding]:
+            raise TypeError(error_message)
+
+        monkeypatch.setattr(gate, "run_detector", raise_schema_error)
+
+        with pytest.raises(SystemExit) as error:
+            gate.check()
+
+        assert error.value.code == 2, "Malformed detector reports must return two."
+        assert capsys.readouterr().err == (
+            "configuration error: PyChase report pairs must be an array\n"
+        ), "Schema errors must use the configuration diagnostic."
+
+    def test_allow_reports_malformed_existing_entries(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Malformed existing allows exit cleanly instead of showing a traceback."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(
+            '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py::alpha"\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(gate, "PYPROJECT", pyproject)
+
+        with pytest.raises(SystemExit) as error:
+            gate.allow(
+                first="episodic/b.py::beta",
+                reason="reviewed exception",
+            )
+
+        assert error.value.code == 2, "Malformed existing allows must return two."
+        assert capsys.readouterr().err == (
+            "configuration error: duplication_gate.allow[0] "
+            "requires a non-empty reason\n"
+        ), "Malformed allows must use the configuration diagnostic."
+
     def test_deterministic_hashing_reexecs_once(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """An unpinned process re-execs itself with a deterministic hash seed."""
         calls: list[tuple[str, list[str]]] = []
-        monkeypatch.delenv("PYTHONHASHSEED", raising=False)
+        environment = dict(gate.os.environ)
+        environment.pop("PYTHONHASHSEED", None)
         monkeypatch.setattr(
             gate.os,
             "execv",
             lambda executable, arguments: calls.append((executable, arguments)),
         )
-        gate._ensure_deterministic_hashing()
-        assert gate.os.environ["PYTHONHASHSEED"] == "0", (
-            "Re-exec must pin the hash seed."
-        )
+        gate._ensure_deterministic_hashing(environment)
+        assert environment["PYTHONHASHSEED"] == "0", "Re-exec must pin the hash seed."
         assert calls == [
             (gate.sys.executable, [gate.sys.executable, *gate.sys.argv])
         ], "Re-exec must retain the current interpreter and arguments."

@@ -34,6 +34,10 @@ def test_expectations_load_and_reference_real_units() -> None:
     for expectation in expectations:
         for member in (expectation.first, expectation.second):
             source = BENCHMARK_ROOT / "corpus" / member.path
+            assert member.start_line >= 1, f"{member.path} span must start at one"
+            assert member.start_line <= member.end_line, (
+                f"{member.path} span must not be inverted"
+            )
             line_count = len(source.read_text(encoding="utf-8").splitlines())
             assert member.end_line <= line_count, (
                 f"{member.path} span exceeds file length"

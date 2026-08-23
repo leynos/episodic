@@ -67,7 +67,7 @@ def _finding(
 class TestParsePyscnPairs:
     """pyscn clone-pair report parsing."""
 
-    def test_parses_locations_types_and_similarity(self, tmp_path: object) -> None:
+    def test_parses_locations_types_and_similarity(self, tmp_path: Path) -> None:
         """Members, clone types, and similarity survive normalization."""
         payload = {
             "clone": {
@@ -84,9 +84,7 @@ class TestParsePyscnPairs:
                         },
                         "clone2": {
                             "location": {
-                                "file_path": str(
-                                    typ.cast("Path", tmp_path) / "pkg" / "b.py"
-                                ),
+                                "file_path": str(tmp_path / "pkg" / "b.py"),
                                 "start_line": 15,
                                 "end_line": 23,
                             }
@@ -95,21 +93,21 @@ class TestParsePyscnPairs:
                 ]
             }
         }
-        findings = parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
+        findings = parse_pyscn_pairs(payload, corpus_root=tmp_path)
         assert findings[0].first == _fragment("pkg/a.py", 4, 12), "first member"
         assert findings[0].second == _fragment("pkg/b.py", 15, 23), "second member"
         assert findings[0].lane is Lane.SEMANTIC_CLONE, "type 4 lane"
         assert findings[0].category == "type-4", "category label"
         assert findings[0].similarity == 0.75, "similarity value"
 
-    def test_null_pair_array_is_empty_report(self, tmp_path: object) -> None:
+    def test_null_pair_array_is_empty_report(self, tmp_path: Path) -> None:
         """Null pair arrays parse as empty pyscn reports."""
         payload = {"clone": {"clone_pairs": None}}
-        assert (
-            parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path)) == ()
-        ), "null clone_pairs must parse as an empty report"
+        assert parse_pyscn_pairs(payload, corpus_root=tmp_path) == (), (
+            "null clone_pairs must parse as an empty report"
+        )
 
-    def test_syntactic_lane_for_types_one_to_three(self, tmp_path: object) -> None:
+    def test_syntactic_lane_for_types_one_to_three(self, tmp_path: Path) -> None:
         """Types 1-3 normalize into the syntactic lane."""
         payload = {
             "clone": {
@@ -136,7 +134,7 @@ class TestParsePyscnPairs:
                 ]
             }
         }
-        findings = parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
+        findings = parse_pyscn_pairs(payload, corpus_root=tmp_path)
         assert all(f.lane is Lane.SYNTACTIC_CLONE for f in findings), (
             "types 1-3 must use the syntactic lane"
         )
@@ -178,13 +176,13 @@ class TestParsePyscnPairs:
         ids=["root-not-object", "clone-not-object", "type-not-int", "similarity-range"],
     )
     def test_rejects_malformed_reports(
-        self, tmp_path: object, payload: object, expected_error: type[Exception]
+        self, tmp_path: Path, payload: object, expected_error: type[Exception]
     ) -> None:
         """Shape violations raise instead of silently dropping findings."""
         with pytest.raises(expected_error):
-            parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
+            parse_pyscn_pairs(payload, corpus_root=tmp_path)
 
-    def test_rejects_paths_outside_corpus_root(self, tmp_path: object) -> None:
+    def test_rejects_paths_outside_corpus_root(self, tmp_path: Path) -> None:
         """Absolute paths outside the corpus root are configuration errors."""
         payload = {
             "clone": {
@@ -211,13 +209,13 @@ class TestParsePyscnPairs:
             }
         }
         with pytest.raises(ValueError, match="outside corpus root"):
-            parse_pyscn_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
+            parse_pyscn_pairs(payload, corpus_root=tmp_path)
 
 
 class TestParsePychasePairs:
     """PyChase candidate report parsing."""
 
-    def test_parses_candidates_in_report_order(self, tmp_path: object) -> None:
+    def test_parses_candidates_in_report_order(self, tmp_path: Path) -> None:
         """Candidates normalize into syntactic-lane findings."""
         payload = {
             "candidates": [
@@ -238,7 +236,7 @@ class TestParsePychasePairs:
                 }
             ]
         }
-        findings = parse_pychase_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
+        findings = parse_pychase_pairs(payload, corpus_root=tmp_path)
         assert findings[0].first == _fragment("pkg/a.py", 4, 12), "left member"
         assert findings[0].second == _fragment("pkg/b.py", 15, 23), "right member"
         assert findings[0].lane is Lane.SYNTACTIC_CLONE, "candidate lane"
@@ -265,11 +263,11 @@ class TestParsePychasePairs:
         ids=["root-not-object", "score-not-number", "line-not-positive"],
     )
     def test_rejects_malformed_reports(
-        self, tmp_path: object, payload: object, expected_error: type[Exception]
+        self, tmp_path: Path, payload: object, expected_error: type[Exception]
     ) -> None:
         """Shape violations raise instead of silently dropping findings."""
         with pytest.raises(expected_error):
-            parse_pychase_pairs(payload, corpus_root=typ.cast("Path", tmp_path))
+            parse_pychase_pairs(payload, corpus_root=tmp_path)
 
 
 class TestScoreFindings:
