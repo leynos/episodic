@@ -11,8 +11,7 @@ The core Protocols are `CostLedgerPort` for append-only ledger persistence,
 module are frozen dataclasses or `NewType` aliases that carry immutable
 snapshot, priced-call, and ledger-entry data.
 
-Tests can use small in-memory fakes that structurally satisfy the
-Protocols; see ``tests/test_cost_ports_protocols.py`` for an example.
+Tests can use in-memory fakes; see ``tests/test_cost_ports_protocols.py``.
 """
 
 import dataclasses as dc
@@ -108,7 +107,12 @@ def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:
 
 @dc.dataclass(frozen=True, slots=True)
 class PricingSnapshot:
-    """Immutable pricing input used by the deterministic pricing engine."""
+    """Immutable pricing input used by the deterministic pricing engine.
+
+    ``effective_from`` is an optional timezone-aware ISO-8601 timestamp
+    (for example ``"2026-08-01T00:00:00Z"``); catalogue resolution keeps
+    snapshots unset or not after now and selects the latest.
+    """
 
     pricing_snapshot_id: PricingSnapshotId
     provider_name: str
@@ -228,9 +232,8 @@ class CostLedgerPort(typ.Protocol):
 
         Examples
         --------
-        ``await ledger.ensure_snapshot(snapshot)`` twice with one
-        ``pricing_snapshot_id`` is idempotent: the repeat call reuses
-        the persisted row.
+        Repeated ``await ledger.ensure_snapshot(snapshot)`` calls with
+        one ``pricing_snapshot_id`` reuse the persisted row.
         """
         raise NotImplementedError
 

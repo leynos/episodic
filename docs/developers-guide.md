@@ -403,6 +403,11 @@ Helm conventions:
 - Keep chart values aligned with the Nile Valley example chart contract:
   `config`, `existingSecretName`, `allowMissingSecret`, `secretEnvFromKeys`,
   `externalSecret`, ingress, and HTTP probes.
+- `volumes` and `volumeMounts` are pass-through chart values (default `[]`)
+  applied verbatim to the pod template and container spec. Use them to make a
+  path writable under the chart's `readOnlyRootFilesystem` default, such as
+  the source-intake object store root; `values.local.yaml` mounts an
+  `emptyDir` at `/tmp` for that purpose.
 - Keep the Deployment pod-template `checksum/config` annotation aligned with
   `templates/configmap.yaml` so ConfigMap-backed environment changes roll pods.
 - Validate chart edits with `uv run pytest tests/test_helm_chart_contract.py`.
@@ -419,6 +424,10 @@ Local preview conventions:
   command failures.
 - `local-k8s-up` must apply the local-only Postgres dependency before invoking
   Helm with `--wait`, because `/health/ready` depends on database connectivity.
+- The preview's application Secret is built as a manifest with credentials in
+  `stringData` and applied with `kubectl apply -f -` on stdin, so secret
+  values never appear in command arguments the runner would otherwise print
+  in dry-run mode or echo to stderr on a failed command.
 - Existing clusters must be reused only when the requested ingress port matches
   the k3d load-balancer mapping.
 - Add focused tests in `tests/test_local_k8s_tooling.py` for new command
@@ -1590,8 +1599,12 @@ it to the run or before recording an unpinned provider call; repeated calls
 with the same snapshot identifier reuse the stored row. Pricing snapshots are
 immutable and content-addressed, so a content-hash collision against another
 identifier raises `PricingSnapshotCollisionError` rather than silently
-overwriting the stored snapshot. `CostRecorder` then records usage with a
-run-scoped idempotency key. `PRICING_SNAPSHOT_DIRECTORY` is optional: its
+overwriting the stored snapshot. `ensure_snapshot` carries `effective_from`
+from the resolved catalogue snapshot through to the persisted row (parsed as a
+timezone-aware instant, or left unset when the catalogue entry has none), so
+the stored snapshot preserves the same effective-date precedence the catalogue
+used to resolve it. `CostRecorder` then records usage with a run-scoped
+idempotency key. `PRICING_SNAPSHOT_DIRECTORY` is optional: its
 default is
 `config/pricing-snapshots`; a configured relative path is resolved from the
 repository root, and startup rejects a path that is not an existing directory.

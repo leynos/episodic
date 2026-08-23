@@ -188,6 +188,11 @@ draft output. Each value must be a positive integer:
 The HTTP runtime also accepts these optional settings for the OpenAI-compatible
 provider request:
 
+- `OPENAI_BASE_URL` and `OPENAI_API_KEY` configure a provider endpoint and
+  credential. They are optional, but must be set together: configuring one
+  without the other fails startup. Neither is set by default.
+- `DRAFT_MODEL` selects the model used for no-QA draft generation. It defaults
+  to `gpt-4o-mini`.
 - `OPENAI_REASONING_EFFORT` is forwarded to the provider as a reasoning-effort
   hint. It is unset by default.
 - `OPENAI_SERVICE_TIER` selects the provider service tier. It is unset by
@@ -428,6 +433,19 @@ the `localhost/episodic:local` image into the `episodic-preview` cluster,
 bootstraps a local-only Postgres Service and StatefulSet, and exposes ingress
 through `http://episodic.localhost:8088`.
 
+The preview writes its generated Kubernetes Secret with `api-bearer-token` set
+to `local-dev-token` by default, so `/v1` requests against the preview
+authenticate with:
+
+```http
+Authorization: Bearer local-dev-token
+```
+
+When `OPENAI_API_KEY` is set in the operator's environment,
+`make local-k8s-up` also writes the paired `openai-base-url`/`openai-api-key`
+keys into the same Secret so preview-generated drafts can reach a real
+provider.
+
 On rootless Podman hosts, use the kind provider directly:
 
 ```shell
@@ -447,6 +465,12 @@ example, after `kubectl rollout restart` or a redeploy). A generation run that
 references pre-restart uploads then fails with a missing-file error. After any
 application pod restart, re-upload the source documents and attach the fresh
 uploads before starting a generation run.
+
+The chart's `volumes` and `volumeMounts` values are passed through verbatim to
+the pod template and container spec, so any writable path needed under the
+chart's default `readOnlyRootFilesystem` (such as the source-intake object
+store root) must be declared there. `charts/episodic/values.local.yaml` sets
+both to mount the `emptyDir` described above at `/tmp`.
 
 If a cluster with the configured name already exists, `local-k8s-up` reuses it
 only when its ingress port matches the requested port. `local-k8s-status` and

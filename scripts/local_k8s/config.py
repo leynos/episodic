@@ -24,9 +24,11 @@ class PreviewConfig:
     committing a credential anywhere.
 
     The Kubernetes Secret generated for the preview always writes
-    ``api-bearer-token``. The ``openai-base-url``/``openai-api-key`` pair is
-    written only when ``openai_api_key`` is non-empty (that is, when
-    ``OPENAI_API_KEY`` was set).
+    ``database-url`` and ``api-bearer-token``. The ``openai-base-url``/
+    ``openai-api-key`` pair is written together only when ``openai_api_key``
+    is non-empty (that is, when ``OPENAI_API_KEY`` was set), since the
+    runtime requires the pair or neither. Secret values travel via stdin
+    ``stringData``, never as command arguments.
     """
 
     cluster_name: str = "episodic-preview"
