@@ -2,16 +2,22 @@
 
 ## Status
 
-Accepted for roadmap step `2.8`.
+Accepted on 2026-08-23 for roadmap step `2.8`. This decision adopts
+append-only, retrievable episode TEI history with same-transaction writes,
+revision-aware reads, and restore-as-forward-write semantics.
 
-## Context
+## Date
+
+2026-08-23
+
+## Context and Problem Statement
 
 Canonical episodes version their TEI P5 document with an optimistic
 `tei_revision` counter and a `tei_content_hash`
 ([ADR-017](adr-017-no-qa-generation-run-execution-and-tei-persistence.md)).
 This detects concurrent writers but retains only the latest document: each
-successful write overwrites `raw_xml`, and the superseded revision is
-unrecoverable.
+successful write overwrites `episodes.tei_xml` and its `episodes.tei_xml_zstd`
+companion, and the superseded revision is unrecoverable.
 
 Three planned capabilities need more than conflict detection:
 
@@ -42,7 +48,7 @@ Extend the explicit history-table pattern to episode TEI.
 Add an `episode_tei_history` table:
 
 - `id` (UUIDv7 primary key);
-- `episode_id` (foreign key to `episodes`, `ON DELETE CASCADE`);
+- `episode_id` (foreign key to `episodes`, `ON DELETE RESTRICT`);
 - `tei_revision` (positive integer; unique on
   `(episode_id, tei_revision)`);
 - `tei_xml` (text) and `tei_xml_zstd` (nullable bytea), mirroring the
@@ -81,13 +87,22 @@ the historical document through the existing update path with the current
 `expected_revision`, producing a new revision whose history row records the
 restore. History rows are never mutated or re-pointed.
 
+### Verification requirements
+
+The implementation must add Hypothesis properties covering arbitrary TEI write
+sequences, a concurrent race with exactly one winning writer, atomicity of the
+same-transaction history write, append-only history rows, and
+restore-as-forward-write transitions.
+
 ### Retention
 
 Revisions are retained indefinitely in the first implementation. Compression
-via the `zstd` column bounds storage growth; a retention or archival policy
-(for example, thinning intermediate refinement drafts after approval) is
-deferred until observed volumes justify one, and would require a superseding
-decision because it deletes audit history.
+via the `zstd` column reduces the storage used by each full-document revision,
+but does not bound total history storage. Global history storage and each
+episode's history size must be monitored. At 80% of provisioned storage or
+2 GiB for one episode, operations must open a review to decide whether archival
+or retention is needed through a superseding ADR. No deletion policy is adopted
+by this decision.
 
 ## Rationale
 
@@ -109,16 +124,16 @@ decision because it deletes audit history.
 ## Consequences
 
 - Every TEI write gains one insert; the write path stays single-transaction.
-  Storage grows with revision count, bounded by compression and, later, an
-  explicit retention decision.
+  Storage grows with revision count. Compression reduces the size of each
+  revision but does not provide a total-storage bound; the monitoring triggers
+  above initiate an operational review without authorizing deletion.
 - Roadmap `4.4.4`'s iteration metadata can reference history rows by
   `(episode_id, tei_revision)` instead of persisting draft summaries alone,
   and diffing two drafts becomes a read-side concern.
 - Script projection editing (`2.7.3`) satisfies the immutable-history
   security requirement without additional machinery.
-- The episode GET surface gains a revision parameter; API documentation and
-  the TUI design's episode endpoints must be updated when the read path
-  lands.
+- The episode GET surface gains a revision parameter, and the TUI/API and
+  system designs document the planned history read and restore paths.
 
 ## References
 

@@ -2,12 +2,18 @@
 
 ## Status
 
-Accepted. This record is retrospective: it consolidates decisions taken
+Accepted on 2026-08-23. This retrospective record establishes explicit,
+repository-written versioning, named concurrency shapes, immutable history,
+and version pinning at consumption boundaries. It consolidates decisions taken
 piecemeal across roadmap items `1.4.1`, `2.2.6`, `2.2.8`, `2.4.4`, `2.6.1`,
 and `4.3.2` so the versioning approach exists as one recorded decision rather
 than an unstated convention.
 
-## Context
+## Date
+
+2026-08-23
+
+## Context and Problem Statement
 
 Episodic versions several kinds of state: series profiles and episode
 templates, reusable reference documents, canonical episode TEI, pricing rate
@@ -39,19 +45,26 @@ concurrency-control shapes and three shared invariants.
 
 ### Two concurrency-control shapes
 
-**Compare-and-set for concurrent writers racing on one mutable row.** Series
-profiles and episode templates carry a `lock_version`; canonical episodes
-carry `tei_revision` with a positive-integer check constraint. Updates are
-conditional (`UPDATE … WHERE revision = expected`) and a stale expectation
-raises a typed domain error (`RevisionConflictError`,
+**History-insert arbitration for profile and template writers.**
+`SeriesProfileRecord` and `EpisodeTemplateRecord` do not carry a
+`lock_version`. Their repositories read the latest history revision, update
+the parent, and use the unique `(parent_id, revision)` history-row insert to
+arbitrate concurrent writers. A losing insert is translated to a typed domain
+conflict rather than silently overwriting history.
+
+**Compare-and-set for concurrent writers racing on one mutable row.**
+Canonical episodes carry `tei_revision` with a positive-integer check
+constraint. Updates are conditional (`UPDATE … WHERE revision = expected`) and
+a stale expectation raises a typed domain error (`RevisionConflictError`,
 `EpisodeRevisionConflictError`) rather than overwriting silently.
 
 **Insert-once-then-reuse for duplicate deliveries of one logical operation.**
-Workflow checkpoints, the source-intake idempotency store, and generation-run
-events insert under a deterministic key and let the database unique constraint
-arbitrate: on conflict, the first row is loaded and reused. This is
-idempotency, not optimistic locking, and the two shapes are deliberately not
-conflated.
+Workflow checkpoints and the source-intake idempotency store insert under a
+deterministic key and let the database unique constraint arbitrate: on
+conflict, the first row is loaded and reused. Generation-run events are
+append-only and allocate a fresh sequence entry; duplicate-event idempotency
+is future work. This is idempotency, not optimistic locking, and the shapes are
+deliberately not conflated.
 
 ### Three shared invariants
 
