@@ -108,7 +108,7 @@ or delivery planning.
   - explicit versioning, concurrency, immutability, deletion, and
     version-pinning strategy.
 - [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
-  - append-only episode TEI history, retrieval, restore, and operational
+  - append-only episode TEI history, retrieval, restoration, and operational
     monitoring.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md

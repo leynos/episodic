@@ -1027,7 +1027,7 @@ ADR 019 extends the optimistic `tei_revision` counter with a planned
 `episode_tei_history` table. Each row stores the complete `tei_xml` document,
 its optional `tei_xml_zstd` compression, content hash, quality and provenance
 metadata, recording actor, and timestamp. The `episode_id` foreign key uses a
-restrictive `ON DELETE RESTRICT` policy so indefinite audit history cannot
+restrictive `ON DELETE RESTRICT` policy, so indefinite audit history cannot
 disappear when an episode is deleted. ADR 018 records the shared versioning
 strategy.
 
@@ -1055,11 +1055,12 @@ erDiagram
     }
     episode_tei_history {
         uuid id PK
-        uuid episode_id FK
+        uuid episode_id FK,UK
         int tei_revision UK
         text tei_xml
         bytea tei_xml_zstd
         text tei_content_hash
+        text quality_mode
         text qa_status
         uuid last_generation_run_id
         timestamptz recorded_at
