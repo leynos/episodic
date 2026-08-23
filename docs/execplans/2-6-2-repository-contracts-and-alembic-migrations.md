@@ -99,6 +99,13 @@ Repository documentation:
   domain ports", and "Manual recovery of expired generation-run leases".
 - `docs/adr/adr-015-generation-run-port-split.md` — why the port is split, and
   why the user-facing `Checkpoint` differs from `WorkflowCheckpoint`.
+- `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` (arriving
+  with pull request PR 278) — the governing record for versioning, concurrency
+  shapes, immutability, and deletion policy. Read it before writing the
+  adapter; it decides D-10 and the foreign-key policy.
+- `docs/alpha-test-4-3-2-setup-notes.md` (arriving with pull request PR 277) —
+  the end-to-end alpha run of the 4.3.2 slice, including where repository
+  documentation was wrong.
 - `docs/adr/adr-007-durable-generation-checkpoints.md` — the *orchestration*
   checkpoint. Read it to avoid conflating the two. Note its title is "Durable
   generation checkpoints", which is why this plan does **not** use "generation
@@ -127,6 +134,51 @@ Existing code and tests this plan extends rather than duplicates:
   the in-memory adapter. Extend it; do not create a second checkpoint feature.
 - `tests/canonical_storage/test_sql_generation_run_property_contract.py` —
   already discharges the paging and cross-run isolation properties.
+
+## Pending pull requests this plan depends on
+
+Two open pull requests touch this plan's surface. Both should land **before**
+implementation starts; if either is abandoned, the noted items must be
+revisited.
+
+**PR 278 — "Record the versioning strategy and adopt episode TEI revision
+history (2.8)"** (`versioning-adr-episode-tei-history`, documentation only).
+
+- It takes **ADR-018 and ADR-019**, so this plan's new ADR is **ADR-020**.
+- Its `docs/adr/adr-018-explicit-versioning-and-history-strategy.md` becomes
+  the **governing record for versioning, concurrency shapes, immutability, and
+  deletion policy**. It is now an upstream item in `Conformance basis`, and
+  three decisions here changed to conform: D-10 (compare-and-set rather than
+  row locking), the `ON DELETE RESTRICT` foreign key in Table 1, and D-11 (why
+  a review checkpoint is not a versioned aggregate).
+- It adds **roadmap step 2.8** (episode TEI revision history), so follow-ups
+  from this plan must not claim that number.
+- It edits `docs/contents.md`, `docs/roadmap.md`,
+  `docs/episodic-podcast-generation-system-design.md`, and
+  `docs/episodic-tui-api-design.md` — all four of which EP-M5 also edits.
+
+**PR 277 — "Harden the no-QA generation slice from local alpha testing
+(4.3.2)"** (`4-3-2-...-alpha-feedback`, code and documentation).
+
+- It edits `episodic/canonical/storage/uow.py`,
+  `episodic/canonical/generation_run_ports.py`,
+  `tests/canonical_storage/test_generation_runs.py`, and
+  `tests/canonical_storage/test_sql_generation_run_property_contract.py` —
+  **the four files this plan changes most**. Expect conflicts; rebase first.
+- It moves `uow.py`'s imports **out of** `if typ.TYPE_CHECKING:` with
+  `# noqa: TC00x` markers, because `mock.create_autospec` evaluates method
+  annotations at runtime. Any import this plan adds there must follow that
+  convention or it reintroduces the `NameError` PR 277 fixes.
+- It adds a `Raises / RunNotFound` section to `count_events` in
+  `generation_run_ports.py` — the precedent Stage C step 7 generalizes, and
+  evidence that the port file is where contracts are expected to live.
+- It establishes that **persisted rows survive between Hypothesis examples**,
+  and scopes an idempotency key per example with `uuid.uuid7()` accordingly.
+  See the runtime entry in `Tolerances`.
+- It changes `make skylos-allow` to take `SKYLOS_CLI` and
+  `$(call cli_value,NAME)`, and pins the Skylos interpreter to Python 3.14.
+- Its `make test` baseline is **1237 passed, 3 skipped**, against 1227 on
+  `main`. Re-measure after rebasing rather than trusting either figure.
 
 ## Constraints
 
@@ -198,11 +250,17 @@ Stop and escalate rather than improvising when any of these is reached.
 - **Runtime:** if per-test `migrated_engine` setup exceeds 0.5 s, or if total
   `make test` wall-clock exceeds 165 s. The measured baseline at commit
   `5af0638` is **130.58 s for 1227 passed, 3 skipped** with
-  `PYTEST_XDIST_WORKERS=1`, and per-test `migrated_engine` setup is **0.20–0.38
-  s** after the one-off session-scoped py-pglite start (~3.8 s). Note that
-  Hypothesis examples do **not** re-run migrations — the fixture is
+  `PYTEST_XDIST_WORKERS=1`; PR 277 reports **1237 passed, 3 skipped**, so
+  re-measure after rebasing, and per-test `migrated_engine` setup is
+  **0.20–0.38 s** after the one-off session-scoped py-pglite start (~3.8 s).
+  Note that Hypothesis examples do **not** re-run migrations — the fixture is
   function-scoped and shared across every example, which is precisely why
   `suppress_health_check=[HealthCheck.function_scoped_fixture]` is required.
+  The corollary, established by pull request PR 277, is that **persisted rows
+  survive between examples**: the session factory outlives them. Every
+  database-backed property test must scope its own data per example —
+  `make_generation_run()` already does so via UUIDv7, but any shared
+  idempotency key, actor, or fixture row must be suffixed per example.
 - **Concurrency evidence:** if any test intended to demonstrate lock contention
   hangs to the 180 s `pytest-timeout`, stop. See AXIOM-3 and Risk 2 — under
   py-pglite this is the expected outcome, not a bug to debug.
@@ -275,7 +333,17 @@ Stop and escalate rather than improvising when any of these is reached.
   Mitigation: keep native enums (D-5) and put the downgrade recipe verbatim in
   ADR-018 so the next author does not invent it under pressure.
 
-- **Risk 8: the shared contract suite certifies a shared blind spot as
+- **Risk 8: this plan is implemented before PR 277 and PR 278 land, and diverges
+  from both.** Severity: medium. Likelihood: medium. Evidence: PR 277 edits the
+  four files this plan changes most, and PR 278 takes ADR-018/019 and sets the
+  concurrency and deletion policy this plan now conforms to. Implementing first
+  means conflicts in `uow.py`, `generation_run_ports.py`, and two test modules,
+  plus an ADR number clash. Mitigation: the `Pending pull requests` section
+  states the dependency; Stage A confirms both have merged before any code is
+  written; if either is abandoned, revisit D-10, D-11, the foreign-key policy,
+  and the ADR number.
+
+- **Risk 9: the shared contract suite certifies a shared blind spot as
   correct.** Severity: medium. Likelihood: medium. Evidence: neither adapter
   checks that `create_checkpoint` targets a non-terminal run, nor that a
   created checkpoint starts in `created`. Both share the hole, so
@@ -555,6 +623,52 @@ Append further observations here as work proceeds.
   validator and add the reverse constraint together. Date/Author: 2026-08-23,
   planning agent.
 
+- **D-10. Use compare-and-set for checkpoint transitions, not row locking.**
+  Rationale: pull request PR 278's ADR-018 records the project's versioning and
+  concurrency strategy and names two shapes, warning that "applying the wrong
+  one produces either lost updates or spurious conflicts". For "concurrent
+  writers racing on one mutable row" — which is exactly a checkpoint transition
+  — the named house shape is **compare-and-set with a typed domain error**, not
+  `SELECT ... FOR UPDATE`. The precedent is
+  `SqlAlchemyEpisodeRepository.update`: a conditional
+  `UPDATE ... WHERE id = :id AND <expected state>`, a `rowcount` check, and a
+  re-fetch to distinguish not-found from conflict. The previous revision of
+  this plan specified `with_for_update()`. That is replaced. Three reasons, in
+  ascending order of weight. It is not the recorded house shape. It buys
+  nothing the domain does not already give: there is no sequence to allocate,
+  and `Checkpoint._raise_if_terminal` already rejects the loser. And
+  decisively, **a compare-and-set predicate is verifiable under py-pglite while
+  lock contention is not** (AXIOM-3): the `WHERE status = 'created'` clause can
+  be exercised sequentially by mutating stored state between calls, whereas
+  `FOR UPDATE` blocking cannot be observed at all. This converts an
+  unverifiable design into a verifiable one, which is the same correction Risk
+  2 applies to INV-SEQ-1. Concretely:
+  `UPDATE review_checkpoints SET ... WHERE id = :id AND status = 'created'`; if
+  `rowcount != 1`, re-read — absent means `CheckpointNotFound`, present means
+  `CheckpointAlreadyTerminal`. The domain transition still computes the new
+  value; the adapter only writes it. Note also what shape `create_checkpoint`
+  is **not**. ADR-018's insert-once-then-reuse shape is for "duplicate
+  deliveries of one logical operation" keyed on an idempotency key — as
+  `create_run` and `SqlAlchemyCostLedgerStore.ensure_snapshot` do. Checkpoint
+  creation has no idempotency key and no defined retry semantics, so a
+  duplicate identifier is a plain conflict (INV-CKPT-5), classified through
+  `integrity_helpers.constraint_name`. If 2.6.3 gives the checkpoint endpoint an
+  `Idempotency-Key`, revisit and adopt insert-once-then-reuse rather than
+  conflating the two shapes. Date/Author: 2026-08-23, planning agent.
+
+- **D-11. A review checkpoint is not a versioned aggregate; it needs no
+  history table.** Rationale: ADR-018 requires that "new versioned aggregates
+  must follow this pattern: explicit repository writes in one unit of work,
+  typed conflict errors, append-only or content-addressed immutability, and
+  pinning at consumption boundaries." A review checkpoint is a state machine
+  that transitions from `created` to a terminal state exactly once; it has no
+  revision counter, no successive versions, and nothing to pin. The response
+  fields are written once and never overwritten, so the row *is* the audit
+  record and a separate `review_checkpoint_history` table would duplicate it.
+  Recorded explicitly to pre-empt the conformance question, and because the
+  deletion half of ADR-018's policy **does** apply — see the foreign key.
+  Date/Author: 2026-08-23, planning agent.
+
 Append further decisions here, including any decision to escalate.
 
 ## Outcomes & retrospective
@@ -662,6 +776,15 @@ documents serve that role. Upstream items traced by this plan:
   gap-sensitive text is the backpressure heuristic at lines 629–633.
 - `ADR-015` — the port split and the `Checkpoint` / `WorkflowCheckpoint`
   separation.
+- `ADR-018` — `docs/adr/adr-018-explicit-versioning-and-history-strategy.md`,
+  arriving with pull request PR 278: the governing record for versioning,
+  concurrency shapes, immutability, and deletion policy. Three clauses bind
+  this slice. "Applying the wrong [concurrency shape] produces either lost
+  updates or spurious conflicts" — see D-10. "Deletion policy protects the
+  audit trail", with `ON DELETE RESTRICT` for references to the immutable
+  records that explain durable state — see the foreign key in Table 1. "New
+  versioned aggregates must follow this pattern" — see D-11 for why a review
+  checkpoint is not one.
 - `EP-4.3.2-DEFER` — "Out of scope and left to later tasks: human-review
   checkpoint persistence (2.6.2) … and an automated stuck-run recovery worker
   (2.6.2)."
@@ -676,15 +799,16 @@ DESIGN-ORCH-CKPT -> EP-M1 -> alembic/versions/20260823_000013_add_review_checkpo
 DESIGN-ORCH-CKPT -> EP-M2 -> episodic/canonical/storage/review_checkpoints.py
 API-GENRUN-CKPT  -> EP-M2 -> uow.generation_runs satisfies GenerationRunPort
 API-GENRUN-CKPT  -> EP-M3 -> tests/features/generation_run_lifecycle.feature
-ADR-015          -> EP-M5 -> docs/adr/adr-018-review-checkpoint-persistence.md
+ADR-015          -> EP-M5 -> docs/adr/adr-020-review-checkpoint-persistence.md
+ADR-018          -> EP-M2 -> compare-and-set transitions; ON DELETE RESTRICT
 EP-4.3.2-DEFER   -> EP-M4 -> tests/canonical_storage/test_generation_run_lease_reclamation.py
 ```
 
 When an artefact is renamed or folded into an existing module, update this
 table in the same commit; a stale trace table is worse than none.
 
-A new ADR is warranted. The highest existing number is 017, so the new one is
-**018**. Separately, three files already share the number 015
+A new ADR is warranted. Pull request PR 278 introduces ADR-018 and ADR-019, so
+the next free number is **020**. Separately, three files already share 015
 (`adr-015-cost-accounting-ports-and-pricing-engine.md`,
 `adr-015-upload-and-idempotency-ports.md`,
 `adr-015-generation-run-port-split.md`), and **two of them are absent from
@@ -797,7 +921,13 @@ uv run pytest \
 - Non-vacuity: after each expected exception, re-read through the scenario
   module's `read_fresh` hook and assert the status is unchanged. Without the
   re-read the test passes even if the adapter wrote the mutation and then
-  raised.
+  raised. Negative control: widen the compare-and-set predicate to
+  `WHERE id = :id` and confirm every terminal case then fails.
+- This obligation is *verifiable* precisely because D-10 chose compare-and-set:
+  the `WHERE status = 'created'` clause is exercised by mutating stored state
+  between calls, sequentially, which py-pglite supports. Had the adapter relied
+  on `FOR UPDATE`, the losing-writer path would have been unobservable for the
+  same reason INV-SEQ-1's concurrency claim is.
 
 ### INV-CKPT-3 — checkpoints round-trip through PostgreSQL exactly
 
@@ -1109,11 +1239,12 @@ violation.
    - Wrap the insert in `async with self._session.begin_nested():`, mirroring
      `create_run`, so a foreign-key violation does not poison the outer
      transaction and abort unrelated pending writes.
-   - Lock the checkpoint row with `with_for_update()` before a transition. Note
-     this is a weaker justification than the event path's: there is no
-     allocation to serialize, and the domain would raise
-     `CheckpointAlreadyTerminal` for the loser anyway. It buys a cleaner error
-     at the cost of a lock; keep it, but do not present it as load-bearing.
+   - Apply transitions by **compare-and-set**, not `with_for_update()` — see
+     D-10 and ADR-018. Issue
+     `UPDATE review_checkpoints SET ... WHERE id = :id AND status = 'created'`,
+     check `rowcount`, and on a miss re-read to distinguish
+     `CheckpointNotFound` from `CheckpointAlreadyTerminal`. Mirror
+     `SqlAlchemyEpisodeRepository.update`, which is the established shape.
    - Emit structured log events with the **`sql_review_checkpoint_store.`**
      prefix, matching `sql_generation_run_store.` in the run adapter. "The same
      events as the in-memory mixin" would wrongly give both adapters the same
@@ -1148,6 +1279,11 @@ violation.
    `generation_runs: GenerationRunPort`, instantiate the composite in
    `SqlAlchemyUnitOfWork.__aenter__`, and update `NoopGenerationRunPort`. Run
    `make typecheck` and fix every implementer it names in the same commit.
+   Import discipline: pull request PR 277 moved `uow.py`'s imports **out of**
+   `if typ.TYPE_CHECKING:` with `# noqa: TC00x` markers, because
+   `mock.create_autospec` evaluates method annotations at runtime and deferred
+   imports raise `NameError`. Any import added here must follow that
+   convention, or the latent bug PR 277 fixed comes straight back.
 9. **Commit safety.** In `SqlAlchemyUnitOfWork.__aexit__`, when `exc is None`
    and the session has pending state
    (`session.new or session.dirty or session.deleted`), emit a `warning` before
@@ -1233,8 +1369,9 @@ async def fail_expired_leases(
    would describe a capability with no entry point, and an operator who
    believes checkpoints are live will not look for the missing scheduler.
    Revisit in 2.6.3.
-3. Add `docs/adr/adr-018-review-checkpoint-persistence.md`, following the shape
-   of `adr-015-generation-run-port-split.md` (Status, Context, Decision,
+3. Add `docs/adr/adr-020-review-checkpoint-persistence.md` — **020**, because
+   pull request PR 278 takes 018 and 019 — following the shape of
+   `adr-015-generation-run-port-split.md` (Status, Context, Decision,
    Consequences with Positive/Negative/Neutral, References) rather than the
    style guide's literal template — every ADR from 010 to 017 does the same, so
    this is house practice, not a deviation. Cover **D-2 and D-3** as decisions;
@@ -1243,9 +1380,13 @@ async def fail_expired_leases(
    decision. Include: the `ALTER TYPE` downgrade recipe from Risk 7; the
    `Checkpoint` / `review_checkpoints` naming asymmetry from D-7; the D-9
    half-constraint and why; that a returned entity is provisional until its
-   unit of work commits; and that the aggregate's deletion policy is
-   deliberately `NO ACTION`, matching `generation_events`. Add to
-   `docs/contents.md` and reference from the design document.
+   unit of work commits; and that the aggregate's deletion policy is `RESTRICT`
+   under ADR-018's audit-trail policy, and D-11's reasoning that a review
+   checkpoint is not a versioned aggregate and so needs no history table. Add to
+   `docs/contents.md` **after** ADR-019's entry, and reference from the design
+   document. Rebase on PR 278 first: it edits `docs/contents.md`,
+   `docs/roadmap.md`, the design document, and the TUI API document, all of
+   which this milestone also edits.
 4. Correct `docs/episodic-tui-api-design.md`: it states event logs are
    "partitioned by `generation_run_id` for efficient range queries". They are
    not, and should not be — `generation_run_id` is a UUID, so that means hash
@@ -1289,7 +1430,10 @@ offending span rather than reverting the format.
 - Acceptance evidence: checkpoint scenarios pass against both adapters; the
   durability scenario passes; INV-COMMIT-1 passes.
 - Conformance check: `make check-architecture` passes; no existing port
-  signature changed; every file under 400 lines; no new dependency.
+  signature changed; every file under 400 lines; no new dependency; **ADR-018
+  conformance** — transitions use the compare-and-set shape with a typed domain
+  error (D-10), the foreign key is `RESTRICT` under the audit-trail policy, and
+  D-11 records why no history table is required.
 - Recovery: **code may be reverted freely; the migration may not.** Reverting
   this commit leaves the table in place, unused and harmless, and rows written
   before the revert survive and are picked up on re-apply. Downgrading
@@ -1488,7 +1632,7 @@ notice; set it explicitly in any bulk statement.
 | Column              | Type                            | Nullable | Notes                                                                                                                                                      |
 | ------------------- | ------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                | `postgresql.UUID(as_uuid=True)` | no       | Primary key, client-assigned UUIDv7                                                                                                                        |
-| `generation_run_id` | `postgresql.UUID(as_uuid=True)` | no       | FK to `generation_runs.id`, **no `ondelete`**, matching `generation_events`                                                                                |
+| `generation_run_id` | `postgresql.UUID(as_uuid=True)` | no       | FK to `generation_runs.id`, `ondelete="RESTRICT"` per ADR-018's audit-trail deletion policy; **not** `CASCADE`                                             |
 | `node`              | `sa.String(160)`                | no       | Orchestration node that raised the checkpoint                                                                                                              |
 | `prompt`            | `sa.Text`                       | no       | Reviewer-facing prompt                                                                                                                                     |
 | `options`           | `postgresql.JSONB`              | no       | Ordered JSON array of option strings; see the CHECK below                                                                                                  |
@@ -1608,6 +1752,22 @@ Metrics to emit through the existing `MetricsPort`, following
 Table 2: Metrics emitted by the review-checkpoint store.
 
 ## Revision note
+
+2026-08-23 (third revision) — Reconciled against two open pull requests. PR 278
+takes ADR-018 and ADR-019, so this plan's ADR becomes **020**; more
+substantially, its ADR-018 is now the governing record for versioning,
+concurrency, and deletion policy, and this plan conforms to it in three places.
+**D-10 replaces `SELECT ... FOR UPDATE` on the checkpoint row with
+compare-and-set**, the shape ADR-018 names for concurrent writers racing on one
+mutable row — which also converts an obligation that py-pglite cannot verify
+into one it can. The foreign key becomes `ON DELETE RESTRICT` under ADR-018's
+audit-trail policy, and **D-11** records why a review checkpoint is not a
+versioned aggregate and needs no history table. PR 277 edits the four files
+this plan changes most and establishes that persisted rows survive between
+Hypothesis examples, which matters at `max_examples=25`; it also fixes
+`uow.py`'s runtime-evaluated annotations, a convention any new import there
+must follow. Both are now stated as dependencies, with a risk entry for
+implementing ahead of them.
 
 2026-08-23 (second revision) — Revised after a six-lens design review. The
 substantive changes:
