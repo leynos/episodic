@@ -15,6 +15,10 @@ _INVALID_CHAT_COMPLETION_MESSAGE = (
     "Invalid OpenAI chat completion payload. Expected non-empty string id/model, "
     "a non-empty choices list, and choices with message.content strings."
 )
+_INVALID_USAGE_DETAIL_MESSAGE = (
+    "Invalid OpenAI usage payload. Nested token details must not exceed "
+    "their parent token totals."
+)
 _INVALID_RESPONSES_PAYLOAD_MESSAGE = (
     "Invalid OpenAI Responses payload. Expected non-empty string id/model, "
     "a non-empty output list, and output items with content text strings."
@@ -224,6 +228,11 @@ def _normalize_chat_provider_call_usage(
     -------
     ProviderCallUsage | None
         Canonical usage metadata, or ``None`` without a usage payload.
+
+    Raises
+    ------
+    OpenAIResponseValidationError
+        If nested token details exceed their parent token totals.
     """
     if usage_payload is None:
         return None
@@ -244,6 +253,10 @@ def _normalize_chat_provider_call_usage(
         "completion_tokens_details",
         "audio_tokens",
     )
+    if (cached_input or 0) + (audio_input or 0) > prompt_tokens or (
+        audio_output or 0
+    ) > completion_tokens:
+        raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
     metrics = {
         "input_tokens": prompt_tokens - (cached_input or 0) - (audio_input or 0),
         "output_tokens": completion_tokens - (audio_output or 0),
@@ -278,6 +291,11 @@ def _normalize_responses_provider_call_usage(
     -------
     ProviderCallUsage | None
         Canonical usage metadata, or ``None`` without a usage payload.
+
+    Raises
+    ------
+    OpenAIResponseValidationError
+        If nested token details exceed their parent token totals.
     """
     if usage_payload is None:
         return None
@@ -296,6 +314,8 @@ def _normalize_responses_provider_call_usage(
         "input_tokens_details",
         "cached_tokens",
     )
+    if (cached_input or 0) > input_tokens:
+        raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
     metrics = {
         "input_tokens": input_tokens - (cached_input or 0),
         "output_tokens": output_tokens,
