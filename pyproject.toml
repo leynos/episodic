@@ -868,7 +868,7 @@ reason = "Schema-specific strict-JSON parsers for distinct DTOs; the shared shap
 
 [[tool.duplication_gate.allow]]
 pair = ["episodic/generation/guest_bios.py::enrich_tei_with_guest_bios", "episodic/generation/show_notes.py::enrich_tei_with_show_notes"]
-reason = "Accepted debt: guest bios re-implements tei_payload helpers; consolidating onto episodic/generation/tei_payload.py is tracked as a follow-up refactor."
+reason = "Accepted debt: guest bios re-implements tei_payload helpers; consolidating onto episodic/generation/tei_payload.py is tracked in PR #276."
 
 [[tool.duplication_gate.allow]]
 pair = ["episodic/llm/openai_validation.py::_normalize_chat_provider_call_usage", "episodic/llm/openai_validation.py::_normalize_responses_provider_call_usage"]
