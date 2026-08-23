@@ -368,10 +368,11 @@ implementer does not have to rediscover them.
   thread-local and, as the evidence under `Surprises & discoveries` shows, does
   not reach records emitted through `get_logger`. Every episodic log call
   already funnels through `log_info`, `log_warning`, or `log_error` in
-  `episodic/logging.py`, so appending ` correlation_id=<id>` inside those three
-  helpers gives complete coverage with a three-function change and no call-site
-  churn. The field is appended only when a correlation identifier is active, so
-  non-request logging is unchanged.
+  `episodic/logging.py`, so appending a space-separated
+  `correlation_id=<id>` field inside those three helpers gives complete
+  coverage with a three-function change and no call-site churn. The field is
+  appended only when a correlation identifier is active, so non-request
+  logging is unchanged.
   Alternatives rejected: threading an explicit argument through every call site
   (large, easy to forget); wrapping each emit in `log_context` (does not work);
   migrating episodic to the standard library so the filter applies (far outside
@@ -552,29 +553,29 @@ RM-4.1.3.g -> EP-M7 -> docs/users-guide.md, docs/developers-guide.md, ADR-018
 These are treated as given. Do not write tests that verify third-party
 internals; do verify episodic-owned logic against the real interface.
 
-- **AX-1.** `falcon_correlate.CorrelationIDMiddlewareASGI` implements the Falcon
+- **AXIOM-1.** `falcon_correlate.CorrelationIDMiddlewareASGI` implements the Falcon
   ASGI middleware contract, selects a trusted and valid incoming identifier or
   generates one, sets `req.context.correlation_id` and `correlation_id_var`,
   and echoes and resets in `process_response`.
-- **AX-2.** Falcon executes middleware `process_request` in registration order
+- **AXIOM-2.** Falcon executes middleware `process_request` in registration order
   and `process_response` in reverse, and runs every registered
   `process_response` even when an earlier component sets `resp.complete = True`
   (`falcon/asgi/app.py:540-594`).
-- **AX-3.** `Request.remote_addr` is `access_route[-1]`, which is the ASGI scope
+- **AXIOM-3.** `Request.remote_addr` is `access_route[-1]`, which is the ASGI scope
   `client` address, falling back to `'127.0.0.1'` when the scope omits it
   (`falcon/asgi/request.py:463-479,539-547`).
-- **AX-4.** Celery fires `before_task_publish` only on a real publish, and fires
+- **AXIOM-4.** Celery fires `before_task_publish` only on a real publish, and fires
   `task_prerun` and `task_postrun` around every execution, including eager
   execution.
-- **AX-5.** `falcon_correlate.celery.propagate_correlation_id_to_celery` writes
+- **AXIOM-5.** `falcon_correlate.celery.propagate_correlation_id_to_celery` writes
   `properties["correlation_id"]` when an identifier is active, except when the
   current application's result backend URI begins with `rpc://`.
-- **AX-6.** `httpx.AsyncClient(transport=...)` routes every request through the
+- **AXIOM-6.** `httpx.AsyncClient(transport=...)` routes every request through the
   supplied transport, and `httpx.MockTransport` observes the fully built request
   including headers.
-- **AX-7.** Python 3.14 provides `uuid.uuid7()`, so
+- **AXIOM-7.** Python 3.14 provides `uuid.uuid7()`, so
   `default_uuid7_generator` never needs the `uuid_utils` fallback here.
-- **AX-8.** `femtologging` records emitted through `get_logger(...)` do not
+- **AXIOM-8.** `femtologging` records emitted through `get_logger(...)` do not
   carry `log_context` fields. Established empirically; recorded under
   `Surprises & discoveries`. If a future `femtologging` bump changes this,
   Decision D5 must be revisited.
@@ -622,7 +623,7 @@ choose the identifier.**
 - Method: parameterized test over the denial statuses, plus one behavioural
   scenario.
 - Rationale: this is the specific outcome RM-4.1.3.b asks for, and it depends on
-  AX-2 rather than on anything episodic controls, so it must be observed rather
+  AXIOM-2 rather than on anything episodic controls, so it must be observed rather
   than assumed.
 - Domain: missing `Authorization` header (401), wrong bearer token (401), and an
   authorization port that raises (503).
@@ -637,8 +638,9 @@ choose the identifier.**
 the active identifier, and only when one is active.**
 
 - Obligation: `log_info`, `log_warning`, and `log_error` append exactly one
-  ` correlation_id=<id>` suffix when `current_correlation_id()` returns a value,
-  and leave the message byte-identical when it returns `None`.
+  space-separated `correlation_id=<id>` suffix when
+  `current_correlation_id()` returns a value, and leave the message
+  byte-identical when it returns `None`.
 - Method: parameterized unit tests against a recording fake logger.
 - Rationale: a finite, fully enumerable partition — identifier present or
   absent, across three helpers, with and without template arguments.
@@ -788,7 +790,7 @@ path cannot establish the publish path (Risk R5).
   `log_context` that would break under asyncio interleaving, but no test drives
   many simultaneous in-flight requests. If a future change reintroduces
   thread-local state, add a concurrency obligation.
-- The `'127.0.0.1'` fallback described in AX-3 is exercised through
+- The `'127.0.0.1'` fallback described in AXIOM-3 is exercised through
   `falcon.testing`'s omission of `remote_addr`; whether Granian always populates
   `scope["client"]` in the target deployment is not verified here. The mitigation
   is the empty default plus the start-up warning, not a test.
@@ -939,8 +941,14 @@ gate suite once more.
 - **Red tests:** `tests/test_request_correlation_settings.py` covering INV-6 and
   INV-7; new cases in `tests/test_runtime_configuration.py` following the
   existing dict-passing pattern at `tests/test_runtime_configuration.py:11-84`.
-- **Acceptance evidence:** `uv run pytest tests/test_request_correlation_settings.py tests/test_runtime_configuration.py -v`
-  fails before the module exists and passes after.
+- **Acceptance evidence:** run
+
+  ```bash
+  uv run pytest tests/test_request_correlation_settings.py \
+    tests/test_runtime_configuration.py -v
+  ```
+
+  It fails before the module exists and passes after.
 - **Conformance check:** `make check-architecture` passes. The new module is
   ungrouped in `pyproject.toml`'s `[tool.hecate]` configuration, following the
   precedent of `episodic/observability.py` and `episodic/logging.py`. If
@@ -1005,10 +1013,10 @@ gate suite once more.
 - **Requirements:** RM-4.1.3.b (the "denial, error, and resource logs share the
   same request identifier" clause); discharges INV-3.
 - **Edits:**
-  - `episodic/logging.py`: add a private helper that appends
-    ` correlation_id=<id>` to a formatted message when
-    `current_correlation_id()` returns a value, and returns the message
-    unchanged otherwise. Call it from `log_info`, `log_warning`, and `log_error`
+  - `episodic/logging.py`: add a private helper that appends a
+    space-separated `correlation_id=<id>` field to a formatted message
+    when `current_correlation_id()` returns a value, and returns the
+    message unchanged otherwise. Call it from `log_info`, `log_warning`, and `log_error`
     immediately after `_format_message`. Import `current_correlation_id` from
     `episodic.request_correlation`.
   - `episodic/observability.py`: include `correlation_id` in the `extra=`
