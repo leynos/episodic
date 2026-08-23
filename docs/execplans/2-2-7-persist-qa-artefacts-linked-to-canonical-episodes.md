@@ -279,7 +279,15 @@ Stop and escalate when any of these is reached.
   make the roadmap's own requirement — "retrieval … filtered by evaluator and
   compliance status" — a union query across two tables. Recorded as ADR 018;
   the design document's Data Model bullet is updated in the same change.
-  Date/Author: 2026-08-23, planning agent.
+  Date/Author: 2026-08-23, planning agent. **Deviation status: accepted.** This
+  is a deviation from `TDD-DATA`, which names `qa_findings` and
+  `brand_compliance_results`. Affected identifiers: `TDD-DATA`, `RM-2.2.7-a`,
+  `RM-2.2.7-b`. Downstream impact: `EP-M2`'s schema, `EP-M4`'s filter contract,
+  and the design document's Data Model bullet, which `EP-M6` must rewrite to
+  name the tables actually created. Upstream document changes required:
+  `docs/episodic-podcast-generation-system-design.md` plus a new ADR 018.
+  Accepted by leynos, 2026-08-23. `EP-M6` may not be marked complete until both
+  upstream edits have landed.
 - Decision: keep a child `qa_findings` table rather than a JSONB findings array
   on the evaluation row. Rationale: roadmap items `4.4.1` and `4.4.2` aggregate
   findings across evaluators and drive refinement turns from individual
@@ -379,7 +387,12 @@ Stop and escalate when any of these is reached.
   assumes it exists. Taking the split is therefore a correction to the roadmap,
   not a scope dodge. This is pre-authorized so the implementer does not have to
   stop and ask, but it must be recorded in `Decision log` with the measured
-  figures when taken. Date/Author: 2026-08-23, planning agent.
+  figures when taken. Date/Author: 2026-08-23, planning agent. **Status:
+  approved as written.** Splitting the CLI bootstrap out up front was offered
+  and declined; `2.2.7` keeps the CLI by default, because `RM-2.2.7-b` names
+  it. The escalation stays available on the budget trigger above and does not
+  need re-approval when taken — record the measured figures here instead.
+  Accepted by leynos, 2026-08-23.
 - Decision: place both ADRs in `docs/adr/`, not `docs/`.
   Rationale: `docs/documentation-style-guide.md` says "Place ADRs in the
   `docs/` directory", but every ADR since 001 lives in `docs/adr/` and
@@ -594,7 +607,7 @@ RM-2.2.7-a  -> TDD-QA   -> EP-M3 -> tests/test_qa_artefact_recording.py::test_re
 RM-2.2.7-b  -> TUI-API  -> EP-M4 -> tests/features/qa_artefact_retrieval.feature (REST scenarios)
 RM-2.2.7-b  -> TDD-CLIENT -> EP-M5 -> tests/features/qa_artefact_retrieval.feature (CLI scenarios)
 ADR-001(open item) -> EP-M6 -> docs/adr/adr-018-qa-artefact-persistence-contract.md
-TDD-DATA(deviation) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
+TDD-DATA(deviation, accepted 2026-08-23) -> EP-M6 -> docs/episodic-podcast-generation-system-design.md (Data Model bullet)
 ```
 
 ## Verification plan
@@ -2264,3 +2277,13 @@ still design. `EP-M0` is now the riskiest milestone rather than a formality and
 must be completed and gated before `EP-M1` begins. `EP-M5` carries a
 pre-authorized escalation: if the CLI bootstrap breaches its budget, split it
 into a roadmap addendum item `2.2.8` rather than letting this item sprawl.
+
+Revision 3, 2026-08-23. No design change. The two open questions put to the
+reviewer were ruled on and the answers recorded in `Decision log`: the
+`brand_compliance_results` deviation from `TDD-DATA` is accepted, with the
+upstream document edits it obliges named explicitly; and the CLI stays in scope
+for `2.2.7`, with splitting the bootstrap up front offered and declined. The
+budget-triggered escalation remains available and needs no further approval.
+Neither decision is an open proposal any more, so implementation is not blocked
+on them. The plan's Status stays `DRAFT` because the plan as a whole has not
+yet been approved for implementation — only these two decisions have.
