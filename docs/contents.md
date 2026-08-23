@@ -162,6 +162,8 @@ or delivery planning.
   - REST API versioning plan.
 - [Finalize REST surfaces](execplans/4-1-2-finalize-rest-surfaces.md) - REST
   surface hardening plan.
+- [Integrate request correlation](execplans/4-1-3-integrate-request-correlation.md)
+  - request correlation propagation plan.
 - [Adopt Hecate](execplans/adopt-hecate.md) - architecture enforcement
   adoption plan.
 - [Femtologging April 2026 migration](execplans/femtologging-april-2026-migration.md)
