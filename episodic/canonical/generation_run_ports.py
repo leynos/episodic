@@ -65,6 +65,43 @@ def event_seq(value: int) -> EventSeq:
     return EventSeq(value)
 
 
+def event_page_minimum_sequence(
+    *,
+    after_seq: EventSeq | None,
+    limit: int,
+    offset: int,
+) -> int:
+    """Validate event-page arguments and return the exclusive sequence bound.
+
+    Parameters
+    ----------
+    after_seq : EventSeq | None
+        Optional exclusive cursor for the event sequence.
+    limit : int
+        Maximum number of events requested.
+    offset : int
+        Number of events to skip after cursor selection.
+
+    Returns
+    -------
+    int
+        The exclusive event-sequence bound, or zero without a cursor.
+
+    Raises
+    ------
+    ValueError
+        If pagination bounds are negative or a cursor is combined with an
+        offset.
+    """
+    if limit < 0 or offset < 0:
+        msg = "limit and offset must be non-negative."
+        raise ValueError(msg)
+    if after_seq is not None and offset != 0:
+        msg = "after_seq and offset cannot be combined."
+        raise ValueError(msg)
+    return int(after_seq) if after_seq is not None else 0
+
+
 @typ.runtime_checkable
 class GenerationRunRepository(typ.Protocol):
     """Repository port for generation-run aggregate roots."""

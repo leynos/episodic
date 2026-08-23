@@ -21,6 +21,7 @@ from episodic.canonical.generation_run_errors import (
 from episodic.canonical.generation_run_ports import (
     EventSeq,
     GenerationRunStatusUpdate,
+    event_page_minimum_sequence,
     event_seq,
 )
 from episodic.orchestration._types import _log_event
@@ -38,22 +39,6 @@ def _now_utc() -> dt.datetime:
 def _default_time_provider() -> TimeProvider:
     """Return the default in-memory timestamp provider."""
     return _now_utc
-
-
-def _event_page_minimum_seq(
-    *,
-    after_seq: EventSeq | None,
-    limit: int,
-    offset: int,
-) -> int:
-    """Validate event-page arguments and return the cursor boundary."""
-    if limit < 0 or offset < 0:
-        msg = "limit and offset must be non-negative."
-        raise ValueError(msg)
-    if after_seq is not None and offset != 0:
-        msg = "after_seq and offset cannot be combined."
-        raise ValueError(msg)
-    return int(after_seq) if after_seq is not None else 0
 
 
 @dc.dataclass(slots=True)
@@ -370,7 +355,7 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
         offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run after an optional sequence cursor."""
-        minimum_seq = _event_page_minimum_seq(
+        minimum_seq = event_page_minimum_sequence(
             after_seq=after_seq,
             limit=limit,
             offset=offset,

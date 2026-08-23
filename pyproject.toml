@@ -863,14 +863,6 @@ pair = ["episodic/canonical/storage/history_repositories.py::SqlAlchemySeriesPro
 reason = "Protocol-conforming naming shims over the shared _HistoryRepositoryBase; only method names and generic parameters differ."
 
 [[tool.duplication_gate.allow]]
-pair = ["episodic/canonical/storage/repositories.py::SqlAlchemyTeiHeaderRepository", "episodic/canonical/storage/repositories.py::SqlAlchemyIngestionJobRepository"]
-reason = "Two-method adapters whose shared query logic lives in _RepositoryBase; the remainder binds record type and mapper."
-
-[[tool.duplication_gate.allow]]
-pair = ["episodic/canonical/storage/repositories.py::SqlAlchemySourceDocumentRepository", "episodic/canonical/storage/repositories.py::SqlAlchemyApprovalEventRepository"]
-reason = "Per-aggregate adapters delegating to _RepositoryBase._list_where; the duplication is protocol naming and column bindings."
-
-[[tool.duplication_gate.allow]]
 pair = ["episodic/generation/guest_bios.py::_parse_entry", "episodic/generation/show_notes.py::_parse_entry"]
 reason = "Schema-specific strict-JSON parsers for distinct DTOs; the shared shape is the validate-then-construct idiom."
 
@@ -949,6 +941,7 @@ allowed = ["domain_ports"]
 [[tool.hecate.groups]]
 name = "application"
 prefixes = [
+    "episodic.canonical.episode_factory",
     "episodic.canonical.services",
     "episodic.canonical.ingestion_service",
     "episodic.canonical.idempotency_service",

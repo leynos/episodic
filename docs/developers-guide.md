@@ -1554,6 +1554,10 @@ The port surface is intentionally split:
 - `GenerationRunRepository` creates, fetches, lists, and updates run state.
 - `GenerationEventLog` appends events and allocates per-run `EventSeq` values
   inside the adapter.
+- `event_page_minimum_sequence` owns the shared cursor, limit, and offset
+  invariant for every `GenerationEventLog` adapter. Keep transport parsing in
+  the inbound adapter and invoke this helper only after values become domain
+  types.
 - `GenerationRunEventStore` composes the run repository and event log for
   durable generation-run storage. `CanonicalUnitOfWork.generation_runs` exposes
   this port; `SqlAlchemyUnitOfWork` binds a `SqlAlchemyGenerationRunStore` to
@@ -1588,6 +1592,11 @@ documents. It commits that request-scoped unit of work before calling
 `launch(run_id)`. `EpisodeTeiResource` remains the retrieval boundary: it
 serves the persisted episode TEI as JSON by default or raw
 `application/tei+xml` with content negotiation.
+
+`episodic.canonical.episode_factory.build_draft_episode` owns the common
+initial field set for new draft episodes. Ingestion services call it after they
+have chosen the owning profile and parsed the TEI header; do not use it when
+rehydrating persisted episodes or applying lifecycle transitions.
 
 `DraftScriptGenerator` is the generation seam. The launcher projects canonical
 source documents and resolved host or guest reference-document revisions into
