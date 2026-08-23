@@ -107,38 +107,29 @@ def test_load_runtime_config_rejects_unpaired_openai_base_url(
         })
 
 
-@pytest.mark.parametrize("value", ["0", "-1", "not-an-integer"])
-def test_load_runtime_config_rejects_invalid_generation_source_limit(
-    tmp_path: Path,
-    value: str,
-) -> None:
-    """Generation source limits must be positive integer runtime settings."""
-    with pytest.raises(
-        RuntimeConfigurationError,
-        match="GENERATION_MAX_SOURCE_COUNT must be a positive integer",
-    ):
-        _load_runtime_config({
-            **_base_environment(tmp_path),
-            "GENERATION_MAX_SOURCE_COUNT": value,
-        })
-
-
 @pytest.mark.parametrize(
-    "setting",
-    ["GENERATION_MAX_OUTPUT_TOKENS", "GENERATION_MAX_RESPONSE_BYTES"],
+    ("setting", "value"),
+    [
+        ("GENERATION_MAX_SOURCE_COUNT", "0"),
+        ("GENERATION_MAX_SOURCE_COUNT", "-1"),
+        ("GENERATION_MAX_SOURCE_COUNT", "not-an-integer"),
+        ("GENERATION_MAX_OUTPUT_TOKENS", "0"),
+        ("GENERATION_MAX_RESPONSE_BYTES", "0"),
+    ],
 )
-def test_load_runtime_config_rejects_invalid_generation_output_limit(
+def test_load_runtime_config_rejects_invalid_generation_limit(
     tmp_path: Path,
     setting: str,
+    value: str,
 ) -> None:
-    """Generation output limits must be positive integer runtime settings."""
+    """Generation limits must be positive integer runtime settings."""
     with pytest.raises(
         RuntimeConfigurationError,
         match=f"{setting} must be a positive integer",
     ):
         _load_runtime_config({
             **_base_environment(tmp_path),
-            setting: "0",
+            setting: value,
         })
 
 
@@ -176,3 +167,59 @@ def test_load_runtime_config_failure_does_not_log_success(
     assert "runtime_config_loaded" not in caplog.text, (
         "the success log line must not be emitted for invalid configuration"
     )
+
+
+def test_load_runtime_config_loads_provider_request_options(
+    tmp_path: Path,
+) -> None:
+    """Configured OPENAI_* request options reach the runtime configuration."""
+    config = _load_runtime_config({
+        **_base_environment(tmp_path),
+        "OPENAI_REASONING_EFFORT": "low",
+        "OPENAI_SERVICE_TIER": "flex",
+        "OPENAI_TOKEN_LIMIT_PARAM": "max_completion_tokens",
+        "OPENAI_TIMEOUT_SECONDS": "600",
+    })
+
+    assert config.llm_reasoning_effort == "low", (
+        f"expected the configured reasoning effort, got {config.llm_reasoning_effort!r}"
+    )
+    assert config.llm_service_tier == "flex", (
+        f"expected the configured service tier, got {config.llm_service_tier!r}"
+    )
+    assert config.llm_token_limit_param == "max_completion_tokens", (  # noqa: S105 - parameter name, not a secret.
+        f"expected the configured token parameter, got {config.llm_token_limit_param!r}"
+    )
+    assert config.llm_timeout_seconds == 600.0, (
+        f"expected the configured timeout, got {config.llm_timeout_seconds!r}"
+    )
+
+
+def test_load_runtime_config_rejects_unknown_token_limit_param(
+    tmp_path: Path,
+) -> None:
+    """Unknown token-limit parameter names fail configuration."""
+    with pytest.raises(
+        RuntimeConfigurationError,
+        match="OPENAI_TOKEN_LIMIT_PARAM must be max_tokens or",
+    ):
+        _load_runtime_config({
+            **_base_environment(tmp_path),
+            "OPENAI_TOKEN_LIMIT_PARAM": "max_words",
+        })
+
+
+@pytest.mark.parametrize("value", ["0", "-3", "abc", "inf", "nan"])
+def test_load_runtime_config_rejects_invalid_timeout(
+    tmp_path: Path,
+    value: str,
+) -> None:
+    """The provider timeout must be a positive, finite number of seconds."""
+    with pytest.raises(
+        RuntimeConfigurationError,
+        match="OPENAI_TIMEOUT_SECONDS must be a positive number",
+    ):
+        _load_runtime_config({
+            **_base_environment(tmp_path),
+            "OPENAI_TIMEOUT_SECONDS": value,
+        })
