@@ -292,11 +292,12 @@ async def test_ensure_snapshot_persists_once_and_satisfies_pins(
                 )
             )
         ).scalar_one()
-        stored_hash, stored_effective_from = (
+        stored_hash, stored_effective_from, stored_rates = (
             await session.execute(
                 sa.select(
                     PricingSnapshotRecord.content_hash,
                     PricingSnapshotRecord.effective_from,
+                    PricingSnapshotRecord.rates_minor_per_metric,
                 ).where(PricingSnapshotRecord.id == uuid.UUID(snapshot_id))
             )
         ).one()
@@ -312,6 +313,9 @@ async def test_ensure_snapshot_persists_once_and_satisfies_pins(
     )
     assert stored_effective_from == dt.datetime(2026, 6, 1, tzinfo=dt.UTC), (
         "ensure_snapshot must persist the snapshot's effective date"
+    )
+    assert stored_rates == dict(snapshot.rates_minor_per_metric), (
+        "a conflicting snapshot must not replace the stored rate map"
     )
     assert pins == 1, "the pinned snapshot must satisfy the foreign key"
 
