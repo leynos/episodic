@@ -10,6 +10,11 @@ The TUI itself is implemented in a separate repository. This document focuses
 on the server-side API that the TUI consumes, including abstract TUI
 requirements as motivation and context for the design decisions.
 
+Episode TEI revision history follows [ADR-019: Retrievable episode TEI
+revision history](adr/adr-019-episode-tei-revision-history.md) and the shared
+versioning strategy in [ADR-018: Explicit repository-written versioning and
+history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md).
+
 ## Motivation
 
 Episodic positions canonical Text Encoding Initiative (TEI) P5 as the auditable
@@ -148,8 +153,12 @@ PATCH  /v1/episodes/{episode_id}
        Body: title, configuration; requires expected_revision
 
 GET    /v1/episodes/{episode_id}/tei
-       Returns canonical TEI XML in a JSON envelope by default
+       Query: revision (optional; defaults to the current revision)
+       Returns canonical or historical TEI XML in a JSON envelope by default
        Accept: application/tei+xml returns direct XML download
+GET    /v1/episodes/{episode_id}/tei/history
+       Query: limit, offset
+       Returns paginated revision metadata
 PUT    /v1/episodes/{episode_id}/tei
        Body: tei_xml, expected_revision
 
@@ -178,6 +187,25 @@ POST   /v1/episodes/{episode_id}/approval-events
 Clients that need a file download send `Accept: application/tei+xml` to the
 same endpoint. The response body is the TEI-P5 XML document, with
 `Content-Type: application/tei+xml` and `Content-Disposition: attachment`.
+
+#### Episode TEI revision history
+
+The planned `episode_tei_history` table retains complete TEI documents with
+their revision, content hash, quality status, generation-run identifier, actor,
+and timestamp. Its foreign key to `episodes` uses a restrictive deletion policy
+(`ON DELETE RESTRICT`) so retained audit history cannot be removed by deleting
+the current episode.
+The repository writes `episodes.tei_xml` and `episodes.tei_xml_zstd` together
+with the new history row in one compare-and-set transaction. Compression
+reduces the size of each retained document but does not bound total storage;
+operations monitor global history storage and per-episode size under ADR-019's
+review triggers.
+
+`GET /v1/episodes/{episode_id}/tei/history` returns revision metadata for the
+TUI's history view. Adding `revision=N` to the TEI endpoint retrieves a stored
+revision. A restore submits that historical document to `PUT` with the
+episode's current `expected_revision`; the server records the result as a new
+forward revision and never mutates an existing history row.
 
 ### Ingestion jobs and sources
 

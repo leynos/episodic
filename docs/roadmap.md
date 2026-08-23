@@ -347,6 +347,40 @@ manipulation. Completion enables user-friendly script review and patching.
   - Apply domain patches with `expected_version` enforcement.
   - Validate round-trip projection-to-TEI fidelity.
 
+### 2.8. Episode TEI revision history
+
+Retain and expose every persisted episode TEI revision. The current
+`tei_revision` counter detects concurrent writers but keeps only the latest
+document, so superseded drafts and pre-edit documents are unrecoverable.
+Completion answers whether refinement iterations, script edits, and
+editorial recovery can rely on retrievable prior revisions. See
+[ADR 018](adr/adr-018-explicit-versioning-and-history-strategy.md) and
+[ADR 019](adr/adr-019-episode-tei-revision-history.md).
+
+- [ ] 2.8.1. Persist an `episode_tei_history` row for every TEI write.
+  - Requires 4.3.2.
+  - Add the `episode_tei_history` table mirroring the profile/template
+    history shape: `(episode_id, tei_revision)` uniqueness, full document
+    with optional zstd compression, content hash, quality mode, QA status,
+    writing run identifier, actor, and timestamp.
+  - Write the history row in the same unit of work as the optimistic
+    episode update, including the revision-1 row at episode creation.
+  - Translate uniqueness violations into the existing revision-conflict
+    error family.
+  - Success: every successful TEI write yields exactly one immutable
+    history row, and a lost compare-and-set race yields none.
+- [ ] 2.8.2. Expose revision history retrieval endpoints. Requires 2.8.1.
+  - Implement `/v1/episodes/{episode_id}/tei/history` (GET) returning
+    paginated revision metadata, mirroring the profile/template history
+    endpoints.
+  - Extend the episode TEI download to accept a `revision` query parameter
+    returning the stored document for that revision, defaulting to the
+    current revision.
+  - Document restore-as-forward-write: resubmitting a historical document
+    through the existing update path with the current `expected_revision`.
+  - Success: a client can list revisions, download any retained revision as
+    TEI P5, and restore a prior revision without mutating history rows.
+
 ## 3. Audio synthesis and delivery
 
 This phase produces production-ready audio with narration, music, and

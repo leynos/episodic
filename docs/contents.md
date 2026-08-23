@@ -104,6 +104,12 @@ or delivery planning.
 - [ADR 017: No-QA generation execution and TEI persistence][adr-017]
   - generation launcher, draft persistence, recovery, and TEI retrieval
     decisions.
+- [ADR 018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md)
+  - explicit versioning, concurrency, immutability, deletion, and
+    version-pinning strategy.
+- [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
+  - append-only episode TEI history, retrieval, restoration, and operational
+    monitoring.
 
 [adr-017]: adr/adr-017-no-qa-generation-run-execution-and-tei-persistence.md
 

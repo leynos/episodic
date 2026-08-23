@@ -21,6 +21,8 @@ Accepted decision records:
 - [ADR 013: Speech synthesis adapters](adr/adr-013-speech-synthesis-adapters.md)
 - [ADR 014: Hexagonal architecture enforcement](adr/adr-014-hexagonal-architecture-enforcement.md)
 - [ADR 015: Upload and idempotency ports](adr/adr-015-upload-and-idempotency-ports.md)
+- [ADR 018: Explicit repository-written versioning and history strategy](adr/adr-018-explicit-versioning-and-history-strategy.md)
+- [ADR 019: Retrievable episode TEI revision history](adr/adr-019-episode-tei-revision-history.md)
 
 ## Overview
 
@@ -1018,6 +1020,105 @@ Generation creation accepts only `draft_without_qa`; the run and episode both
 record skipped-QA provenance and the supplied rationale. Recognized but
 unsupported QA-gated requests return `422`, malformed requests return `400`,
 and TEI retrieval returns `404` before generation has persisted a draft.
+
+#### Episode TEI revision history
+
+ADR 019 extends the optimistic `tei_revision` counter with a planned
+`episode_tei_history` table. Each row stores the complete `tei_xml` document,
+its optional `tei_xml_zstd` compression, content hash, quality and provenance
+metadata, recording actor, and timestamp. The `episode_id` foreign key uses a
+restrictive `ON DELETE RESTRICT` policy, so indefinite audit history cannot
+disappear when an episode is deleted. ADR 018 records the shared versioning
+strategy.
+
+The repository updates `episodes.tei_xml` and `episodes.tei_xml_zstd` with a
+compare-and-set on `tei_revision`, then inserts the new history row and commits
+both operations in one transaction. A history list endpoint returns paginated
+revision metadata; the TEI endpoint accepts `revision=N` to retrieve a stored
+document. Restoring an earlier document is a normal update with the current
+expected revision, creating a new forward revision while leaving old rows
+untouched.
+
+Accessible description: Entity-relationship diagram showing canonical episodes
+retaining append-only episode TEI revision rows, including revision numbers,
+compressed and uncompressed TEI, content hashes, quality status, generation
+provenance, timestamps, and actors.
+
+```mermaid
+erDiagram
+    episodes ||--o{ episode_tei_history : retains
+    episodes {
+        uuid id PK
+        int tei_revision
+        text tei_xml
+        text tei_content_hash
+    }
+    episode_tei_history {
+        uuid id PK
+        uuid episode_id FK,UK
+        int tei_revision UK
+        text tei_xml
+        bytea tei_xml_zstd
+        text tei_content_hash
+        text quality_mode
+        text qa_status
+        uuid last_generation_run_id
+        timestamptz recorded_at
+        text actor
+    }
+```
+
+Accessible description: Sequence diagram showing a repository compare-and-set
+TEI update, same-transaction history insert and commit for the winning writer,
+and a typed revision-conflict response for a losing writer.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Repository as SqlAlchemyEpisodeRepository
+    participant Database
+
+    Client->>Repository: update_tei(episode_id, expected_revision, tei_xml)
+    Repository->>Database: UPDATE episodes WHERE tei_revision = expected_revision
+    alt compare-and-set succeeds
+        Repository->>Database: INSERT episode_tei_history for new revision
+        Repository->>Database: COMMIT
+        Repository-->>Client: updated episode
+    else revision conflict
+        Database-->>Repository: uniqueness or stale revision error
+        Repository-->>Client: EpisodeRevisionConflictError
+    end
+```
+
+Accessible description: Sequence diagram showing history metadata listing,
+revision-specific TEI retrieval, and restoration of a historical document as a
+new forward revision through the episode update path.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant Repository as SqlAlchemyEpisodeRepository
+    participant Database
+
+    Client->>API: GET /v1/episodes/{episode_id}/tei/history
+    API->>Repository: list episode TEI history
+    Repository->>Database: SELECT revision metadata
+    Database-->>Repository: paginated revisions
+    Repository-->>API: revision metadata
+    API-->>Client: revision list
+
+    Client->>API: GET /v1/episodes/{episode_id}/tei?revision=N
+    API->>Repository: retrieve revision N
+    Repository->>Database: SELECT episode_tei_history
+    Database-->>Repository: stored TEI document
+    Repository-->>API: TEI P5 document
+    API-->>Client: TEI P5 response
+
+    Client->>API: update historical document with expected_revision
+    API->>Repository: update_tei(episode_id, expected_revision, tei_xml)
+    Repository-->>Client: new forward revision
+```
 
 #### Content Request Decision Tree
 
