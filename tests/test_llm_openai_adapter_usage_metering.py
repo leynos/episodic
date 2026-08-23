@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from episodic.cost import UsageSource
+from episodic.llm.ports import LLMProviderResponseError
 
 if typ.TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
@@ -167,3 +168,40 @@ async def test_chat_completion_usage_omits_zero_valued_optional_metrics(
         "input_tokens": 42,
         "output_tokens": 18,
     }, "zero-valued optional metrics must be omitted from usage metrics"
+
+
+@pytest.mark.asyncio
+async def test_chat_completion_usage_rejects_oversubscribed_details(
+    openai_adapter_factory: _OpenAIAdapterFactory,
+    openai_json_response: _OpenAIJsonResponseBuilder,
+    openai_request_builder: _OpenAIRequestBuilder,
+) -> None:
+    """Nested counts exceeding the parent totals must fail validation."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return openai_json_response({
+            "id": "chatcmpl-oversubscribed",
+            "model": "gpt-4o-mini",
+            "choices": [
+                {
+                    "message": {"content": "Draft intro copy."},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+                "prompt_tokens_details": {"cached_tokens": 11},
+            },
+        })
+
+    async with openai_adapter_factory(
+        transport=httpx.MockTransport(handler)
+    ) as adapter:
+        with pytest.raises(
+            LLMProviderResponseError,
+            match="invalid OpenAI-compatible response payload",
+        ):
+            await adapter.generate(openai_request_builder())

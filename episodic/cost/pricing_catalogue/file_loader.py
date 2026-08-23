@@ -50,6 +50,24 @@ def _require_mapping(value: object, *, path: pathlib.Path) -> dict[str, object]:
     return typ.cast("dict[str, object]", value)
 
 
+def _optional_string(
+    data: cabc.Mapping[str, object],
+    key: str,
+    path: pathlib.Path,
+) -> str | None:
+    """Return an optional string field, rejecting present non-string values."""
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        msg = (
+            f"Pricing snapshot {path} field {key!r} must be a non-empty "
+            "string when present."
+        )
+        raise ValueError(msg)
+    return value.strip()
+
+
 def _require_string(
     data: cabc.Mapping[str, object], key: str, path: pathlib.Path
 ) -> str:
@@ -225,13 +243,13 @@ class FilePricingCatalogue:
         raw_bytes = path.read_bytes()
         raw_data = yaml.safe_load(raw_bytes) or {}
         data = _require_mapping(raw_data, path=path)
-        effective_from_value = data.get("effective_from")
+        effective_from_value = _optional_string(data, "effective_from", path)
         effective_from = (
             parse_instant(
                 effective_from_value,
                 error_message=_timestamp_timezone_error,
             )
-            if isinstance(effective_from_value, str)
+            if effective_from_value is not None
             else None
         )
         snapshot = PricingSnapshot(
@@ -254,8 +272,6 @@ class FilePricingCatalogue:
             source_metadata=_optional_string_mapping(data, "source_metadata", path),
             content_hash=hashlib.sha256(raw_bytes).hexdigest(),
             retrieved_at=_require_string(data, "retrieved_at", path),
-            effective_from=(
-                effective_from_value if isinstance(effective_from_value, str) else None
-            ),
+            effective_from=effective_from_value,
         )
         return _LoadedSnapshot(snapshot=snapshot, effective_from=effective_from)
