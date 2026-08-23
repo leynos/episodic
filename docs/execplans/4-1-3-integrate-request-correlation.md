@@ -175,20 +175,28 @@ Hard invariants. Violating one of these requires escalation, not a workaround.
 
 ## Risks
 
-- **Risk R1: `falcon-correlate` has no tagged release, and the chosen commit is
-  not a meaningful boundary.**
-  The repository has zero tags and zero GitHub releases, and the name is not
-  registered on PyPI (`GET https://pypi.org/pypi/falcon-correlate/json` returns
-  `{"message": "Not Found"}`). Worse, the `main` HEAD selected for the pin,
-  `caea7a6a`, is a Dependabot development-dependency bump ("bump ty from 0.0.68
-  to 0.0.69") — a date-chosen commit, not a semantic one.
-  Severity: medium. Likelihood: certain.
-  Mitigation: before EP-M0, ask upstream to cut a `v0.1.0` tag and pin that
-  instead; the same author maintains both repositories, so this is cheap. If no
-  tag is forthcoming, pin the commit and state plainly in ADR-018 that a
-  security-relevant trust boundary rests on an unversioned single-author pin
-  with private-attribute coupling (see R6). Record a dated review item so the
-  pin has an upgrade trigger rather than ageing silently.
+- **Risk R1: `falcon-correlate` is an unpublished single-author dependency on a
+  security-relevant trust boundary.**
+  Upstream cut **`v0.1.0`** on 2026-08-23 in response to this plan's first
+  draft, resolving to `caea7a6ac804f851f7226ccf9acb3d256cc2d5d4` — the exact
+  commit every empirical finding in this plan was probed against, so none of
+  them needs re-verifying. That removes the worst of the original risk: the pin
+  is now a deliberate semantic boundary rather than a date-chosen Dependabot
+  bump, and there is a real GitHub release. Verified:
+  `uv run --with "falcon-correlate @ git+...@v0.1.0"` installs and reports
+  version `0.1.0`.
+  What remains: the package is still absent from PyPI (`GET
+  https://pypi.org/pypi/falcon-correlate/json` returns
+  `{"message": "Not Found"}`), it has one author, and `0.1.0` is an alpha-status
+  release carrying the trust decision described in R2 and the private-attribute
+  coupling described in R6. A Git tag is also mutable in a way a commit is not.
+  Severity: low. Likelihood: low.
+  Mitigation: pin `@v0.1.0`. `uv.lock` records the **resolved commit**, so a
+  moved tag would show up as a lockfile change in review rather than silently
+  altering behaviour — check that the locked revision is `caea7a6a` when
+  committing EP-M0. State the supply-chain posture in ADR-018 in a sentence
+  rather than a footnote, and record a dated review item so the pin has an
+  upgrade trigger rather than ageing silently.
 
 - **Risk R2: the trusted-source model does not survive the deployment topology.**
   This replaces the first draft's R2, which aimed at the wrong hazard. Three
@@ -351,7 +359,7 @@ Hard invariants. Violating one of these requires escalation, not a workaround.
 
 ## Progress
 
-- [ ] EP-M0 Pin `falcon-correlate`, request a tag, file two upstream issues.
+- [ ] EP-M0 Pin `falcon-correlate` at `v0.1.0`; file two upstream issues.
 - [ ] EP-M1 Correlation seam, sanitization, and runtime configuration.
 - [ ] EP-M2 Falcon ASGI middleware wiring ahead of authorization.
 - [ ] EP-M3a Split `episodic/observability.py` below the 400-line limit.
@@ -586,12 +594,14 @@ has been verified; do not re-litigate them without new evidence.
 
 ## Decision log
 
-- **D1. Pin `falcon-correlate` to commit
-  `caea7a6ac804f851f7226ccf9acb3d256cc2d5d4`, but ask for a tag first.**
-  Rationale: the project is not on PyPI and has no tags, so a commit pin is the
-  only reproducible option, mirroring `femtologging` and `tei-rapporteur` at
-  `pyproject.toml:14,21`. The chosen commit is a Dependabot bump rather than a
-  meaningful boundary, so EP-M0 first asks upstream for `v0.1.0`. What the
+- **D1. Pin `falcon-correlate` to the `v0.1.0` tag.**
+  Rationale: the first draft could only pin a commit, because the project had no
+  tags and is not on PyPI. Upstream cut `v0.1.0` on 2026-08-23, and it resolves
+  to the same commit this plan was researched against, so the pin is now both
+  reproducible and semantically meaningful. This differs deliberately from the
+  `femtologging` and `tei-rapporteur` commit pins at `pyproject.toml:14,21` and
+  matches the existing `df12-python-lints @ ...@v0.2.0` tag pin in the
+  development group; prefer a tag whenever upstream offers one. What the
   library actually buys is the part that is hardest to get right and carries an
   upstream test suite: the context-variable token lifecycle with its
   mismatched-token and invalid-token guards, CIDR host-bits validation, and the
@@ -1328,9 +1338,9 @@ run the whole gate suite once more.
 - **Outcome:** `falcon_correlate` is installable, importable, and its default
   header name is pinned by a test.
 - **Requirements:** RM-4.1.3.a.
-- **Before editing:** ask upstream to cut a `v0.1.0` tag (Risk R1), and file two
-  upstream issues, both identified by the design review and both explicitly the
-  correct response under `Tolerances` rather than local shims:
+- **Before editing:** file two upstream issues, both identified by the design
+  review and both explicitly the correct response under `Tolerances` rather than
+  local shims:
   1. `_current_result_backend_uses_rpc()` recomputes a startup-time property on
      **every** publish, at about 2 µs, dominated by `importlib.import_module`
      and `current_app` proxy resolution. Cache it.
@@ -1338,18 +1348,20 @@ run the whole gate suite once more.
      application from the signal's `sender`, so in a process holding two
      applications it checks the wrong one.
 - **Edits:** `pyproject.toml`, `[project].dependencies`: insert in alphabetical
-  position between `"falcon>=4.3.1,<5.0"` and `"femtologging @ ..."` either
-  `"falcon-correlate @ git+https://github.com/leynos/falcon-correlate@v0.1.0"`
-  or, failing a tag,
-  `"falcon-correlate @ git+https://github.com/leynos/falcon-correlate@caea7a6ac804f851f7226ccf9acb3d256cc2d5d4"`.
-  Run `make build` and commit the `uv.lock` change.
+  position between `"falcon>=4.3.1,<5.0"` and `"femtologging @ ..."` the line
+  `"falcon-correlate @ git+https://github.com/leynos/falcon-correlate@v0.1.0"`.
+  Run `make build` and commit the `uv.lock` change. Confirm the locked revision
+  is `caea7a6ac804f851f7226ccf9acb3d256cc2d5d4`; that is the commit every
+  finding in this plan was probed against, and a different value means the tag
+  moved (Risk R1).
 - **Acceptance evidence:**
 
   ```bash
+  uv run python -c "import importlib.metadata as md; print(md.version('falcon-correlate'))"
   uv run python -c "import falcon_correlate; print(falcon_correlate.__all__)"
   ```
 
-  prints a list containing `CorrelationIDMiddlewareASGI`,
+  prints `0.1.0`, then a list containing `CorrelationIDMiddlewareASGI`,
   `configure_celery_correlation`, and `AsyncCorrelationIDTransport`.
 - **Conformance check:** one new dependency, authorized by `Tolerances`.
 - **Recovery:** revert `pyproject.toml` and `uv.lock`, rerun `make build`.
@@ -1930,8 +1942,8 @@ the milestone commit. Nothing writes to a database, migrates a schema, or
 changes a persisted format.
 
 If `uv sync` fails fetching the pinned revision, confirm network access to
-`github.com` and that the reference still exists; the repository is public, so
-no credential is required.
+`github.com` and that the `v0.1.0` tag still exists; the repository is public,
+so no credential is required.
 
 ## Artefacts and notes
 
@@ -1950,7 +1962,7 @@ gains nothing.
 Dependency added to `pyproject.toml`:
 
 ```plaintext
-falcon-correlate @ git+https://github.com/leynos/falcon-correlate@<tag-or-caea7a6a>
+falcon-correlate @ git+https://github.com/leynos/falcon-correlate@v0.1.0
 ```
 
 No port protocol changes: `episodic/canonical/ports.py`, `episodic/llm/ports.py`,
