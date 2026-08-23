@@ -139,31 +139,54 @@ def _detector_mapping(value: object, *, context: str) -> cabc.Mapping[str, objec
     return typ.cast("cabc.Mapping[str, object]", value)
 
 
+def _detector_required_string(value: object, *, context: str) -> str:
+    """Validate a required non-empty PyChase string field."""
+    if not isinstance(value, str) or not value:
+        msg = f"{context} must be a non-empty string"
+        raise ValueError(msg)
+    return value
+
+
+def _detector_start_line(value: object, *, context: str) -> int:
+    """Validate a positive PyChase member start line."""
+    if not isinstance(value, int) or isinstance(value, bool):
+        msg = f"{context}.start_line must be a positive integer"
+        raise TypeError(msg)
+    if value < 1:
+        msg = f"{context}.start_line must be a positive integer"
+        raise ValueError(msg)
+    return value
+
+
+def _detector_end_line(
+    value: object,
+    *,
+    start_line: int,
+    context: str,
+) -> int:
+    """Validate a PyChase member end line against its start line."""
+    if not isinstance(value, int) or isinstance(value, bool):
+        msg = f"{context}.end_line must not precede start_line"
+        raise TypeError(msg)
+    if value < start_line:
+        msg = f"{context}.end_line must not precede start_line"
+        raise ValueError(msg)
+    return value
+
+
 def _detector_member(value: object, *, context: str) -> _DetectorMemberPayload:
     """Validate one PyChase member before it enters gate logic."""
     member = _detector_mapping(value, context=context)
-    file = member.get("file")
-    qualname = member.get("qualname")
-    start_line = member.get("start_line")
-    end_line = member.get("end_line")
-    if not isinstance(file, str) or not file:
-        msg = f"{context}.file must be a non-empty string"
-        raise ValueError(msg)
-    if not isinstance(qualname, str) or not qualname:
-        msg = f"{context}.qualname must be a non-empty string"
-        raise ValueError(msg)
-    if not isinstance(start_line, int) or isinstance(start_line, bool):
-        msg = f"{context}.start_line must be a positive integer"
-        raise TypeError(msg)
-    if start_line < 1:
-        msg = f"{context}.start_line must be a positive integer"
-        raise ValueError(msg)
-    if not isinstance(end_line, int) or isinstance(end_line, bool):
-        msg = f"{context}.end_line must not precede start_line"
-        raise TypeError(msg)
-    if end_line < start_line:
-        msg = f"{context}.end_line must not precede start_line"
-        raise ValueError(msg)
+    file = _detector_required_string(member.get("file"), context=f"{context}.file")
+    qualname = _detector_required_string(
+        member.get("qualname"), context=f"{context}.qualname"
+    )
+    start_line = _detector_start_line(member.get("start_line"), context=context)
+    end_line = _detector_end_line(
+        member.get("end_line"),
+        start_line=start_line,
+        context=context,
+    )
     return {
         "file": file,
         "qualname": qualname,
