@@ -266,6 +266,7 @@ def test_skylos_allow_ignores_wsl_host_name(tmp_path: Path) -> None:
         env={
             **os.environ,
             "NAME": "wsl-hostname",
+            "SYMBOL": "episodic.ambient.wsl_host_name",
             "SKYLOS_CAPTURE": str(capture),
         },
         check=False,

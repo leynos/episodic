@@ -75,7 +75,7 @@ async def _manually_fail_expired_run(
             run_id,
             update=GenerationRunStatusUpdate(
                 status=GenerationRunStatus.FAILED,
-                current_node="failed",
+                current_node=None,
                 ended_at=now,
                 error_message="Generation lease expired; failed manually.",
                 error_category="launcher.lease_expired",

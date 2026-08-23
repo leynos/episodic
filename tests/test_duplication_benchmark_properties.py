@@ -24,6 +24,13 @@ def test_parse_ratio_rejects_negative_fractions(ratio: str) -> None:
         parse_ratio(ratio)
 
 
+@pytest.mark.parametrize("ratio", ["inf", "-inf"])
+def test_parse_ratio_rejects_non_finite_fractions(ratio: str) -> None:
+    """Infinite ratio forms cannot enter the labelled benchmark corpus."""
+    with pytest.raises(ValueError, match="ratio must be finite"):
+        parse_ratio(ratio)
+
+
 @pytest.mark.parametrize("limit", [0, -1])
 def test_message_collectors_reject_non_positive_limits(limit: int) -> None:
     """Aligned corpus collectors return no messages for non-positive limits."""

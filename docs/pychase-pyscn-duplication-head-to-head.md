@@ -98,7 +98,7 @@ retained under `benchmarks/duplication/results/`.
 ## Episodic production scan and adjudication
 
 Every candidate from the selected configuration was adjudicated by reading both
-members (`results/production-adjudication.json`):
+members ([the production adjudication report](results/production-adjudication.json)):
 
 | Disposition                | Count | Interpretation                                                              |
 | -------------------------- | ----: | --------------------------------------------------------------------------- |

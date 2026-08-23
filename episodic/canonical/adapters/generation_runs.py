@@ -13,6 +13,7 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
     JsonMapping,
+    _validate_terminal_run_lifecycle,
 )
 from episodic.canonical.generation_run_errors import (
     RunAlreadyTerminal,
@@ -214,6 +215,11 @@ class InMemoryGenerationRunStore(InMemoryGenerationCheckpointMixin):
                     current_status=run.status.value,
                     requested_status=update.status.value,
                 ),
+            )
+            _validate_terminal_run_lifecycle(
+                status=update.status,
+                current_node=update.current_node,
+                ended_at=update.ended_at,
             )
             updated = dc.replace(
                 run,

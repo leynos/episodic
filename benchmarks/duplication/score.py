@@ -5,15 +5,13 @@ the shared report-schema validation belongs to :mod:`benchmarks.score_support`.
 This module owns only pair-specific matching and score accounting.
 """
 
-from __future__ import annotations
-
 import typing as typ
+from collections import (
+    abc as cabc,  # noqa: TC003 - annotations are evaluated on import by supported Python versions.
+)
 
 from .models import Expectation, Fragment, Lane, LaneScore, PairFinding
 from .parsers import parse_pychase_pairs, parse_pyscn_pairs
-
-if typ.TYPE_CHECKING:
-    from collections import abc as cabc
 
 __all__ = (
     "Expectation",

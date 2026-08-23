@@ -34,6 +34,9 @@ from pathlib import Path
 
 import cyclopts
 import tomlkit
+
+# PyChase 0.1.0 exposes no public file collector, so keep this pinned private
+# helper alongside the script's exact ``pychase==0.1.0`` dependency.
 from pychase.cli import (  # ty: ignore[unresolved-import]  # pychase installs only in this script's Python 3.13 environment.
     Config,
     _collect_files,
@@ -393,10 +396,10 @@ def check() -> None:
     os.chdir(REPO_ROOT)
     try:
         allowlist = load_allowlist(PYPROJECT)
-    except GateConfigError as error:
+        findings = run_detector()
+    except (GateConfigError, TypeError, ValueError) as error:
         print(f"configuration error: {error}", file=sys.stderr)
         raise SystemExit(2) from error
-    findings = run_detector()
     blocking, allowed, stale = partition_findings(findings, allowlist)
     _report(blocking, allowed, stale)
     if blocking:
@@ -434,7 +437,11 @@ def allow(
         if "::" not in key:
             print(f"'{key}' is not a 'path::qualname' unit key", file=sys.stderr)
             raise SystemExit(2)
-    append_allow_entry(PYPROJECT, first=first, second=second, reason=reason)
+    try:
+        append_allow_entry(PYPROJECT, first=first, second=second, reason=reason)
+    except GateConfigError as error:
+        print(f"configuration error: {error}", file=sys.stderr)
+        raise SystemExit(2) from error
     label = first if second is None else f"{first} ~ {second}"
     print(f"recorded duplication exception for {label}")
 
@@ -520,7 +527,9 @@ def _atomic_write(path: Path, content: str) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
-def _ensure_deterministic_hashing() -> None:
+def _ensure_deterministic_hashing(
+    environment: cabc.MutableMapping[str, str] | None = None,
+) -> None:
     """Re-exec with a fixed hash seed so LSH bucketing is reproducible.
 
     PyChase buckets MinHash signatures with the built-in ``hash()`` over
@@ -528,8 +537,9 @@ def _ensure_deterministic_hashing() -> None:
     is pinned. Without this, near-threshold pairs appear and disappear
     between runs, which a blocking gate cannot tolerate.
     """
-    if os.environ.get("PYTHONHASHSEED") != "0":
-        os.environ["PYTHONHASHSEED"] = "0"
+    environment = os.environ if environment is None else environment
+    if environment.get("PYTHONHASHSEED") != "0":
+        environment["PYTHONHASHSEED"] = "0"
         os.execv(sys.executable, [sys.executable, *sys.argv])  # noqa: S606 - re-exec of the same interpreter with a pinned hash seed
 
 

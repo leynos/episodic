@@ -123,6 +123,23 @@ class CheckpointStatus(enum.StrEnum):
         return self is not CheckpointStatus.CREATED
 
 
+def _validate_terminal_run_lifecycle(
+    *,
+    status: GenerationRunStatus,
+    current_node: str | None,
+    ended_at: dt.datetime | None,
+) -> None:
+    """Validate lifecycle fields required by terminal generation runs."""
+    if not status.is_terminal():
+        return
+    if current_node is not None:
+        msg = "terminal generation runs must not have a current node"
+        raise ValueError(msg)
+    if ended_at is None:
+        msg = "terminal generation runs must have an end time"
+        raise ValueError(msg)
+
+
 class CheckpointAction(enum.StrEnum):
     """Reviewer actions accepted for a generation checkpoint."""
 
@@ -155,6 +172,11 @@ class GenerationRun:
 
     def __post_init__(self) -> None:
         """Validate generation-run invariants."""
+        _validate_terminal_run_lifecycle(
+            status=self.status,
+            current_node=self.current_node,
+            ended_at=self.ended_at,
+        )
         _validate_non_empty_text(self.actor, "actor")
         _validate_optional_text(self.current_node, "current_node")
         _validate_optional_text(self.error_message, "error_message")

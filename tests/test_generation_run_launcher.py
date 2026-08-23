@@ -144,9 +144,7 @@ async def test_launcher_completes_run_and_records_cost(
     assert run.status is GenerationRunStatus.SUCCEEDED, (
         f"run {run_id} status={run.status}; events={events!r}"
     )
-    assert run.current_node == "complete", (
-        f"run {run_id} current_node={run.current_node!r}"
-    )
+    assert run.current_node is None, f"run {run_id} current_node={run.current_node!r}"
     assert episode is not None, f"episode {episode_id} was not persisted"
     assert episode.tei_xml == valid_tei(), (
         f"episode {episode_id} TEI={episode.tei_xml!r}"
@@ -206,9 +204,7 @@ async def test_launcher_records_provider_failure(
     assert run.error_message == "try again later", (
         f"run {run_id} error={run.error_message!r}"
     )
-    assert run.current_node == "failed", (
-        f"run {run_id} current_node={run.current_node!r}"
-    )
+    assert run.current_node is None, f"run {run_id} current_node={run.current_node!r}"
     assert [event.kind for event in events] == ["run.started", "run.failed"], (
         f"run {run_id} events={events!r}"
     )

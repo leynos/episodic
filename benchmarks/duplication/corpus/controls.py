@@ -1,6 +1,8 @@
 # Benchmark source locations are intentionally stable.
 """Structurally similar but semantically distinct false-positive controls."""
 
+import math
+
 PERCENT_SCALE = 100.0
 SECONDS_PER_MINUTE = 60.0
 SECONDS_PER_HOUR = 3600.0
@@ -75,6 +77,9 @@ def parse_ratio(text: str) -> float:
         fraction = float(left) / denominator
     else:
         fraction = float(cleaned)
+    if not math.isfinite(fraction):
+        msg = "ratio must be finite"
+        raise ValueError(msg)
     if fraction < 0:
         msg = "ratio must not be negative"
         raise ValueError(msg)

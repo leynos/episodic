@@ -1,6 +1,10 @@
-"""Detector-specific report parsing for the duplication benchmark."""
+"""Normalize PyChase and pyscn reports for duplication scoring.
 
-from __future__ import annotations
+The public parser functions accept decoded detector JSON and a corpus root.
+They validate each report's shape, normalize source locations, and return the
+tool-neutral :class:`~benchmarks.duplication.models.PairFinding` values used by
+the scorer. Detector-specific field names remain confined to this module.
+"""
 
 import typing as typ
 
@@ -61,7 +65,30 @@ def parse_pyscn_pairs(
     *,
     corpus_root: Path,
 ) -> tuple[PairFinding, ...]:
-    """Extract pyscn clone pairs from its unified JSON report."""
+    """Extract clone pairs from a pyscn unified JSON report.
+
+    Parameters
+    ----------
+    payload : object
+        Decoded pyscn report. It must contain an object-valued ``clone`` field
+        with a ``clone_pairs`` sequence, or ``null`` for no pairs.
+    corpus_root : pathlib.Path
+        Root directory used to normalize and constrain reported file paths.
+
+    Returns
+    -------
+    tuple[PairFinding, ...]
+        Pyscn pairs in report order, with clone type four mapped to the
+        semantic lane and other types mapped to the syntactic lane.
+
+    Propagated errors
+    -----------------
+    TypeError
+        If the report, pair fields, locations, or scalar fields have the wrong
+        shape or type.
+    ValueError
+        If a line, similarity, or source path fails validation.
+    """
     root = mapping(payload, context="pyscn payload")
     clone = mapping(root.get("clone"), context="pyscn clone")
     pairs = sequence(
@@ -121,7 +148,30 @@ def parse_pychase_pairs(
     *,
     corpus_root: Path,
 ) -> tuple[PairFinding, ...]:
-    """Extract PyChase candidate pairs from its JSON report."""
+    """Extract candidate pairs from a PyChase JSON report.
+
+    Parameters
+    ----------
+    payload : object
+        Decoded PyChase report containing a ``candidates`` sequence. Each
+        candidate provides ``left`` and ``right`` member objects and a numeric
+        ``score``.
+    corpus_root : pathlib.Path
+        Root directory used to normalize and constrain reported file paths.
+
+    Returns
+    -------
+    tuple[PairFinding, ...]
+        PyChase candidates in report order, normalized to the syntactic lane.
+
+    Propagated errors
+    -----------------
+    TypeError
+        If the report, candidates, members, or scalar fields have the wrong
+        shape or type.
+    ValueError
+        If a line, score, or source path fails validation.
+    """
     root = mapping(payload, context="PyChase payload")
     candidates = sequence(root.get("candidates"), context="PyChase candidates")
     return tuple(
