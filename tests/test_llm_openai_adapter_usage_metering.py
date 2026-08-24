@@ -171,10 +171,24 @@ async def test_chat_completion_usage_omits_zero_valued_optional_metrics(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "usage_details",
+    [
+        pytest.param(
+            {"prompt_tokens_details": {"cached_tokens": 6, "audio_tokens": 5}},
+            id="prompt_details_exceed_prompt_tokens",
+        ),
+        pytest.param(
+            {"completion_tokens_details": {"audio_tokens": 6}},
+            id="completion_audio_exceeds_completion_tokens",
+        ),
+    ],
+)
 async def test_chat_completion_usage_rejects_oversubscribed_details(
     openai_adapter_factory: _OpenAIAdapterFactory,
     openai_json_response: _OpenAIJsonResponseBuilder,
     openai_request_builder: _OpenAIRequestBuilder,
+    usage_details: dict[str, dict[str, int]],
 ) -> None:
     """Nested counts exceeding the parent totals must fail validation."""
 
@@ -193,7 +207,7 @@ async def test_chat_completion_usage_rejects_oversubscribed_details(
                 "prompt_tokens": 10,
                 "completion_tokens": 5,
                 "total_tokens": 15,
-                "prompt_tokens_details": {"cached_tokens": 11},
+                **usage_details,
             },
         })
 

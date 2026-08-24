@@ -210,6 +210,80 @@ def _add_metric_if_present(
         metrics[key] = value
 
 
+def _validate_chat_usage_detail_totals(  # noqa: PLR0913  # pylint: disable=too-many-arguments  # Keyword-only usage fields travel together.
+    *,
+    prompt_tokens: int,
+    completion_tokens: int,
+    cached_input: int | None,
+    audio_input: int | None,
+    audio_output: int | None,
+) -> None:
+    """Validate that nested chat usage details fit within parent totals.
+
+    Raises
+    ------
+    OpenAIResponseValidationError
+        If nested token details exceed their parent token totals.
+    """
+    input_detail_tokens = (cached_input or 0) + (audio_input or 0)
+    if input_detail_tokens > prompt_tokens:
+        raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
+    output_audio_tokens = audio_output or 0
+    if output_audio_tokens > completion_tokens:
+        raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
+
+
+def _build_chat_usage_metrics(
+    usage_payload: cabc.Mapping[str, object],
+) -> dict[str, int]:
+    """Build mutually exclusive canonical metrics from chat usage details.
+
+    Returns
+    -------
+    dict[str, int]
+        Mutually exclusive canonical usage metrics.
+
+    Raises
+    ------
+    OpenAIResponseValidationError
+        If nested token details exceed their parent token totals.
+    """  # noqa: DOC502  # _validate_chat_usage_detail_totals raises for this helper.
+    prompt_tokens = _extract_token_count(usage_payload, "prompt_tokens")
+    completion_tokens = _extract_token_count(usage_payload, "completion_tokens")
+    cached_input = _extract_nested_token_count(
+        usage_payload,
+        "prompt_tokens_details",
+        "cached_tokens",
+    )
+    audio_input = _extract_nested_token_count(
+        usage_payload,
+        "prompt_tokens_details",
+        "audio_tokens",
+    )
+    audio_output = _extract_nested_token_count(
+        usage_payload,
+        "completion_tokens_details",
+        "audio_tokens",
+    )
+    _validate_chat_usage_detail_totals(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cached_input=cached_input,
+        audio_input=audio_input,
+        audio_output=audio_output,
+    )
+    input_detail_tokens = (cached_input or 0) + (audio_input or 0)
+    output_audio_tokens = audio_output or 0
+    metrics = {
+        "input_tokens": prompt_tokens - input_detail_tokens,
+        "output_tokens": completion_tokens - output_audio_tokens,
+    }
+    _add_metric_if_present(metrics, "cached_input_tokens", cached_input)
+    _add_metric_if_present(metrics, "audio_input_tokens", audio_input)
+    _add_metric_if_present(metrics, "audio_output_tokens", audio_output)
+    return metrics
+
+
 def _normalize_chat_provider_call_usage(
     payload_mapping: cabc.Mapping[str, object],
     usage_payload: cabc.Mapping[str, object] | None,
@@ -233,37 +307,10 @@ def _normalize_chat_provider_call_usage(
     ------
     OpenAIResponseValidationError
         If nested token details exceed their parent token totals.
-    """
+    """  # noqa: DOC502  # _build_chat_usage_metrics raises for the normalizer.
     if usage_payload is None:
         return None
-    prompt_tokens = _extract_token_count(usage_payload, "prompt_tokens")
-    completion_tokens = _extract_token_count(usage_payload, "completion_tokens")
-    cached_input = _extract_nested_token_count(
-        usage_payload,
-        "prompt_tokens_details",
-        "cached_tokens",
-    )
-    audio_input = _extract_nested_token_count(
-        usage_payload,
-        "prompt_tokens_details",
-        "audio_tokens",
-    )
-    audio_output = _extract_nested_token_count(
-        usage_payload,
-        "completion_tokens_details",
-        "audio_tokens",
-    )
-    if (cached_input or 0) + (audio_input or 0) > prompt_tokens or (
-        audio_output or 0
-    ) > completion_tokens:
-        raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
-    metrics = {
-        "input_tokens": prompt_tokens - (cached_input or 0) - (audio_input or 0),
-        "output_tokens": completion_tokens - (audio_output or 0),
-    }
-    _add_metric_if_present(metrics, "cached_input_tokens", cached_input)
-    _add_metric_if_present(metrics, "audio_input_tokens", audio_input)
-    _add_metric_if_present(metrics, "audio_output_tokens", audio_output)
+    metrics = _build_chat_usage_metrics(usage_payload)
     return ProviderCallUsage(
         usage_metrics=metrics,
         usage_source=UsageSource.PROVIDER,
