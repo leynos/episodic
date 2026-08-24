@@ -250,7 +250,7 @@ def _pricing_snapshot(snapshot_id: str) -> PricingSnapshot:
         source_metadata={"source_url": "https://example.test/pricing"},
         content_hash="ensure-hash",
         retrieved_at="2026-06-04T09:00:00Z",
-        effective_from="2026-06-01T00:00:00Z",
+        effective_from=dt.datetime(2026, 6, 1, tzinfo=dt.UTC),
     )
 
 

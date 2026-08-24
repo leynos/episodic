@@ -1,5 +1,6 @@
 """Tests for file-backed pricing catalogue resolution."""
 
+import datetime as dt
 import textwrap
 import typing as typ
 
@@ -186,8 +187,13 @@ async def test_file_pricing_catalogue_propagates_effective_from(
         BillingPeriodKey("2026-06"),
     )
 
-    assert snapshot.effective_from == "2026-06-01T00:00:00Z", (
-        f"expected the YAML effective date, got {snapshot.effective_from!r}"
+    effective_from = snapshot.effective_from
+    assert effective_from is not None, "expected a loaded effective date"
+    assert effective_from == dt.datetime(2026, 6, 1, tzinfo=dt.UTC), (
+        f"expected the parsed YAML effective date, got {effective_from!r}"
+    )
+    assert effective_from.tzinfo is not None, (
+        "the loaded effective date must be timezone-aware"
     )
 
 

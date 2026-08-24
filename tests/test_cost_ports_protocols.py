@@ -1,6 +1,10 @@
 """Port contract tests for cost accounting protocols."""
 
+import dataclasses as dc
+import datetime as dt
 import inspect
+
+import pytest
 
 from episodic.cost.engine import PricingEngine, PricingRequest
 from episodic.cost.ports import (
@@ -235,3 +239,14 @@ def test_llm_response_accepts_optional_provider_call_usage() -> None:
 
     assert response.provider_call_usage == provider_usage, "Expected values to match"
     assert legacy_response.provider_call_usage is None, "Expected value to be absent"
+
+
+def test_pricing_snapshot_rejects_naive_effective_from() -> None:
+    """A naive effective date must fail value-object validation."""
+    aware = _make_snapshot(PricingSnapshotId("snapshot:aware"))
+
+    with pytest.raises(ValueError, match="effective_from must be timezone-aware"):
+        dc.replace(
+            aware,
+            effective_from=dt.datetime(2026, 6, 1),  # noqa: DTZ001 - naive on purpose.
+        )

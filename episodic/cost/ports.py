@@ -15,6 +15,7 @@ Tests can use in-memory fakes; see ``tests/test_cost_ports_protocols.py``.
 """
 
 import dataclasses as dc
+import datetime as dt  # noqa: TC003 - dataclass field annotation evaluated at runtime.
 import enum
 import typing as typ
 
@@ -109,9 +110,9 @@ def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:
 class PricingSnapshot:
     """Immutable pricing input used by the deterministic pricing engine.
 
-    ``effective_from`` is an optional timezone-aware ISO-8601 timestamp
-    (for example ``"2026-08-01T00:00:00Z"``); catalogue resolution keeps
-    snapshots unset or not after now and selects the latest.
+    ``effective_from`` is an optional timezone-aware ``datetime`` (for
+    example 2026-08-01T00:00:00Z); catalogue resolution keeps snapshots
+    unset or not after now and selects the latest.
     """
 
     pricing_snapshot_id: PricingSnapshotId
@@ -125,12 +126,15 @@ class PricingSnapshot:
     source_metadata: cabc.Mapping[str, str]
     content_hash: str
     retrieved_at: str
-    effective_from: str | None = None
+    effective_from: dt.datetime | None = None
 
     def __post_init__(self) -> None:
         """Validate value-object invariants."""
         _validate_currency_code(self.currency)
         _validate_usage_metrics(self.rates_minor_per_metric)
+        if self.effective_from is not None and self.effective_from.tzinfo is None:
+            msg = "effective_from must be timezone-aware."
+            raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -257,20 +261,12 @@ class CostLedgerPort(typ.Protocol):
     async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
         """Record or return an idempotent provider-call ledger entry.
 
-        Parameters
-        ----------
-        entry : ProviderCallLedgerEntry
-            Provider-call ledger entry to persist.
-
         Returns
         -------
         CostLedgerEntryId
-            Identifier of the inserted or existing ledger row.
-
-        Notes
-        -----
-        Repeated calls with the same idempotency key must return the same
-        `CostLedgerEntryId` without creating duplicate rows.
+            Identifier of the inserted or existing row; repeated calls
+            with one idempotency key return the same identifier without
+            creating duplicate rows.
         """
         raise NotImplementedError
 
