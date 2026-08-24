@@ -390,7 +390,8 @@ has been verified; do not re-litigate them without new evidence.
   `StreamHandlerBuilder.stderr().with_formatter(fn)` observes
   `metadata.key_values == {}` inside `with log_context(correlation_id="abc123")`.
   `FemtoLogger` has no structured-field API at all.
-  **Impact:** drives Decision D5.
+  **Impact:** drives Decision D5. Filed upstream as
+  [femtologging#417](https://github.com/leynos/femtologging/issues/417).
 
 - **Observation:** two apparent escapes from the femtologging limitation were
   tested and both fail, for reasons worth recording.
@@ -406,7 +407,11 @@ has been verified; do not re-litigate them without new evidence.
   `key_values`. So there is no single attach point.
   **Impact:** confirms D5's shape while correcting the first draft's stated
   rationale, which said only "it is a `logging.Filter` and only works with the
-  standard library".
+  standard library". Filed upstream as
+  [femtologging#418](https://github.com/leynos/femtologging/issues/418) (the
+  worker-thread trap) and
+  [femtologging#419](https://github.com/leynos/femtologging/issues/419) (the
+  missing attach point).
 
 - **Observation:** D5's coverage claim in the first draft was false. **29 of 48**
   logging call sites in `episodic/` bypass the three helpers.
@@ -417,7 +422,10 @@ has been verified; do not re-litigate them without new evidence.
   (`_log_error_event`), the structured provider-error path that fires on exactly
   the provider timeouts this plan exists to correlate.
   **Impact:** EP-M3b now schedules both edits, and the plan no longer claims
-  complete coverage.
+  complete coverage. The structural fix — a documented logging port with
+  architecture enforcement against direct invocation — is tracked as
+  [episodic#286](https://github.com/leynos/episodic/issues/286) and is
+  deliberately outside this item's scope.
 
 - **Observation:** the authorization denial logs at `DEBUG` through a direct
   `logger.log` call, and the first draft's marquee transcript was fabricated.
@@ -427,13 +435,16 @@ has been verified; do not re-litigate them without new evidence.
   adapter-failure path at line 115. No `authorization_denied method=... path=...`
   message exists anywhere in the codebase.
   **Impact:** the `Purpose` section now quotes the real message. EP-M3b promotes
-  the denial to `WARNING` through a helper.
+  the denial to `WARNING` through a helper. Also tracked as
+  [episodic#287](https://github.com/leynos/episodic/issues/287), since the
+  `DEBUG` level is wrong independently of this feature.
 
 - **Observation:** `episodic/api/errors.py` and `episodic/api/resources/*.py`
   emit **no** log calls at all.
   **Evidence:** grep across both.
   **Impact:** the roadmap's "error and resource logs" clause is vacuously
-  satisfied today. Say so rather than implying coverage.
+  satisfied today. Say so rather than implying coverage. Tracked as
+  [episodic#288](https://github.com/leynos/episodic/issues/288).
 
 - **Observation:** `import falcon_correlate` imports Celery and registers three
   signal handlers globally, at import time.
@@ -444,7 +455,12 @@ has been verified; do not re-litigate them without new evidence.
   `configure_celery_correlation(app)` ignores `app` entirely; its own docstring
   says "signal registration remains global".
   **Impact:** INV-4a's negative control is now signal disconnection, not
-  deleting the call. D4 records that the call is declarative.
+  deleting the call. D4 records that the call is declarative. Filed upstream as
+  [falcon-correlate#158](https://github.com/leynos/falcon-correlate/issues/158)
+  (import-time registration) and
+  [falcon-correlate#159](https://github.com/leynos/falcon-correlate/issues/159)
+  (the unused `app` argument, the per-publish `current_app` lookup, and the
+  `rpc://` guard consulting the wrong application).
 
 - **Observation:** importing a **submodule** does not avoid that side effect.
   Two reviewers independently proposed `from falcon_correlate.middleware_utils
@@ -456,7 +472,9 @@ has been verified; do not re-litigate them without new evidence.
   **86.8 ms** warm for the package import, of which `celery.utils.dispatch`
   is 63.3 ms.
   **Impact:** this fix is rejected. See D3 for the alternative that was
-  considered and why it was not taken either.
+  considered and why it was not taken either, and
+  [falcon-correlate#158](https://github.com/leynos/falcon-correlate/issues/158)
+  for the upstream request.
 
 - **Observation:** `episodic/observability.py` is **399** lines against a
   blocking 400-line limit.
@@ -1338,15 +1356,15 @@ run the whole gate suite once more.
 - **Outcome:** `falcon_correlate` is installable, importable, and its default
   header name is pinned by a test.
 - **Requirements:** RM-4.1.3.a.
-- **Before editing:** file two upstream issues, both identified by the design
-  review and both explicitly the correct response under `Tolerances` rather than
-  local shims:
-  1. `_current_result_backend_uses_rpc()` recomputes a startup-time property on
-     **every** publish, at about 2 µs, dominated by `importlib.import_module`
-     and `current_app` proxy resolution. Cache it.
-  2. The same function consults `celery.current_app` rather than resolving the
-     application from the signal's `sender`, so in a process holding two
-     applications it checks the wrong one.
+- **Upstream issues already filed** (the correct response under `Tolerances`,
+  rather than local shims). No action needed at EP-M0 beyond awareness; none
+  blocks this plan:
+  [falcon-correlate#158](https://github.com/leynos/falcon-correlate/issues/158)
+  covers the import-time Celery import and global signal registration, and
+  [falcon-correlate#159](https://github.com/leynos/falcon-correlate/issues/159)
+  covers the unused `app` argument, the ~2 µs per-publish
+  `_current_result_backend_uses_rpc()` recomputation, and that guard consulting
+  `celery.current_app` rather than the signal's `sender`.
 - **Edits:** `pyproject.toml`, `[project].dependencies`: insert in alphabetical
   position between `"falcon>=4.3.1,<5.0"` and `"femtologging @ ..."` the line
   `"falcon-correlate @ git+https://github.com/leynos/falcon-correlate@v0.1.0"`.
