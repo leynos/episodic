@@ -158,14 +158,7 @@ class SqlAlchemyCostLedgerStore:
                     snapshot.retrieved_at,
                     error_message="timestamp must include timezone information.",
                 ),
-                effective_from=(
-                    None
-                    if snapshot.effective_from is None
-                    else parse_instant(
-                        snapshot.effective_from,
-                        error_message=("timestamp must include timezone information."),
-                    )
-                ),
+                effective_from=snapshot.effective_from,
             )
             .on_conflict_do_nothing(index_elements=["id"])
         )
