@@ -34,7 +34,7 @@ stilyagi = "stilyagi.stilyagi:main"
 [dependency-groups]
 dev = [
     "crosshair-tool>=0.0.110,<0.1",
-    "cyclopts>=4.22.5,<5",
+    "cyclopts>=4.23.0,<5",
     "df12-python-lints @ git+https://github.com/leynos/df12-python-lints.git@v0.2.0",
     "hecate @ git+https://github.com/leynos/hecate@46f8c8798e7a80a3a1ab5a13c2a000a4423ffc12",
     "hypothesis[asyncio]>=6.165.10,<7",
