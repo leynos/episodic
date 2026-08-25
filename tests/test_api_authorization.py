@@ -1,10 +1,12 @@
 """Authorization middleware tests for canonical REST endpoints."""
 
+import time
 import typing as typ
 
 import pytest
 from falcon import testing
 
+from episodic.api import authorization as authorization_module
 from episodic.api import create_app
 from episodic.api.authorization import (
     AuthorizationContext,
@@ -17,6 +19,39 @@ from tests.fixtures.api import build_api_dependencies
 
 if typ.TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+class _AuthorizationLogCollector:
+    """Collect authorization log records through the femtologging protocol."""
+
+    def __init__(self) -> None:
+        """Initialise an empty authorization-record collection."""
+        self.records: list[tuple[str, str, str]] = []
+
+    def handle(self, logger_name: str, level: str, message: str) -> None:
+        """Record one emitted authorization log message."""
+        self.records.append((logger_name, level, message))
+
+
+class _SupportsFlushHandlers(typ.Protocol):
+    """Minimal logger protocol needed by the authorization log assertions."""
+
+    def flush_handlers(self) -> None:
+        """Flush pending log records through attached handlers."""
+
+
+def _wait_for_authorization_log(
+    logger: _SupportsFlushHandlers,
+    collector: _AuthorizationLogCollector,
+) -> None:
+    """Flush handlers until the expected authorization record arrives."""
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        logger.flush_handlers()
+        if collector.records:
+            return
+        time.sleep(0.01)
+    logger.flush_handlers()
 
 
 class DenyAllAuthorization:
@@ -165,6 +200,57 @@ def test_authorization_decision_serializes_to_canonical_envelope(
         f"Expected envelope {expected_payload} for "
         f"{adapter_factory.__name__}; got {payload}."
     )
+
+
+@pytest.mark.parametrize(
+    ("adapter_factory", "expected"),
+    [
+        (DenyAllAuthorization, (AuthorizationDecision.UNAUTHORIZED, 401)),
+        (
+            ForbidSeriesProfilesAuthorization,
+            (AuthorizationDecision.FORBIDDEN, 403),
+        ),
+    ],
+    ids=["unauthorized", "forbidden"],
+)
+def test_authorization_denials_log_warning_without_credentials(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+    adapter_factory: type[AuthorizationPort],
+    expected: tuple[AuthorizationDecision, int],
+) -> None:
+    """Unauthorized and forbidden responses should emit redacted warnings."""
+    import femtologging
+
+    expected_decision, expected_status = expected
+    femtologging.reset_manager()
+    logger = femtologging.getLogger("episodic.api.authorization")
+    collector = _AuthorizationLogCollector()
+    logger.clear_handlers()
+    logger.set_propagate(False)
+    logger.add_handler(collector)
+    monkeypatch.setattr(authorization_module, "logger", logger)
+
+    try:
+        client = _build_client(session_factory, adapter_factory())
+        response = client.simulate_get(
+            "/v1/series-profiles",
+            headers={"Authorization": "Bearer sensitive-token"},
+        )
+        _wait_for_authorization_log(logger, collector)
+    finally:
+        femtologging.reset_manager()
+
+    assert response.status_code == expected_status, response.status_code
+    assert len(collector.records) == 1, collector.records
+    logger_name, level, message = collector.records[0]
+    assert logger_name == "episodic.api.authorization", logger_name
+    assert level == "WARN", level
+    assert message == (
+        f"Authorization denied with {expected_decision} for GET /v1/series-profiles."
+    ), message
+    assert "Bearer sensitive-token" not in message, message
+    assert "sensitive-token" not in message, message
 
 
 def test_non_v1_paths_bypass_authorization(
