@@ -261,13 +261,15 @@ _event_log = getLogger(__name__)
 
 def _serialize_log_field(value: object) -> object:
     """Return a stable JSON-compatible representation for a log field."""
-    if isinstance(value, enum.Enum):
-        return value.value
-    if isinstance(value, dt.date | dt.time):
-        return value.isoformat()
-    if isinstance(value, uuid.UUID | BaseException):
-        return str(value)
-    return str(value)
+    match value:
+        case enum.Enum():
+            return value.value
+        case dt.date() | dt.time():
+            return value.isoformat()
+        case uuid.UUID() | BaseException():
+            return str(value)
+        case _:
+            return str(value)
 
 
 def log_event(level: str, message: str, **fields: object) -> None:

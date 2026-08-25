@@ -76,7 +76,7 @@ def _invoke_finish_callback(
             "generation_graph.finish_node.callback.finish",
             correlation_id=correlation_id,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - Callback failures must not replace a completed graph result.
         _log_event(
             "error",
             "generation_graph.finish_node.callback.error",
@@ -178,6 +178,10 @@ def _build_execute_node(
     When *checkpoint_port* is ``None``, returns the direct execute node
     targeting ``"finish"``. Otherwise returns the suspend-before-execute node
     targeting ``END``.
+
+    Returns
+    -------
+        The execute node callable and its graph target.
     """
     if checkpoint_port is None:
 
@@ -225,6 +229,10 @@ def build_generation_orchestration_graph(
             actions.
         extensions: Optional persistence, callback, and cost-recording
             collaborators for graph execution.
+
+    Returns
+    -------
+        The compiled generation orchestration graph.
     """
     graph_extensions = extensions or GenerationGraphExtensions()
     graph = StateGraph(GenerationGraphState)

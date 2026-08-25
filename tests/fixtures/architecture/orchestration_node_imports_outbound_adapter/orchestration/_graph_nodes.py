@@ -4,4 +4,4 @@ from tests.fixtures.architecture.orchestration_node_imports_outbound_adapter imp
     storage,
 )
 
-VALUE = storage.VALUE
+VALUE: str = storage.VALUE

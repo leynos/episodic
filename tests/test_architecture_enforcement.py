@@ -224,10 +224,10 @@ def test_orchestration_json_diagnostics_match_snapshot(
             config_path,
             output_format="json",
         )
-        assert completed_process.returncode == 1
+        assert completed_process.returncode == 1, _render_process(completed_process)
         reports[package_name] = _normalise_hecate_json_report(completed_process)
 
-    assert reports == snapshot
+    assert reports == snapshot, "normalized JSON diagnostics must match the snapshot"
 
 
 def test_checker_accepts_allowed_fixture_graph(tmp_path: Path) -> None:
@@ -286,7 +286,7 @@ def test_production_config_declares_orchestration_groups() -> None:
         "orchestration",
         "orchestration_tasks",
         "orchestration_checkpoint",
-    } <= group_names
+    } <= group_names, "production Hecate config must declare orchestration groups"
 
 
 def test_production_checker_accepts_scoped_packages() -> None:

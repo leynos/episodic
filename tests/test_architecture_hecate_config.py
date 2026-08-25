@@ -22,12 +22,8 @@ from architecture_hecate_config import (
 )
 
 if typ.TYPE_CHECKING:
-    from pathlib import Path
-
-    from syrupy.assertion import SnapshotAssertion
-
-if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    from pathlib import Path
 
 
 class _ErrorCase(typ.NamedTuple):
@@ -100,7 +96,9 @@ def _assert_expected_base_groups(
         "inbound_adapter",
         "outbound_adapter",
     ], "Hecate groups must retain first-match policy order"
-    assert _group_prefixes(config, "composition_root") == [f"{package}.runtime"]
+    assert _group_prefixes(config, "composition_root") == [f"{package}.runtime"], (
+        "composition_root must match the runtime module"
+    )
     assert _group_allowed(config, "composition_root") == [
         "application",
         "composition_root",
@@ -115,25 +113,27 @@ def _assert_expected_base_groups(
     assert _group_prefixes(config, "domain") == [
         f"{package}.domain",
         f"{package}.worker.workloads",
-    ]
+    ], "domain must include domain and workload modules"
     assert _group_allowed(config, "domain") == ["domain"], (
         "domain group must allow only domain imports"
     )
-    assert _group_allowed(config, "application") == ["application", "domain"]
+    assert _group_allowed(config, "application") == ["application", "domain"], (
+        "application must allow application and domain imports"
+    )
     assert _group_prefixes(config, "inbound_adapter") == [
         f"{package}.api",
         f"{package}.worker.topology",
-    ]
+    ], "inbound_adapter must match API and worker topology modules"
     assert _group_allowed(config, "inbound_adapter") == [
         "inbound_adapter",
         "application",
         "domain",
-    ]
+    ], "inbound_adapter must allow inbound, application, and domain imports"
     assert _group_allowed(config, "outbound_adapter") == [
         "outbound_adapter",
         "application",
         "domain",
-    ]
+    ], "outbound_adapter must allow outbound, application, and domain imports"
 
 
 def _assert_expected_orchestration_groups(
@@ -145,36 +145,36 @@ def _assert_expected_orchestration_groups(
         f"{package}.orchestration._checkpoint_payload",
         f"{package}.orchestration._checkpoint_dto",
         f"{package}.orchestration._payload_dto",
-    ]
+    ], "checkpoint group must match checkpoint payload modules"
     assert _group_allowed(config, "orchestration_checkpoint") == [
         "orchestration_checkpoint",
         "domain",
-    ]
+    ], "checkpoint group must allow checkpoint and domain imports"
     assert _group_prefixes(config, "orchestration_nodes") == [
         f"{package}.orchestration._graph_nodes",
-    ]
+    ], "node group must match only the graph node module"
     assert _group_allowed(config, "orchestration_nodes") == [
         "orchestration_nodes",
         "domain",
         "orchestration_checkpoint",
-    ]
+    ], "node group must allow node, domain, and checkpoint imports"
     assert _group_prefixes(config, "orchestration_tasks") == [
         f"{package}.worker.tasks",
-    ]
+    ], "task group must match worker tasks"
     assert _group_allowed(config, "orchestration_tasks") == [
         "orchestration_tasks",
         "application",
         "domain",
-    ]
+    ], "task group must allow task, application, and domain imports"
     assert _group_prefixes(config, "orchestration") == [
         f"{package}.orchestration",
-    ]
+    ], "orchestration group must match the orchestration package"
     assert _group_allowed(config, "orchestration") == [
         "orchestration",
         "application",
         "domain",
         "orchestration_checkpoint",
-    ]
+    ], "orchestration must allow its declared internal dependencies"
 
 
 @pytest.mark.parametrize(
@@ -312,7 +312,7 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
         output_format=output_format,
     )
 
-    assert captured_command == [
+    expected_command = [
         "/custom/python",
         "-m",
         "hecate",
@@ -322,15 +322,13 @@ def test_fixture_check_uses_injected_python_and_explicit_arguments(
         "--package",
         "tests.fixtures.architecture.allowed_case",
         "--root",
-        str(
-            Path(__file__).resolve().parent
-            / "fixtures"
-            / "architecture"
-            / "allowed_case",
-        ),
+        str(REPO_ROOT / "tests/fixtures/architecture/allowed_case"),
         "--format",
         output_format,
     ]
+    assert captured_command == expected_command, (
+        "fixture Hecate command must include the requested output format"
+    )
 
 
 def test_production_check_uses_injected_python(
