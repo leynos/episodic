@@ -122,11 +122,20 @@ async def test_langgraph_plans_executes_and_finishes_with_vidai_mock(
         state = await graph.ainvoke(GenerationGraphState(request=request))
 
     result = state["orchestration_result"]
-    assert result.plan.steps[0].action_kind is ActionKind.GENERATE_SHOW_NOTES
-    assert result.action_results[0].show_notes_result is not None
-    assert result.action_results[0].show_notes_result.entries[0].topic == "Introduction"
-    assert result.total_usage.total_tokens == 81
+    assert result.plan.steps[0].action_kind is ActionKind.GENERATE_SHOW_NOTES, (
+        "planner must select show-note generation"
+    )
+    assert result.action_results[0].show_notes_result is not None, (
+        "show-note execution must return a result"
+    )
+    topic = result.action_results[0].show_notes_result.entries[0].topic
+    assert topic == "Introduction", (
+        "Vidai Mock response must populate the expected topic"
+    )
+    assert result.total_usage.total_tokens == 81, (
+        "planner and action usage must aggregate"
+    )
     assert [call.model for call in recording_port.requests] == [
         "gpt-4.1",
         "gpt-4o-mini",
-    ]
+    ], "orchestration must call the planning and execution models in order"

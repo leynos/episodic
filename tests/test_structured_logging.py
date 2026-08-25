@@ -21,7 +21,7 @@ class _EventSpyLogger:
 
     def info(self, message: str, **kwargs: object) -> None:
         """Record one INFO message and verify no logger kwargs were added."""
-        assert not kwargs
+        assert not kwargs, "structured event fields must be encoded in the message"
         self.messages.append(message)
 
 
@@ -49,10 +49,13 @@ def test_log_event_normalizes_non_json_structured_fields(
         error=RuntimeError("provider unavailable"),
     )
 
-    assert json.loads(logger.messages[0]) == {
+    expected_payload = {
         "error": "provider unavailable",
         "event": "generation.failed",
         "event_id": str(event_id),
         "occurred_at": "2026-08-03T12:30:00+00:00",
         "state": "ready",
     }
+    assert json.loads(logger.messages[0]) == expected_payload, (
+        "non-JSON fields must normalize to the expected event payload"
+    )

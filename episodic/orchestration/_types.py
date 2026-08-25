@@ -2,9 +2,9 @@
 
 import enum
 
-from episodic.logging import log_event
-
-_log_event = log_event
+from episodic.logging import (
+    log_event as _log_event,  # noqa: F401 - Compatibility re-export for orchestration callers.
+)
 
 
 class ActionKind(enum.StrEnum):

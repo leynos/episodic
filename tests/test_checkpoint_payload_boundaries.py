@@ -84,7 +84,7 @@ def test_checkpoint_payload_dtos_use_provider_neutral_field_types() -> None:
                     f"{field_type!r}"
                 )
 
-    assert not rejected_fields
+    assert not rejected_fields, f"provider-specific DTO fields found: {rejected_fields}"
 
 
 def test_workflow_checkpoint_rejects_non_json_payload_values() -> None:
@@ -142,7 +142,9 @@ def test_workflow_checkpoint_payload_round_trips_through_json(payload: object) -
 
     encoded = json.dumps(checkpoint.payload, sort_keys=True)
 
-    assert json.loads(encoded) == checkpoint.payload
+    assert json.loads(encoded) == checkpoint.payload, (
+        "checkpoint payload must survive JSON round-tripping"
+    )
 
 
 @pytest.mark.parametrize(
@@ -182,7 +184,9 @@ def test_provider_neutral_origin_dispatch(
     expected: bool,
 ) -> None:
     """Generic annotation origins dispatch to the expected validator."""
-    assert _is_provider_neutral_origin(origin, arguments) is expected
+    assert _is_provider_neutral_origin(origin, arguments) is expected, (
+        f"unexpected provider-neutral result for {origin!r} with {arguments!r}"
+    )
 
 
 def _is_provider_neutral_type(field_type: object) -> bool:
