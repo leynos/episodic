@@ -19,6 +19,7 @@ from episodic.llm.openai_adapter import (
     OpenAICompatibleLLMAdapter,
     OpenAICompatibleLLMConfig,
 )
+from episodic.logging import LoggerHandle, LogLevel
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -42,8 +43,18 @@ class _OpenAIAdapterLogSpy:
         """Initialise an empty message list."""
         self.messages: list[str] = []
 
-    def error(self, message: str) -> None:
+    def log(
+        self,
+        level: int | LogLevel,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
         """Record one ERROR-level log message."""
+        del exc_info, stack_info
+        assert level == 40, "OpenAI adapter failures must be ERROR logs"
         self.messages += [message]
 
 
@@ -62,7 +73,7 @@ def openai_log_spy() -> cabc.Generator[_OpenAILogSpy]:
     from episodic.llm.openai_api import utils as openai_utils
 
     spy = _OpenAIAdapterLogSpy()
-    token = openai_utils._log_override.set(spy)
+    token = openai_utils._log_override.set(LoggerHandle(spy))
     yield spy
     openai_utils._log_override.reset(token)
 

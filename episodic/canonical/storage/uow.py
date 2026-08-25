@@ -16,7 +16,7 @@ import typing as typ
 
 from episodic.canonical.unit_of_work_protocols import CanonicalUnitOfWork
 from episodic.cost.storage import SqlAlchemyCostLedgerStore
-from episodic.logging import get_logger
+from episodic.logging import get_logger, log_info
 
 from .episode_repository import SqlAlchemyEpisodeRepository
 from .generation_runs import SqlAlchemyGenerationRunStore
@@ -211,7 +211,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             If no unit-of-work session is active.
         """  # noqa: DOC502  # Documents an exception propagated by the helper.
         await self._apply_session_action("commit")
-        logger.info("Committed canonical unit of work.")
+        log_info(logger, "Committed canonical unit of work.")
 
     async def flush(self) -> None:
         """Flush pending unit-of-work changes."""

@@ -18,6 +18,7 @@ assert result.returncode == 1
 import subprocess  # noqa: S404  # Tests exercise the Hecate CLI contract.
 import sys
 import textwrap
+import typing as typ
 from pathlib import Path
 
 FIXTURE_ROOT: Path = Path(__file__).resolve().parent / "fixtures" / "architecture"
@@ -38,7 +39,9 @@ OUTBOUND_ADAPTER_GROUPS: tuple[str, ...] = (
     "domain",
 )
 BARREL_OUTBOUND_FIXTURE = "api_imports_star_reexported_outbound_adapter"
+LOGGING_PORT_FIXTURE = "femtologging_outside_logging_port"
 HECATE_TIMEOUT_SECONDS = 60
+type FixturePolicyVariant = typ.Literal["default", "external_logging"]
 
 
 class HecateInvocationError(RuntimeError):
@@ -63,7 +66,12 @@ class HecateInvocationError(RuntimeError):
         super().__init__(message)
 
 
-def write_fixture_config(tmp_path: Path, package_name: str) -> Path:
+def write_fixture_config(
+    tmp_path: Path,
+    package_name: str,
+    *,
+    policy_variant: FixturePolicyVariant = "default",
+) -> Path:
     """Write a Hecate config for one architecture fixture package.
 
     Parameters
@@ -90,6 +98,7 @@ def write_fixture_config(tmp_path: Path, package_name: str) -> Path:
         _fixture_config(
             package,
             treats_package_barrel_as_outbound=package_name == BARREL_OUTBOUND_FIXTURE,
+            policy_variant=policy_variant,
         ),
         encoding="utf-8",
     )
@@ -205,8 +214,15 @@ def run_hecate_production_check(
         raise HecateInvocationError from exc
 
 
-def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) -> str:
+def _fixture_config(
+    package: str,
+    *,
+    treats_package_barrel_as_outbound: bool,
+    policy_variant: FixturePolicyVariant,
+) -> str:
     """Return fixture-specific Hecate TOML."""
+    if policy_variant == "external_logging":
+        return _external_logging_fixture_config(package)
     outbound_prefixes = (
         f'"{package}.storage", "{package}"'
         if treats_package_barrel_as_outbound
@@ -247,6 +263,87 @@ def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) ->
         name = "outbound_adapter"
         prefixes = [{outbound_prefixes}]
         allowed = {outbound_adapter_allowed}
+        """
+    )
+
+
+def _external_logging_fixture_config(package: str) -> str:
+    """Return a fixture policy that enforces the femtologging boundary."""
+    return textwrap.dedent(
+        f"""\
+        [tool.hecate]
+        root_packages = ["{package}"]
+        default_rule_id = "ARCH001"
+        include_external_packages = true
+
+        [[tool.hecate.groups]]
+        name = "logging_port"
+        prefixes = ["{package}.logging"]
+        allowed = ["logging_port", "logging_backend"]
+
+        [[tool.hecate.groups]]
+        name = "logging_backend"
+        prefixes = ["femtologging"]
+        allowed = ["logging_backend"]
+
+        [[tool.hecate.groups]]
+        name = "external_libraries"
+        prefixes = [
+            "alembic",
+            "celery",
+            "falcon",
+            "httpx",
+            "langgraph",
+            "openai",
+            "pydantic",
+            "sqlalchemy",
+        ]
+        allowed = ["external_libraries"]
+
+        [[tool.hecate.groups]]
+        name = "composition_root"
+        prefixes = ["{package}.runtime"]
+        allowed = [
+            "application",
+            "composition_root",
+            "domain",
+            "external_libraries",
+            "inbound_adapter",
+            "logging_port",
+            "outbound_adapter",
+        ]
+
+        [[tool.hecate.groups]]
+        name = "domain"
+        prefixes = ["{package}.domain"]
+        allowed = ["domain", "external_libraries", "logging_port"]
+
+        [[tool.hecate.groups]]
+        name = "application"
+        prefixes = ["{package}.service"]
+        allowed = ["application", "domain", "external_libraries", "logging_port"]
+
+        [[tool.hecate.groups]]
+        name = "inbound_adapter"
+        prefixes = ["{package}.api"]
+        allowed = [
+            "application",
+            "domain",
+            "external_libraries",
+            "inbound_adapter",
+            "logging_port",
+        ]
+
+        [[tool.hecate.groups]]
+        name = "outbound_adapter"
+        prefixes = ["{package}.storage"]
+        allowed = [
+            "application",
+            "domain",
+            "external_libraries",
+            "logging_port",
+            "outbound_adapter",
+        ]
         """
     )
 

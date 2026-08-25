@@ -16,7 +16,11 @@ import subprocess  # noqa: S404, TC003  # pytest-bdd evaluates step annotations.
 from pathlib import Path  # noqa: TC003  # pytest-bdd evaluates step annotations.
 
 import pytest
-from architecture_hecate_config import run_hecate_fixture_check, write_fixture_config
+from architecture_hecate_config import (
+    LOGGING_PORT_FIXTURE,
+    run_hecate_fixture_check,
+    write_fixture_config,
+)
 from pytest_bdd import given, parsers, scenario, then, when
 
 
@@ -58,6 +62,14 @@ def test_composition_root_wiring_is_accepted() -> None:
     """Run the composition-root acceptance scenario."""
 
 
+@scenario(
+    "../features/architecture_enforcement.feature",
+    "A direct femtologging import bypassing the logging port is rejected",
+)
+def test_direct_femtologging_import_is_rejected() -> None:
+    """Run the femtologging-boundary scenario."""
+
+
 @given(parsers.parse('the architecture fixture package "{package_name}"'))
 def architecture_fixture_package(
     context: ArchitectureContext,
@@ -70,7 +82,16 @@ def architecture_fixture_package(
 @when("the architecture checker runs")
 def architecture_checker_runs(context: ArchitectureContext, tmp_path: Path) -> None:
     """Run the architecture checker through its command-line entrypoint."""
-    config_path = write_fixture_config(tmp_path, context.package_name)
+    policy_variant = (
+        "external_logging"
+        if context.package_name == LOGGING_PORT_FIXTURE
+        else "default"
+    )
+    config_path = write_fixture_config(
+        tmp_path,
+        context.package_name,
+        policy_variant=policy_variant,
+    )
     context.completed_process = run_hecate_fixture_check(
         context.package_name,
         config_path,

@@ -20,3 +20,11 @@ Feature: Architecture enforcement
     Given the architecture fixture package "composition_root_allows_wiring"
     When the architecture checker runs
     Then the architecture check passes
+
+  Scenario: A direct femtologging import bypassing the logging port is rejected
+    Given the architecture fixture package "femtologging_outside_logging_port"
+    When the architecture checker runs
+    Then the architecture check fails
+    And the architecture diagnostic mentions "ARCH001"
+    And the architecture diagnostic mentions "api"
+    And the architecture diagnostic mentions "femtologging"

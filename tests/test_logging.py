@@ -54,6 +54,23 @@ class _SpyLogger:
         )
 
     # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
+    def debug(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record a DEBUG-level call."""
+        self._record(
+            episodic_logging.LogLevel.DEBUG,
+            message,
+            exc_info=exc_info,
+            stack_info=stack_info,
+        )
+
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
     def warning(
         self,
         message: str,
@@ -80,6 +97,23 @@ class _SpyLogger:
         stack_info: bool = False,
     ) -> None:
         """Record an ERROR-level call."""
+        self._record(
+            episodic_logging.LogLevel.ERROR,
+            message,
+            exc_info=exc_info,
+            stack_info=stack_info,
+        )
+
+    # pylint: disable-next=too-many-arguments  # mirrors stdlib/femtologging call signature
+    def exception(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Record an exception-level call."""
         self._record(
             episodic_logging.LogLevel.ERROR,
             message,
@@ -228,9 +262,11 @@ def test_log_wrappers_delegate_through_convenience_methods(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Compatibility helpers should preserve percent-style formatting semantics."""
-    logger = _SpyLogger()
+    spy_logger = _SpyLogger()
+    logger = episodic_logging.LoggerHandle(spy_logger)
     err = RuntimeError("boom")
 
+    episodic_logging.log_debug(logger, "Loading %s documents", 3)
     episodic_logging.log_info(logger, "Loaded %s documents", 3)
     episodic_logging.log_warning(logger, "Potential issue in %s", "ingestion")
     episodic_logging.log_error(
@@ -239,13 +275,17 @@ def test_log_wrappers_delegate_through_convenience_methods(
         "job-1",
         exc_info=err,
     )
+    episodic_logging.log_exception(logger, "Failed capture %s", "job-2")
 
-    assert logger.calls == snapshot, "convenience-wrapper calls must match the snapshot"
+    assert spy_logger.calls == snapshot, (
+        "convenience-wrapper calls must match the snapshot"
+    )
 
 
 def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
     """Compatibility helpers should propagate `TypeError` from formatting."""
-    logger = _SpyLogger()
+    spy_logger = _SpyLogger()
+    logger = episodic_logging.LoggerHandle(spy_logger)
 
     with pytest.raises(
         TypeError,
@@ -253,7 +293,7 @@ def test_log_wrappers_raise_type_error_on_mismatched_format() -> None:
     ):
         episodic_logging.log_info(logger, "Loaded %s documents for %s", 3)
 
-    assert logger.calls == [], (  # pylint: disable=use-implicit-booleaness-not-comparison  # The explicit empty-list comparison documents the expected collection value.
+    assert spy_logger.calls == [], (  # pylint: disable=use-implicit-booleaness-not-comparison  # The explicit empty-list comparison documents the expected collection value.
         "expected no log calls after TypeError"
     )
 
@@ -262,9 +302,11 @@ def test_log_wrappers_fall_back_to_logger_log_when_needed(
     snapshot: SnapshotAssertion,
 ) -> None:
     """Compatibility helpers should support loggers that only expose `log()`."""
-    logger = _LogOnlySpyLogger()
+    spy_logger = _LogOnlySpyLogger()
+    logger = episodic_logging.LoggerHandle(spy_logger)
     err = RuntimeError("boom")
 
+    episodic_logging.log_debug(logger, "Loading %s documents", 3)
     episodic_logging.log_info(logger, "Loaded %s documents", 3)
     episodic_logging.log_warning(logger, "Potential issue in %s", "ingestion")
     episodic_logging.log_error(
@@ -273,8 +315,9 @@ def test_log_wrappers_fall_back_to_logger_log_when_needed(
         "job-1",
         exc_info=err,
     )
+    episodic_logging.log_exception(logger, "Failed capture %s", "job-2")
 
-    assert logger.calls == snapshot, "fallback logger calls must match the snapshot"
+    assert spy_logger.calls == snapshot, "fallback logger calls must match the snapshot"
 
 
 def test_femtologging_exposes_stdlib_style_logger_surface() -> None:
@@ -298,8 +341,8 @@ def test_femtologging_exposes_stdlib_style_logger_surface() -> None:
         assert hasattr(logger, method_name), method_name
 
 
-def test_episodic_logging_get_logger_reexport_matches_femtologging_surface() -> None:
-    """Episodic logging should re-export the stdlib-style logger constructor."""
+def test_episodic_logging_get_logger_returns_opaque_handle() -> None:
+    """Episodic logging should hide the raw femtologging logger surface."""
     logger = episodic_logging.getLogger("tests.logging.surface")
     for method_name in (
         "debug",
@@ -310,10 +353,7 @@ def test_episodic_logging_get_logger_reexport_matches_femtologging_surface() -> 
         "exception",
         "isEnabledFor",
     ):
-        assert hasattr(logger, method_name), method_name
-    assert logger.isEnabledFor("INFO") is True, (
-        "re-exported logger must report INFO as enabled"
-    )
+        assert not hasattr(logger, method_name), method_name
 
 
 def _raise_logged_exception() -> None:

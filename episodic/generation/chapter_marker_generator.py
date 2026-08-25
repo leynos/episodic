@@ -16,7 +16,7 @@ from episodic.generation.chapter_marker_segments import (
     _validate_chapters_align_to_segments,
 )
 from episodic.llm import LLMPort, LLMRequest, LLMResponse
-from episodic.logging import log_info
+from episodic.logging import log_info, log_warning
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -45,7 +45,7 @@ class ChapterMarkersGenerator:
             payload = json.loads(response.text)
         except json.JSONDecodeError as exc:
             msg = "LLM response is not valid JSON."
-            logger.warning("chapter_markers_response_invalid_json")
+            log_warning(logger, "chapter_markers_response_invalid_json")
             raise ChapterMarkersResponseFormatError(msg) from exc
 
         payload_dict = _decode_object(payload, "response")
@@ -63,7 +63,7 @@ class ChapterMarkersGenerator:
                 finish_reason=response.finish_reason,
             )
         except ValueError as exc:
-            logger.warning("chapter_markers_response_invalid_timing")
+            log_warning(logger, "chapter_markers_response_invalid_timing")
             raise ChapterMarkersResponseFormatError(str(exc)) from exc
         log_info(
             logger,
@@ -90,12 +90,12 @@ class ChapterMarkersGenerator:
             provider_operation=self.config.provider_operation,
             token_budget=self.config.token_budget,
         )
-        logger.info("chapter_markers_generation_requested")
+        log_info(logger, "chapter_markers_generation_requested")
         response = await self.llm.generate(request)
         result = self._result_from_response(response)
         try:
             _validate_chapters_align_to_segments(result, segment_structure)
         except ChapterMarkersResponseFormatError:
-            logger.warning("chapter_markers_alignment_validation_failed")
+            log_warning(logger, "chapter_markers_alignment_validation_failed")
             raise
         return result
