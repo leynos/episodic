@@ -7,7 +7,7 @@ import typing as typ
 
 import falcon
 
-from episodic.logging import LogLevel, get_logger, log_warning
+from episodic.logging import get_logger, log_warning
 
 logger = get_logger(__name__)
 
@@ -111,7 +111,7 @@ class AuthorizationMiddleware:
         )
         try:
             result = _authorization_result(await self._authorization.decide(context))
-        except OSError, RuntimeError, TypeError, ValueError:
+        except (OSError, RuntimeError, TypeError, ValueError):  # fmt: skip
             log_warning(
                 logger,
                 "Authorization adapter failed for %s %s.",
@@ -173,7 +173,10 @@ def _log_authorization_denial(
     context: AuthorizationContext,
 ) -> None:
     """Log non-permit decisions without recording credential material."""
-    logger.log(
-        LogLevel.DEBUG,
-        (f"Authorization denied with {decision} for {context.method} {context.path}."),
+    log_warning(
+        logger,
+        "Authorization denied with %s for %s %s.",
+        decision,
+        context.method,
+        context.path,
     )
