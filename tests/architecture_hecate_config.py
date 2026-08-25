@@ -17,53 +17,20 @@ assert result.returncode == 1
 
 import subprocess  # ruff: ignore[suspicious-subprocess-import]  # Tests exercise the Hecate CLI contract.
 import sys
-import textwrap
+import typing as typ
 from pathlib import Path
+
+from architecture_hecate_config_templates import (
+    render_default_fixture_config,
+    render_external_logging_fixture_config,
+)
 
 FIXTURE_ROOT: Path = Path(__file__).resolve().parent / "fixtures" / "architecture"
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
-COMPOSITION_ROOT_GROUPS: tuple[str, ...] = (
-    "application",
-    "composition_root",
-    "domain",
-    "inbound_adapter",
-    "orchestration",
-    "orchestration_checkpoint",
-    "orchestration_nodes",
-    "orchestration_tasks",
-    "outbound_adapter",
-)
-DOMAIN_GROUPS: tuple[str, ...] = ("domain",)
-APPLICATION_GROUPS: tuple[str, ...] = ("application", "domain")
-ORCHESTRATION_CHECKPOINT_GROUPS: tuple[str, ...] = (
-    "orchestration_checkpoint",
-    "domain",
-)
-ORCHESTRATION_NODE_GROUPS: tuple[str, ...] = (
-    "orchestration_nodes",
-    "domain",
-    "orchestration_checkpoint",
-)
-ORCHESTRATION_GROUPS: tuple[str, ...] = (
-    "orchestration",
-    "application",
-    "domain",
-    "orchestration_checkpoint",
-    "orchestration_nodes",
-)
-ORCHESTRATION_TASK_GROUPS: tuple[str, ...] = (
-    "orchestration_tasks",
-    "application",
-    "domain",
-)
-INBOUND_ADAPTER_GROUPS: tuple[str, ...] = ("inbound_adapter", "application", "domain")
-OUTBOUND_ADAPTER_GROUPS: tuple[str, ...] = (
-    "outbound_adapter",
-    "application",
-    "domain",
-)
 BARREL_OUTBOUND_FIXTURE = "api_imports_star_reexported_outbound_adapter"
+LOGGING_PORT_FIXTURE = "femtologging_outside_logging_port"
 HECATE_TIMEOUT_SECONDS = 60
+type FixturePolicyVariant = typ.Literal["default", "external_logging"]
 
 
 class HecateInvocationError(RuntimeError):
@@ -88,7 +55,12 @@ class HecateInvocationError(RuntimeError):
         super().__init__(message)
 
 
-def write_fixture_config(tmp_path: Path, package_name: str) -> Path:
+def write_fixture_config(
+    tmp_path: Path,
+    package_name: str,
+    *,
+    policy_variant: FixturePolicyVariant = "default",
+) -> Path:
     """Write a Hecate config for one architecture fixture package.
 
     Parameters
@@ -115,6 +87,7 @@ def write_fixture_config(tmp_path: Path, package_name: str) -> Path:
         _fixture_config(
             package,
             treats_package_barrel_as_outbound=package_name == BARREL_OUTBOUND_FIXTURE,
+            policy_variant=policy_variant,
         ),
         encoding="utf-8",
     )
@@ -236,82 +209,16 @@ def run_hecate_production_check(
         raise HecateInvocationError from exc
 
 
-def _fixture_config(package: str, *, treats_package_barrel_as_outbound: bool) -> str:
-    """Return fixture-specific Hecate TOML."""
-    outbound_prefixes = (
-        f'"{package}.storage", "{package}.adapter", "{package}"'
-        if treats_package_barrel_as_outbound
-        else f'"{package}.storage", "{package}.adapter"'
+def _fixture_config(
+    package: str,
+    *,
+    treats_package_barrel_as_outbound: bool,
+    policy_variant: FixturePolicyVariant,
+) -> str:
+    """Select one explicit fixture policy and render its TOML."""
+    if policy_variant == "external_logging":
+        return render_external_logging_fixture_config(package)
+    return render_default_fixture_config(
+        package,
+        treats_package_barrel_as_outbound=treats_package_barrel_as_outbound,
     )
-    composition_root_allowed = _toml_string_array(COMPOSITION_ROOT_GROUPS)
-    domain_allowed = _toml_string_array(DOMAIN_GROUPS)
-    application_allowed = _toml_string_array(APPLICATION_GROUPS)
-    orchestration_checkpoint_allowed = _toml_string_array(
-        ORCHESTRATION_CHECKPOINT_GROUPS,
-    )
-    orchestration_node_allowed = _toml_string_array(ORCHESTRATION_NODE_GROUPS)
-    orchestration_allowed = _toml_string_array(ORCHESTRATION_GROUPS)
-    orchestration_task_allowed = _toml_string_array(ORCHESTRATION_TASK_GROUPS)
-    inbound_adapter_allowed = _toml_string_array(INBOUND_ADAPTER_GROUPS)
-    outbound_adapter_allowed = _toml_string_array(OUTBOUND_ADAPTER_GROUPS)
-    return textwrap.dedent(
-        f"""\
-        [tool.hecate]
-        root_packages = ["{package}"]
-        default_rule_id = "ARCH001"
-
-        [[tool.hecate.groups]]
-        name = "composition_root"
-        prefixes = ["{package}.runtime"]
-        allowed = {composition_root_allowed}
-
-        [[tool.hecate.groups]]
-        name = "domain"
-        prefixes = ["{package}.domain", "{package}.worker.workloads"]
-        allowed = {domain_allowed}
-
-        [[tool.hecate.groups]]
-        name = "orchestration_checkpoint"
-        prefixes = [
-            "{package}.orchestration._checkpoint_payload",
-            "{package}.orchestration._checkpoint_dto",
-            "{package}.orchestration._payload_dto",
-        ]
-        allowed = {orchestration_checkpoint_allowed}
-
-        [[tool.hecate.groups]]
-        name = "orchestration_nodes"
-        prefixes = ["{package}.orchestration._graph_nodes"]
-        allowed = {orchestration_node_allowed}
-
-        [[tool.hecate.groups]]
-        name = "orchestration_tasks"
-        prefixes = ["{package}.worker.tasks"]
-        allowed = {orchestration_task_allowed}
-
-        [[tool.hecate.groups]]
-        name = "orchestration"
-        prefixes = ["{package}.orchestration"]
-        allowed = {orchestration_allowed}
-
-        [[tool.hecate.groups]]
-        name = "application"
-        prefixes = ["{package}.service"]
-        allowed = {application_allowed}
-
-        [[tool.hecate.groups]]
-        name = "inbound_adapter"
-        prefixes = ["{package}.api", "{package}.worker.topology"]
-        allowed = {inbound_adapter_allowed}
-
-        [[tool.hecate.groups]]
-        name = "outbound_adapter"
-        prefixes = [{outbound_prefixes}]
-        allowed = {outbound_adapter_allowed}
-        """
-    )
-
-
-def _toml_string_array(values: tuple[str, ...]) -> str:
-    """Return a TOML array of quoted strings."""
-    return "[" + ", ".join(f'"{value}"' for value in values) + "]"

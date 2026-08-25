@@ -32,17 +32,18 @@ runtime policy.
 
 import asyncio
 import dataclasses as dc
-import logging
+import json
 import re
 import typing as typ
 
 import tei_rapporteur as _tei
 
+from episodic.logging import get_logger, log_debug, log_warning
 from episodic.metrics_ports import BoundedMetricsPort, NoopBoundedMetrics
 from episodic.observability import MonotonicClockPort, PerfCounterClock
 
 SPOKEN_WORD_REGEX = r"[A-Za-z][A-Za-z0-9'-]*"
-_log = logging.getLogger(__name__)
+_log = get_logger(__name__)
 _WORD_PATTERN = re.compile(SPOKEN_WORD_REGEX)
 _DEFAULT_ESTIMATOR_NAME = "chrono-naive-word-count"
 _DEFAULT_ESTIMATOR_VERSION = "1"
@@ -254,9 +255,16 @@ class ChronoRuntimeEstimator:
     ) -> None:
         """Record success-only side effects for the estimator boundary."""
         if result.metadata.spoken_word_count == 0:
-            _log.debug(
-                "Chrono: no spoken words found",
-                extra={"input_character_count": len(request.script_tei_xml)},
+            log_debug(
+                _log,
+                "%s",
+                json.dumps(
+                    {
+                        "event": "chrono_no_spoken_words",
+                        "input_character_count": len(request.script_tei_xml),
+                    },
+                    sort_keys=True,
+                ),
             )
         labels = {"outcome": "success"}
         self.metrics.increment_counter(_METRIC_EVALUATIONS, labels=labels)
@@ -274,7 +282,8 @@ class ChronoRuntimeEstimator:
     ) -> None:
         """Record validation-error side effects for the estimator boundary."""
         labels = {"outcome": "error", "error_type": "ValueError"}
-        _log.warning(
+        log_warning(
+            _log,
             "Chrono TEI validation failed; input_character_count=%s",
             len(request.script_tei_xml),
             exc_info=True,

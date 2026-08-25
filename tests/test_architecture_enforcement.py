@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from architecture_hecate_config import (
+    LOGGING_PORT_FIXTURE,
     run_hecate_fixture_check,
     run_hecate_production_check,
     write_fixture_config,
@@ -194,6 +195,14 @@ def _fixture_module(package_name: str, module_name: str) -> str:
                 _fixture_module("ungrouped_adapter_is_caught", "adapter"),
             ),
         ),
+        (
+            LOGGING_PORT_FIXTURE,
+            (
+                "ARCH001",
+                "tests.fixtures.architecture.femtologging_outside_logging_port.api",
+                "femtologging",
+            ),
+        ),
     ],
 )
 def test_checker_reports_fixture_boundary_violations(
@@ -202,7 +211,12 @@ def test_checker_reports_fixture_boundary_violations(
     tmp_path: Path,
 ) -> None:
     """Forbidden fixture imports produce stable architecture diagnostics."""
-    config_path = write_fixture_config(tmp_path, package_name)
+    policy_variant = (
+        "external_logging" if package_name == LOGGING_PORT_FIXTURE else "default"
+    )
+    config_path = write_fixture_config(
+        tmp_path, package_name, policy_variant=policy_variant
+    )
 
     completed_process = run_hecate_fixture_check(package_name, config_path)
 

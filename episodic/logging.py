@@ -1,7 +1,6 @@
 """Logging helpers for femtologging integration.
 
-This module keeps the local logging configuration seam stable while exposing
-the newer stdlib-aligned femtologging logger surface for current code.
+This module owns the application's logging port over femtologging.
 
 Examples
 --------
@@ -9,7 +8,7 @@ Configure logging and emit a message:
 
 >>> level, used_default = configure_logging("INFO")
 >>> logger = get_logger(__name__)
->>> logger.info("Started ingestion")
+>>> log_info(logger, "Started ingestion")
 """
 
 import datetime as dt
@@ -19,7 +18,8 @@ import logging
 import typing as typ
 import warnings
 
-from femtologging import basicConfig, get_logger, getLogger
+from femtologging import basicConfig
+from femtologging import get_logger as _get_femtologger
 
 
 class LogLevel(enum.StrEnum):
@@ -93,6 +93,16 @@ def configure_logging(
 class _SupportsConvenienceLog(typ.Protocol):
     """Protocol for loggers supporting stdlib-like femtologging methods."""
 
+    def debug(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Emit a DEBUG-level log record."""
+
     def info(
         self,
         message: str,
@@ -123,6 +133,16 @@ class _SupportsConvenienceLog(typ.Protocol):
     ) -> None:
         """Emit an ERROR-level log record."""
 
+    def exception(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Emit an ERROR-level record with exception information."""
+
 
 class _SupportsLogMethod(typ.Protocol):
     """Protocol for loggers exposing the stdlib-style `log` entry point."""
@@ -140,6 +160,45 @@ class _SupportsLogMethod(typ.Protocol):
 
 
 type _CompatibleLogger = _SupportsConvenienceLog | _SupportsLogMethod
+type _ConvenienceMethod = typ.Literal[
+    "debug",
+    "info",
+    "warning",
+    "error",
+    "exception",
+]
+
+
+class _LogCall(typ.NamedTuple):
+    """One formatted log request ready for backend dispatch."""
+
+    level: int
+    convenience_method: _ConvenienceMethod
+    template: str
+    args: tuple[object, ...]
+    exc_info: object | None
+
+
+class LoggerHandle:
+    """Opaque handle accepted by the Episodic logging port.
+
+    Callers obtain a handle from :func:`get_logger` and emit records through
+    ``log_debug``, ``log_info``, ``log_warning``, ``log_error``, or
+    ``log_exception``. The private backend remains inaccessible so future
+    cross-cutting context is attached consistently at this port.
+    """
+
+    def __init__(self, logger: _CompatibleLogger) -> None:
+        """Wrap a compatible backend logger for use by port helpers."""
+        self._logger = logger
+
+
+def get_logger(name: str) -> LoggerHandle:
+    """Return an opaque logging-port handle for *name*."""
+    return LoggerHandle(typ.cast("_CompatibleLogger", _get_femtologger(name)))
+
+
+getLogger = get_logger  # ruff: ignore[mixed-case-variable-in-global-scope]  # Preserve the stdlib-compatible constructor alias.
 
 
 def _format_message(template: str, args: tuple[object, ...]) -> str:
@@ -147,19 +206,22 @@ def _format_message(template: str, args: tuple[object, ...]) -> str:
     return template % args if args else template
 
 
-def _log_at(
-    logger: _CompatibleLogger,
-    level: int,
-    message: str,
-    *,
-    exc_info: object | None,
+def _emit(
+    logger: LoggerHandle,
+    log_call: _LogCall,
 ) -> None:
-    """Dispatch to a convenience method with a stdlib ``log()`` fallback."""
-    method_name = logging.getLevelName(level).lower()
+    """Format and dispatch one log request through the wrapped backend."""
+    level = log_call.level
+    convenience_method = log_call.convenience_method
+    message = _format_message(log_call.template, log_call.args)
+    exc_info = log_call.exc_info
+    backend = logger._logger
     try:
-        method = getattr(typ.cast("_SupportsConvenienceLog", logger), method_name)
+        method = getattr(
+            typ.cast("_SupportsConvenienceLog", backend), convenience_method
+        )
     except AttributeError:
-        typ.cast("_SupportsLogMethod", logger).log(
+        typ.cast("_SupportsLogMethod", backend).log(
             level,
             message,
             exc_info=exc_info,
@@ -169,8 +231,18 @@ def _log_at(
         method(message, exc_info=exc_info, stack_info=False)
 
 
+def log_debug(
+    logger: LoggerHandle,
+    template: str,
+    *args: object,
+    exc_info: object | None = None,
+) -> None:
+    """Format and emit a DEBUG log message through the port."""
+    _emit(logger, _LogCall(logging.DEBUG, "debug", template, args, exc_info))
+
+
 def log_info(
-    logger: _CompatibleLogger,
+    logger: LoggerHandle,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -179,9 +251,8 @@ def log_info(
 
     Parameters
     ----------
-    logger : _CompatibleLogger
-        Logger instance that supports femtologging convenience methods or a
-        stdlib-style `log(...)` fallback.
+    logger : LoggerHandle
+        Opaque handle returned by :func:`get_logger`.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -189,11 +260,11 @@ def log_info(
     exc_info : object | None, optional
         Exception info to attach to the log record.
     """
-    _log_at(logger, logging.INFO, _format_message(template, args), exc_info=exc_info)
+    _emit(logger, _LogCall(logging.INFO, "info", template, args, exc_info))
 
 
 def log_warning(
-    logger: _CompatibleLogger,
+    logger: LoggerHandle,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -202,9 +273,8 @@ def log_warning(
 
     Parameters
     ----------
-    logger : _CompatibleLogger
-        Logger instance that supports femtologging convenience methods or a
-        stdlib-style `log(...)` fallback.
+    logger : LoggerHandle
+        Opaque handle returned by :func:`get_logger`.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -212,11 +282,11 @@ def log_warning(
     exc_info : object | None, optional
         Exception info to attach to the log record.
     """
-    _log_at(logger, logging.WARNING, _format_message(template, args), exc_info=exc_info)
+    _emit(logger, _LogCall(logging.WARNING, "warning", template, args, exc_info))
 
 
 def log_error(
-    logger: _CompatibleLogger,
+    logger: LoggerHandle,
     template: str,
     *args: object,
     exc_info: object | None = None,
@@ -225,9 +295,8 @@ def log_error(
 
     Parameters
     ----------
-    logger : _CompatibleLogger
-        Logger instance that supports femtologging convenience methods or a
-        stdlib-style `log(...)` fallback.
+    logger : LoggerHandle
+        Opaque handle returned by :func:`get_logger`.
     template : str
         Percent-style format string for the log message.
     *args : object
@@ -235,10 +304,22 @@ def log_error(
     exc_info : object | None, optional
         Exception info to attach to the log record.
     """
-    _log_at(logger, logging.ERROR, _format_message(template, args), exc_info=exc_info)
+    _emit(logger, _LogCall(logging.ERROR, "error", template, args, exc_info))
 
 
-_event_log = getLogger(__name__)
+def log_exception(
+    logger: LoggerHandle,
+    template: str,
+    *args: object,
+    exc_info: object | None = True,
+) -> None:
+    """Format and emit an exception record with traceback information."""
+    _emit(logger, _LogCall(logging.ERROR, "exception", template, args, exc_info))
+
+
+# Keep the raw backend private to this module. The public structured-event
+# helper is itself part of the logging port and preserves the historical API.
+_event_log = typ.cast("_CompatibleLogger", _get_femtologger(__name__))
 
 
 def _serialize_log_field(value: object) -> object:
@@ -253,22 +334,20 @@ def _serialize_log_field(value: object) -> object:
 
 
 def log_event(level: str, message: str, **fields: object) -> None:
-    """Emit one structured log event with a JSON fallback.
+    """Emit one structured log event through the port.
 
-    Logger convenience methods only accept ``exc_info`` and ``stack_info``
-    beside the message. Structured fields are serialized into one JSON message
-    when needed.
+    Logger convenience methods accept only ``exc_info`` and ``stack_info``
+    beside the message. Other fields are serialized as JSON.
 
     Parameters
     ----------
     level : str
-        Name of the logger method to call, such as ``"info"`` or ``"error"``.
+        Logger method name, such as ``"info"`` or ``"error"``.
     message : str
-        Event message. When fields are encoded as JSON, this is the value of
-        the ``"event"`` key.
+        Event name, retained as the JSON ``"event"`` value when fields exist.
     **fields : object
-        ``exc_info`` and ``stack_info`` are passed through to the logger. Other
-        fields are serialized into the JSON log message.
+        Exception metadata is passed through; other fields are included in the
+        serialized event message.
 
     Examples
     --------
@@ -277,9 +356,11 @@ def log_event(level: str, message: str, **fields: object) -> None:
     """
     log_method = getattr(_event_log, level)
     allowed_kwargs = {
-        k: v for k, v in fields.items() if k in {"exc_info", "stack_info"}
+        key: value for key, value in fields.items() if key in {"exc_info", "stack_info"}
     }
-    extra_fields = {k: v for k, v in fields.items() if k not in allowed_kwargs}
+    extra_fields = {
+        key: value for key, value in fields.items() if key not in allowed_kwargs
+    }
     if extra_fields:
         payload = {**extra_fields, "event": message}
         log_method(
@@ -296,11 +377,14 @@ def log_event(level: str, message: str, **fields: object) -> None:
 
 __all__ = (
     "LogLevel",
+    "LoggerHandle",
     "configure_logging",
     "getLogger",
     "get_logger",
+    "log_debug",
     "log_error",
     "log_event",
+    "log_exception",
     "log_info",
     "log_warning",
 )

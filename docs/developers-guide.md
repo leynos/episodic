@@ -1235,6 +1235,11 @@ the importer, imported module, and dependency direction.
 
 The enforced groups are:
 
+- `logging_port`: the public `episodic.logging` seam used by every package.
+- `logging_backend`: the `femtologging` implementation, which only
+  `logging_port` may import.
+- `external_libraries`: approved third-party libraries, tracked as import
+  edges alongside the internal groups.
 - `domain_ports`: canonical domain types, canonical ports, ingestion ports,
   canonical constraint names, and LLM ports.
 - `application`: canonical services, profile/template workflows,
@@ -1265,11 +1270,13 @@ The enforced groups are:
 - `composition_root`: modules that wire concrete adapters, currently
   `episodic.api.runtime` and `episodic.worker.runtime`.
 
-When adding a new port or adapter, update `[tool.hecate]` in `pyproject.toml`
-in the same change as the package. Keep specific prefixes before broader
-prefixes because Hecate uses first-match group ordering: `composition_root`
-before adapter prefixes, `orchestration_nodes` before the broad `orchestration`
-prefix, and `orchestration_tasks` before worker adapter prefixes.
+`include_external_packages = true` makes Hecate classify third-party import
+edges. The groups are ordered by first matching prefix: keep `logging_port` and
+`logging_backend` before the broad `external_libraries` group so the latter
+cannot silently permit direct femtologging imports. Keep `composition_root`,
+`orchestration_nodes`, and `orchestration_tasks` before their broader adapter
+prefixes. When adding a new port or adapter, update `[tool.hecate]` in
+`pyproject.toml` in the same change as the package.
 
 `episodic.worker.workloads.WorkloadClass` is the canonical worker workload
 contract that task modules may import without pulling in the Celery app or
@@ -2682,18 +2689,30 @@ normalizer.
 
 ## Logging
 
-Structured logging uses femtologging v0.1.0-style logger methods. Import
-`get_logger` (or `getLogger` when matching stdlib naming) from
-`episodic.logging`, then emit via `logger.info(...)`, `logger.warning(...)`,
-`logger.error(...)`, or `logger.exception(...)`.
+`episodic.logging` is the project's logging port. Call sites obtain a
+`LoggerHandle` through `get_logger` (or the stdlib-compatible `getLogger`
+alias) and emit through `log_debug`, `log_info`, `log_warning`, `log_error`, or
+`log_exception`. Pass percent-style templates and arguments to the port; it
+eagerly formats the final message for femtologging.
 
-Keep `episodic.logging.configure_logging(...)` as the local configuration seam.
-The legacy `log_info`, `log_warning`, and `log_error` helpers remain available
-for compatibility. Use logger methods for ordinary messages and
-`episodic.logging.log_event(...)` for structured event payloads. Femtologging
-still expects pre-formatted messages rather than stdlib
-`logger.info("%s", value)` lazy formatting, so build the final string before
-calling the method.
+The handle deliberately exposes no level methods. The raw femtologging logger
+is an implementation detail, not a public surface: logging behaviour that
+crosses package boundaries must pass through the port. This gives each call
+site a stable emission contract while allowing the port to attach the request
+correlation identifier and future common fields consistently.
+
+Keep `configure_logging(...)` as the local configuration seam. `log_exception`
+records exception information by default; the other wrappers accept optional
+`exc_info` explicitly when a caller needs it.
+
+Use `log_event(...)` for structured event fields; it serializes those fields
+into the message while preserving the event name and exception metadata.
+
+The import boundary is enforced by Hecate's `logging_port` and
+`logging_backend` groups. The direct-call boundary has two independent gates:
+the opaque `LoggerHandle` is rejected by `ty` when code accesses `.info` or
+another level method, and `tests/test_logging_port_enforcement.py` scans the
+production tree so a regression reports every offending file.
 
 `episodic.logging.log_event(level, message, **fields)` is the public helper for
 event-oriented logging. Its signature is:

@@ -33,6 +33,7 @@ if typ.TYPE_CHECKING:
         TracerPort,
         ValueMetricsPort,
     )
+from episodic.logging import log_info
 
 from .episode_repository import SqlAlchemyEpisodeRepository
 from .generation_run_port_adapter import SqlAlchemyGenerationRunPortAdapter
@@ -242,9 +243,9 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
                 await self._session.rollback()
             elif self._has_pending_changes():
                 # Emitted as a structured event, not a bare warning: the
-                # canonical logger is a femtologging logger whose records do
-                # not reach stdlib handlers, so a plain logger.warning() would
-                # be invisible to caplog and therefore to any regression test.
+                # canonical logger is femtologging; its records do not reach
+                # stdlib handlers, so a plain warning record would be invisible
+                # to caplog and therefore to any regression test.
                 _log_event(
                     "warning",
                     "canonical_unit_of_work.closed_with_uncommitted_changes",
@@ -305,7 +306,7 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         """  # ruff: ignore[docstring-extraneous-exception]  # Documents an exception propagated by the helper.
         await self._apply_session_action("commit")
         self._mark_settled()
-        logger.info("Committed canonical unit of work.")
+        log_info(logger, "Committed canonical unit of work.")
 
     async def flush(self) -> None:
         """Flush pending unit-of-work changes."""

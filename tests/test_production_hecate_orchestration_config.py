@@ -45,11 +45,15 @@ def test_production_config_classifies_orchestration_in_strict_order() -> None:
     assert group_by_name["orchestration_checkpoint"]["allowed"] == [
         "orchestration_checkpoint",
         "domain_ports",
+        "external_libraries",
+        "logging_port",
     ], "checkpoint dependencies must remain restricted"
     assert group_by_name["orchestration_nodes"]["allowed"] == [
         "orchestration_nodes",
         "domain_ports",
         "orchestration_checkpoint",
+        "external_libraries",
+        "logging_port",
     ], "node dependencies must remain restricted"
 
     orchestration_group = group_by_name["orchestration"]
@@ -62,6 +66,8 @@ def test_production_config_classifies_orchestration_in_strict_order() -> None:
         "domain_ports",
         "orchestration_checkpoint",
         "orchestration_nodes",
+        "external_libraries",
+        "logging_port",
     ], "broad orchestration must not permit adapter imports"
 
     orchestration_tasks_group = group_by_name["orchestration_tasks"]
@@ -73,11 +79,37 @@ def test_production_config_classifies_orchestration_in_strict_order() -> None:
         "orchestration_tasks",
         "application",
         "domain_ports",
+        "external_libraries",
+        "logging_port",
     ], "worker tasks must not depend on adapters"
 
     module_groups = _production_orchestration_module_groups(groups)
     assert module_groups == EXPECTED_PRODUCTION_ORCHESTRATION_GROUPS, (
         "every orchestration Python module must match its intended production group"
+    )
+
+
+def test_production_logging_backend_is_restricted_to_logging_port() -> None:
+    """The production group order must not shadow the femtologging boundary."""
+    groups = _production_hecate_groups()
+    group_names = [typ.cast("str", group["name"]) for group in groups]
+    group_by_name = {typ.cast("str", group["name"]): group for group in groups}
+
+    assert (
+        group_names.index("logging_port")
+        < group_names.index("logging_backend")
+        < group_names.index("external_libraries")
+    ), "logging groups must precede the broad external-library group"
+    assert group_by_name["logging_backend"]["allowed"] == ["logging_port"], (
+        "the backend group must have a valid non-empty policy"
+    )
+    allowed_backend_groups = [
+        typ.cast("str", group["name"])
+        for group in groups
+        if "logging_backend" in typ.cast("list[str]", group["allowed"])
+    ]
+    assert allowed_backend_groups == ["logging_port"], (
+        "only the logging port may import the femtologging backend"
     )
 
 

@@ -9,12 +9,13 @@ import asyncio
 import collections.abc as cabc
 import concurrent.futures as cf
 import dataclasses as dc
-import logging
+import json
 import os
 import threading
 import time
 import typing as typ
 
+from episodic.logging import get_logger, log_exception, log_info
 from episodic.metrics_ports import (
     BoundedValueMetricsPort,
     NoopBoundedValueMetrics,
@@ -32,7 +33,21 @@ _METRIC_MAP_CALLS = "interpreter_pool.map.calls"
 _METRIC_MAP_ITEMS = "interpreter_pool.map.items"
 _METRIC_SHUTDOWN_LATENCY_MS = "interpreter_pool.shutdown.latency_ms"
 _TRUTHY_VALUES = frozenset({"1", "on", "true", "yes"})
-_log = logging.getLogger(__name__)
+_log = get_logger(__name__)
+
+
+def _log_event(
+    event: str,
+    *,
+    is_exception: bool = False,
+    **fields: object,
+) -> None:
+    """Emit one executor event as a stable JSON message."""
+    message = json.dumps({"event": event, **fields}, sort_keys=True)
+    if is_exception:
+        log_exception(_log, "%s", message)
+    else:
+        log_info(_log, "%s", message)
 
 
 class CpuTaskExecutorMetricsPort(BoundedValueMetricsPort, typ.Protocol):
@@ -189,9 +204,10 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                     )
                 except Exception:
                     outcome = "error"
-                    _log.exception(
-                        "Failed to create interpreter-pool executor",
-                        extra={"max_workers": self._max_workers},
+                    _log_event(
+                        "interpreter_pool_executor_creation_failed",
+                        is_exception=True,
+                        max_workers=self._max_workers,
                     )
                     raise
                 finally:
@@ -199,9 +215,9 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                         _METRIC_POOL_CREATIONS,
                         labels={"outcome": outcome},
                     )
-                _log.info(
-                    "Created interpreter-pool executor",
-                    extra={"max_workers": self._max_workers},
+                _log_event(
+                    "interpreter_pool_executor_created",
+                    max_workers=self._max_workers,
                 )
             return self._executor
 
@@ -218,9 +234,10 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                     executor.shutdown(wait=True)
                 except Exception:
                     outcome = "error"
-                    _log.exception(
-                        "Interpreter-pool executor shutdown failed",
-                        extra={"max_workers": self._max_workers},
+                    _log_event(
+                        "interpreter_pool_executor_shutdown_failed",
+                        is_exception=True,
+                        max_workers=self._max_workers,
                     )
                     raise
                 finally:
@@ -229,9 +246,9 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                         (self._clock.monotonic_seconds() - started) * 1000,
                         labels={"outcome": outcome},
                     )
-                _log.info(
-                    "Shut down interpreter-pool executor",
-                    extra={"max_workers": self._max_workers},
+                _log_event(
+                    "interpreter_pool_executor_shutdown",
+                    max_workers=self._max_workers,
                 )
 
     @typ.override
@@ -258,12 +275,11 @@ class InterpreterPoolCpuTaskExecutor(CpuTaskExecutor):
                         _METRIC_MAP_CALLS,
                         labels={"outcome": "error"},
                     )
-                    _log.exception(
-                        "Interpreter-pool executor map failed",
-                        extra={
-                            "item_count": len(items),
-                            "max_workers": self._max_workers,
-                        },
+                    _log_event(
+                        "interpreter_pool_executor_map_failed",
+                        is_exception=True,
+                        item_count=len(items),
+                        max_workers=self._max_workers,
                     )
                     raise
                 self._metrics.increment_counter(
@@ -292,9 +308,10 @@ def _build_cpu_task_executor_from_environment(
             _METRIC_EXECUTOR_SELECTIONS,
             labels={"executor": "inline", "reason": "feature_flag_disabled"},
         )
-        _log.info(
-            "Using inline CPU task executor",
-            extra={"reason": "feature_flag_disabled"},
+        _log_event(
+            "cpu_task_executor_selected",
+            executor="inline",
+            reason="feature_flag_disabled",
         )
         return InlineCpuTaskExecutor()
     if not _capability_check():
@@ -302,9 +319,10 @@ def _build_cpu_task_executor_from_environment(
             _METRIC_EXECUTOR_SELECTIONS,
             labels={"executor": "inline", "reason": "interpreter_pool_unavailable"},
         )
-        _log.info(
-            "Using inline CPU task executor",
-            extra={"reason": "interpreter_pool_unavailable"},
+        _log_event(
+            "cpu_task_executor_selected",
+            executor="inline",
+            reason="interpreter_pool_unavailable",
         )
         return InlineCpuTaskExecutor()
     max_workers = _parse_optional_positive_int(
@@ -314,9 +332,10 @@ def _build_cpu_task_executor_from_environment(
         _METRIC_EXECUTOR_SELECTIONS,
         labels={"executor": "interpreter_pool", "reason": "enabled"},
     )
-    _log.info(
-        "Using interpreter-pool CPU task executor",
-        extra={"max_workers": max_workers},
+    _log_event(
+        "cpu_task_executor_selected",
+        executor="interpreter_pool",
+        max_workers=max_workers,
     )
     return InterpreterPoolCpuTaskExecutor(max_workers=max_workers, metrics=metrics)
 
