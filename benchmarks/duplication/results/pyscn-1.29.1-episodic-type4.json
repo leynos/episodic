@@ -1,0 +1,40 @@
+{
+ "date": "2026-08-28",
+ "tool": "pyscn 1.29.1",
+ "question": "Can pyscn Type-4 be made usable with allow-listing on episodic/?",
+ "runs": [
+  {
+   "name": "permissive",
+   "config": {
+    "min_lines": 5,
+    "min_nodes": 10,
+    "clone_threshold": 0.65,
+    "enabled_clone_types": [
+     "type1",
+     "type2",
+     "type3",
+     "type4"
+    ]
+   },
+   "raw_report": "pyscn-1.29.1-episodic-permissive.json.gz",
+   "raw_report_sha256": "889ce37553da04d5aa33f832333d6e375968c3f23f5b3176b84a833ee2df092b",
+   "clone_pairs": 1365,
+   "type4_pairs": 692
+  },
+  {
+   "name": "gate-strength",
+   "config": {
+    "min_lines": 13,
+    "min_nodes": 50,
+    "clone_threshold": 0.9,
+    "enabled_clone_types": [
+     "type4"
+    ]
+   },
+   "raw_report": "pyscn-1.29.1-episodic-type4-gate.json",
+   "clone_pairs": 18,
+   "type4_pairs": 18
+  }
+ ],
+ "adjudication": "All 18 gate-strength pairs are intentional idiom parallels, dominated by the api/resources REST handler cluster; the spot-checked generation_persistence.py~storage/generation_runs.py pair (0.974) is the load-with-optional-lock idiom over two different domain entities. With the corpus's only true Type-4 at 0.77 ranking beneath false parallels at 0.93-1.0, no threshold plus allowlist yields a lane with an expected true-positive rate above zero."
+}

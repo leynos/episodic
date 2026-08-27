@@ -19,6 +19,7 @@ from episodic.orchestration._checkpoint_payload import (
     _planner_result_from_payload,
     _planner_result_to_payload,
 )
+from episodic.orchestration._graph_state import _require_request_and_planner
 from episodic.orchestration._types import _log_event
 from episodic.orchestration._usage import build_generation_result
 
@@ -72,14 +73,7 @@ def _validate_suspend_preconditions(
     dto.PlannedAction,
 ]:
     """Validate and extract required state fields for a suspend checkpoint."""
-    request = state.request
-    if request is None:
-        msg = "missing required state value: request"
-        raise ValueError(msg)
-    planner_result = state.planner_result
-    if planner_result is None:
-        msg = "missing required state value: planner_result"
-        raise ValueError(msg)
+    request, planner_result = _require_request_and_planner(state)
     if len(planner_result.plan.steps) != 1:
         msg = "cannot suspend a workflow with no planned steps"
         if planner_result.plan.steps:

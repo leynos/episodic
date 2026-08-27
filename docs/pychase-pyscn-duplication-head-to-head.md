@@ -2,22 +2,26 @@
 
 ## Outcome
 
-PyChase 0.1.0 is the choice for Episodic's blocking duplication gate. On the
-labelled corpus it reported every syntactic clone with no false positives and
-no unlabelled noise, and its unit-level findings carry qualified names that
-feed directly into remediation. pyscn 1.29.1 matched PyChase's syntactic recall
-and was the only tool to detect the Type-4 semantic clone, but it could not do
-so without also reporting a false positive, and its similarity scores compress
-into a narrow band that offers no threshold separating the two.
+On the labelled corpus PyChase 0.1.0 reported every syntactic clone with no
+false positives and no unlabelled noise, and its unit-level findings carry
+qualified names that feed directly into remediation. pyscn 1.29.1 matched
+PyChase's syntactic recall and was the only tool to detect the Type-4 semantic
+clone, but it could not do so without also reporting a false positive, and its
+similarity scores compress into a narrow band that offers no threshold
+separating the two.
 
-Neither tool detects semantically equivalent code reliably. The adopted gate
-therefore targets copy-paste duplication (Types 1-3) and treats semantic
-duplication as a review concern, not a machine-checked one.
+No tool measured here detects semantically equivalent code reliably. The
+duplication gate therefore targets copy-paste duplication (Types 1-3) and
+treats semantic duplication, beyond nose's narrow exact-equivalence witness, as
+a review concern rather than a machine-checked one.
 
 A follow-up evaluation of nose 0.20.0 on 2026-08-27 (see
 [the nose follow-up](#follow-up-nose-0200)) tied PyChase's perfect syntactic
-score but detected no Type-4 clone in any configuration, so the gate keeps
-PyChase and still enforces nothing semantic.
+score and detected no Type-4 clone in any configuration. On 2026-08-28 the
+maintainers nevertheless moved the gate to nose on speed and determinism
+grounds; see [ADR-019](adr/adr-019-adopt-nose-duplication-gate.md). The tables
+and history below record the comparison as measured, not the current tool
+choice.
 
 ## What each project means by duplication
 
@@ -81,6 +85,18 @@ threshold down to 0.6.
 pyscn's similarity band is also compressed: near-identical code rarely scores
 above 0.85 unless it is byte-identical, so the usable strict range collapses to
 a single step between 0.8 and exact match.
+
+The same behaviour scales badly on production code. Run over `episodic/` on
+2026-08-28, pyscn's semantic lane reported 692 Type-4 pairs at permissive
+settings; tightened to gate strength it still reported 18, every one of which
+adjudication found to be an intentional idiom parallel rather than a semantic
+clone (both raw reports and their run configurations are retained under
+`benchmarks/duplication/results/` beside the adjudicated summary
+`pyscn-1.29.1-episodic-type4.json`). Combined with the ranking inversion on the
+corpus — the true Type-4 pair at 0.77 beneath control pairs at 0.93 — no
+threshold keeps the true positives while rejecting the parallels, so Type-4
+enforcement through pyscn stays rejected even with an allowlist absorbing the
+known parallels.
 
 ## Configuration tuning
 
@@ -196,28 +212,33 @@ carry spans without qualified unit names (the adopted gate's allowlist keys on
 GitHub releases rather than PyPI, and the project documentation describes a
 `nose verify` behavioural oracle that the released 0.20.0 CLI does not include.
 
-nose is therefore not adopted: not for Types 1-3, where it equals but does not
-better PyChase while costing the qualified-name output and `uvx` pinning the
-gate relies on, and not for Type 4, where it detects nothing on this corpus. It
-is the first tool to revisit if PyChase's Python 3.13 pin becomes untenable or
-a semantic advisory channel is wanted, since its exact-witness design refuses
-false equivalences rather than ranking them above true ones.
+The evaluation therefore left nose tied on Types 1-3 — equalling but not
+bettering PyChase, at the cost of the qualified-name output and `uvx` pinning
+the gate then relied on — and empty-handed on Type 4. On 2026-08-28 the
+maintainers adopted nose regardless, in
+[ADR-019](adr/adr-019-adopt-nose-duplication-gate.md): with detection quality
+tied, its determinism (byte-identical runs needing neither a `PYTHONHASHSEED`
+nor a Python 3.13 pin) and its roughly fiftyfold speed advantage decided the
+choice, and location-keyed allow entries replace the qualified names it does
+not report. Its exact-equivalence channel is enforced as a narrow blocking
+signal, since its witness design refuses false equivalences rather than ranking
+them above true ones; broader Type-4 duplication remains a review concern.
 
 ## Recommendation
 
-- Use PyChase behind `scripts/duplication_gate.py` as the blocking
-  copy-paste gate, with the declarative-module exclusions and the reasoned
-  allowlist in `pyproject.toml` (ADR-018).
-- Do not rely on either tool for semantic (Type-4) duplication. pyscn's
-  semantic detector inverted the ranking between a true and a false semantic
-  pair on this corpus.
-- Revisit the comparison when PyChase gains Python 3.14 support or pyscn
-  widens its similarity band; both caveats are release-specific behaviour, not
-  architectural limits.
-- Do not adopt nose 0.20.0: it ties PyChase on Types 1-3 without the
-  qualified-name output the gate keys on, and detects no Type-4 clone on this
-  corpus. Re-evaluate it first if the PyChase pins become untenable or an
-  advisory semantic channel is wanted.
+- Use nose 0.20.0 behind `scripts/duplication_gate.py` as the blocking
+  copy-paste gate, with the pinned `[tool.nose]` settings and the reasoned,
+  location-keyed allowlist in `pyproject.toml` (ADR-019). PyChase remains the
+  reference for detection quality on Types 1-3, which nose matches.
+- Do not rely on pyscn for semantic (Type-4) duplication. Its semantic detector
+  inverted the ranking between a true and a false semantic pair on this corpus,
+  and on `episodic/` reported only intentional parallels at gate strength.
+- Treat nose's exact-equivalence witness as the only machine-checked semantic
+  signal. It covers a narrow modelled subset and misses rewrites such as a loop
+  against a `sum()` fold, so wider semantic duplication stays a review concern.
+- Revisit the comparison if nose's pre-1.0 distribution or ranked-surface view
+  becomes a liability, or if pyscn widens its similarity band; these caveats
+  are release-specific behaviour, not architectural limits.
 
 The corpus is intentionally small and Episodic is only one codebase. The
 results establish behaviour for these released versions and fixtures; they do

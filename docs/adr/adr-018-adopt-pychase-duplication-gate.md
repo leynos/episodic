@@ -1,6 +1,7 @@
 # ADR-018: Adopt PyChase code-duplication gate
 
-- Status: Accepted
+- Status: Superseded by
+  [ADR-019](adr-019-adopt-nose-duplication-gate.md)
 - Date: 2026-08-22
 - Deciders: Episodic maintainers
 
@@ -53,3 +54,7 @@ hash-seed pins become untenable. Evidence is retained under
 `benchmarks/duplication/results/` (`nose-0.20.0*.json`,
 `tuning-nose-0.20.0.json`) and summarized in the head-to-head's nose follow-up
 section.
+
+This verdict was reversed the next day on speed and determinism grounds; see
+[ADR-019](adr-019-adopt-nose-duplication-gate.md) (2026-08-28), which
+supersedes this record.

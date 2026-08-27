@@ -1,8 +1,8 @@
 """Tests for the code-duplication gate helper script.
 
-The gate depends on PyChase, which imports removed ``ast`` aliases on
-Python 3.14, so the whole module is skipped when that import fails; the
-``make duplication-test`` target runs these tests on Python 3.13.
+The gate drives the pinned ``nose`` binary; these tests exercise the
+allowlist, matching, and partitioning logic without invoking it. The
+``make duplication-test`` target runs them on the repository interpreter.
 """
 
 import re
@@ -10,292 +10,165 @@ import textwrap
 import typing as typ
 
 import pytest
+from duplication_gate_test_support import allowlist, detector, gate
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
-try:
-    import duplication_gate as gate
-except ImportError:  # pragma: no cover - Python 3.14 path
-    pytest.skip(
-        "duplication_gate requires PyChase, which needs Python < 3.14",
-        allow_module_level=True,
-    )
-except AttributeError as error:  # pragma: no cover - Python 3.14 path
-    if str(error) != "module 'ast' has no attribute 'Str'":
-        raise
-    pytest.skip(
-        "duplication_gate requires PyChase, which needs Python < 3.14",
-        allow_module_level=True,
-    )
+
+def _location(
+    file: str = "episodic/a.py",
+    start: int = 1,
+    end: int = 20,
+    name: str | None = None,
+) -> detector.Location:
+    """Build one reported location."""
+    return detector.Location(file=file, start=start, end=end, name=name)
 
 
-def _finding(
-    first: str = "episodic/a.py::alpha",
-    second: str = "episodic/b.py::beta",
-    score: float = 1.0,
-) -> gate.Finding:
-    """Build a finding with derived locations for partitioning tests."""
-    return gate.Finding(
-        first=first,
-        second=second,
-        location_first=f"{first.split('::')[0]}:1-20",
-        location_second=f"{second.split('::')[0]}:1-20",
-        score=score,
+def _finding(*locations: detector.Location, value: float = 22.1) -> detector.Finding:
+    """Build a finding over the supplied locations."""
+    members = locations or (_location(), _location(file="episodic/b.py"))
+    return detector.Finding(witness="copy-paste", value=value, locations=members)
+
+
+class TestKeyMatching:
+    """Path-glob and unit-name semantics for allow keys."""
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            pytest.param("episodic/a.py", id="exact-path"),
+            pytest.param("episodic/*.py", id="glob-path"),
+            pytest.param("episodic/**/*.py", id="recursive-glob"),
+            pytest.param("episodic/a.py::run", id="matching-name"),
+            pytest.param("episodic/*.py::run", id="glob-path-and-name"),
+        ],
     )
+    def test_matching_keys_cover_the_location(self, key: str) -> None:
+        """Keys match on the path glob and, when given, the unit name."""
+        location = _location(name="run")
+        assert allowlist.key_matches(key, location), (
+            f"Key {key!r} must cover {location.file}."
+        )
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            pytest.param("episodic/b.py", id="other-path"),
+            pytest.param("episodic/a.py::other", id="other-name"),
+            pytest.param("episodic/nested/*.py", id="other-directory"),
+        ],
+    )
+    def test_unrelated_keys_do_not_cover_the_location(self, key: str) -> None:
+        """Keys naming another path or unit leave the location uncovered."""
+        location = _location(name="run")
+        assert not allowlist.key_matches(key, location), (
+            f"Key {key!r} must not cover {location.file}."
+        )
+
+    def test_named_keys_never_match_fragments(self) -> None:
+        """A ``::name`` key cannot silence an unnamed fragment finding."""
+        assert not allowlist.key_matches("episodic/a.py::run", _location()), (
+            "Named keys must not match locations nose reported without a name."
+        )
 
 
 class TestAllowEntry:
-    """Matching semantics for unit and pair allow entries."""
+    """Coverage semantics for unit and members allow entries."""
 
-    def test_unit_entry_matches_either_side(self) -> None:
-        """A unit entry silences any pair the unit participates in."""
-        entry = gate.AllowEntry(units=("episodic/a.py::alpha",), reason="r")
-        assert entry.matches("episodic/a.py::alpha", "episodic/b.py::beta"), (
-            "Unit entry must match its left member."
+    def test_unit_entry_requires_every_location(self) -> None:
+        """A unit entry silences a family only when it covers every member."""
+        entry = allowlist.AllowEntry(keys=("episodic/a.py",), reason="r")
+        assert entry.matches(_finding(_location(), _location(start=40, end=60))), (
+            "A single-file family must be covered by its file key."
         )
-        assert entry.matches("episodic/b.py::beta", "episodic/a.py::alpha"), (
-            "Unit entry must match its right member."
-        )
-        assert not entry.matches("episodic/b.py::beta", "episodic/c.py::gamma"), (
-            "Unit entry must not match unrelated members."
+        assert not entry.matches(_finding()), (
+            "A family reaching an uncovered file must keep blocking."
         )
 
-    def test_pair_entry_matches_unordered(self) -> None:
-        """A pair entry silences only that unordered pair."""
-        entry = gate.AllowEntry(
-            units=("episodic/a.py::alpha", "episodic/b.py::beta"),
+    def test_members_entry_covers_each_listed_key(self) -> None:
+        """A members entry covers families whose members it all names."""
+        entry = allowlist.AllowEntry(
+            keys=("episodic/a.py", "episodic/b.py"),
             reason="r",
         )
-        assert entry.matches("episodic/b.py::beta", "episodic/a.py::alpha"), (
-            "Pair entry must ignore member order."
-        )
-        assert not entry.matches("episodic/a.py::alpha", "episodic/c.py::gamma"), (
-            "Pair entry must not match a different pair."
-        )
+        assert entry.matches(_finding()), "Listed members must silence the family."
+        assert not entry.matches(
+            _finding(_location(), _location(file="episodic/c.py"))
+        ), "An unlisted third member must keep the family blocking."
 
 
-class TestNormalizeFindings:
-    """Normalization of raw PyChase pair payloads."""
-
-    def test_orders_by_descending_score_then_location(self) -> None:
-        """Findings sort by score, then by source location."""
-        raw: list[gate._DetectorPairPayload] = [
-            {
-                "score": 0.9,
-                "left": {
-                    "file": "episodic/z.py",
-                    "start_line": 1,
-                    "end_line": 20,
-                    "qualname": "one",
-                },
-                "right": {
-                    "file": "episodic/z.py",
-                    "start_line": 30,
-                    "end_line": 50,
-                    "qualname": "two",
-                },
-            },
-            {
-                "score": 1.0,
-                "left": {
-                    "file": "episodic/a.py",
-                    "start_line": 5,
-                    "end_line": 25,
-                    "qualname": "three",
-                },
-                "right": {
-                    "file": "episodic/b.py",
-                    "start_line": 5,
-                    "end_line": 25,
-                    "qualname": "four",
-                },
-            },
-        ]
-        findings = gate.normalize_findings(raw)
-        assert [f.score for f in findings] == [1.0, 0.9], (
-            "Findings must descend by similarity."
-        )
-        assert findings[0].first == "episodic/a.py::three", (
-            "Higher-scored finding must sort first."
-        )
-        assert findings[0].location_first == "episodic/a.py:5-25", (
-            "Normalized location must retain source lines."
-        )
-
-
-class TestDetectorMember:
-    """PyChase member payload validation."""
-
-    _VALID_PAYLOAD: typ.ClassVar[dict[str, object]] = {
-        "file": "episodic/a.py",
-        "qualname": "module.function",
-        "start_line": 10,
-        "end_line": 20,
-    }
-    _MISSING = object()
-
-    def test_accepts_a_valid_payload(self) -> None:
-        """A complete PyChase member retains its original field values."""
-        assert (
-            gate._detector_member(self._VALID_PAYLOAD, context="member")
-            == self._VALID_PAYLOAD
-        ), "Valid PyChase member payloads must round-trip."
+class TestValidateKey:
+    """Allow-key validation at the configuration boundary."""
 
     @pytest.mark.parametrize(
-        ("field", "invalid_value", "expected_error", "message"),
+        "key",
+        ["episodic/a.py", "episodic/*.py::run", "episodic/**/models.py"],
+    )
+    def test_accepts_well_formed_keys(self, key: str) -> None:
+        """Well-formed keys round-trip unchanged."""
+        assert allowlist.validate_key(key, context="key") == key, (
+            "Validation must return the key unchanged."
+        )
+
+    @pytest.mark.parametrize(
+        ("key", "diagnostic"),
         [
-            (
-                "file",
-                _MISSING,
-                ValueError,
-                "member.file must be a non-empty string",
+            pytest.param("", "must be a 'path' or 'path::name' key", id="empty"),
+            pytest.param("::run", "must be a 'path' or 'path::name' key", id="no-path"),
+            pytest.param(
+                "episodic/a.py::",
+                "must be a 'path' or 'path::name' key",
+                id="empty-name",
             ),
-            ("file", "", ValueError, "member.file must be a non-empty string"),
-            (
-                "file",
-                1,
-                ValueError,
-                "member.file must be a non-empty string",
+            pytest.param(
+                "/episodic/a.py",
+                "must be a repository-relative path key",
+                id="absolute",
             ),
-            (
-                "qualname",
-                _MISSING,
-                ValueError,
-                "member.qualname must be a non-empty string",
+            pytest.param(
+                "../secrets.py",
+                "must be a repository-relative path key",
+                id="parent-escape",
             ),
-            (
-                "qualname",
-                "",
-                ValueError,
-                "member.qualname must be a non-empty string",
-            ),
-            (
-                "qualname",
-                1,
-                ValueError,
-                "member.qualname must be a non-empty string",
-            ),
-            (
-                "start_line",
-                True,
-                TypeError,
-                "member.start_line must be a positive integer",
-            ),
-            (
-                "start_line",
-                "10",
-                TypeError,
-                "member.start_line must be a positive integer",
-            ),
-            (
-                "end_line",
-                False,
-                TypeError,
-                "member.end_line must not precede start_line",
-            ),
-            (
-                "start_line",
-                0,
-                ValueError,
-                "member.start_line must be a positive integer",
-            ),
-            (
-                "start_line",
-                -1,
-                ValueError,
-                "member.start_line must be a positive integer",
-            ),
-            (
-                "end_line",
-                "20",
-                TypeError,
-                "member.end_line must not precede start_line",
-            ),
-            (
-                "end_line",
-                _MISSING,
-                TypeError,
-                "member.end_line must not precede start_line",
-            ),
-            ("end_line", 9, ValueError, "member.end_line must not precede start_line"),
-        ],
-        ids=[
-            "missing-file",
-            "empty-file",
-            "non-string-file",
-            "missing-qualname",
-            "empty-qualname",
-            "non-string-qualname",
-            "boolean-start-line",
-            "non-integer-start-line",
-            "boolean-end-line",
-            "zero-start-line",
-            "negative-start-line",
-            "non-integer-end-line",
-            "missing-end-line",
-            "inverted-lines",
         ],
     )
-    def test_rejects_invalid_field_values(
-        self,
-        field: str,
-        invalid_value: object,
-        expected_error: type[Exception],
-        message: str,
-    ) -> None:
-        """Invalid fields preserve PyChase's exception types and messages."""
-        payload: dict[str, object] = self._VALID_PAYLOAD.copy()
-        if invalid_value is self._MISSING:
-            del payload[field]
-        else:
-            payload[field] = invalid_value
-        with pytest.raises(expected_error) as error:
-            gate._detector_member(payload, context="member")
-        assert type(error.value) is expected_error, "Exception type must remain exact."
-        assert str(error.value) == message, "Validation message must remain exact."
-
-    def test_rejects_non_mapping_payload(self) -> None:
-        """Non-object PyChase members fail at the detector boundary."""
-        with pytest.raises(
-            TypeError,
-            match=re.escape("member must be an object with string keys"),
-        ):
-            gate._detector_member([], context="member")
+    def test_rejects_malformed_keys(self, key: str, diagnostic: str) -> None:
+        """Malformed keys raise a configuration error."""
+        with pytest.raises(gate.GateConfigError, match=re.escape(diagnostic)):
+            allowlist.validate_key(key, context="key")
 
 
 class TestLoadAllowlist:
     """Allowlist parsing and validation."""
 
-    def _write(self, tmp_path: object, body: str) -> object:
-        """Write ``body`` to ``pyproject.toml`` under ``tmp_path`` and return it."""
+    def _write(self, tmp_path: object, body: str) -> Path:
+        """Write ``body`` to ``pyproject.toml`` under ``tmp_path``."""
         pyproject = typ.cast("Path", tmp_path) / "pyproject.toml"
         pyproject.write_text(textwrap.dedent(body), encoding="utf-8")
         return pyproject
 
-    def test_loads_unit_and_pair_entries(self, tmp_path: object) -> None:
-        """Unit and pair entries load with their reasons."""
-        pyproject = typ.cast(
-            "Path",
-            self._write(
-                tmp_path,
-                """\
+    def test_loads_unit_and_members_entries(self, tmp_path: object) -> None:
+        """Unit and members entries load with their reasons."""
+        pyproject = self._write(
+            tmp_path,
+            """\
             [[tool.duplication_gate.allow]]
-            unit = "episodic/a.py::alpha"
+            unit = "episodic/a.py"
             reason = "declarative"
 
             [[tool.duplication_gate.allow]]
-            pair = ["episodic/b.py::beta", "episodic/c.py::gamma"]
+            members = ["episodic/b.py::beta", "episodic/c.py::gamma"]
             reason = "parallel contracts"
             """,
-            ),
         )
-        entries = gate.load_allowlist(pyproject)
-        assert entries[0].units == ("episodic/a.py::alpha",), (
+        entries = allowlist.load_allowlist(pyproject)
+        assert entries[0].keys == ("episodic/a.py",), (
             "Unit entry must retain its target."
         )
-        assert entries[1].units == ("episodic/b.py::beta", "episodic/c.py::gamma"), (
-            "Pair entry must retain both targets."
+        assert entries[1].keys == ("episodic/b.py::beta", "episodic/c.py::gamma"), (
+            "Members entry must retain every target."
         )
         assert entries[1].reason == "parallel contracts", (
             "Allow entry must retain its reason."
@@ -303,11 +176,8 @@ class TestLoadAllowlist:
 
     def test_missing_gate_table_yields_empty_allowlist(self, tmp_path: object) -> None:
         """A pyproject without the gate table produces no entries."""
-        pyproject = typ.cast(
-            "Path",
-            self._write(tmp_path, "[project]\nname = 'x'\nversion = '0'\n"),
-        )
-        assert gate.load_allowlist(pyproject) == (), (
+        pyproject = self._write(tmp_path, "[project]\nname = 'x'\nversion = '0'\n")
+        assert allowlist.load_allowlist(pyproject) == (), (
             "Missing gate table must mean no allow entries."
         )
 
@@ -315,33 +185,38 @@ class TestLoadAllowlist:
         ("body", "diagnostic"),
         [
             (
-                '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py::alpha"\n',
+                '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py"\n',
                 "requires a non-empty reason",
             ),
             (
-                '[[tool.duplication_gate.allow]]\nunit = "a"\nreason = "r"\n',
-                "unit must be a 'path::qualname' string",
+                '[[tool.duplication_gate.allow]]\nunit = "/a.py"\nreason = "r"\n',
+                "must be a repository-relative path key",
             ),
             (
-                '[[tool.duplication_gate.allow]]\npair = ["a.py::x"]\nreason = "r"\n',
-                "pair must be two 'path::qualname' strings",
+                '[[tool.duplication_gate.allow]]\nmembers = ["a.py"]\nreason = "r"\n',
+                "members must be two or more 'path[::name]' strings",
+            ),
+            (
+                '[[tool.duplication_gate.allow]]\nmembers = "a.py"\nreason = "r"\n',
+                "members must be two or more 'path[::name]' strings",
             ),
             (
                 '[[tool.duplication_gate.allow]]\nreason = "r"\n',
-                "must set exactly one of 'unit' or 'pair'",
+                "must set exactly one of 'unit' or 'members'",
             ),
             (
                 (
-                    '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py::x"\n'
-                    'pair = ["episodic/a.py::x", "episodic/b.py::y"]\nreason = "r"\n'
+                    '[[tool.duplication_gate.allow]]\nunit = "episodic/a.py"\n'
+                    'members = ["episodic/a.py", "episodic/b.py"]\nreason = "r"\n'
                 ),
-                "must set exactly one of 'unit' or 'pair'",
+                "must set exactly one of 'unit' or 'members'",
             ),
         ],
         ids=[
             "no-reason",
-            "malformed-unit",
-            "one-member-pair",
+            "absolute-unit",
+            "one-member",
+            "string-members",
             "no-target",
             "both-kinds",
         ],
@@ -353,9 +228,9 @@ class TestLoadAllowlist:
         diagnostic: str,
     ) -> None:
         """Malformed entries raise a configuration error."""
-        pyproject = typ.cast("Path", self._write(tmp_path, body))
+        pyproject = self._write(tmp_path, body)
         with pytest.raises(gate.GateConfigError, match=re.escape(diagnostic)):
-            gate.load_allowlist(pyproject)
+            allowlist.load_allowlist(pyproject)
 
 
 class TestPartitionFindings:
@@ -370,7 +245,7 @@ class TestPartitionFindings:
 
     def test_matched_findings_are_allowed(self) -> None:
         """Entries silence their findings and are not reported stale."""
-        entry = gate.AllowEntry(units=("episodic/a.py::alpha",), reason="r")
+        entry = allowlist.AllowEntry(keys=("episodic/*.py",), reason="r")
         blocking, allowed, stale = gate.partition_findings([_finding()], [entry])
         assert not blocking, "Matching entry must prevent blocking."
         assert len(allowed) == 1, "Matching entry must allow the finding."
@@ -378,7 +253,7 @@ class TestPartitionFindings:
 
     def test_unused_entries_are_stale(self) -> None:
         """Entries matching nothing are reported for removal."""
-        entry = gate.AllowEntry(units=("episodic/gone.py::old",), reason="r")
+        entry = allowlist.AllowEntry(keys=("episodic/gone.py",), reason="r")
         blocking, _allowed, stale = gate.partition_findings([_finding()], [entry])
         assert len(blocking) == 1, "Unmatched finding must remain blocking."
         assert stale == [entry], "Unused allow entry must be stale."

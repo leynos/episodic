@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 from duplication_gate_test_support import (
+    allowlist,
     copied_gate_workspace,
-    gate,
     gate_command,
     gate_environment,
 )
@@ -20,36 +20,33 @@ class TestAppendAllowEntry:
         """Appended entries load again and preserve existing TOML content."""
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text('[project]\nname = "x"\nversion = "0"\n', encoding="utf-8")
-        gate.append_allow_entry(
+        allowlist.append_allow_entry(
             pyproject,
-            first="episodic/a.py::alpha",
-            second=None,
+            keys=("episodic/a.py",),
             reason="unit reason",
         )
-        gate.append_allow_entry(
+        allowlist.append_allow_entry(
             pyproject,
-            first="episodic/b.py::beta",
-            second="episodic/c.py::gamma",
-            reason="pair reason",
+            keys=("episodic/b.py::beta", "episodic/c.py::gamma"),
+            reason="members reason",
         )
-        gate.append_allow_entry(
+        allowlist.append_allow_entry(
             pyproject,
-            first="episodic/c.py::gamma",
-            second="episodic/b.py::beta",
-            reason="updated pair reason",
+            keys=("episodic/c.py::gamma", "episodic/b.py::beta"),
+            reason="updated members reason",
         )
 
-        entries = gate.load_allowlist(pyproject)
-        assert entries[0].units == ("episodic/a.py::alpha",), (
+        entries = allowlist.load_allowlist(pyproject)
+        assert entries[0].keys == ("episodic/a.py",), (
             "Unit entry must retain its target."
         )
-        assert entries[1].units == ("episodic/b.py::beta", "episodic/c.py::gamma"), (
-            "Pair entry must retain both targets."
+        assert entries[1].keys == ("episodic/b.py::beta", "episodic/c.py::gamma"), (
+            "Members entry must retain both targets."
         )
-        assert entries[1].reason == "updated pair reason", (
-            "Repeated pair must update its reason."
+        assert entries[1].reason == "updated members reason", (
+            "A repeated member set must update its reason."
         )
-        assert len(entries) == 2, "Repeated pair must not create a duplicate entry."
+        assert len(entries) == 2, "A repeated member set must not add an entry."
         data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
         assert data["project"]["name"] == "x", (
             "Appending must preserve existing TOML content."
@@ -71,10 +68,9 @@ class TestAppendAllowEntry:
 
         monkeypatch.setattr(Path, "replace", fail_replace)
         with pytest.raises(OSError, match="replacement failed"):
-            gate.append_allow_entry(
+            allowlist.append_allow_entry(
                 pyproject,
-                first="episodic/a.py::alpha",
-                second=None,
+                keys=("episodic/a.py",),
                 reason="unit reason",
             )
         monkeypatch.setattr(Path, "replace", original_replace)
@@ -82,10 +78,9 @@ class TestAppendAllowEntry:
         assert pyproject.read_text(encoding="utf-8") == original, (
             "Failed replacement must preserve the original TOML."
         )
-        gate.append_allow_entry(
+        allowlist.append_allow_entry(
             pyproject,
-            first="episodic/a.py::alpha",
-            second=None,
+            keys=("episodic/a.py",),
             reason="unit reason",
         )
         assert pyproject.stat().st_mode & 0o777 == 0o640, (
@@ -97,13 +92,13 @@ class TestAppendAllowEntry:
     ) -> None:
         """Two blocked writers retain both exceptions after the lock releases."""
         _, script = copied_gate_workspace(tmp_path)
-        with gate._locked_file(script.parent.parent / "pyproject.toml"):
+        with allowlist._locked_file(script.parent.parent / "pyproject.toml"):
             first = subprocess.Popen(  # noqa: S603 - fixed copied gate command.
                 gate_command(
                     script,
                     "allow",
                     "--first",
-                    "episodic/a.py::alpha",
+                    "episodic/a.py",
                     "--reason",
                     "first writer",
                 ),
@@ -118,7 +113,7 @@ class TestAppendAllowEntry:
                     script,
                     "allow",
                     "--first",
-                    "episodic/b.py::beta",
+                    "episodic/b.py",
                     "--reason",
                     "second writer",
                 ),
@@ -138,6 +133,6 @@ class TestAppendAllowEntry:
             (script.parent.parent / "pyproject.toml").read_text(encoding="utf-8")
         )["tool"]["duplication_gate"]["allow"]
         recorded_units = {entry["unit"] for entry in entries}
-        assert recorded_units == {"episodic/a.py::alpha", "episodic/b.py::beta"}, (
+        assert recorded_units == {"episodic/a.py", "episodic/b.py"}, (
             "Concurrent commands must preserve both independently added entries."
         )

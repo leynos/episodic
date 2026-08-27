@@ -52,6 +52,12 @@ nose query . all --format json --min-size 1 --mode near:0.7
 The nose production run was `nose query episodic all --format json` from the
 repository root.
 
+The 2026-08-28 pyscn Type-4 production evidence (permissive and gate-strength
+runs over `episodic/`, answering whether allow-listing could make the lane
+usable) is retained as `pyscn-1.29.1-episodic-permissive.json.gz` (SHA-256
+recorded in the summary), `pyscn-1.29.1-episodic-type4-gate.json`, and the
+adjudicated summary `pyscn-1.29.1-episodic-type4.json`.
+
 Run the production comparison from the repository root:
 
 ```bash

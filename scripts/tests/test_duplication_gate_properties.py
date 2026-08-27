@@ -1,142 +1,129 @@
 """Property tests for duplication-gate matching and normalization invariants."""
 
-import itertools
-
-from duplication_gate_test_support import gate
+from duplication_gate_test_support import allowlist, detector, gate
 from hypothesis import given
 from hypothesis import strategies as st
 
-_UNIT_KEYS = st.sampled_from((
-    "episodic/a.py::alpha",
-    "episodic/b.py::beta",
-    "episodic/c.py::gamma",
-    "episodic/d.py::delta",
+_PATHS = st.sampled_from((
+    "episodic/a.py",
+    "episodic/b.py",
+    "episodic/c.py",
+    "episodic/d.py",
 ))
-
-
-def _finding(first: str, second: str, score: float = 1.0) -> gate.Finding:
-    """Build a finding with stable spans for matching properties."""
-    return gate.Finding(
-        first=first,
-        second=second,
-        location_first=f"{first.split('::')[0]}:1-20",
-        location_second=f"{second.split('::')[0]}:30-50",
-        score=score,
-    )
-
-
-@given(first=_UNIT_KEYS, second=_UNIT_KEYS)
-def test_unit_allows_match_either_member(first: str, second: str) -> None:
-    """A unit allow entry is invariant to finding member order."""
-    entry = gate.AllowEntry(units=(first,), reason="property")
-    assert entry.matches(first, second), (
-        "Unit allows must match their first occurrence."
-    )
-    assert entry.matches(second, first), (
-        "Unit allows must match their reversed occurrence."
-    )
-
-
-@given(
-    first=_UNIT_KEYS,
-    second=_UNIT_KEYS.filter(lambda value: value != "episodic/a.py::alpha"),
-)
-def test_pair_allows_match_only_their_unordered_members(
-    first: str,
-    second: str,
-) -> None:
-    """A pair allow matches both orders and no third member."""
-    entry = gate.AllowEntry(units=(first, second), reason="property")
-    assert entry.matches(first, second), "Pair allows must match their stored order."
-    assert entry.matches(second, first), "Pair allows must match reversed order."
-    if second != "episodic/a.py::alpha":
-        assert not entry.matches(first, "episodic/a.py::alpha"), (
-            "Pair allows must not match a different unordered pair."
-        )
+_NAMES = st.sampled_from(("alpha", "beta", None))
 
 
 @st.composite
-def _allow_entries(draw: st.DrawFn) -> list[gate.AllowEntry]:
-    """Build valid unit and unordered-pair allow entries."""
-    entries: list[gate.AllowEntry] = []
-    for index in range(draw(st.integers(min_value=0, max_value=8))):
-        units = draw(
-            st.one_of(
-                st.tuples(_UNIT_KEYS),
-                st.lists(_UNIT_KEYS, min_size=2, max_size=2, unique=True).map(tuple),
-            )
+def _locations(draw: st.DrawFn) -> detector.Location:
+    """Build one reported location with a stable span."""
+    start = draw(st.integers(min_value=1, max_value=200))
+    return detector.Location(
+        file=draw(_PATHS),
+        start=start,
+        end=start + draw(st.integers(min_value=0, max_value=40)),
+        name=draw(_NAMES),
+    )
+
+
+@st.composite
+def _findings(draw: st.DrawFn) -> detector.Finding:
+    """Build one duplication family over two or more locations."""
+    return detector.Finding(
+        witness=draw(st.sampled_from(("exact", "copy-paste", "similar"))),
+        value=float(draw(st.integers(min_value=0, max_value=100))),
+        locations=tuple(draw(st.lists(_locations(), min_size=2, max_size=5))),
+    )
+
+
+@st.composite
+def _allow_entries(draw: st.DrawFn) -> allowlist.AllowEntry:
+    """Build one valid unit or members allow entry."""
+    keys = draw(
+        st.one_of(
+            st.tuples(_PATHS),
+            st.lists(_PATHS, min_size=2, max_size=3, unique=True).map(tuple),
         )
-        entries.append(gate.AllowEntry(units=units, reason=f"property-{index}"))
-    return entries
+    )
+    return allowlist.AllowEntry(keys=keys, reason="property")
+
+
+@given(finding=_findings(), entry=_allow_entries())
+def test_entries_allow_only_fully_covered_families(
+    finding: detector.Finding,
+    entry: allowlist.AllowEntry,
+) -> None:
+    """An entry silences a family exactly when it covers every location."""
+    covered = all(
+        any(allowlist.key_matches(key, location) for key in entry.keys)
+        for location in finding.locations
+    )
+    assert entry.matches(finding) is covered, (
+        "Matching must require coverage of every reported location."
+    )
+
+
+@given(finding=_findings())
+def test_file_keys_cover_their_own_locations(finding: detector.Finding) -> None:
+    """Listing every file in a family always silences it."""
+    entry = allowlist.AllowEntry(
+        keys=tuple({location.file for location in finding.locations}),
+        reason="property",
+    )
+    assert entry.matches(finding), (
+        "An entry naming every participating file must silence the family."
+    )
 
 
 @given(
-    pairs=st.lists(
-        st.lists(_UNIT_KEYS, min_size=2, max_size=2, unique=True).map(tuple),
-        max_size=12,
-    ),
-    allowlist=_allow_entries(),
+    findings=st.lists(_findings(), max_size=8),
+    allowlist=st.lists(_allow_entries(), max_size=6),
 )
 def test_partition_conserves_findings_and_identifies_stale_entries(
-    pairs: list[tuple[str, str]],
-    allowlist: list[gate.AllowEntry],
+    findings: list[detector.Finding],
+    allowlist: list[allowlist.AllowEntry],
 ) -> None:
     """Every finding is exactly blocking or allowed and stale entries match none."""
-    findings = list(itertools.starmap(_finding, pairs))
     blocking, allowed, stale = gate.partition_findings(findings, allowlist)
 
     assert len(blocking) + len(allowed) == len(findings), (
         "Partitioning must retain every reported finding exactly once."
     )
     assert all(
-        any(entry.matches(finding.first, finding.second) for entry in allowlist)
-        for finding in allowed
+        any(entry.matches(finding) for entry in allowlist) for finding in allowed
     ), "Allowed findings must have a matching allow entry."
     assert all(
-        not any(entry.matches(finding.first, finding.second) for entry in allowlist)
-        for finding in blocking
+        not any(entry.matches(finding) for entry in allowlist) for finding in blocking
     ), "Blocking findings must have no matching allow entry."
     assert all(
-        not any(entry.matches(finding.first, finding.second) for finding in findings)
-        for entry in stale
+        not any(entry.matches(finding) for finding in findings) for entry in stale
     ), "Stale entries must not match any current finding."
 
 
-@given(
-    scores=st.lists(st.integers(min_value=0, max_value=100), min_size=1, max_size=12),
-    locations=st.permutations(("episodic/a.py", "episodic/b.py", "episodic/c.py")),
-)
-def test_normalization_orders_scores_then_locations(
-    scores: list[int],
-    locations: tuple[str, ...],
+@given(findings=st.lists(_findings(), min_size=1, max_size=8))
+def test_normalization_orders_values_then_locations(
+    findings: list[detector.Finding],
 ) -> None:
     """Normalized findings use the documented deterministic ordering."""
-    pairs: list[gate._DetectorPairPayload] = []
-    location_cycle = itertools.cycle(locations)
-    for index, score in enumerate(scores, start=1):
-        left_path = next(location_cycle)
-        right_path = next(location_cycle)
-        pairs.append({
-            "score": float(score),
-            "left": {
-                "file": left_path,
-                "qualname": f"left_{index}",
-                "start_line": index,
-                "end_line": index + 1,
-            },
-            "right": {
-                "file": right_path,
-                "qualname": f"right_{index}",
-                "start_line": index + 10,
-                "end_line": index + 11,
-            },
-        })
-
-    findings = gate.normalize_findings(pairs)
-    sort_keys = [
-        (-finding.score, finding.location_first, finding.location_second)
-        for finding in findings
-    ]
+    report = {
+        "families": [
+            {
+                "witness": finding.witness,
+                "value": finding.value,
+                "locations": [
+                    {
+                        "file": location.file,
+                        "start": location.start,
+                        "end": location.end,
+                        "name": location.name,
+                    }
+                    for location in finding.locations
+                ],
+            }
+            for finding in findings
+        ]
+    }
+    normalized = detector.normalize_findings(report)
+    sort_keys = [(-finding.value, finding.label) for finding in normalized]
     assert sort_keys == sorted(sort_keys), (
-        "Normalization must sort by descending score then source locations."
+        "Normalization must sort by descending value then source location."
     )
