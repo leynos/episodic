@@ -1,6 +1,7 @@
 """Runtime composition tests for the OPENAI_* provider request options."""
 
 import asyncio
+import json
 import typing as typ
 
 import httpx
@@ -71,6 +72,28 @@ def _compose_runtime_dependencies(
         f"expected captured ApiDependencies, got {type(dependencies).__name__}"
     )
     return dependencies
+
+
+def _assert_configured_provider_request(request: httpx.Request) -> None:
+    """Assert that the request carries the configured provider options."""
+    body = json.loads(request.content.decode())
+    assert body["reasoning_effort"] == "low", (
+        f"expected reasoning_effort 'low' in the body, got {body!r}"
+    )
+    assert body["service_tier"] == "flex", (
+        f"expected service_tier 'flex' in the body, got {body!r}"
+    )
+    assert body["max_completion_tokens"] == 2000, (
+        f"expected the requested output budget, got {body!r}"
+    )
+    assert "max_tokens" not in body, (
+        "the default token parameter must be replaced, not duplicated"
+    )
+    timeout = request.extensions["timeout"]
+    expected_timeout = dict.fromkeys(("connect", "read", "write", "pool"), 600.0)
+    assert timeout == expected_timeout, (
+        f"expected a 600 second request timeout, got {timeout!r}"
+    )
 
 
 def test_create_app_from_env_propagates_provider_request_options(
@@ -168,24 +191,4 @@ async def test_runtime_composed_adapter_sends_configured_provider_request(
     assert len(captured_requests) == 1, (
         f"expected one provider request, got {len(captured_requests)}"
     )
-    request = captured_requests[0]
-    import json as jsonlib
-
-    body = jsonlib.loads(request.content.decode())
-    assert body["reasoning_effort"] == "low", (
-        f"expected reasoning_effort 'low' in the body, got {body!r}"
-    )
-    assert body["service_tier"] == "flex", (
-        f"expected service_tier 'flex' in the body, got {body!r}"
-    )
-    assert body["max_completion_tokens"] == 2000, (
-        f"expected the requested output budget, got {body!r}"
-    )
-    assert "max_tokens" not in body, (
-        "the default token parameter must be replaced, not duplicated"
-    )
-    timeout = request.extensions["timeout"]
-    expected_timeout = dict.fromkeys(("connect", "read", "write", "pool"), 600.0)
-    assert timeout == expected_timeout, (
-        f"expected a 600 second request timeout, got {timeout!r}"
-    )
+    _assert_configured_provider_request(captured_requests[0])

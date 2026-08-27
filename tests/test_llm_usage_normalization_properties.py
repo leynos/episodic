@@ -17,16 +17,26 @@ if typ.TYPE_CHECKING:
 _TOKEN_COUNTS = st.integers(min_value=0, max_value=200)
 _OPTIONAL_COUNTS = st.none() | st.integers(min_value=0, max_value=250)
 
+type _UsageCase = tuple[int, int, int | None, int | None, int | None]
 
-def _usage_payload(  # pylint: disable=too-many-arguments  # Usage fields travel together.
-    *,
-    prompt_tokens: int,
-    completion_tokens: int,
-    cached_input: int | None,
-    audio_input: int | None,
-    audio_output: int | None,
-) -> dict[str, object]:
+_USAGE_CASES = st.tuples(
+    _TOKEN_COUNTS,
+    _TOKEN_COUNTS,
+    _OPTIONAL_COUNTS,
+    _OPTIONAL_COUNTS,
+    _OPTIONAL_COUNTS,
+)
+
+
+def _usage_payload(case: _UsageCase) -> dict[str, object]:
     """Build a chat usage payload with optional nested detail counts."""
+    (
+        prompt_tokens,
+        completion_tokens,
+        cached_input,
+        audio_input,
+        audio_output,
+    ) = case
     payload: dict[str, object] = {
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
@@ -57,29 +67,18 @@ def _normalized_metrics(
     return usage.usage_metrics
 
 
-@given(
-    prompt_tokens=_TOKEN_COUNTS,
-    completion_tokens=_TOKEN_COUNTS,
-    cached_input=_OPTIONAL_COUNTS,
-    audio_input=_OPTIONAL_COUNTS,
-    audio_output=_OPTIONAL_COUNTS,
-)
+@given(case=_USAGE_CASES)
 @settings(max_examples=100)
-def test_chat_usage_metrics_partition_the_parent_totals(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # Hypothesis injects one argument per strategy.
-    prompt_tokens: int,
-    completion_tokens: int,
-    cached_input: int | None,
-    audio_input: int | None,
-    audio_output: int | None,
-) -> None:
+def test_chat_usage_metrics_partition_the_parent_totals(case: _UsageCase) -> None:
     """Valid nested details partition the parent totals exactly once."""
-    payload = _usage_payload(
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        cached_input=cached_input,
-        audio_input=audio_input,
-        audio_output=audio_output,
-    )
+    (
+        prompt_tokens,
+        completion_tokens,
+        cached_input,
+        audio_input,
+        audio_output,
+    ) = case
+    payload = _usage_payload(case)
     oversubscribed = (cached_input or 0) + (audio_input or 0) > prompt_tokens or (
         audio_output or 0
     ) > completion_tokens
