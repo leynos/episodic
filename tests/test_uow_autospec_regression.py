@@ -14,12 +14,12 @@ def test_unit_of_work_supports_autospec_creation() -> None:
     so this test fails with ``NameError`` if the imports move back behind
     ``typing.TYPE_CHECKING``.
     """
-    specced = mock.create_autospec(SqlAlchemyUnitOfWork)
+    specced = mock.create_autospec(SqlAlchemyUnitOfWork, instance=True)
 
     assert specced is not None, "expected an autospecced unit of work"
-    assert hasattr(specced, "__aenter__"), (
-        "the autospecced unit of work must keep its context-manager surface"
+    assert isinstance(specced.__aenter__, mock.AsyncMock), (
+        "the autospecced unit of work must expose an awaitable __aenter__"
     )
-    assert hasattr(specced, "__aexit__"), (
-        "the autospecced unit of work must keep its context-manager surface"
+    assert isinstance(specced.__aexit__, mock.AsyncMock), (
+        "the autospecced unit of work must expose an awaitable __aexit__"
     )
