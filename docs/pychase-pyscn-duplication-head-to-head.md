@@ -14,6 +14,11 @@ Neither tool detects semantically equivalent code reliably. The adopted gate
 therefore targets copy-paste duplication (Types 1-3) and treats semantic
 duplication as a review concern, not a machine-checked one.
 
+A follow-up evaluation of nose 0.20.0 on 2026-08-27 (see
+[the nose follow-up](#follow-up-nose-0200)) tied PyChase's perfect syntactic
+score but detected no Type-4 clone in any configuration, so the gate keeps
+PyChase and still enforces nothing semantic.
+
 ## What each project means by duplication
 
 The [pyscn repository](https://github.com/ludo-technologies/pyscn) implements
@@ -98,7 +103,8 @@ retained under `benchmarks/duplication/results/`.
 ## Episodic production scan and adjudication
 
 Every candidate from the selected configuration was adjudicated by reading both
-members ([the production adjudication report](results/production-adjudication.json)):
+members
+([the production adjudication report](results/production-adjudication.json)):
 
 | Disposition                | Count | Interpretation                                                              |
 | -------------------------- | ----: | --------------------------------------------------------------------------- |
@@ -133,6 +139,70 @@ dozens of pairs individually.
   spans without unit names, so a blocking gate would need report
   post-processing under either tool.
 
+## Follow-up: nose 0.20.0
+
+[nose](https://github.com/corca-ai/nose) was evaluated on 2026-08-27 as a
+candidate replacement for PyChase (Types 1-3) and as a candidate Type-4
+detector where pyscn had failed. nose is a pre-1.0 Rust binary that lowers
+source into a normalized intermediate language (IL) and reports duplication
+families through three channels: `syntax` (token-level copies), `semantic`
+(exact IL value-graph equivalence, witness `exact`), and `near` (fuzzy
+similarity with a configurable threshold). The released
+`nose-cli-x86_64-unknown-linux-gnu` 0.20.0 binary ran against the same corpus
+oracle through `parse_nose_pairs`, which expands each reported family into its
+unordered member pairs. The sweep table is retained in
+`benchmarks/duplication/results/tuning-nose-0.20.0.json` alongside the raw
+reports.
+
+| Configuration                    | Lane            | TP  | FP  | FN  | TN  | Unmatched | Precision   | Recall | F1          |
+| -------------------------------- | --------------- | --: | --: | --: | --: | --------: | ----------: | -----: | ----------: |
+| Default channels, `--min-size 1` | Syntactic clone | 3   | 0   | 1   | 3   | 2         | 100.0%      | 75.0%  | 85.7%       |
+| `--mode near:0.7 --min-size 1`   | Syntactic clone | 4   | 0   | 0   | 3   | 0         | 100.0%      | 100.0% | 100.0%      |
+| Every swept configuration        | Semantic clone  | 0   | 0   | 1   | 2   | 0         | Not defined | 0.0%   | Not defined |
+
+*Table 3: nose 0.20.0 corpus scores over all reported surfaces.*
+
+Three observations qualify the table:
+
+- The default syntax channel merges the adjacent Type-1 and Type-2 function
+  pairs into one block-level copy-paste family (`reporting.py:5-64` against
+  `pricing.py:5-62`), which pair-level scoring credits to the Type-1 label and
+  counts the Type-2 label as missed. The near channel reports function-level
+  pairs instead, and every swept near threshold from 0.5 to 0.9 restores the
+  perfect syntactic score with no false positives.
+- The semantic channel never reported the Type-4 pair. Probes show why: it
+  converges alpha-renamed structure and a bare loop against its list
+  comprehension (both witness `exact`), but declines a loop against a `sum()`
+  fold, `if`/`else` against a ternary, and De Morgan rewrites. The corpus
+  Type-4 pair additionally needs loop-fission reasoning (a one-pass
+  two-accumulator loop against two comprehension passes), which is outside the
+  modelled subset. Its coverage report shows zero unlowered IL nodes on the
+  corpus, so the miss is a modelling limit, not a parsing gap.
+- Against pyscn on Type 4, the comparison inverts: pyscn found the true
+  semantic pair but ranked a false pair above it, while nose reports nothing at
+  all — perfect precision with zero recall. Neither behaviour supports a
+  machine-checked Type-4 gate, though nose's refusal to guess makes it the
+  safer advisory signal.
+
+Operationally, nose is attractive: three consecutive corpus runs were
+byte-identical with no hash-seed pinning, and it scanned the corpus in 12 ms and
+`episodic/` in 89 ms against PyChase's 4.8 s. An all-surface production scan
+reported 30 families — 24 copy-paste (import blocks and small fragments), five
+near-similar, and one `exact` family of thirteen two-line resource `__init__`
+methods — all trivial parallels below the adopted gate's thirteen-line floor.
+Against adoption: it ties rather than beats PyChase on Types 1-3, its findings
+carry spans without qualified unit names (the adopted gate's allowlist keys on
+`path::qualname`), it is distributed as a pre-1.0 platform-specific binary from
+GitHub releases rather than PyPI, and the project documentation describes a
+`nose verify` behavioural oracle that the released 0.20.0 CLI does not include.
+
+nose is therefore not adopted: not for Types 1-3, where it equals but does not
+better PyChase while costing the qualified-name output and `uvx` pinning the
+gate relies on, and not for Type 4, where it detects nothing on this corpus. It
+is the first tool to revisit if PyChase's Python 3.13 pin becomes untenable or
+a semantic advisory channel is wanted, since its exact-witness design refuses
+false equivalences rather than ranking them above true ones.
+
 ## Recommendation
 
 - Use PyChase behind `scripts/duplication_gate.py` as the blocking
@@ -144,6 +214,10 @@ dozens of pairs individually.
 - Revisit the comparison when PyChase gains Python 3.14 support or pyscn
   widens its similarity band; both caveats are release-specific behaviour, not
   architectural limits.
+- Do not adopt nose 0.20.0: it ties PyChase on Types 1-3 without the
+  qualified-name output the gate keys on, and detects no Type-4 clone on this
+  corpus. Re-evaluate it first if the PyChase pins become untenable or an
+  advisory semantic channel is wanted.
 
 The corpus is intentionally small and Episodic is only one codebase. The
 results establish behaviour for these released versions and fixtures; they do

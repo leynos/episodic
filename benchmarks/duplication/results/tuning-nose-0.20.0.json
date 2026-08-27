@@ -1,0 +1,374 @@
+[
+    {
+        "cfg": {
+            "mode": "default (syntax,semantic,near:0.7)",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 6,
+        "pairs": 6,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 1,
+                "tn": 3,
+                "unmatched_findings": 2,
+                "precision": 1.0,
+                "recall": 0.75,
+                "f1": 0.857
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "default (syntax,semantic,near:0.7)",
+            "min_size": 24,
+            "surface": "all"
+        },
+        "raw_families": 4,
+        "pairs": 4,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 1,
+                "tn": 3,
+                "unmatched_findings": 0,
+                "precision": 1.0,
+                "recall": 0.75,
+                "f1": 0.857
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "syntax",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 3,
+        "pairs": 3,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "tn": 3,
+                "unmatched_findings": 2,
+                "precision": 1.0,
+                "recall": 0.25,
+                "f1": 0.4
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "semantic",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 1,
+        "pairs": 1,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "tn": 3,
+                "unmatched_findings": 0,
+                "precision": 1.0,
+                "recall": 0.25,
+                "f1": 0.4
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "near:0.5",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 4,
+        "pairs": 4,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 0,
+                "tn": 3,
+                "unmatched_findings": 0,
+                "precision": 1.0,
+                "recall": 1.0,
+                "f1": 1.0
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "near:0.6",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 4,
+        "pairs": 4,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 0,
+                "tn": 3,
+                "unmatched_findings": 0,
+                "precision": 1.0,
+                "recall": 1.0,
+                "f1": 1.0
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "near:0.7",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 5,
+        "pairs": 5,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 0,
+                "tn": 3,
+                "unmatched_findings": 0,
+                "precision": 1.0,
+                "recall": 1.0,
+                "f1": 1.0
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "near:0.8",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 4,
+        "pairs": 4,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 0,
+                "tn": 3,
+                "unmatched_findings": 0,
+                "precision": 1.0,
+                "recall": 1.0,
+                "f1": 1.0
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "near:0.9",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 4,
+        "pairs": 4,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 0,
+                "tn": 3,
+                "unmatched_findings": 0,
+                "precision": 1.0,
+                "recall": 1.0,
+                "f1": 1.0
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "syntax,near:0.7",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 6,
+        "pairs": 6,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 1,
+                "tn": 3,
+                "unmatched_findings": 2,
+                "precision": 1.0,
+                "recall": 0.75,
+                "f1": 0.857
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "semantic,near:0.7",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 5,
+        "pairs": 5,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 0,
+                "tn": 3,
+                "unmatched_findings": 0,
+                "precision": 1.0,
+                "recall": 1.0,
+                "f1": 1.0
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    },
+    {
+        "cfg": {
+            "mode": "syntax,semantic,near:0.7",
+            "min_size": 1,
+            "surface": "all"
+        },
+        "raw_families": 6,
+        "pairs": 6,
+        "lanes": {
+            "syntactic-clone": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 1,
+                "tn": 3,
+                "unmatched_findings": 2,
+                "precision": 1.0,
+                "recall": 0.75,
+                "f1": 0.857
+            },
+            "semantic-clone": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "tn": 2,
+                "unmatched_findings": 0,
+                "precision": null,
+                "recall": 0.0,
+                "f1": null
+            }
+        }
+    }
+]

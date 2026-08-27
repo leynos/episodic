@@ -57,7 +57,37 @@
       },
       "corpus_elapsed_ms": 140,
       "episodic_elapsed_ms": 4800
+    },
+    "nose": {
+      "version": "0.20.0",
+      "date": "2026-08-27",
+      "config": "query . all --format json --min-size 1 --mode near:0.7 (tuned; the sweep is in tuning-nose-0.20.0.json)",
+      "raw_findings": 5,
+      "lanes": {
+        "syntactic-clone": {
+          "tp": 4,
+          "fp": 0,
+          "fn": 0,
+          "tn": 3,
+          "unmatched_findings": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "semantic-clone": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "tn": 2,
+          "unmatched_findings": 0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": null
+        }
+      },
+      "corpus_elapsed_ms": 12,
+      "episodic_elapsed_ms": 89
     }
   },
-  "notes": "Corpus runs used the permissive capability settings recorded in the benchmark README. Elapsed times are single wall-clock observations, not performance benchmarks."
+  "notes": "Corpus runs used the permissive capability settings recorded in the benchmark README. The pyscn and PyChase rows are from 2026-08-22; the nose row is from the 2026-08-27 follow-up at its tuned near-channel settings, and its default-channel scores are in tuning-nose-0.20.0.json. Elapsed times are single wall-clock observations, not performance benchmarks."
 }

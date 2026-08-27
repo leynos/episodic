@@ -1,9 +1,10 @@
 """Test the duplication benchmark parser and scorer contracts.
 
 Parser contract tests verify report-shape validation, path normalization,
-and finding order for the pyscn and PyChase result schemas. Scorer contract
-tests verify lane attribution, pair deduplication, overlap matching, and
-expectation classification so benchmark results remain comparable across
+and finding order for the pyscn and PyChase result schemas; the nose family
+parser is covered in :mod:`tests.test_duplication_benchmark_nose`. Scorer
+contract tests verify lane attribution, pair deduplication, overlap matching,
+and expectation classification so benchmark results remain comparable across
 detector runs.
 """
 

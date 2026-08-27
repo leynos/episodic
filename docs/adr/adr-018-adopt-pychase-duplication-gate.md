@@ -38,3 +38,18 @@ and that semantic duplication remains a human review concern.
   justify the tool choice and thresholds are retained under
   `benchmarks/duplication/` and summarized in
   [the duplication head-to-head](../pychase-pyscn-duplication-head-to-head.md).
+
+## Addendum: nose 0.20.0 evaluated and not adopted (2026-08-27)
+
+The nose semantic clone detector was benchmarked against the same corpus as a
+candidate replacement for PyChase on Types 1-3 and as a Type-4 detector where
+pyscn had failed. At tuned near-channel settings it tied PyChase's perfect
+syntactic precision and recall, but its exact-equivalence semantic channel
+reported no Type-4 clone in any swept configuration, and its findings carry
+spans without the qualified unit names this gate's allowlist keys on. The
+decision stands: PyChase remains the blocking detector, no tool enforces
+Type-4, and nose is the first candidate to revisit if PyChase's interpreter and
+hash-seed pins become untenable. Evidence is retained under
+`benchmarks/duplication/results/` (`nose-0.20.0*.json`,
+`tuning-nose-0.20.0.json`) and summarized in the head-to-head's nose follow-up
+section.
