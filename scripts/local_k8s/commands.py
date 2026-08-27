@@ -1,6 +1,7 @@
 """Command construction for the local Kubernetes preview workflow."""
 
 import dataclasses as dc
+import re
 import subprocess
 import sys
 import typing as typ
@@ -277,8 +278,8 @@ def secret_manifest(config: PreviewConfig) -> str:
         "apiVersion: v1",
         "kind: Secret",
         "metadata:",
-        f"  name: {config.secret_name}",
-        f"  namespace: {config.namespace}",
+        f"  name: {_require_dns1123_label(config.secret_name, 'secret_name')}",
+        f"  namespace: {_require_dns1123_label(config.namespace, 'namespace')}",
         "type: Opaque",
         "stringData:",
         f"  database-url: {_yaml_string(config.database_url)}",
@@ -294,9 +295,31 @@ def secret_manifest(config: PreviewConfig) -> str:
     return "\n".join(lines) + "\n"
 
 
+_DNS1123_LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
+
+
+def _require_dns1123_label(value: str, field_name: str) -> str:
+    """Return a Kubernetes DNS-1123 label or reject the manifest value."""
+    if not _DNS1123_LABEL.match(value):
+        msg = (
+            f"{field_name} must be a DNS-1123 label "
+            f"(lowercase alphanumerics and hyphens); got {value!r}"
+        )
+        raise ValueError(msg)
+    return value
+
+
 def _yaml_string(value: str) -> str:
-    """Quote a simple scalar for the local manifest."""
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    """Quote a scalar for the local manifest, escaping control characters."""
+    escaped = (
+        value
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+    return '"' + escaped + '"'
 
 
 def local_postgres_manifest(config: PreviewConfig) -> str:
