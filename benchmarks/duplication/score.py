@@ -11,7 +11,7 @@ from collections import (
 )
 
 from .models import Expectation, Fragment, Lane, LaneScore, PairFinding
-from .parsers import parse_pychase_pairs, parse_pyscn_pairs
+from .parsers import parse_nose_pairs, parse_pychase_pairs, parse_pyscn_pairs
 
 __all__ = (
     "Expectation",
@@ -19,6 +19,7 @@ __all__ = (
     "Lane",
     "LaneScore",
     "PairFinding",
+    "parse_nose_pairs",
     "parse_pychase_pairs",
     "parse_pyscn_pairs",
     "score_findings",

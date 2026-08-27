@@ -1,4 +1,4 @@
-"""Normalize PyChase and pyscn reports for duplication scoring.
+"""Normalize PyChase, pyscn, and nose reports for duplication scoring.
 
 The public parser functions accept decoded detector JSON and a corpus root.
 They validate each report's shape, normalize source locations, and return the
@@ -6,6 +6,8 @@ tool-neutral :class:`~benchmarks.duplication.models.PairFinding` values used by
 the scorer. Detector-specific field names remain confined to this module.
 """
 
+import dataclasses as dc
+import itertools
 import typing as typ
 
 from benchmarks.score_support import (
@@ -13,6 +15,7 @@ from benchmarks.score_support import (
     positive_line,
     relative_source_path,
     sequence,
+    string,
 )
 
 from .models import Fragment, Lane, PairFinding
@@ -22,6 +25,8 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
 _PYSCN_SEMANTIC_CLONE_TYPE = 4
+_NOSE_SEMANTIC_WITNESS = "exact"
+_MINIMUM_FAMILY_LOCATIONS = 2
 
 
 def _similarity(value: object, *, context: str) -> float:
@@ -36,24 +41,38 @@ def _similarity(value: object, *, context: str) -> float:
     return score
 
 
+@dc.dataclass(frozen=True, slots=True, kw_only=True)
+class _LocationKeys:
+    """Detector-specific field names for one reported source location."""
+
+    path: str
+    start: str = "start_line"
+    end: str = "end_line"
+
+
+_LINE_SUFFIXED_KEYS = _LocationKeys(path="file_path")
+_PYCHASE_KEYS = _LocationKeys(path="file")
+_NOSE_KEYS = _LocationKeys(path="file", start="start", end="end")
+
+
 def _fragment(
     payload: cabc.Mapping[str, object],
     *,
-    path_key: str,
+    keys: _LocationKeys,
     context: str,
     corpus_root: Path,
 ) -> Fragment:
     """Normalize one reported fragment location."""
     start_line = positive_line(
-        payload.get("start_line"), context=f"{context} start_line"
+        payload.get(keys.start), context=f"{context} {keys.start}"
     )
-    end_line = positive_line(payload.get("end_line"), context=f"{context} end_line")
+    end_line = positive_line(payload.get(keys.end), context=f"{context} {keys.end}")
     if start_line > end_line:
-        msg = f"{context} start_line must not exceed end_line"
+        msg = f"{context} {keys.start} must not exceed {keys.end}"
         raise ValueError(msg)
     return Fragment(
         path=relative_source_path(
-            payload.get(path_key), corpus_root, subject="fragment"
+            payload.get(keys.path), corpus_root, subject="fragment"
         ),
         start_line=start_line,
         end_line=end_line,
@@ -123,7 +142,7 @@ def _parse_pyscn_pair(
                 ),
                 context=f"{context}.{member_key}.location",
             ),
-            path_key="file_path",
+            keys=_LINE_SUFFIXED_KEYS,
             context=f"{context}.{member_key}.location",
             corpus_root=corpus_root,
         )
@@ -196,7 +215,7 @@ def _parse_pychase_candidate(
     members = [
         _fragment(
             mapping(candidate.get(member_key), context=f"{context}.{member_key}"),
-            path_key="file",
+            keys=_PYCHASE_KEYS,
             context=f"{context}.{member_key}",
             corpus_root=corpus_root,
         )
@@ -208,4 +227,93 @@ def _parse_pychase_candidate(
         lane=Lane.SYNTACTIC_CLONE,
         category="candidate",
         similarity=_similarity(candidate.get("score"), context=f"{context} score"),
+    )
+
+
+def parse_nose_pairs(
+    payload: object,
+    *,
+    corpus_root: Path,
+) -> tuple[PairFinding, ...]:
+    """Extract location pairs from a nose ``query --format json`` report.
+
+    Parameters
+    ----------
+    payload : object
+        Decoded nose report containing a ``families`` sequence. Each family
+        provides a ``witness`` label, a ``metrics`` object with a numeric
+        ``mean_score``, and two or more member ``locations``.
+    corpus_root : pathlib.Path
+        Root directory used to normalize and constrain reported file paths.
+
+    Returns
+    -------
+    tuple[PairFinding, ...]
+        Every unordered member pair of every family, in report order. Families
+        with the ``exact`` semantic witness map to the semantic lane; all other
+        witnesses map to the syntactic lane.
+
+    Propagated errors
+    -----------------
+    TypeError
+        If the report, families, locations, or scalar fields have the wrong
+        shape or type.
+    ValueError
+        If a line, score, or source path fails validation, or a family has
+        fewer than two locations.
+    """
+    root = mapping(payload, context="nose payload")
+    families = sequence(root.get("families"), context="nose families")
+    return tuple(
+        pair
+        for index, raw_family in enumerate(families)
+        for pair in _parse_nose_family(
+            raw_family,
+            family_index=index,
+            corpus_root=corpus_root,
+        )
+    )
+
+
+def _parse_nose_family(
+    raw_family: object,
+    *,
+    family_index: int,
+    corpus_root: Path,
+) -> tuple[PairFinding, ...]:
+    """Expand one validated nose family into unordered member pairs."""
+    context = f"nose families[{family_index}]"
+    family = mapping(raw_family, context=context)
+    witness = string(family.get("witness"), context=f"{context} witness")
+    metrics = mapping(family.get("metrics"), context=f"{context}.metrics")
+    similarity = _similarity(
+        metrics.get("mean_score"), context=f"{context} metrics.mean_score"
+    )
+    locations = sequence(family.get("locations"), context=f"{context}.locations")
+    fragments = [
+        _fragment(
+            mapping(raw_location, context=f"{context}.locations[{location_index}]"),
+            keys=_NOSE_KEYS,
+            context=f"{context}.locations[{location_index}]",
+            corpus_root=corpus_root,
+        )
+        for location_index, raw_location in enumerate(locations)
+    ]
+    if len(fragments) < _MINIMUM_FAMILY_LOCATIONS:
+        msg = f"{context} must contain at least two locations"
+        raise ValueError(msg)
+    lane = (
+        Lane.SEMANTIC_CLONE
+        if witness == _NOSE_SEMANTIC_WITNESS
+        else Lane.SYNTACTIC_CLONE
+    )
+    return tuple(
+        PairFinding(
+            first=first,
+            second=second,
+            lane=lane,
+            category=witness,
+            similarity=similarity,
+        )
+        for first, second in itertools.combinations(fragments, 2)
     )
