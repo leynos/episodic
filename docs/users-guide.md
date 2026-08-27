@@ -446,6 +446,18 @@ When `OPENAI_API_KEY` is set in the operator's environment,
 keys into the same Secret so preview-generated drafts can reach a real
 provider.
 
+`charts/episodic/values.local.yaml` also pins the effective generation
+settings for the local preview:
+
+- `DRAFT_MODEL: gpt-5.6-sol`
+- `OPENAI_REASONING_EFFORT: low`
+- `OPENAI_TOKEN_LIMIT_PARAM: max_completion_tokens`
+- `OPENAI_TIMEOUT_SECONDS: 600`
+- `GENERATION_MAX_OUTPUT_TOKENS: 32768`
+
+Override these by editing `values.local.yaml` before running
+`make local-k8s-up`.
+
 On rootless Podman hosts, use the kind provider directly:
 
 ```shell
