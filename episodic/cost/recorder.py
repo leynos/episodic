@@ -208,8 +208,18 @@ class CostRecorder:
 
     async def _resolve_snapshot_for_record(
         self, record: ProviderCallRecord
-    ) -> PricingSnapshot:
-        """Resolve the pricing snapshot for a provider-call record."""
+    ) -> tuple[PricingSnapshot, bool]:
+        """Resolve the snapshot for a record and whether it was pinned.
+
+        This helper is read-only; the caller owns any persistence the
+        resolution outcome requires.
+
+        Returns
+        -------
+        tuple[PricingSnapshot, bool]
+            The resolved snapshot and whether a run pricing pin selected
+            it.
+        """
         key = RunPricingKey(
             workflow_run_id=record.workflow_run_id,
             provider_name=record.provider_name,
@@ -225,12 +235,8 @@ class CostRecorder:
                 record.operation,
                 record.billing_period_key,
             )
-            # Unpinned calls must persist the snapshot before the ledger row
-            # references it; pinned calls skip this because the pin's foreign
-            # key already guarantees the stored row exists.
-            await self.ledger.ensure_snapshot(snapshot)
-            return snapshot
-        return await self.pricing_catalogue.get_snapshot(pinned_snapshot_id)
+            return snapshot, False
+        return await self.pricing_catalogue.get_snapshot(pinned_snapshot_id), True
 
     async def record_provider_call(
         self,
@@ -255,7 +261,12 @@ class CostRecorder:
         CostAccountingError
             If pricing or ledger validation fails.
         """  # noqa: DOC502  # Collaborating ports propagate these domain exceptions.
-        snapshot = await self._resolve_snapshot_for_record(record)
+        snapshot, pinned = await self._resolve_snapshot_for_record(record)
+        if not pinned:
+            # Unpinned calls must persist the snapshot before the ledger row
+            # references it; pinned calls skip this because the pin's foreign
+            # key already guarantees the stored row exists.
+            await self.ledger.ensure_snapshot(snapshot)
         priced_call = self.pricing_engine.price(
             snapshot,
             PricingRequest(

@@ -173,7 +173,13 @@ async def test_cancelled_transaction_leaves_no_partial_snapshot(
 
     async def ensure_then_stall() -> None:
         async with session_factory() as session:
-            await SqlAlchemyCostLedgerStore(session).ensure_snapshot(snapshot)
+            store = SqlAlchemyCostLedgerStore(session)
+            await store.ensure_snapshot(snapshot)
+            await store.pin_run_pricing(
+                key,
+                snapshot.pricing_snapshot_id,
+                "2026-06-04T10:00:00Z",
+            )
             ensured.set()
             # Hold the transaction open, uncommitted, until cancelled.
             await release.wait()
@@ -196,7 +202,7 @@ async def test_cancelled_transaction_leaves_no_partial_snapshot(
                 )
             )
         ).scalar_one()
-    assert pins == 0, "a cancelled transaction must leave no pin row"
+    assert pins == 0, "a cancelled transaction must roll back its uncommitted pin row"
 
     async with session_factory() as session:
         store = SqlAlchemyCostLedgerStore(session)
