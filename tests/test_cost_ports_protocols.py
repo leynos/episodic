@@ -250,3 +250,14 @@ def test_pricing_snapshot_rejects_naive_effective_from() -> None:
             aware,
             effective_from=dt.datetime(2026, 6, 1),  # noqa: DTZ001 - naive on purpose.
         )
+
+
+def test_pricing_snapshot_rejects_non_datetime_effective_from() -> None:
+    """A non-datetime effective date must fail with a TypeError."""
+    aware = _make_snapshot(PricingSnapshotId("snapshot:typed"))
+
+    with pytest.raises(TypeError, match="effective_from must be a datetime"):
+        dc.replace(
+            aware,
+            effective_from="2026-06-01T00:00:00Z",  # type: ignore[arg-type]  # invalid on purpose.
+        )

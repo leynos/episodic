@@ -15,7 +15,7 @@ Tests can use in-memory fakes; see ``tests/test_cost_ports_protocols.py``.
 """
 
 import dataclasses as dc
-import datetime as dt  # noqa: TC003 - dataclass field annotation evaluated at runtime.
+import datetime as dt
 import enum
 import typing as typ
 
@@ -110,9 +110,8 @@ def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:
 class PricingSnapshot:
     """Immutable pricing input used by the deterministic pricing engine.
 
-    ``effective_from`` is an optional timezone-aware ``datetime`` (for
-    example 2026-08-01T00:00:00Z); catalogue resolution keeps snapshots
-    unset or not after now and selects the latest.
+    ``effective_from`` is an optional timezone-aware ``datetime``; the
+    catalogue keeps snapshots unset or not after now, selecting the latest.
     """
 
     pricing_snapshot_id: PricingSnapshotId
@@ -132,7 +131,12 @@ class PricingSnapshot:
         """Validate value-object invariants."""
         _validate_currency_code(self.currency)
         _validate_usage_metrics(self.rates_minor_per_metric)
-        if self.effective_from is not None and self.effective_from.tzinfo is None:
+        if self.effective_from is None:
+            return
+        if not isinstance(self.effective_from, dt.datetime):
+            msg = "effective_from must be a datetime or None."
+            raise TypeError(msg)
+        if self.effective_from.tzinfo is None:
             msg = "effective_from must be timezone-aware."
             raise ValueError(msg)
 
