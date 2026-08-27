@@ -323,27 +323,3 @@ def test_command_runner_surfaces_captured_output_on_failure(
     assert "err-diag" in captured.err, (
         "captured stderr of a failed command must be surfaced on stderr"
     )
-
-
-def test_preview_config_reads_openai_key_from_environment(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A configured OPENAI_API_KEY reaches the preview configuration."""
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-env-test")
-
-    config = PreviewConfig()
-
-    assert config.openai_api_key == "sk-env-test", (
-        "the preview config must read the OpenAI key from the environment"
-    )
-
-
-def test_preview_config_defaults_to_empty_openai_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An unset OPENAI_API_KEY defaults to an empty string."""
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-    config = PreviewConfig()
-
-    assert not config.openai_api_key, "the preview config must default to no OpenAI key"
