@@ -102,11 +102,17 @@
     ```
 
     with the verified caller in the reason.
-    The lint pipeline ends with the blocking PyChase duplication gate.
-    Prefer extracting shared logic over suppressing a finding; when parallel
-    structure is intentional, record a reasoned exception with
-    `make duplication-allow FIRST='path::qualname' [SECOND='path::qualname']
+    The lint pipeline ends with the blocking nose duplication gate, which
+    `make lint` provisions through `make install-nose`. Prefer extracting
+    shared logic over suppressing a finding; when parallel structure is
+    intentional, record a reasoned exception with
+    `make duplication-allow FIRST='path[::name]' [SECOND='path[::name]']
     REASON="why this stays"`, and remove entries the gate reports as stale.
+    Keys are repository-relative path globs, optionally suffixed `::name` to
+    require nose's unit name; an entry silences a family only when every
+    member location matches one of its keys. `make duplication-allow` takes one
+    `SECOND` key, so record families with more members by invoking
+    `scripts/duplication_gate.py allow` with a repeated `--second`.
   - **Formatting:** Adheres to formatting standards (`make check-fmt`; use
     `make fmt` to apply fixes).
   - **Typechecking:** Passes type checking (`make typecheck`).
