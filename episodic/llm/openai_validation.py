@@ -1,6 +1,7 @@
 """Shared OpenAI payload validation helpers."""
 
 import collections.abc as cabc
+import dataclasses as dc
 import typing as typ
 
 from episodic.cost.ports import UsageSource
@@ -210,14 +211,28 @@ def _add_metric_if_present(
         metrics[key] = value
 
 
-def _validate_chat_usage_detail_totals(  # noqa: PLR0913  # pylint: disable=too-many-arguments  # Keyword-only usage fields travel together.
-    *,
-    prompt_tokens: int,
-    completion_tokens: int,
-    cached_input: int | None,
-    audio_input: int | None,
-    audio_output: int | None,
-) -> None:
+@dc.dataclass(frozen=True, slots=True)
+class _ChatUsageDetailTotals:
+    """Parent totals and optional nested details from chat usage."""
+
+    prompt_tokens: int
+    completion_tokens: int
+    cached_input: int | None
+    audio_input: int | None
+    audio_output: int | None
+
+    @property
+    def input_detail_tokens(self) -> int:
+        """Return cached and audio input tokens."""
+        return (self.cached_input or 0) + (self.audio_input or 0)
+
+    @property
+    def output_audio_tokens(self) -> int:
+        """Return audio output tokens."""
+        return self.audio_output or 0
+
+
+def _validate_chat_usage_detail_totals(details: _ChatUsageDetailTotals) -> None:
     """Validate that nested chat usage details fit within parent totals.
 
     Raises
@@ -225,11 +240,9 @@ def _validate_chat_usage_detail_totals(  # noqa: PLR0913  # pylint: disable=too-
     OpenAIResponseValidationError
         If nested token details exceed their parent token totals.
     """
-    input_detail_tokens = (cached_input or 0) + (audio_input or 0)
-    if input_detail_tokens > prompt_tokens:
+    if details.input_detail_tokens > details.prompt_tokens:
         raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
-    output_audio_tokens = audio_output or 0
-    if output_audio_tokens > completion_tokens:
+    if details.output_audio_tokens > details.completion_tokens:
         raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
 
 
@@ -265,18 +278,17 @@ def _build_chat_usage_metrics(
         "completion_tokens_details",
         "audio_tokens",
     )
-    _validate_chat_usage_detail_totals(
+    details = _ChatUsageDetailTotals(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         cached_input=cached_input,
         audio_input=audio_input,
         audio_output=audio_output,
     )
-    input_detail_tokens = (cached_input or 0) + (audio_input or 0)
-    output_audio_tokens = audio_output or 0
+    _validate_chat_usage_detail_totals(details)
     metrics = {
-        "input_tokens": prompt_tokens - input_detail_tokens,
-        "output_tokens": completion_tokens - output_audio_tokens,
+        "input_tokens": details.prompt_tokens - details.input_detail_tokens,
+        "output_tokens": details.completion_tokens - details.output_audio_tokens,
     }
     _add_metric_if_present(metrics, "cached_input_tokens", cached_input)
     _add_metric_if_present(metrics, "audio_input_tokens", audio_input)
