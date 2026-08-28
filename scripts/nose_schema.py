@@ -151,29 +151,35 @@ def normalize_findings(report: object) -> list[Finding]:
     return findings
 
 
-def _finding(raw: object, *, context: str) -> Finding:
-    """Validate one nose family payload."""
-    family = require_table(raw, context=context)
-    value = family.get("value")
+def _finding_value(value: object, *, context: str) -> float:
+    """Validate a family's refactoring value as a non-boolean number."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         msg = f"{context}.value must be a number"
         raise GateConfigError(msg)
-    raw_locations = family.get("locations")
-    if not isinstance(raw_locations, cabc.Sequence) or isinstance(
-        raw_locations, (str, bytes)
-    ):
+    return float(value)
+
+
+def _finding_locations(value: object, *, context: str) -> tuple[Location, ...]:
+    """Validate a family's member locations, preserving their report order."""
+    if not isinstance(value, cabc.Sequence) or isinstance(value, (str, bytes)):
         msg = f"{context}.locations must be an array"
         raise GateConfigError(msg)
-    if not raw_locations:
+    if not value:
         msg = f"{context}.locations must not be empty"
         raise GateConfigError(msg)
+    return tuple(
+        _location(location, context=f"{context}.locations[{index}]")
+        for index, location in enumerate(value)
+    )
+
+
+def _finding(raw: object, *, context: str) -> Finding:
+    """Validate one nose family payload."""
+    family = require_table(raw, context=context)
     return Finding(
         witness=require_string(family.get("witness"), context=f"{context}.witness"),
-        value=float(value),
-        locations=tuple(
-            _location(location, context=f"{context}.locations[{index}]")
-            for index, location in enumerate(raw_locations)
-        ),
+        value=_finding_value(family.get("value"), context=context),
+        locations=_finding_locations(family.get("locations"), context=context),
     )
 
 

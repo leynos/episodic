@@ -224,6 +224,27 @@ class TestRunDetector:
         )
 
     @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            pytest.param(7, 7.0, id="integer"),
+            pytest.param(7.5, 7.5, id="float"),
+        ],
+    )
+    def test_normalizes_numeric_values_to_float(
+        self,
+        value: float,
+        expected: float,
+    ) -> None:
+        """Integer and floating-point family values both normalize to float."""
+        report = copy.deepcopy(STUB_REPORT)
+        typ.cast("dict[str, typ.Any]", report)["families"][0]["value"] = value
+        findings = detector.normalize_findings(report)
+        assert isinstance(findings[0].value, float), (
+            "Normalization must coerce family values to float."
+        )
+        assert findings[0].value == expected, "Normalization must preserve the value."
+
+    @pytest.mark.parametrize(
         ("mutate", "diagnostic"),
         [
             pytest.param(
@@ -237,9 +258,40 @@ class TestRunDetector:
                 id="string-value",
             ),
             pytest.param(
+                lambda report: report["families"][0].update({"value": True}),
+                "value must be a number",
+                id="boolean-value",
+            ),
+            pytest.param(
+                lambda report: report["families"][0].pop("value"),
+                "value must be a number",
+                id="missing-value",
+            ),
+            pytest.param(
+                lambda report: report["families"][0].__setitem__(
+                    "locations", "episodic/a.py"
+                ),
+                "locations must be an array",
+                id="string-locations",
+            ),
+            pytest.param(
+                lambda report: report["families"][0].__setitem__(
+                    "locations", b"episodic/a.py"
+                ),
+                "locations must be an array",
+                id="bytes-locations",
+            ),
+            pytest.param(
                 lambda report: report["families"][0].__setitem__("locations", []),
                 "locations must not be empty",
                 id="empty-locations",
+            ),
+            pytest.param(
+                lambda report: report["families"][0]["locations"].__setitem__(
+                    0, "episodic/a.py"
+                ),
+                "families[0].locations[0] must be a table",
+                id="malformed-first-location",
             ),
             pytest.param(
                 lambda report: report["families"][0]["locations"][0].__setitem__(
