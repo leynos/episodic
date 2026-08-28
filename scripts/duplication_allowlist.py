@@ -83,15 +83,15 @@ def key_matches(key: str, location: Location) -> bool:
     return PurePosixPath(location.file).full_match(path_glob)
 
 
-def _key_parts(key: str, *, context: str) -> tuple[str, str]:
-    """Split an allow key into its path glob and its optional unit name."""
-    path_glob, separator, name = key.partition("::")
+def _validate_key_shape(
+    path_glob: str, separator: str, name: str, *, context: str
+) -> None:
+    """Reject a key with an empty path or a ``::`` suffix naming no unit."""
     msg = f"{context} must be a 'path' or 'path::name' key"
     if not path_glob:
         raise GateConfigError(msg)
     if separator and not name:
         raise GateConfigError(msg)
-    return path_glob, name
 
 
 def _validate_repository_relative_path(path_glob: str, *, context: str) -> None:
@@ -121,7 +121,8 @@ def validate_key(key: str, *, context: str) -> str:
     GateConfigError
         If the key is not a well-formed ``path[::name]`` string.
     """
-    path_glob, _ = _key_parts(key, context=context)
+    path_glob, separator, name = key.partition("::")
+    _validate_key_shape(path_glob, separator, name, context=context)
     _validate_repository_relative_path(path_glob, context=context)
     return key
 
@@ -183,6 +184,24 @@ def _allow_entry(raw: object, *, index: int) -> AllowEntry:
     return AllowEntry(keys=_entry_keys(table, index), reason=reason)
 
 
+def _unit_key(unit: object, *, context: str) -> tuple[str, ...]:
+    """Validate a single-location ``unit`` field as a one-key tuple."""
+    if not isinstance(unit, str):
+        msg = f"{context} unit must be a 'path[::name]' string"
+        raise GateConfigError(msg)
+    return (validate_key(unit, context=f"{context} unit"),)
+
+
+def _member_keys(members: object, *, context: str) -> tuple[str, ...]:
+    """Validate a multi-location ``members`` field, preserving its order."""
+    if not _is_key_list(members):
+        msg = f"{context} members must be two or more 'path[::name]' strings"
+        raise GateConfigError(msg)
+    return tuple(
+        validate_key(member, context=f"{context} members") for member in members
+    )
+
+
 def _entry_keys(raw: cabc.Mapping[str, object], index: int) -> tuple[str, ...]:
     """Extract and validate the location keys named by one allow entry."""
     unit = raw.get("unit")
@@ -192,16 +211,8 @@ def _entry_keys(raw: cabc.Mapping[str, object], index: int) -> tuple[str, ...]:
         msg = f"{context} must set exactly one of 'unit' or 'members'"
         raise GateConfigError(msg)
     if unit is not None:
-        if not isinstance(unit, str):
-            msg = f"{context} unit must be a 'path[::name]' string"
-            raise GateConfigError(msg)
-        return (validate_key(unit, context=f"{context} unit"),)
-    if not _is_key_list(members):
-        msg = f"{context} members must be two or more 'path[::name]' strings"
-        raise GateConfigError(msg)
-    return tuple(
-        validate_key(member, context=f"{context} members") for member in members
-    )
+        return _unit_key(unit, context=context)
+    return _member_keys(members, context=context)
 
 
 def _is_key_list(value: object) -> typ.TypeIs[cabc.Sequence[str]]:
