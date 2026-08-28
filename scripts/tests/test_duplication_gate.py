@@ -132,6 +132,11 @@ class TestValidateKey:
                 "must be a repository-relative path key",
                 id="parent-escape",
             ),
+            pytest.param(
+                "episodic/../private.py",
+                "must be a repository-relative path key",
+                id="interior-parent-escape",
+            ),
         ],
     )
     def test_rejects_malformed_keys(self, key: str, diagnostic: str) -> None:
