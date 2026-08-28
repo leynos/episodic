@@ -18,7 +18,7 @@ if typ.TYPE_CHECKING:
 
     from episodic.api.dependencies import ApiDependencies
     from episodic.llm import LLMRequest, LLMResponse
-    from episodic.observability import MetricsPort
+    from episodic.observability import MetricsPort, TracerPort
 
 
 def test_create_app_from_env_requires_database_url(
@@ -287,8 +287,11 @@ async def test_create_app_from_env_runs_shutdown_hooks_during_lifespan(
         database_url: str,
         *,
         metrics: "MetricsPort",  # noqa: UP037 - imported only during type checking.
+        tracer: "TracerPort | None" = None,  # noqa: UP037 - imported only during type checking.
     ) -> tuple[object, ...]:
-        probe, uow, original_hook = original_build(database_url, metrics=metrics)
+        probe, uow, original_hook = original_build(
+            database_url, metrics=metrics, tracer=tracer
+        )
 
         async def _tracked_hook() -> None:
             nonlocal shutdown_hook_called

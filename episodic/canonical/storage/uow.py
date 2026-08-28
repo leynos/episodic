@@ -28,6 +28,7 @@ from episodic.logging import get_logger
 from episodic.observability import (  # noqa: TC001 - runtime-evaluated annotations.
     MetricsPort,
     MonotonicClockPort,
+    TracerPort,
 )
 
 from .episode_repository import SqlAlchemyEpisodeRepository
@@ -105,17 +106,19 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
         Cost ledger adapter bound to the same session.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913  # pylint: disable=too-many-arguments  # Observability ports travel together through the runtime seam.
         self,
         session_factory: cabc.Callable[[], AsyncSession],
         *,
         metrics: MetricsPort | None = None,
         clock: MonotonicClockPort | None = None,
+        tracer: TracerPort | None = None,
         generation_run_runtime: GenerationRunStorageRuntime | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._metrics = metrics
         self._clock = clock
+        self._tracer = tracer
         self._generation_run_runtime = generation_run_runtime
         self._session: AsyncSession | None = None
 
@@ -162,7 +165,12 @@ class SqlAlchemyUnitOfWork(CanonicalUnitOfWork):
             self._session,
             runtime=self._generation_run_runtime,
         )
-        self.cost_ledger = SqlAlchemyCostLedgerStore(self._session)
+        self.cost_ledger = SqlAlchemyCostLedgerStore(
+            self._session,
+            metrics=self._metrics,
+            tracer=self._tracer,
+            clock=self._clock,
+        )
         self.workflow_checkpoints = SqlAlchemyWorkflowCheckpointStore(
             self._session,
             metrics=self._metrics,

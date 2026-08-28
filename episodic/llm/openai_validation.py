@@ -12,6 +12,10 @@ class OpenAIResponseValidationError(ValueError):
     """Raised when an OpenAI payload fails adapter boundary validation."""
 
 
+class OpenAIUsageDetailError(OpenAIResponseValidationError):
+    """Raised when nested usage details exceed their parent totals."""
+
+
 _INVALID_CHAT_COMPLETION_MESSAGE = (
     "Invalid OpenAI chat completion payload. Expected non-empty string id/model, "
     "a non-empty choices list, and choices with message.content strings."
@@ -237,13 +241,13 @@ def _validate_chat_usage_detail_totals(details: _ChatUsageDetailTotals) -> None:
 
     Raises
     ------
-    OpenAIResponseValidationError
+    OpenAIUsageDetailError
         If nested token details exceed their parent token totals.
     """
     if details.input_detail_tokens > details.prompt_tokens:
-        raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
+        raise OpenAIUsageDetailError(_INVALID_USAGE_DETAIL_MESSAGE)
     if details.output_audio_tokens > details.completion_tokens:
-        raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
+        raise OpenAIUsageDetailError(_INVALID_USAGE_DETAIL_MESSAGE)
 
 
 def _build_chat_usage_metrics(
@@ -353,7 +357,7 @@ def _normalize_responses_provider_call_usage(
 
     Raises
     ------
-    OpenAIResponseValidationError
+    OpenAIUsageDetailError
         If nested token details exceed their parent token totals.
     """
     if usage_payload is None:
@@ -374,7 +378,7 @@ def _normalize_responses_provider_call_usage(
         "cached_tokens",
     )
     if (cached_input or 0) > input_tokens:
-        raise OpenAIResponseValidationError(_INVALID_USAGE_DETAIL_MESSAGE)
+        raise OpenAIUsageDetailError(_INVALID_USAGE_DETAIL_MESSAGE)
     metrics = {
         "input_tokens": input_tokens - (cached_input or 0),
         "output_tokens": output_tokens,
