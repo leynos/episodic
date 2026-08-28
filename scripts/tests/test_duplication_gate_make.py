@@ -1,5 +1,6 @@
 """Make-target contract tests for recording duplication exceptions."""
 
+import dataclasses as dc
 import shutil
 import subprocess  # noqa: S404 - tests exercise the real Make target.
 import sys
@@ -15,12 +16,19 @@ from duplication_gate_test_support import (
 )
 
 
+@dc.dataclass(frozen=True, slots=True)
+class _MakeAllowRequest:
+    """The `FIRST`, `SECOND`, and `REASON` inputs for one Make target run."""
+
+    first: str | None
+    second: str | None
+    reason: str | None
+
+
 def _make_allow(
     workspace: object,
     *,
-    first: str | None,
-    second: str | None,
-    reason: str | None,
+    request: _MakeAllowRequest,
     environment: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run the real Make target against a copied, writable gate workspace."""
@@ -34,12 +42,12 @@ def _make_allow(
         "duplication-allow",
         f"DUPLICATION_GATE={sys.executable} scripts/duplication_gate.py",
     ]
-    if first is not None:
-        command.append(f"FIRST={first}")
-    if second is not None:
-        command.append(f"SECOND={second}")
-    if reason is not None:
-        command.append(f"REASON={reason}")
+    if request.first is not None:
+        command.append(f"FIRST={request.first}")
+    if request.second is not None:
+        command.append(f"SECOND={request.second}")
+    if request.reason is not None:
+        command.append(f"REASON={request.reason}")
     workspace_path = Path(typ.cast("Path", workspace))
     return subprocess.run(  # noqa: S603 - fixed Make target and copied workspace.
         command,
@@ -78,9 +86,7 @@ class TestMakeDuplicationAllow:
         }
         result = _make_allow(
             workspace,
-            first=first,
-            second=None,
-            reason=reason,
+            request=_MakeAllowRequest(first=first, second=None, reason=reason),
             environment=environment,
         )
         assert result.returncode == 2, result.stderr
@@ -111,9 +117,9 @@ class TestMakeDuplicationAllow:
         reason = f'kept literally: "$(touch {marker})"; $HOME'
         result = _make_allow(
             workspace,
-            first="episodic/a.py",
-            second=second,
-            reason=reason,
+            request=_MakeAllowRequest(
+                first="episodic/a.py", second=second, reason=reason
+            ),
         )
         assert result.returncode == 0, result.stderr
         entries = allowlist.load_allowlist(workspace / "pyproject.toml")
