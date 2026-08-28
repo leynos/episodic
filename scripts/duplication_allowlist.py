@@ -83,6 +83,24 @@ def key_matches(key: str, location: Location) -> bool:
     return PurePosixPath(location.file).full_match(path_glob)
 
 
+def _key_parts(key: str, *, context: str) -> tuple[str, str]:
+    """Split an allow key into its path glob and its optional unit name."""
+    path_glob, separator, name = key.partition("::")
+    msg = f"{context} must be a 'path' or 'path::name' key"
+    if not path_glob:
+        raise GateConfigError(msg)
+    if separator and not name:
+        raise GateConfigError(msg)
+    return path_glob, name
+
+
+def _validate_repository_relative_path(path_glob: str, *, context: str) -> None:
+    """Reject a path glob that is absolute or escapes the repository root."""
+    if path_glob.startswith("/") or ".." in PurePosixPath(path_glob).parts:
+        msg = f"{context} must be a repository-relative path key"
+        raise GateConfigError(msg)
+
+
 def validate_key(key: str, *, context: str) -> str:
     """Validate one allow key and return it unchanged.
 
@@ -98,20 +116,13 @@ def validate_key(key: str, *, context: str) -> str:
     str
         The validated key.
 
-    Raises
-    ------
+    Propagated errors
+    -----------------
     GateConfigError
         If the key is not a well-formed ``path[::name]`` string.
     """
-    path_glob, separator, name = key.partition("::")
-    malformed = f"{context} must be a 'path' or 'path::name' key"
-    if not path_glob:
-        raise GateConfigError(malformed)
-    if separator and not name:
-        raise GateConfigError(malformed)
-    if path_glob.startswith("/") or ".." in PurePosixPath(path_glob).parts:
-        msg = f"{context} must be a repository-relative path key"
-        raise GateConfigError(msg)
+    path_glob, _ = _key_parts(key, context=context)
+    _validate_repository_relative_path(path_glob, context=context)
     return key
 
 
