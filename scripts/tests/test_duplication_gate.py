@@ -206,6 +206,17 @@ class TestLoadAllowlist:
                 "members must be two or more 'path[::name]' strings",
             ),
             (
+                '[[tool.duplication_gate.allow]]\nunit = 42\nreason = "r"\n',
+                "unit must be a 'path[::name]' string",
+            ),
+            (
+                (
+                    "[[tool.duplication_gate.allow]]\n"
+                    'members = ["episodic/a.py", 7]\nreason = "r"\n'
+                ),
+                "members must be two or more 'path[::name]' strings",
+            ),
+            (
                 '[[tool.duplication_gate.allow]]\nreason = "r"\n',
                 "must set exactly one of 'unit' or 'members'",
             ),
@@ -222,6 +233,8 @@ class TestLoadAllowlist:
             "absolute-unit",
             "one-member",
             "string-members",
+            "non-string-unit",
+            "non-string-member",
             "no-target",
             "both-kinds",
         ],
