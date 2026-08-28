@@ -1,4 +1,4 @@
-# ADR-019: Adopt nose code-duplication gate
+# ADR-021: Adopt nose code-duplication gate
 
 - Status: Accepted
 - Date: 2026-08-28
@@ -26,7 +26,7 @@ GitHub releases, that nose reports spans without qualified unit names so allow
 keys are path globs with an optional `::name` suffix, and that ranked-surface
 gating adjudicates the top 30 families rather than every reported one.
 
-This supersedes ADR-018, whose 2026-08-27 addendum recorded nose as evaluated
+This supersedes ADR-020, whose 2026-08-27 addendum recorded nose as evaluated
 and not adopted. The reversal is deliberate: no new detection evidence emerged,
 and speed and determinism decided a tie that the earlier addendum resolved in
 favour of the incumbent.
@@ -66,7 +66,7 @@ favour of the incumbent.
   silences a family only when every location in it matches one of the entry's
   keys, so a new copy in an unlisted file still blocks. Entries that cover no
   finding are reported as stale.
-- The declarative-module exclusions ADR-018 kept in `[tool.pychase]` become
+- The declarative-module exclusions ADR-020 kept in `[tool.pychase]` become
   ordinary reasoned allow entries, so what used to be a wholesale exclusion is
   now reviewable and stale-checked like every other exception.
 - Re-adjudicating every family nose reports left 23 allow entries: five re-keyed
