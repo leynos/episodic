@@ -75,7 +75,12 @@ class PsycopgConnectKwargs(typ.TypedDict, total=False):
     sslmode: str
 
 
-def _build_llm_port(config: RuntimeConfig) -> OpenAICompatibleLLMAdapter | None:
+def _build_llm_port(
+    config: RuntimeConfig,
+    *,
+    tracer: TracerPort | None = None,
+    metrics: MetricsPort | None = None,
+) -> OpenAICompatibleLLMAdapter | None:
     """Build the environment-configured OpenAI-compatible LLM adapter."""
     if config.llm_base_url is None or config.llm_api_key is None:
         return None
@@ -88,7 +93,9 @@ def _build_llm_port(config: RuntimeConfig) -> OpenAICompatibleLLMAdapter | None:
             service_tier=config.llm_service_tier,
             token_limit_param=config.llm_token_limit_param,
             timeout_seconds=config.llm_timeout_seconds,
-        )
+        ),
+        tracer=tracer,
+        metrics=metrics,
     )
 
 
@@ -96,6 +103,7 @@ def _build_database_probe(
     database_url: str,
     *,
     metrics: MetricsPort,
+    tracer: TracerPort | None = None,
 ) -> tuple[ReadinessProbe, UowFactory, ShutdownHook]:
     """Build the database readiness probe and unit-of-work factory."""
     async_database_url, probe_connection_kwargs = _normalize_database_urls(database_url)
@@ -120,7 +128,7 @@ def _build_database_probe(
         return True
 
     def uow_factory() -> CanonicalUnitOfWork:
-        return SqlAlchemyUnitOfWork(session_factory, metrics=metrics)
+        return SqlAlchemyUnitOfWork(session_factory, metrics=metrics, tracer=tracer)
 
     return (
         ReadinessProbe(name="database", check=check_database),
@@ -244,13 +252,14 @@ def create_app_from_env() -> asgi.App:
     """Build the Falcon ASGI service from environment configuration."""
     config = _load_runtime_config()
     metrics = StructuredLogMetrics()
+    tracer = StructuredLogTracer()
     database_probe, uow_factory, shutdown_hook = _build_database_probe(
         config.database_url,
         metrics=metrics,
+        tracer=tracer,
     )
     object_store = FilesystemObjectStore(config.source_intake_object_store_root)
-    llm_port = _build_llm_port(config)
-    tracer = StructuredLogTracer()
+    llm_port = _build_llm_port(config, tracer=tracer, metrics=metrics)
     if llm_port is None:
         launcher = None
         shutdown_hooks = (shutdown_hook,)
