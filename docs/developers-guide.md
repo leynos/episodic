@@ -197,7 +197,7 @@ duplication families remain. Findings name every member as a
 `path:start-end ~ path:start-end` family, with nose's unit name appended to
 each location it named, followed by the witness kind and refactoring value, so
 a finding can be pasted directly into a refactoring task or coding-agent
-prompt. The tool choice, settings, and exception policy follow ADR-019 and
+prompt. The tool choice, settings, and exception policy follow ADR-021 and
 [the duplication head-to-head](pychase-pyscn-duplication-head-to-head.md).
 
 Both targets depend on `make install-nose`, which installs the `nose-cli`

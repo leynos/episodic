@@ -19,7 +19,7 @@ A follow-up evaluation of nose 0.20.0 on 2026-08-27 (see
 [the nose follow-up](#follow-up-nose-0200)) tied PyChase's perfect syntactic
 score and detected no Type-4 clone in any configuration. On 2026-08-28 the
 maintainers nevertheless moved the gate to nose on speed and determinism
-grounds; see [ADR-019](adr/adr-019-adopt-nose-duplication-gate.md). The tables
+grounds; see [ADR-021](adr/adr-021-adopt-nose-duplication-gate.md). The tables
 and history below record the comparison as measured, not the current tool
 choice.
 
@@ -216,7 +216,7 @@ The evaluation therefore left nose tied on Types 1-3 — equalling but not
 bettering PyChase, at the cost of the qualified-name output and `uvx` pinning
 the gate then relied on — and empty-handed on Type 4. On 2026-08-28 the
 maintainers adopted nose regardless, in
-[ADR-019](adr/adr-019-adopt-nose-duplication-gate.md): with detection quality
+[ADR-021](adr/adr-021-adopt-nose-duplication-gate.md): with detection quality
 tied, its determinism (byte-identical runs needing neither a `PYTHONHASHSEED`
 nor a Python 3.13 pin) and its roughly fiftyfold speed advantage decided the
 choice, and location-keyed allow entries replace the qualified names it does
@@ -228,7 +228,7 @@ them above true ones; broader Type-4 duplication remains a review concern.
 
 - Use nose 0.20.0 behind `scripts/duplication_gate.py` as the blocking
   copy-paste gate, with the pinned `[tool.nose]` settings and the reasoned,
-  location-keyed allowlist in `pyproject.toml` (ADR-019). PyChase remains the
+  location-keyed allowlist in `pyproject.toml` (ADR-021). PyChase remains the
   reference for detection quality on Types 1-3, which nose matches.
 - Do not rely on pyscn for semantic (Type-4) duplication. Its semantic detector
   inverted the ranking between a true and a false semantic pair on this corpus,
