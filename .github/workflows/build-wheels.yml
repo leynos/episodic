@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    # This reusable workflow retains caller-selected native runners for its
+    # This reusable workflow retains matrix-selected native runners for its
     # Linux, Windows, and macOS architecture matrix.
     runs-on: ${{ matrix.os }}
     strategy:
