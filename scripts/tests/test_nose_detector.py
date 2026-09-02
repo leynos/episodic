@@ -1,6 +1,7 @@
 """Tests for the pinned nose detector wrapper used by the duplication gate."""
 
 import copy
+import dataclasses as dc
 import re
 import textwrap
 import typing as typ
@@ -156,7 +157,7 @@ class TestBuildCommand:
         """Roots, surface, ranking bound, channels, and size are all passed."""
         command = detector.build_command(
             "nose",
-            stub_settings(roots=("episodic", "openai_test_types.py")),
+            dc.replace(stub_settings(), roots=("episodic", "openai_test_types.py")),
         )
         assert command[:6] == [
             "nose",
@@ -173,7 +174,7 @@ class TestBuildCommand:
     def test_default_surface_omits_the_all_term(self) -> None:
         """The default surface leaves nose on its ranked dashboard."""
         command = detector.build_command(
-            "nose", stub_settings(surface="default", top=None)
+            "nose", dc.replace(stub_settings(), surface="default", top=None)
         )
         assert "all" not in command, "The default surface must not widen the view."
         assert not any(item.startswith("top=") for item in command), (
