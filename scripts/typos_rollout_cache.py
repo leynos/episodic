@@ -35,13 +35,20 @@ class RemoteResponse(typ.Protocol):
         ...
 
 
+@dc.dataclass(frozen=True)
+class AtomicWriteOptions:
+    """Configure atomic replacement behaviour."""
+
+    create_parents: bool = True
+    preserve_mode: bool = False
+    sync_file: bool = False
+
+
 def atomic_write(
     path: pathlib.Path,
     content: bytes,
     *,
-    create_parents: bool = True,
-    preserve_mode: bool = False,
-    sync_file: bool = False,
+    options: AtomicWriteOptions = AtomicWriteOptions(),
 ) -> None:
     """Atomically replace a path after writing a temporary sibling.
 
@@ -51,24 +58,20 @@ def atomic_write(
         Destination to replace.
     content : bytes
         Complete replacement contents.
-    create_parents : bool
-        Whether to create missing destination directories.
-    preserve_mode : bool
-        Whether an existing destination's permission mode is copied to the
-        temporary replacement before it is installed.
-    sync_file : bool
-        Whether to fsync the temporary replacement before atomically replacing
-        the destination.
+    options : AtomicWriteOptions
+        Directory creation, mode preservation, and fsync policy. The default
+        creates missing parents, ignores the destination mode, and does not
+        fsync.
     """
-    if create_parents:
+    if options.create_parents:
         path.parent.mkdir(parents=True, exist_ok=True)
-    mode = path.stat().st_mode if preserve_mode else None
+    mode = path.stat().st_mode if options.preserve_mode else None
     with tempfile.NamedTemporaryFile(
         delete=False, dir=path.parent, prefix=f".{path.name}."
     ) as stream:
         stream.write(content)
         stream.flush()
-        if sync_file:
+        if options.sync_file:
             os.fsync(stream.fileno())
         temporary = pathlib.Path(stream.name)
     try:

@@ -251,6 +251,45 @@ class TestLoadAllowlist:
             allowlist.load_allowlist(pyproject)
 
 
+class TestEntryKeyHelpers:
+    """Direct contracts for the unit and members key helpers.
+
+    TOML cannot express a bytes value, so the bytes rejection that guards
+    ``members`` is only reachable through the helper itself.
+    """
+
+    def test_unit_entry_keys_validates_one_key(self) -> None:
+        """A well-formed unit becomes a single-key tuple."""
+        assert allowlist._unit_entry_keys("episodic/a.py::run", context="entry") == (
+            "episodic/a.py::run",
+        ), "A valid unit must yield exactly one validated key."
+
+    def test_members_entry_keys_preserves_order(self) -> None:
+        """Member keys keep their configured order."""
+        members = ["episodic/b.py", "episodic/a.py"]
+        assert allowlist._members_entry_keys(members, context="entry") == (
+            "episodic/b.py",
+            "episodic/a.py",
+        ), "Member order must survive validation."
+
+    @pytest.mark.parametrize(
+        "members",
+        [
+            pytest.param("episodic/a.py", id="string"),
+            pytest.param(b"episodic/a.py", id="bytes"),
+        ],
+    )
+    def test_members_entry_keys_rejects_string_like_values(
+        self, members: object
+    ) -> None:
+        """String and bytes values are never treated as member sequences."""
+        with pytest.raises(
+            gate.GateConfigError,
+            match=re.escape("entry members must be two or more 'path[::name]' strings"),
+        ):
+            allowlist._members_entry_keys(members, context="entry")
+
+
 class TestPartitionFindings:
     """Blocking, allowed, and stale-entry partitioning."""
 

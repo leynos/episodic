@@ -24,7 +24,7 @@ from pathlib import Path, PurePosixPath
 import tomlkit
 import tomlkit.items
 from nose_schema import Finding, GateConfigError, Location
-from typos_rollout_cache import atomic_write
+from typos_rollout_cache import AtomicWriteOptions, atomic_write
 
 _MINIMUM_MEMBER_COUNT = 2
 
@@ -184,7 +184,7 @@ def _allow_entry(raw: object, *, index: int) -> AllowEntry:
     return AllowEntry(keys=_entry_keys(table, index), reason=reason)
 
 
-def _unit_key(unit: object, *, context: str) -> tuple[str, ...]:
+def _unit_entry_keys(unit: object, *, context: str) -> tuple[str, ...]:
     """Validate a single-location ``unit`` field as a one-key tuple."""
     if not isinstance(unit, str):
         msg = f"{context} unit must be a 'path[::name]' string"
@@ -192,7 +192,7 @@ def _unit_key(unit: object, *, context: str) -> tuple[str, ...]:
     return (validate_key(unit, context=f"{context} unit"),)
 
 
-def _member_keys(members: object, *, context: str) -> tuple[str, ...]:
+def _members_entry_keys(members: object, *, context: str) -> tuple[str, ...]:
     """Validate a multi-location ``members`` field, preserving its order."""
     if not _is_key_list(members):
         msg = f"{context} members must be two or more 'path[::name]' strings"
@@ -211,8 +211,8 @@ def _entry_keys(raw: cabc.Mapping[str, object], index: int) -> tuple[str, ...]:
         msg = f"{context} must set exactly one of 'unit' or 'members'"
         raise GateConfigError(msg)
     if unit is not None:
-        return _unit_key(unit, context=context)
-    return _member_keys(members, context=context)
+        return _unit_entry_keys(unit, context=context)
+    return _members_entry_keys(members, context=context)
 
 
 def _is_key_list(value: object) -> typ.TypeIs[cabc.Sequence[str]]:
@@ -273,9 +273,11 @@ def _write_document(pyproject_path: Path, document: tomlkit.TOMLDocument) -> Non
     atomic_write(
         pyproject_path,
         tomlkit.dumps(document).encode("utf-8"),
-        create_parents=False,
-        preserve_mode=True,
-        sync_file=True,
+        options=AtomicWriteOptions(
+            create_parents=False,
+            preserve_mode=True,
+            sync_file=True,
+        ),
     )
 
 

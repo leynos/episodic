@@ -128,3 +128,60 @@ class TestMakeDuplicationAllow:
         )
         assert entries[0].reason == reason, "Make must preserve quoted reasons."
         assert not marker.exists(), "Quoted values must not execute shell fragments."
+
+
+def _make_dry_run(target: str) -> subprocess.CompletedProcess[str]:
+    """Expand a Make target's recipe without running it."""
+    make = shutil.which("make")
+    assert make is not None, "Expected make to be available for contract tests."
+    return subprocess.run(  # noqa: S603 - fixed Make target in the repository root.
+        [
+            make,
+            "--dry-run",
+            "--no-print-directory",
+            "-f",
+            str(REPOSITORY_ROOT / "Makefile"),
+            target,
+        ],
+        cwd=REPOSITORY_ROOT,
+        env=gate_environment(),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+class TestMakeGateWiring:
+    """The Make targets that must run the blocking duplication gate.
+
+    Mocked gate tests cannot show that `make lint` still reaches the gate, so
+    these expand the real recipes and assert the gate command survives.
+    """
+
+    @pytest.mark.parametrize("target", ["lint", "duplication"])
+    def test_target_runs_the_duplication_gate_check(self, target: str) -> None:
+        """Both targets invoke the gate's `check` subcommand."""
+        result = _make_dry_run(target)
+
+        assert result.returncode == 0, result.stderr
+        assert "scripts/duplication_gate.py check" in result.stdout, (
+            f"`make {target}` must invoke the duplication gate's check command."
+        )
+
+    @pytest.mark.parametrize("target", ["lint", "duplication"])
+    def test_target_pins_the_detector_binary(self, target: str) -> None:
+        """Both targets pass the pinned detector location to the gate."""
+        result = _make_dry_run(target)
+
+        assert "NOSE_BIN=" in result.stdout, (
+            f"`make {target}` must pin the detector binary for the gate."
+        )
+
+    def test_duplication_installs_the_pinned_detector_first(self) -> None:
+        """The standalone target ensures the pinned detector before gating."""
+        result = _make_dry_run("duplication")
+        install = result.stdout.find("nose-cli@")
+        check = result.stdout.find("scripts/duplication_gate.py check")
+
+        assert install != -1, "`make duplication` must ensure the pinned detector."
+        assert install < check, "The detector must be installed before the gate runs."

@@ -98,21 +98,21 @@ def _report(
     )
 
 
-def _check_inputs(
-    *,
-    allowlist_reader: AllowlistReader,
-    detector: FindingDetector,
-) -> tuple[tuple[AllowEntry, ...], list[Finding]]:
-    """Load the gate inputs with explicit local-environment failures."""
+def _read_allowlist(allowlist_reader: AllowlistReader) -> tuple[AllowEntry, ...]:
+    """Read the reasoned allowlist, naming unreadable configuration."""
     try:
-        allowlist = allowlist_reader(PYPROJECT)
+        return allowlist_reader(PYPROJECT)
     except GateConfigError:
         raise
     except (OSError, tomllib.TOMLDecodeError) as error:
         msg = f"cannot load duplication allowlist: {error}"
         raise GateExecutionError(msg) from error
+
+
+def _detect_findings(detector: FindingDetector) -> list[Finding]:
+    """Run the detector, separating execution failures from bad configuration."""
     try:
-        findings = detector()
+        return detector()
     except GateConfigError:
         raise
     except (OSError, RuntimeError) as error:
@@ -120,7 +120,15 @@ def _check_inputs(
         raise GateExecutionError(msg) from error
     except (TypeError, ValueError) as error:
         raise GateConfigError(str(error)) from error
-    return allowlist, findings
+
+
+def _check_inputs(
+    *,
+    allowlist_reader: AllowlistReader,
+    detector: FindingDetector,
+) -> tuple[tuple[AllowEntry, ...], list[Finding]]:
+    """Load the gate inputs with explicit local-environment failures."""
+    return (_read_allowlist(allowlist_reader), _detect_findings(detector))
 
 
 @app.command

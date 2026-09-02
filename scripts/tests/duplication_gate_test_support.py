@@ -110,25 +110,26 @@ def run_gate_command(
     )
 
 
-def stub_settings(  # noqa: PLR0913 - mirrors every NoseSettings field.
-    *,
-    version: str = "0.20.0",
-    roots: tuple[str, ...] = ("episodic",),
-    mode: str = "syntax,semantic,near",
-    min_size: int = 24,
-    surface: str = "all",
-    top: int | None = 30,
-    exclude: tuple[str, ...] = (),
-) -> detector.NoseSettings:
-    """Build detector settings for tests, overriding selected fields."""
+def stub_settings() -> detector.NoseSettings:
+    """Build the standard detector settings used by the gate tests.
+
+    Vary individual fields at the call site with :func:`dataclasses.replace`
+    rather than threading an override parameter per field through this factory.
+
+    Returns
+    -------
+    detector.NoseSettings
+        The pinned version, roots, channels, size floor, surface, ranking
+        bound, and exclusions shared by the gate tests.
+    """
     return detector.NoseSettings(
-        version=version,
-        roots=roots,
-        mode=mode,
-        min_size=min_size,
-        surface=surface,
-        top=top,
-        exclude=exclude,
+        version="0.20.0",
+        roots=("episodic",),
+        mode="syntax,semantic,near",
+        min_size=24,
+        surface="all",
+        top=30,
+        exclude=(),
     )
 
 

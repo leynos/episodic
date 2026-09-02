@@ -5,6 +5,7 @@ import json
 import subprocess  # noqa: S404 - tests exercise copied gate and Make commands.
 import sys
 import textwrap
+import tomllib
 import typing as typ
 
 import pytest
@@ -109,6 +110,139 @@ class TestGateCommands:
 
         with pytest.raises(gate.GateExecutionError, match=str(error)):
             gate._check_inputs(allowlist_reader=reader, detector=detect)
+
+    def test_read_allowlist_returns_the_reader_result(self) -> None:
+        """A successful reader result reaches the caller unchanged."""
+        entry = allowlist.AllowEntry(keys=("episodic/a.py",), reason="reviewed")
+
+        def reader(_path: object) -> tuple[allowlist.AllowEntry, ...]:
+            return (entry,)
+
+        assert gate._read_allowlist(reader) == (entry,), (
+            "The reader's entries must pass through unchanged."
+        )
+
+    def test_detect_findings_returns_the_detector_result(self) -> None:
+        """A successful detector result reaches the caller unchanged."""
+        finding = detector.Finding(
+            witness="copy-paste",
+            value=9.0,
+            locations=(
+                detector.Location(file="episodic/a.py", start=1, end=2, name=None),
+                detector.Location(file="episodic/b.py", start=1, end=2, name=None),
+            ),
+        )
+
+        def detect() -> list[detector.Finding]:
+            return [finding]
+
+        assert gate._detect_findings(detect) == [finding], (
+            "The detector's findings must pass through unchanged."
+        )
+
+    @pytest.mark.parametrize(
+        ("error", "expected_type", "expected_message"),
+        [
+            pytest.param(
+                OSError("unreadable configuration"),
+                gate.GateExecutionError,
+                "cannot load duplication allowlist: unreadable configuration",
+                id="os-error",
+            ),
+            pytest.param(
+                tomllib.TOMLDecodeError("bad table"),
+                gate.GateExecutionError,
+                "cannot load duplication allowlist: bad table",
+                id="toml-error",
+            ),
+        ],
+    )
+    def test_read_allowlist_translates_environment_failures(
+        self,
+        error: Exception,
+        expected_type: type[Exception],
+        expected_message: str,
+    ) -> None:
+        """Unreadable configuration becomes an explicit execution error."""
+
+        def reader(_path: object) -> tuple[allowlist.AllowEntry, ...]:
+            raise error
+
+        with pytest.raises(expected_type) as raised:
+            gate._read_allowlist(reader)
+
+        assert str(raised.value) == expected_message, "Diagnostic must name the cause."
+        assert raised.value.__cause__ is error, "The original error must be the cause."
+
+    @pytest.mark.parametrize(
+        ("error", "expected_type", "expected_message"),
+        [
+            pytest.param(
+                OSError("detector executable unavailable"),
+                gate.GateExecutionError,
+                "nose detector failed: detector executable unavailable",
+                id="os-error",
+            ),
+            pytest.param(
+                RuntimeError("detector runtime failed"),
+                gate.GateExecutionError,
+                "nose detector failed: detector runtime failed",
+                id="runtime-error",
+            ),
+            pytest.param(
+                TypeError("families must be an array"),
+                gate.GateConfigError,
+                "families must be an array",
+                id="type-error",
+            ),
+            pytest.param(
+                ValueError("value must be a number"),
+                gate.GateConfigError,
+                "value must be a number",
+                id="value-error",
+            ),
+        ],
+    )
+    def test_detect_findings_translates_detector_failures(
+        self,
+        error: Exception,
+        expected_type: type[Exception],
+        expected_message: str,
+    ) -> None:
+        """Execution failures and schema violations use distinct gate errors."""
+
+        def detect() -> list[detector.Finding]:
+            raise error
+
+        with pytest.raises(expected_type) as raised:
+            gate._detect_findings(detect)
+
+        assert str(raised.value) == expected_message, "Diagnostic must name the cause."
+        assert raised.value.__cause__ is error, "The original error must be the cause."
+
+    def test_read_allowlist_passes_configuration_errors_through(self) -> None:
+        """An allowlist configuration error is not rewrapped."""
+        error = gate.GateConfigError("duplication_gate.allow[0] requires a reason")
+
+        def reader(_path: object) -> tuple[allowlist.AllowEntry, ...]:
+            raise error
+
+        with pytest.raises(gate.GateConfigError) as raised:
+            gate._read_allowlist(reader)
+
+        assert raised.value is error, "The original configuration error must propagate."
+
+    def test_detect_findings_passes_configuration_errors_through(self) -> None:
+        """A detector configuration error is not rewrapped."""
+        error = gate.GateConfigError("nose 0.19.0 is installed but 0.20.0 is pinned")
+
+        def detect() -> list[detector.Finding]:
+            raise error
+
+        with pytest.raises(gate.GateConfigError) as raised:
+            gate._detect_findings(detect)
+
+        assert raised.value is error, "The original configuration error must propagate."
 
     def test_check_reports_detector_schema_errors(
         self,
@@ -325,3 +459,109 @@ class TestGateCommands:
             == {"first_total", "second_total"}
             for finding in findings
         ), "The planted copy must name both duplicated functions."
+
+
+class TestEndToEndBlocking:
+    """The real detector driving the real `check` command.
+
+    Every other blocking test substitutes a stub report or calls the detector
+    without the gate, so none of them shows that a genuine duplicate reaches
+    `check` and fails the build. These do, using the pinned binary.
+    """
+
+    DUPLICATE_BODY = textwrap.dedent(
+        """\
+        def NAME(items):
+            total = 0.0
+            for item in items:
+                price = item["price"] * item["quantity"]
+                if item.get("taxable"):
+                    price *= 1.2
+                if item.get("discount"):
+                    price -= item["discount"]
+                total += price
+            if total < 0:
+                total = 0.0
+            return round(total, 2)
+        """
+    )
+
+    def _planted_workspace(self, tmp_path: object, *, allow: str = "") -> Path:
+        """Build a gate workspace whose package holds one verbatim duplicate."""
+        workspace, _script = copied_gate_workspace(typ.cast("Path", tmp_path))
+        package = workspace / "planted"
+        package.mkdir()
+        (package / "__init__.py").write_text("", encoding="utf-8")
+        (package / "mod.py").write_text(
+            self.DUPLICATE_BODY.replace("NAME", "first_total")
+            + "\n\n"
+            + self.DUPLICATE_BODY.replace("NAME", "second_total"),
+            encoding="utf-8",
+        )
+        (workspace / "pyproject.toml").write_text(
+            textwrap.dedent(
+                """\
+                [project]
+                name = "gate-test"
+                version = "0"
+
+                [tool.nose]
+                version = "0.20.0"
+                roots = ["planted"]
+                mode = "syntax,semantic,near"
+                min-size = 8
+                surface = "all"
+                top = 30
+                """
+            )
+            + allow,
+            encoding="utf-8",
+        )
+        return workspace
+
+    def _run_check(self, workspace: Path) -> subprocess.CompletedProcess[str]:
+        """Run the copied gate's real `check` against the pinned detector."""
+        settings = detector.load_settings(REPOSITORY_ROOT / "pyproject.toml")
+        try:
+            binary = detector.resolve_binary(settings)
+        except detector.GateExecutionError as error:  # pragma: no cover
+            pytest.skip(str(error))
+        return run_gate_command(
+            workspace / "scripts" / "duplication_gate.py",
+            "check",
+            environment=gate_environment(NOSE_BIN=binary),
+        )
+
+    def test_planted_duplicate_blocks_the_gate(self, tmp_path: object) -> None:
+        """A genuine duplicate fails `check` and names both copies."""
+        result = self._run_check(self._planted_workspace(tmp_path))
+
+        assert result.returncode == 1, (
+            f"A planted duplicate must fail the gate.\n{result.stdout}{result.stderr}"
+        )
+        assert "planted/mod.py" in result.stdout, (
+            "The report must locate the duplicated file."
+        )
+        assert "make duplication-allow" in result.stdout, (
+            "A blocking report must show how to record a reasoned exception."
+        )
+
+    def test_reasoned_exception_unblocks_the_planted_duplicate(
+        self, tmp_path: object
+    ) -> None:
+        """The same duplicate passes once a reasoned allow entry covers it."""
+        allow = textwrap.dedent(
+            """
+            [[tool.duplication_gate.allow]]
+            unit = "planted/mod.py"
+            reason = "Planted fixture proving the gate blocks and allows."
+            """
+        )
+        result = self._run_check(self._planted_workspace(tmp_path, allow=allow))
+
+        assert result.returncode == 0, (
+            f"A covered duplicate must pass.\n{result.stdout}{result.stderr}"
+        )
+        assert "duplication gate passed" in result.stdout, (
+            "The gate must report its successful result."
+        )

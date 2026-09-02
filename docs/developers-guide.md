@@ -1787,7 +1787,7 @@ SELECT :event_id, :run_id,
 
 UPDATE generation_runs
 SET status = 'failed',
-    current_node = 'failed',
+    current_node = NULL,
     ended_at = CURRENT_TIMESTAMP,
     error_message = 'Generation lease expired; failed manually.',
     error_category = 'launcher.lease_expired',
@@ -1802,6 +1802,17 @@ The resulting semantics are compare-and-act: only the qualifying row is locked,
 and a missing row causes an explicit rollback with no persisted event or status
 change. The `run.failed` event and `failed` terminal update are committed
 atomically after that lock succeeds.
+
+The terminal update must clear `current_node` and set `ended_at`. A run in a
+terminal status (`succeeded`, `failed`, or `cancelled`) records where it
+stopped in its events, not in `current_node`, which names only the node a
+*running* run currently occupies. The SQL adapter validates both fields before
+flushing and rejects a terminal update that leaves a current node
+(`terminal generation runs must not have a current node`) or omits an end time
+(`terminal generation runs must have an end time`), leaving the persisted run
+unchanged. Manual recovery must use `current_node = NULL` and a non-null
+`ended_at`, as shown above; a terminal update omitting either field is rejected
+before persistence.
 
 Keep `idempotency_principal_id` and `idempotency_key` unchanged. They remain
 attached to the failed generation run so a replay is tied to the existing

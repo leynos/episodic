@@ -197,6 +197,12 @@ timestamp. The public HTTP endpoints for creating and reviewing these resources
 are still planned; this release establishes the domain model and in-memory
 reference port used by those later endpoints.
 
+Poll a generation run until its status is `succeeded`, `failed`, or `cancelled`.
+Terminal runs always have `current_node: null` and a non-null `ended_at`; the
+event log retains the node where execution stopped. Non-terminal runs may
+report their current orchestration node, and clients should continue polling
+until a terminal status is returned.
+
 #### Failure behaviour
 
 If either stage returns a response that does not match the expected structured
@@ -365,7 +371,9 @@ endpoints are not covered by this `/v1` authorization requirement.
 Before upgrading to the next minor release, apply the new Alembic revisions.
 Production API clients must configure the bearer token and principal settings
 above, send the bearer header on every `/v1` request, and adopt the generation
-source limits and event cursor contract described in this guide.
+source limits and event cursor contract described in this guide. Generation-run
+pollers must also handle the terminal lifecycle contract: terminal responses
+have `current_node: null` and a populated `ended_at`.
 
 Health endpoints:
 
