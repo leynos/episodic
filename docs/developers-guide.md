@@ -240,6 +240,26 @@ If a workflow's behaviour genuinely depends on a feature only present from a
 particular commit onwards, express that as a comment or a changelog note, not
 as a test assertion on the SHA string.
 
+## GitHub Actions runner contract
+
+Repository-owned Linux jobs use the shared, uncached Namespace profile
+`namespace-profile-default`. The profile contract is Ubuntu 22.04 on amd64,
+with 4 vCPUs and 16 GB of memory. Repository-specific cache volumes remain
+disabled during this pilot. The supported actionlint labels are
+`namespace-profile-default` and `namespace-profile-default-arm64`.
+
+The profile is used by the bootstrap, CI, coverage, CodeScene SHA refresh,
+DOKS provisioning, and release jobs. The reusable wheel workflow is the
+exception: its Linux, Windows, and macOS jobs retain the native runners chosen
+by its operating-system matrix, because those builds require platform-native
+toolchains.
+
+The Namespace image is managed outside this repository. Local `act` runs can
+validate workflow structure and the runner-selection contract, but cannot
+certify profile availability, installed tools, or permissions. Confirm those
+properties on the shared image before relying on release publication; in
+particular, the release job requires the `gh` CLI for wheel upload.
+
 ## Falcon HTTP runtime
 
 The canonical HTTP adapter has two layers:
