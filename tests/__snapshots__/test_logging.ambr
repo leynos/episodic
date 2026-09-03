@@ -2,6 +2,12 @@
 # name: test_log_wrappers_delegate_through_convenience_methods
   list([
     tuple(
+      <LogLevel.DEBUG: 'DEBUG'>,
+      'Loaded 3 documents',
+      None,
+      False,
+    ),
+    tuple(
       <LogLevel.INFO: 'INFO'>,
       'Loaded 3 documents',
       None,
@@ -23,6 +29,12 @@
 # ---
 # name: test_log_wrappers_fall_back_to_logger_log_when_needed
   list([
+    tuple(
+      10,
+      'Loaded 3 documents',
+      None,
+      False,
+    ),
     tuple(
       20,
       'Loaded 3 documents',

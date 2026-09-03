@@ -91,6 +91,16 @@ def configure_logging(
 class _SupportsConvenienceLog(typ.Protocol):
     """Protocol for loggers supporting stdlib-like femtologging methods."""
 
+    def debug(
+        self,
+        message: str,
+        /,
+        *,
+        exc_info: object | None = None,
+        stack_info: bool = False,
+    ) -> None:
+        """Emit a DEBUG-level log record."""
+
     def info(
         self,
         message: str,
@@ -143,6 +153,42 @@ type _CompatibleLogger = _SupportsConvenienceLog | _SupportsLogMethod
 def _format_message(template: str, args: tuple[object, ...]) -> str:
     """Format a log message template."""
     return template % args if args else template
+
+
+def log_debug(
+    logger: _CompatibleLogger,
+    template: str,
+    *args: object,
+    exc_info: object | None = None,
+) -> None:
+    """Format and emit a DEBUG log message.
+
+    Parameters
+    ----------
+    logger : _CompatibleLogger
+        Logger instance that supports femtologging convenience methods or a
+        stdlib-style `log(...)` fallback.
+    template : str
+        Percent-style format string for the log message.
+    *args : object
+        Arguments interpolated into the template.
+    exc_info : object | None, optional
+        Exception info to attach to the log record.
+    """
+    message = _format_message(template, args)
+    try:
+        typ.cast("_SupportsConvenienceLog", logger).debug(
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
+    except (AttributeError, TypeError):  # fmt: skip
+        typ.cast("_SupportsLogMethod", logger).log(
+            logging.DEBUG,
+            message,
+            exc_info=exc_info,
+            stack_info=False,
+        )
 
 
 def log_info(
@@ -258,6 +304,7 @@ __all__ = (
     "configure_logging",
     "getLogger",
     "get_logger",
+    "log_debug",
     "log_error",
     "log_info",
     "log_warning",
