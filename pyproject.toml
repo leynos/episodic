@@ -63,6 +63,9 @@ extend-exclude = [
     "scripts/typos_rollout_cache.py",
 ]
 
+[tool.ty.src]
+exclude = ["tests/fixtures/typecheck/"]
+
 [tool.ruff.lint]
 select = [
     "F",        # Pyflakes rules
@@ -749,6 +752,11 @@ full_name = [
 reason = "Metrics and tracing adapters implement runtime-selected observability protocols and their bounded emission path."
 
 [[tool.skylos.dead_code.entrypoints]]
+type = "function"
+full_name = ["episodic.observability._emit_structured_event"]
+reason = "StructuredLogMetrics and StructuredLogTracer invoke this shared port-emission helper."
+
+[[tool.skylos.dead_code.entrypoints]]
 type = "variable"
 full_name = [
     "episodic.api.runtime.GRANIAN_FACTORY_TARGET",
@@ -785,6 +793,41 @@ names = []
 [tool.hecate]
 root_packages = ["episodic"]
 default_rule_id = "ARCH001"
+include_external_packages = true
+
+[[tool.hecate.groups]]
+name = "logging_port"
+prefixes = ["episodic.logging"]
+allowed = ["logging_port", "logging_backend"]
+
+[[tool.hecate.groups]]
+name = "logging_backend"
+prefixes = ["femtologging"]
+allowed = ["logging_backend"]
+
+[[tool.hecate.groups]]
+name = "external_libraries"
+prefixes = [
+    "alembic",
+    "asyncpg",
+    "celery",
+    "eventlet",
+    "falcon",
+    "gevent",
+    "granian",
+    "httpx",
+    "kombu",
+    "langgraph",
+    "openai",
+    "psycopg",
+    "py_pglite",
+    "pydantic",
+    "sqlalchemy",
+    "tei_rapporteur",
+    "tenacity",
+    "yaml",
+]
+allowed = ["external_libraries"]
 
 [[tool.hecate.groups]]
 name = "composition_root"
@@ -793,7 +836,9 @@ allowed = [
     "application",
     "composition_root",
     "domain_ports",
+    "external_libraries",
     "inbound_adapter",
+    "logging_port",
     "outbound_adapter",
 ]
 
@@ -824,7 +869,7 @@ prefixes = [
     "episodic.llm.ports",
     "episodic.metrics_ports",
 ]
-allowed = ["domain_ports"]
+allowed = ["domain_ports", "external_libraries", "logging_port"]
 
 [[tool.hecate.groups]]
 name = "application"
@@ -840,7 +885,7 @@ prefixes = [
     "episodic.generation",
     "episodic.orchestration",
 ]
-allowed = ["application", "domain_ports"]
+allowed = ["application", "domain_ports", "external_libraries", "logging_port"]
 
 [[tool.hecate.groups]]
 name = "inbound_adapter"
@@ -849,7 +894,13 @@ prefixes = [
     "episodic.worker.tasks",
     "episodic.worker.topology",
 ]
-allowed = ["inbound_adapter", "application", "domain_ports"]
+allowed = [
+    "inbound_adapter",
+    "application",
+    "domain_ports",
+    "external_libraries",
+    "logging_port",
+]
 
 [[tool.hecate.groups]]
 name = "outbound_adapter"
@@ -862,7 +913,13 @@ prefixes = [
     "episodic.llm.openai_adapter",
     "episodic.llm.openai_client",
 ]
-allowed = ["outbound_adapter", "application", "domain_ports"]
+allowed = [
+    "outbound_adapter",
+    "application",
+    "domain_ports",
+    "external_libraries",
+    "logging_port",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.6,<0.13.0"]
