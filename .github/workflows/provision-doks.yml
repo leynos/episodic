@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   provision:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-default
     env:
       OUTPUT_DIR: /tmp/doks-provision
     steps:
