@@ -1,34 +1,10 @@
 """Domain enums and exceptions for generation orchestration."""
 
 import enum
-import json
 
-from episodic.logging import getLogger
-
-_log = getLogger(__name__)
-
-
-def _log_event(level: str, message: str, **fields: object) -> None:
-    """Emit one structured log event with a JSON fallback.
-
-    Logger convenience methods (``debug``, ``info``, ...) only accept
-    ``exc_info`` / ``stack_info`` besides the message. Structured fields are
-    serialized into one JSON message when needed.
-    """
-    log_method = getattr(_log, level)
-    allowed_kwargs = {
-        k: v for k, v in fields.items() if k in {"exc_info", "stack_info"}
-    }
-    extra_fields = {k: v for k, v in fields.items() if k not in allowed_kwargs}
-    if extra_fields:
-        payload = {"event": message, **extra_fields}
-        log_method(json.dumps(payload, sort_keys=True), **allowed_kwargs)
-        return
-    try:
-        log_method(message, **allowed_kwargs)
-    except TypeError:
-        payload = {"event": message}
-        log_method(json.dumps(payload, sort_keys=True), **allowed_kwargs)
+from episodic.logging import (
+    log_event as _log_event,  # noqa: F401 - Compatibility re-export for orchestration callers.
+)
 
 
 class ActionKind(enum.StrEnum):
