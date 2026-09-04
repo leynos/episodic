@@ -1,0 +1,2068 @@
+{
+    "families": [
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-helper",
+            "files": 6,
+            "folds": 0,
+            "id": "8e47e3054ec9d76a",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 51,
+                    "file": "episodic/api/resources/base.py",
+                    "id": "b1b317954a35bbd3",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 50
+                },
+                {
+                    "end": 34,
+                    "file": "episodic/api/resources/reference_bindings.py",
+                    "id": "b5b1c3218e4f24a2",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 33
+                },
+                {
+                    "end": 108,
+                    "file": "episodic/api/resources/reference_bindings.py",
+                    "id": "bb2389bcd401de2a",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 107
+                },
+                {
+                    "end": 76,
+                    "file": "episodic/api/resources/reference_documents.py",
+                    "id": "19f7c58d2af78c3c",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 75
+                },
+                {
+                    "end": 145,
+                    "file": "episodic/api/resources/reference_documents.py",
+                    "id": "f94920820c91fcb6",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 144
+                },
+                {
+                    "end": 207,
+                    "file": "episodic/api/resources/reference_documents.py",
+                    "id": "087ad2d56b1e1b92",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 206
+                },
+                {
+                    "end": 284,
+                    "file": "episodic/api/resources/reference_documents.py",
+                    "id": "c67fdb292d58f9a0",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 283
+                },
+                {
+                    "end": 20,
+                    "file": "episodic/api/resources/resolved_bindings.py",
+                    "id": "6316242989370a49",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 19
+                },
+                {
+                    "end": 252,
+                    "file": "episodic/api/resources/series_profiles.py",
+                    "id": "7ee16266db141180",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 251
+                },
+                {
+                    "end": 142,
+                    "file": "episodic/api/resources/source_intake.py",
+                    "id": "526556070b4a3f4a",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 141
+                },
+                {
+                    "end": 166,
+                    "file": "episodic/api/resources/source_intake.py",
+                    "id": "bbc1f3aa0e05272a",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 165
+                },
+                {
+                    "end": 241,
+                    "file": "episodic/api/resources/source_intake.py",
+                    "id": "583ad020b59669a0",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 240
+                },
+                {
+                    "end": 271,
+                    "file": "episodic/api/resources/source_intake.py",
+                    "id": "489c55276b123be0",
+                    "lang": "python",
+                    "name": "__init__",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 270
+                }
+            ],
+            "members": 13,
+            "metrics": {
+                "dup_lines": 24,
+                "files": 6,
+                "languages": 1,
+                "mean_lines": 2,
+                "mean_score": 1.0,
+                "mean_sem": 5.0,
+                "members": 13,
+                "modules": 1,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 2,
+                "shared_weight": 2.0,
+                "value": 42.247448713915894
+            },
+            "params": 0,
+            "removable": 24,
+            "rep_lines": 2,
+            "same_symbol": true,
+            "scope": "prod",
+            "shared": 2,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 42.247448713915894,
+            "value_nodes": 5,
+            "witness": "exact"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 3,
+            "folds": 0,
+            "id": "43da9a0d4459edb4",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 75,
+                    "file": "episodic/canonical/storage/entity_models.py",
+                    "id": "a33db9228dced387",
+                    "lang": "python",
+                    "name": null,
+                    "start": 65
+                },
+                {
+                    "end": 100,
+                    "file": "episodic/canonical/storage/reference_models.py",
+                    "id": "1e27e6d9d3cb97b3",
+                    "lang": "python",
+                    "name": null,
+                    "start": 90
+                },
+                {
+                    "end": 55,
+                    "file": "episodic/canonical/storage/workflow_checkpoint_models.py",
+                    "id": "7945209588a89da8",
+                    "lang": "python",
+                    "name": null,
+                    "start": 45
+                }
+            ],
+            "members": 3,
+            "metrics": {
+                "dup_lines": 22,
+                "files": 3,
+                "languages": 1,
+                "mean_lines": 11,
+                "mean_score": 1.0,
+                "mean_sem": 39.0,
+                "members": 3,
+                "modules": 1,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 11,
+                "shared_weight": 7.0,
+                "value": 35.2
+            },
+            "params": 0,
+            "removable": 22,
+            "rep_lines": 11,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 11,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 35.2,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "23a607fd7273b0ef",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 82,
+                    "file": "episodic/orchestration/_checkpoint_resume.py",
+                    "id": "689ac51e53ef8eb7",
+                    "lang": "python",
+                    "name": null,
+                    "start": 76
+                },
+                {
+                    "end": 192,
+                    "file": "episodic/orchestration/langgraph.py",
+                    "id": "00f6b7635c7fa828",
+                    "lang": "python",
+                    "name": null,
+                    "start": 186
+                },
+                {
+                    "end": 230,
+                    "file": "episodic/orchestration/langgraph.py",
+                    "id": "c930162749f5ec40",
+                    "lang": "python",
+                    "name": null,
+                    "start": 224
+                }
+            ],
+            "members": 3,
+            "metrics": {
+                "dup_lines": 14,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 7,
+                "mean_score": 1.0,
+                "mean_sem": 28.0,
+                "members": 3,
+                "modules": 1,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 7,
+                "shared_weight": 6.0,
+                "value": 18.2
+            },
+            "params": 0,
+            "removable": 14,
+            "rep_lines": 7,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 7,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 18.2,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 5,
+            "folds": 0,
+            "id": "bfa96c5bb875da97",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 17,
+                    "file": "episodic/canonical/storage/reference_models.py",
+                    "id": "d82fe5952a5b5823",
+                    "lang": "python",
+                    "name": null,
+                    "start": 3
+                },
+                {
+                    "end": 15,
+                    "file": "episodic/canonical/storage/entity_models.py",
+                    "id": "ba00ed3978759d79",
+                    "lang": "python",
+                    "name": null,
+                    "start": 3
+                },
+                {
+                    "end": 13,
+                    "file": "episodic/canonical/storage/generation_run_models.py",
+                    "id": "5a695ecbbcace80a",
+                    "lang": "python",
+                    "name": null,
+                    "start": 3
+                },
+                {
+                    "end": 13,
+                    "file": "episodic/canonical/storage/history_models.py",
+                    "id": "1c923b81009766b0",
+                    "lang": "python",
+                    "name": null,
+                    "start": 3
+                },
+                {
+                    "end": 12,
+                    "file": "episodic/canonical/storage/source_intake_models.py",
+                    "id": "d9d90ac684b762c5",
+                    "lang": "python",
+                    "name": null,
+                    "start": 3
+                }
+            ],
+            "members": 5,
+            "metrics": {
+                "dup_lines": 48,
+                "files": 5,
+                "languages": 1,
+                "mean_lines": 12,
+                "mean_score": 1.0,
+                "mean_sem": 24.0,
+                "members": 5,
+                "modules": 1,
+                "params": 1,
+                "scope": "prod",
+                "shared_lines": 8,
+                "shared_weight": 6.0,
+                "value": 105.60000000000001
+            },
+            "params": 1,
+            "removable": 32,
+            "rep_lines": 15,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 8,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 105.60000000000001,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "fe536a179b0ad6eb",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 41,
+                    "file": "episodic/canonical/storage/uow.py",
+                    "id": "5d02cd5c628ced15",
+                    "lang": "python",
+                    "name": null,
+                    "start": 24
+                },
+                {
+                    "end": 57,
+                    "file": "episodic/canonical/storage/__init__.py",
+                    "id": "0d47e3298e4f0daf",
+                    "lang": "python",
+                    "name": null,
+                    "start": 41
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 17,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 17,
+                "mean_score": 1.0,
+                "mean_sem": 73.0,
+                "members": 2,
+                "modules": 1,
+                "params": 1,
+                "scope": "prod",
+                "shared_lines": 17,
+                "shared_weight": 16.0,
+                "value": 22.1
+            },
+            "params": 1,
+            "removable": 17,
+            "rep_lines": 18,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 17,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 22.1,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "a6b5daf69b5da5c4",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 20,
+                    "file": "episodic/generation/guest_bios.py",
+                    "id": "37e568de6651b795",
+                    "lang": "python",
+                    "name": null,
+                    "start": 12
+                },
+                {
+                    "end": 73,
+                    "file": "episodic/generation/show_notes.py",
+                    "id": "358524bbe34099d4",
+                    "lang": "python",
+                    "name": null,
+                    "start": 65
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 9,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 9,
+                "mean_score": 1.0,
+                "mean_sem": 38.0,
+                "members": 2,
+                "modules": 1,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 9,
+                "shared_weight": 9.0,
+                "value": 11.700000000000001
+            },
+            "params": 0,
+            "removable": 9,
+            "rep_lines": 9,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 9,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 11.700000000000001,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-helper",
+            "files": 1,
+            "folds": 0,
+            "id": "2d90ab77a630954b",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 190,
+                    "file": "episodic/logging.py",
+                    "id": "4c9a3db03b127c2d",
+                    "lang": "python",
+                    "name": "log_info",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "function"
+                    },
+                    "start": 170
+                },
+                {
+                    "end": 213,
+                    "file": "episodic/logging.py",
+                    "id": "14cbb2d739fc8e39",
+                    "lang": "python",
+                    "name": "log_warning",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "function"
+                    },
+                    "start": 193
+                },
+                {
+                    "end": 236,
+                    "file": "episodic/logging.py",
+                    "id": "3b1971765e15b7f7",
+                    "lang": "python",
+                    "name": "log_error",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "function"
+                    },
+                    "start": 216
+                }
+            ],
+            "members": 3,
+            "metrics": {
+                "dup_lines": 42,
+                "files": 1,
+                "languages": 1,
+                "mean_lines": 21,
+                "mean_score": 0.769,
+                "mean_sem": 12.0,
+                "members": 3,
+                "modules": 1,
+                "params": 3,
+                "scope": "prod",
+                "shared_lines": 18,
+                "shared_weight": 17.0,
+                "value": 32.298
+            },
+            "params": 3,
+            "removable": 36,
+            "rep_lines": 21,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 18,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 32.298,
+            "witness": "similar"
+        },
+        {
+            "dirs": 2,
+            "extraction_shape": "extract-method-from-block",
+            "files": 3,
+            "folds": 0,
+            "id": "2005d23936dfa4dc",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 40,
+                    "file": "episodic/cost/__init__.py",
+                    "id": "6153c618c010286f",
+                    "lang": "python",
+                    "name": null,
+                    "start": 21
+                },
+                {
+                    "end": 34,
+                    "file": "episodic/cost/recorder.py",
+                    "id": "c0a3cbd70b21c8d3",
+                    "lang": "python",
+                    "name": null,
+                    "start": 19
+                },
+                {
+                    "end": 33,
+                    "file": "episodic/cost/storage/adapters.py",
+                    "id": "dab876aef711b408",
+                    "lang": "python",
+                    "name": null,
+                    "start": 21
+                }
+            ],
+            "members": 3,
+            "metrics": {
+                "dup_lines": 32,
+                "files": 3,
+                "languages": 1,
+                "mean_lines": 16,
+                "mean_score": 1.0,
+                "mean_sem": 29.666666666666668,
+                "members": 3,
+                "modules": 2,
+                "params": 2,
+                "scope": "prod",
+                "shared_lines": 11,
+                "shared_weight": 11.0,
+                "value": 67.2
+            },
+            "params": 3,
+            "removable": 22,
+            "rep_lines": 20,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 11,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 67.2,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "24f5df282dd167df",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 32,
+                    "file": "episodic/canonical/storage/mappers.py",
+                    "id": "81b5d540f9b1de92",
+                    "lang": "python",
+                    "name": null,
+                    "start": 25
+                },
+                {
+                    "end": 35,
+                    "file": "episodic/canonical/storage/reference_repositories.py",
+                    "id": "f9c6227b7dc478be",
+                    "lang": "python",
+                    "name": null,
+                    "start": 28
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 8,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 8,
+                "mean_score": 1.0,
+                "mean_sem": 34.0,
+                "members": 2,
+                "modules": 1,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 8,
+                "shared_weight": 8.0,
+                "value": 10.4
+            },
+            "params": 0,
+            "removable": 8,
+            "rep_lines": 8,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 8,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 10.4,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 1,
+            "folds": 0,
+            "id": "b98529a97749fb48",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 260,
+                    "file": "episodic/llm/openai_validation.py",
+                    "id": "35b3c1ce37e9b7cd",
+                    "lang": "python",
+                    "name": null,
+                    "start": 252
+                },
+                {
+                    "end": 309,
+                    "file": "episodic/llm/openai_validation.py",
+                    "id": "908270c759e5b4f0",
+                    "lang": "python",
+                    "name": null,
+                    "start": 301
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 9,
+                "files": 1,
+                "languages": 1,
+                "mean_lines": 9,
+                "mean_score": 1.0,
+                "mean_sem": 24.0,
+                "members": 2,
+                "modules": 1,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 9,
+                "shared_weight": 9.0,
+                "value": 9.0
+            },
+            "params": 0,
+            "removable": 9,
+            "rep_lines": 9,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 9,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 9.0,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 3,
+            "folds": 1,
+            "id": "ab3a074acb4b6a4c",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 135,
+                    "file": "episodic/canonical/storage/entity_models.py",
+                    "id": "ba224e81925185a3",
+                    "lang": "python",
+                    "name": null,
+                    "start": 121
+                },
+                {
+                    "end": 224,
+                    "file": "episodic/canonical/storage/entity_models.py",
+                    "id": "d3956b6fa52a7867",
+                    "lang": "python",
+                    "name": null,
+                    "start": 210
+                },
+                {
+                    "end": 51,
+                    "file": "episodic/canonical/storage/history_models.py",
+                    "id": "e2f02784681794c8",
+                    "lang": "python",
+                    "name": null,
+                    "start": 41
+                },
+                {
+                    "end": 105,
+                    "file": "episodic/canonical/storage/profile_models.py",
+                    "id": "839f28114ea466f3",
+                    "lang": "python",
+                    "name": null,
+                    "start": 95
+                }
+            ],
+            "members": 4,
+            "metrics": {
+                "dup_lines": 39,
+                "files": 3,
+                "languages": 1,
+                "mean_lines": 13,
+                "mean_score": 1.0,
+                "mean_sem": 27.0,
+                "members": 4,
+                "modules": 1,
+                "params": 2,
+                "scope": "prod",
+                "shared_lines": 10,
+                "shared_weight": 8.0,
+                "value": 62.400000000000006
+            },
+            "params": 1,
+            "removable": 30,
+            "rep_lines": 15,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 10,
+            "source_comparable": true,
+            "subsumes": [
+                "cd8b656b72"
+            ],
+            "surface": "default",
+            "value": 62.400000000000006,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "b8fdb6f8e5c45c99",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 33,
+                    "file": "episodic/orchestration/_show_notes_executor.py",
+                    "id": "5eef1e1d9937e3c7",
+                    "lang": "python",
+                    "name": null,
+                    "start": 12
+                },
+                {
+                    "end": 34,
+                    "file": "episodic/orchestration/_guest_bios_executor.py",
+                    "id": "ce5d0e8f0ef536a3",
+                    "lang": "python",
+                    "name": null,
+                    "start": 14
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 21,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 21,
+                "mean_score": 1.0,
+                "mean_sem": 59.0,
+                "members": 2,
+                "modules": 1,
+                "params": 2,
+                "scope": "prod",
+                "shared_lines": 20,
+                "shared_weight": 17.0,
+                "value": 27.3
+            },
+            "params": 1,
+            "removable": 20,
+            "rep_lines": 22,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 20,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 27.3,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "b5d756ffb4dfb4d8",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 129,
+                    "file": "episodic/canonical/storage/repositories.py",
+                    "id": "fc3108e3b2b07c52",
+                    "lang": "python",
+                    "name": null,
+                    "start": 124
+                },
+                {
+                    "end": 323,
+                    "file": "episodic/canonical/storage/repositories.py",
+                    "id": "18a9038610d2a7b2",
+                    "lang": "python",
+                    "name": null,
+                    "start": 318
+                },
+                {
+                    "end": 94,
+                    "file": "episodic/canonical/storage/repository_base.py",
+                    "id": "bbcf3441b05d5cca",
+                    "lang": "python",
+                    "name": null,
+                    "start": 89
+                }
+            ],
+            "members": 3,
+            "metrics": {
+                "dup_lines": 12,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 6,
+                "mean_score": 1.0,
+                "mean_sem": 31.0,
+                "members": 3,
+                "modules": 1,
+                "params": 1,
+                "scope": "prod",
+                "shared_lines": 5,
+                "shared_weight": 5.0,
+                "value": 15.600000000000001
+            },
+            "params": 1,
+            "removable": 10,
+            "rep_lines": 6,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 5,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 15.600000000000001,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 2,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "596fc75dce155df5",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 175,
+                    "file": "episodic/canonical/storage/generation_runs.py",
+                    "id": "287b4b291d045e13",
+                    "lang": "python",
+                    "name": null,
+                    "start": 152
+                },
+                {
+                    "end": 193,
+                    "file": "episodic/canonical/adapters/generation_runs.py",
+                    "id": "3e17ca32acd18263",
+                    "lang": "python",
+                    "name": null,
+                    "start": 175
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 21,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 21,
+                "mean_score": 1.0,
+                "mean_sem": 25.0,
+                "members": 2,
+                "modules": 2,
+                "params": 1,
+                "scope": "prod",
+                "shared_lines": 12,
+                "shared_weight": 12.0,
+                "value": 37.800000000000004
+            },
+            "params": 1,
+            "removable": 12,
+            "rep_lines": 24,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 12,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 37.800000000000004,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "748444d20b18dcaf",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 25,
+                    "file": "episodic/canonical/reference_documents/__init__.py",
+                    "id": "c5b102b109373a24",
+                    "lang": "python",
+                    "name": null,
+                    "start": 9
+                },
+                {
+                    "end": 22,
+                    "file": "episodic/canonical/reference_documents/services.py",
+                    "id": "1236160750bb4aa0",
+                    "lang": "python",
+                    "name": null,
+                    "start": 8
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 16,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 16,
+                "mean_score": 1.0,
+                "mean_sem": 43.0,
+                "members": 2,
+                "modules": 1,
+                "params": 2,
+                "scope": "prod",
+                "shared_lines": 15,
+                "shared_weight": 13.0,
+                "value": 20.8
+            },
+            "params": 2,
+            "removable": 15,
+            "rep_lines": 17,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 15,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 20.8,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 2,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "482acd01a9158bc6",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 14,
+                    "file": "episodic/canonical/domain.py",
+                    "id": "cc227ea133932acf",
+                    "lang": "python",
+                    "name": null,
+                    "start": 10
+                },
+                {
+                    "end": 42,
+                    "file": "episodic/generation/draft_script.py",
+                    "id": "188461e72bcae6dc",
+                    "lang": "python",
+                    "name": null,
+                    "start": 38
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 5,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 5,
+                "mean_score": 1.0,
+                "mean_sem": 24.0,
+                "members": 2,
+                "modules": 2,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 5,
+                "shared_weight": 4.0,
+                "value": 9.0
+            },
+            "params": 0,
+            "removable": 5,
+            "rep_lines": 5,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 5,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 9.0,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 2,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "83158f87a4ab20a2",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 43,
+                    "file": "episodic/llm/openai_api/adapter.py",
+                    "id": "1ccc76f2f0470d7d",
+                    "lang": "python",
+                    "name": null,
+                    "start": 19
+                },
+                {
+                    "end": 31,
+                    "file": "episodic/llm/openai_adapter.py",
+                    "id": "e9e7e5fa901b8c00",
+                    "lang": "python",
+                    "name": null,
+                    "start": 9
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 24,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 24,
+                "mean_score": 1.0,
+                "mean_sem": 45.0,
+                "members": 2,
+                "modules": 2,
+                "params": 3,
+                "scope": "prod",
+                "shared_lines": 17,
+                "shared_weight": 14.0,
+                "value": 43.2
+            },
+            "params": 3,
+            "removable": 17,
+            "rep_lines": 25,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 17,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 43.2,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-helper",
+            "files": 1,
+            "folds": 0,
+            "id": "d43dbdaf28cb4b9a",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 120,
+                    "file": "episodic/api/resources/episode_templates.py",
+                    "id": "e316ad3f00c568be",
+                    "lang": "python",
+                    "name": "_get_serializer_fn",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 115
+                },
+                {
+                    "end": 163,
+                    "file": "episodic/api/resources/episode_templates.py",
+                    "id": "e78a468d23af916c",
+                    "lang": "python",
+                    "name": "_get_serializer_fn",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 158
+                },
+                {
+                    "end": 189,
+                    "file": "episodic/api/resources/episode_templates.py",
+                    "id": "231c6ef6660992de",
+                    "lang": "python",
+                    "name": "_get_update_serializer_fn",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 184
+                }
+            ],
+            "members": 3,
+            "metrics": {
+                "dup_lines": 12,
+                "files": 1,
+                "languages": 1,
+                "mean_lines": 6,
+                "mean_score": 1.0,
+                "mean_sem": 5.0,
+                "members": 3,
+                "modules": 1,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 4,
+                "shared_weight": 4.0,
+                "value": 12.0
+            },
+            "params": 1,
+            "removable": 8,
+            "rep_lines": 6,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 4,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 12.0,
+            "witness": "similar"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-helper",
+            "files": 1,
+            "folds": 0,
+            "id": "a3ab7dc49681081b",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 121,
+                    "file": "episodic/api/resources/series_profiles.py",
+                    "id": "b019dfa96b29123f",
+                    "lang": "python",
+                    "name": "_get_serializer_fn",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 116
+                },
+                {
+                    "end": 164,
+                    "file": "episodic/api/resources/series_profiles.py",
+                    "id": "4269b4762fb44071",
+                    "lang": "python",
+                    "name": "_get_serializer_fn",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 159
+                },
+                {
+                    "end": 190,
+                    "file": "episodic/api/resources/series_profiles.py",
+                    "id": "3c8424146290990d",
+                    "lang": "python",
+                    "name": "_get_update_serializer_fn",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "method"
+                    },
+                    "start": 185
+                }
+            ],
+            "members": 3,
+            "metrics": {
+                "dup_lines": 12,
+                "files": 1,
+                "languages": 1,
+                "mean_lines": 6,
+                "mean_score": 1.0,
+                "mean_sem": 5.0,
+                "members": 3,
+                "modules": 1,
+                "params": 0,
+                "scope": "prod",
+                "shared_lines": 4,
+                "shared_weight": 4.0,
+                "value": 12.0
+            },
+            "params": 1,
+            "removable": 8,
+            "rep_lines": 6,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 4,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 12.0,
+            "witness": "similar"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "224365a5ef581be9",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 46,
+                    "file": "episodic/canonical/storage/entity_mappers.py",
+                    "id": "8e8a9cc317f16fe4",
+                    "lang": "python",
+                    "name": null,
+                    "start": 39
+                },
+                {
+                    "end": 23,
+                    "file": "episodic/canonical/storage/models.py",
+                    "id": "480fa710b26691e6",
+                    "lang": "python",
+                    "name": null,
+                    "start": 16
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 8,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 8,
+                "mean_score": 1.0,
+                "mean_sem": 33.0,
+                "members": 2,
+                "modules": 1,
+                "params": 1,
+                "scope": "prod",
+                "shared_lines": 7,
+                "shared_weight": 7.0,
+                "value": 10.4
+            },
+            "params": 1,
+            "removable": 7,
+            "rep_lines": 8,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 7,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 10.4,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "77377dd4c244c295",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 33,
+                    "file": "episodic/generation/__init__.py",
+                    "id": "9987cdb4a7293b88",
+                    "lang": "python",
+                    "name": null,
+                    "start": 18
+                },
+                {
+                    "end": 52,
+                    "file": "episodic/generation/launcher_support.py",
+                    "id": "def5583e0780db9c",
+                    "lang": "python",
+                    "name": null,
+                    "start": 41
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 14,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 14,
+                "mean_score": 1.0,
+                "mean_sem": 41.0,
+                "members": 2,
+                "modules": 1,
+                "params": 2,
+                "scope": "prod",
+                "shared_lines": 12,
+                "shared_weight": 12.0,
+                "value": 18.2
+            },
+            "params": 2,
+            "removable": 12,
+            "rep_lines": 16,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 12,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 18.2,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 2,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "330e428e3786c16e",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 64,
+                    "file": "episodic/api/serializers.py",
+                    "id": "0b41c5020347da62",
+                    "lang": "python",
+                    "name": null,
+                    "start": 52
+                },
+                {
+                    "end": 195,
+                    "file": "episodic/canonical/profile_templates/helpers.py",
+                    "id": "58fc0747c5e7c121",
+                    "lang": "python",
+                    "name": null,
+                    "start": 186
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 11,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 11,
+                "mean_score": 1.0,
+                "mean_sem": 35.0,
+                "members": 2,
+                "modules": 2,
+                "params": 2,
+                "scope": "prod",
+                "shared_lines": 9,
+                "shared_weight": 9.0,
+                "value": 19.8
+            },
+            "params": 2,
+            "removable": 9,
+            "rep_lines": 13,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 9,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 19.8,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "7b68092393aa4c58",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 19,
+                    "file": "episodic/api/resources/source_intake.py",
+                    "id": "1e07c2876664747a",
+                    "lang": "python",
+                    "name": null,
+                    "start": 8
+                },
+                {
+                    "end": 18,
+                    "file": "episodic/api/resources/reference_documents.py",
+                    "id": "96128b8dea722663",
+                    "lang": "python",
+                    "name": null,
+                    "start": 8
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 11,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 11,
+                "mean_score": 1.0,
+                "mean_sem": 33.0,
+                "members": 2,
+                "modules": 1,
+                "params": 1,
+                "scope": "prod",
+                "shared_lines": 9,
+                "shared_weight": 8.0,
+                "value": 14.3
+            },
+            "params": 1,
+            "removable": 9,
+            "rep_lines": 12,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 9,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 14.3,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 2,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "5105acf00e9cca68",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 45,
+                    "file": "episodic/api/serializers.py",
+                    "id": "4b0891f796838b1f",
+                    "lang": "python",
+                    "name": null,
+                    "start": 34
+                },
+                {
+                    "end": 182,
+                    "file": "episodic/canonical/profile_templates/helpers.py",
+                    "id": "10e8dc96e6c1e346",
+                    "lang": "python",
+                    "name": null,
+                    "start": 174
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 10,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 10,
+                "mean_score": 1.0,
+                "mean_sem": 29.0,
+                "members": 2,
+                "modules": 2,
+                "params": 2,
+                "scope": "prod",
+                "shared_lines": 8,
+                "shared_weight": 8.0,
+                "value": 18.0
+            },
+            "params": 2,
+            "removable": 8,
+            "rep_lines": 12,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 8,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 18.0,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "96cebc1085098a5a",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 141,
+                    "file": "episodic/canonical/storage/source_intake_models.py",
+                    "id": "2a9a8f06f44d7b0d",
+                    "lang": "python",
+                    "name": null,
+                    "start": 118
+                },
+                {
+                    "end": 345,
+                    "file": "episodic/canonical/storage/entity_models.py",
+                    "id": "70e36a3501dbd03f",
+                    "lang": "python",
+                    "name": null,
+                    "start": 327
+                },
+                {
+                    "end": 80,
+                    "file": "episodic/canonical/storage/source_intake_models.py",
+                    "id": "4b945eb5d3de56be",
+                    "lang": "python",
+                    "name": null,
+                    "start": 62
+                }
+            ],
+            "members": 3,
+            "metrics": {
+                "dup_lines": 40,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 20,
+                "mean_score": 1.0,
+                "mean_sem": 34.333333333333336,
+                "members": 3,
+                "modules": 1,
+                "params": 2,
+                "scope": "prod",
+                "shared_lines": 12,
+                "shared_weight": 9.0,
+                "value": 52.0
+            },
+            "params": 2,
+            "removable": 24,
+            "rep_lines": 24,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 12,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 52.0,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "10ba2076e9b6584a",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 125,
+                    "file": "episodic/orchestration/_guest_bios_executor.py",
+                    "id": "6b677033ea1266ed",
+                    "lang": "python",
+                    "name": null,
+                    "start": 79
+                },
+                {
+                    "end": 105,
+                    "file": "episodic/orchestration/_show_notes_executor.py",
+                    "id": "be55b41ecca21452",
+                    "lang": "python",
+                    "name": null,
+                    "start": 59
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 47,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 47,
+                "mean_score": 1.0,
+                "mean_sem": 50.0,
+                "members": 2,
+                "modules": 1,
+                "params": 5,
+                "scope": "prod",
+                "shared_lines": 41,
+                "shared_weight": 22.0,
+                "value": 61.1
+            },
+            "params": 5,
+            "removable": 41,
+            "rep_lines": 47,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 41,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 61.1,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 2,
+            "folds": 0,
+            "id": "89b808094358798e",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 19,
+                    "file": "episodic/canonical/ports.py",
+                    "id": "f4cfcc191c750e8d",
+                    "lang": "python",
+                    "name": null,
+                    "start": 3
+                },
+                {
+                    "end": 63,
+                    "file": "episodic/canonical/__init__.py",
+                    "id": "91b15246db3947d2",
+                    "lang": "python",
+                    "name": null,
+                    "start": 50
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 15,
+                "files": 2,
+                "languages": 1,
+                "mean_lines": 15,
+                "mean_score": 1.0,
+                "mean_sem": 43.0,
+                "members": 2,
+                "modules": 1,
+                "params": 1,
+                "scope": "prod",
+                "shared_lines": 10,
+                "shared_weight": 9.0,
+                "value": 19.5
+            },
+            "params": 1,
+            "removable": 10,
+            "rep_lines": 17,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 10,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 19.5,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-base-class",
+            "files": 1,
+            "folds": 0,
+            "id": "d8447136eff5a9fe",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 74,
+                    "file": "episodic/canonical/storage/history_models.py",
+                    "id": "72ca9a2c0ebe3f3d",
+                    "lang": "python",
+                    "name": "SeriesProfileHistoryRecord",
+                    "start": 19
+                },
+                {
+                    "end": 133,
+                    "file": "episodic/canonical/storage/history_models.py",
+                    "id": "a1881fe0746718c6",
+                    "lang": "python",
+                    "name": "EpisodeTemplateHistoryRecord",
+                    "start": 78
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 56,
+                "files": 1,
+                "languages": 1,
+                "mean_lines": 56,
+                "mean_score": 0.836,
+                "mean_sem": 58.0,
+                "members": 2,
+                "modules": 1,
+                "params": 9,
+                "scope": "prod",
+                "shared_lines": 46,
+                "shared_weight": 34.0,
+                "value": 46.815999999999995
+            },
+            "params": 9,
+            "removable": 46,
+            "rep_lines": 56,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 46,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 46.815999999999995,
+            "witness": "similar"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-method-from-block",
+            "files": 1,
+            "folds": 1,
+            "id": "484cd7a45329cd19",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 158,
+                    "file": "episodic/asyncio_tasks.py",
+                    "id": "f978640c8e34bf7a",
+                    "lang": "python",
+                    "name": null,
+                    "start": 139
+                },
+                {
+                    "end": 182,
+                    "file": "episodic/asyncio_tasks.py",
+                    "id": "e1f78966cb70be8a",
+                    "lang": "python",
+                    "name": null,
+                    "start": 163
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 20,
+                "files": 1,
+                "languages": 1,
+                "mean_lines": 20,
+                "mean_score": 1.0,
+                "mean_sem": 34.0,
+                "members": 2,
+                "modules": 1,
+                "params": 4,
+                "scope": "prod",
+                "shared_lines": 16,
+                "shared_weight": 15.0,
+                "value": 20.0
+            },
+            "params": 4,
+            "removable": 16,
+            "rep_lines": 20,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 16,
+            "source_comparable": true,
+            "subsumes": [
+                "48a913da55"
+            ],
+            "surface": "default",
+            "value": 20.0,
+            "witness": "copy-paste"
+        },
+        {
+            "dirs": 1,
+            "extraction_shape": "extract-helper",
+            "files": 1,
+            "folds": 0,
+            "id": "3649499e881d8214",
+            "languages": 1,
+            "locations": [
+                {
+                    "end": 143,
+                    "file": "episodic/generation/tei_payload.py",
+                    "id": "227edfeae1ab5f5d",
+                    "lang": "python",
+                    "name": "require_payload_object",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "function"
+                    },
+                    "start": 123
+                },
+                {
+                    "end": 166,
+                    "file": "episodic/generation/tei_payload.py",
+                    "id": "bfd045d4751c249c",
+                    "lang": "python",
+                    "name": "require_payload_list",
+                    "origin": {
+                        "body_kind": "implementation",
+                        "domains": [
+                            "imperative"
+                        ],
+                        "evidence_flags": [
+                            "has-reusable-body"
+                        ],
+                        "region_kind": "code",
+                        "source_granularity": "whole-unit",
+                        "subkind": "function"
+                    },
+                    "start": 146
+                }
+            ],
+            "members": 2,
+            "metrics": {
+                "dup_lines": 21,
+                "files": 1,
+                "languages": 1,
+                "mean_lines": 21,
+                "mean_score": 0.701,
+                "mean_sem": 9.0,
+                "members": 2,
+                "modules": 1,
+                "params": 3,
+                "scope": "prod",
+                "shared_lines": 16,
+                "shared_weight": 14.0,
+                "value": 14.720999999999998
+            },
+            "params": 3,
+            "removable": 16,
+            "rep_lines": 21,
+            "same_symbol": false,
+            "scope": "prod",
+            "shared": 16,
+            "source_comparable": true,
+            "surface": "default",
+            "value": 14.720999999999998,
+            "witness": "similar"
+        }
+    ],
+    "next": [
+        "nose query episodic group=dir",
+        "nose query episodic group=witness"
+    ],
+    "path": "episodic",
+    "schema_version": 9,
+    "summary": {
+        "families": 159,
+        "shown": 30,
+        "widened": true
+    },
+    "tool": "nose",
+    "view": "list",
+    "semantic_packs_provenance": {
+        "file": "nose-0.20.0-semantic-packs.json",
+        "sha256": "5a59fd7558e5200dc96c27a384dd90f5bfca7053190c9d135563d9c41ea8fbdc"
+    }
+}

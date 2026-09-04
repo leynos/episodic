@@ -10,8 +10,10 @@ from episodic.canonical.domain import (
     GenerationRun,
     GenerationRunStatus,
     JsonMapping,
+    _validate_terminal_run_lifecycle,
 )
 from episodic.canonical.generation_run_errors import RunAlreadyTerminal, RunNotFound
+from episodic.canonical.generation_run_ports import event_page_minimum_sequence
 from episodic.orchestration._types import _log_event
 
 from .generation_run_mappers import (
@@ -37,22 +39,6 @@ if typ.TYPE_CHECKING:
     from episodic.canonical.storage.generation_run_storage_runtime import (
         GenerationRunStorageRuntime,
     )
-
-
-def _minimum_event_sequence(
-    after_seq: EventSeq | None,
-    *,
-    limit: int,
-    offset: int,
-) -> int:
-    """Validate event-page arguments and return the exclusive sequence bound."""
-    if limit < 0 or offset < 0:
-        msg = "limit and offset must be non-negative."
-        raise ValueError(msg)
-    if after_seq is not None and offset != 0:
-        msg = "after_seq and offset cannot be combined."
-        raise ValueError(msg)
-    return int(after_seq) if after_seq is not None else 0
 
 
 class SqlAlchemyGenerationRunStore:
@@ -196,6 +182,11 @@ class SqlAlchemyGenerationRunStore:
     ) -> GenerationRun:
         """Update lifecycle fields for a run."""
         record = await self._require_mutable_run(run_id, lock=True)
+        _validate_terminal_run_lifecycle(
+            status=update.status,
+            current_node=update.current_node,
+            ended_at=update.ended_at,
+        )
         record.status = update.status
         record.current_node = update.current_node
         record.ended_at = update.ended_at
@@ -238,7 +229,7 @@ class SqlAlchemyGenerationRunStore:
                 updated_at=now,
             )
         )
-        cursor_result = typ.cast("CursorResult[typ.Any]", result)
+        cursor_result = typ.cast("CursorResult[object]", result)
         if cursor_result.rowcount == 1:
             record = await self._get_record(run_id)
             if record is None:  # pragma: no cover - guarded by updated row.
@@ -325,8 +316,8 @@ class SqlAlchemyGenerationRunStore:
         offset: int = 0,
     ) -> tuple[GenerationEvent, ...]:
         """List events for a run after an optional sequence cursor."""
-        minimum_seq = _minimum_event_sequence(
-            after_seq,
+        minimum_seq = event_page_minimum_sequence(
+            after_seq=after_seq,
             limit=limit,
             offset=offset,
         )

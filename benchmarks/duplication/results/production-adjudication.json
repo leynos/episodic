@@ -1,0 +1,36 @@
+{
+  "date": "2026-08-22",
+  "target": "episodic/ and openai_test_types.py at commit time",
+  "detector": "pychase 0.1.0",
+  "settings": {
+    "threshold": 0.9,
+    "min_lines": 13,
+    "min_nodes": 50,
+    "pythonhashseed": "0"
+  },
+  "raw_candidates": 84,
+  "report": {
+    "file": "pychase-0.1.0-episodic.json.gz",
+    "sha256": "71b14189a0b4fe2a19065ec8209420f7e204554c164578f1efb45d3b82f99a88"
+  },
+  "dispositions": {
+    "declarative_module_pairs": {
+      "count": 53,
+      "interpretation": "Both members sit in modules that are declarative by convention (storage record models, record/domain mappers, repository protocols, typed request/response modules). Identifier and literal normalization makes such declarations structurally identical without copy-paste, so these modules are excluded from the gate scan with documented patterns."
+    },
+    "actionable": {
+      "count": 4,
+      "interpretation": "Genuine copy-paste fixed in this change: the verbatim _validate_async_callable helper duplicated across episodic/api/dependencies.py and episodic/canonical/health.py, and the three-way log_info/log_warning/log_error body in episodic/logging.py.",
+      "pairs": [
+        "episodic/api/dependencies.py::_validate_async_callable ~ episodic/canonical/health.py::_validate_async_callable",
+        "episodic/logging.py::log_info ~ episodic/logging.py::log_warning",
+        "episodic/logging.py::log_info ~ episodic/logging.py::log_error",
+        "episodic/logging.py::log_warning ~ episodic/logging.py::log_error"
+      ]
+    },
+    "allowlisted": {
+      "count": 27,
+      "interpretation": "Structurally parallel code adjudicated as intentional: Template Method subclasses over shared bases, typed facades over shared helpers, wire-format declarations, per-domain error dispatchers, and one accepted-debt pair (guest-bios TEI enrichment) recorded for a follow-up refactor. Each pair or unit is recorded with its reason under [tool.duplication_gate] in pyproject.toml."
+    }
+  }
+}

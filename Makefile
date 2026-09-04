@@ -36,13 +36,25 @@ DF12_FUTURE_ANNOTATIONS = $(DF12_PYLINT_BASE) --enable=C9112 \
 AMBRLEAKS = $(UV_ENV) $(UV) tool run --python $(DF12_PYTHON) \
 	--from '$(DF12_PYTHON_LINTS)' ambrleaks
 SKYLOS_VERSION = 4.33.2
-SKYLOS = $(UV_ENV) $(UV) tool run --from 'skylos==$(SKYLOS_VERSION)' skylos \
+# Pin the tool interpreter: Skylos parses sources with its own runtime `ast`,
+# so an older default Python misreads the project's 3.14 syntax.
+SKYLOS_CLI = $(UV_ENV) $(UV) tool run --python 3.14 \
+	--from 'skylos==$(SKYLOS_VERSION)' skylos
+SKYLOS = $(SKYLOS_CLI) \
 	--config-file pyproject.toml
 SKYLOS_PRODUCTION_TARGETS ?= alembic episodic openai_test_types.py
+# Keep this pin in sync with the CI nose install step;
+# tests/test_toolchain_contract.py enforces the match.
+NOSE_VERSION ?= 0.20.0
+NOSE_TOOLS_DIR ?= .tools/nose
+NOSE_BIN ?= $(NOSE_TOOLS_DIR)/nose
+CARGO_BINSTALL ?= cargo-binstall
+DUPLICATION_GATE = $(UV_ENV) NOSE_BIN=$(NOSE_BIN) $(UV) run scripts/duplication_gate.py
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie spelling spelling-helper-test test typecheck \
         crosshair check-migrations skylos-allow validate \
+        install-nose duplication duplication-test duplication-allow \
         local-k8s-up local-k8s-down local-k8s-status local-k8s-logs \
         $(TOOLS) $(VENV_TOOLS)
 
@@ -103,20 +115,63 @@ check-fmt: build ## Verify formatting
 validate: ## Validate the Makefile
 	mbake validate Makefile
 
-lint: check-architecture ## Run linters
+lint: check-architecture install-nose ## Run linters
 	$(UV_ENV) $(UV) run ruff check
 	$(PYLINT) $(PYLINT_TARGETS)
 	$(DF12_PYLINT) $(PYLINT_TARGETS)
 	$(DF12_FUTURE_ANNOTATIONS) $(PYLINT_TARGETS)
 	$(AMBRLEAKS) tests
 	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
+	$(DUPLICATION_GATE) check
 
-skylos-allow: export SKYLOS_NAME = $(value NAME)
-skylos-allow: export SKYLOS_REASON = $(value REASON)
+install-nose: ## Install the pinned nose duplication detector
+	@if [ "$$($(NOSE_BIN) --version 2>/dev/null)" = "nose $(NOSE_VERSION)" ]; then \
+	  printf "nose %s already installed at %s\n" "$(NOSE_VERSION)" "$(NOSE_BIN)"; \
+	else \
+	  printf "Installing nose %s into %s\n" "$(NOSE_VERSION)" "$(NOSE_TOOLS_DIR)"; \
+	  mkdir -p "$(NOSE_TOOLS_DIR)"; \
+	  $(CARGO_BINSTALL) --no-confirm --install-path "$(NOSE_TOOLS_DIR)" \
+	    --git https://github.com/corca-ai/nose 'nose-cli@$(NOSE_VERSION)'; \
+	fi
+
+duplication: install-nose ## Run the blocking code-duplication gate
+	$(DUPLICATION_GATE) check
+
+duplication-test: ## Run the duplication-gate helper tests
+	@$(UV_ENV) NOSE_BIN=$(NOSE_BIN) $(UV) run --no-project \
+		--with pytest==9.0.2 --with cyclopts \
+		--with tomlkit --with 'hypothesis[asyncio]==6.165.6' \
+		python -m pytest -c /dev/null --rootdir=. -p no:cacheprovider \
+		scripts/tests/test_duplication_gate.py \
+		scripts/tests/test_duplication_gate_commands.py \
+		scripts/tests/test_duplication_gate_make.py \
+		scripts/tests/test_duplication_gate_persistence.py \
+		scripts/tests/test_duplication_gate_properties.py \
+		scripts/tests/test_nose_detector.py
+
+# Accept FIRST/SECOND/REASON (and skylos SYMBOL) only from the make command
+# line. `NAME` is ambient under WSL, which injects the hostname there, so the
+# Skylos interface deliberately uses the otherwise-unset `SYMBOL` variable.
+cli_value = $(if $(filter command line,$(origin $(1))),$(value $(1)))
+
+duplication-allow: export DUPLICATION_FIRST = $(call cli_value,FIRST)
+duplication-allow: export DUPLICATION_SECOND = $(call cli_value,SECOND)
+duplication-allow: export DUPLICATION_REASON = $(call cli_value,REASON)
+duplication-allow: ## Record one reasoned duplication exception
+	@test -n "$${DUPLICATION_FIRST}" || { printf "Error: FIRST is required (path[::name])\\n" >&2; exit 2; }
+	@test -n "$${DUPLICATION_REASON}" || { printf "Error: REASON is required for a duplication exception\\n" >&2; exit 2; }
+	$(DUPLICATION_GATE) allow --first "$${DUPLICATION_FIRST}" \
+		$(if $(call cli_value,SECOND),--second "$${DUPLICATION_SECOND}",) \
+		--reason "$${DUPLICATION_REASON}"
+
+skylos-allow: export SKYLOS_SYMBOL = $(call cli_value,SYMBOL)
+skylos-allow: export SKYLOS_REASON = $(call cli_value,REASON)
 skylos-allow: ## Document one named Skylos exception, not an entry point
-	@test -n "$${SKYLOS_NAME}" || { printf "Error: NAME is required for a named whitelist exception\\n" >&2; exit 2; }
+	@test -n "$${SKYLOS_SYMBOL}" || { printf "Error: SYMBOL is required for a named whitelist exception\\n" >&2; exit 2; }
 	@test -n "$${SKYLOS_REASON}" || { printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2; }
-	$(SKYLOS) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"
+	# The whitelist subcommand must be skylos's first argument; global
+	# options such as --config-file make the main parser treat it as a path.
+	$(SKYLOS_CLI) whitelist "$${SKYLOS_SYMBOL}" --reason "$${SKYLOS_REASON}"
 
 check-architecture: build ## Check hexagonal architecture import boundaries
 	$(UV_ENV) $(UV) run hecate check

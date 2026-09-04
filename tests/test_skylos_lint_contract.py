@@ -125,17 +125,17 @@ def test_make_lint_runs_local_blocking_dead_code_scan() -> None:
     ), "Expected the blocking Skylos command to retain its gate flags."
 
 
-def test_skylos_allow_requires_name_and_reason() -> None:
-    """Guard the command that adds a named, non-entry-point exception."""
+def test_skylos_allow_requires_symbol_and_reason() -> None:
+    """Guard the command that adds a symbol-specific, non-entry-point exception."""
     makefile = (REPOSITORY_ROOT / "Makefile").read_text(encoding="utf-8")
 
     required_fragments = (
         "skylos-allow: ## Document one named Skylos exception, not an entry point",
-        "skylos-allow: export SKYLOS_NAME = $(value NAME)",
-        "skylos-allow: export SKYLOS_REASON = $(value REASON)",
-        'test -n "$${SKYLOS_NAME}"',
+        "skylos-allow: export SKYLOS_SYMBOL = $(call cli_value,SYMBOL)",
+        "skylos-allow: export SKYLOS_REASON = $(call cli_value,REASON)",
+        'test -n "$${SKYLOS_SYMBOL}"',
         'test -n "$${SKYLOS_REASON}"',
-        "NAME is required for a named whitelist exception",
+        "SYMBOL is required for a named whitelist exception",
         "REASON is required for a named whitelist exception",
     )
     missing_fragments = tuple(
@@ -144,7 +144,9 @@ def test_skylos_allow_requires_name_and_reason() -> None:
     assert not missing_fragments, (
         f"Expected skylos-allow target requirements; missing {missing_fragments!r}."
     )
-    command = '$(SKYLOS) whitelist "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"'
+    # The whitelist subcommand must run without the --config-file prefix that
+    # $(SKYLOS) carries; global options stop Skylos dispatching the subcommand.
+    command = '$(SKYLOS_CLI) whitelist "$${SKYLOS_SYMBOL}" --reason "$${SKYLOS_REASON}"'
     assert makefile.count(command) == 1, (
         "Expected exactly one safely quoted Skylos whitelist command."
     )
@@ -160,7 +162,7 @@ def test_skylos_allow_preserves_metacharacters_as_arguments(tmp_path: Path) -> N
         encoding="utf-8",
     )
     recorder.chmod(0o755)
-    name = f'registered"; touch {marker}; printf "'
+    symbol = f'registered"; touch {marker}; printf "'
     reason = f"loaded by `touch {marker}` and $(touch {marker})"
     make_executable = shutil.which("make")
     assert make_executable is not None, "Expected make to be available for the test."
@@ -170,9 +172,9 @@ def test_skylos_allow_preserves_metacharacters_as_arguments(tmp_path: Path) -> N
             make_executable,
             "--no-print-directory",
             "skylos-allow",
-            f"NAME={name}",
+            f"SYMBOL={symbol}",
             f"REASON={reason}",
-            f"SKYLOS={recorder}",
+            f"SKYLOS_CLI={recorder}",
         ],
         cwd=REPOSITORY_ROOT,
         env={**os.environ, "SKYLOS_CAPTURE": str(capture)},
@@ -184,10 +186,10 @@ def test_skylos_allow_preserves_metacharacters_as_arguments(tmp_path: Path) -> N
     assert result.returncode == 0, "Expected quoted metacharacters to reach Skylos."
     assert capture.read_text(encoding="utf-8").splitlines() == [
         "whitelist",
-        name,
+        symbol,
         "--reason",
         reason,
-    ], "Expected NAME and REASON to remain single whitelist arguments."
+    ], "Expected SYMBOL and REASON to remain single whitelist arguments."
     assert not marker.exists(), "Expected no injected shell command to execute."
 
 
@@ -196,10 +198,10 @@ def test_skylos_allow_preserves_metacharacters_as_arguments(tmp_path: Path) -> N
     [
         (
             "REASON=loaded by the verified plugin registry",
-            "Error: NAME is required for a named whitelist exception",
+            "Error: SYMBOL is required for a named whitelist exception",
         ),
         (
-            "NAME=registered_handler",
+            "SYMBOL=registered_handler",
             "Error: REASON is required for a named whitelist exception",
         ),
     ],
@@ -226,7 +228,7 @@ def test_skylos_allow_rejects_missing_required_value(
             "--no-print-directory",
             "skylos-allow",
             provided_assignment,
-            f"SKYLOS={recorder}",
+            f"SKYLOS_CLI={recorder}",
         ],
         cwd=REPOSITORY_ROOT,
         env={**os.environ, "SKYLOS_CAPTURE": str(capture)},
@@ -238,6 +240,45 @@ def test_skylos_allow_rejects_missing_required_value(
     assert result.returncode == 2, "Expected missing values to return status 2."
     assert expected_error in result.stderr, "Expected the missing-value diagnostic."
     assert not capture.exists(), "Expected Skylos not to run after validation fails."
+
+
+def test_skylos_allow_ignores_wsl_host_name(tmp_path: Path) -> None:
+    """An ambient WSL ``NAME`` value cannot become a Skylos exception."""
+    recorder = tmp_path / "skylos-recorder"
+    capture = tmp_path / "arguments.txt"
+    recorder.write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$SKYLOS_CAPTURE"\n',
+        encoding="utf-8",
+    )
+    recorder.chmod(0o755)
+    make_executable = shutil.which("make")
+    assert make_executable is not None, "Expected make to be available for the test."
+
+    result = subprocess.run(  # noqa: S603 - tests Makefile validation safely
+        [
+            make_executable,
+            "--no-print-directory",
+            "skylos-allow",
+            "REASON=Loaded by the plugin registry",
+            f"SKYLOS_CLI={recorder}",
+        ],
+        cwd=REPOSITORY_ROOT,
+        env={
+            **os.environ,
+            "NAME": "wsl-hostname",
+            "SYMBOL": "episodic.ambient.wsl_host_name",
+            "SKYLOS_CAPTURE": str(capture),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2, "An ambient NAME value must not satisfy SYMBOL."
+    assert "Error: SYMBOL is required" in result.stderr, (
+        "Expected the missing-SYMBOL diagnostic."
+    )
+    assert not capture.exists(), "Skylos must not run without a CLI SYMBOL."
 
 
 def test_skylos_cache_is_ignored() -> None:

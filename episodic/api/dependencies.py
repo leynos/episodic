@@ -7,9 +7,9 @@ this contract instead of importing concrete adapter implementations directly.
 
 import collections.abc as cabc
 import dataclasses as dc
-import inspect
 import typing as typ
 
+from episodic.canonical.validation import validate_async_callable
 from episodic.observability import NoopMetrics, NoopTracer, PerfCounterClock
 
 from .authorization import AuthorizationPort, PermitAll
@@ -27,21 +27,6 @@ type ReadinessCheck = cabc.Callable[[], cabc.Coroutine[None, None, bool]]
 type ShutdownHook = cabc.Callable[[], cabc.Coroutine[None, None, None]]
 
 
-def _validate_async_callable(callback: object, attribute_name: str) -> None:
-    """Require a coroutine function for adapter hooks invoked with ``await``."""
-    if not callable(callback):
-        msg = f"{attribute_name} must be callable."
-        raise TypeError(msg)
-
-    if inspect.iscoroutinefunction(callback) or inspect.iscoroutinefunction(
-        type(callback).__call__
-    ):
-        return
-
-    msg = f"{attribute_name} must be an async callable returning an awaitable."
-    raise TypeError(msg)
-
-
 def _validate_readiness_probe(
     probe: object,
     *,
@@ -57,7 +42,7 @@ def _validate_readiness_probe(
     if not hasattr(probe, "check"):
         msg = f"{label} must define an async check."
         raise TypeError(msg)
-    _validate_async_callable(probe.check, label)  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
+    validate_async_callable(probe.check, label)  # type: ignore[union-attr]  # Runtime shape checks narrow externally supplied values beyond static inference.
 
 
 def _validate_authorization_port(port: object) -> None:
@@ -65,7 +50,7 @@ def _validate_authorization_port(port: object) -> None:
     if not isinstance(port, AuthorizationPort):
         msg = "ApiDependencies.authorization must implement AuthorizationPort."
         raise TypeError(msg)
-    _validate_async_callable(port.decide, "ApiDependencies.authorization.decide")
+    validate_async_callable(port.decide, "ApiDependencies.authorization.decide")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -80,7 +65,7 @@ class ReadinessProbe:
         if not self.name.strip():
             msg = "ReadinessProbe.name must be a non-empty string."
             raise ValueError(msg)
-        _validate_async_callable(self.check, "ReadinessProbe.check")
+        validate_async_callable(self.check, "ReadinessProbe.check")
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -125,7 +110,7 @@ class ApiDependencies:
             msg = "ApiDependencies.health_observer must define observe()."
             raise TypeError(msg)
         for shutdown_hook in self.shutdown_hooks:
-            _validate_async_callable(
+            validate_async_callable(
                 shutdown_hook,
                 "ApiDependencies.shutdown_hooks entries",
             )

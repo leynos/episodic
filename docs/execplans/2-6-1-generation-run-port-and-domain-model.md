@@ -342,6 +342,9 @@ threshold is reached, stop and escalate via a *Decision log* entry.
   now logs `*_already_terminal` warning events in
   `_apply_checkpoint_transition` before re-raising `CheckpointAlreadyTerminal`,
   preserving domain purity and behaviour.
+- 2026-09-02: Documented the terminal generation-run invariant: terminal
+  updates clear `current_node` and require a non-null `ended_at`, including in
+  the manual recovery procedure and client polling guidance.
 
 ## Surprises & discoveries
 

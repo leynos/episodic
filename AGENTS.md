@@ -95,8 +95,24 @@
     names the verified runtime caller. Match methods as `type = "method"`,
     rather than `"function"`. Use the named allow-list target only when an
     entry-point rule cannot describe the boundary: run
-    `make skylos-allow NAME=handler REASON="Loaded by plugin registry"`
+
+    ```sh
+    make skylos-allow SYMBOL=episodic.api.handlers.handle_get_entity \
+      REASON="Loaded by plugin registry"
+    ```
+
     with the verified caller in the reason.
+    The lint pipeline ends with the blocking nose duplication gate, which
+    `make lint` provisions through `make install-nose`. Prefer extracting
+    shared logic over suppressing a finding; when parallel structure is
+    intentional, record a reasoned exception with
+    `make duplication-allow FIRST='path[::name]' [SECOND='path[::name]']
+    REASON="why this stays"`, and remove entries the gate reports as stale.
+    Keys are repository-relative path globs, optionally suffixed `::name` to
+    require nose's unit name; an entry silences a family only when every
+    member location matches one of its keys. `make duplication-allow` takes one
+    `SECOND` key, so record families with more members by invoking
+    `scripts/duplication_gate.py allow` with a repeated `--second`.
   - **Formatting:** Adheres to formatting standards (`make check-fmt`; use
     `make fmt` to apply fixes).
   - **Typechecking:** Passes type checking (`make typecheck`).

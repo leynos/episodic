@@ -27,7 +27,6 @@ from .domain import (
     ApprovalEvent,
     ApprovalState,
     CanonicalEpisode,
-    EpisodeStatus,
     IngestionJob,
     IngestionRequest,
     IngestionStatus,
@@ -35,6 +34,7 @@ from .domain import (
     SourceDocument,
     TeiHeader,
 )
+from .episode_factory import build_draft_episode
 from .provenance import build_tei_header_provenance, merge_tei_header_provenance
 from .tei import TeiHeaderPayload, parse_tei_header
 
@@ -83,26 +83,6 @@ def _create_tei_header(
         title=header_payload.title,
         payload=header_payload.payload,
         raw_xml=tei_xml,
-        created_at=now,
-        updated_at=now,
-    )
-
-
-def _create_canonical_episode(
-    episode_id: uuid.UUID,
-    series_profile: SeriesProfile,
-    header: TeiHeader,
-    now: dt.datetime,
-) -> CanonicalEpisode:
-    """Create a canonical episode entity."""
-    return CanonicalEpisode(
-        id=episode_id,
-        series_profile_id=series_profile.id,
-        tei_header_id=header.id,
-        title=header.title,
-        tei_xml=header.raw_xml,
-        status=EpisodeStatus.DRAFT,
-        approval_state=ApprovalState.DRAFT,
         created_at=now,
         updated_at=now,
     )
@@ -252,7 +232,12 @@ async def ingest_sources(
     job_id = _new_storage_id()
 
     header = _create_tei_header(header_id, header_payload, request.tei_xml, now)
-    episode = _create_canonical_episode(episode_id, series_profile, header, now)
+    episode = build_draft_episode(
+        episode_id=episode_id,
+        series_profile_id=series_profile.id,
+        header=header,
+        now=now,
+    )
     job = _create_ingestion_job(job_id, series_profile.id, episode_id, now)
 
     await uow.tei_headers.add(header)
