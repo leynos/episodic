@@ -9,9 +9,13 @@ passes locally and fails in CI (or the reverse).
 """
 
 import re
+import typing as typ
 from pathlib import Path
 
 import pytest
+
+if typ.TYPE_CHECKING:
+    from syrupy.assertion import SnapshotAssertion
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE_PATH = _REPO_ROOT / "Makefile"
@@ -70,6 +74,28 @@ def _ci_pin() -> str:
     return matches[0]
 
 
+def _ci_nose_installation_step() -> str:
+    """Return CI's complete nose-detector installation step."""
+    text = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
+    start = text.index("      - name: Install nose duplication detector")
+    end = text.index("      - name: Install CLI tools", start)
+    step = text[start:end].rstrip()
+    return (
+        re
+        .sub(
+            r'(?<=BINSTALL_SHA256: ")[0-9a-f]{64}(?=")',
+            "<sha256>",
+            step,
+        )
+        .replace(
+            "https://github.com/cargo-bins/cargo-binstall/releases/download/"
+            "${BINSTALL_VERSION}/cargo-binstall-x86_64-unknown-linux-musl.tgz",
+            "<cargo-binstall release>",
+        )
+        .replace("https://github.com/corca-ai/nose", "<nose repository>")
+    )
+
+
 def _gate_pin() -> str:
     """Return the detector version the duplication gate verifies at runtime."""
     text = PYPROJECT_PATH.read_text(encoding="utf-8")
@@ -126,16 +152,11 @@ class TestToolchainPins:
             f"{NOSE_TOOL} command does not reference it (expected pattern {usage_re})"
         )
 
-    def test_ci_installs_the_pinned_detector_with_binstall(self) -> None:
+    def test_ci_installs_the_pinned_detector_with_binstall(
+        self,
+        snapshot: SnapshotAssertion,
+    ) -> None:
         """CI must install nose through the pinned cargo-binstall command."""
-        text = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
-        assert 'cargo-binstall" --no-confirm --install-path .tools/nose' in text, (
-            "ci.yml must install nose with cargo binstall into .tools/nose"
-        )
-        assert '"nose-cli@${NOSE_VERSION}"' in text, (
-            "ci.yml's nose install must reference the NOSE_VERSION pin"
-        )
-        assert "BINSTALL_VERSION" in text, "ci.yml must pin the cargo-binstall release."
-        assert "BINSTALL_SHA256" in text, (
-            "ci.yml must verify the cargo-binstall release."
+        assert _ci_nose_installation_step() == snapshot, (
+            "CI's nose-detector installation contract must match its snapshot."
         )

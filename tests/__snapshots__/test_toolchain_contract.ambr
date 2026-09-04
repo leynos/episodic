@@ -1,0 +1,24 @@
+# serializer version: 1
+# name: TestToolchainPins.test_ci_installs_the_pinned_detector_with_binstall
+  '''
+        - name: Install nose duplication detector
+          env:
+            BINSTALL_VERSION: "v1.22.0"
+            BINSTALL_SHA256: "<sha256>"
+          run: |
+            if [ "$(.tools/nose/nose --version 2>/dev/null)" = "nose ${NOSE_VERSION}" ]; then
+              echo "nose ${NOSE_VERSION} restored from cache"
+              exit 0
+            fi
+            binstall_archive="$(mktemp)"
+            binstall_directory="$(mktemp -d)"
+            curl -fsSL --proto '=https' --tlsv1.2 -o "$binstall_archive" \
+              "<cargo-binstall release>"
+            echo "${BINSTALL_SHA256}  ${binstall_archive}" | sha256sum -c -
+            tar -xzf "$binstall_archive" -C "$binstall_directory"
+            mkdir -p .tools/nose
+            "$binstall_directory/cargo-binstall" --no-confirm --install-path .tools/nose \
+              --git <nose repository> "nose-cli@${NOSE_VERSION}"
+            .tools/nose/nose --version
+  '''
+# ---
