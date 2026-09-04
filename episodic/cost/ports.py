@@ -11,16 +11,11 @@ The core Protocols are `CostLedgerPort` for append-only ledger persistence,
 module are frozen dataclasses or `NewType` aliases that carry immutable
 snapshot, priced-call, and ledger-entry data.
 
-Tests can use small in-memory fakes that structurally satisfy the Protocols:
-
-```python
-class FakeLedger:
-    async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
-        return CostLedgerEntryId(str(entry.idempotency_key))
-```
+Tests can use in-memory fakes; see ``tests/test_cost_ports_protocols.py``.
 """
 
 import dataclasses as dc
+import datetime as dt
 import enum
 import typing as typ
 
@@ -87,6 +82,10 @@ class BillingPeriodMismatchError(CostAccountingError):
     """Raised when a pricing snapshot is used for the wrong billing period."""
 
 
+class PricingSnapshotCollisionError(CostAccountingError):
+    """Raised when one content hash maps to two snapshot identifiers."""
+
+
 def _validate_currency_code(currency: CurrencyCode) -> None:
     """Validate an ISO 4217-style currency code."""
     currency_value = str(currency)
@@ -109,7 +108,11 @@ def _validate_usage_metrics(usage: cabc.Mapping[str, int]) -> None:
 
 @dc.dataclass(frozen=True, slots=True)
 class PricingSnapshot:
-    """Immutable pricing input used by the deterministic pricing engine."""
+    """Immutable pricing input used by the deterministic pricing engine.
+
+    ``effective_from`` is an optional timezone-aware ``datetime``; the
+    catalogue keeps snapshots unset or not after now, selecting the latest.
+    """
 
     pricing_snapshot_id: PricingSnapshotId
     provider_name: str
@@ -122,11 +125,20 @@ class PricingSnapshot:
     source_metadata: cabc.Mapping[str, str]
     content_hash: str
     retrieved_at: str
+    effective_from: dt.datetime | None = None
 
     def __post_init__(self) -> None:
         """Validate value-object invariants."""
         _validate_currency_code(self.currency)
         _validate_usage_metrics(self.rates_minor_per_metric)
+        if self.effective_from is None:
+            return
+        if not isinstance(self.effective_from, dt.datetime):
+            msg = "effective_from must be a datetime or None."
+            raise TypeError(msg)
+        if self.effective_from.tzinfo is None:
+            msg = "effective_from must be timezone-aware."
+            raise ValueError(msg)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -202,10 +214,7 @@ class TaskRollupLedgerEntry:
 
 @dc.dataclass(frozen=True, slots=True)
 class RunPricingKey:
-    """Composite key identifying a pricing pin.
-
-    The key identifies one provider operation within a run.
-    """
+    """Composite key identifying one provider operation's pricing pin."""
 
     workflow_run_id: str
     provider_name: str
@@ -217,6 +226,24 @@ class RunPricingKey:
 @typ.runtime_checkable
 class CostLedgerPort(typ.Protocol):
     """Port for append-only cost ledger persistence."""
+
+    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
+        """Persist an immutable pricing snapshot; reuse an existing row.
+
+        Run pricing pins and ledger entries reference snapshots by
+        identifier, so the snapshot must be persisted before it is pinned.
+
+        Parameters
+        ----------
+        snapshot : PricingSnapshot
+            Immutable snapshot to persist.
+
+        Examples
+        --------
+        Repeated ``await ledger.ensure_snapshot(snapshot)`` calls with
+        one ``pricing_snapshot_id`` reuse the persisted row.
+        """
+        raise NotImplementedError
 
     async def pin_run_pricing(
         self,
@@ -238,20 +265,12 @@ class CostLedgerPort(typ.Protocol):
     async def record_call(self, entry: ProviderCallLedgerEntry) -> CostLedgerEntryId:
         """Record or return an idempotent provider-call ledger entry.
 
-        Parameters
-        ----------
-        entry : ProviderCallLedgerEntry
-            Provider-call ledger entry to persist.
-
         Returns
         -------
         CostLedgerEntryId
-            Identifier of the inserted or existing ledger row.
-
-        Notes
-        -----
-        Repeated calls with the same idempotency key must return the same
-        `CostLedgerEntryId` without creating duplicate rows.
+            Identifier of the inserted or existing row; repeated calls
+            with one idempotency key return the same identifier without
+            creating duplicate rows.
         """
         raise NotImplementedError
 

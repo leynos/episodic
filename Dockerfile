@@ -31,6 +31,10 @@ RUN groupadd --system --gid 10001 episodic \
     && chown -R episodic:episodic /app
 
 COPY --from=builder --chown=episodic:episodic /app/.venv /app/.venv
+# Pricing snapshots are read at boot; the packaged default path resolves
+# inside site-packages, so ship the repository snapshots and point
+# PRICING_SNAPSHOT_DIRECTORY at this location in deployment configuration.
+COPY --chown=episodic:episodic config/pricing-snapshots /app/config/pricing-snapshots
 
 USER 10001:10001
 

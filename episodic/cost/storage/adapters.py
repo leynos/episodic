@@ -16,26 +16,33 @@ import uuid
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 
 from episodic.cost._time import parse_instant
 from episodic.cost.ports import (
-    BillingPeriodKey,
     CostLedgerEntryId,
-    IdempotencyKey,
     LedgerScope,
-    MeteringCounterKey,
     PricingModel,
+    PricingSnapshot,
+    PricingSnapshotCollisionError,
     PricingSnapshotId,
     ProviderCallLedgerEntry,
     RunPricingKey,
     TaskRollupLedgerEntry,
     UsageSource,
 )
+from episodic.observability import (
+    MetricsPort,
+    MonotonicClockPort,
+    NoopMetrics,
+    NoopTracer,
+    PerfCounterClock,
+    TracerPort,
+)
 
 from .models import (
     CostLedgerEntryRecord,
-    MeteringCounterEventRecord,
-    MeteringCounterRecord,
+    PricingSnapshotRecord,
     RunPricingPinRecord,
 )
 
@@ -112,8 +119,116 @@ def _task_rollup_values(rollup: TaskRollupLedgerEntry) -> dict[str, object]:
 class SqlAlchemyCostLedgerStore:
     """SQLAlchemy implementation of `CostLedgerPort`."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        metrics: MetricsPort | None = None,
+        tracer: TracerPort | None = None,
+        clock: MonotonicClockPort | None = None,
+    ) -> None:
         self._session = session
+        self._metrics: MetricsPort = metrics if metrics is not None else NoopMetrics()
+        self._tracer: TracerPort = tracer if tracer is not None else NoopTracer()
+        self._clock: MonotonicClockPort = (
+            clock if clock is not None else PerfCounterClock()
+        )
+
+    def _record_ensure_outcome(
+        self,
+        started: float,
+        outcome: str,
+        failure_category: str | None,
+    ) -> None:
+        """Emit the bounded ensure-snapshot counter and latency metrics."""
+        labels = {"operation": "ensure_snapshot", "outcome": outcome}
+        if failure_category is not None:
+            labels["failure_category"] = failure_category
+        self._metrics.increment_counter("pricing_snapshot.ensure", labels=labels)
+        self._metrics.observe_latency_ms(
+            "pricing_snapshot.ensure.duration_ms",
+            (self._clock.monotonic_seconds() - started) * 1000.0,
+            labels={"operation": "ensure_snapshot", "outcome": outcome},
+        )
+
+    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
+        """Persist an immutable pricing snapshot; reuse an existing row.
+
+        Persists the snapshot identifier, provider name, model, operation,
+        source kind, currency, billing period, rates, source metadata,
+        content hash, and retrieved-at timestamp. If a row with the same
+        ``id`` already exists, the insert is a no-op via
+        ``ON CONFLICT DO NOTHING``, leaving the stored row unchanged.
+
+        Raises
+        ------
+        PricingSnapshotCollisionError
+            If ``snapshot.content_hash`` is already stored under a
+            different snapshot identifier.
+        sqlalchemy.exc.IntegrityError
+            If the insert violates a constraint other than the identifier
+            or content-hash uniqueness.
+        ValueError
+            If ``snapshot.retrieved_at`` lacks timezone information, via
+            ``parse_instant``'s ``"timestamp must include timezone
+            information."`` error.
+        """  # noqa: DOC502  # parse_instant raises on the adapter's behalf.
+        statement = (
+            insert(PricingSnapshotRecord)
+            .values(
+                id=uuid.UUID(str(snapshot.pricing_snapshot_id)),
+                provider_name=snapshot.provider_name,
+                model=snapshot.model,
+                operation=snapshot.operation,
+                source_kind=str(snapshot.source_kind),
+                currency=str(snapshot.currency),
+                billing_period_key=str(snapshot.billing_period_key),
+                rates_minor_per_metric=dict(snapshot.rates_minor_per_metric),
+                source_metadata=dict(snapshot.source_metadata),
+                content_hash=snapshot.content_hash,
+                retrieved_at=parse_instant(
+                    snapshot.retrieved_at,
+                    error_message="timestamp must include timezone information.",
+                ),
+                effective_from=snapshot.effective_from,
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+            .returning(PricingSnapshotRecord.id)
+        )
+        started = self._clock.monotonic_seconds()
+        outcome = "error"
+        failure_category: str | None = None
+        with self._tracer.start_span(
+            "pricing_snapshot.ensure_snapshot",
+            attributes={"operation": "ensure_snapshot"},
+        ) as span:
+            try:
+                result = await self._session.execute(statement)
+            except IntegrityError as exc:
+                # The id conflict target does not cover the unique content
+                # hash; a duplicate hash under a different identifier is a
+                # catalogue defect, not a transient storage failure.
+                if "content_hash" in str(exc.orig):
+                    outcome, failure_category = (
+                        "collision",
+                        "pricing_snapshot.collision",
+                    )
+                    msg = (
+                        "pricing snapshot content hash "
+                        f"{snapshot.content_hash!r} is already stored under a "
+                        "different snapshot identifier"
+                    )
+                    raise PricingSnapshotCollisionError(msg) from exc
+                failure_category = "pricing_snapshot.integrity"
+                raise
+            else:
+                inserted = result.scalar_one_or_none()
+                outcome = "persisted" if inserted is not None else "reused"
+            finally:
+                span.set_attribute("outcome", outcome)
+                if failure_category is not None:
+                    span.set_attribute("failure_category", failure_category)
+                self._record_ensure_outcome(started, outcome, failure_category)
 
     async def pin_run_pricing(
         self,
@@ -219,110 +334,3 @@ class SqlAlchemyCostLedgerStore:
             )
         ).scalar_one()
         return CostLedgerEntryId(str(existing_id))
-
-
-class SqlAlchemyMeteringCounterStore:
-    """SQLAlchemy implementation of `MeteringPort`."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-
-    # Atomic consumption needs the counter, period, delta, and idempotency
-    # fields separately to satisfy the storage port without a lossy DTO.
-    async def consume(  # pylint: disable=too-many-arguments,too-many-positional-arguments
-        self,
-        counter_key: MeteringCounterKey,
-        billing_period_key: BillingPeriodKey,
-        delta: int,
-        idempotency_key: IdempotencyKey,
-    ) -> int:
-        """Atomically consume a metering delta."""
-        if delta < 0:
-            msg = "delta must be non-negative."
-            raise ValueError(msg)
-
-        inserted_event = await self._insert_metering_event(
-            counter_key,
-            billing_period_key,
-            delta,
-            idempotency_key,
-        )
-        if not inserted_event:
-            return await self._existing_event_total(idempotency_key)
-
-        total = await self._upsert_counter(counter_key, billing_period_key, delta)
-        await self._set_event_total(idempotency_key, total)
-        return total
-
-    # Keep the event insert aligned with the public consume fields so the
-    # idempotency gate cannot drift from the counter mutation.
-    async def _insert_metering_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
-        self,
-        counter_key: MeteringCounterKey,
-        billing_period_key: BillingPeriodKey,
-        delta: int,
-        idempotency_key: IdempotencyKey,
-    ) -> bool:
-        """Insert the idempotency event that gates counter mutation."""
-        statement = (
-            insert(MeteringCounterEventRecord)
-            .values(
-                idempotency_key=str(idempotency_key),
-                counter_key=str(counter_key),
-                billing_period_key=str(billing_period_key),
-                delta=delta,
-                consumed_after=0,
-            )
-            .on_conflict_do_nothing(index_elements=["idempotency_key"])
-            .returning(MeteringCounterEventRecord.idempotency_key)
-        )
-        inserted_key = (await self._session.execute(statement)).scalar_one_or_none()
-        return inserted_key is not None
-
-    async def _existing_event_total(self, idempotency_key: IdempotencyKey) -> int:
-        """Return an existing idempotent event total, if present."""
-        return (
-            await self._session.execute(
-                sa.select(MeteringCounterEventRecord.consumed_after).where(
-                    MeteringCounterEventRecord.idempotency_key == str(idempotency_key)
-                )
-            )
-        ).scalar_one()
-
-    async def _set_event_total(
-        self,
-        idempotency_key: IdempotencyKey,
-        total: int,
-    ) -> None:
-        """Store the counter total produced by the winning event insert."""
-        await self._session.execute(
-            sa
-            .update(MeteringCounterEventRecord)
-            .where(MeteringCounterEventRecord.idempotency_key == str(idempotency_key))
-            .values(consumed_after=total)
-        )
-
-    async def _upsert_counter(
-        self,
-        counter_key: MeteringCounterKey,
-        billing_period_key: BillingPeriodKey,
-        delta: int,
-    ) -> int:
-        """Increment a counter row and return its consumed total."""
-        statement = (
-            insert(MeteringCounterRecord)
-            .values(
-                counter_key=str(counter_key),
-                billing_period_key=str(billing_period_key),
-                consumed=delta,
-            )
-            .on_conflict_do_update(
-                index_elements=["counter_key", "billing_period_key"],
-                set_={
-                    "consumed": MeteringCounterRecord.consumed + delta,
-                    "updated_at": sa.func.now(),
-                },
-            )
-            .returning(MeteringCounterRecord.consumed)
-        )
-        return (await self._session.execute(statement)).scalar_one()

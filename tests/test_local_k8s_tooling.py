@@ -2,6 +2,7 @@
 
 import socket
 import subprocess
+import sys
 import typing as typ
 from collections.abc import Callable  # noqa: ICN003, TC003 - requested test shape.
 
@@ -79,15 +80,68 @@ def test_helm_upgrade_command_uses_local_chart_values() -> None:
     assert str(config.values_path) in command, "local values path must be rendered."
 
 
-def test_kubectl_secret_command_renders_database_url_literal() -> None:
+def test_secret_manifest_renders_database_url() -> None:
     """Create the app Secret from the configured local database URL."""
     config = PreviewConfig(database_url="postgresql+asyncpg://user:pass@postgres/db")
 
-    command = commands.kubectl_secret_command(config)
+    manifest = commands.secret_manifest(config)
 
-    assert "--from-literal=database-url=postgresql+asyncpg://user:pass@postgres/db" in (
-        command
-    ), "Expected collection to contain the value"
+    assert '  database-url: "postgresql+asyncpg://user:pass@postgres/db"' in manifest, (
+        "the preview secret must include the local database URL"
+    )
+
+
+def test_secret_manifest_renders_bearer_token() -> None:
+    """Create the app Secret with the local authorization bearer token."""
+    config = PreviewConfig(api_bearer_token="alpha-token")  # noqa: S106 - local-only test token.
+
+    manifest = commands.secret_manifest(config)
+
+    assert '  api-bearer-token: "alpha-token"' in manifest, (
+        "the preview secret must include the local bearer token"
+    )
+
+
+def test_secret_manifest_omits_openai_pair_without_key() -> None:
+    """Omit the OpenAI entries when no key is configured."""
+    config = PreviewConfig(openai_api_key="")
+
+    manifest = commands.secret_manifest(config)
+
+    assert "openai" not in manifest, (
+        "the preview secret must omit OpenAI entries without a key"
+    )
+
+
+def test_secret_manifest_renders_openai_pair_with_key() -> None:
+    """Write the OpenAI base URL and key together when a key is configured."""
+    config = PreviewConfig(openai_api_key="sk-local-test")
+
+    manifest = commands.secret_manifest(config)
+
+    assert '  openai-api-key: "sk-local-test"' in manifest, (
+        "the preview secret must include the configured OpenAI key"
+    )
+    assert f'  openai-base-url: "{config.openai_base_url}"' in manifest, (
+        "the preview secret must pair the base URL with the key"
+    )
+
+
+def test_secret_values_stay_out_of_command_arguments() -> None:
+    """Secret values must never appear in printable command arguments."""
+    config = PreviewConfig(
+        api_bearer_token="alpha-token",  # noqa: S106 - local-only test token.
+        openai_api_key="sk-local-test",
+    )
+
+    apply_command = commands.kubectl_apply_command(config)
+
+    assert not any("alpha-token" in part for part in apply_command), (
+        "the bearer token must travel via stdin, not command arguments"
+    )
+    assert not any("sk-local-test" in part for part in apply_command), (
+        "the OpenAI key must travel via stdin, not command arguments"
+    )
 
 
 def test_loopback_port_validation_reports_occupied_port() -> None:
@@ -246,4 +300,26 @@ def test_command_reports_missing_cluster_without_kubectl(
     )
     assert "does not exist" in capsys.readouterr().out, (
         "Expected collection to contain the value"
+    )
+
+
+def test_command_runner_surfaces_captured_output_on_failure(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failed command's captured stdout and stderr reach the operator."""
+    runner = commands.CommandRunner()
+    script = (
+        "import sys; sys.stdout.write('out-diag'); "
+        "sys.stderr.write('err-diag'); sys.exit(3)"
+    )
+
+    with pytest.raises(subprocess.CalledProcessError):
+        runner.run([sys.executable, "-c", script])
+
+    captured = capsys.readouterr()
+    assert "out-diag" in captured.err, (
+        "captured stdout of a failed command must be surfaced on stderr"
+    )
+    assert "err-diag" in captured.err, (
+        "captured stderr of a failed command must be surfaced on stderr"
     )

@@ -90,7 +90,21 @@ adapter that can use pre-signed upload URLs.
 
 Before using these endpoints, apply the latest Alembic migrations to the
 service database with `alembic upgrade head`. The application does not apply
-schema migrations during startup.
+schema migrations during startup, and no deployment hook applies them for you.
+
+Against the local Kubernetes preview, run the migrations from the host through
+a port-forward to the preview Postgres Service. The `kubectl` context depends
+on the chosen local Kubernetes provider: the default k3d provider registers
+`k3d-episodic-preview`, while the optional rootless-Podman kind provider
+(`LOCAL_K8S_PROVIDER=kind`, described later in this guide) registers
+`kind-episodic-preview` instead.
+
+```shell
+kubectl --context k3d-episodic-preview --namespace episodic \
+  port-forward svc/postgres 15432:5432 &
+DATABASE_URL=postgresql+asyncpg://episodic:episodic@127.0.0.1:15432/episodic \
+  uv run alembic upgrade head
+```
 
 Create a draft run for a ready ingestion job with
 `POST /v1/ingestion-jobs/{ingestion_job_id}/generation-runs`. Supply an
@@ -170,6 +184,24 @@ draft output. Each value must be a positive integer:
   passed to the LLM request.
 - `GENERATION_MAX_RESPONSE_BYTES` defaults to `1048576` and caps the UTF-8
   response before generated JSON parsing.
+
+The HTTP runtime also accepts these optional settings for the OpenAI-compatible
+provider request:
+
+- `OPENAI_BASE_URL` and `OPENAI_API_KEY` configure a provider endpoint and
+  credential. They are optional, but must be set together: configuring one
+  without the other fails startup. Neither is set by default.
+- `DRAFT_MODEL` selects the model used for no-QA draft generation. It defaults
+  to `gpt-4o-mini`.
+- `OPENAI_REASONING_EFFORT` is forwarded to the provider as a reasoning-effort
+  hint. It is unset by default.
+- `OPENAI_SERVICE_TIER` selects the provider service tier. It is unset by
+  default.
+- `OPENAI_TOKEN_LIMIT_PARAM` selects the request field used to cap output
+  tokens: `max_tokens` (the default) or `max_completion_tokens`, which
+  reasoning models require instead. Any other value is rejected at boot.
+- `OPENAI_TIMEOUT_SECONDS` sets the provider HTTP timeout in seconds. It must
+  be a positive number and defaults to `30`.
 
 #### Resumable orchestration
 
@@ -401,6 +433,31 @@ the `localhost/episodic:local` image into the `episodic-preview` cluster,
 bootstraps a local-only Postgres Service and StatefulSet, and exposes ingress
 through `http://episodic.localhost:8088`.
 
+The preview writes its generated Kubernetes Secret with `api-bearer-token` set
+to `local-dev-token` by default, so `/v1` requests against the preview
+authenticate with:
+
+```http
+Authorization: Bearer local-dev-token
+```
+
+When `OPENAI_API_KEY` is set in the operator's environment,
+`make local-k8s-up` also writes the paired `openai-base-url`/`openai-api-key`
+keys into the same Secret so preview-generated drafts can reach a real
+provider.
+
+`charts/episodic/values.local.yaml` also pins the effective generation
+settings for the local preview:
+
+- `DRAFT_MODEL: gpt-5.6-sol`
+- `OPENAI_REASONING_EFFORT: low`
+- `OPENAI_TOKEN_LIMIT_PARAM: max_completion_tokens`
+- `OPENAI_TIMEOUT_SECONDS: 600`
+- `GENERATION_MAX_OUTPUT_TOKENS: 32768`
+
+Override these by editing `values.local.yaml` before running
+`make local-k8s-up`.
+
 On rootless Podman hosts, use the kind provider directly:
 
 ```shell
@@ -411,6 +468,21 @@ kubectl --context kind-episodic-preview --namespace episodic \
 
 Kind does not install the `traefik` ingress controller used by the local chart
 values, so the preview URL is reached through the printed port-forward command.
+
+The preview stores uploaded source blobs in an `emptyDir` volume mounted at the
+configured `SOURCE_INTAKE_OBJECT_STORE_ROOT`. An `emptyDir` lives and dies with
+its pod: the Postgres StatefulSet keeps upload rows on a persistent volume, but
+the blobs they point at vanish whenever the application pod is replaced (for
+example, after `kubectl rollout restart` or a redeploy). A generation run that
+references pre-restart uploads then fails with a missing-file error. After any
+application pod restart, re-upload the source documents and attach the fresh
+uploads before starting a generation run.
+
+The chart's `volumes` and `volumeMounts` values are passed through verbatim to
+the pod template and container spec, so any writable path needed under the
+chart's default `readOnlyRootFilesystem` (such as the source-intake object
+store root) must be declared there. `charts/episodic/values.local.yaml` sets
+both to mount the `emptyDir` described above at `/tmp`.
 
 If a cluster with the configured name already exists, `local-k8s-up` reuses it
 only when its ingress port matches the requested port. `local-k8s-status` and

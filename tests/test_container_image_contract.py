@@ -185,3 +185,28 @@ def test_docker_image_serves_liveness_when_docker_smoke_enabled() -> None:
         runtime.GRANIAN_FACTORY_TARGET,
         str(runtime.HTTP_BIND_PORT),
     ], f"unexpected container runtime constants: {run.stdout!r}"
+
+
+def test_dockerfile_ships_pricing_snapshots_into_the_runtime_stage() -> None:
+    """The runtime image must carry the immutable pricing catalogue."""
+    stage = None
+    copies_by_stage: dict[str | None, list[str]] = {}
+    for raw_line in _dockerfile_text().splitlines():
+        line = raw_line.strip()
+        if line.startswith("FROM ") and " AS " in line:
+            stage = line.split(" AS ")[-1].strip()
+        elif line.startswith("COPY") and "pricing-snapshots" in line:
+            copies_by_stage.setdefault(stage, []).append(line)
+
+    assert copies_by_stage == {
+        "runtime": [
+            (
+                "COPY --chown=episodic:episodic config/pricing-snapshots "
+                "/app/config/pricing-snapshots"
+            )
+        ]
+    }, (
+        "the runtime stage, and only the runtime stage, must copy "
+        "config/pricing-snapshots to /app/config/pricing-snapshots owned by "
+        f"the episodic user; got {copies_by_stage!r}"
+    )

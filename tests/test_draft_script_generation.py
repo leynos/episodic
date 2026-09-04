@@ -172,6 +172,9 @@ async def test_draft_script_generator_emits_valid_stable_tei(
     assert fake_llm.requests[0].system_prompt is not None, (
         "expected a system prompt, got None"
     )
+    assert fake_llm.requests[0].json_response is True, (
+        "draft generation must request a provider-enforced JSON response"
+    )
     assert result.tei_xml == snapshot, "generated TEI must match the approved snapshot"
 
 

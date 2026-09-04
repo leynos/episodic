@@ -19,7 +19,11 @@ from episodic.cost.ports import (
     TaskRollupLedgerEntry,
     UsageSource,
 )
-from episodic.cost.recorder import CostRecorder, ProviderCallRecord
+from episodic.cost.recorder import (
+    CostProviderOperation,
+    CostRecorder,
+    ProviderCallRecord,
+)
 
 
 def _snapshot(
@@ -60,8 +64,16 @@ def _snapshot(
 class _PinnedLedger:
     """Ledger fake that exposes one existing run pricing pin."""
 
-    pinned_snapshot_id: PricingSnapshotId
+    pinned_snapshot_id: PricingSnapshotId | None
     recorded_call: ProviderCallLedgerEntry | None = None
+    ensured_snapshots: list[PricingSnapshot] = dc.field(default_factory=list)
+    calls: list[tuple[str, PricingSnapshotId]] = dc.field(default_factory=list)
+
+    async def ensure_snapshot(self, snapshot: PricingSnapshot) -> None:
+        """Capture snapshots the recorder persists, mirroring idempotency."""
+        self.calls.append(("ensure", snapshot.pricing_snapshot_id))
+        if snapshot not in self.ensured_snapshots:
+            self.ensured_snapshots.append(snapshot)
 
     async def pin_run_pricing(
         self,
@@ -69,8 +81,9 @@ class _PinnedLedger:
         pricing_snapshot_id: PricingSnapshotId,
         pinned_at: str,
     ) -> None:
-        """Accept a fake run-pricing pin."""
-        _ = (key, pricing_snapshot_id, pinned_at)
+        """Accept a fake run-pricing pin, recording the call order."""
+        _ = (key, pinned_at)
+        self.calls.append(("pin", pricing_snapshot_id))
 
     async def get_run_pricing_pin(self, key: RunPricingKey) -> PricingSnapshotId | None:
         """Return the fake pinned snapshot identifier."""
@@ -167,3 +180,78 @@ async def test_cost_recorder_prices_provider_call_with_pinned_snapshot() -> None
     assert ledger.recorded_call.computed_cost_minor == 3, (
         "cost must be computed from the pinned 1_000_000 rate, not drifted rates"
     )
+    assert not ledger.ensured_snapshots, (
+        "pinned calls must skip snapshot persistence; the pin's foreign key "
+        "already guarantees the stored row exists"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cost_recorder_persists_snapshot_for_unpinned_provider_call() -> None:
+    """Unpinned calls persist the resolved snapshot before the ledger row."""
+    latest_snapshot = _snapshot("snapshot:new", input_token_rate=1_000_000)
+    ledger = _PinnedLedger(pinned_snapshot_id=None)
+    recorder = CostRecorder(
+        ledger=ledger,
+        pricing_catalogue=_DriftingCatalogue(
+            pinned_snapshot=latest_snapshot,
+            latest_snapshot=latest_snapshot,
+        ),
+        pricing_engine=PricingEngine(),
+    )
+
+    await recorder.record_provider_call(
+        ProviderCallRecord(
+            idempotency_key=IdempotencyKey("run:abc:node:planner:call:2:attempt:0"),
+            parent_cost_entry_id=None,
+            provider_type="llm",
+            provider_name="openai",
+            model="gpt-4o-mini",
+            workflow_node="planner",
+            operation="chat_completions",
+            usage={"input_tokens": 3},
+            usage_source=UsageSource.PROVIDER,
+            usage_complete=True,
+            pricing_model=PricingModel.PAYG,
+            retry_attempt=0,
+            billing_period_key=BillingPeriodKey("2026-06"),
+            workflow_run_id="run-abc",
+            recorded_at="2026-06-04T00:00:00Z",
+        ),
+    )
+
+    assert ledger.ensured_snapshots == [latest_snapshot], (
+        "unpinned calls must persist the resolved snapshot before recording"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cost_recorder_persists_snapshot_before_pinning() -> None:
+    """The real pin method ensures the snapshot before writing the pin."""
+    snapshot = _snapshot("snapshot:pin-order", input_token_rate=1_000_000)
+    ledger = _PinnedLedger(pinned_snapshot_id=None)
+    recorder = CostRecorder(
+        ledger=ledger,
+        pricing_catalogue=_DriftingCatalogue(
+            pinned_snapshot=snapshot,
+            latest_snapshot=snapshot,
+        ),
+        pricing_engine=PricingEngine(),
+    )
+
+    await recorder.pin_run_pricing(
+        "run-pin-order",
+        (
+            CostProviderOperation(
+                provider_name="openai",
+                model="gpt-4o-mini",
+                operation="chat_completions",
+            ),
+        ),
+        BillingPeriodKey("2026-06"),
+    )
+
+    assert ledger.calls == [
+        ("ensure", snapshot.pricing_snapshot_id),
+        ("pin", snapshot.pricing_snapshot_id),
+    ], f"the snapshot must be persisted before it is pinned; got {ledger.calls!r}"

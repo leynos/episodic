@@ -74,7 +74,8 @@ async def create_ready_ingestion_job(
     headers : dict[str, str] | None, optional
         Authorization headers determining the persisted job owner.
     key_prefix : str, default="generation"
-        Prefix used to isolate the fixture's idempotency keys.
+        Prefix used to isolate the fixture's idempotency keys and the
+        series-profile slug.
 
     Returns
     -------
@@ -86,7 +87,7 @@ async def create_ready_ingestion_job(
         "/v1/series-profiles",
         headers={**request_headers, "Idempotency-Key": f"{key_prefix}-profile-key"},
         json={
-            "slug": "generation-api-profile",
+            "slug": f"{key_prefix}-api-profile",
             "title": "Generation API profile",
             "description": "Generation endpoint fixture.",
             "configuration": {},
